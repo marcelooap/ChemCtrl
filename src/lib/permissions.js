@@ -10,7 +10,7 @@ export function canAccessRoute(user, path) {
     return path === '/tela-clientes';
   }
 
-  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase();
+  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   if (nivel === 'administrador') return true;
 
@@ -19,26 +19,33 @@ export function canAccessRoute(user, path) {
   }
 
   if (nivel === 'operacional' || nivel === 'operador') {
-    return path === '/ordens' || path.startsWith('/producao/');
+    return path === '/ordens' || path.startsWith('/producao/') ||
+      path === '/inventario' || path.startsWith('/inventario/') ||
+      path === '/vasilhames' || path === '/estoque';
   }
 
-  if (nivel === 'visualização' || nivel === 'visualizacao') {
-    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/dashboard', '/estoque-cliente', '/inventario'];
+  if (nivel === 'visualizacao') {
+    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa'];
     return allowed.includes(path);
   }
 
   return false;
 }
 
-export function isReadOnly(user) {
-  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase();
+export function isReadOnly(user, path) {
+  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (user?.tipo === 'externo') return true;
-  return nivel === 'visualização' || nivel === 'visualizacao';
+  if (nivel === 'visualizacao') return true;
+  // Operacional: read-only on Vasilhames and Estoque de MP
+  if (nivel === 'operacional' || nivel === 'operador') {
+    return ['/vasilhames', '/estoque'].includes(path);
+  }
+  return false;
 }
 
 export function canUseClientFilter(user) {
-  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase();
-  return user?.tipo === 'interno' && ['administrador', 'supervisor'].includes(nivel);
+  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return user?.tipo === 'interno' && ['administrador', 'supervisor', 'visualizacao'].includes(nivel);
 }
 
 export function getUserClient(user) {
@@ -49,9 +56,9 @@ export function getUserClient(user) {
 export function getDefaultRoute(user) {
   if (!user) return '/login';
   if (user.tipo === 'externo') return '/tela-clientes';
-  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase();
+  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (nivel === 'operacional' || nivel === 'operador') return '/ordens';
-  if (nivel === 'visualização' || nivel === 'visualizacao') return '/pedidos';
+  if (nivel === 'visualizacao') return '/vasilhames';
   return '/';
 }
 
