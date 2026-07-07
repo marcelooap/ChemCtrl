@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
-import { Package, Box as BoxIcon, Cylinder, FileText, Warehouse, Search } from 'lucide-react';
+import { Package, Box as BoxIcon, Cylinder, FileText, Warehouse, Search, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { canUseClientFilter, getUserClient } from '@/lib/permissions';
 import { generateClientStockPDF } from '@/lib/pdfReports';
+import { exportEstoqueClienteExcel } from '@/lib/exportEstoqueClienteExcel';
 import moment from 'moment';
 import { useToast } from '@/components/ui/use-toast';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
@@ -40,7 +41,7 @@ function SummaryCard({ title, count, icon: Icon, color }) {
 export default function EstoqueCliente() {
   const { user } = useOutletContext();
   const { toast } = useToast();
-  const { data: stocks, loading } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
+  const { data: stocks, loading } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const [selectedClient, setSelectedClient] = useState('all');
@@ -62,11 +63,11 @@ export default function EstoqueCliente() {
     if (effectiveClient) result = result.filter(s => s.client === effectiveClient);
     const q = search.toLowerCase();
     if (q) result = result.filter(s => [s.mp_name, s.mp_code, s.lot, s.supplier].some(v => (v || '').toLowerCase().includes(q)));
-    // Unify by lot — sum current_stock and initial_stock
+    // Unify by product + lot — sum current_stock and initial_stock
     const lotMap = {};
     const lotOrder = [];
     result.forEach(s => {
-      const key = s.lot || 'Sem Lote';
+      const key = `${s.mp_code || s.mp_name}||${s.lot || 'Sem Lote'}`;
       if (!lotMap[key]) {
         lotMap[key] = { ...s, initial_stock: 0, current_stock: 0, _count: 0 };
         lotOrder.push(key);
@@ -75,7 +76,7 @@ export default function EstoqueCliente() {
       lotMap[key].current_stock += (s.current_stock || 0);
       lotMap[key]._count += 1;
     });
-    return lotOrder.map(k => lotMap[k]);
+    return lotOrder.map(k => lotMap[k]).filter(s => (s.current_stock || 0) > 0);
   }, [stocks, effectiveClient, search]);
 
   const filteredContainers = useMemo(() => {
@@ -160,6 +161,22 @@ export default function EstoqueCliente() {
     }
   };
 
+  const handleExcel = async () => {
+    setGenerating(true);
+    try {
+      await exportEstoqueClienteExcel({
+        client: effectiveClient || 'Todos os Clientes',
+        stocks: filteredStocks,
+        containers: filteredContainers,
+      });
+      toast({ title: 'Relatório Excel exportado com sucesso.' });
+    } catch (e) {
+      toast({ title: 'Erro ao exportar relatório.', variant: 'destructive' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
@@ -191,6 +208,15 @@ export default function EstoqueCliente() {
           >
             <FileText className="w-4 h-4" />
             {generating ? 'Gerando...' : 'Gerar Relatório PDF'}
+          </Button>
+          <Button
+            onClick={handleExcel}
+            disabled={generating || (filteredStocks.length === 0 && filteredContainers.length === 0 && filteredTanks.length === 0)}
+            className="flex items-center gap-2 whitespace-nowrap"
+            style={{ background: '#16a34a' }}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {generating ? 'Gerando...' : 'Exportar Excel'}
           </Button>
         </div>
       </div>
