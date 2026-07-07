@@ -6,9 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Check, ChevronRight, ChevronLeft, Users, Package, Layers } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 export default function InventoryWizard({ open, onOpenChange, onCreated }) {
   const { toast } = useToast();
+  const { user: authUser } = useInternalAuth();
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: inventories } = useRealtimeEntity('Inventory', () => base44.entities.Inventory.list('-created_date', 500));
 
@@ -61,8 +63,7 @@ export default function InventoryWizard({ open, onOpenChange, onCreated }) {
   const handleFinish = async () => {
     setSaving(true);
     try {
-      const user = await base44.auth.me();
-      const userName = user?.nome || user?.full_name || user?.email || '—';
+      const userName = authUser?.nome || authUser?.full_name || '—';
       const nextNum = inventories.length + 1;
       const inventory_number = `INV-${String(nextNum).padStart(4, '0')}`;
 
