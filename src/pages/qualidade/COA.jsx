@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+// eslint-disable-next-line
+import { uploadFileToSupabase } from '@/api/storage'; // storage module (split from supabaseClient)
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Pencil, FileText } from 'lucide-react';
+import { Search, Pencil, FileText, Camera, Trash2, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { generateCOAPDF } from '@/lib/pdfReports';
 import { brasiliaDate } from '@/lib/brasilTime';
+import SignedImage from '@/components/SignedImage';
 import moment from 'moment';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
@@ -24,15 +27,39 @@ export default function COA() {
   const [editForm, setEditForm] = useState({ analyst: '', observations: '', results: [] });
   const [generatingPDF, setGeneratingPDF] = useState(null);
   const { toast } = useToast();
+  const photoInputRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const filtered = results.filter(r => { const q = search.toLowerCase(); return !q || [r.product, r.lot, r.op_number].some(v => (v || '').toLowerCase().includes(q)); });
 
-  const openEdit = (r) => { setEditing(r); setEditForm({ analyst: r.analyst, observations: r.observations || '', results: parseArr(r.results) }); setShowEdit(true); };
+  const openEdit = (r) => { setEditing(r); setEditForm({ analyst: r.analyst, observations: r.observations || '', results: parseArr(r.results), sample_photo_url: r.sample_photo_url || '' }); setShowEdit(true); };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadFileToSupabase(file);
+      setEditForm(prev => ({ ...prev, sample_photo_url: url }));
+    } catch (e) {
+      console.error('[COA] handlePhotoUpload erro:', e);
+      toast({ title: 'Erro ao enviar foto', description: e.message || 'Verifique se o bucket "fotos-cq" existe no Supabase.', variant: 'destructive' });
+    }
+    finally { setUploadingPhoto(false); }
+  };
 
   const saveEdit = async () => {
-    await base44.entities.QualityResult.update(editing.id, { analyst: editForm.analyst, observations: editForm.observations, results: editForm.results });
-    setShowEdit(false); load();
-    toast({ title: 'Resultados atualizados' });
+    setSaving(true);
+    try {
+      await base44.entities.QualityResult.update(editing.id, { analyst: editForm.analyst, observations: editForm.observations, results: editForm.results, sample_photo_url: editForm.sample_photo_url || '' });
+      setShowEdit(false); load();
+      toast({ title: 'Resultados atualizados' });
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleGeneratePDF = async (r) => {
@@ -152,6 +179,21 @@ export default function COA() {
                 <div><label className="text-xs font-medium text-muted-foreground">Analista</label><Input value={editForm.analyst} onChange={e => setEditForm({ ...editForm, analyst: e.target.value })} /></div>
                 <div><label className="text-xs font-medium text-muted-foreground">Observações</label><Input value={editForm.observations} onChange={e => setEditForm({ ...editForm, observations: e.target.value })} /></div>
               </div>
+              <div className="mb-4 flex items-center gap-3">
+                <span className="text-xs font-medium text-muted-foreground">Foto da Amostra:</span>
+                <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
+                {editForm.sample_photo_url ? (
+                  <div className="flex items-center gap-2">
+                    <SignedImage url={editForm.sample_photo_url} alt="Amostra" className="w-16 h-16 object-cover rounded-lg border" />
+                    <button type="button" onClick={() => setEditForm(prev => ({ ...prev, sample_photo_url: '' }))} className="p-1 rounded hover:bg-red-50 text-red-500" title="Remover foto"><Trash2 className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1 rounded hover:bg-gray-100 text-gray-500" title="Substituir foto"><Camera className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-[#2575D1] hover:text-[#2575D1] text-gray-500 transition-colors disabled:opacity-50">
+                    <Camera className="w-4 h-4" /> {uploadingPhoto ? 'Enviando...' : 'Adicionar Foto'}
+                  </button>
+                )}
+              </div>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
                 <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">ANÁLISE</th><th className="px-3 py-2 text-left">MÉTODO</th><th className="px-3 py-2 text-left">UNID.</th>
@@ -172,8 +214,10 @@ export default function COA() {
                 </tbody>
               </table>
               <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowEdit(false)}>Cancelar</Button>
-                <Button onClick={saveEdit} style={{ background: '#2575D1', color: 'white' }}>Salvar Alterações</Button>
+                <Button variant="outline" onClick={() => setShowEdit(false)} disabled={saving}>Cancelar</Button>
+                <Button onClick={saveEdit} disabled={saving} style={{ background: '#2575D1', color: 'white' }}>
+                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+                </Button>
               </div>
             </div>
           )}
