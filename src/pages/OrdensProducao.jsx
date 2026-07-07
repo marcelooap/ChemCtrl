@@ -19,7 +19,7 @@ const parseArr = (val) => {
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val;
     return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 };
 
 export default function OrdensProducao() {
@@ -36,7 +36,9 @@ export default function OrdensProducao() {
   const canAnalyze = user && (user.nivel === 'administrador' || user.nivel === 'supervisor');
 
   const activeProds = productions.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
-  const filtered = filter === 'all' ? activeProds : activeProds.filter(p => p.status === filter);
+  const opNumeric = (op) => { const m = String(op || '').match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; };
+  const sortedProds = [...activeProds].sort((a, b) => opNumeric(a.op_number) - opNumeric(b.op_number));
+  const filtered = filter === 'all' ? sortedProds : sortedProds.filter(p => p.status === filter);
 
   const startProduction = (prod) => {
     setConfirm({
@@ -97,7 +99,7 @@ export default function OrdensProducao() {
     }
     if (prod.status === 'Qualidade') {
       if (canAnalyze) {
-        return <Button onClick={() => navigate('/qualidade/producoes')} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> Analisar</Button>;
+        return <Button onClick={() => navigate(`/qualidade/producoes?prod=${prod.id}`)} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> Analisar</Button>;
       }
       return <Button disabled className="w-full text-white" style={{ background: '#94a3b8' }}>Aguardando CQ</Button>;
     }
