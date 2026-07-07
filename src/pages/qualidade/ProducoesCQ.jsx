@@ -1,12 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+// eslint-disable-next-line
+import { uploadFileToSupabase } from '@/api/storage'; // storage module (split from supabaseClient)
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Search, FileCheck, CheckCircle, XCircle } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import { Search, FileCheck, CheckCircle, XCircle, Camera, Trash2, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProductionCard from '@/components/ProductionCard';
+import SignedImage from '@/components/SignedImage';
 import moment from 'moment';
 
 const parseArr = (val) => {
@@ -15,7 +21,7 @@ const parseArr = (val) => {
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val;
     return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 };
 
 const fmtNum = (n) => {
@@ -31,36 +37,79 @@ const isTextAnalysis = (name) => {
 };
 
 export default function ProducoesCQ() {
+  const { user: internalUser } = useInternalAuth();
   const { data: allProds, loading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: tests } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500));
   const { data: results, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [selectedProd, setSelectedProd] = useState(null);
-  const [analysisForm, setAnalysisForm] = useState({ analyst: '', observations: '', results: [] });
+  const [analysisForm, setAnalysisForm] = useState({ analyst: '', observations: '', results: [], sample_photo_url: '' });
+  const [saving, setSaving] = useState(false);
+  const photoInputRef = React.useRef(null);
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const productions = useMemo(() =>
     allProds.filter(p =>
-      p.status === 'Qualidade' || (p.bypass_qc && p.status === 'Envase' && !results.some(res => res.production_id === p.id))
+      p.status === 'Qualidade' ||
+      (p.bypass_qc && ['Envase', 'Finalizado'].includes(p.status) && !results.some(res => res.production_id === p.id))
     ),
     [allProds, results]
   );
+
+  // Auto-open analysis dialog when navigated with ?prod=<id>
+  useEffect(() => {
+    const prodId = searchParams.get('prod');
+    if (prodId && !loading && !showAnalysis) {
+      const prod = productions.find(p => p.id === prodId);
+      if (prod) {
+        openAnalysis(prod);
+        searchParams.delete('prod');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+  }, [searchParams, loading, productions, showAnalysis]);
 
   const openAnalysis = (prod) => {
     setSelectedProd(prod);
     const test = tests.find(t => t.product === prod.product);
     const existing = results.find(r => r.production_id === prod.id);
     if (existing) {
-      setAnalysisForm({ analyst: existing.analyst || '', observations: existing.observations || '', results: parseArr(existing.results) });
+      // Sempre sincroniza metodologia/limites do ensaio atual, mantendo resultados já preenchidos
+      const savedResults = parseArr(existing.results);
+      const items = parseArr(test?.analyses).map(a => {
+        const saved = savedResults.find(r => r.analysis_name === a.analysis_name);
+        return {
+          analysis_name: a.analysis_name,
+          methodology: a.methodology,       // sempre da versão atual do ensaio
+          unit: a.unit,
+          min_limit: a.min_limit,
+          max_limit: a.max_limit,
+          specification: a.specification,
+          result: saved?.result ?? '',
+          status: saved?.status ?? '—',
+        };
+      });
+      setAnalysisForm({ analyst: existing.analyst || '', observations: existing.observations || '', results: items, sample_photo_url: existing.sample_photo_url || '' });
     } else {
       const items = parseArr(test?.analyses).map(a => ({
         analysis_name: a.analysis_name, methodology: a.methodology, unit: a.unit,
         min_limit: a.min_limit, max_limit: a.max_limit, specification: a.specification,
         result: '', status: '—'
       }));
-      setAnalysisForm({ analyst: '', observations: '', results: items });
+      setAnalysisForm({ analyst: '', observations: '', results: items, sample_photo_url: '' });
     }
     setShowAnalysis(true);
+  };
+
+  const handleCapturePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadFileToSupabase(file);
+      setAnalysisForm(prev => ({ ...prev, sample_photo_url: url }));
+    } catch (_e) {}
   };
 
   const updateResult = (idx, val) => {
@@ -97,27 +146,42 @@ export default function ProducoesCQ() {
   const overallStatus = computeOverallStatus();
 
   const saveAndApprove = async (status) => {
-    let analystName = '';
-    try { const user = await base44.auth.me(); analystName = user?.nome || user?.full_name || user?.email || ''; } catch (_) {}
+    const analystName = internalUser?.nome_completo || internalUser?.nome || '';
     const existing = results.find(r => r.production_id === selectedProd.id);
     const data = {
       production_id: selectedProd.id, op_number: selectedProd.op_number,
       product: selectedProd.product, client: selectedProd.client, lot: selectedProd.lot,
       date: new Date().toISOString(), analyst: analystName,
       status, observations: analysisForm.observations, results: analysisForm.results,
+      sample_photo_url: analysisForm.sample_photo_url || '',
     };
-    if (existing) await base44.entities.QualityResult.update(existing.id, data);
-    else await base44.entities.QualityResult.create(data);
+    setSaving(true);
+    try {
+      if (existing) await base44.entities.QualityResult.update(existing.id, data);
+      else await base44.entities.QualityResult.create(data);
 
-    const newProdStatus = status === 'Aprovado' ? 'Envase' : (status === 'Reprovado' ? 'Cancelado' : 'Envase');
-    const prodUpdates = { qc_status: status, qc_analyst: analystName, qc_observations: analysisForm.observations, status: newProdStatus };
-    if (newProdStatus === 'Envase') {
-      prodUpdates.envase_start_time = new Date().toISOString();
+      const alreadyFinished = selectedProd.status === 'Finalizado';
+      let newProdStatus;
+      if (status === 'Reprovado') {
+        newProdStatus = 'Cancelado';
+      } else if (alreadyFinished) {
+        newProdStatus = 'Finalizado';
+      } else {
+        newProdStatus = 'Envase';
+      }
+      const prodUpdates = { qc_status: status, qc_analyst: analystName, qc_observations: analysisForm.observations, status: newProdStatus };
+      if (newProdStatus === 'Envase') {
+        prodUpdates.envase_start_time = new Date().toISOString();
+      }
+      await base44.entities.Production.update(selectedProd.id, prodUpdates);
+
+      setShowAnalysis(false);
+      load();
+    } catch (err) {
+      toast({ title: 'Erro ao salvar análise', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    await base44.entities.Production.update(selectedProd.id, prodUpdates);
-
-    setShowAnalysis(false);
-    load();
   };
 
   const filtered = productions.filter(p => { const q = search.toLowerCase(); return !q || [p.op_number, p.product, p.client].some(v => (v || '').toLowerCase().includes(q)); });
@@ -166,9 +230,24 @@ export default function ProducoesCQ() {
                 <div><p className="text-xs text-muted-foreground">Volume</p><p className="font-medium">{(selectedProd.volume || 0).toLocaleString('pt-BR')} L</p></div>
                 <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{moment(selectedProd.date).format('DD/MM/YYYY')}</p></div>
               </div>
-              <div className="mb-4">
-                <p className="text-xs font-medium text-muted-foreground">Analista Responsável</p>
-                <p className="text-sm font-semibold text-gray-700 mt-1">Registrado automaticamente pelo usuário logado</p>
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Analista Responsável</p>
+                  <p className="text-sm font-semibold text-gray-700 mt-1">Registrado automaticamente pelo usuário logado</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
+                  {analysisForm.sample_photo_url ? (
+                    <div className="flex items-center gap-2">
+                      <SignedImage url={analysisForm.sample_photo_url} alt="Amostra" className="w-16 h-16 object-cover rounded-lg border" />
+                      <button type="button" onClick={() => setAnalysisForm(prev => ({ ...prev, sample_photo_url: '' }))} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => photoInputRef.current?.click()} className="flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-[#2575D1] hover:text-[#2575D1] text-gray-500 transition-colors">
+                      <Camera className="w-4 h-4" /> Foto da Amostra
+                    </button>
+                  )}
+                </div>
               </div>
               <h4 className="text-sm font-semibold mb-2">Resultados — {selectedProd.recipe_revision || 'Rev.01'}</h4>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
@@ -226,10 +305,16 @@ export default function ProducoesCQ() {
               </div>
 
               <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowAnalysis(false)}>Cancelar</Button>
-                <Button variant="outline" className="text-amber-600 border-amber-300" onClick={() => saveAndApprove('Com Restrição')}>Liberar com Pendência</Button>
-                <Button variant="destructive" onClick={() => saveAndApprove('Reprovado')}>Bloquear</Button>
-                <Button onClick={() => saveAndApprove('Aprovado')} disabled={overallStatus !== 'Aprovado'} className="text-white" style={{ background: overallStatus === 'Aprovado' ? '#2575D1' : '#94a3b8' }} title={overallStatus !== 'Aprovado' ? 'Todas as análises devem estar aprovadas' : ''}>Salvar e Liberar</Button>
+                <Button variant="outline" onClick={() => setShowAnalysis(false)} disabled={saving}>Cancelar</Button>
+                <Button variant="outline" className="text-amber-600 border-amber-300" disabled={saving} onClick={() => saveAndApprove('Com Restrição')}>
+                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />...</> : 'Liberar com Pendência'}
+                </Button>
+                <Button variant="destructive" disabled={saving} onClick={() => saveAndApprove('Reprovado')}>
+                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />...</> : 'Bloquear'}
+                </Button>
+                <Button onClick={() => saveAndApprove('Aprovado')} disabled={overallStatus !== 'Aprovado' || saving} className="text-white" style={{ background: overallStatus === 'Aprovado' ? '#2575D1' : '#94a3b8' }} title={overallStatus !== 'Aprovado' ? 'Todas as análises devem estar aprovadas' : ''}>
+                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : 'Salvar e Liberar'}
+                </Button>
               </div>
             </div>
           )}
