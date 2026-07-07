@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ProductCombobox from '@/components/ui/ProductCombobox';
 import { useToast } from '@/components/ui/use-toast';
 import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -27,6 +28,7 @@ export default function Pedidos() {
   const [detailOrder, setDetailOrder] = useState(null);
   const [form, setForm] = useState(emptyOrder);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   // Compute derived order statuses from production data (recomputed automatically on any realtime change)
@@ -34,7 +36,8 @@ export default function Pedidos() {
     return rawOrders.map(order => {
       const linkedOPs = productions.filter(p => p.order_id === order.id);
       const openOPs = linkedOPs.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
-      const totalProduced = linkedOPs.reduce((s, p) => s + (p.volume || 0), 0);
+      const activeOPs = linkedOPs.filter(p => p.status !== 'Cancelado');
+      const totalProduced = activeOPs.reduce((s, p) => s + (p.volume || 0), 0);
 
       let newStatus = order.status;
       if (order.status === 'Parcial') newStatus = 'Em produção';
@@ -98,6 +101,7 @@ export default function Pedidos() {
     const volOrdered = parseFloat(form.volume_ordered) || 0;
     const baseData = { ...form, date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(), volume_ordered: volOrdered };
     if (!baseData.product || !baseData.volume_ordered) { toast({ title: 'Preencha produto e volume', variant: 'destructive' }); return; }
+    setSaving(true);
     try {
       if (editing) {
         const data = { ...baseData };
@@ -116,6 +120,8 @@ export default function Pedidos() {
       toast({ title: editing ? 'Pedido atualizado' : 'Novo pedido registrado' });
     } catch (err) {
       toast({ title: 'Erro ao salvar pedido', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -257,12 +263,12 @@ export default function Pedidos() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Produto *</label>
-                <Select value={form.product} onValueChange={handleProductChange}>
-                  <SelectTrigger><SelectValue placeholder="Selecione um produto..." /></SelectTrigger>
-                  <SelectContent>
-                    {recipes.map(r => <SelectItem key={r.id} value={r.product_name}>{r.product_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ProductCombobox
+                  value={form.product}
+                  onChange={handleProductChange}
+                  options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
+                  placeholder="Selecione ou busque..."
+                />
               </div>
               <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-gray-50" /></div>
             </div>
@@ -275,9 +281,9 @@ export default function Pedidos() {
             <div><label className="text-xs font-medium text-muted-foreground">Observação</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={save} style={{ background: '#2575D1' }} className="text-white">
-              {editing ? 'Salvar Alterações' : 'Registrar Pedido'}
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar Alterações' : 'Registrar Pedido'}
             </Button>
           </div>
         </DialogContent>
