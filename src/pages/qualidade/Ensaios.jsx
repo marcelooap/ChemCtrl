@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Plus, Search, Eye, Pencil, Trash2, X, FileText } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, X, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -46,6 +46,7 @@ export default function Ensaios() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [form, setForm] = useState({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], analyses: [{ ...emptyAnalysis }] });
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   const analysisNameOptions = useMemo(() => {
@@ -108,10 +109,17 @@ export default function Ensaios() {
 
   const save = async () => {
     if (!form.product) { toast({ title: 'Informe o produto', variant: 'destructive' }); return; }
-    if (editing) await base44.entities.QualityTest.update(editing.id, form);
-    else await base44.entities.QualityTest.create(form);
-    setShowForm(false); load();
-    toast({ title: editing ? 'Ensaio atualizado' : 'Novo ensaio cadastrado' });
+    setSaving(true);
+    try {
+      if (editing) await base44.entities.QualityTest.update(editing.id, form);
+      else await base44.entities.QualityTest.create(form);
+      setShowForm(false); load();
+      toast({ title: editing ? 'Ensaio atualizado' : 'Novo ensaio cadastrado' });
+    } catch (err) {
+      toast({ title: 'Erro ao salvar ensaio', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (t) => { if (!confirm('Excluir?')) return; await base44.entities.QualityTest.delete(t.id); load(); };
@@ -218,8 +226,10 @@ export default function Ensaios() {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={save} style={{ background: '#2575D1' }} className="text-white">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar' : 'Cadastrar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
