@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 import { applyUpdate } from '@/lib/pwa';
 
 /**
- * Fixed banner that appears when a new version of the PWA is available.
- * The user can update immediately or dismiss the notification.
+ * Modal obrigatório exibido quando uma nova versão do PWA está disponível.
+ * Bloqueia toda interação com a aplicação até o usuário atualizar.
  */
 export default function PWAUpdatePrompt() {
   const [visible, setVisible] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     const handler = () => setVisible(true);
@@ -18,36 +18,42 @@ export default function PWAUpdatePrompt() {
 
   if (!visible) return null;
 
+  const handleUpdate = () => {
+    setUpdating(true);
+    applyUpdate();
+  };
+
   return (
-    <div className="fixed bottom-4 right-4 z-[100] max-w-sm animate-in slide-in-from-bottom-5 duration-300">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 pr-10 relative">
-        <button
-          onClick={() => setVisible(false)}
-          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Fechar"
-        >
-          <X className="w-4 h-4" />
-        </button>
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-            <RefreshCw className="w-5 h-5 text-[#2575D1]" />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-sm text-gray-900">Nova versão disponível</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Uma nova versão do ChemCtrl está pronta para uso.
-            </p>
-            <Button
-              onClick={applyUpdate}
-              size="sm"
-              className="mt-3 w-full"
-              style={{ background: '#2575D1' }}
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Atualizar agora
-            </Button>
-          </div>
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ backdropFilter: 'blur(6px)', backgroundColor: 'rgba(0,0,0,0.6)' }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-8 flex flex-col items-center text-center">
+        {/* Ícone */}
+        <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-5">
+          <RefreshCw className={`w-8 h-8 text-blue-600 ${updating ? 'animate-spin' : ''}`} />
         </div>
+
+        {/* Título */}
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
+          Nova versão disponível!
+        </h2>
+
+        {/* Mensagem */}
+        <p className="text-sm text-gray-500 leading-relaxed mb-6">
+          Uma versão mais recente do <strong className="text-gray-700">ChemCtrl</strong> foi publicada.
+          Para continuar utilizando o sistema, é necessário atualizar o aplicativo.
+        </p>
+
+        {/* Botão único — sem opção de fechar */}
+        <button
+          onClick={handleUpdate}
+          disabled={updating}
+          className="w-full py-3 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-70"
+          style={{ background: '#2575D1' }}
+        >
+          {updating ? 'Atualizando...' : 'Atualizar agora'}
+        </button>
       </div>
     </div>
   );
