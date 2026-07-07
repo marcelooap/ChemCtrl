@@ -7,17 +7,23 @@ import moment from 'moment';
 
 const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
+const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
-export default function TransferViewDialog({ transfer, density, onClose }) {
+export default function TransferViewDialog({ transfer, density, recipeCode, containers, onClose }) {
   if (!transfer) return null;
 
-  const origins = transfer.origins || [];
-  const dests = transfer.destinations || [];
+  const origins = parseArr(transfer.origins);
+  const dests = parseArr(transfer.destinations);
+
+  // Live lot lookup from current container data (falls back to frozen value)
+  const containerLot = {};
+  (Array.isArray(containers) ? containers : []).forEach(c => { if (c.id && c.lot) containerLot[c.id] = c.lot; });
+  const liveLotFor = (o) => (o.container_id && containerLot[o.container_id]) ? containerLot[o.container_id] : o.lot;
 
   // Group by lot
   const lotMap = {};
   origins.forEach(o => {
-    const key = o.lot || 'Sem Lote';
+    const key = liveLotFor(o) || 'Sem Lote';
     if (!lotMap[key]) lotMap[key] = { volume: 0, mass: 0 };
     lotMap[key].volume += parseFloat(o.volume_used) || 0;
     lotMap[key].mass += (parseFloat(o.volume_used) || 0) * (density || 0);
@@ -38,7 +44,7 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
               {transfer.transfer_number} — {transfer.product}
             </DialogTitle>
             <Button size="sm" style={{ background: '#2575D1' }} className="text-white hover:opacity-90"
-              onClick={() => generateTransferPDF(transfer, density)}>
+              onClick={() => generateTransferPDF(transfer, density, containers, recipeCode)}>
               <FileDown className="w-4 h-4 mr-2" /> Gerar PDF
             </Button>
           </div>
@@ -72,14 +78,14 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
                   <tr key={i} className="border-t border-gray-100">
                     <td className="px-3 py-2 text-sm font-medium">{o.container_number || '—'}</td>
                     <td className="px-3 py-2 text-sm">{o.barril_number || '—'}</td>
-                    <td className="px-3 py-2 text-sm">{o.lot || '—'}</td>
-                    <td className="px-3 py-2 text-sm text-right">{fmt3(o.volume_used)}</td>
-                    <td className="px-3 py-2 text-sm text-right">{fmt3(o.remaining_stock)}</td>
+                    <td className="px-3 py-2 text-sm">{liveLotFor(o) || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-right">{fmt(o.volume_used)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{fmt(o.remaining_stock)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-gray-300 bg-blue-50/50">
                   <td className="px-3 py-2 text-xs font-bold" colSpan={3}>Total</td>
-                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt3(totalVolUsed)} L</td>
+                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt(totalVolUsed)} L</td>
                   <td className="px-3 py-2"></td>
                 </tr>
               </tbody>
@@ -99,14 +105,14 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
                 {lotKeys.map(k => (
                   <tr key={k} className="border-t border-gray-100">
                     <td className="px-3 py-2 text-sm font-medium">{k}</td>
-                    <td className="px-3 py-2 text-sm text-right">{fmt3(lotMap[k].volume)}</td>
-                    <td className="px-3 py-2 text-sm text-right">{fmt3(lotMap[k].mass)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{fmt(lotMap[k].volume)}</td>
+                    <td className="px-3 py-2 text-sm text-right">{fmt(lotMap[k].mass)}</td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-gray-300 bg-blue-50/50">
                   <td className="px-3 py-2 text-xs font-bold">Total</td>
-                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt3(totalVolUsed)} L</td>
-                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt3(totalMassUsed)} kg</td>
+                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt(totalVolUsed)} L</td>
+                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt(totalMassUsed)} kg</td>
                 </tr>
               </tbody>
             </table>
@@ -120,17 +126,26 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
                 <div className="grid grid-cols-4 gap-2 text-sm">
                   <Info label="Tipo" value={d.type || '—'} />
                   <Info label={d.type === 'Transbordo' ? 'N° Placa' : 'Placa'} value={d.placa || '—'} />
-                  <Info label={d.type === 'Transbordo' ? 'N° Barril' : 'Motorista'} value={d.barril || d.driver || '—'} />
-                  <Info label="Volume (L)" value={fmt3(d.volume)} />
-                  <Info label="Massa (kg)" value={fmt3(d.mass)} />
-                  <Info label="Tipo Embalagem" value={d.packaging_type || '—'} />
-                  <Info label="Lacres" value={d.seals || '—'} />
-                  <Info label="Eslinga" value={d.sling || '—'} />
-                  <Info label="GPS" value={d.gps || '—'} />
-                  <Info label="Data Menor Teste" value={d.min_test_date ? moment(d.min_test_date).format('DD/MM/YYYY') : '—'} />
-                  <Info label="Tara (kg)" value={fmt3(d.tare)} />
-                  <Info label="Peso Líquido (kg)" value={fmt3(d.net_weight)} />
-                  <Info label="Peso Bruto (kg)" value={fmt3(d.gross_weight)} />
+                  <Info label={d.type === 'Transbordo' ? 'N° Barril' : 'Motorista'} value={d.type === 'Transbordo' ? (d.barril || '—') : (d.driver || '—')} />
+                  <Info label="Volume (L)" value={fmt(d.volume)} />
+                  <Info label="Massa (kg)" value={fmt(d.mass)} />
+                  {d.type === 'Transbordo' ? (
+                    <>
+                      <Info label="Tipo Embalagem" value={d.packaging_type || '—'} />
+                      <Info label="Eslinga" value={d.sling || '—'} />
+                      <Info label="GPS" value={d.gps || '—'} />
+                      <Info label="Data Menor Teste" value={d.min_test_date ? moment(d.min_test_date).format('DD/MM/YYYY') : '—'} />
+                      <Info label="Tara (kg)" value={fmt(d.tare)} />
+                      <Info label="Lacres" value={d.seals || '—'} wrap />
+                    </>
+                  ) : (
+                    <>
+                      <Info label="Peso Líquido (kg)" value={fmt(d.net_weight)} />
+                      <Info label="Tara (kg)" value={fmt(d.tare)} />
+                      <Info label="Peso Bruto (kg)" value={fmt(d.gross_weight)} />
+                      <Info label="Lacres" value={d.seals || '—'} wrap />
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -140,10 +155,10 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
           <div>
             <h4 className="text-sm font-bold mb-3" style={{ color: '#2A5A95' }}>Totais Gerais</h4>
             <div className="grid grid-cols-4 gap-2 text-sm">
-              <Info label="Volume Total Retirado" value={`${fmt3(totalVolUsed)} L`} />
-              <Info label="Massa Total Retirada" value={`${fmt3(totalMassUsed)} kg`} />
-              <Info label="Volume Total Destino" value={`${fmt3(totalVolDest)} L`} />
-              <Info label="Massa Total Destino" value={`${fmt3(totalMassDest)} kg`} />
+              <Info label="Volume Total Retirado" value={`${fmt(totalVolUsed)} L`} />
+              <Info label="Massa Total Retirada" value={`${fmt(totalMassUsed)} kg`} />
+              <Info label="Volume Total Destino" value={`${fmt(totalVolDest)} L`} />
+              <Info label="Massa Total Destino" value={`${fmt(totalMassDest)} kg`} />
             </div>
           </div>
         </div>
@@ -152,11 +167,11 @@ export default function TransferViewDialog({ transfer, density, onClose }) {
   );
 }
 
-function Info({ label, value }) {
+function Info({ label, value, wrap }) {
   return (
-    <div className="border border-gray-100 rounded-md px-2.5 py-1.5 bg-gray-50/50">
+    <div className={`border border-gray-100 rounded-md px-2.5 py-1.5 bg-gray-50/50 ${wrap ? 'col-span-4' : ''}`}>
       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-sm font-medium text-foreground truncate">{value}</p>
+      <p className={`text-sm font-medium text-foreground ${wrap ? 'break-words whitespace-normal' : 'truncate'}`}>{value}</p>
     </div>
   );
 }
