@@ -188,6 +188,7 @@ export default function TelaClientes() {
               <thead className="sticky top-0">
                 <tr style={{ background: '#F3F4F6' }}>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">N° Embalagem</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Produto</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Volume (L)</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Massa (kg)</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Lote</th>
@@ -198,6 +199,7 @@ export default function TelaClientes() {
                 {filteredContainers.map(c => (
                   <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                     <td className="px-3 py-2 text-sm font-bold" style={{ color: '#1A1A2E' }}>{c.container_number || '—'}</td>
+                    <td className="px-3 py-2 text-sm" style={{ color: '#333' }}>{c.product || '—'}</td>
                     <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt3(c.volume)}</td>
                     <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#065F46' }}>{fmt3(c.net_weight)}</td>
                     <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF', fontFamily: "'Arial Narrow', 'Inter', sans-serif", fontStretch: 'condensed' }}>{c.lot || '—'}</td>
