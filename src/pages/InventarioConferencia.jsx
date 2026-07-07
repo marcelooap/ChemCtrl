@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Save, CheckCircle, Lock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 import moment from 'moment';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
@@ -15,6 +16,7 @@ export default function InventarioConferencia() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user: authUser } = useInternalAuth();
   const [inventory, setInventory] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +64,7 @@ export default function InventarioConferencia() {
 
   const handleFinish = async () => {
     try {
-      const u = await base44.auth.me();
-      const userName = u?.nome || u?.full_name || u?.email || '—';
+      const userName = authUser?.nome || authUser?.full_name || '—';
       await base44.entities.Inventory.update(id, {
         items,
         status: 'Finalizado',
