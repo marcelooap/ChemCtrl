@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createSupabaseEntities } from '@/api/supabaseClient';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+
+const supabase = createSupabaseEntities();
 
 const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const fmt1 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -15,6 +18,7 @@ const emptyContainer = () => ({ number: '', barril: '', type: 'Tambor 200 L', vo
 export default function EnvaseDialog({ open, onOpenChange, production, onSave }) {
   const [containers, setContainers] = useState([emptyContainer()]);
   const [saving, setSaving] = useState(false);
+  const { user: internalUser } = useInternalAuth();
 
   useEffect(() => {
     if (open) {
@@ -28,7 +32,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     const next = [...containers];
     const wasNotTankagem = next[idx].type !== 'Tankagem';
     next[idx] = { ...next[idx], [field]: value };
-    // Ao selecionar Tankagem: preencher campos opcionais com "-" se estiverem vazios
     if (field === 'type' && value === 'Tankagem' && wasNotTankagem) {
       if (!next[idx].barril) next[idx].barril = '-';
       if (!next[idx].tare) next[idx].tare = 0;
@@ -60,21 +63,16 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     if (volumeExceeded || !allContainersValid || totalVolumeEntered === 0) return;
     setSaving(true);
     try {
-      // Get logged-in user name for operator field
-      let operatorName = '';
-      try {
-        const user = await base44.auth.me();
-        operatorName = user?.nome || user?.full_name || user?.email || '';
-      } catch (_) {}
+      const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
 
-      // Get next registration_id
-      const existing = await base44.entities.Container.list('-created_date', 500);
+      // Consulta usando o novo cliente customizado do Supabase
+      const existing = await supabase.Container.list('-created_date', 500);
       const maxRegId = existing.reduce((max, c) => Math.max(max, c.registration_id || 0), 0);
       let nextRegId = maxRegId + 1;
 
       for (const c of containers) {
         if (!c.volume) continue;
-        await base44.entities.Container.create({
+        await supabase.Container.create({
           production_id: production.id,
           op_number: production.op_number,
           product: production.product,
@@ -95,15 +93,23 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
           operator: operatorName,
           status: 'No Pátio',
         });
-        // If this vasilhame is a tankagem, zero out any MP stock previously stored in that tanka
         if (c.type === 'Tankagem' && c.number) {
           await zeroOutTankaStock(c.number);
         }
         nextRegId++;
       }
-      await base44.entities.Production.update(production.id, { status: 'Finalizado', end_time: new Date().toISOString(), packaging_type: containers[0]?.type, operator: operatorName });
+      
+      await supabase.Production.update(production.id, { 
+        status: 'Finalizado', 
+        end_time: new Date().toISOString(), 
+        packaging_type: containers[0]?.type, 
+        operator: operatorName 
+      });
+
       onSave?.();
       onOpenChange(false);
+    } catch (error) {
+      console.error("Erro ao registrar envase:", error);
     } finally {
       setSaving(false);
     }
@@ -119,7 +125,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         </DialogHeader>
         {production && (
           <div>
-            {/* Summary */}
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-4 gap-4 text-sm">
                 <div>
@@ -147,7 +152,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
               </div>
             </div>
 
-            {/* Containers */}
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-gray-700">Embalagens Envasadas</h4>
               <Button size="sm" onClick={addRow} className="text-white" style={{ background: '#2563EB' }}>
@@ -168,7 +172,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
                       <Input value={c.number} onChange={e => updateContainer(idx, 'number', e.target.value)} className="h-10 text-sm" placeholder="151340690 (806547-8)" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">N° Barril{c.type === 'Tankagem' ? '' : ''}</label>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">N° Barril</label>
                       <Input value={c.barril} onChange={e => updateContainer(idx, 'barril', e.target.value)} className="h-10 text-sm" placeholder={c.type === 'Tankagem' ? '-' : 'N° do barril'} />
                     </div>
                     <div>
@@ -212,7 +216,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
               ))}
             </div>
 
-            {/* Volume check */}
             <div className="mt-4 flex items-center justify-between text-sm border rounded-lg px-4 py-2.5" style={{ background: volumeExceeded ? '#fef2f2' : '#f0fdf4', borderColor: volumeExceeded ? '#fca5a5' : '#86efac' }}>
               <span style={{ color: volumeExceeded ? '#dc2626' : '#15803d' }}>
                 Volume registrado: <strong>{fmt1(totalVolumeEntered)} L</strong> / Volume da OP: <strong>{fmt1(opVolume)} L</strong>
@@ -220,7 +223,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
               {volumeExceeded && <span className="text-xs font-semibold text-red-600">⚠ Volume excedido!</span>}
             </div>
 
-            {/* Footer */}
             <div className="flex justify-end gap-2 mt-5">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button onClick={handleSave} disabled={saving || !allContainersValid || volumeExceeded || totalVolumeEntered === 0} className="text-white" style={{ background: '#1E40AF' }}>
