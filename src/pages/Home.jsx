@@ -18,7 +18,7 @@ const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Ico
               type="button"
               onClick={onToggleEye}
               className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 cursor-pointer"
-              title={hidden ? 'Mostrar receita' : 'Ocultar receita'}
+              title={hidden ? 'Mostrar' : 'Ocultar'}
             >
               {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -57,14 +57,18 @@ export default function Home() {
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
   const { data: orders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 200));
   const [bypassing, setBypassing] = useState(null);
-  const [hideRevenue, setHideRevenue] = useState(false);
+  const [hideRevenue, setHideRevenue] = useState(true);
+  const [hideVolume, setHideVolume] = useState(false);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   const now = moment();
   const startOfMonth = now.clone().startOf('month');
-  const monthProds = productions.filter(p => moment(p.date).isSameOrAfter(startOfMonth));
-  const finishedThisMonth = monthProds.filter(p => p.status === 'Finalizado');
+  const finishedThisMonth = productions.filter(p => {
+    if (p.status !== 'Finalizado') return false;
+    const finishDate = p.end_time || p.updated_date;
+    return finishDate && moment(finishDate).isSameOrAfter(startOfMonth);
+  });
   const inProgressProds = productions.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
   const totalVolumeMonth = finishedThisMonth.reduce((s, p) => s + (p.volume || 0), 0);
   const inProgressVolume = inProgressProds.reduce((s, p) => s + (p.volume || 0), 0);
@@ -108,9 +112,10 @@ export default function Home() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard title="Volume Produzido no Mês" value={`${fmt(totalVolumeMonth)} L`} valueColor="#000"
           subtitle={`${finishedThisMonth.length} OP(s) finalizada(s)`} icon={BarChart3} iconBg="#1e56a0"
+          showEye hidden={hideVolume} onToggleEye={() => setHideVolume(h => !h)}
           footer={[
-            { text: `+ ${fmt(inProgressVolume)} L em produção`, color: '#1e56a0' },
-            { text: `Total provisionado: ${fmt(totalVolumeMonth + inProgressVolume)} L`, color: '#666' },
+            { text: hideVolume ? '+ •••••• em produção' : `+ ${fmt(inProgressVolume)} L em produção`, color: '#1e56a0' },
+            { text: hideVolume ? 'Total provisionado: ••••••' : `Total provisionado: ${fmt(totalVolumeMonth + inProgressVolume)} L`, color: '#666' },
           ]} />
         <StatCard title="Receita Gerada no Mês" value={fmtMoney(revenueMonth)} valueColor="#00875a"
           subtitle="receita realizada" icon={DollarSign} iconBg="#00875a" accentBorder="#00875a" showEye
