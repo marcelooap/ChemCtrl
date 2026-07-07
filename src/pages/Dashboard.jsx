@@ -71,8 +71,11 @@ export default function Dashboard() {
 
   const metrics = useMemo(() => {
     const startOfMonth = now.clone().startOf('month');
-    const monthProds = productions.filter(p => moment(p.date).isSameOrAfter(startOfMonth));
-    const finishedThisMonth = monthProds.filter(p => p.status === 'Finalizado');
+    const finishedThisMonth = productions.filter(p => {
+      if (p.status !== 'Finalizado') return false;
+      const finishDate = p.end_time || p.updated_date;
+      return finishDate && moment(finishDate).isSameOrAfter(startOfMonth);
+    });
     const finishedAll = productions.filter(p => p.status === 'Finalizado');
     const inProgress = productions.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
     const cancelled = productions.filter(p => p.status === 'Cancelado');
@@ -119,9 +122,11 @@ export default function Dashboard() {
     for (let i = 5; i >= 0; i--) {
       const m = now.clone().subtract(i, 'months');
       const label = m.format('MMM/YYYY');
-      const monthProds = productions.filter(p =>
-        p.status === 'Finalizado' && moment(p.date).isSame(m, 'month') && moment(p.date).isSame(m, 'year')
-      );
+      const monthProds = productions.filter(p => {
+        if (p.status !== 'Finalizado') return false;
+        const finishDate = p.end_time || p.updated_date;
+        return finishDate && moment(finishDate).isSame(m, 'month') && moment(finishDate).isSame(m, 'year');
+      });
       const volume = monthProds.reduce((s, p) => s + (p.volume || 0), 0);
       const revenue = monthProds.reduce((s, p) => s + ((p.mass || 0) * (p.unit_price || 0)), 0);
       months.push({ month: label, volume: Math.round(volume), revenue: Math.round(revenue) });
