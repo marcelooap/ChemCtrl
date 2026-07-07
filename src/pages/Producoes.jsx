@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Search, Eye, Pencil, FileText, Ban } from 'lucide-react';
+import { Search, Eye, Pencil, FileText, Ban, Loader2, QrCode } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import InvoiceToggle from '@/components/productions/InvoiceToggle';
 import { generateProductionPDF } from '@/lib/pdfReports';
+import QrCodeDialog from '@/components/productions/QrCodeDialog';
 import { brasiliaDate, brasiliaDateTime } from '@/lib/brasilTime';
 import moment from 'moment';
 
@@ -17,7 +19,7 @@ const parseArr = (val) => {
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val;
     return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 };
 
 const StatusBadge = ({ status }) => {
@@ -36,6 +38,7 @@ export default function Producoes() {
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
+  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -46,12 +49,20 @@ export default function Producoes() {
   const [editingPkg, setEditingPkg] = useState(null);
   const [pkgValue, setPkgValue] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
+  const [clientOrder, setClientOrder] = useState('');
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [savingPkg, setSavingPkg] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [qrToken, setQrToken] = useState(null);
+  const [qrLabel, setQrLabel] = useState('');
   const { toast } = useToast();
 
   const filtered = productions.filter(p => {
     const q = search.toLowerCase();
-    const matchSearch = !q || [p.op_number, p.product, p.client, p.lot].some(v => (v || '').toLowerCase().includes(q));
+    const opContainersOf = (p) => containers.filter(c => c.op_number === p.op_number);
+    const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
+      || opContainersOf(p).some(c => (c.container_number || '').toLowerCase().includes(q))
+      || (p.packaging_type || '').toLowerCase().includes(q);
     const endDate = p.end_time ? moment(p.end_time) : null;
     const matchFrom = !dateFrom || (endDate && endDate.isSameOrAfter(moment(dateFrom), 'day'));
     const matchTo = !dateTo || (endDate && endDate.isSameOrBefore(moment(dateTo), 'day'));
@@ -63,19 +74,58 @@ export default function Producoes() {
   const totalVol = filtered.filter(p => p.status === 'Finalizado').reduce((s, p) => s + (p.volume || 0), 0);
   const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
   const fmtMoney = (n) => `R$ ${(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const fmt4 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const stockUnitOf = (mp) => {
+    if (mp.stock_id) { const s = (stocks || []).find(x => x.id === mp.stock_id); if (s && s.unit) return s.unit; }
+    return 'kg';
+  };
+  const liveLotOf = (mp) => {
+    if (mp.stock_id) { const s = (stocks || []).find(x => x.id === mp.stock_id); if (s && s.lot) return s.lot; }
+    return mp.lot;
+  };
+  const stockUnitPriceOf = (mp) => {
+    if (mp.stock_id) { const s = (stocks || []).find(x => x.id === mp.stock_id); if (s) return s.unit_price || 0; }
+    return 0;
+  };
 
   const savePkg = async () => {
     const price = parseFloat(unitPrice) || 0;
     const totalValue = price * (editingPkg.mass || 0);
-    await base44.entities.Production.update(editingPkg.id, {
+    const updates = {
       packaging_type: pkgValue,
       packaging_info: pkgValue,
       unit_price: price,
       total_value: totalValue,
-    });
-    setShowEditPkg(false);
-    load();
-    toast({ title: 'Embalagem atualizada com sucesso' });
+    };
+    if (clientOrder.trim()) updates.client_order = clientOrder.trim();
+
+    setSavingPkg(true);
+    try {
+      await base44.entities.Production.update(editingPkg.id, updates);
+
+      if (clientOrder.trim()) {
+        const opNum = editingPkg.op_number;
+        if (editingPkg.order_id) {
+          await base44.entities.Order.update(editingPkg.order_id, { client_order: clientOrder.trim() }).catch(() => {});
+        }
+        const allQR = await base44.entities.QualityResult.filter({ production_id: editingPkg.id });
+        for (const qr of allQR) {
+          await base44.entities.QualityResult.update(qr.id, { op_number: opNum }).catch(() => {});
+        }
+        const allC = containers.filter(c => c.op_number === opNum);
+        for (const c of allC) {
+          await base44.entities.Container.update(c.id, { op_number: opNum }).catch(() => {});
+        }
+      }
+
+      setShowEditPkg(false);
+      load();
+      toast({ title: 'Produção atualizada com sucesso' });
+    } catch (err) {
+      toast({ title: 'Erro ao atualizar produção', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingPkg(false);
+    }
   };
 
   const canCancel = (status) => ['Aguardando Início', 'Em Produção'].includes(status);
@@ -99,9 +149,22 @@ export default function Producoes() {
         }
       }
 
-      // Update linked order back to Pendente if it was in production
+      // Update linked order: subtract cancelled volume and recalculate
       if (cancelTarget.order_id) {
-        await base44.entities.Order.update(cancelTarget.order_id, { status: 'Pendente' }).catch(() => {});
+        try {
+          const order = await base44.entities.Order.get(cancelTarget.order_id);
+          if (order) {
+            const cancelledVol = cancelTarget.volume || 0;
+            const newProduced = Math.max(0, (order.volume_produced || 0) - cancelledVol);
+            const newPending = Math.max(0, (order.volume_ordered || 0) - newProduced);
+            const newStatus = newProduced <= 0 ? 'Pendente' : newProduced < (order.volume_ordered || 0) ? 'Em produção' : 'Finalizado';
+            await base44.entities.Order.update(cancelTarget.order_id, {
+              volume_produced: newProduced,
+              volume_pending: newPending,
+              status: newStatus,
+            });
+          }
+        } catch (_e) {}
       }
 
       await base44.entities.Production.update(cancelTarget.id, {
@@ -157,13 +220,14 @@ export default function Producoes() {
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-gray-50">
                   <th className="px-4 py-3 text-left">OP</th>
-                  <th className="px-4 py-3 text-left">Data Finaliz.</th>
+                  <th className="px-4 py-3 text-left">Fabricação</th>
                   <th className="px-4 py-3 text-left">Produto</th>
                   <th className="px-4 py-3 text-left">Cliente</th>
                   <th className="px-4 py-3 text-left">Lote</th>
                   <th className="px-4 py-3 text-right">Volume (L)</th>
                   <th className="px-4 py-3 text-left">Embalagem</th>
                   <th className="px-4 py-3 text-center">Etapa</th>
+                  <th className="px-4 py-3 text-center">Envio p/ Faturamento</th>
                   <th className="px-4 py-3 text-center">Ações</th>
                 </tr>
               </thead>
@@ -176,12 +240,32 @@ export default function Producoes() {
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{p.client}</td>
                     <td className="px-4 py-2.5 text-sm">{p.lot}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(p.volume)}</td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground">{p.packaging_info || p.packaging_type || '—'}</td>
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground">
+                      {(() => {
+                        const opContainers = containers.filter(c => c.op_number === p.op_number);
+                        if (opContainers.length > 0) {
+                          if (opContainers.length > 1) {
+                            return String(opContainers.length).padStart(2, '0') + ' x Unidades de Carga';
+                          }
+                          return opContainers.map(c => c.container_number).filter(Boolean).join(', ') || '—';
+                        }
+                        return p.packaging_type || p.packaging_info || '—';
+                      })()}
+                    </td>
                     <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>
+                    <td className="px-4 py-2.5 text-center">
+                      <InvoiceToggle
+                        invoiced={p.invoiced}
+                        onToggle={async () => {
+                          await base44.entities.Production.update(p.id, { invoiced: !p.invoiced });
+                          load();
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(p)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canCancel(p.status) && (
                           <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title="Cancelar OP"><Ban className="w-3.5 h-3.5 text-red-400" /></button>
                         )}
@@ -205,7 +289,7 @@ export default function Producoes() {
       {/* View Dialog */}
       <Dialog open={showView} onOpenChange={setShowView}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>OP {viewing?.op_number} · {viewing?.product}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{viewing?.op_number} · {viewing?.product}</DialogTitle></DialogHeader>
           {viewing && (
             <div>
               <div className="grid grid-cols-3 gap-4 text-sm mb-4">
@@ -233,24 +317,107 @@ export default function Producoes() {
                   <th className="px-3 py-2 text-right">Qtd. Op. (kg)</th>
                 </tr></thead>
                 <tbody>
-                  {parseArr(viewing.raw_materials_used).map((m, i) => (
+                  {parseArr(viewing.raw_materials_used).map((m, i) => {
+                    const unit = stockUnitOf(m);
+                    return (
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
                       <td className="px-3 py-2">{m.mp_name}</td>
-                      <td className="px-3 py-2">{m.lot || '—'}</td>
-                      <td className="px-3 py-2 text-right">{fmt(m.qty_fiscal)} kg</td>
+                      <td className="px-3 py-2">{liveLotOf(m) || '—'}</td>
+                      <td className="px-3 py-2 text-right">{fmt(m.qty_fiscal)} {unit}</td>
                       <td className="px-3 py-2 text-right font-medium">{fmt(m.qty_operational)} kg</td>
                     </tr>
-                  ))}
-                  <tr className="border-t bg-gray-50 font-bold" style={{ color: '#2575D1' }}>
-                    <td colSpan={3} className="px-3 py-2">TOTAL</td>
-                    <td className="px-3 py-2 text-right">{fmt(parseArr(viewing.raw_materials_used).reduce((s, m) => s + (m.qty_fiscal || 0), 0))} kg</td>
-                    <td className="px-3 py-2 text-right">{fmt(parseArr(viewing.raw_materials_used).reduce((s, m) => s + (m.qty_operational || 0), 0))} kg</td>
-                  </tr>
+                    );
+                  })}
+                  {(() => {
+                    const mps = parseArr(viewing.raw_materials_used);
+                    const units = mps.map(stockUnitOf);
+                    const sameUnit = units.length > 0 && units.every(u => u === units[0]);
+                    const tFiscal = mps.reduce((s, m) => s + (m.qty_fiscal || 0), 0);
+                    const tOp = mps.reduce((s, m) => s + (m.qty_operational || 0), 0);
+                    return (
+                    <tr className="border-t bg-gray-50 font-bold" style={{ color: '#2575D1' }}>
+                      <td colSpan={3} className="px-3 py-2">TOTAL</td>
+                      <td className="px-3 py-2 text-right">{fmt(tFiscal)}{sameUnit ? ' ' + units[0] : ''}</td>
+                      <td className="px-3 py-2 text-right">{fmt(tOp)} kg</td>
+                    </tr>
+                    );
+                  })()}
                 </tbody>
               </table>
 
-              {viewContainers.length > 0 && (
+              {/* Análise de Custos (somente na tela, não consta no PDF) */}
+              {(() => {
+                const mps = parseArr(viewing.raw_materials_used);
+                const mpCostRows = mps.map(m => {
+                  const price = stockUnitPriceOf(m);
+                  const qty = m.qty_fiscal || 0;
+                  return { name: m.mp_name, unit: stockUnitOf(m), price, qty, cost: price * qty };
+                });
+                const totalMpCost = mpCostRows.reduce((s, r) => s + r.cost, 0);
+                const recipe = (recipes || []).find(r => r.product_name === viewing.product);
+                const productPrice = recipe?.price || viewing.unit_price || 0;
+                const mass = viewing.mass || 0;
+                const moCost = productPrice * mass;
+                const totalCost = totalMpCost + moCost;
+                const costPerKg = mass > 0 ? totalCost / mass : 0;
+                const pctMp = totalCost > 0 ? (totalMpCost / totalCost) * 100 : 0;
+                const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
+                return (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold mb-2">Análise de Custos</h4>
+                    <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
+                      <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                        <th className="px-3 py-2 text-left">MATÉRIA PRIMA</th>
+                        <th className="px-3 py-2 text-right">QTD. FISCAL</th>
+                        <th className="px-3 py-2 text-right">PREÇO UNIT.</th>
+                        <th className="px-3 py-2 text-right">CUSTO</th>
+                      </tr></thead>
+                      <tbody>
+                        {mpCostRows.map((r, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-3 py-2">{r.name || '—'}</td>
+                            <td className="px-3 py-2 text-right">{fmt(r.qty)} {r.unit}</td>
+                            <td className="px-3 py-2 text-right">{fmt4(r.price)}</td>
+                            <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t bg-gray-50 font-bold">
+                          <td colSpan={3} className="px-3 py-2 text-right">Custo com MP</td>
+                          <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
+                        </tr>
+                        <tr className="border-t bg-gray-50 font-bold">
+                          <td colSpan={2} className="px-3 py-2">Mão de Obra (preço PA × massa)</td>
+                          <td className="px-3 py-2 text-right">{fmt4(productPrice)} × {fmt(mass)} kg</td>
+                          <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">Custo MP</p>
+                        <p className="font-bold text-sm" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</p>
+                        <p className="text-xs text-muted-foreground">{pctMp.toFixed(1)}% do total</p>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">Custo MO</p>
+                        <p className="font-bold text-sm text-purple-700">{fmtMoney(moCost)}</p>
+                        <p className="text-xs text-muted-foreground">{pctMo.toFixed(1)}% do total</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">Custo Total</p>
+                        <p className="font-bold text-sm text-green-700">{fmtMoney(totalCost)}</p>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">Custo por kg</p>
+                        <p className="font-bold text-sm text-amber-700">{fmtMoney(costPerKg)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {viewContainers.length > 0 ? (
                 <>
                   <h4 className="text-sm font-semibold mb-2">Embalagens Envasadas</h4>
                   <table className="w-full text-sm border rounded-lg overflow-hidden">
@@ -280,13 +447,95 @@ export default function Producoes() {
                     </tbody>
                   </table>
                 </>
-              )}
+              ) : (viewing.packaging_info || viewing.packaging_type) ? (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2">Embalagem Sugerida para Envase</h4>
+                  <p className="text-sm bg-gray-50 rounded-lg px-3 py-2 font-medium">{viewing.packaging_info || viewing.packaging_type}</p>
+                </div>
+              ) : null}
+
+              {/* Tempos de Produção */}
+              {(() => {
+                const p = viewing;
+                const startMs = p.start_time ? new Date(p.start_time).getTime() : null;
+                const endMs = p.end_time ? new Date(p.end_time).getTime() : null;
+                const qcStartMs = p.qc_start_time ? new Date(p.qc_start_time).getTime() : null;
+                const envaseStartMs = p.envase_start_time ? new Date(p.envase_start_time).getTime() : null;
+                const pauseMs = p.total_pause_ms || 0;
+
+                const fmtDur = (ms) => {
+                  if (!ms || ms <= 0) return '—';
+                  const totalMin = Math.floor(ms / 60000);
+                  const h = Math.floor(totalMin / 60);
+                  const m = totalMin % 60;
+                  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+                };
+
+                const prodMs = (qcStartMs && startMs) ? (qcStartMs - startMs - pauseMs) : (endMs && startMs && !qcStartMs) ? (endMs - startMs - pauseMs) : null;
+                const qcMs = (envaseStartMs && qcStartMs) ? (envaseStartMs - qcStartMs) : null;
+                const envaseMs = (endMs && envaseStartMs) ? (endMs - envaseStartMs) : null;
+                const totalMs = (endMs && startMs) ? ((prodMs || 0) + (qcMs || 0) + (envaseMs || 0)) : null;
+
+                if (!startMs) return null;
+
+                return (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold mb-3">Tempos de Produção</h4>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      {/* Produção */}
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-blue-700 mb-2">⚙️ Produção</p>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.start_time ? brasiliaDateTime(p.start_time) : '—'}</p></div>
+                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{qcStartMs ? brasiliaDateTime(p.qc_start_time) : (endMs ? brasiliaDateTime(p.end_time) : '—')}</p></div>
+                          <div><p className="text-muted-foreground">Tempo (- pausa)</p><p className="font-bold text-blue-700">{fmtDur(prodMs)}{pauseMs > 0 ? ` (pausa: ${fmtDur(pauseMs)})` : ''}</p></div>
+                        </div>
+                      </div>
+                      {/* Qualidade */}
+                      <div className="bg-amber-50 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-amber-700 mb-2">🔬 Controle de Qualidade</p>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.qc_start_time ? brasiliaDateTime(p.qc_start_time) : '—'}</p></div>
+                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{envaseStartMs ? brasiliaDateTime(p.envase_start_time) : '—'}</p></div>
+                          <div><p className="text-muted-foreground">Tempo</p><p className="font-bold text-amber-700">{fmtDur(qcMs)}</p></div>
+                        </div>
+                      </div>
+                      {/* Envase */}
+                      <div className="bg-purple-50 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-purple-700 mb-2">📦 Envase</p>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.envase_start_time ? brasiliaDateTime(p.envase_start_time) : '—'}</p></div>
+                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{endMs ? brasiliaDateTime(p.end_time) : '—'}</p></div>
+                          <div><p className="text-muted-foreground">Tempo</p><p className="font-bold text-purple-700">{fmtDur(envaseMs)}</p></div>
+                        </div>
+                      </div>
+                      {/* Total */}
+                      {totalMs && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold text-green-700">⏱️ Tempo Total da Produção</p>
+                            <p className="text-lg font-bold text-green-700">{fmtDur(totalMs)}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">Produção + Qualidade + Envase</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
           <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={() => generateProductionPDF(viewing, viewContainers)} className="gap-2">
-              <FileText className="w-4 h-4" /> Gerar PDF
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => generateProductionPDF(viewing, viewContainers, stocks)} className="gap-2">
+                <FileText className="w-4 h-4" /> Gerar PDF
+              </Button>
+              {viewing?.public_token && (
+                <Button variant="outline" onClick={() => { setQrToken(viewing.public_token); setQrLabel(`${viewing.op_number} · ${viewing.product} · Lote ${viewing.lot}`); setShowQr(true); }} className="gap-2">
+                  <QrCode className="w-4 h-4" /> QR Code
+                </Button>
+              )}
+            </div>
             <Button variant="outline" onClick={() => setShowView(false)}>Fechar</Button>
           </div>
         </DialogContent>
@@ -297,6 +546,10 @@ export default function Producoes() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Editar Produção — {editingPkg?.op_number}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Pedido Cliente</label>
+              <Input value={clientOrder} onChange={e => setClientOrder(e.target.value)} placeholder="Nº do pedido do cliente" />
+            </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Embalagem</label>
               <Input value={pkgValue} onChange={e => setPkgValue(e.target.value)} placeholder="Ex: Tambor 200 L" />
@@ -312,11 +565,14 @@ export default function Producoes() {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowEditPkg(false)}>Cancelar</Button>
-            <Button onClick={savePkg} style={{ background: '#2575D1', color: 'white' }}>Salvar</Button>
+            <Button variant="outline" onClick={() => setShowEditPkg(false)} disabled={savingPkg}>Cancelar</Button>
+            <Button onClick={savePkg} disabled={savingPkg} style={{ background: '#2575D1', color: 'white' }}>
+              {savingPkg ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : 'Salvar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+      <QrCodeDialog open={showQr} onOpenChange={setShowQr} token={qrToken} lotLabel={qrLabel} />
       <ConfirmDialog
         open={!!cancelTarget}
         onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
