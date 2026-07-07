@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { ArrowLeft, ListChecks, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ListChecks, Save, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { brasiliaDate, brasiliaDateTime } from '@/lib/brasilTime';
 import moment from 'moment';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -14,7 +15,7 @@ const parseArr = (val) => {
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val;
     return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 };
 
 const statusBadgeColors = {
@@ -30,9 +31,11 @@ export default function ChecklistProducao() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user: internalUser } = useInternalAuth();
   const [production, setProduction] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: 'Sim', confirmColor: '#2575D1' });
+  const [savingProgress, setSavingProgress] = useState(false);
 
   useEffect(() => {
     base44.entities.Production.get(id).then(setProduction).finally(() => setLoading(false));
@@ -65,12 +68,19 @@ export default function ChecklistProducao() {
   const uncheckedCount = grouped.filter(g => !g.lots.every(l => l.checked)).length;
 
   const saveProgress = async () => {
-    await base44.entities.Production.update(production.id, {
-      raw_materials_used: production.raw_materials_used,
-      pause_start_time: new Date().toISOString(),
-    });
-    toast({ title: 'Progresso salvo' });
-    navigate('/ordens');
+    setSavingProgress(true);
+    try {
+      await base44.entities.Production.update(production.id, {
+        raw_materials_used: production.raw_materials_used,
+        pause_start_time: new Date().toISOString(),
+      });
+      toast({ title: 'Progresso salvo' });
+      navigate('/ordens');
+    } catch (err) {
+      toast({ title: 'Erro ao salvar progresso', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingProgress(false);
+    }
   };
 
   const finalizeProduction = () => {
@@ -85,8 +95,7 @@ export default function ChecklistProducao() {
       confirmLabel: 'Sim, Finalizar',
       confirmColor: '#22c55e',
       onConfirm: async () => {
-        let operatorName = '';
-        try { const user = await base44.auth.me(); operatorName = user?.nome || user?.full_name || user?.email || ''; } catch (_) {}
+        const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
         const nextStatus = production.bypass_qc ? 'Envase' : 'Qualidade';
         const now = new Date().toISOString();
         const updates = {
@@ -217,8 +226,8 @@ export default function ChecklistProducao() {
 
         {/* Footer actions */}
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={saveProgress} className="gap-2">
-            <Save className="w-4 h-4" /> Salvar Progresso
+          <Button variant="outline" onClick={saveProgress} disabled={savingProgress} className="gap-2">
+            {savingProgress ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4" /> Salvar Progresso</>}
           </Button>
           <Button onClick={finalizeProduction} className="gap-2 disabled:opacity-50" style={{ background: allMPsChecked ? '#22c55e' : '#94a3b8', color: 'white' }}>
             <CheckCircle className="w-4 h-4" /> Finalizar Produção
