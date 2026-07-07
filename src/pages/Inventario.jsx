@@ -39,8 +39,7 @@ export default function Inventario() {
 
   const handleStart = async (inv) => {
     try {
-      const u = await base44.auth.me();
-      const userName = u?.nome || u?.full_name || u?.email || '—';
+      const userName = user?.nome || user?.full_name || '—';
       await base44.entities.Inventory.update(inv.id, {
         status: 'Em andamento',
         start_date: new Date().toISOString(),
@@ -48,7 +47,7 @@ export default function Inventario() {
       });
       navigate(`/inventario/${inv.id}`);
     } catch (e) {
-      toast({ title: 'Erro ao iniciar inventário', variant: 'destructive' });
+      toast({ title: 'Erro ao iniciar inventário', description: e?.message || String(e), variant: 'destructive' });
     }
   };
 
