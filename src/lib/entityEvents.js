@@ -1,4 +1,4 @@
-/**
+**
  * Local event bus for immediate UI updates after CRUD operations.
  *
  * The fetch-based Supabase REST client emits here after every INSERT/UPDATE/DELETE.
