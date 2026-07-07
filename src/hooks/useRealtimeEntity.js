@@ -1,115 +1,113 @@
 /**
- * React hook that provides real-time entity data with polling fallback.
+ * useRealtimeEntity — hook centralizado de dados em tempo real
  *
- * Usage (replaces useState + useEffect + load pattern):
+ * - Fetch inicial ao montar.
+ * - Subscreve Supabase Realtime (WebSocket) via subscribeToTable.
+ * - Subscreve event bus local (entityEvents) para updates imediatos do próprio dispositivo.
+ * - Aplica INSERTs/UPDATEs/DELETEs diretamente no estado local (sem refetch completo).
+ * - Em caso de REFRESH (payload incompleto ou reconexão), faz refetch pontual.
+ * - Polling leve (30s) como failsafe final, somente quando realtime está com erro.
+ * - Re-dispara fetch quando deps mudam.
  *
- *   const { data: productions, loading, reload: load, setData: setProductions } =
- *     useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
- *
- * - On mount: fetches initial data.
- * - Subscribes to Supabase Realtime for INSERT/UPDATE/DELETE on the entity's table.
- * - Applies incremental updates to state (no full page reload).
- * - Falls back to polling every 10s if realtime is not connected.
- * - Preserves all other UI state (filters, dialogs, etc.) — only the data array updates.
- * - Optional `transform` function is applied to every record (initial fetch + realtime)
- *   — use it to parse JSON string fields (e.g. parseArr(r.raw_materials)).
- *
- * @param {string} entityName  - Entity name (e.g. 'Production')
- * @param {() => Promise<Array>} fetchFn - Function that returns the full data array (raw)
- * @param {Array} deps - Dependencies that should trigger a refetch
- * @param {(record: object) => object} transform - Optional transform applied to each record
- * @returns {{ data: Array, loading: boolean, reload: Function, setData: Function }}
+ * @param {string}   entityName  - Nome da entidade (ex: 'Production')
+ * @param {Function} fetchFn     - () => Promise<Array> — busca os dados
+ * @param {Array}    deps        - Dependências que re-triggeram o fetch
+ * @param {Function} transform   - Transforma cada registro antes de colocar no estado
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscribeToTable, getRealtimeStatus } from '@/lib/realtime';
 import { onEntityChange } from '@/lib/entityEvents';
 
-const POLL_INTERVAL = 10000; // 10 seconds
+const POLL_INTERVAL_MS = 15000; // polling universal — garante sincronização mesmo com WebSocket ativo
 
 export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x) => x) {
-  const [data, setData] = useState([]);
+  const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchFnRef = useRef(fetchFn);
-  fetchFnRef.current = fetchFn;
-  const transformRef = useRef(transform);
+  const fetchFnRef    = useRef(fetchFn);
+  fetchFnRef.current  = fetchFn;
+  const transformRef  = useRef(transform);
   transformRef.current = transform;
 
+  // ── fetch completo ──────────────────────────────────────────────────────────
   const reload = useCallback(() => {
     setLoading(true);
-    return fetchFnRef
-      .current()
-      .then((result) => { setData((result || []).map(transformRef.current)); })
+    return fetchFnRef.current()
+      .then((result) => setData((result || []).map(transformRef.current)))
       .catch(() => {})
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  useEffect(() => {
-    // Initial load
-    reload();
+  // ── fetch silencioso (sem loading=true) — usado pelo REFRESH ───────────────
+  const silentReload = useCallback(() => {
+    return fetchFnRef.current()
+      .then((result) => setData((result || []).map(transformRef.current)))
+      .catch(() => {});
+  }, []); // intencionalmente sem deps — sempre usa ref atual
 
-    // Shared handler for both WebSocket realtime events and local CRUD events.
-    const handleChange = (payload) => {
-      const { eventType, new: newRecord, old: oldRecord } = payload;
+  // ── handler incremental de eventos ─────────────────────────────────────────
+  const handleChange = useCallback((payload) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
 
-      // REFRESH — full refetch (used by updateMany/deleteMany without full records)
-      if (eventType === 'REFRESH') {
-        fetchFnRef
-          .current()
-          .then((result) => { setData((result || []).map(transformRef.current)); })
-          .catch(() => {});
-        return;
-      }
+    if (eventType === 'REFRESH') {
+      silentReload();
+      return;
+    }
 
-      setData((prev) => {
-        if (eventType === 'INSERT') {
-          if (!newRecord) return prev;
+    setData((prev) => {
+      switch (eventType) {
+        case 'INSERT': {
+          if (!newRecord?.id) return prev;
           const record = transformRef.current(newRecord);
-          if (prev.some((item) => item.id === record.id)) return prev;
-          return [...prev, record];
+          // Evita duplicata
+          if (prev.some((item) => item.id === record.id)) {
+            // Atualiza se já existia (pode ter chegado pelo event bus local antes do WS)
+            return prev.map((item) => item.id === record.id ? { ...item, ...record } : item);
+          }
+          return [record, ...prev];
         }
-        if (eventType === 'UPDATE') {
-          if (!newRecord) return prev;
+        case 'UPDATE': {
+          if (!newRecord?.id) return prev;
           const record = transformRef.current(newRecord);
           const idx = prev.findIndex((item) => item.id === record.id);
-          if (idx === -1) return [...prev, record]; // record not loaded yet → add it
+          if (idx === -1) return [record, ...prev];
           const updated = [...prev];
           updated[idx] = { ...updated[idx], ...record };
           return updated;
         }
-        if (eventType === 'DELETE') {
+        case 'DELETE': {
           const id = oldRecord?.id;
           if (!id) return prev;
           return prev.filter((item) => item.id !== id);
         }
-        return prev;
-      });
-    };
+        default:
+          return prev;
+      }
+    });
+  }, [silentReload]);
 
-    // WebSocket realtime subscription (for changes from other clients/sessions)
-    const unsubRealtime = subscribeToTable(entityName, handleChange);
+  // ── efeito principal ────────────────────────────────────────────────────────
+  useEffect(() => {
+    reload();
 
-    // Local event bus subscription (for immediate UI updates after local writes)
+    // Supabase WebSocket (eventos de outros dispositivos/sessões)
+    const unsubWS    = subscribeToTable(entityName, handleChange);
+    // Event bus local (eventos do próprio dispositivo — feedback imediato)
     const unsubLocal = onEntityChange(entityName, handleChange);
 
-    // Polling fallback — only polls when realtime is NOT connected
-    const pollInterval = setInterval(() => {
-      if (getRealtimeStatus(entityName) !== 'connected') {
-        fetchFnRef
-          .current()
-          .then((result) => { setData((result || []).map(transformRef.current)); })
-          .catch(() => {});
-      }
-    }, POLL_INTERVAL);
+    // Polling universal — sincroniza mesmo que o WebSocket esteja ativo mas com eventos perdidos
+    const pollTimer = setInterval(() => {
+      silentReload();
+    }, POLL_INTERVAL_MS);
 
     return () => {
-      unsubRealtime();
+      unsubWS();
       unsubLocal();
-      clearInterval(pollInterval);
+      clearInterval(pollTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityName]);
+  }, [entityName, reload]);
 
   return { data, loading, reload, setData };
 }
