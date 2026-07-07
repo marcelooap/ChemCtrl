@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Plus, Cylinder, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Cylinder, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -51,6 +51,7 @@ export default function Tankagem() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState({ name: '', client: '' });
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   const clientOptions = useMemo(() => {
@@ -154,14 +155,21 @@ export default function Tankagem() {
       name: form.name,
       client: form.client,
     };
-    if (editing) {
-      await base44.entities.Tank.update(editing.id, data);
-    } else {
-      await base44.entities.Tank.create(data);
+    setSaving(true);
+    try {
+      if (editing) {
+        await base44.entities.Tank.update(editing.id, data);
+      } else {
+        await base44.entities.Tank.create(data);
+      }
+      setShowForm(false);
+      load();
+      toast({ title: editing ? 'Tanka atualizada' : 'Tanka cadastrada' });
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setShowForm(false);
-    load();
-    toast({ title: editing ? 'Tanka atualizada' : 'Tanka cadastrada' });
   };
 
   const confirmDelete = async () => {
@@ -316,8 +324,10 @@ export default function Tankagem() {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={save} style={{ background: '#2575D1' }} className="text-white">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar' : 'Cadastrar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
