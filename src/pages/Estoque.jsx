@@ -2,7 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Search, Eye, Pencil, Trash2, Box, FileText } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2 } from 'lucide-react';
+import MovimentacaoEstoqueDialog from '@/components/estoque/MovimentacaoEstoqueDialog';
+import { exportEstoqueMPToExcel } from '@/lib/exportEstoqueMP';
+import { Download } from 'lucide-react';
+import RawMaterialViewDialog from '@/components/estoque/RawMaterialViewDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Combobox from '@/components/ui/combobox';
@@ -10,7 +14,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { generateStockPDF } from '@/lib/pdfReports';
 import moment from 'moment';
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
@@ -31,10 +34,11 @@ export default function Estoque() {
   const [showView, setShowView] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
-  const [consumption, setConsumption] = useState([]);
-  const [loadingConsumption, setLoadingConsumption] = useState(false);
   const [form, setForm] = useState(emptyItem);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showMovimentacao, setShowMovimentacao] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { toast } = useToast();
 
   const mpOptions = useMemo(() => {
@@ -86,23 +90,7 @@ export default function Estoque() {
 
   const openNew = () => { setEditing(null); setForm({ ...emptyItem }); setShowForm(true); };
   const openEdit = (item) => { setEditing(item); setForm({ ...item, tank_entries: item.tank_entries || (item.tank_name ? [{ tank_name: item.tank_name, volume: item.tank_volume, mass: item.tank_mass }] : []) }); setShowForm(true); };
-  const openView = async (item) => {
-    setViewing(item);
-    setShowView(true);
-    setLoadingConsumption(true);
-    setConsumption([]);
-    const allProductions = await base44.entities.Production.list('-created_date', 500);
-    const used = [];
-    allProductions.forEach(prod => {
-      parseArr(prod.raw_materials_used).forEach(mp => {
-        if (mp.stock_id === item.id) {
-          used.push({ op_number: prod.op_number, product: prod.product, date: prod.date, qty_fiscal: mp.qty_fiscal, qty_operational: mp.qty_operational });
-        }
-      });
-    });
-    setConsumption(used);
-    setLoadingConsumption(false);
-  };
+  const openView = (item) => { setViewing(item); setShowView(true); };
 
   const addTankEntry = () => setForm(prev => ({ ...prev, tank_entries: [...(prev.tank_entries || []), { tank_name: '', volume: '', mass: 0 }] }));
   const updateTankEntry = (idx, patch) => setForm(prev => ({ ...prev, tank_entries: (prev.tank_entries || []).map((e, i) => i === idx ? { ...e, ...patch } : e) }));
@@ -123,16 +111,44 @@ export default function Estoque() {
     const packagingCapacity = parseFloat(form.packaging_capacity) || 0;
     const data = { ...form, unit_price: parseFloat(form.unit_price) || 0, initial_stock: initialStock, current_stock: editing ? (parseFloat(form.current_stock) || 0) : initialStock, density: parseFloat(form.density) || 0, entry_date: form.entry_date || null, packaging_capacity: packagingCapacity, packaging_quantity: calcPackagingQty(stockForPackaging(), packagingCapacity), tank_entries: form.tank_storage ? (form.tank_entries || []).filter(te => te.tank_name).map(te => ({ tank_name: te.tank_name, volume: parseFloat(te.volume) || 0, mass: te.mass || 0 })) : [] };
     if (!data.mp_name) { toast({ title: 'Informe o nome da matéria prima', variant: 'destructive' }); return; }
-    if (editing) {
-      await base44.entities.RawMaterialStock.update(editing.id, data);
-    } else {
-      const count = items.length + 1;
-      data.entry_id = `MP${String(count).padStart(3, '0')}`;
-      await base44.entities.RawMaterialStock.create(data);
+    setSaving(true);
+    try {
+      if (editing) {
+        await base44.entities.RawMaterialStock.update(editing.id, data);
+        // Sincronizar lote alterado em todas as Produções que utilizam esta MP
+        const newLot = (form.lot || '').trim();
+        const oldLot = (editing.lot || '').trim();
+        if (newLot !== oldLot) {
+          try {
+            const allProductions = await base44.entities.Production.list('-created_date', 500);
+            for (const prod of allProductions) {
+              const mps = parseArr(prod.raw_materials_used);
+              let changed = false;
+              for (const mp of mps) {
+                if (mp.stock_id === editing.id && (mp.lot || '') !== newLot) {
+                  mp.lot = newLot;
+                  changed = true;
+                }
+              }
+              if (changed) {
+                await base44.entities.Production.update(prod.id, { raw_materials_used: mps });
+              }
+            }
+          } catch (_e) {}
+        }
+      } else {
+        const count = items.length + 1;
+        data.entry_id = `MP${String(count).padStart(3, '0')}`;
+        await base44.entities.RawMaterialStock.create(data);
+      }
+      setShowForm(false);
+      load();
+      toast({ title: editing ? 'Item atualizado' : 'Novo item cadastrado' });
+    } catch (err) {
+      toast({ title: 'Erro ao salvar item', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setShowForm(false);
-    load();
-    toast({ title: editing ? 'Item atualizado' : 'Novo item cadastrado' });
   };
 
   const remove = (item) => { setDeleteTarget(item); };
@@ -142,6 +158,19 @@ export default function Estoque() {
     setDeleteTarget(null);
     load();
     toast({ title: 'Item excluído permanentemente' });
+  };
+
+  const handleExportExcel = async () => {
+    if (!filtered.length) { toast({ title: 'Nenhum item para exportar', variant: 'destructive' }); return; }
+    setExporting(true);
+    try {
+      await exportEstoqueMPToExcel(filtered);
+      toast({ title: 'Planilha exportada com sucesso' });
+    } catch (err) {
+      toast({ title: 'Erro ao exportar', description: err.message, variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
@@ -161,11 +190,21 @@ export default function Estoque() {
           <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>⚗ Controle de Estoque</h1>
           <p className="text-sm text-muted-foreground">Matérias primas · {items.length} item(s)</p>
         </div>
-        {!isReadOnly && (
-          <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" /> Novo Item
+        <div className="flex gap-2">
+          <Button onClick={handleExportExcel} disabled={exporting} className="bg-green-600 text-white hover:bg-green-700">
+            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} Exportar Excel
           </Button>
-        )}
+          {!isReadOnly && (
+            <Button onClick={() => setShowMovimentacao(true)} variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50">
+              <ArrowLeftRight className="w-4 h-4 mr-2" /> Movimentação de Estoque
+            </Button>
+          )}
+          {!isReadOnly && (
+            <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
+              <Plus className="w-4 h-4 mr-2" /> Novo Item
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Card: fixed search, scrollable table, fixed footer */}
@@ -310,7 +349,12 @@ export default function Estoque() {
                 </div>
               )}
             </div>
-            <div><label className="text-xs font-medium text-muted-foreground">Observações</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Notas adicionais..." /></div>
+            {form.density > 0 && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Densidade (g/mL)</label>
+                <Input value={`${form.density} g/mL`} readOnly className="bg-gray-50 text-blue-700 font-semibold" />
+              </div>
+            )}
             <div className="border-t pt-3 mt-1">
               <p className="text-xs font-semibold text-muted-foreground mb-2">Embalagem</p>
               <div className="grid grid-cols-3 gap-3">
@@ -338,6 +382,7 @@ export default function Estoque() {
                 </div>
               </div>
             </div>
+            <div><label className="text-xs font-medium text-muted-foreground">Observações</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Notas adicionais..." /></div>
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={form.tank_storage || false} onChange={e => setForm({ ...form, tank_storage: e.target.checked, tank_entries: e.target.checked ? (form.tank_entries && form.tank_entries.length > 0 ? form.tank_entries : [{ tank_name: '', volume: '', mass: 0 }]) : [] })} className="rounded" />
               <div>
@@ -379,104 +424,24 @@ export default function Estoque() {
             )}
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={save} style={{ background: '#2575D1' }} className="text-white">
-              {editing ? 'Salvar Alterações' : 'Cadastrar'}
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar Alterações' : 'Cadastrar'}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog open={showView} onOpenChange={setShowView}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm">
-              <Box className="w-4 h-4 text-muted-foreground" />
-              <span style={{ color: '#2563eb' }}>{viewing?.entry_id}</span>
-              {' · '}
-              <span className="font-bold">{viewing?.mp_code}</span>
-              {' – '}
-              {viewing?.mp_name}
-            </DialogTitle>
-          </DialogHeader>
-          {viewing && (
-            <div>
-              <div className="grid grid-cols-3 gap-4 text-sm mb-5">
-                <div><p className="text-xs text-muted-foreground">ID Registro</p><p className="font-medium" style={{ color: '#2563eb' }}>{viewing.entry_id}</p></div>
-                <div><p className="text-xs text-muted-foreground">Data de Entrada</p><p className="font-medium">{viewing.entry_date ? moment(viewing.entry_date).format('DD/MM/YYYY') : '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Código</p><p className="font-bold">{viewing.mp_code}</p></div>
-                <div><p className="text-xs text-muted-foreground">Nome</p><p className="font-medium">{viewing.mp_name}</p></div>
-                <div><p className="text-xs text-muted-foreground">Cliente</p><p className="font-medium">{viewing.client || '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{viewing.lot || '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Fornecedor</p><p className="font-medium">{viewing.supplier || '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Fabricação</p><p className="font-medium">{viewing.manufacture_date ? moment(viewing.manufacture_date).format('DD/MM/YYYY') : '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Validade</p><p className="font-medium">{viewing.expiry_date ? moment(viewing.expiry_date).format('DD/MM/YYYY') : '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Unidade</p><p className="font-medium">{viewing.unit}</p></div>
-                <div><p className="text-xs text-muted-foreground">Estoque Inicial</p><p className="font-bold">{fmt(viewing.initial_stock)} {viewing.unit}</p></div>
-                <div><p className="text-xs text-muted-foreground">Saldo Atual</p><p className="font-bold" style={{ color: '#2563eb' }}>{fmt(viewing.current_stock)} {viewing.unit}</p></div>
-                <div><p className="text-xs text-muted-foreground">Preço Unitário</p><p className="font-medium">{(viewing.unit_price || 0).toFixed(4)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Tipo de Embalagem</p><p className="font-medium">{viewing.packaging_type || '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Capacidade Embalagem</p><p className="font-medium">{fmt(viewing.packaging_capacity)} kg</p></div>
-                <div><p className="text-xs text-muted-foreground">Qtd. de Embalagens</p><p className="font-medium">{fmt(viewing.packaging_quantity)}</p></div>
-              </div>
+      <RawMaterialViewDialog item={viewing} open={showView} onOpenChange={setShowView} />
+      {/* Movimentação Dialog */}
+      <MovimentacaoEstoqueDialog
+        open={showMovimentacao}
+        onOpenChange={setShowMovimentacao}
+        stocks={items}
+        onSuccess={load}
+      />
 
-              {viewing.tank_entries && viewing.tank_entries.length > 0 && (
-                <div className="mb-5">
-                  <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Tankas de Destino (Recebimento)</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    {viewing.tank_entries.map((te, i) => (
-                      <div key={i} className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                        <p className="text-xs text-muted-foreground mb-0.5">Tanka</p>
-                        <p className="font-bold text-sm" style={{ color: '#2563eb' }}>{te.tank_name}</p>
-                        <div className="flex justify-between mt-2 text-xs">
-                          <span className="text-muted-foreground">Volume: <strong className="text-foreground">{fmt(te.volume)} L</strong></span>
-                          <span className="text-muted-foreground">Massa: <strong className="text-foreground">{fmt(te.mass)} kg</strong></span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Ordens de Produção que utilizaram este lote</h4>
-              {loadingConsumption ? (
-                <div className="flex items-center justify-center h-16"><div className="w-5 h-5 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
-              ) : consumption.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma OP utilizou este lote ainda.</p>
-              ) : (
-                <table className="w-full text-sm border rounded-lg overflow-hidden">
-                  <thead><tr className="text-xs font-semibold text-muted-foreground">
-                    <th className="px-3 py-2 text-left">OP</th><th className="px-3 py-2 text-left">Produto</th><th className="px-3 py-2 text-left">Data</th><th className="px-3 py-2 text-right">Qtd. Fiscal</th><th className="px-3 py-2 text-right">Qtd. Op. (kg)</th>
-                  </tr></thead>
-                  <tbody>
-                    {consumption.map((c, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2 font-medium" style={{ color: '#2563eb' }}>{c.op_number}</td>
-                        <td className="px-3 py-2">{c.product}</td>
-                        <td className="px-3 py-2">{moment(c.date).format('DD/MM/YYYY')}</td>
-                        <td className="px-3 py-2 text-right">{fmt(c.qty_fiscal)} {viewing.unit}</td>
-                        <td className="px-3 py-2 text-right">{fmt(c.qty_operational)} kg</td>
-                      </tr>
-                    ))}
-                    <tr className="border-t-2 bg-gray-50 font-bold">
-                      <td colSpan={3} className="px-3 py-2" style={{ color: '#2563eb' }}>TOTAL CONSUMIDO</td>
-                      <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmt(consumption.reduce((s, c) => s + (c.qty_fiscal || 0), 0))} {viewing.unit}</td>
-                      <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmt(consumption.reduce((s, c) => s + (c.qty_operational || 0), 0))} kg</td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-          <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={() => generateStockPDF(viewing, consumption)} className="gap-2">
-              <FileText className="w-4 h-4" /> Gerar PDF
-            </Button>
-            <Button variant="outline" onClick={() => setShowView(false)}>Fechar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
       {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
