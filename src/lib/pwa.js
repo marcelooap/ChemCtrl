@@ -2,92 +2,95 @@
 
 let registration = null;
 let updateNotified = false;
-let isFirstLoad = !navigator.serviceWorker?.controller;
+// true only during the very first activation (no previous controller)
+let isFirstActivation = !navigator.serviceWorker?.controller;
 
-/**
- * Registers the service worker and wires up update detection.
- * Call this on app startup (main.jsx).
- */
-export function initPWA() {
-  if (!('serviceWorker' in navigator)) return;
-
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js', { updateViaCache: 'none' })
-      .then((reg) => {
-        registration = reg;
-
-        // Detect a new SW being installed
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-
-          newWorker.addEventListener('statechange', () => {
-            // New version downloaded and ready
-            if (
-              newWorker.state === 'installed' &&
-              navigator.serviceWorker.controller
-            ) {
-              notifyUpdate();
-            }
-          });
-        });
-      })
-      .catch(() => {});
-  });
-
-  // When a new SW takes control (via skipWaiting), notify the user
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (isFirstLoad) {
-      isFirstLoad = false;
-      return; // First activation — no reload needed
-    }
-    notifyUpdate();
-  });
-
-  // Listen for SW_ACTIVATED message from the service worker
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SW_ACTIVATED' && navigator.serviceWorker.controller) {
-      // Only notify if this isn't the very first load
-      if (!isFirstLoad) {
-        notifyUpdate();
-      }
-    }
-  });
-
-  // Periodically check for updates (every 60 minutes)
-  setInterval(() => {
-    registration?.update().catch(() => {});
-  }, 60 * 60 * 1000);
-
-  // Check for updates when the tab becomes visible again
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      registration?.update().catch(() => {});
-    }
-  });
-}
-
-/**
- * Dispatches a custom event that the PWAUpdatePrompt component listens to.
- */
 function notifyUpdate() {
   if (updateNotified) return;
   updateNotified = true;
   window.dispatchEvent(new CustomEvent('pwa-update-available'));
 }
 
+function watchInstalling(worker) {
+  worker.addEventListener('statechange', () => {
+    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+      // A new SW finished installing and is waiting — notify immediately
+      notifyUpdate();
+    }
+    if (worker.state === 'activated' && !navigator.serviceWorker.controller) {
+      // First-ever activation — no update prompt needed
+      isFirstActivation = false;
+    }
+  });
+}
+
+export function initPWA() {
+  if (!('serviceWorker' in navigator)) return;
+
+  // controllerchange fires when a new SW calls clients.claim() after skipWaiting
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (isFirstActivation) {
+      isFirstActivation = false;
+      return;
+    }
+    // New SW took control → reload immediately to serve fresh assets
+    window.location.reload();
+  });
+
+  // Message from SW (backup channel)
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_UPDATE_AVAILABLE') {
+      notifyUpdate();
+    }
+  });
+
+  navigator.serviceWorker
+    .register('/sw.js', { updateViaCache: 'none' })
+    .then((reg) => {
+      registration = reg;
+
+      // Already a waiting worker on first load (user was offline previously)
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        notifyUpdate();
+      }
+
+      // New worker found while app is open
+      reg.addEventListener('updatefound', () => {
+        if (reg.installing) {
+          watchInstalling(reg.installing);
+        }
+      });
+
+      // Poll for updates every 5 minutes
+      setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000);
+
+      // Check on tab focus
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          reg.update().catch(() => {});
+        }
+      });
+    })
+    .catch(() => {});
+}
+
 /**
- * Called when the user clicks "Atualizar agora".
- * Sends SKIP_WAITING to the waiting SW (if any) and reloads.
+ * Activates the waiting SW immediately, clears caches, and reloads.
  */
-export function applyUpdate() {
+export async function applyUpdate() {
   const reg = registration;
-  if (reg && reg.waiting) {
+
+  // Clear all caches so no stale asset remains
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch (_) {}
+
+  if (reg?.waiting) {
+    // Tell SW to skip waiting → triggers controllerchange → reload
     reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    // The controllerchange listener will reload the page
-    // Fallback reload after 2s in case controllerchange doesn't fire
-    setTimeout(() => window.location.reload(), 2000);
+    // Fallback: if controllerchange doesn't fire within 3s, force reload
+    setTimeout(() => window.location.reload(), 3000);
   } else {
     window.location.reload();
   }
