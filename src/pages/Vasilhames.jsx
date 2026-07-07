@@ -1,40 +1,128 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { useOutletContext, Link } from 'react-router-dom';
-import { Search, Eye, Pencil, Truck, Cylinder, FileText, Printer } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { Search, Eye, Pencil, Truck, FileText, Printer, Loader2, Plus, ArrowUpRight, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { generateBoletaPDF } from '@/lib/pdfReports';
+import { generateBoletaPDF, generateVasilhamesReportPDF } from '@/lib/pdfReports';
 import { printContainerLabel } from '@/lib/labelPrint';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { brasiliaDate } from '@/lib/brasilTime';
+import AddTankDialog from '@/components/vasilhames/AddTankDialog';
+import HistoryDialog from '@/components/vasilhames/HistoryDialog';
 import moment from 'moment';
+
+const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
+
+// Finds the transfer (transbordo) related to a container, whether it's an origin or a destination.
+const findTransferForContainer = (container, transfers) => {
+  if (!container || !transfers) return null;
+  // Destination: created from a transbordo, op_number === transfer_number
+  if (container.op_number && container.op_number.startsWith('TB')) {
+    const t = transfers.find(tr => tr.transfer_number === container.op_number);
+    if (t) return { transfer: t, role: 'destino' };
+  }
+  // Origin: its id appears in origins[].container_id
+  const asOrigin = transfers.find(tr => {
+    const origins = parseArr(tr.origins);
+    return origins.some(o => o.container_id === container.id);
+  });
+  if (asOrigin) return { transfer: asOrigin, role: 'origem' };
+  return null;
+};
 
 export default function Vasilhames() {
   const { isReadOnly } = useOutletContext();
   const { data: containers, loading, reload: load } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
+  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [clientFilter, setClientFilter] = useState('all');
   const [showView, setShowView] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showDepart, setShowDepart] = useState(false);
+  const [showAddTank, setShowAddTank] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [editing, setEditing] = useState(null);
   const [departDate, setDepartDate] = useState(new Date().toISOString().split('T')[0]);
   const [departItem, setDepartItem] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [savingDepart, setSavingDepart] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [sending, setSending] = useState(false);
   const { toast } = useToast();
+
+  const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
 
   const filtered = containers.filter(c => {
     const q = search.toLowerCase();
     const matchSearch = !q || [c.product, c.client, c.container_number, c.barril_number, c.lot].some(v => (v || '').toLowerCase().includes(q));
-    const matchType = typeFilter === 'all' || c.type === typeFilter;
-    return matchSearch && matchType;
+    const matchStatus = statusFilter === 'all' || c.status === statusFilter;
+    const matchClient = clientFilter === 'all' || c.client === clientFilter;
+    return matchSearch && matchStatus && matchClient;
   });
+
+  const productCodeOf = (c) => {
+    const r = (recipes || []).find(rc => rc.product_name === c.product);
+    return (r && r.code) || c.product;
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(c => selected.has(c.id));
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelected(prev => {
+        const next = new Set(prev);
+        filtered.forEach(c => next.delete(c.id));
+        return next;
+      });
+    } else {
+      setSelected(prev => {
+        const next = new Set(prev);
+        filtered.forEach(c => next.add(c.id));
+        return next;
+      });
+    }
+  };
+
+  const selectedContainers = containers.filter(c => selected.has(c.id));
+
+  const enviarDados = () => {
+    const productIds = new Set(selectedContainers.map(productCodeOf));
+    if (productIds.size > 1) {
+      toast({
+        title: 'Validação',
+        description: 'Selecione apenas vasilhames do mesmo produto para gerar o relatório.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSending(true);
+    try {
+      const recipe = (recipes || []).find(rc => rc.product_name === selectedContainers[0].product);
+      generateVasilhamesReportPDF(selectedContainers, recipe);
+      toast({ title: 'Relatório gerado', description: `${selectedContainers.length} vasilhame(s) exportado(s).` });
+    } catch (err) {
+      toast({ title: 'Erro ao gerar relatório', description: err.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
   const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : '—';
@@ -46,19 +134,32 @@ export default function Vasilhames() {
     } else {
       updates.status = 'No Pátio';
     }
-    await base44.entities.Container.update(editing.id, updates);
-    // If this vasilhame is a tankagem, zero out any MP stock previously stored in that tanka
-    if ((editing.type || '').toLowerCase().includes('tank') && editing.container_number) {
-      await zeroOutTankaStock(editing.container_number);
+    setSavingEdit(true);
+    try {
+      await base44.entities.Container.update(editing.id, updates);
+      if ((editing.type || '').toLowerCase().includes('tank') && editing.container_number) {
+        await zeroOutTankaStock(editing.container_number);
+      }
+      setShowEdit(false); load();
+      toast({ title: 'Vasilhame atualizado' });
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
     }
-    setShowEdit(false); load();
-    toast({ title: 'Vasilhame atualizado' });
   };
 
   const confirmDepart = async () => {
-    await base44.entities.Container.update(departItem.id, { status: 'Expedido', departure_date: departDate });
-    setShowDepart(false); load();
-    toast({ title: 'Saída registrada' });
+    setSavingDepart(true);
+    try {
+      await base44.entities.Container.update(departItem.id, { status: 'Expedido', departure_date: departDate });
+      setShowDepart(false); load();
+      toast({ title: 'Saída registrada' });
+    } catch (err) {
+      toast({ title: 'Erro ao registrar saída', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingDepart(false);
+    }
   };
 
   const statusBadge = (s) => {
@@ -76,49 +177,81 @@ export default function Vasilhames() {
           <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📦 Vasilhames / Envase</h1>
           <p className="text-sm text-muted-foreground">{containers.length} embalagem(ns)</p>
         </div>
-        <Link to="/tankagem"><Button variant="outline"><Cylinder className="w-4 h-4 mr-2" /> Tankagem</Button></Link>
+        {!isReadOnly && (
+          <Button onClick={() => setShowAddTank(true)} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
+            <Plus className="w-4 h-4 mr-2" /> Adicionar Tanque
+          </Button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex items-center gap-3">
           <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar produto, nº placa, nº barril, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32"><SelectValue placeholder="Todos" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="Contentor">Contentor</SelectItem>
-              <SelectItem value="Tambor">Tambor</SelectItem>
-              <SelectItem value="IBC 1000L">IBC 1000L</SelectItem>
-              <SelectItem value="TANKA">TANKA</SelectItem>
+              <SelectItem value="No Pátio">No Pátio</SelectItem>
+              <SelectItem value="Expedido">Expedido</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os clientes</SelectItem>
+              {clients.map(cl => <SelectItem key={cl} value={cl}>{cl}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {selected.size > 0 && (
+            <Button onClick={enviarDados} disabled={sending} className="text-white" style={{ background: '#2575D1' }}>
+              {sending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Gerando...</> : <><FileText className="w-4 h-4 mr-2" /> Enviar Dados ({selected.size})</>}
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setShowHistory(true)} className="gap-2 ml-auto shrink-0">
+            <History className="w-4 h-4" /> Histórico
+          </Button>
         </div>
 
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50/50">
-                <th className="px-4 py-3 text-left">ID Reg.</th>
+                <th className="px-3 py-3 text-center w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todos" /></th>
+                <th className="px-4 py-3 text-left">ID</th>
                 <th className="px-4 py-3 text-left">OP</th>
                 <th className="px-4 py-3 text-left">N° Placa</th>
                 <th className="px-4 py-3 text-left">N° Barril</th>
-                <th className="px-4 py-3 text-left">Tipo</th>
                 <th className="px-4 py-3 text-left">Produto</th>
                 <th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Lote</th>
                 <th className="px-4 py-3 text-right">Vol.(L)</th>
                 <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-left">Dt. Saída</th>
+                <th className="px-4 py-3 text-left">Saída</th>
                 <th className="px-4 py-3 text-center">Ações</th>
               </tr></thead>
               <tbody>
                 {filtered.map(c => (
-                  <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={c.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
+                    <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={`Selecionar ${c.container_number || c.id}`} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
-                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{c.op_number}</td>
-                    <td className="px-4 py-2.5 text-sm font-medium">{c.container_number}</td>
+                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{c.op_number || <span className="text-muted-foreground">Manual</span>}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        {c.container_number}
+                        {(() => {
+                          const rel = findTransferForContainer(c, transfers);
+                          if (!rel) return null;
+                          return (
+                            <ArrowUpRight
+                              className="w-3.5 h-3.5"
+                              style={{ color: '#4B0082' }}
+                              title={rel.role === 'origem' ? 'Origem de transbordo' : 'Destino de transbordo'}
+                            />
+                          );
+                        })()}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-sm font-medium">{c.barril_number || '—'}</td>
-                    <td className="px-4 py-2.5 text-sm">{c.type}</td>
                     <td className="px-4 py-2.5 text-sm">{c.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{c.client}</td>
                     <td className="px-4 py-2.5 text-sm">{c.lot}</td>
@@ -129,7 +262,8 @@ export default function Vasilhames() {
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => {
                           const recipe = (recipes || []).find(r => r.product_name === c.product);
-                          printContainerLabel(c, recipe?.validity_days);
+                          const production = (productions || []).find(p => p.id === c.production_id || p.op_number === c.op_number);
+                          printContainerLabel(c, recipe?.validity_days, production?.public_token);
                         }} className="p-1 rounded hover:bg-gray-100" title="Imprimir Etiqueta"><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
@@ -146,6 +280,12 @@ export default function Vasilhames() {
           <span>Vasilhames no pátio: <strong>{noPatioCount}</strong></span>
           <span>Volume total no pátio: <strong>{fmt(noPatioVolume)} L</strong></span>
           <span>Total exibido: {filtered.length}</span>
+          {selected.size > 0 && (
+            <>
+              <span className="font-semibold" style={{ color: '#2575D1' }}>Selecionados: {selected.size}</span>
+              <button onClick={() => setSelected(new Set())} className="text-blue-500 underline">Limpar seleção</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -201,7 +341,7 @@ export default function Vasilhames() {
                   <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Tara (kg)</p><p className="font-medium">{fmt(viewing.tare)}</p></div>
                   <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Líquido (kg)</p><p className="font-bold text-base text-green-700">{fmt(viewing.net_weight)}</p></div>
                   <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Bruto (kg)</p><p className="font-bold text-base">{fmt(viewing.gross_weight)}</p></div>
-                  {viewing.min_test_date && <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Menor Teste</p><p className="font-medium">{moment(viewing.min_test_date).format('DD/MM/YYYY')}</p></div>}
+                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Menor Teste</p><p className="font-medium">{viewing.min_test_date ? moment(viewing.min_test_date).format('DD/MM/YYYY') : '—'}</p></div>
                 </div>
               </div>
 
@@ -218,6 +358,63 @@ export default function Vasilhames() {
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Responsável</span><span className="font-medium">{viewing.operator || '—'}</span></div>
                 </div>
               </div>
+
+              {/* Section 4 — Transbordo (se houver) */}
+              {(() => {
+                const rel = findTransferForContainer(viewing, transfers);
+                if (!rel) return null;
+                const { transfer: t, role } = rel;
+                const origins = parseArr(t.origins);
+                const dests = parseArr(t.destinations);
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-1 h-4 rounded" style={{ background: '#7C3AED' }} />
+                      <h4 className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7C3AED' }}>Transbordo</h4>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EDE9FE', color: '#6D28D9' }}>
+                        {role === 'origem' ? 'Origem' : 'Destino'}
+                      </span>
+                    </div>
+                    <div className="bg-gray-50/50 rounded-lg p-4 space-y-3 text-sm">
+                      <div className="grid grid-cols-3 gap-3 pb-2 border-b border-gray-100">
+                        <div><p className="text-xs text-muted-foreground">Registro</p><p className="font-bold" style={{ color: '#7C3AED' }}>{t.transfer_number || '—'}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{t.date ? moment(t.date).format('DD/MM/YYYY') : '—'}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Tipo</p><p className="font-medium">{dests[0]?.type || t.destination_type || '—'}</p></div>
+                      </div>
+                      {origins.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Embalagens de Origem</p>
+                          <div className="space-y-1.5">
+                            {origins.map((o, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs bg-white rounded px-3 py-1.5 border border-gray-100">
+                                <span className="font-semibold" style={{ color: '#2575D1' }}>{o.container_number || '—'}</span>
+                                <span className="text-muted-foreground">{o.barril_number || '—'}</span>
+                                <span className="text-muted-foreground">Lote: {o.lot || '—'}</span>
+                                <span className="ml-auto font-medium">Vol. retirado: {fmt(o.volume_used)} L</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {dests.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Destino(s)</p>
+                          <div className="space-y-1.5">
+                            {dests.map((d, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs bg-white rounded px-3 py-1.5 border border-gray-100">
+                                <span className="font-semibold" style={{ color: '#2575D1' }}>{d.placa || '—'}</span>
+                                <span className="text-muted-foreground">{d.barril || '—'}</span>
+                                <span className="text-muted-foreground">{d.packaging_type || d.type || '—'}</span>
+                                <span className="ml-auto font-medium">Vol.: {fmt(d.volume)} L</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
           <div className="flex justify-between mt-4 pt-4 border-t">
@@ -246,6 +443,10 @@ export default function Vasilhames() {
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Tipo</label>
                 <Input value={editing.type || ''} onChange={e => setEditing({ ...editing, type: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Lote</label>
+                <Input value={editing.lot || ''} onChange={e => setEditing({ ...editing, lot: e.target.value })} placeholder="Lote do vasilhame" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Volume (L)</label>
@@ -279,8 +480,10 @@ export default function Vasilhames() {
             </div>
           )}
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancelar</Button>
-            <Button onClick={saveEdit} style={{ background: '#2575D1', color: 'white' }}>Salvar Alterações</Button>
+            <Button variant="outline" onClick={() => setShowEdit(false)} disabled={savingEdit}>Cancelar</Button>
+            <Button onClick={saveEdit} disabled={savingEdit} style={{ background: '#2575D1', color: 'white' }}>
+              {savingEdit ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -291,11 +494,26 @@ export default function Vasilhames() {
           <DialogHeader><DialogTitle>Registrar Saída</DialogTitle></DialogHeader>
           <div><label className="text-xs font-medium text-muted-foreground">Data de Saída</label><Input type="date" value={departDate} onChange={e => setDepartDate(e.target.value)} /></div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowDepart(false)}>Cancelar</Button>
-            <Button onClick={confirmDepart} style={{ background: '#2575D1', color: 'white' }}>Confirmar Saída</Button>
+            <Button variant="outline" onClick={() => setShowDepart(false)} disabled={savingDepart}>Cancelar</Button>
+            <Button onClick={confirmDepart} disabled={savingDepart} style={{ background: '#2575D1', color: 'white' }}>
+              {savingDepart ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Confirmando...</> : 'Confirmar Saída'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Adicionar Tanque */}
+      <AddTankDialog open={showAddTank} onOpenChange={setShowAddTank} onSaved={load} />
+
+      {/* Histórico */}
+      <HistoryDialog
+        open={showHistory}
+        onOpenChange={setShowHistory}
+        containers={containers}
+        transfers={transfers}
+        productions={productions}
+        recipes={recipes}
+      />
     </div>
   );
 }
