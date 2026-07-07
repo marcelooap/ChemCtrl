@@ -7,7 +7,7 @@ import { canAccessRoute, getDefaultRoute, isReadOnly } from '@/lib/permissions';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const location = useLocation();
   const [showWelcome, setShowWelcome] = useState(false);
 
@@ -31,7 +31,7 @@ export default function AppLayout() {
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} user={user} />
       <main className={`transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
         <div className="p-4 sm:p-6 w-full">
-          <Outlet context={{ user, isReadOnly: isReadOnly(user) }} />
+          <Outlet context={{ user, isReadOnly: isReadOnly(user, location.pathname) }} />
         </div>
       </main>
       {showWelcome && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
