@@ -1,102 +1,597 @@
 /**
- * Supabase Realtime subscription manager for ChemCtrl.
+ * Supabase Realtime subscription manager — ChemCtrl
  *
- * - Uses @supabase/supabase-js WebSocket client for realtime events.
- * - Deduplicates channels per table (multiple components share one channel).
- * - Tracks subscription status so the hook can fall back to polling.
- * - Exposes a simple subscribeToTable(entityName, callback) → unsubscribe.
+ * Arquitetura:
+ * - Um único cliente Supabase WebSocket compartilhado (singleton).
+ * - Um único canal por tabela compartilhado entre componentes.
+ * - Reconexão automática em falhas.
+ * - Refresh automático ao recuperar conexão ou foco da aplicação.
+ * - Normalização de payload incompleto do Realtime.
  */
-import { createClient } from '@supabase/supabase-js';
-import { supabaseUrl, supabaseAnonKey, entityTableMap } from '@/api/supabaseClient';
 
-let supabaseClient = null;
+import { createClient } from '@supabase/supabase-js';
+import {
+  supabaseUrl,
+  supabaseAnonKey,
+  entityTableMap
+} from '@/api/supabaseClient';
+
+import { getSessionId } from '@/api/rpcClient';
+
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+function safeExecute(callback) {
+  try {
+    callback();
+  } catch (_) {}
+}
+
+
+// ─────────────────────────────────────────────
+// Singleton Supabase Realtime Client
+// ─────────────────────────────────────────────
+
+let supabaseWS = null;
 
 function getSupabase() {
-  if (!supabaseClient) {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      realtime: { params: { eventsPerSecond: 10 } },
-      auth: { persistSession: false },
-    });
+
+  if (supabaseWS) {
+    return supabaseWS;
   }
-  return supabaseClient;
+
+  const sessionId = getSessionId();
+
+  supabaseWS = createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      realtime: {
+        params: {
+          eventsPerSecond: 20
+        },
+        timeout: 30000
+      },
+
+      auth: {
+        persistSession: false
+      },
+
+      global: {
+        headers: sessionId
+          ? {
+              'x-session-id': sessionId
+            }
+          : {}
+      }
+    }
+  );
+
+  return supabaseWS;
 }
 
-// tableName → Set<callback>
+
+// ─────────────────────────────────────────────
+// Reset client (login/logout)
+// ─────────────────────────────────────────────
+
+export function resetRealtimeClient() {
+
+  tableChannels.forEach(channel => {
+    safeExecute(() => {
+      supabaseWS?.removeChannel(channel);
+    });
+  });
+
+  tableCallbacks.clear();
+  tableChannels.clear();
+  tableStatus.clear();
+
+  reconnectTimers.forEach(timer => {
+    clearTimeout(timer);
+  });
+
+  reconnectTimers.clear();
+
+  supabaseWS = null;
+}
+
+
+// ─────────────────────────────────────────────
+// Estados internos
+// ─────────────────────────────────────────────
+
 const tableCallbacks = new Map();
-// tableName → channel
 const tableChannels = new Map();
-// tableName → 'connecting' | 'connected' | 'error'
 const tableStatus = new Map();
+const reconnectTimers = new Map();
 
-/**
- * Returns the current realtime connection status for an entity.
- */
+const RECONNECT_DELAY_MS = 2000;
+
+
+// ─────────────────────────────────────────────
+// Status
+// ─────────────────────────────────────────────
+
 export function getRealtimeStatus(entityName) {
+
   const tableName = entityTableMap[entityName];
-  return tableName ? tableStatus.get(tableName) || 'disconnected' : 'disconnected';
+
+  return tableName
+    ? (tableStatus.get(tableName) || 'disconnected')
+    : 'disconnected';
 }
 
-/**
- * Subscribe to all INSERT/UPDATE/DELETE events on the given entity's table.
- * Multiple components subscribing to the same table share a single WebSocket channel.
- *
- * @param {string} entityName - e.g. 'Production', 'Tank'
- * @param {(payload: { eventType: string, new: object, old: object }) => void} callback
- * @returns {() => void} unsubscribe function
- */
-export function subscribeToTable(entityName, callback) {
-  const tableName = entityTableMap[entityName];
-  if (!tableName) return () => {};
+
+export function isAllConnected() {
+
+  if (tableStatus.size === 0) {
+    return false;
+  }
+
+  for (const status of tableStatus.values()) {
+
+    if (status !== 'connected') {
+      return false;
+    }
+
+  }
+
+  return true;
+}
+
+
+// ─────────────────────────────────────────────
+// Payload handling
+// ─────────────────────────────────────────────
+
+function dispatchToCallbacks(tableName, payload) {
+
+  const callbacks = tableCallbacks.get(tableName);
+
+  if (!callbacks) {
+    return;
+  }
+
+  callbacks.forEach(callback => {
+
+    safeExecute(() => {
+      callback(payload);
+    });
+
+  });
+}
+
+
+
+function normalizePayload(payload) {
+
+  const {
+    eventType,
+    new: newRecord,
+    old: oldRecord
+  } = payload;
+
+
+  if (
+    eventType === 'INSERT' &&
+    (!newRecord || Object.keys(newRecord).length <= 1)
+  ) {
+
+    return {
+      eventType: 'REFRESH'
+    };
+
+  }
+
+
+  if (
+    eventType === 'UPDATE' &&
+    (!newRecord || Object.keys(newRecord).length <= 1)
+  ) {
+
+    return {
+      eventType: 'REFRESH'
+    };
+
+  }
+
+
+  if (
+    eventType === 'DELETE' &&
+    (!oldRecord || !oldRecord.id)
+  ) {
+
+    return {
+      eventType: 'REFRESH'
+    };
+
+  }
+
+
+  return {
+    eventType,
+    new: newRecord,
+    old: oldRecord
+  };
+
+}
+
+
+// ─────────────────────────────────────────────
+// Channel creation
+// ─────────────────────────────────────────────
+
+function createChannel(tableName) {
 
   const supabase = getSupabase();
 
-  // Register callback
-  if (!tableCallbacks.has(tableName)) {
-    tableCallbacks.set(tableName, new Set());
-  }
-  tableCallbacks.get(tableName).add(callback);
+  tableStatus.set(
+    tableName,
+    'connecting'
+  );
 
-  // Create channel if this is the first subscriber
-  if (!tableChannels.has(tableName)) {
-    tableStatus.set(tableName, 'connecting');
-    const channelName = `realtime-${tableName}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: tableName },
-        (payload) => {
-          const callbacks = tableCallbacks.get(tableName);
-          if (callbacks) {
-            callbacks.forEach((cb) => {
-              try { cb(payload); } catch (_) { /* prevent one bad callback from breaking others */ }
-            });
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          tableStatus.set(tableName, 'connected');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          tableStatus.set(tableName, 'error');
-        }
-      });
-    tableChannels.set(tableName, channel);
-  }
 
-  // Unsubscribe: remove callback, and tear down channel if no more subscribers
-  return () => {
-    const callbacks = tableCallbacks.get(tableName);
-    if (!callbacks) return;
-    callbacks.delete(callback);
-    if (callbacks.size === 0) {
-      const channel = tableChannels.get(tableName);
-      if (channel) {
-        getSupabase().removeChannel(channel);
+  const channel = supabase
+    .channel(`chemctrl-${tableName}`)
+
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: tableName
+      },
+
+      payload => {
+
+        dispatchToCallbacks(
+          tableName,
+          normalizePayload(payload)
+        );
+
       }
-      tableChannels.delete(tableName);
-      tableCallbacks.delete(tableName);
-      tableStatus.delete(tableName);
+
+    )
+
+
+    .subscribe((status)=>{
+
+
+      if(status === 'SUBSCRIBED'){
+
+        tableStatus.set(
+          tableName,
+          'connected'
+        );
+
+
+        const timer = reconnectTimers.get(tableName);
+
+        if(timer){
+
+          clearTimeout(timer);
+          reconnectTimers.delete(tableName);
+
+        }
+
+
+        dispatchToCallbacks(
+          tableName,
+          {
+            eventType:'REFRESH'
+          }
+        );
+
+      }
+
+
+      if(
+        status === 'CHANNEL_ERROR' ||
+        status === 'TIMED_OUT' ||
+        status === 'CLOSED'
+      ){
+
+        tableStatus.set(
+          tableName,
+          'error'
+        );
+
+        scheduleReconnect(tableName);
+
+      }
+
+
+    });
+
+
+  tableChannels.set(
+    tableName,
+    channel
+  );
+
+}
+
+
+
+// ─────────────────────────────────────────────
+// Reconnect
+// ─────────────────────────────────────────────
+
+function scheduleReconnect(tableName){
+
+  if(reconnectTimers.has(tableName)){
+    return;
+  }
+
+
+  const timer = setTimeout(()=>{
+
+
+    reconnectTimers.delete(tableName);
+
+
+    const oldChannel =
+      tableChannels.get(tableName);
+
+
+    if(oldChannel){
+
+      safeExecute(()=>{
+        getSupabase()
+          .removeChannel(oldChannel);
+      });
+
     }
+
+
+    tableChannels.delete(tableName);
+
+
+
+    const subscribers =
+      tableCallbacks.get(tableName);
+
+
+    if(
+      subscribers &&
+      subscribers.size > 0
+    ){
+
+      createChannel(tableName);
+
+    }
+
+
+  }, RECONNECT_DELAY_MS);
+
+
+
+  reconnectTimers.set(
+    tableName,
+    timer
+  );
+
+}
+
+
+// ─────────────────────────────────────────────
+// Visibility refresh
+// ─────────────────────────────────────────────
+
+if(typeof document !== 'undefined'){
+
+
+  document.addEventListener(
+    'visibilitychange',
+    ()=>{
+
+
+      if(document.visibilityState === 'visible'){
+
+
+        tableStatus.forEach(
+          (status, tableName)=>{
+
+
+            if(
+              status === 'error' ||
+              status === 'disconnected'
+            ){
+
+              scheduleReconnect(tableName);
+
+            }
+
+
+            dispatchToCallbacks(
+              tableName,
+              {
+                eventType:'REFRESH'
+              }
+            );
+
+
+          }
+        );
+
+      }
+
+
+    }
+  );
+
+
+
+  window.addEventListener(
+    'focus',
+    ()=>{
+
+
+      tableStatus.forEach(
+        (_,tableName)=>{
+
+
+          dispatchToCallbacks(
+            tableName,
+            {
+              eventType:'REFRESH'
+            }
+          );
+
+
+        }
+      );
+
+
+    }
+  );
+
+}
+
+
+// ─────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────
+
+export function subscribeToTable(
+  entityName,
+  callback
+){
+
+  const tableName =
+    entityTableMap[entityName];
+
+
+  if(!tableName){
+    return ()=>{};
+  }
+
+
+  if(!tableCallbacks.has(tableName)){
+
+    tableCallbacks.set(
+      tableName,
+      new Set()
+    );
+
+  }
+
+
+  tableCallbacks
+    .get(tableName)
+    .add(callback);
+
+
+
+  if(!tableChannels.has(tableName)){
+
+    createChannel(tableName);
+
+  }
+
+
+
+  return ()=>{
+
+
+    const callbacks =
+      tableCallbacks.get(tableName);
+
+
+
+    if(callbacks){
+
+      callbacks.delete(callback);
+
+
+
+      if(callbacks.size === 0){
+
+
+        tableCallbacks.delete(tableName);
+
+
+
+        const channel =
+          tableChannels.get(tableName);
+
+
+
+        if(channel){
+
+          safeExecute(()=>{
+            getSupabase()
+              .removeChannel(channel);
+          });
+
+        }
+
+
+
+        tableChannels.delete(tableName);
+        tableStatus.delete(tableName);
+
+
+
+        const timer =
+          reconnectTimers.get(tableName);
+
+
+        if(timer){
+
+          clearTimeout(timer);
+          reconnectTimers.delete(tableName);
+
+        }
+
+
+      }
+
+    }
+
+
   };
+
+}
+
+
+
+export function subscribeAllTables(
+  onChangeCallback
+){
+
+  const unsubscribers =
+    Object.keys(entityTableMap)
+      .map(entityName =>
+
+        subscribeToTable(
+          entityName,
+          payload=>{
+
+            if(onChangeCallback){
+
+              onChangeCallback(
+                entityName,
+                payload
+              );
+
+            }
+
+          }
+        )
+
+      );
+
+
+  return ()=>{
+
+    unsubscribers.forEach(
+      unsubscribe=>unsubscribe()
+    );
+
+  };
+
 }
