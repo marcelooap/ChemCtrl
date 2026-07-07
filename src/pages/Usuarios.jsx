@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { Plus, Search, Pencil, Power, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Power, Trash2, EyeOff, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,8 +20,8 @@ export default function Usuarios() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState('');
-  const [showPasswords, setShowPasswords] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, user: null });
+  const [hidePasswords, setHidePasswords] = useState(true);
   const { toast } = useToast();
 
   const nivelBadge = (nivel) => {
@@ -108,8 +108,12 @@ export default function Usuarios() {
   };
 
   const saveUser = async () => {
-    if (!form.nome_completo || !form.usuario || !form.senha) {
-      toast({ title: 'Preencha nome, usuário e senha', variant: 'destructive' });
+    if (!form.nome_completo || !form.usuario) {
+      toast({ title: 'Preencha nome e usuário', variant: 'destructive' });
+      return;
+    }
+    if (!editingId && !form.senha) {
+      toast({ title: 'Informe a senha inicial', variant: 'destructive' });
       return;
     }
     if (!form.nivel_acesso) {
@@ -137,13 +141,15 @@ export default function Usuarios() {
       const data = {
         nome_completo: form.nome_completo,
         usuario: form.usuario,
-        senha: form.senha,
         cargo: form.cargo,
         nivel_acesso: form.nivel_acesso,
         status: form.status,
         tipo: form.tipo,
         cliente: form.tipo === 'externo' ? form.cliente : null,
       };
+      if (form.senha) {
+        data.senha = form.senha;
+      }
 
       if (editingId) {
         await base44.entities.Usuario.update(editingId, data);
@@ -167,15 +173,16 @@ export default function Usuarios() {
   const nivelOptions = getNivelOptionsForTipo(form.tipo);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Usuários</h1>
           <p className="text-sm text-muted-foreground">Gerencie o acesso ao sistema · {users.length} usuário(s)</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setShowPasswords(!showPasswords)} className="text-sm">
-            {showPasswords ? <><EyeOff className="w-4 h-4 mr-2" /> Ocultar Senhas</> : <><Eye className="w-4 h-4 mr-2" /> Mostrar Senhas</>}
+          <Button variant="outline" onClick={() => setHidePasswords(v => !v)} title={hidePasswords ? 'Mostrar senhas' : 'Ocultar senhas'}>
+            {hidePasswords ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
+            {hidePasswords ? 'Mostrar Senhas' : 'Ocultar Senhas'}
           </Button>
           <Button onClick={openNew} className="text-white" style={{ background: '#2575D1' }}>
             <Plus className="w-4 h-4 mr-2" /> Adicionar Usuário
@@ -183,20 +190,20 @@ export default function Usuarios() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
         ) : (
           <>
-            <div className="p-4 border-b border-gray-100">
+            <div className="p-4 border-b border-gray-100 shrink-0">
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="flex-1 overflow-auto">
               <table className="w-full chemctrl-table">
-                <thead><tr className="border-b border-gray-50 bg-gray-50/50">
+                <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50">
                   <th className="px-4 py-3 text-left">Nome</th>
                   <th className="px-4 py-3 text-left">Usuário</th>
                   <th className="px-4 py-3 text-left">Senha</th>
@@ -222,7 +229,9 @@ export default function Usuarios() {
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{u.usuario || '—'}</td>
                         <td className="px-4 py-3 text-sm font-mono">
-                          {showPasswords ? (u.senha || '—') : '••••••'}
+                          {hidePasswords
+                            ? <span className="text-muted-foreground/60 tracking-widest select-none">••••••</span>
+                            : (u.senha || '—')}
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">{u.cargo || '—'}</td>
                         <td className="px-4 py-3 text-center">{nivelBadge(u.nivel_acesso)}</td>
@@ -256,6 +265,16 @@ export default function Usuarios() {
                 </tbody>
               </table>
             </div>
+            {/* Fixed Footer */}
+            <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-1.5">
+              <div className="flex items-center gap-4 text-xs flex-wrap">
+                <span className="text-muted-foreground">Total: <span className="font-bold" style={{ color: '#1A1A2E' }}>{users.length}</span></span>
+                <span className="text-muted-foreground">Internos: <span className="font-bold text-green-600">{users.filter(u => u.tipo === 'interno').length}</span></span>
+                <span className="text-muted-foreground">Externos: <span className="font-bold text-purple-600">{users.filter(u => u.tipo === 'externo').length}</span></span>
+                <span className="text-muted-foreground">Ativos: <span className="font-bold text-green-600">{users.filter(u => u.status === 'Ativo').length}</span></span>
+                <span className="text-muted-foreground">Inativos: <span className="font-bold text-red-600">{users.filter(u => u.status === 'Inativo').length}</span></span>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -274,8 +293,8 @@ export default function Usuarios() {
               <Input value={form.usuario} onChange={e => setForm({ ...form, usuario: e.target.value })} placeholder="ex: marcelo.amaral" />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Senha {editingId ? '' : '*'}</label>
-              <Input type="text" value={form.senha} onChange={e => setForm({ ...form, senha: e.target.value })} placeholder={editingId ? 'Manter ou alterar senha' : 'Senha inicial'} />
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Senha {editingId ? '(deixe em branco para manter)' : '*'}</label>
+              <Input type="password" value={form.senha} onChange={e => setForm({ ...form, senha: e.target.value })} placeholder={editingId ? 'Nova senha ou deixe em branco' : 'Senha inicial'} />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Cargo</label>
