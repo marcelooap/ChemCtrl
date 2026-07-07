@@ -5,8 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, X } from 'lucide-react';
+import ProductCombobox from '@/components/ui/ProductCombobox';
+import { Plus, X, Loader2 } from 'lucide-react';
 import moment from 'moment';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
+import { generatePublicToken } from '@/lib/publicToken';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -14,7 +17,7 @@ const parseArr = (val) => {
   try {
     const parsed = typeof val === 'string' ? JSON.parse(val) : val;
     return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 };
 
 const convertToKg = (value, unit, density) => {
@@ -55,6 +58,7 @@ export default function NovaProducao() {
     density: '', mass: 0
   });
   const [mpList, setMpList] = useState([]);
+  const [saving, setSaving] = useState(false);
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);
 
@@ -68,22 +72,24 @@ export default function NovaProducao() {
     let remainingKg = qtyNeededKg;
     const lots = mp.lots.map(lot => {
       if (!lot.stock_id) {
-        // Antes de selecionar lote: ambos os campos em kg
+        // Antes de selecionar lote: mostra o saldo restante necessário (em kg)
+        const remKg = Math.max(0, remainingKg);
         return {
           ...lot,
-          qty_fiscal: round3(qtyNeededKg),
-          qty_operational: round3(qtyNeededKg),
-          qty_operational_raw: qtyNeededKg,
+          qty_fiscal: round3(remKg),
+          qty_operational: round3(remKg),
+          qty_operational_raw: remKg,
         };
       }
       const stock = stocks.find(s => s.id === lot.stock_id);
       const unit = stock?.unit || 'kg';
-      const stockDensity = stock?.density || 1;
-      const stockAvailableKg = convertToKg(stock?.current_stock || 0, unit, stockDensity);
+      // Usa a densidade da MP cadastrada na receita (mp_density) para conversão
+      const d = mp.mp_density || stock?.density || 1;
+      const stockAvailableKg = convertToKg(stock?.current_stock || 0, unit, d);
       const qtyKg = Math.min(stockAvailableKg, Math.max(0, remainingKg));
       remainingKg -= qtyKg;
-      // Após selecionar lote: converte fiscal para a unidade do estoque se não for kg
-      const qtyFiscal = convertFromKg(qtyKg, unit, stockDensity);
+      // Após selecionar lote: converte fiscal para a unidade do estoque usando a densidade da MP
+      const qtyFiscal = convertFromKg(qtyKg, unit, d);
       return {
         ...lot,
         qty_fiscal: round3(qtyFiscal),
@@ -160,10 +166,11 @@ export default function NovaProducao() {
       const lots = [...updated[mpIdx].lots];
       const lot = { ...lots[lotIdx] };
       lot.qty_fiscal = round3(val);
+      const mp = updated[mpIdx];
       const stock = lot.stock_id ? stocks.find(s => s.id === lot.stock_id) : null;
       const unit = stock?.unit || 'kg';
-      const stockDensity = stock?.density || 1;
-      const kg = convertToKg(val, unit, stockDensity);
+      const d = mp.mp_density || stock?.density || 1;
+      const kg = convertToKg(val, unit, d);
       lot.qty_operational = round3(kg);
       lot.qty_operational_raw = kg;
       lots[lotIdx] = lot;
@@ -180,10 +187,11 @@ export default function NovaProducao() {
       const lot = { ...lots[lotIdx] };
       lot.qty_operational = round3(val);
       lot.qty_operational_raw = val;
+      const mp = updated[mpIdx];
       const stock = lot.stock_id ? stocks.find(s => s.id === lot.stock_id) : null;
       const unit = stock?.unit || 'kg';
-      const stockDensity = stock?.density || 1;
-      const fiscal = convertFromKg(val, unit, stockDensity);
+      const d = mp.mp_density || stock?.density || 1;
+      const fiscal = convertFromKg(val, unit, d);
       lot.qty_fiscal = round3(fiscal);
       lots[lotIdx] = lot;
       updated[mpIdx] = { ...updated[mpIdx], lots };
@@ -219,6 +227,7 @@ export default function NovaProducao() {
   const save = async () => {
     if (!form.product || !form.volume) return;
     if (!massOk) return;
+    setSaving(true);
 
     const volNum = parseFloat(form.volume) || 0;
     const densityNum = parseFloat(form.density) || 0;
@@ -230,14 +239,15 @@ export default function NovaProducao() {
       operatorName = user?.nome || user?.full_name || user?.email || '';
     } catch (_) {}
 
-    for (const mp of mpList) {
-      for (const lot of mp.lots) {
-        if (lot.stock_id) {
-          const stock = stocks.find(s => s.id === lot.stock_id);
-          if (stock && (stock.current_stock || 0) < (lot.qty_fiscal || 0)) return;
+    try {
+      for (const mp of mpList) {
+        for (const lot of mp.lots) {
+          if (lot.stock_id) {
+            const stock = stocks.find(s => s.id === lot.stock_id);
+            if (stock && (stock.current_stock || 0) < (lot.qty_fiscal || 0)) { setSaving(false); return; }
+          }
         }
       }
-    }
 
     const allProductions = await base44.entities.Production.list('-created_date', 500);
     const nextNum = allProductions.length + 1;
@@ -251,6 +261,7 @@ export default function NovaProducao() {
       density: densityNum,
       op_number: `OP${String(nextNum).padStart(2, '0')}`,
       lot: lotNumber,
+      public_token: generatePublicToken(),
       status: 'Aguardando Início',
       operator: operatorName,
       order_id: form.order_id,
@@ -265,31 +276,34 @@ export default function NovaProducao() {
       ),
     };
 
-    await base44.entities.Production.create(data);
+      await base44.entities.Production.create(data);
 
-    // Update linked order status to "Em produção"
-    if (form.order_id) {
-      await base44.entities.Order.update(form.order_id, { status: 'Em produção' });
-    }
+      // Update linked order status to "Em produção"
+      if (form.order_id) {
+        await base44.entities.Order.update(form.order_id, { status: 'Em produção' });
+      }
 
-    // Deduct stock by stock_id (aggregating same stock used in multiple lots)
-    const stockDeductions = {};
-    for (const mp of mpList) {
-      for (const lot of mp.lots) {
-        if (lot.stock_id && lot.qty_fiscal > 0) {
-          stockDeductions[lot.stock_id] = (stockDeductions[lot.stock_id] || 0) + lot.qty_fiscal;
+      // Deduct stock by stock_id (aggregating same stock used in multiple lots)
+      const stockDeductions = {};
+      for (const mp of mpList) {
+        for (const lot of mp.lots) {
+          if (lot.stock_id && lot.qty_fiscal > 0) {
+            stockDeductions[lot.stock_id] = (stockDeductions[lot.stock_id] || 0) + lot.qty_fiscal;
+          }
         }
       }
-    }
-    for (const [stockId, totalDeduction] of Object.entries(stockDeductions)) {
-      const stock = stocks.find(s => s.id === stockId);
-      if (stock) {
-        const newStock = parseFloat(((stock.current_stock || 0) - totalDeduction).toFixed(3));
-        await base44.entities.RawMaterialStock.update(stockId, { current_stock: newStock });
+      for (const [stockId, totalDeduction] of Object.entries(stockDeductions)) {
+        const stock = stocks.find(s => s.id === stockId);
+        if (stock) {
+          const newStock = parseFloat(((stock.current_stock || 0) - totalDeduction).toFixed(3));
+          await base44.entities.RawMaterialStock.update(stockId, { current_stock: newStock });
+        }
       }
-    }
 
-    navigate('/ordens');
+      navigate('/ordens');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
@@ -301,18 +315,19 @@ export default function NovaProducao() {
         <p className="text-sm text-muted-foreground">Registre uma nova ordem de produção.</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative">
+        <LoadingOverlay visible={saving} label="Registrando OP..." />
         <h3 className="text-sm font-semibold mb-4" style={{ color: '#1A1A2E' }}>Dados da Produção</h3>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div><label className="text-xs font-medium text-muted-foreground">Data *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Produto Acabado *</label>
-            <Select value={form.product} onValueChange={handleProductSelect}>
-              <SelectTrigger><SelectValue placeholder="Selecione o produto..." /></SelectTrigger>
-              <SelectContent>
-                {recipes.map(r => <SelectItem key={r.id} value={r.product_name}>{r.product_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <ProductCombobox
+              value={form.product}
+              onChange={handleProductSelect}
+              options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
+              placeholder="Selecione ou busque..."
+            />
           </div>
           <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-gray-50" /></div>
         </div>
@@ -322,7 +337,7 @@ export default function NovaProducao() {
             <label className="text-xs font-medium text-muted-foreground">Pedido Vinculado</label>
             <Select value={form.order_id} onValueChange={v => {
               const o = orders.find(ord => ord.id === v);
-              setForm(prev => ({ ...prev, order_id: v, client_order: o?.client_order || '' }));
+              setForm(prev => ({ ...prev, order_id: v, client_order: o?.client_order || '', volume_pending: o?.volume_pending || 0 }));
             }}>
               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
@@ -388,7 +403,7 @@ export default function NovaProducao() {
                         // Excluir lotes já selecionados em outras linhas da mesma MP
                         const usedStockIds = mp.lots.filter((_, li) => li !== lotIdx).map(l => l.stock_id).filter(Boolean);
                         const availableStocks = stocks.filter(s =>
-                          (s.mp_name === mp.mp_name || s.mp_code === mp.mp_code) && !usedStockIds.includes(s.id)
+                          s.mp_code === mp.mp_code && !usedStockIds.includes(s.id) && (s.current_stock || 0) > 0
                         );
                         return (
                           <div key={lotIdx} className="grid grid-cols-12 gap-2 items-start">
@@ -398,7 +413,7 @@ export default function NovaProducao() {
                                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar lote..." /></SelectTrigger>
                                 <SelectContent>
                                   {availableStocks.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>{s.lot} — Saldo: {fmt3(s.current_stock)} {s.unit}</SelectItem>
+                                    <SelectItem key={s.id} value={s.id}>Reg. {s.entry_id || s.id} — {s.lot} — Saldo: {fmt3(s.current_stock)} {s.unit}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -446,8 +461,10 @@ export default function NovaProducao() {
         )}
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); }}>Limpar</Button>
-          <Button onClick={save} disabled={!massOk} style={{ background: massOk ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">Registrar Ordem de Produção</Button>
+          <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); }} disabled={saving}>Limpar</Button>
+          <Button onClick={save} disabled={!massOk || saving} style={{ background: massOk ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registrando...</> : 'Registrar Ordem de Produção'}
+          </Button>
         </div>
       </div>
     </div>
