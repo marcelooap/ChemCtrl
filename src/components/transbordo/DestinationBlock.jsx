@@ -8,11 +8,12 @@ import FieldLabel from './FieldLabel';
 const PACKAGING_TYPES = ['Contentor', 'IBC – 1.000 L', 'Tambor 200 L', 'Tankagem'];
 
 const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
+const fmt0 = (n) => Math.round(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
 
 export default function DestinationBlock({ dest, idx, total, originsVolume, productDensity, onUpdate, onRemove }) {
   const isSingle = total === 1;
-  const effectiveVolume = isSingle ? originsVolume : (parseFloat(dest.volume) || 0);
-  const mass = effectiveVolume * productDensity;
+  const effectiveVolume = isSingle ? Math.round(originsVolume) : Math.round(parseFloat(dest.volume) || 0);
+  const mass = Math.round(effectiveVolume * productDensity);
   const grossWeight = mass + (parseFloat(dest.tare) || 0);
 
   return (
@@ -66,7 +67,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
           <FieldLabel>Volume (L) {isSingle ? 'auto' : ''}</FieldLabel>
           <Input
             type="number"
-            value={isSingle ? originsVolume : (dest.volume || '')}
+            value={isSingle ? Math.round(originsVolume) : (dest.volume || '')}
             readOnly={isSingle}
             onChange={e => onUpdate(idx, 'volume', e.target.value)}
             className={isSingle ? 'bg-gray-50 text-sm' : 'text-sm'}
@@ -75,7 +76,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
         </div>
         <div>
           <FieldLabel>Massa (kg) auto</FieldLabel>
-          <Input value={fmt3(mass)} readOnly className="bg-gray-50 text-sm" />
+          <Input value={fmt0(mass)} readOnly className="bg-gray-50 text-sm" />
         </div>
         {dest.type === 'Transbordo' && (
           <div>
@@ -118,7 +119,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
         <div className="grid grid-cols-4 gap-3 mt-3">
           <div>
             <FieldLabel>Peso Líq. (kg) auto</FieldLabel>
-            <Input value={fmt3(mass)} readOnly className="bg-gray-50 text-sm" />
+            <Input value={fmt0(mass)} readOnly className="bg-gray-50 text-sm" />
           </div>
           <div>
             <FieldLabel>Tara (kg)</FieldLabel>
@@ -126,7 +127,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
           </div>
           <div>
             <FieldLabel>Peso Bruto (kg) auto</FieldLabel>
-            <Input value={fmt3(grossWeight)} readOnly className="bg-gray-50 text-sm" />
+            <Input value={fmt0(grossWeight)} readOnly className="bg-gray-50 text-sm" />
           </div>
           <div>
             <FieldLabel>Lacres</FieldLabel>
