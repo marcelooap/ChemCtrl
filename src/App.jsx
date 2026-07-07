@@ -9,6 +9,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { InternalAuthProvider } from '@/lib/InternalAuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
+import RealtimeProvider from '@/components/RealtimeProvider';
 
 // Auth pages
 import Login from '@/pages/Login';
@@ -34,16 +35,19 @@ import Producoes from '@/pages/Producoes';
 import Ensaios from '@/pages/qualidade/Ensaios';
 import ProducoesCQ from '@/pages/qualidade/ProducoesCQ';
 import COA from '@/pages/qualidade/COA';
+import EquipamentosLab from '@/pages/qualidade/EquipamentosLab';
 import Vasilhames from '@/pages/Vasilhames';
 import Tankagem from '@/pages/Tankagem';
 import Transbordo from '@/pages/Transbordo';
 import Inventario from '@/pages/Inventario';
 import InventarioConferencia from '@/pages/InventarioConferencia';
 import Usuarios from '@/pages/Usuarios';
+import ConsultaPublica from '@/pages/ConsultaPublica';
 
 const AuthenticatedApp = () => {
   return (
     <Routes>
+      <Route path="/consulta/:token" element={<ConsultaPublica />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -63,6 +67,7 @@ const AuthenticatedApp = () => {
           <Route path="/producao/:id/checklist" element={<ChecklistProducao />} />
           <Route path="/producoes" element={<Producoes />} />
           <Route path="/qualidade/ensaios" element={<Ensaios />} />
+          <Route path="/qualidade/equipamentos" element={<EquipamentosLab />} />
           <Route path="/qualidade/producoes" element={<ProducoesCQ />} />
           <Route path="/qualidade/coa" element={<COA />} />
           <Route path="/vasilhames" element={<Vasilhames />} />
@@ -86,7 +91,9 @@ function App() {
         <Router>
           <ScrollToTop />
           <InternalAuthProvider>
+            <RealtimeProvider>
             <AuthenticatedApp />
+          </RealtimeProvider>
           </InternalAuthProvider>
         </Router>
         <Toaster />
