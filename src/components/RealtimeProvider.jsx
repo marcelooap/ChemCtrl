@@ -1,10 +1,10 @@
-**
+/**
  * RealtimeProvider — pré-subscreve todos os canais Supabase Realtime ao iniciar.
- *
+ * 
  * Ao montar na raiz do app, abre WebSocket para todas as tabelas imediatamente.
  * Isso elimina a latência de setup que ocorreria se cada tela abrisse seu próprio
  * canal apenas quando o usuário navega até ela.
- *
+ * 
  * Também exibe um pequeno badge de status no canto inferior esquerdo (apenas em dev,
  * ou quando há erro de conexão em produção).
  */

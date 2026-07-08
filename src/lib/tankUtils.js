@@ -8,7 +8,7 @@
  * Usa Supabase diretamente.
  */
 
-import { supabase } from '@/api/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
 
 const parseArr = (v) => {

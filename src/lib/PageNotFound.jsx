@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { useInternalAuth } from "@/contexts/InternalAuthContext";
+import { useInternalAuth } from "@/lib/InternalAuthContext";
 
 export default function PageNotFound() {
   const location = useLocation();
