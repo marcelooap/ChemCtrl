@@ -10,6 +10,7 @@ import { Plus, X, Loader2 } from 'lucide-react';
 import moment from 'moment';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { generatePublicToken } from '@/lib/publicToken';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -49,6 +50,7 @@ export default function NovaProducao() {
   const { data: allOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const navigate = useNavigate();
+  const { user: internalUser } = useInternalAuth();
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -233,11 +235,7 @@ export default function NovaProducao() {
     const densityNum = parseFloat(form.density) || 0;
 
     // Auto-register logged-in user as operator
-    let operatorName = '';
-    try {
-      const user = await base44.auth.me();
-      operatorName = user?.nome || user?.full_name || user?.email || '';
-    } catch (_) {}
+    const operatorName = internalUser?.nome_completo || internalUser?.nome || internalUser?.full_name || '';
 
     try {
       for (const mp of mpList) {

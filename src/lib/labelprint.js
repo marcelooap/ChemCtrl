@@ -6,8 +6,6 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { QRCodeSVG } from 'qrcode.react';
 
-const RESP_TECNICO = 'Italo Giuseppe Cantisani CRQ III – 03213117';
-
 function calcValidity(fabDateStr, validityDays) {
   if (!fabDateStr) return '—';
   const d = new Date(fabDateStr);
@@ -57,7 +55,9 @@ function tryFlushSync(publicUrl) {
 
 async function buildQrSvgMarkup(publicToken) {
   if (!publicToken) return '';
-  const publicUrl = `${window.location.origin}/consulta/${publicToken}`;
+  // Usa a URL pública configurada (VITE_APP_URL) em produção; em local, cai para window.location.origin
+  const baseUrl = (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
+  const publicUrl = `${baseUrl}/consulta/${publicToken}`;
   // Tenta renderToStaticMarkup primeiro; se falhar, usa flushSync
   let markup = await tryServerRender(publicUrl);
   if (!markup) markup = tryFlushSync(publicUrl);
@@ -133,7 +133,7 @@ export const printContainerLabel = async (container, validityDays, publicToken) 
   .data-block { display: flex; gap: 2mm; margin-top: 1.5mm; flex: 1; }
   .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
   .icon-col svg { width: 7mm; height: 7mm; }
-  .fields { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.8mm; }
   .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.25; }
   .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 24mm; }
   .field-row .sep { margin: 0 0.8mm; }
@@ -177,7 +177,6 @@ export const printContainerLabel = async (container, validityDays, publicToken) 
           <div class="field-row"><span class="lbl">LOTE</span><span class="sep">•</span><span class="val">${lot}</span></div>
           <div class="field-row"><span class="lbl">FABRICAÇÃO</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
           <div class="field-row"><span class="lbl">VALIDADE</span><span class="sep">•</span><span class="val">${valDate}</span></div>
-          <div class="field-row"><span class="lbl">RESP. TÉCNICO</span><span class="sep">•</span><span class="val">${RESP_TECNICO}</span></div>
         </div>
       </div>
     </div>

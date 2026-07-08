@@ -10,7 +10,8 @@ export default function QrCodeDialog({ open, onOpenChange, token, lotLabel }) {
 
   if (!token) return null;
 
-  const publicUrl = `${window.location.origin}/consulta/${token}`;
+  const baseUrl = (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
+  const publicUrl = `${baseUrl}/consulta/${token}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(publicUrl).then(() => {

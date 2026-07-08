@@ -48,8 +48,7 @@ export default function OrdensProducao() {
       confirmLabel: 'Sim, Iniciar',
       confirmColor: '#1e40af',
       onConfirm: async () => {
-        let operatorName = '';
-        try { const user = await base44.auth.me(); operatorName = user?.nome || user?.full_name || user?.email || ''; } catch (_) {}
+        const operatorName = user?.nome || user?.full_name || user?.email || '';
         await base44.entities.Production.update(prod.id, { status: 'Em Produção', start_time: new Date().toISOString(), operator: operatorName });
         navigate(`/producao/${prod.id}/checklist`);
       },

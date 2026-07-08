@@ -485,12 +485,15 @@ export function generateProductionPDF(production, containers, stocks) {
   }
   if (containers && containers.length > 0) {
     y = addSectionTitle(doc, y, 'Embalagens Envasadas');
-    const cHeaders = ['N EMBALAGEM', 'TIPO', 'VOLUME (L)', 'LIQ. (KG)', 'BRUTO (KG)'];
-    const cRows = containers.map(function(c) { return [c.container_number || '-', c.type || '-', fmtNum(c.volume, 1), fmtNum(c.net_weight, 3), fmtNum(c.gross_weight, 3)]; });
+    const cHeaders = ['N EMBALAGEM', 'TIPO', 'VOLUME (L)', 'LIQ. (KG)', 'BRUTO (KG)', 'TARA'];
+    const cRows = containers.map(function(c) {
+      const tareVal = (c.tare != null && c.tare !== '') ? fmtNum(c.tare, 3) : 'N/A';
+      return [c.container_number || '-', c.type || '-', fmtNum(c.volume, 1), fmtNum(c.net_weight, 3), fmtNum(c.gross_weight, 3), tareVal];
+    });
     const tVol = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
     const tNet = containers.reduce(function(s, c) { return s + (c.net_weight || 0); }, 0);
     const tGross = containers.reduce(function(s, c) { return s + (c.gross_weight || 0); }, 0);
-    addTable(doc, y, cHeaders, cRows, [50, 42, 30, 30, 30], ['Total', '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 3) + ' kg', fmtNum(tGross, 3) + ' kg']);
+    addTable(doc, y, cHeaders, cRows, [42, 36, 26, 26, 26, 26], ['Total', '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 3) + ' kg', fmtNum(tGross, 3) + ' kg', '']);
   }
   addFooter(doc);
   doc.save((production.op_number || 'producao') + '.pdf');
