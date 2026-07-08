@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { generateBoletaPDF, generateVasilhamesReportPDF } from '@/lib/pdfReports';
-import { printContainerLabel } from '@/lib/labelPrint';
+import { printContainerLabel } from '@/lib/labelprint';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { brasiliaDate } from '@/lib/brasilTime';
 import AddTankDialog from '@/components/vasilhames/AddTankDialog';
