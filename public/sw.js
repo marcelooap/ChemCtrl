@@ -1,6 +1,6 @@
 /* ChemCtrl Service Worker — versão 2025-06 */
 
-const CACHE_VERSION = 'chemctrl-v6';
+const CACHE_VERSION = 'chemctrl-v7';
 
 // ── Install: cache shell assets ───────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -78,7 +78,8 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('.png') ||
     url.pathname.endsWith('.ico') ||
     url.pathname.endsWith('.svg') ||
-    url.pathname.endsWith('.webmanifest')
+    url.pathname.endsWith('.webmanifest') ||
+    (url.pathname.endsWith('.json') && url.pathname.includes('manifest'))
   ) {
     event.respondWith(
       fetch(request).then((response) => {
