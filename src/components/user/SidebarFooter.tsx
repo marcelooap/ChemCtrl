@@ -36,9 +36,22 @@ export function SidebarFooter({ collapsed, onToggleCollapse }: SidebarFooterProp
           type="button"
           onClick={logout}
           aria-label="Sair"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-red-400 hover:bg-white/10 transition-colors shrink-0"
+          className={cn(
+            'flex items-center gap-2 rounded-lg text-white/60 hover:text-red-400 hover:bg-white/10 transition-all duration-200 shrink-0 overflow-hidden',
+            collapsed
+              ? 'w-0 opacity-0 p-0 pointer-events-none'
+              : 'w-auto opacity-100 px-2 py-1.5'
+          )}
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-4 h-4 shrink-0" />
+          <span
+            className={cn(
+              'text-sm font-medium whitespace-nowrap transition-all duration-200',
+              collapsed ? 'max-w-0 opacity-0' : 'max-w-[4rem] opacity-100'
+            )}
+          >
+            Sair
+          </span>
         </button>
       </div>
     </div>

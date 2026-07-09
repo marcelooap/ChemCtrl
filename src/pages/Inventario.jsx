@@ -98,16 +98,16 @@ export default function Inventario() {
           {loading ? (
             <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
-            <table className="w-full">
+            <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
-                <tr style={{ background: '#F3F4F6' }}>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Nº Inventário</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Data Abertura</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Cliente</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Produto</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Usuário</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Ações</th>
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold">Nº Inventário</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold">Data Abertura</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold">Produto</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold">Usuário</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold">Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,28 +119,28 @@ export default function Inventario() {
                   const isFinished = inv.status === 'Finalizado';
                   const canStart = inv.status === 'Aberto' && !isReadOnly;
                   return (
-                    <tr key={inv.id} className="border-b border-border hover:bg-accent/30" style={{ background: '#FFFFFF' }}>
-                      <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#2575D1' }}>{inv.inventory_number}</td>
+                    <tr key={inv.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-4 py-3 font-semibold text-sm text-primary">{inv.inventory_number}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{fmtDateTime(inv.opening_date)}</td>
-                      <td className="px-4 py-3 text-sm">{clients || '—'}</td>
-                      <td className="px-4 py-3 text-sm">{products || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{clients || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-foreground">{products || '—'}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{inv.opened_by || '—'}</td>
                       <td className="px-4 py-3 text-center">{statusBadge(inv.status)}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-muted" title="Visualizar">
-                            <Eye className="w-4 h-4 text-gray-400" />
+                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-accent" title="Visualizar">
+                            <Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                           </button>
                           {canStart && (
-                            <button onClick={() => handleStart(inv)} className="p-1.5 rounded hover:bg-muted" title="Iniciar Inventário">
+                            <button onClick={() => handleStart(inv)} className="p-1.5 rounded hover:bg-accent" title="Iniciar Inventário">
                               <Play className="w-4 h-4 text-green-500" />
                             </button>
                           )}
                           <button onClick={() => handlePDF(inv)} disabled={!isFinished || generatingPDF === inv.id}
-                            className="p-1.5 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed" title={isFinished ? 'Baixar PDF' : 'PDF disponível após finalização'}>
+                            className="p-1.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed" title={isFinished ? 'Baixar PDF' : 'PDF disponível após finalização'}>
                             {generatingPDF === inv.id
-                              ? <div className="w-4 h-4 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
-                              : <FileText className="w-4 h-4 text-gray-400" />}
+                              ? <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
+                              : <FileText className="w-4 h-4 text-muted-foreground hover:text-foreground" />}
                           </button>
                         </div>
                       </td>

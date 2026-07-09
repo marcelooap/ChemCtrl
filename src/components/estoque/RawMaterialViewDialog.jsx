@@ -88,7 +88,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
             </div>
 
             {/* Ordens de Produção */}
-            <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Ordens de Produção que utilizaram este lote</h4>
+            <h4 className="text-sm font-bold mb-2 text-foreground">Ordens de Produção que utilizaram este lote</h4>
             {loadingConsumption ? (
               <div className="flex items-center justify-center h-16"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
             ) : consumption.length === 0 ? (
@@ -118,7 +118,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
             )}
 
             {/* Histórico de Movimentações */}
-            <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Histórico de Movimentações</h4>
+            <h4 className="text-sm font-bold mb-2 text-foreground">Histórico de Movimentações</h4>
             {loadingMovements ? (
               <div className="flex items-center justify-center h-12"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
             ) : movements.length === 0 ? (

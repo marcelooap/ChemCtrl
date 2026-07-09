@@ -7,6 +7,13 @@ import {
 } from 'lucide-react';
 import { canAccessRoute } from '@/lib/permissions';
 import { SidebarFooter } from '@/components/user/SidebarFooter';
+import { cn } from '@/lib/utils';
+
+const labelClass = (collapsed) =>
+  cn(
+    'truncate transition-all duration-300 overflow-hidden whitespace-nowrap',
+    collapsed ? 'max-w-0 opacity-0' : 'max-w-[12rem] opacity-100'
+  );
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard, path: '/' },
@@ -64,8 +71,8 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm mb-0.5 cursor-not-allowed select-none"
           style={{ opacity: 0.25 }}>
           <item.icon className="w-4 h-4 shrink-0 text-white/50" />
-          {!collapsed && <span className="truncate flex-1 text-white/50">{item.label}</span>}
-          {!collapsed && <Lock className="w-3 h-3 shrink-0 text-white/30" />}
+          <span className={cn(labelClass(collapsed), 'flex-1 text-white/50')}>{item.label}</span>
+          <Lock className={cn('w-3 h-3 shrink-0 text-white/30 transition-opacity duration-300', collapsed ? 'opacity-0 w-0' : 'opacity-100')} />
         </div>
       );
     }
@@ -75,7 +82,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
         className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${isActive(item.path) ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
         style={isActive(item.path) ? { background: '#2575D1' } : {}}>
         <item.icon className="w-4 h-4 shrink-0" />
-        {!collapsed && <span className="truncate">{item.label}</span>}
+        <span className={labelClass(collapsed)}>{item.label}</span>
       </Link>
     );
   };
@@ -89,12 +96,10 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
         className="flex items-center gap-3 px-4 h-16 border-b border-white/10 shrink-0 hover:bg-white/5 transition-colors w-full">
         <img src="https://media.base44.com/images/public/6a3bc68b6dcf809125758419/36b0a109a_image.png"
           alt="ChemCtrl" className="w-8 h-8 rounded-lg shrink-0" />
-        {!collapsed && (
-          <div className="overflow-hidden text-left">
-            <p className="text-white font-bold text-sm leading-tight">ChemCtrl</p>
-            <p className="text-white/50 text-[10px]">Controle de Produção</p>
-          </div>
-        )}
+        <div className={cn('overflow-hidden text-left transition-all duration-300', collapsed ? 'max-w-0 opacity-0' : 'max-w-[10rem] opacity-100')}>
+          <p className="text-white font-bold text-sm leading-tight whitespace-nowrap">ChemCtrl</p>
+          <p className="text-white/50 text-[10px] whitespace-nowrap">Controle de Produção</p>
+        </div>
       </button>
 
       {/* Navigation */}
@@ -113,8 +118,8 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
                   className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm mb-0.5 cursor-not-allowed select-none"
                   style={{ opacity: 0.25 }}>
                   <item.icon className="w-4 h-4 shrink-0 text-white/50" />
-                  {!collapsed && <span className="truncate flex-1 text-white/50">{item.label}</span>}
-                  {!collapsed && <Lock className="w-3 h-3 shrink-0 text-white/30" />}
+                  <span className={cn(labelClass(collapsed), 'flex-1 text-white/50')}>{item.label}</span>
+                  <Lock className={cn('w-3 h-3 shrink-0 text-white/30 transition-opacity duration-300', collapsed ? 'opacity-0 w-0' : 'opacity-100')} />
                 </div>
               );
             }
@@ -124,12 +129,9 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
                 <button onClick={() => toggleGroup(item.label)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isGroupActive ? 'text-white bg-white/10' : 'text-white/60 hover:text-white hover:bg-white/5'}`}>
                   <item.icon className="w-4 h-4 shrink-0" />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left truncate">{item.label}</span>
-                      {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                    </>
-                  )}
+                  <span className={cn(labelClass(collapsed), 'flex-1 text-left')}>{item.label}</span>
+                  <ChevronDown className={cn('w-3 h-3 shrink-0 transition-opacity duration-300', collapsed || !isExpanded ? 'hidden' : 'block')} />
+                  <ChevronRight className={cn('w-3 h-3 shrink-0 transition-opacity duration-300', collapsed || isExpanded ? 'hidden' : 'block')} />
                 </button>
                 {!collapsed && isExpanded && (
                   <div className="ml-4 pl-3 border-l border-white/10">

@@ -29,7 +29,7 @@ export default function Usuarios() {
       Administrador: 'bg-red-100 text-red-700',
       Supervisor: 'bg-amber-100 text-amber-700',
       Operacional: 'bg-blue-100 text-blue-700',
-      'Visualização': 'bg-gray-200 text-foreground',
+      'Visualização': 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
     };
     return <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${colors[nivel] || colors.Operacional}`}>{nivel || 'Operacional'}</span>;
   };
@@ -203,7 +203,7 @@ export default function Usuarios() {
             </div>
             <div className="flex-1 overflow-auto">
               <table className="w-full chemctrl-table">
-                <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
+                <thead className="sticky top-0 z-10"><tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">Nome</th>
                   <th className="px-4 py-3 text-left">Usuário</th>
                   <th className="px-4 py-3 text-left">Senha</th>
@@ -218,7 +218,7 @@ export default function Usuarios() {
                   {filtered.map(u => {
                     const inactive = u.status === 'Inativo';
                     return (
-                      <tr key={u.id} className="border-b border-gray-50" style={{ opacity: inactive ? 0.5 : 1 }}>
+                      <tr key={u.id} className="border-b border-border" style={{ opacity: inactive ? 0.5 : 1 }}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: '#2575D1' }}>

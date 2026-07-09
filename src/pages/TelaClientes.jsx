@@ -125,18 +125,18 @@ export default function TelaClientes() {
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhum item em estoque.</div>
         ) : (
           <div className="overflow-x-auto max-h-80 overflow-y-auto">
-            <table className="w-full">
+            <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
-                <tr style={{ background: '#F3F4F6' }}>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">ID</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Cód. MP</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Produto</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Lote</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Saldo Inicial</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Saldo Atual</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Un.</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Status</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Ver</th>
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Cód. MP</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Produto</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Lote</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold">Saldo Inicial</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold">Saldo Atual</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold">Un.</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold">Status</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold">Ver</th>
                 </tr>
               </thead>
               <tbody>
@@ -144,16 +144,16 @@ export default function TelaClientes() {
                   const status = getMPStatus(item);
                   return (
                     <tr key={item.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 text-sm font-medium" style={{ color: '#3B82F6' }}>{item.entry_id || '—'}</td>
-                      <td className="px-3 py-2 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code || '—'}</td>
-                      <td className="px-3 py-2 text-sm font-medium">{item.mp_name}</td>
-                      <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF', fontFamily: "'Arial Narrow', 'Inter', sans-serif", fontStretch: 'condensed' }}>{item.lot || '—'}</td>
-                      <td className="px-3 py-2 text-right text-sm">{fmt(item.initial_stock)}</td>
-                      <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#000' }}>{fmt(item.current_stock)}</td>
-                      <td className="px-3 py-2 text-center text-sm font-bold" style={{ color: '#000' }}>{item.unit}</td>
+                      <td className="px-3 py-2 text-sm font-medium text-primary">{item.entry_id || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || '—'}</td>
+                      <td className="px-3 py-2 text-sm font-medium text-foreground">{item.mp_name}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || '—'}</td>
+                      <td className="px-3 py-2 text-right text-sm text-foreground">{fmt(item.initial_stock)}</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-foreground">{fmt(item.current_stock)}</td>
+                      <td className="px-3 py-2 text-center text-sm font-bold text-foreground">{item.unit}</td>
                       <td className="px-3 py-2 text-center">
                         {status === null ? (
-                          <span className="text-sm" style={{ color: '#9CA3AF' }}>—</span>
+                          <span className="text-sm text-muted-foreground">—</span>
                         ) : status === 'Vencido' ? (
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Vencido</span>
                         ) : (
@@ -161,7 +161,7 @@ export default function TelaClientes() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
+                        <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
                       </td>
                     </tr>
                   );
@@ -188,27 +188,27 @@ export default function TelaClientes() {
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhum vasilhame no pátio.</div>
         ) : (
           <div className="overflow-x-auto max-h-80 overflow-y-auto">
-            <table className="w-full">
+            <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
-                <tr style={{ background: '#F3F4F6' }}>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">N° Embalagem</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Produto</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Volume (L)</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Massa (kg)</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">Lote</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">Ver</th>
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">N° Embalagem</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Produto</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold">Volume (L)</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold">Massa (kg)</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold">Lote</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold">Ver</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredContainers.map(c => (
                   <tr key={c.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-3 py-2 text-sm font-bold">{c.container_number || '—'}</td>
-                    <td className="px-3 py-2 text-sm">{c.product || '—'}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt3(c.volume)}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#065F46' }}>{fmt3(c.net_weight)}</td>
-                    <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF', fontFamily: "'Arial Narrow', 'Inter', sans-serif", fontStretch: 'condensed' }}>{c.lot || '—'}</td>
+                    <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-foreground">{c.product || '—'}</td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmt3(c.volume)}</td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-green-600 dark:text-green-400">{fmt3(c.net_weight)}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || '—'}</td>
                     <td className="px-3 py-2 text-center">
-                      <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
+                      <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
                     </td>
                   </tr>
                 ))}

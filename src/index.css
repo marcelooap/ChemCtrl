@@ -138,3 +138,42 @@ table tbody tr {
 table tbody tr:hover {
   background-color: hsl(var(--accent) / 0.5) !important;
 }
+
+/* Dark mode — consistent table surfaces and readable text */
+.dark table,
+.dark .chemctrl-table {
+  background-color: hsl(var(--card));
+}
+.dark table tbody tr,
+.dark .chemctrl-table tbody tr {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground));
+}
+.dark table tbody td {
+  color: hsl(var(--card-foreground));
+}
+.dark table tbody td .text-gray-400,
+.dark table tbody td .text-gray-500,
+.dark table tbody td .text-gray-600 {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Dark mode status pills — keep semantics, improve contrast */
+.dark .bg-green-100 { background-color: hsl(142 50% 18%); }
+.dark .text-green-700 { color: hsl(142 60% 65%); }
+.dark .bg-red-100 { background-color: hsl(0 50% 18%); }
+.dark .text-red-700 { color: hsl(0 70% 68%); }
+.dark .bg-amber-100 { background-color: hsl(38 50% 18%); }
+.dark .text-amber-700 { color: hsl(38 80% 65%); }
+.dark .bg-blue-100 { background-color: hsl(212 50% 20%); }
+.dark .text-blue-700 { color: hsl(212 70% 70%); }
+.dark .bg-purple-100 { background-color: hsl(262 40% 22%); }
+.dark .text-purple-700 { color: hsl(262 60% 72%); }
+.dark .bg-gray-200 { background-color: hsl(230 15% 28%); }
+.dark .bg-green-50 { background-color: hsl(142 40% 15%); }
+.dark .text-green-700 { color: hsl(142 60% 65%); }
+.dark .border-green-300 { border-color: hsl(142 40% 35%); }
+.dark .border-gray-300 { border-color: hsl(var(--border)); }
+.dark .text-gray-600 { color: hsl(var(--muted-foreground)); }
+.dark .bg-blue-50 { background-color: hsl(212 40% 18%); }
+.dark .ring-blue-50 { --tw-ring-color: hsl(212 40% 25%); }

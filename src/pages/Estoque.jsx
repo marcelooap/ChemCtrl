@@ -237,19 +237,19 @@ export default function Estoque() {
           {loading ? (
             <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
-            <table className="w-full" style={{ background: '#F9FAFB' }}>
+            <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
-                <tr style={{ background: '#F3F4F6' }}>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Reg.</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Código</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Nome</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Cliente</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Lote</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Saldo Atual</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Preço Unit. (R$)</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Custo Total (R$)</th>
-                  <th className="px-4 py-2 text-center text-xs font-semibold text-gray-600">Status</th>
-                  <th className="px-4 py-2 text-center text-xs font-semibold text-gray-600">Ações</th>
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Reg.</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Código</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Nome</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Cliente</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold">Lote</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold">Saldo Atual</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold">Preço Unit. (R$)</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold">Custo Total (R$)</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold">Status</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -257,32 +257,32 @@ export default function Estoque() {
                   const zeroStock = (item.current_stock || 0) === 0;
                   const status = getStatus(item);
                   return (
-                    <tr key={item.id} style={{ opacity: zeroStock ? 0.45 : 1, borderBottom: '1px solid #E5E7EB', background: '#FFFFFF' }}>
-                       <td className="px-4 py-2.5 text-sm font-medium" style={{ color: '#3B82F6' }}>{item.entry_id || `#${idx + 1}`}</td>
-                       <td className="px-4 py-2.5 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code}</td>
-                       <td className="px-4 py-2.5 font-medium text-sm">{item.mp_name}</td>
-                       <td className="px-4 py-2.5 text-sm" style={{ color: '#9CA3AF' }}>{item.client || '—'}</td>
-                       <td className="px-4 py-2.5 font-mono text-sm" style={{ color: '#6B7280' }}>{item.lot || '—'}</td>
-                       <td className="px-4 py-2.5 text-right text-sm">
+                    <tr key={item.id} className="border-b border-border hover:bg-accent/30" style={{ opacity: zeroStock ? 0.45 : 1 }}>
+                       <td className="px-4 py-2.5 text-sm font-medium text-primary">{item.entry_id || `#${idx + 1}`}</td>
+                       <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.mp_code}</td>
+                       <td className="px-4 py-2.5 font-medium text-sm text-foreground">{item.mp_name}</td>
+                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client || '—'}</td>
+                       <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.lot || '—'}</td>
+                       <td className="px-4 py-2.5 text-right text-sm text-foreground">
                          <span className="font-medium">{fmt(item.current_stock)}</span>{' '}
                          <span className="font-medium">{item.unit}</span>
                        </td>
-                       <td className="px-4 py-2.5 text-right text-sm">{(item.unit_price || 0).toFixed(4)}</td>
-                       <td className="px-4 py-2.5 text-right text-sm font-semibold" style={{ color: '#065F46' }}>{fmtMoney((item.current_stock || 0) * (item.unit_price || 0))}</td>
+                       <td className="px-4 py-2.5 text-right text-sm text-foreground">{(item.unit_price || 0).toFixed(4)}</td>
+                       <td className="px-4 py-2.5 text-right text-sm font-semibold text-green-600 dark:text-green-400">{fmtMoney((item.current_stock || 0) * (item.unit_price || 0))}</td>
                        <td className="px-4 py-2.5 text-center">
                          {status === null ? (
-                           <span className="text-sm" style={{ color: '#9CA3AF' }}>—</span>
+                           <span className="text-sm text-muted-foreground">—</span>
                          ) : status === 'Vencido' ? (
                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700">Vencido</span>
                          ) : (
-                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-600 text-white">Válido</span>
+                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-600 text-white dark:bg-green-700">Válido</span>
                          )}
                        </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">
-                           <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-muted"><Eye className="w-4 h-4 text-gray-400" /></button>
-                           {!isReadOnly && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-muted"><Pencil className="w-4 h-4 text-gray-400" /></button>}
-                           {!isReadOnly && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-muted"><Trash2 className="w-4 h-4 text-gray-400" /></button>}
+                           <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-accent"><Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>
+                           {!isReadOnly && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-accent"><Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>}
+                           {!isReadOnly && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-accent"><Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-400" /></button>}
                          </div>
                        </td>
                      </tr>

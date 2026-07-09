@@ -247,7 +247,7 @@ export default function EstoqueCliente() {
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
-                <tr style={{ background: '#F3F4F6' }}>
+                <tr>
                   <th className="px-3 py-2 text-left">Cód. MP</th>
                   <th className="px-3 py-2 text-left">Produto</th>
                   {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
@@ -265,15 +265,15 @@ export default function EstoqueCliente() {
                   const status = getMPStatus(item);
                   return (
                     <tr key={item.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code || '—'}</td>
-                      <td className="px-3 py-2 text-sm font-medium">{item.mp_name}</td>
-                      {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{item.client || '—'}</td>}
-                      <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{item.lot || '—'}</td>
-                      <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{item.supplier || '—'}</td>
-                      <td className="px-3 py-2 text-right text-sm">{fmt(item.initial_stock)}</td>
-                      <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#000' }}>{fmt(item.current_stock)}</td>
-                      <td className="px-3 py-2 text-center text-sm font-bold" style={{ color: '#000' }}>{item.unit}</td>
-                      <td className="px-3 py-2 text-center text-sm" style={{ color: '#6B7280' }}>{item.expiry_date ? moment(item.expiry_date).format('DD/MM/YYYY') : '—'}</td>
+                      <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || '—'}</td>
+                      <td className="px-3 py-2 text-sm font-medium text-foreground">{item.mp_name}</td>
+                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{item.client || '—'}</td>}
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || '—'}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.supplier || '—'}</td>
+                      <td className="px-3 py-2 text-right text-sm text-foreground">{fmt(item.initial_stock)}</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-foreground">{fmt(item.current_stock)}</td>
+                      <td className="px-3 py-2 text-center text-sm font-bold text-foreground">{item.unit}</td>
+                      <td className="px-3 py-2 text-center text-sm text-muted-foreground">{item.expiry_date ? moment(item.expiry_date).format('DD/MM/YYYY') : '—'}</td>
                       <td className="px-3 py-2 text-center">
                         {status === null ? (
                           <span className="text-sm" style={{ color: '#9CA3AF' }}>—</span>
@@ -305,7 +305,7 @@ export default function EstoqueCliente() {
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
-                <tr style={{ background: '#F3F4F6' }}>
+                <tr>
                   <th className="px-3 py-2 text-left">N° Embalagem</th>
                   <th className="px-3 py-2 text-left">Barril</th>
                   {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
@@ -321,15 +321,15 @@ export default function EstoqueCliente() {
               <tbody>
                 {filteredContainers.map(c => (
                   <tr key={c.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-3 py-2 text-sm font-bold">{c.container_number || '—'}</td>
-                    <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.barril_number || '—'}</td>
-                    {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.client || '—'}</td>}
-                    <td className="px-3 py-2 text-sm font-medium">{c.product || '—'}</td>
-                    <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{c.lot || '—'}</td>
-                    <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.type || '—'}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt3(c.volume)}</td>
-                    <td className="px-3 py-2 text-right text-sm" style={{ color: '#065F46' }}>{fmt3(c.net_weight)}</td>
-                    <td className="px-3 py-2 text-right text-sm">{fmt3(c.gross_weight)}</td>
+                    <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.barril_number || '—'}</td>
+                    {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{c.client || '—'}</td>}
+                    <td className="px-3 py-2 text-sm font-medium text-foreground">{c.product || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.type || '—'}</td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmt3(c.volume)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-green-600 dark:text-green-400">{fmt3(c.net_weight)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-foreground">{fmt3(c.gross_weight)}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.status === 'No Pátio' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
                         {c.status || '—'}
@@ -356,7 +356,7 @@ export default function EstoqueCliente() {
           <div className="overflow-x-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
-                <tr style={{ background: '#F3F4F6' }}>
+                <tr>
                   <th className="px-3 py-2 text-left">Tanka</th>
                   {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
                   <th className="px-3 py-2 text-left">Produto</th>
@@ -372,17 +372,17 @@ export default function EstoqueCliente() {
                   const pct = Math.min(100, Math.round((volume / capacity) * 100));
                   return (
                     <tr key={t.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 text-sm font-bold">{t.name || '—'}</td>
-                      {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{t.client || '—'}</td>}
-                      <td className="px-3 py-2 text-sm font-medium">{t.computed_products.join(', ') || '—'}</td>
-                      <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{t.computed_lot || '—'}</td>
-                      <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt(volume)}</td>
+                      <td className="px-3 py-2 text-sm font-bold text-foreground">{t.name || '—'}</td>
+                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{t.client || '—'}</td>}
+                      <td className="px-3 py-2 text-sm font-medium text-foreground">{t.computed_products.join(', ') || '—'}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{t.computed_lot || '—'}</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmt(volume)}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: '#16a34a' }} />
+                          <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden min-w-[60px]">
+                            <div className="h-full rounded-full transition-all bg-green-600" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-xs font-medium text-gray-500 shrink-0">{pct}%</span>
+                          <span className="text-xs font-medium text-muted-foreground shrink-0">{pct}%</span>
                         </div>
                       </td>
                     </tr>
