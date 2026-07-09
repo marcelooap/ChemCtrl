@@ -1,6 +1,6 @@
 /* ChemCtrl Service Worker — versão 2025-06 */
 
-const CACHE_VERSION = 'chemctrl-v7';
+const CACHE_VERSION = 'chemctrl-v8';
 
 // ── Install: cache shell assets ───────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -9,7 +9,17 @@ self.addEventListener('install', (event) => {
   // We do NOT auto-skipWaiting here to give the UI time to show the prompt.
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(['/'])
+      cache.addAll([
+        '/',
+        '/manifest.json',
+        '/favicon.ico',
+        '/icons/favicon-32x32.png',
+        '/icons/apple-touch-icon.png',
+        '/icons/icon-192x192.png',
+        '/icons/icon-192x192-maskable.png',
+        '/icons/icon-512x512.png',
+        '/icons/icon-512x512-maskable.png',
+      ])
     ).catch(() => {})
   );
 });

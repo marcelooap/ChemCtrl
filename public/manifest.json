@@ -6,23 +6,11 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f3455",
-  "theme_color": "#0f3455",
+  "background_color": "#223f56",
+  "theme_color": "#223f56",
   "lang": "pt-BR",
   "categories": ["productivity", "business"],
   "icons": [
-    {
-      "src": "/icons/favicon-32x32.png",
-      "sizes": "32x32",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    },
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
@@ -32,18 +20,6 @@
     {
       "src": "/icons/icon-192x192-maskable.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/icon-256x256.png",
-      "sizes": "256x256",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-256x256-maskable.png",
-      "sizes": "256x256",
       "type": "image/png",
       "purpose": "maskable"
     },

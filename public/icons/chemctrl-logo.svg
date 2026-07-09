@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="hexGrad" x1="256" y1="20.47999999999999" x2="256" y2="491.52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#37bcc2"/>
+      <stop offset="52%" stop-color="#2a89a5"/>
+      <stop offset="100%" stop-color="#225480"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#223f56"/>
+  <polygon fill="url(#hexGrad)" points="256.0,20.5 460.0,138.2 460.0,373.8 256.0,491.5 52.0,373.8 52.0,138.2"/>
+  <path d="M 117.04320000000001 237.1584 C 166.50240000000002 217.1392, 232.448 257.1776, 256 237.1584 C 279.552 217.1392, 345.4976 257.1776, 394.9568 237.1584"
+    stroke="#46e9e1" stroke-width="12.0" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 117.04320000000001 274.84159999999997 C 166.50240000000002 254.82239999999996, 232.448 294.8608, 256 274.84159999999997 C 279.552 254.82239999999996, 345.4976 294.8608, 394.9568 274.84159999999997"
+    stroke="#46e9e1" stroke-width="12.0" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
