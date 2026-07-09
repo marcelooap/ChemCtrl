@@ -184,7 +184,7 @@ export default function Tankagem() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>🛢 Tankagem</h1>
+          <h1 className="text-2xl font-bold">🛢 Tankagem</h1>
           <p className="text-sm text-muted-foreground">{tanks.length} tanka(s) · {fmt(totalVolume)} L em uso de {fmt(totalCapacity)} L</p>
         </div>
         <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white">
@@ -194,10 +194,10 @@ export default function Tankagem() {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
         </div>
       ) : tanks.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+        <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
           <Cylinder className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
           <p className="text-lg font-medium text-muted-foreground">Nenhuma tanka cadastrada</p>
           <p className="text-sm text-muted-foreground mt-1">Clique em "Cadastrar Tanka" para começar.</p>
@@ -205,7 +205,7 @@ export default function Tankagem() {
       ) : (
         <>
           {/* Silo View — grouped by client */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
             <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">Visão Geral — Silos por Cliente</h2>
             {Object.entries(tanksByClient).map(([client, clientTanks]) => {
               const clientColor = getClientColor(client);
@@ -235,8 +235,8 @@ export default function Tankagem() {
                             <div className="h-3 rounded-b-full border-2 border-t-0" style={{ borderColor: '#cbd5e1', background: '#f1f5f9' }} />
                           </div>
                           <div className="text-center mt-2 w-full">
-                            <p className="font-bold text-sm" style={{ color: '#1A1A2E' }}>{tank.name}</p>
-                             <p className="text-xs font-medium truncate" style={{ color: '#1A1A2E' }}>{tank.latest_product || '—'}</p>
+                            <p className="font-bold text-sm">{tank.name}</p>
+                             <p className="text-xs font-medium truncate">{tank.latest_product || '—'}</p>
                             {tank.computed_lot && <p className="text-xs text-muted-foreground">Lote: {tank.computed_lot}</p>}
                             <p className="text-xs text-muted-foreground mt-0.5">Cap: {fmt(tank.capacity)} L</p>
                           </div>
@@ -250,10 +250,10 @@ export default function Tankagem() {
           </div>
 
           {/* Detailed Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full chemctrl-table">
-                <thead><tr className="border-b border-gray-50 bg-gray-50/50">
+                <thead><tr className="border-b border-gray-50 bg-muted/50/50">
                   <th className="px-4 py-3 text-left">Tanka</th>
                   <th className="px-4 py-3 text-left">Cliente</th>
                   <th className="px-4 py-3 text-left">Produto(s)</th>
@@ -268,17 +268,17 @@ export default function Tankagem() {
                     const fillPercent = Math.min(100, ((tank.current_volume || 0) / (tank.capacity || 26000)) * 100);
                     const clientColor = getClientColor(tank.client);
                     return (
-                      <tr key={tank.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3 font-bold text-sm" style={{ color: '#1A1A2E' }}>{tank.name}</td>
+                      <tr key={tank.id} className="border-b border-gray-50 hover:bg-accent/30">
+                        <td className="px-4 py-3 font-bold text-sm">{tank.name}</td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: clientColor }} />
                             {tank.client || '—'}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm" style={{ color: '#1A1A2E' }}>{tank.latest_product || '—'}</td>
+                        <td className="px-4 py-3 text-sm">{tank.latest_product || '—'}</td>
                         <td className="px-4 py-3 text-sm font-mono">{tank.computed_lot || '—'}</td>
-                        <td className="px-4 py-3 text-right text-sm font-bold" style={{ color: '#1A1A2E' }}>{fmt(tank.current_volume)}</td>
+                        <td className="px-4 py-3 text-right text-sm font-bold">{fmt(tank.current_volume)}</td>
                         <td className="px-4 py-3 text-right text-sm text-muted-foreground">{fmt(tank.capacity)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -290,8 +290,8 @@ export default function Tankagem() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => openEdit(tank)} className="p-1.5 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                            <button onClick={() => setDeleteTarget(tank)} className="p-1.5 rounded hover:bg-gray-100"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                            <button onClick={() => openEdit(tank)} className="p-1.5 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                            <button onClick={() => setDeleteTarget(tank)} className="p-1.5 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
                           </div>
                         </td>
                       </tr>

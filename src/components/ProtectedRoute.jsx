@@ -2,9 +2,9 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 const DefaultFallback = () => (
-  <div className="fixed inset-0 flex items-center justify-center bg-[#F5F5F7]">
+  <div className="fixed inset-0 flex items-center justify-center bg-background">
     <div className="text-center">
-      <div className="w-10 h-10 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin mx-auto mb-3"></div>
+      <div className="w-10 h-10 border-4 border-border border-t-[#2575D1] rounded-full animate-spin mx-auto mb-3"></div>
       <p className="text-sm text-muted-foreground">Carregando ChemCtrl...</p>
     </div>
   </div>

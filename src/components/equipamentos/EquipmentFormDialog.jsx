@@ -83,7 +83,7 @@ export default function EquipmentFormDialog({ open, onClose, onSave, equipment }
           <div className="sm:col-span-2"><Label className="text-xs">Empresa de Calibração</Label><Input value={form.calibration_company} onChange={(e) => set('calibration_company', e.target.value)} /></div>
           <div><Label className="text-xs">Nº Certificado Atual</Label><Input value={form.certificate_number} onChange={(e) => set('certificate_number', e.target.value)} /></div>
           <div><Label className="text-xs">Última Calibração</Label><Input type="date" value={form.last_calibration_date || ''} onChange={(e) => set('last_calibration_date', e.target.value)} /></div>
-          <div><Label className="text-xs">Próxima Calibração (auto)</Label><Input type="date" value={form.next_calibration_date || ''} disabled className="bg-gray-50 text-gray-500" /></div>
+          <div><Label className="text-xs">Próxima Calibração (auto)</Label><Input type="date" value={form.next_calibration_date || ''} disabled className="bg-muted/50 text-gray-500" /></div>
           <div className="sm:col-span-2"><Label className="text-xs">Observações</Label><Textarea rows={2} value={form.observations || ''} onChange={(e) => set('observations', e.target.value)} /></div>
           <UploadField label="Imagem do Equipamento" value={form.image_url} onChange={(v) => set('image_url', v)} accept="image/*" />
           <UploadField label="Certificado Atual" value={form.certificate_url} onChange={(v) => set('certificate_url', v)} accept=".pdf,image/*" />

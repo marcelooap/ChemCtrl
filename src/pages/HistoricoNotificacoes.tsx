@@ -67,7 +67,7 @@ export default function HistoricoNotificacoes() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: '#1A1A2E' }}>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
             <Bell className="w-6 h-6" />
             Histórico de Notificações
           </h1>
@@ -83,7 +83,7 @@ export default function HistoricoNotificacoes() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+      <div className="bg-card rounded-xl border border-border p-4 mb-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -119,7 +119,7 @@ export default function HistoricoNotificacoes() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -140,7 +140,7 @@ export default function HistoricoNotificacoes() {
           </div>
         )}
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <Button
             variant="outline"
             size="sm"

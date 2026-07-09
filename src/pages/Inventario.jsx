@@ -67,7 +67,7 @@ export default function Inventario() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📋 Inventário</h1>
+          <h1 className="text-2xl font-bold">📋 Inventário</h1>
           <p className="text-sm text-muted-foreground">Controle de inventários físicos · {inventories.length} registro(s)</p>
         </div>
         {!isReadOnly && (
@@ -77,8 +77,8 @@ export default function Inventario() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por número, cliente, produto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -96,7 +96,7 @@ export default function Inventario() {
 
         <div className="flex-1 overflow-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full">
               <thead className="sticky top-0 z-10">
@@ -119,7 +119,7 @@ export default function Inventario() {
                   const isFinished = inv.status === 'Finalizado';
                   const canStart = inv.status === 'Aberto' && !isReadOnly;
                   return (
-                    <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50/50" style={{ background: '#FFFFFF' }}>
+                    <tr key={inv.id} className="border-b border-border hover:bg-accent/30" style={{ background: '#FFFFFF' }}>
                       <td className="px-4 py-3 font-semibold text-sm" style={{ color: '#2575D1' }}>{inv.inventory_number}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{fmtDateTime(inv.opening_date)}</td>
                       <td className="px-4 py-3 text-sm">{clients || '—'}</td>
@@ -128,18 +128,18 @@ export default function Inventario() {
                       <td className="px-4 py-3 text-center">{statusBadge(inv.status)}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-gray-100" title="Visualizar">
+                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-muted" title="Visualizar">
                             <Eye className="w-4 h-4 text-gray-400" />
                           </button>
                           {canStart && (
-                            <button onClick={() => handleStart(inv)} className="p-1.5 rounded hover:bg-gray-100" title="Iniciar Inventário">
+                            <button onClick={() => handleStart(inv)} className="p-1.5 rounded hover:bg-muted" title="Iniciar Inventário">
                               <Play className="w-4 h-4 text-green-500" />
                             </button>
                           )}
                           <button onClick={() => handlePDF(inv)} disabled={!isFinished || generatingPDF === inv.id}
-                            className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed" title={isFinished ? 'Baixar PDF' : 'PDF disponível após finalização'}>
+                            className="p-1.5 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed" title={isFinished ? 'Baixar PDF' : 'PDF disponível após finalização'}>
                             {generatingPDF === inv.id
-                              ? <div className="w-4 h-4 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" />
+                              ? <div className="w-4 h-4 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
                               : <FileText className="w-4 h-4 text-gray-400" />}
                           </button>
                         </div>
@@ -152,7 +152,7 @@ export default function Inventario() {
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Total: {filtered.length}</span>
           <span>Abertos: <strong>{inventories.filter(i => i.status === 'Aberto').length}</strong></span>
           <span>Em andamento: <strong>{inventories.filter(i => i.status === 'Em andamento').length}</strong></span>

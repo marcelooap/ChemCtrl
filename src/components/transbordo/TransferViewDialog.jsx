@@ -40,7 +40,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-semibold" style={{ color: '#1A1A2E' }}>
+            <DialogTitle className="text-base font-semibold">
               {transfer.transfer_number} — {transfer.product}
             </DialogTitle>
             <Button size="sm" style={{ background: '#2575D1' }} className="text-white hover:opacity-90"
@@ -67,7 +67,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
           {/* Origens */}
           <div>
             <h4 className="text-sm font-bold mb-3" style={{ color: '#2A5A95' }}>Origens</h4>
-            <table className="w-full chemctrl-table border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full chemctrl-table border border-border rounded-lg overflow-hidden">
               <thead><tr>
                 <th className="px-3 py-2 text-left">Vasilhame</th><th className="px-3 py-2 text-left">Barril</th>
                 <th className="px-3 py-2 text-left">Lote</th><th className="px-3 py-2 text-right">Vol. Retirado (L)</th>
@@ -75,7 +75,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
               </tr></thead>
               <tbody>
                 {origins.map((o, i) => (
-                  <tr key={i} className="border-t border-gray-100">
+                  <tr key={i} className="border-t border-border">
                     <td className="px-3 py-2 text-sm font-medium">{o.container_number || '—'}</td>
                     <td className="px-3 py-2 text-sm">{o.barril_number || '—'}</td>
                     <td className="px-3 py-2 text-sm">{liveLotFor(o) || '—'}</td>
@@ -95,7 +95,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
           {/* Resumo por Lote */}
           <div>
             <h4 className="text-sm font-bold mb-3" style={{ color: '#2A5A95' }}>Resumo por Lote</h4>
-            <table className="w-full chemctrl-table border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full chemctrl-table border border-border rounded-lg overflow-hidden">
               <thead><tr>
                 <th className="px-3 py-2 text-left">Lote</th>
                 <th className="px-3 py-2 text-right">Volume (L)</th>
@@ -103,7 +103,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
               </tr></thead>
               <tbody>
                 {lotKeys.map(k => (
-                  <tr key={k} className="border-t border-gray-100">
+                  <tr key={k} className="border-t border-border">
                     <td className="px-3 py-2 text-sm font-medium">{k}</td>
                     <td className="px-3 py-2 text-sm text-right">{fmt(lotMap[k].volume)}</td>
                     <td className="px-3 py-2 text-sm text-right">{fmt(lotMap[k].mass)}</td>
@@ -169,7 +169,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
 
 function Info({ label, value, wrap }) {
   return (
-    <div className={`border border-gray-100 rounded-md px-2.5 py-1.5 bg-gray-50/50 ${wrap ? 'col-span-4' : ''}`}>
+    <div className={`border border-border rounded-md px-2.5 py-1.5 bg-muted/50/50 ${wrap ? 'col-span-4' : ''}`}>
       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
       <p className={`text-sm font-medium text-foreground ${wrap ? 'break-words whitespace-normal' : 'truncate'}`}>{value}</p>
     </div>

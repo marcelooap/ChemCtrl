@@ -77,7 +77,7 @@ export default function InventarioConferencia() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   if (!inventory) return <div className="p-8 text-center text-muted-foreground">Inventário não encontrado.</div>;
 
   const clients = inventory.clients === 'TODOS' ? 'TODOS' : parseArr(inventory.clients).join(', ');
@@ -97,7 +97,7 @@ export default function InventarioConferencia() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>{inventory.inventory_number}</h1>
+            <h1 className="text-2xl font-bold">{inventory.inventory_number}</h1>
             <p className="text-sm text-muted-foreground">
               {clients} · {products} · Aberto por {inventory.opened_by || '—'} em {moment(inventory.opening_date).format('DD/MM/YYYY HH:mm')}
             </p>
@@ -110,7 +110,7 @@ export default function InventarioConferencia() {
         ) : (
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSave} disabled={saving}>
-              {saving ? <div className="w-4 h-4 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+              {saving ? <div className="w-4 h-4 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
               Salvar
             </Button>
             <Button onClick={() => setShowFinish(true)} style={{ background: '#16a34a' }} className="text-white hover:opacity-90">
@@ -121,7 +121,7 @@ export default function InventarioConferencia() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-auto">
           <table className="w-full chemctrl-table">
             <thead className="sticky top-0 z-10">
@@ -149,7 +149,7 @@ export default function InventarioConferencia() {
                 const diffPct = calcDiffPct(it);
                 const diffColor = diff > 0 ? '#16a34a' : diff < 0 ? '#dc2626' : '#666';
                 return (
-                  <tr key={idx} className="border-b hover:bg-gray-50/50">
+                  <tr key={idx} className="border-b hover:bg-accent/30">
                     <td className="px-3 py-2 text-sm">{it.client || '—'}</td>
                     <td className="px-3 py-2 text-sm font-medium">{it.product || '—'}</td>
                     <td className="px-3 py-2 text-sm font-mono">{it.lot || '—'}</td>
@@ -182,7 +182,7 @@ export default function InventarioConferencia() {
         </div>
 
         {/* Footer summary */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-sm bg-gray-50/50">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-sm bg-muted/50/50">
           <span>Itens: <strong>{items.length}</strong></span>
           <span>Estoque Registrado: <strong>{fmt(totalRegistered)} kg</strong></span>
           <span>Quantidade Física: <strong>{fmt(totalPhysical)} kg</strong></span>

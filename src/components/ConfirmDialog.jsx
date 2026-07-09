@@ -24,7 +24,7 @@ export default function ConfirmDialog({ open, onOpenChange, title, message, onCo
             <AlertCircle className="w-5 h-5 text-amber-500" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-bold" style={{ color: '#1A1A2E' }}>{title}</h3>
+            <h3 className="text-sm font-bold">{title}</h3>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed whitespace-pre-line">{message}</p>
           </div>
         </div>

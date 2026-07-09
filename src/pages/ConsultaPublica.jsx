@@ -94,7 +94,7 @@ export default function ConsultaPublica() {
   if (notFound) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
+        <div className="max-w-md w-full bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
           <img src={LOGO_URL} alt="ChemCtrl" className="h-12 mx-auto mb-4 object-contain" />
           <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
           <h1 className="text-xl font-bold text-gray-800 mb-2">Lote não encontrado</h1>
@@ -113,7 +113,7 @@ export default function ConsultaPublica() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-4 px-4 sm:py-8">
       <div className="max-w-lg mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden mb-4">
+        <div className="bg-card rounded-2xl shadow-lg border border-border overflow-hidden mb-4">
           <div className="px-6 py-4 flex items-center justify-between" style={{ background: '#1e56a0' }}>
             <span className="text-white text-lg font-bold">ChemCtrl</span>
             <span className="text-white text-xs font-medium opacity-90">Rastreabilidade</span>
@@ -129,8 +129,8 @@ export default function ConsultaPublica() {
         </div>
 
         {/* Lot Details */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Informações do Lote</h2>
+        <div className="bg-card rounded-2xl shadow-sm border border-border p-6 mb-4">
+          <h2 className="text-sm font-semibold text-foreground mb-4">Informações do Lote</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex items-start gap-3">
               <Package className="w-4 h-4 mt-0.5 text-gray-400 shrink-0" />
@@ -182,16 +182,16 @@ export default function ConsultaPublica() {
         </div>
 
         {/* COA Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-gray-700">Certificado de Análise</h2>
+              <h2 className="text-sm font-semibold text-foreground">Certificado de Análise</h2>
               <p className="text-xs text-gray-500">Documento oficial de qualidade</p>
             </div>
             {lotInfo.has_coa ? (
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">Disponível</span>
             ) : (
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-500">Indisponível</span>
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-gray-500">Indisponível</span>
             )}
           </div>
           {lotInfo.has_coa ? (
@@ -199,7 +199,7 @@ export default function ConsultaPublica() {
               <button
                 onClick={() => handleCOA(true)}
                 disabled={coaLoading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors hover:bg-gray-50 disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors hover:bg-accent/50 disabled:opacity-50"
                 style={{ borderColor: '#1e56a0', color: '#1e56a0' }}
               >
                 {coaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
@@ -216,7 +216,7 @@ export default function ConsultaPublica() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 p-4 rounded-xl bg-gray-50">
+            <div className="flex items-center gap-2 p-4 rounded-xl bg-muted/50">
               <FileText className="w-4 h-4 text-gray-400 shrink-0" />
               <p className="text-sm text-gray-500">Certificado de Análise ainda não disponível.</p>
             </div>
@@ -226,7 +226,7 @@ export default function ConsultaPublica() {
         {/* PDF Viewer Overlay */}
         {pdfUrl && (
           <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ background: '#1e56a0' }}>
                 <span className="text-white text-sm font-semibold">Certificado de Análise — {lotInfo?.lot}</span>
                 <div className="flex items-center gap-2">

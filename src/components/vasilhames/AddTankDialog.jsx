@@ -192,7 +192,7 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
           </div>
 
           {/* Resumo de pesos */}
-          <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg px-4 py-3 bg-gray-50">
+          <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg px-4 py-3 bg-muted/50">
             <div>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Peso Líquido (kg)</p>
               <p className="font-bold text-green-700">{fmt3(netWeight)}</p>

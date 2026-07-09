@@ -199,7 +199,7 @@ export default function ProducoesCQ() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Controle de Qualidade</h1>
+          <h1 className="text-2xl font-bold">Controle de Qualidade</h1>
           <p className="text-sm text-muted-foreground">{productions.length} produção(ões) aguardando análise</p>
         </div>
         <div className="relative w-64">
@@ -209,7 +209,7 @@ export default function ProducoesCQ() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+        <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(prod => (
@@ -234,7 +234,7 @@ export default function ProducoesCQ() {
           <DialogHeader><DialogTitle>Análise CQ — {selectedProd?.product} · Lote {selectedProd?.lot}</DialogTitle></DialogHeader>
           {selectedProd && (
             <div>
-              <div className="grid grid-cols-3 gap-3 text-sm mb-4 bg-gray-50 rounded-lg p-3">
+              <div className="grid grid-cols-3 gap-3 text-sm mb-4 bg-muted/50 rounded-lg p-3">
                 <div><p className="text-xs text-muted-foreground">OP</p><p className="font-bold">{selectedProd.op_number}</p></div>
                 <div><p className="text-xs text-muted-foreground">Volume</p><p className="font-medium">{(selectedProd.volume || 0).toLocaleString('pt-BR')} L</p></div>
                 <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{moment(selectedProd.date).format('DD/MM/YYYY')}</p></div>
@@ -242,7 +242,7 @@ export default function ProducoesCQ() {
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Analista Responsável</p>
-                  <p className="text-sm font-semibold text-gray-700 mt-1">Registrado automaticamente pelo usuário logado</p>
+                  <p className="text-sm font-semibold text-foreground mt-1">Registrado automaticamente pelo usuário logado</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
@@ -301,7 +301,7 @@ export default function ProducoesCQ() {
               {/* Overall Status — at the bottom for "final result" impression */}
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Resultado Final</span>
+                  <span className="text-sm font-semibold text-foreground">Resultado Final</span>
                   {overallStatus ? (
                     <span className={`inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-lg ${overallStatus === 'Aprovado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {overallStatus === 'Aprovado' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}

@@ -53,24 +53,24 @@ export default function Login() {
       </div>
 
       {/* Right Login Panel */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6" style={{ background: "#f8fafc" }}>
+      <div className="flex-1 flex flex-col items-center justify-center px-6 bg-background">
         <div className="w-full max-w-sm">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-1" style={{ color: "#1e293b" }}>Acessar o Sistema</h2>
-            <p className="text-sm" style={{ color: "#94a3b8" }}>Entre com suas credenciais</p>
+            <h2 className="text-2xl font-bold mb-1 text-foreground">Acessar o Sistema</h2>
+            <p className="text-sm text-muted-foreground">Entre com suas credenciais</p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-sm">
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <Label htmlFor="username" className="text-sm font-medium" style={{ color: "#1e293b" }}>Usuário</Label>
+              <Label htmlFor="username" className="text-sm font-medium text-foreground">Usuário</Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#94a3b8" }} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="username"
                   type="text"
@@ -79,16 +79,15 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="pl-10 h-11"
-                  style={{ borderColor: "#e2e8f0", color: "#1e293b" }}
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#1e293b" }}>Senha</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-foreground">Senha</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#94a3b8" }} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -96,7 +95,6 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 h-11"
-                  style={{ borderColor: "#e2e8f0", color: "#1e293b" }}
                   required
                 />
                 <button

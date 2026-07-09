@@ -27,7 +27,7 @@ export function NotificationDropdown() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="font-semibold text-sm" style={{ color: '#1A1A2E' }}>
+          <h3 className="font-semibold text-sm">
             Notificações
             {unreadCount > 0 && (
               <span className="ml-2 text-xs font-normal text-muted-foreground">

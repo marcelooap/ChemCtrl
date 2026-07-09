@@ -310,18 +310,18 @@ export default function NovaProducao() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Nova Produção</h1>
+        <h1 className="text-2xl font-bold">Nova Produção</h1>
         <p className="text-sm text-muted-foreground">Registre uma nova ordem de produção.</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative">
+      <div className="bg-card rounded-xl shadow-sm border border-border p-6 relative">
         <LoadingOverlay visible={saving} label="Registrando OP..." />
-        <h3 className="text-sm font-semibold mb-4" style={{ color: '#1A1A2E' }}>Dados da Produção</h3>
+        <h3 className="text-sm font-semibold mb-4">Dados da Produção</h3>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div><label className="text-xs font-medium text-muted-foreground">Data *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div>
@@ -333,10 +333,10 @@ export default function NovaProducao() {
               placeholder="Selecione ou busque..."
             />
           </div>
-          <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-gray-50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">Revisão da Receita</label><Input value={form.recipe_revision} readOnly className="bg-gray-50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">Revisão da Receita</label><Input value={form.recipe_revision} readOnly className="bg-muted/50" /></div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Pedido Vinculado</label>
             <Select value={form.order_id} onValueChange={v => {
@@ -351,10 +351,10 @@ export default function NovaProducao() {
               </SelectContent>
             </Select>
           </div>
-          <div><label className="text-xs font-medium text-muted-foreground">Ped. Cliente</label><Input value={form.client_order} readOnly className="bg-gray-50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">Ped. Cliente</label><Input value={form.client_order} readOnly className="bg-muted/50" /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">Volume Pendente (L)</label><Input value={form.volume_pending || '—'} readOnly className="bg-gray-50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">Volume Pendente (L)</label><Input value={form.volume_pending || '—'} readOnly className="bg-muted/50" /></div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Prioridade</label>
             <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v })}>
@@ -370,7 +370,7 @@ export default function NovaProducao() {
         </div>
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div><label className="text-xs font-medium text-muted-foreground">Densidade (g/mL)</label><Input type="number" step="0.001" value={form.density} onChange={e => handleDensityChange(e.target.value)} /></div>
-          <div><label className="text-xs font-medium text-muted-foreground">Massa (kg) — calculado</label><Input value={form.mass.toFixed(3)} readOnly className="bg-gray-50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">Massa (kg) — calculado</label><Input value={form.mass.toFixed(3)} readOnly className="bg-muted/50" /></div>
           <div><label className="text-xs font-medium text-muted-foreground">Embalagem de Destino</label><Input value={form.packaging_type} onChange={e => setForm({ ...form, packaging_type: e.target.value })} placeholder="Ex: Tambor 200L, IBC 1000L..." /></div>
         </div>
         <div className="mb-6">
@@ -381,15 +381,15 @@ export default function NovaProducao() {
         {/* MP Allocation */}
         {mpList.length > 0 && (
           <div className="mt-6">
-            <h3 className="text-sm font-semibold mb-3" style={{ color: '#1A1A2E' }}>Apontamento de Matérias Primas</h3>
+            <h3 className="text-sm font-semibold mb-3">Apontamento de Matérias Primas</h3>
             <p className="text-xs text-muted-foreground mb-3">As quantidades são calculadas em kg automaticamente. Ao selecionar o lote, a Qtd. Fiscal converte para a unidade do estoque. Use "+ Lote" para misturar lotes.</p>
             <div className="space-y-4">
               {mpList.map((mp, idx) => {
                 const totalUsed = mp.lots.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
                 return (
-                  <div key={idx} className="border rounded-lg overflow-hidden bg-white">
+                  <div key={idx} className="border rounded-lg overflow-hidden bg-card">
                     {/* Header */}
-                    <div className="px-4 py-2 flex items-center gap-3 border-b bg-gray-50/50 flex-wrap">
+                    <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/50/50 flex-wrap">
                       <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#E0E7FF', color: '#4338CA' }}>{mp.mp_code}</span>
                       <span className="text-sm font-semibold">{mp.mp_name}</span>
                       <span className="text-xs text-muted-foreground">%m/m: {(mp.percentage || 0).toFixed(8)}%</span>

@@ -126,7 +126,7 @@ export default function ChecklistProducao() {
 
   const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   if (!production) return <div className="p-8 text-center text-muted-foreground">Produção não encontrada.</div>;
 
   const colors = statusBadgeColors[production.status] || statusBadgeColors['Aguardando Início'];
@@ -139,7 +139,7 @@ export default function ChecklistProducao() {
         <Button variant="ghost" size="sm" onClick={() => navigate('/ordens')}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>OP: {production.op_number}</h1>
+            <h1 className="text-2xl font-bold">OP: {production.op_number}</h1>
             <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={{ background: colors.bg, color: colors.text }}>{production.status}</span>
           </div>
           <p className="text-sm text-muted-foreground">{production.product} {production.client ? `— ${production.client}` : ''}</p>
@@ -147,7 +147,7 @@ export default function ChecklistProducao() {
       </div>
 
       {/* Info Card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <div className="bg-card rounded-xl shadow-sm border border-border p-5 mb-6">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Informações da OP</h3>
         <div className="grid grid-cols-4 gap-4 text-sm">
           <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{production.lot}</p></div>
@@ -162,10 +162,10 @@ export default function ChecklistProducao() {
       </div>
 
       {/* Checklist */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <div className="bg-card rounded-xl shadow-sm border border-border p-5">
         <div className="flex items-center gap-2 mb-1">
           <ListChecks className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Checklist de Matérias Primas</h3>
+          <h3 className="text-sm font-semibold">Checklist de Matérias Primas</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-4">Clique em qualquer parte do card para marcar/desmarcar a MP</p>
         <div className="space-y-3">
@@ -197,7 +197,7 @@ export default function ChecklistProducao() {
                     ) : (
                       <div className="mt-2">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-muted-foreground">Total: <strong className="text-gray-700">{fmt(totalQty)} kg</strong></span>
+                          <span className="text-xs text-muted-foreground">Total: <strong className="text-foreground">{fmt(totalQty)} kg</strong></span>
                         </div>
                         <div className="space-y-2 ml-2">
                           {group.lots.map((lot, lIdx) => (

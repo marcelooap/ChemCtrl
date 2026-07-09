@@ -29,7 +29,7 @@ export default function Usuarios() {
       Administrador: 'bg-red-100 text-red-700',
       Supervisor: 'bg-amber-100 text-amber-700',
       Operacional: 'bg-blue-100 text-blue-700',
-      'Visualização': 'bg-gray-200 text-gray-700',
+      'Visualização': 'bg-gray-200 text-foreground',
     };
     return <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${colors[nivel] || colors.Operacional}`}>{nivel || 'Operacional'}</span>;
   };
@@ -176,7 +176,7 @@ export default function Usuarios() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Usuários</h1>
+          <h1 className="text-2xl font-bold">Usuários</h1>
           <p className="text-sm text-muted-foreground">Gerencie o acesso ao sistema · {users.length} usuário(s)</p>
         </div>
         <div className="flex items-center gap-2">
@@ -190,12 +190,12 @@ export default function Usuarios() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+          <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
         ) : (
           <>
-            <div className="p-4 border-b border-gray-100 shrink-0">
+            <div className="p-4 border-b border-border shrink-0">
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Buscar usuário..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -203,7 +203,7 @@ export default function Usuarios() {
             </div>
             <div className="flex-1 overflow-auto">
               <table className="w-full chemctrl-table">
-                <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50">
+                <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
                   <th className="px-4 py-3 text-left">Nome</th>
                   <th className="px-4 py-3 text-left">Usuário</th>
                   <th className="px-4 py-3 text-left">Senha</th>
@@ -251,7 +251,7 @@ export default function Usuarios() {
                             <button onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-blue-50" title="Editar">
                               <Pencil className="w-3.5 h-3.5 text-blue-500" />
                             </button>
-                            <button onClick={() => toggleActive(u)} className="p-1.5 rounded hover:bg-gray-100" title={inactive ? 'Reativar' : 'Inativar'}>
+                            <button onClick={() => toggleActive(u)} className="p-1.5 rounded hover:bg-muted" title={inactive ? 'Reativar' : 'Inativar'}>
                               <Power className={`w-3.5 h-3.5 ${inactive ? 'text-green-500' : 'text-red-400'}`} />
                             </button>
                             <button onClick={() => deleteUser(u)} className="p-1.5 rounded hover:bg-red-50" title="Excluir">
@@ -266,9 +266,9 @@ export default function Usuarios() {
               </table>
             </div>
             {/* Fixed Footer */}
-            <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-1.5">
+            <div className="shrink-0 border-t border-border bg-muted/50 px-4 py-1.5">
               <div className="flex items-center gap-4 text-xs flex-wrap">
-                <span className="text-muted-foreground">Total: <span className="font-bold" style={{ color: '#1A1A2E' }}>{users.length}</span></span>
+                <span className="text-muted-foreground">Total: <span className="font-bold">{users.length}</span></span>
                 <span className="text-muted-foreground">Internos: <span className="font-bold text-green-600">{users.filter(u => u.tipo === 'interno').length}</span></span>
                 <span className="text-muted-foreground">Externos: <span className="font-bold text-purple-600">{users.filter(u => u.tipo === 'externo').length}</span></span>
                 <span className="text-muted-foreground">Ativos: <span className="font-bold text-green-600">{users.filter(u => u.status === 'Ativo').length}</span></span>

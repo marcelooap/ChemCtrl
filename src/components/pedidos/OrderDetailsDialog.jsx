@@ -13,13 +13,13 @@ const StatusBadge = ({ status }) => {
     Pendente: 'bg-amber-100 text-amber-700',
     'Em produção': 'bg-blue-100 text-blue-700',
     Finalizado: 'bg-green-100 text-green-700',
-    'Aguardando Início': 'bg-gray-100 text-gray-700',
+    'Aguardando Início': 'bg-muted text-foreground',
     'Em Produção': 'bg-blue-100 text-blue-700',
     Qualidade: 'bg-purple-100 text-purple-700',
     Envase: 'bg-orange-100 text-orange-700',
     Cancelado: 'bg-red-100 text-red-700',
   };
-  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-gray-100 text-gray-700'}`}>{status}</span>;
+  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{status}</span>;
 };
 
 export default function OrderDetailsDialog({ open, onOpenChange, order, productions }) {
@@ -66,7 +66,7 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
           {order.observations && (
             <div className="mb-4">
               <p className="text-xs text-muted-foreground mb-1">OBSERVAÇÕES</p>
-              <p className="text-sm bg-gray-50 rounded-lg p-3">{order.observations}</p>
+              <p className="text-sm bg-muted/50 rounded-lg p-3">{order.observations}</p>
             </div>
           )}
 
@@ -74,13 +74,13 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
             Ordens de Produção Vinculadas · {linkedOPs.length}
           </h4>
           {linkedOPs.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-muted-foreground text-center py-4 bg-muted/50 rounded-lg">
               Nenhuma OP vinculada a este pedido.
             </p>
           ) : (
             <table className="w-full text-sm border rounded-lg overflow-hidden">
               <thead>
-                <tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">OP</th>
                   <th className="px-3 py-2 text-left">Status</th>
                   <th className="px-3 py-2 text-left">Data Finaliz.</th>
@@ -103,7 +103,7 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
                     </tr>
                   );
                 })}
-                <tr className="border-t-2 bg-gray-50 font-bold">
+                <tr className="border-t-2 bg-muted/50 font-bold">
                   <td colSpan={3} className="px-3 py-2" style={{ color: '#2563eb' }}>VOLUME TOTAL PRODUZIDO</td>
                   <td className="px-3 py-2 text-right" style={{ color: '#16a34a' }}>{fmt(totalVolume)} L</td>
                   <td></td>

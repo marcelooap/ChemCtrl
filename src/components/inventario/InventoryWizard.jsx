@@ -137,7 +137,7 @@ export default function InventoryWizard({ open, onOpenChange, onCreated }) {
         <div className="flex items-center gap-2 mb-4">
           {steps.map((s, i) => (
             <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i <= step ? 'text-white' : 'text-gray-400 bg-gray-100'}`}
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i <= step ? 'text-white' : 'text-gray-400 bg-muted'}`}
                 style={{ background: i <= step ? '#2575D1' : undefined }}>
                 {i < step ? <Check className="w-3.5 h-3.5" /> : i + 1}
               </div>
@@ -163,7 +163,7 @@ export default function InventoryWizard({ open, onOpenChange, onCreated }) {
             <p className="text-sm text-muted-foreground text-center py-6">Nenhum item disponível.</p>
           ) : (
             current.items.map(item => (
-              <label key={item} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0">
+              <label key={item} className="flex items-center gap-3 px-3 py-2 hover:bg-accent/50 cursor-pointer border-b border-border last:border-0">
                 <Checkbox checked={current.selected.includes(item)} onCheckedChange={() => toggle(item, current.selected, current.setSelected)} />
                 <span className="text-sm">{item}</span>
               </label>

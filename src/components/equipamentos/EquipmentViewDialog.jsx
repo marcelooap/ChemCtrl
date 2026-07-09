@@ -12,7 +12,7 @@ function InfoRow({ icon: Icon, label, value }) {
   return (
     <div className="flex items-center gap-2 text-gray-600">
       <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-      <span><b className="text-gray-700">{label}:</b> {value || '—'}</span>
+      <span><b className="text-foreground">{label}:</b> {value || '—'}</span>
     </div>
   );
 }
@@ -39,7 +39,7 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
         <DialogHeader><DialogTitle>{equipment.name}</DialogTitle></DialogHeader>
 
         <div className="flex gap-4 mb-4">
-          <div className="w-24 h-24 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
+          <div className="w-24 h-24 rounded-lg bg-muted/50 flex items-center justify-center overflow-hidden shrink-0 border border-border">
             {equipment.image_url ? (
               <SignedImage url={equipment.image_url} alt={equipment.name} className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
             ) : (
@@ -48,11 +48,11 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
           </div>
           <div className="flex-1 text-sm space-y-1">
             <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mb-1" style={{ color: status.color, background: status.bg }}>{status.label}</span>
-            <p><b className="text-gray-700">Tipo:</b> {equipment.type}</p>
-            <p><b className="text-gray-700">Fabricante:</b> {equipment.manufacturer || '—'}</p>
-            <p><b className="text-gray-700">Modelo:</b> {equipment.model || '—'}</p>
-            <p><b className="text-gray-700">Série:</b> {equipment.serial_number || '—'}</p>
-            <p><b className="text-gray-700">Patrimônio:</b> {equipment.patrimony_number || '—'}</p>
+            <p><b className="text-foreground">Tipo:</b> {equipment.type}</p>
+            <p><b className="text-foreground">Fabricante:</b> {equipment.manufacturer || '—'}</p>
+            <p><b className="text-foreground">Modelo:</b> {equipment.model || '—'}</p>
+            <p><b className="text-foreground">Série:</b> {equipment.serial_number || '—'}</p>
+            <p><b className="text-foreground">Patrimônio:</b> {equipment.patrimony_number || '—'}</p>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
                 <p className="font-bold" style={{ color: calColor.color }}>{formatDate(equipment.next_calibration_date)} · {calColor.label}</p>
               </div>
             </div>
-            {equipment.observations && <p className="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded"><b>Obs:</b> {equipment.observations}</p>}
+            {equipment.observations && <p className="text-xs text-gray-600 mt-2 p-2 bg-muted/50 rounded"><b>Obs:</b> {equipment.observations}</p>}
           </TabsContent>
 
           <TabsContent value="history" className="mt-3">
@@ -88,7 +88,7 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
                 {[...history].reverse().map((h, i) => (
                   <div key={i} className="rounded-lg border p-3 text-xs space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-semibold text-gray-700">{formatDate(h.date)}</span>
+                      <span className="font-semibold text-foreground">{formatDate(h.date)}</span>
                       {h.certificate_url && <button className="text-blue-600 hover:underline" onClick={() => downloadFile(h.certificate_url)}>Ver certificado</button>}
                     </div>
                     <p><b>Certificado:</b> {h.certificate_number || '—'}</p>
@@ -108,9 +108,9 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
             ) : (
               <div className="space-y-2">
                 {attachments.map((a, i) => (
-                  <button key={i} onClick={() => downloadFile(a.url)} className="w-full flex items-center gap-2 rounded-lg border p-3 text-xs hover:bg-gray-50 transition-colors">
+                  <button key={i} onClick={() => downloadFile(a.url)} className="w-full flex items-center gap-2 rounded-lg border p-3 text-xs hover:bg-accent/50 transition-colors">
                     <FileText className="w-4 h-4 text-gray-400 shrink-0" />
-                    <span className="flex-1 text-left text-gray-700 truncate">{a.name}</span>
+                    <span className="flex-1 text-left text-foreground truncate">{a.name}</span>
                     <Download className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                   </button>
                 ))}

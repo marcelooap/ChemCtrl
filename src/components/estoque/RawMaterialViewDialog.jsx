@@ -90,12 +90,12 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
             {/* Ordens de Produção */}
             <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Ordens de Produção que utilizaram este lote</h4>
             {loadingConsumption ? (
-              <div className="flex items-center justify-center h-16"><div className="w-5 h-5 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+              <div className="flex items-center justify-center h-16"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
             ) : consumption.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma OP utilizou este lote ainda.</p>
             ) : (
               <table className="w-full text-sm border rounded-lg overflow-hidden mb-5">
-                <thead><tr className="text-xs font-semibold text-muted-foreground bg-gray-50">
+                <thead><tr className="text-xs font-semibold text-muted-foreground bg-muted/50">
                   <th className="px-3 py-2 text-left">OP</th><th className="px-3 py-2 text-left">Produto</th><th className="px-3 py-2 text-left">Data</th><th className="px-3 py-2 text-right">Qtd. Fiscal</th><th className="px-3 py-2 text-right">Qtd. Op. (kg)</th>
                 </tr></thead>
                 <tbody>
@@ -108,7 +108,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
                       <td className="px-3 py-2 text-right">{fmt(c.qty_operational)} kg</td>
                     </tr>
                   ))}
-                  <tr className="border-t-2 bg-gray-50 font-bold">
+                  <tr className="border-t-2 bg-muted/50 font-bold">
                     <td colSpan={3} className="px-3 py-2" style={{ color: '#2563eb' }}>TOTAL CONSUMIDO</td>
                     <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmt(consumption.reduce((s, c) => s + (c.qty_fiscal || 0), 0))} {item.unit}</td>
                     <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmt(consumption.reduce((s, c) => s + (c.qty_operational || 0), 0))} kg</td>
@@ -120,12 +120,12 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
             {/* Histórico de Movimentações */}
             <h4 className="text-sm font-bold mb-2" style={{ color: '#1f2937' }}>Histórico de Movimentações</h4>
             {loadingMovements ? (
-              <div className="flex items-center justify-center h-12"><div className="w-5 h-5 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+              <div className="flex items-center justify-center h-12"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
             ) : movements.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg">Nenhuma movimentação registrada.</p>
             ) : (
               <table className="w-full text-sm border rounded-lg overflow-hidden">
-                <thead><tr className="text-xs font-semibold text-muted-foreground bg-gray-50">
+                <thead><tr className="text-xs font-semibold text-muted-foreground bg-muted/50">
                   <th className="px-3 py-2 text-left">Data</th>
                   <th className="px-3 py-2 text-left">Destino</th>
                   <th className="px-3 py-2 text-right">Quantidade</th>
@@ -138,7 +138,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{m.movement_date ? moment(m.movement_date).format('DD/MM/YY HH:mm') : '—'}</td>
                       <td className="px-3 py-2">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DEST_COLORS[m.destination] || 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${DEST_COLORS[m.destination] || 'bg-muted text-foreground'}`}>
                           {m.destination}
                         </span>
                       </td>
@@ -157,7 +157,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
                       </td>
                     </tr>
                   ))}
-                  <tr className="border-t-2 bg-gray-50 font-bold">
+                  <tr className="border-t-2 bg-muted/50 font-bold">
                     <td colSpan={2} className="px-3 py-2 text-red-600">TOTAL MOVIMENTADO</td>
                     <td className="px-3 py-2 text-right text-red-600">-{fmt(movements.reduce((s, m) => s + (m.quantity || 0), 0))} {item.unit}</td>
                     <td colSpan={4} />

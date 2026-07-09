@@ -25,14 +25,14 @@ const parseArr = (val) => {
 
 const StatusBadge = ({ status }) => {
   const c = {
-    'Aguardando Início': 'bg-gray-100 text-gray-700',
+    'Aguardando Início': 'bg-muted text-foreground',
     'Em Produção': 'bg-blue-100 text-blue-700',
     'Qualidade': 'bg-amber-100 text-amber-700',
     'Envase': 'bg-purple-100 text-purple-700',
     'Finalizado': 'bg-green-100 text-green-700',
     'Cancelado': 'bg-red-100 text-red-700',
   };
-  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-gray-100'}`}>{status}</span>;
+  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted'}`}>{status}</span>;
 };
 
 export default function Producoes() {
@@ -199,13 +199,13 @@ export default function Producoes() {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📊 Produções</h1>
+        <h1 className="text-2xl font-bold">📊 Produções</h1>
         <p className="text-sm text-muted-foreground">{productions.length} produção(ões) registrada(s)</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
         {/* Filters */}
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3 flex-wrap">
+        <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por OP, produto, lote, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -231,7 +231,7 @@ export default function Producoes() {
         {/* Scrollable Table */}
         <div className="flex-1 overflow-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
@@ -250,7 +250,7 @@ export default function Producoes() {
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={p.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{p.op_number}</td>
                     <td className="px-4 py-2.5 text-sm">{p.end_time ? brasiliaDate(p.end_time) : '—'}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{p.product}</td>
@@ -281,8 +281,8 @@ export default function Producoes() {
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openView(p)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => openView(p)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canCancel(p.status) && (
                           <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title="Cancelar OP"><Ban className="w-3.5 h-3.5 text-red-400" /></button>
                         )}
@@ -296,7 +296,7 @@ export default function Producoes() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Total de OPs: <strong>{totalOPs}</strong></span>
           <span>OPs ativas: <strong>{activeOPs}</strong></span>
           <span>Volume total finalizado: <strong>{fmt(totalVol)} L</strong></span>
@@ -326,7 +326,7 @@ export default function Producoes() {
 
               <h4 className="text-sm font-semibold mt-4 mb-2">Matérias Primas Utilizadas</h4>
               <table className="w-full text-sm border rounded-lg overflow-hidden mb-4">
-                <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">Código</th>
                   <th className="px-3 py-2 text-left">MP</th>
                   <th className="px-3 py-2 text-left">Lote</th>
@@ -353,7 +353,7 @@ export default function Producoes() {
                     const tFiscal = mps.reduce((s, m) => s + (m.qty_fiscal || 0), 0);
                     const tOp = mps.reduce((s, m) => s + (m.qty_operational || 0), 0);
                     return (
-                    <tr className="border-t bg-gray-50 font-bold" style={{ color: '#2575D1' }}>
+                    <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>
                       <td colSpan={3} className="px-3 py-2">TOTAL</td>
                       <td className="px-3 py-2 text-right">{fmt(tFiscal)}{sameUnit ? ' ' + units[0] : ''}</td>
                       <td className="px-3 py-2 text-right">{fmt(tOp)} kg</td>
@@ -384,7 +384,7 @@ export default function Producoes() {
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold mb-2">Análise de Custos</h4>
                     <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
-                      <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                      <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                         <th className="px-3 py-2 text-left">MATÉRIA PRIMA</th>
                         <th className="px-3 py-2 text-right">QTD. FISCAL</th>
                         <th className="px-3 py-2 text-right">PREÇO UNIT.</th>
@@ -399,11 +399,11 @@ export default function Producoes() {
                             <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
                           </tr>
                         ))}
-                        <tr className="border-t bg-gray-50 font-bold">
+                        <tr className="border-t bg-muted/50 font-bold">
                           <td colSpan={3} className="px-3 py-2 text-right">Custo com MP</td>
                           <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
                         </tr>
-                        <tr className="border-t bg-gray-50 font-bold">
+                        <tr className="border-t bg-muted/50 font-bold">
                           <td colSpan={2} className="px-3 py-2">Mão de Obra (preço PA × massa)</td>
                           <td className="px-3 py-2 text-right">{fmt4(productPrice)} × {fmt(mass)} kg</td>
                           <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
@@ -438,7 +438,7 @@ export default function Producoes() {
                 <>
                   <h4 className="text-sm font-semibold mb-2">Embalagens Envasadas</h4>
                   <table className="w-full text-sm border rounded-lg overflow-hidden">
-                    <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                    <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                       <th className="px-3 py-2 text-left">Nº Embalagem</th>
                       <th className="px-3 py-2 text-left">Tipo</th>
                       <th className="px-3 py-2 text-right">Volume (L)</th>
@@ -455,7 +455,7 @@ export default function Producoes() {
                           <td className="px-3 py-2 text-right">{fmt(c.gross_weight)}</td>
                         </tr>
                       ))}
-                      <tr className="border-t bg-gray-50 font-bold" style={{ color: '#2575D1' }}>
+                      <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>
                         <td colSpan={2} className="px-3 py-2">TOTAL</td>
                         <td className="px-3 py-2 text-right">{fmt(viewContainers.reduce((s, c) => s + (c.volume || 0), 0))} L</td>
                         <td className="px-3 py-2 text-right">{fmt(viewContainers.reduce((s, c) => s + (c.net_weight || 0), 0))} kg</td>
@@ -467,7 +467,7 @@ export default function Producoes() {
               ) : (viewing.packaging_info || viewing.packaging_type) ? (
                 <div className="mt-4">
                   <h4 className="text-sm font-semibold mb-2">Embalagem Sugerida para Envase</h4>
-                  <p className="text-sm bg-gray-50 rounded-lg px-3 py-2 font-medium">{viewing.packaging_info || viewing.packaging_type}</p>
+                  <p className="text-sm bg-muted/50 rounded-lg px-3 py-2 font-medium">{viewing.packaging_info || viewing.packaging_type}</p>
                 </div>
               ) : null}
 
@@ -577,7 +577,7 @@ export default function Producoes() {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Valor Total (auto)</label>
-              <Input value={fmtMoney((parseFloat(unitPrice) || 0) * (editingPkg?.mass || 0))} readOnly className="bg-gray-50 font-semibold" />
+              <Input value={fmtMoney((parseFloat(unitPrice) || 0) * (editingPkg?.mass || 0))} readOnly className="bg-muted/50 font-semibold" />
               <p className="text-xs text-muted-foreground mt-1">{fmt(editingPkg?.mass || 0)} kg × R$ {(parseFloat(unitPrice) || 0).toFixed(2)}</p>
             </div>
           </div>

@@ -8,7 +8,7 @@ export default function SignedImage({ url, alt = '', className = '', fallbackCla
   const { signedUrl, loading } = useSignedUrl(url);
 
   if (loading || !signedUrl) {
-    return <div className={`${fallbackClassName || className} bg-gray-100 animate-pulse`} />;
+    return <div className={`${fallbackClassName || className} bg-muted animate-pulse`} />;
   }
 
   return <img src={signedUrl} alt={alt} className={className} />;

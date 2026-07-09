@@ -3,11 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Bell,
-  Users, ChevronDown,   ChevronRight, LogOut, Building2, Warehouse, ClipboardCheck, Lock, PanelLeftClose, PanelLeft
+  Users, ChevronDown, ChevronRight, Building2, Warehouse, ClipboardCheck, Lock
 } from 'lucide-react';
-import { canAccessRoute, getRoleLabel } from '@/lib/permissions';
-import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getInstalledVersion } from '@/pwa/version';
+import { canAccessRoute } from '@/lib/permissions';
+import { SidebarFooter } from '@/components/user/SidebarFooter';
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard, path: '/' },
@@ -39,7 +38,6 @@ const navItems = [
 export default function Sidebar({ collapsed, setCollapsed, user }) {
   const location = useLocation();
   const [expandedGroups, setExpandedGroups] = useState({});
-  const { logout } = useInternalAuth();
 
   const toggleGroup = (label) => {
     setExpandedGroups(prev => ({ ...prev, [label]: !prev[label] }));
@@ -51,7 +49,6 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
   };
 
   const isExterno = user?.tipo === 'externo';
-  const installedVersion = getInstalledVersion();
 
   // Externo: Tela Clientes e Notificações visíveis na sidebar
   const visibleItems = isExterno
@@ -166,32 +163,10 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
         })}
       </nav>
 
-      {/* User & Toggle */}
-      <div className="border-t border-white/10 p-3 shrink-0">
-        <div className="flex items-center gap-2 mb-2 px-1">
-          <button onClick={() => setCollapsed(!collapsed)}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 hover:opacity-80 transition-opacity" style={{ background: '#2575D1' }}
-            title={collapsed ? 'Expandir' : 'Recolher'}>
-            {collapsed
-              ? <PanelLeft className="w-3.5 h-3.5" />
-              : (user.nome || user.full_name || 'U').charAt(0).toUpperCase()}
-          </button>
-          {!collapsed && user && (
-            <div className="overflow-hidden flex-1">
-              <p className="text-white text-xs font-medium truncate">{user.nome || user.full_name || 'Usuário'}</p>
-              <p className="text-white/40 text-[10px] truncate">{getRoleLabel(user)}</p>
-            </div>
-          )}
-          {!collapsed && <span className="text-white/30 text-[10px] shrink-0">Ver. {installedVersion}</span>}
-        </div>
-        {!collapsed && (
-          <button onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-2 py-1.5 rounded-md text-white/50 hover:text-red-400 hover:bg-white/5 text-xs transition-colors">
-            <LogOut className="w-4 h-4" />
-            <span>Sair</span>
-          </button>
-        )}
-      </div>
+      <SidebarFooter
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(!collapsed)}
+      />
     </aside>
   );
 }

@@ -8,9 +8,9 @@ export default function WelcomeModal({ user, onClose }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center"
       style={{ background: 'rgba(245, 245, 247, 0.85)', backdropFilter: 'blur(6px)' }}>
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-100 px-8 py-10 max-w-md w-[90%] text-center">
+      <div className="relative bg-card rounded-2xl shadow-2xl border border-border px-8 py-10 max-w-md w-[90%] text-center">
         <button onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+          className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted transition-colors">
           <X className="w-5 h-5 text-gray-400" />
         </button>
 
@@ -19,7 +19,7 @@ export default function WelcomeModal({ user, onClose }) {
           {name.charAt(0).toUpperCase()}
         </div>
 
-        <h2 className="text-xl font-bold mb-1" style={{ color: '#1A1A2E' }}>
+        <h2 className="text-xl font-bold mb-1">
           Bem-vindo, {name}!
         </h2>
         <p className="text-sm text-muted-foreground mb-6">

@@ -9,8 +9,8 @@ export default function EquipmentCard({ equipment, onEdit, onDelete, onView, onC
   const calColor = getCalibrationColor(equipment.next_calibration_date);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
-      <div className="relative h-32 bg-gray-50 flex items-center justify-center">
+    <div className="bg-card rounded-xl border border-border overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+      <div className="relative h-32 bg-muted/50 flex items-center justify-center">
         {equipment.image_url ? (
           <SignedImage url={equipment.image_url} alt={equipment.name} className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
         ) : (

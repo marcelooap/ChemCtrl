@@ -8,7 +8,7 @@ import moment from 'moment';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
 
 const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert }) => (
-  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ borderBottom: accentBorder ? `3px solid ${accentBorder}` : undefined }}>
+  <div className="bg-card rounded-xl border border-border overflow-hidden flex flex-col" style={{ borderBottom: accentBorder ? `3px solid ${accentBorder}` : undefined }}>
     <div className="p-5">
       <div className="flex items-start justify-between mb-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
@@ -17,7 +17,7 @@ const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Ico
             <button
               type="button"
               onClick={onToggleEye}
-              className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center bg-muted hover:bg-gray-200 text-gray-600 hover:text-gray-800 cursor-pointer"
               title={hidden ? 'Mostrar' : 'Ocultar'}
             >
               {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -33,7 +33,7 @@ const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Ico
     </div>
     {footer && (
       <>
-        <div className="border-t border-gray-100" />
+        <div className="border-t border-border" />
         <div className="px-5 py-3 flex flex-col gap-0.5">
           {footer.map((f, i) => (
             <p key={i} className="text-xs" style={{ color: f.color }}>{f.text}</p>
@@ -60,7 +60,7 @@ export default function Home() {
   const [hideRevenue, setHideRevenue] = useState(true);
   const [hideVolume, setHideVolume] = useState(false);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   const now = moment();
   const startOfMonth = now.clone().startOf('month');
@@ -104,7 +104,7 @@ export default function Home() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Home</h1>
+        <h1 className="text-2xl font-bold">Home</h1>
         <p className="text-sm text-muted-foreground">Visão geral · {now.format('DD [de] MMMM [de] YYYY')}</p>
       </div>
 
@@ -132,11 +132,11 @@ export default function Home() {
       </div>
 
       {/* Active Productions — redesigned */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-card rounded-xl border border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Produções em andamento</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{inProgressProds.length}</span>
+            <h3 className="text-sm font-semibold">Produções em andamento</h3>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{inProgressProds.length}</span>
           </div>
 
         </div>

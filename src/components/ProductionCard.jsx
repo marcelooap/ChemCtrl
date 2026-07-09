@@ -22,7 +22,7 @@ const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3,
 export default function ProductionCard({ prod, onView, children }) {
   const cfg = statusConfig[prod.status] || statusConfig['Aguardando Início'];
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden relative" style={{ borderColor: '#e2e8f0' }}>
+    <div className="bg-card rounded-xl border shadow-sm overflow-hidden relative" style={{ borderColor: '#e2e8f0' }}>
       <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ background: cfg.text }} />
       <div className="px-4 py-3 flex items-center justify-between border-b ml-1.5" style={{ borderColor: '#f1f5f9' }}>
         <div className="flex items-center gap-2">

@@ -12,6 +12,8 @@ import RealtimeProvider from '@/components/RealtimeProvider';
 import { NotificationProvider } from '@/notifications/context/NotificationProvider';
 import { UpdateProvider } from '@/pwa/context/UpdateProvider';
 import { UpdateModal } from '@/pwa/components/UpdateModal';
+import { ThemeProvider } from '@/lib/theme/ThemeProvider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Auth pages
 import Login from '@/pages/Login';
@@ -84,24 +86,28 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <ScrollToTop />
-          <UpdateProvider>
-            <InternalAuthProvider>
-              <RealtimeProvider>
-                <NotificationProvider>
-                  <AuthenticatedApp />
-                </NotificationProvider>
-              </RealtimeProvider>
-            </InternalAuthProvider>
-            <UpdateModal />
-          </UpdateProvider>
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <TooltipProvider delayDuration={300}>
+        <AuthProvider>
+          <QueryClientProvider client={queryClientInstance}>
+            <Router>
+              <ScrollToTop />
+              <UpdateProvider>
+                <InternalAuthProvider>
+                  <RealtimeProvider>
+                    <NotificationProvider>
+                      <AuthenticatedApp />
+                    </NotificationProvider>
+                  </RealtimeProvider>
+                </InternalAuthProvider>
+                <UpdateModal />
+              </UpdateProvider>
+            </Router>
+            <Toaster />
+          </QueryClientProvider>
+        </AuthProvider>
+      </TooltipProvider>
+    </ThemeProvider>
   )
 }
 

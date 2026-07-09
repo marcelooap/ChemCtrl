@@ -69,13 +69,13 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
             value={isSingle ? Math.round(originsVolume) : (dest.volume || '')}
             readOnly={isSingle}
             onChange={e => onUpdate(idx, 'volume', e.target.value)}
-            className={isSingle ? 'bg-gray-50 text-sm' : 'text-sm'}
+            className={isSingle ? 'bg-muted/50 text-sm' : 'text-sm'}
             placeholder={isSingle ? 'Automático' : '0'}
           />
         </div>
         <div>
           <FieldLabel>Massa (kg) auto</FieldLabel>
-          <Input value={fmt0(mass)} readOnly className="bg-gray-50 text-sm" />
+          <Input value={fmt0(mass)} readOnly className="bg-muted/50 text-sm" />
         </div>
         {dest.type === 'Transbordo' && (
           <div>
@@ -118,7 +118,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
         <div className="grid grid-cols-4 gap-3 mt-3">
           <div>
             <FieldLabel>Peso Líq. (kg) auto</FieldLabel>
-            <Input value={fmt0(mass)} readOnly className="bg-gray-50 text-sm" />
+            <Input value={fmt0(mass)} readOnly className="bg-muted/50 text-sm" />
           </div>
           <div>
             <FieldLabel>Tara (kg)</FieldLabel>
@@ -126,7 +126,7 @@ export default function DestinationBlock({ dest, idx, total, originsVolume, prod
           </div>
           <div>
             <FieldLabel>Peso Bruto (kg) auto</FieldLabel>
-            <Input value={fmt0(grossWeight)} readOnly className="bg-gray-50 text-sm" />
+            <Input value={fmt0(grossWeight)} readOnly className="bg-muted/50 text-sm" />
           </div>
           <div>
             <FieldLabel>Lacres</FieldLabel>

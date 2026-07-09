@@ -225,7 +225,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Unidade</label>
-                <Input value={selectedStock?.unit || ''} readOnly className="bg-gray-50 font-semibold" />
+                <Input value={selectedStock?.unit || ''} readOnly className="bg-muted/50 font-semibold" />
               </div>
             </div>
           )}

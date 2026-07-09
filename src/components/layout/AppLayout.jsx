@@ -28,7 +28,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7]">
+    <div className="min-h-screen bg-background">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} user={user} />
       <main className={`transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
         <div className="p-4 sm:p-6 w-full">

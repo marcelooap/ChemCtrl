@@ -24,7 +24,7 @@ export function NotificationItem({
       type="button"
       onClick={() => onClick(notification)}
       className={cn(
-        'w-full text-left flex gap-3 p-3 rounded-lg transition-colors hover:bg-gray-50 border-b border-gray-100 last:border-0',
+        'w-full text-left flex gap-3 p-3 rounded-lg transition-colors hover:bg-accent/50 border-b border-border last:border-0',
         !notification.isRead && 'bg-primary/5'
       )}
     >

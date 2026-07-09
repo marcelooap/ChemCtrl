@@ -69,13 +69,13 @@ export default function TelaClientes() {
     return 'Válido';
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Tela Clientes</h1>
+          <h1 className="text-2xl font-bold">Tela Clientes</h1>
           <p className="text-sm text-muted-foreground">
             {effectiveClient ? `Cliente: ${effectiveClient}` : 'Todos os clientes'} · Acompanhamento de produção, estoque e vasilhames
           </p>
@@ -94,11 +94,11 @@ export default function TelaClientes() {
       </div>
 
       {/* Q1 — Production Tracking */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-6">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+      <div className="bg-card rounded-xl border border-border mb-6">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <Factory className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Produções em andamento</h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{inProgressProds.length}</span>
+          <h3 className="text-sm font-semibold">Produções em andamento</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{inProgressProds.length}</span>
         </div>
         <ProductionTrackingTable
           productions={inProgressProds}
@@ -110,12 +110,12 @@ export default function TelaClientes() {
       </div>
 
       {/* Q2 — Raw Material Stock */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-6">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-card rounded-xl border border-border mb-6">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Package className="w-4 h-4" style={{ color: '#2575D1' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Estoque de Matéria Prima</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{filteredStocks.length}</span>
+            <h3 className="text-sm font-semibold">Estoque de Matéria Prima</h3>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredStocks.length}</span>
           </div>
           <div className="relative w-40">
             <Input placeholder="Buscar..." value={searchMP} onChange={e => setSearchMP(e.target.value)} className="h-7 text-xs" />
@@ -143,12 +143,12 @@ export default function TelaClientes() {
                 {filteredStocks.map(item => {
                   const status = getMPStatus(item);
                   return (
-                    <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                    <tr key={item.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-3 py-2 text-sm font-medium" style={{ color: '#3B82F6' }}>{item.entry_id || '—'}</td>
                       <td className="px-3 py-2 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code || '—'}</td>
-                      <td className="px-3 py-2 text-sm font-medium" style={{ color: '#333' }}>{item.mp_name}</td>
+                      <td className="px-3 py-2 text-sm font-medium">{item.mp_name}</td>
                       <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF', fontFamily: "'Arial Narrow', 'Inter', sans-serif", fontStretch: 'condensed' }}>{item.lot || '—'}</td>
-                      <td className="px-3 py-2 text-right text-sm" style={{ color: '#333' }}>{fmt(item.initial_stock)}</td>
+                      <td className="px-3 py-2 text-right text-sm">{fmt(item.initial_stock)}</td>
                       <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#000' }}>{fmt(item.current_stock)}</td>
                       <td className="px-3 py-2 text-center text-sm font-bold" style={{ color: '#000' }}>{item.unit}</td>
                       <td className="px-3 py-2 text-center">
@@ -161,7 +161,7 @@ export default function TelaClientes() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
+                        <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
                       </td>
                     </tr>
                   );
@@ -173,12 +173,12 @@ export default function TelaClientes() {
       </div>
 
       {/* Q3 — Containers in Pátio */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-card rounded-xl border border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BoxIcon className="w-4 h-4" style={{ color: '#2575D1' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Vasilhames no Pátio</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{filteredContainers.length}</span>
+            <h3 className="text-sm font-semibold">Vasilhames no Pátio</h3>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredContainers.length}</span>
           </div>
           <div className="relative w-40">
             <Input placeholder="Buscar..." value={searchContainer} onChange={e => setSearchContainer(e.target.value)} className="h-7 text-xs" />
@@ -201,14 +201,14 @@ export default function TelaClientes() {
               </thead>
               <tbody>
                 {filteredContainers.map(c => (
-                  <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="px-3 py-2 text-sm font-bold" style={{ color: '#1A1A2E' }}>{c.container_number || '—'}</td>
-                    <td className="px-3 py-2 text-sm" style={{ color: '#333' }}>{c.product || '—'}</td>
+                  <tr key={c.id} className="border-b border-border hover:bg-accent/30">
+                    <td className="px-3 py-2 text-sm font-bold">{c.container_number || '—'}</td>
+                    <td className="px-3 py-2 text-sm">{c.product || '—'}</td>
                     <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt3(c.volume)}</td>
                     <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#065F46' }}>{fmt3(c.net_weight)}</td>
                     <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF', fontFamily: "'Arial Narrow', 'Inter', sans-serif", fontStretch: 'condensed' }}>{c.lot || '—'}</td>
                     <td className="px-3 py-2 text-center">
-                      <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
+                      <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
                     </td>
                   </tr>
                 ))}

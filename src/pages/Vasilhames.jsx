@@ -181,7 +181,7 @@ export default function Vasilhames() {
 
   const statusBadge = (s) => {
     const c = { 'No Pátio': 'bg-amber-100 text-amber-700', 'Expedido': 'bg-green-100 text-green-700' };
-    return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c[s] || 'bg-gray-100'}`}>{s}</span>;
+    return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c[s] || 'bg-muted'}`}>{s}</span>;
   };
 
   const noPatioCount = containers.filter(c => c.status === 'No Pátio').length;
@@ -191,7 +191,7 @@ export default function Vasilhames() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📦 Vasilhames / Envase</h1>
+          <h1 className="text-2xl font-bold">📦 Vasilhames / Envase</h1>
           <p className="text-sm text-muted-foreground">{containers.length} embalagem(ns)</p>
         </div>
         {!isReadOnly && (
@@ -201,8 +201,8 @@ export default function Vasilhames() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar produto, nº placa, nº barril, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -229,10 +229,10 @@ export default function Vasilhames() {
           </Button>
         </div>
 
-        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : (
+        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
                 <th className="px-3 py-3 text-center w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todos" /></th>
                 <th className="px-4 py-3 text-left">ID</th>
                 <th className="px-4 py-3 text-left">OP</th>
@@ -248,7 +248,7 @@ export default function Vasilhames() {
               </tr></thead>
               <tbody>
                 {filtered.map(c => (
-                  <tr key={c.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
+                  <tr key={c.id} className={`border-b border-gray-50 hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={`Selecionar ${c.container_number || c.id}`} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{c.op_number || <span className="text-muted-foreground">Manual</span>}</td>
@@ -281,11 +281,11 @@ export default function Vasilhames() {
                           const recipe = (recipes || []).find(r => r.product_name === c.product);
                           const production = (productions || []).find(p => p.id === c.production_id || p.op_number === c.op_number);
                           printContainerLabel(c, recipe?.validity_days, production?.public_token);
-                        }} className="p-1 rounded hover:bg-gray-100" title="Imprimir Etiqueta"><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                        }} className="p-1 rounded hover:bg-muted" title="Imprimir Etiqueta"><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
                         {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title="Excluir"><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
-                        {!isReadOnly && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-gray-100"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
+                        {!isReadOnly && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-muted"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -294,7 +294,7 @@ export default function Vasilhames() {
             </table>
           </div>
         )}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Vasilhames no pátio: <strong>{noPatioCount}</strong></span>
           <span>Volume total no pátio: <strong>{fmt(noPatioVolume)} L</strong></span>
           <span>Total exibido: {filtered.length}</span>
@@ -317,12 +317,12 @@ export default function Vasilhames() {
               <div className="flex items-center gap-4 p-4 rounded-lg" style={{ background: '#F0F4FF' }}>
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">N° Placa</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: '#1A1A2E' }}>{viewing.container_number || '—'}</p>
+                  <p className="text-lg font-bold mt-0.5">{viewing.container_number || '—'}</p>
                 </div>
                 <div className="w-px h-12 bg-gray-300" />
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">N° Barril</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: '#1A1A2E' }}>{viewing.barril_number || '—'}</p>
+                  <p className="text-lg font-bold mt-0.5">{viewing.barril_number || '—'}</p>
                 </div>
                 <div className="w-px h-12 bg-gray-300" />
                 <div className="flex-1">
@@ -337,11 +337,11 @@ export default function Vasilhames() {
                   <div className="w-1 h-4 rounded" style={{ background: '#2575D1' }} />
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Dados da OP</h4>
                 </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm bg-gray-50/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">OP</span><span className="font-bold" style={{ color: '#2575D1' }}>{viewing.op_number || '—'}</span></div>
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">Lote</span><span className="font-medium">{viewing.lot || '—'}</span></div>
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">Produto</span><span className="font-bold text-right">{viewing.product || '—'}</span></div>
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">Cliente</span><span className="font-medium text-right">{viewing.client || '—'}</span></div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm bg-muted/50/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">OP</span><span className="font-bold" style={{ color: '#2575D1' }}>{viewing.op_number || '—'}</span></div>
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">Lote</span><span className="font-medium">{viewing.lot || '—'}</span></div>
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">Produto</span><span className="font-bold text-right">{viewing.product || '—'}</span></div>
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">Cliente</span><span className="font-medium text-right">{viewing.client || '—'}</span></div>
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Status</span>{statusBadge(viewing.status)}</div>
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Data Saída</span><span className="font-medium">{viewing.departure_date ? moment(viewing.departure_date).format('DD/MM/YYYY') : '—'}</span></div>
                 </div>
@@ -354,12 +354,12 @@ export default function Vasilhames() {
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Dados da Embalagem</h4>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Tipo</p><p className="font-bold">{viewing.type || '—'}</p></div>
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Volume (L)</p><p className="font-bold text-base" style={{ color: '#2575D1' }}>{fmt(viewing.volume)}</p></div>
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Tara (kg)</p><p className="font-medium">{fmt(viewing.tare)}</p></div>
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Líquido (kg)</p><p className="font-bold text-base text-green-700">{fmt(viewing.net_weight)}</p></div>
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Bruto (kg)</p><p className="font-bold text-base">{fmt(viewing.gross_weight)}</p></div>
-                  <div className="bg-gray-50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Menor Teste</p><p className="font-medium">{viewing.min_test_date ? moment(viewing.min_test_date).format('DD/MM/YYYY') : '—'}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Tipo</p><p className="font-bold">{viewing.type || '—'}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Volume (L)</p><p className="font-bold text-base" style={{ color: '#2575D1' }}>{fmt(viewing.volume)}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Tara (kg)</p><p className="font-medium">{fmt(viewing.tare)}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Líquido (kg)</p><p className="font-bold text-base text-green-700">{fmt(viewing.net_weight)}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Peso Bruto (kg)</p><p className="font-bold text-base">{fmt(viewing.gross_weight)}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">Menor Teste</p><p className="font-medium">{viewing.min_test_date ? moment(viewing.min_test_date).format('DD/MM/YYYY') : '—'}</p></div>
                 </div>
               </div>
 
@@ -369,9 +369,9 @@ export default function Vasilhames() {
                   <div className="w-1 h-4 rounded" style={{ background: '#2575D1' }} />
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Logística</h4>
                 </div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm bg-gray-50/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">Lacres</span><span className="font-medium text-right">{viewing.seals || '—'}</span></div>
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2"><span className="text-muted-foreground">Eslinga</span><span className="font-medium">{viewing.sling || '—'}</span></div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm bg-muted/50/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">Lacres</span><span className="font-medium text-right">{viewing.seals || '—'}</span></div>
+                  <div className="flex items-center justify-between border-b border-border pb-2"><span className="text-muted-foreground">Eslinga</span><span className="font-medium">{viewing.sling || '—'}</span></div>
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">GPS</span><span className="font-medium">{viewing.gps || '—'}</span></div>
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Responsável</span><span className="font-medium">{viewing.operator || '—'}</span></div>
                 </div>
@@ -393,8 +393,8 @@ export default function Vasilhames() {
                         {role === 'origem' ? 'Origem' : 'Destino'}
                       </span>
                     </div>
-                    <div className="bg-gray-50/50 rounded-lg p-4 space-y-3 text-sm">
-                      <div className="grid grid-cols-3 gap-3 pb-2 border-b border-gray-100">
+                    <div className="bg-muted/50/50 rounded-lg p-4 space-y-3 text-sm">
+                      <div className="grid grid-cols-3 gap-3 pb-2 border-b border-border">
                         <div><p className="text-xs text-muted-foreground">Registro</p><p className="font-bold" style={{ color: '#7C3AED' }}>{t.transfer_number || '—'}</p></div>
                         <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{t.date ? moment(t.date).format('DD/MM/YYYY') : '—'}</p></div>
                         <div><p className="text-xs text-muted-foreground">Tipo</p><p className="font-medium">{dests[0]?.type || t.destination_type || '—'}</p></div>
@@ -404,7 +404,7 @@ export default function Vasilhames() {
                           <p className="text-xs font-semibold text-muted-foreground mb-2">Embalagens de Origem</p>
                           <div className="space-y-1.5">
                             {origins.map((o, i) => (
-                              <div key={i} className="flex items-center gap-3 text-xs bg-white rounded px-3 py-1.5 border border-gray-100">
+                              <div key={i} className="flex items-center gap-3 text-xs bg-card rounded px-3 py-1.5 border border-border">
                                 <span className="font-semibold" style={{ color: '#2575D1' }}>{o.container_number || '—'}</span>
                                 <span className="text-muted-foreground">{o.barril_number || '—'}</span>
                                 <span className="text-muted-foreground">Lote: {o.lot || '—'}</span>
@@ -419,7 +419,7 @@ export default function Vasilhames() {
                           <p className="text-xs font-semibold text-muted-foreground mb-2">Destino(s)</p>
                           <div className="space-y-1.5">
                             {dests.map((d, i) => (
-                              <div key={i} className="flex items-center gap-3 text-xs bg-white rounded px-3 py-1.5 border border-gray-100">
+                              <div key={i} className="flex items-center gap-3 text-xs bg-card rounded px-3 py-1.5 border border-border">
                                 <span className="font-semibold" style={{ color: '#2575D1' }}>{d.placa || '—'}</span>
                                 <span className="text-muted-foreground">{d.barril || '—'}</span>
                                 <span className="text-muted-foreground">{d.packaging_type || d.type || '—'}</span>

@@ -41,7 +41,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose })
       </div>
       <h4 className="text-sm font-semibold mb-2">Matérias Primas</h4>
       <table className="w-full text-sm border rounded-lg overflow-hidden">
-        <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+        <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
           <th className="px-3 py-2 text-left">Código MP</th>
           <th className="px-3 py-2 text-left">Matéria Prima</th>
           <th className="px-3 py-2 text-right">Dens. MP (g/mL)</th>
@@ -58,7 +58,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose })
               <td className="px-3 py-2 text-right font-medium">{(m.quantity_kg || 0).toLocaleString('pt-BR')}</td>
             </tr>
           ))}
-          <tr className="border-t bg-gray-50 font-bold">
+          <tr className="border-t bg-muted/50 font-bold">
             <td colSpan={3} className="px-3 py-2">Totais</td>
             <td className="px-3 py-2 text-right">{(viewing.raw_materials || []).reduce((s, m) => s + (m.percentage || 0), 0).toFixed(2)}%</td>
             <td className="px-3 py-2 text-right">{(viewing.raw_materials || []).reduce((s, m) => s + (m.quantity_kg || 0), 0).toLocaleString('pt-BR')} kg</td>
@@ -227,7 +227,7 @@ export default function Receitas() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>🧪 Receitas</h1>
+          <h1 className="text-2xl font-bold">🧪 Receitas</h1>
           <p className="text-sm text-muted-foreground">{recipes.length} receita(s) cadastrada(s)</p>
         </div>
         <div className="flex items-center gap-2">
@@ -240,8 +240,8 @@ export default function Receitas() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por ID, produto ou cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -249,12 +249,12 @@ export default function Receitas() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+          <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
         ) : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
-                <tr className="border-b border-gray-50 bg-gray-50/50">
+                <tr className="border-b border-gray-50 bg-muted/50/50">
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Produto</th>
                   <th className="px-4 py-3 text-left">Cliente</th>
@@ -267,7 +267,7 @@ export default function Receitas() {
               </thead>
               <tbody>
                 {filtered.map((r, idx) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={r.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.id] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{r.product_name}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
@@ -277,9 +277,9 @@ export default function Receitas() {
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openView(r)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => remove(r)} className="p-1 rounded hover:bg-gray-100"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
                       </div>
                     </td>
                   </tr>
@@ -289,7 +289,7 @@ export default function Receitas() {
           </div>
         )}
 
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Receitas cadastradas: {recipes.length}</span>
           <span>Preço médio: <strong>R$ {avgPrice.toFixed(4)}/kg</strong></span>
           <span>Com preço definido: {recipes.filter(r => r.price).length}</span>
@@ -331,7 +331,7 @@ export default function Receitas() {
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                  <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                     <th className="px-3 py-2 text-left">CÓDIGO MP</th>
                     <th className="px-3 py-2 text-left">MATÉRIA PRIMA</th>
                     <th className="px-3 py-2 text-right">DENS. (G/ML)</th>
@@ -347,10 +347,10 @@ export default function Receitas() {
                         <td className="px-2 py-1"><Input type="number" step="0.001" value={m.mp_density} onChange={e => updateMP(idx, 'mp_density', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
                         <td className="px-2 py-1"><Input type="number" step="0.01" value={m.percentage} onChange={e => updateMP(idx, 'percentage', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
                         <td className="px-2 py-1 text-right text-xs font-medium text-muted-foreground">{calcQty(m.percentage || 0).toFixed(3)}</td>
-                        <td className="px-1"><button onClick={() => removeMP(idx)} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3 text-red-400" /></button></td>
+                        <td className="px-1"><button onClick={() => removeMP(idx)} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3 text-red-400" /></button></td>
                       </tr>
                     ))}
-                    <tr className="border-t bg-gray-50">
+                    <tr className="border-t bg-muted/50">
                       <td colSpan={3} className="px-3 py-2 text-xs font-bold" style={{ color: '#2575D1' }}>TOTAIS</td>
                       <td className="px-3 py-2 text-right text-xs font-bold" style={{ color: totalPct === 100 ? '#10B981' : '#EF4444' }}>{totalPct.toFixed(2)} %</td>
                       <td className="px-3 py-2 text-right text-xs font-bold" style={{ color: '#2575D1' }}>{totalKg.toFixed(3)} kg</td>

@@ -107,7 +107,7 @@ export default function COA() {
   };
 
   const statusBadge = (s) => {
-    const c = { Aprovado: 'bg-green-100 text-green-700', Reprovado: 'bg-red-100 text-red-700', 'Com Restrição': 'bg-amber-100 text-amber-700', Pendente: 'bg-gray-100 text-gray-700' };
+    const c = { Aprovado: 'bg-green-100 text-green-700', Reprovado: 'bg-red-100 text-red-700', 'Com Restrição': 'bg-amber-100 text-amber-700', Pendente: 'bg-muted text-foreground' };
     return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[s] || c.Pendente}`}>{s}</span>;
   };
 
@@ -116,12 +116,12 @@ export default function COA() {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="mb-4 shrink-0">
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📜 Certificados de Análise (COA)</h1>
+        <h1 className="text-2xl font-bold">📜 Certificados de Análise (COA)</h1>
         <p className="text-sm text-muted-foreground">{results.length} COA(s) disponível(is)</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 shrink-0 flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border shrink-0 flex items-center gap-3">
           <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar por produto ou lote..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
           <Select value={clientFilter} onValueChange={setClientFilter}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Cliente" /></SelectTrigger>
@@ -131,17 +131,17 @@ export default function COA() {
             </SelectContent>
           </Select>
         </div>
-        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : (
+        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
                 <th className="px-4 py-3 text-left">OP</th><th className="px-4 py-3 text-left">Produto</th><th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Lote</th><th className="px-4 py-3 text-left">Data Análise</th><th className="px-4 py-3 text-left">Analista</th>
                 <th className="px-4 py-3 text-center">Status CQ</th><th className="px-4 py-3 text-center">Editar</th><th className="px-4 py-3 text-center">COA</th>
               </tr></thead>
               <tbody>
                 {filtered.map(r => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={r.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{r.op_number}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{r.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
@@ -156,7 +156,7 @@ export default function COA() {
                     <td className="px-4 py-2.5 text-sm">{r.date ? brasiliaDate(r.date) : '—'}</td>
                     <td className="px-4 py-2.5 text-sm">{r.analyst}</td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(r.status)}</td>
-                    <td className="px-4 py-2.5 text-center">{!isReadOnly && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}</td>
+                    <td className="px-4 py-2.5 text-center">{!isReadOnly && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}</td>
                     <td className="px-4 py-2.5 text-center">
                       {(() => {
                         const hasResults = parseArr(r.results).length > 0 && parseArr(r.results).some(res => res.result);
@@ -171,7 +171,7 @@ export default function COA() {
                           <button
                             onClick={() => handleGeneratePDF(r)}
                             disabled={generatingPDF === r.id}
-                            className="text-xs font-medium px-2 py-1 rounded hover:bg-gray-100 flex items-center gap-1 mx-auto disabled:opacity-50"
+                            className="text-xs font-medium px-2 py-1 rounded hover:bg-muted flex items-center gap-1 mx-auto disabled:opacity-50"
                             style={{ color: '#2575D1' }}
                           >
                             {generatingPDF === r.id ? <div className="w-3 h-3 border border-gray-300 border-t-[#2575D1] rounded-full animate-spin" /> : <FileText className="w-3 h-3" />}
@@ -186,7 +186,7 @@ export default function COA() {
             </table>
           </div>
         )}
-        <div className="shrink-0 border-t border-gray-100 px-4 py-3 flex items-center gap-6 bg-gray-50/50">
+        <div className="shrink-0 border-t border-border px-4 py-3 flex items-center gap-6 bg-muted/50/50">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase text-muted-foreground">COAs Aprovados</span>
             <span className="text-sm font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">{aprovados}</span>
@@ -215,7 +215,7 @@ export default function COA() {
                   <div className="flex items-center gap-2">
                     <SignedImage url={editForm.sample_photo_url} alt="Amostra" className="w-16 h-16 object-cover rounded-lg border" />
                     <button type="button" onClick={() => setEditForm(prev => ({ ...prev, sample_photo_url: '' }))} className="p-1 rounded hover:bg-red-50 text-red-500" title="Remover foto"><Trash2 className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1 rounded hover:bg-gray-100 text-gray-500" title="Substituir foto"><Camera className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-gray-500" title="Substituir foto"><Camera className="w-4 h-4" /></button>
                   </div>
                 ) : (
                   <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-[#2575D1] hover:text-[#2575D1] text-gray-500 transition-colors disabled:opacity-50">
@@ -224,7 +224,7 @@ export default function COA() {
                 )}
               </div>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
-                <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">ANÁLISE</th><th className="px-3 py-2 text-left">MÉTODO</th><th className="px-3 py-2 text-left">UNID.</th>
                   <th className="px-3 py-2 text-right">MÍN.</th><th className="px-3 py-2 text-right">MÁX.</th><th className="px-3 py-2 text-left">RESULTADO</th><th className="px-3 py-2 text-left">STATUS</th>
                 </tr></thead>

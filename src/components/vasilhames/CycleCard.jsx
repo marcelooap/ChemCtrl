@@ -72,7 +72,7 @@ function TransbordoCard({ event, container }) {
         <span className="text-xs font-bold" style={{ color: '#4B0082' }}>Transbordo de Saída</span>
         <span className="text-[10px] text-muted-foreground ml-auto">{fmtDateTime(event.date)}</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-3 py-2 bg-white">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-3 py-2 bg-card">
         <Field label="Origem" value={origem} />
         <Field label="Destino" value={f['Destino(s)']} />
         <Field label="Data" value={fmtDateOnly(event.date)} />
@@ -105,7 +105,7 @@ export default function CycleCard({ cycle, index }) {
   const statusColor = hasTransbordo ? { bg: '#F5F0FF', text: '#4B0082' } : (finished ? { bg: '#DCFCE7', text: '#15803D' } : { bg: '#DBEAFE', text: '#1D4ED8' });
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       {/* Header strip */}
       <div
         className="flex items-center justify-between px-4 py-2 cursor-pointer select-none"
@@ -119,7 +119,7 @@ export default function CycleCard({ cycle, index }) {
           >
             {String(index + 1).padStart(2, '0')}
           </div>
-          <span className="text-sm font-bold" style={{ color: '#1A1A2E' }}>
+          <span className="text-sm font-bold">
             OP {header.op}
           </span>
           <span
@@ -157,7 +157,7 @@ export default function CycleCard({ cycle, index }) {
 
         {/* Expanded info */}
         {expanded && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t border-gray-100">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 pt-3 border-t border-border">
             <Field label="Volume (L)" value={volume} />
             <Field label="Tara (kg)" value={tare} />
             <Field label="Líquido (kg)" value={netWeight} />

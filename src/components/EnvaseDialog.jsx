@@ -133,7 +133,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         </DialogHeader>
         {production && (
           <div>
-            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <div className="bg-muted/50 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-4 gap-4 text-sm">
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">OP</p>
@@ -141,34 +141,34 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Lote</p>
-                  <p className="font-medium text-gray-700">{production.lot}</p>
+                  <p className="font-medium text-foreground">{production.lot}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Volume</p>
-                  <p className="font-medium text-gray-700">{fmt1(production.volume)} L</p>
+                  <p className="font-medium text-foreground">{fmt1(production.volume)} L</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Massa</p>
-                  <p className="font-medium text-gray-700">{fmt3(production.mass)} kg</p>
+                  <p className="font-medium text-foreground">{fmt3(production.mass)} kg</p>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-2 gap-4">
+              <div className="mt-3 pt-3 border-t border-border grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Embalagem de Destino</p>
-                  <p className="text-xs font-medium text-gray-700">{production.packaging_type || '—'}</p>
+                  <p className="text-xs font-medium text-foreground">{production.packaging_type || '—'}</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold text-gray-700">Embalagens Envasadas</h4>
+              <h4 className="text-sm font-semibold text-foreground">Embalagens Envasadas</h4>
               <Button size="sm" onClick={addRow} className="text-white" style={{ background: '#2563EB' }}>
                 <Plus className="w-3.5 h-3.5 mr-1" /> Incluir Embalagem
               </Button>
             </div>
             <div className="space-y-4">
               {containers.map((c, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-white relative">
+                <div key={idx} className="border border-border rounded-lg p-4 bg-white relative">
                   {containers.length > 1 && (
                     <button onClick={() => removeRow(idx)} className="absolute top-3 right-3 p-1.5 rounded hover:bg-red-50 z-10">
                       <Trash2 className="w-4 h-4 text-red-400" />

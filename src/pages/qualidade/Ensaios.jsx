@@ -128,26 +128,26 @@ export default function Ensaios() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>🧪 Cadastro CQ</h1>
+          <h1 className="text-2xl font-bold">🧪 Cadastro CQ</h1>
           <p className="text-sm text-muted-foreground">{tests.length} ensaio(s) cadastrado(s)</p>
         </div>
         <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90"><Plus className="w-4 h-4 mr-2" /> Novo Ensaio</Button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border">
           <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar produto ou cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         </div>
-        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : (
+        {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
                 <th className="px-4 py-3 text-left">ID</th><th className="px-4 py-3 text-left">Produto</th><th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Revisão</th><th className="px-4 py-3 text-left">Dt. Revisão</th><th className="px-4 py-3 text-right">Análises</th><th className="px-4 py-3 text-center">Ações</th>
               </tr></thead>
               <tbody>
                 {filtered.map((t, idx) => (
-                  <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={t.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>EN{String(regNumMap[t.id] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{t.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{t.client}</td>
@@ -156,9 +156,9 @@ export default function Ensaios() {
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(t.analyses || []).length}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => { setViewing({ ...t, analyses: parseArr(t.analyses) }); setShowView(true); }} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => openEdit(t)} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => remove(t)} className="p-1 rounded hover:bg-gray-100"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        <button onClick={() => { setViewing({ ...t, analyses: parseArr(t.analyses) }); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => openEdit(t)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => remove(t)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
                       </div>
                     </td>
                   </tr>
@@ -167,7 +167,7 @@ export default function Ensaios() {
             </table>
           </div>
         )}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Ensaios cadastrados: <strong>{tests.length}</strong></span>
           <span>Total de análises: <strong>{tests.reduce((s, t) => s + (t.analyses || []).length, 0)}</strong></span>
           <span>Exibidos: {filtered.length}</span>
@@ -184,7 +184,7 @@ export default function Ensaios() {
                 <label className="text-xs font-medium text-muted-foreground">Produto * <span className="text-muted-foreground/60">(selecione ou digite)</span></label>
                 <Combobox value={form.product} onValueChange={v => setForm({ ...form, product: v })} options={productOptions} onSelect={handleProductSelect} placeholder="Selecione um produto cadastrado ou digite..." />
               </div>
-              <div><label className="text-xs font-medium text-muted-foreground">Cliente (automático)</label><Input value={form.client} readOnly className="bg-gray-50" /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">Cliente (automático)</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">Revisão</label><Input value={form.revision} onChange={e => setForm({ ...form, revision: e.target.value })} /></div>
@@ -193,7 +193,7 @@ export default function Ensaios() {
             <div className="flex items-center justify-between"><h4 className="text-sm font-semibold">Análises</h4><Button variant="outline" size="sm" onClick={addAnalysis}><Plus className="w-3 h-3 mr-1" /> Adicionar Análise</Button></div>
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
-                <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">ANÁLISE</th><th className="px-3 py-2 text-left">METODOLOGIA</th><th className="px-3 py-2 text-left">UNIDADE</th><th className="px-3 py-2 text-left">ESPECIFICAÇÃO</th><th className="px-3 py-2 w-8"></th>
                 </tr></thead>
                 <tbody>
@@ -218,7 +218,7 @@ export default function Ensaios() {
                           </div>
                         )}
                       </td>
-                      <td className="px-1"><button onClick={() => removeAnalysis(idx)} className="p-1 hover:bg-gray-100 rounded"><X className="w-3 h-3 text-red-400" /></button></td>
+                      <td className="px-1"><button onClick={() => removeAnalysis(idx)} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3 text-red-400" /></button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -246,7 +246,7 @@ export default function Ensaios() {
                 <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{viewing.revision_date}</p></div>
               </div>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
-                <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">Análise</th><th className="px-3 py-2 text-left">Metodologia</th><th className="px-3 py-2 text-left">Unidade</th><th className="px-3 py-2 text-left">Especificação</th>
                 </tr></thead>
                 <tbody>

@@ -50,7 +50,7 @@ export default function HistoryDialog({ open, onOpenChange, containers, transfer
       {/* Janela de seleção */}
       {open && !showTimeline && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-background rounded-xl shadow-xl border border-gray-200 max-w-md w-full p-6 relative animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-background rounded-xl shadow-xl border border-border max-w-md w-full p-6 relative animate-in fade-in zoom-in-95 duration-150">
             <button onClick={resetAndClose} className="absolute right-4 top-4 opacity-70 hover:opacity-100 transition-opacity">
               <X className="w-4 h-4" />
             </button>
@@ -82,8 +82,8 @@ export default function HistoryDialog({ open, onOpenChange, containers, transfer
       {/* Tela de histórico por ciclos */}
       {open && showTimeline && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-background rounded-xl shadow-xl border border-gray-200 max-w-5xl w-full max-h-[92vh] flex flex-col relative animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-background rounded-xl shadow-xl border border-border max-w-5xl w-full max-h-[92vh] flex flex-col relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5" style={{ color: '#4B0082' }} />
                 <h2 className="text-lg font-semibold">Histórico do Vasilhame</h2>
@@ -104,7 +104,7 @@ export default function HistoryDialog({ open, onOpenChange, containers, transfer
                 <HistoryCycles cycles={cycles} />
               )}
             </div>
-            <div className="flex justify-between px-6 py-3 border-t border-gray-100">
+            <div className="flex justify-between px-6 py-3 border-t border-border">
               <Button variant="outline" onClick={backToSearch}>Nova consulta</Button>
               <Button variant="outline" onClick={resetAndClose}>Fechar</Button>
             </div>

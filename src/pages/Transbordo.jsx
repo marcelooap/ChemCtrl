@@ -252,8 +252,8 @@ export default function Transbordo() {
   return (
     <div className="flex gap-4" style={{ height: 'calc(100vh - 48px)' }}>
       {/* Sidebar */}
-      <div className="w-60 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-4 overflow-y-auto">
-        <h3 className="text-sm font-bold" style={{ color: '#1A1A2E' }}>Filtros</h3>
+      <div className="w-60 shrink-0 bg-card rounded-xl shadow-sm border border-border p-4 flex flex-col gap-4 overflow-y-auto">
+        <h3 className="text-sm font-bold">Filtros</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -280,7 +280,7 @@ export default function Transbordo() {
         {(search || startDate || endDate || typeFilter !== 'all') && (
           <Button onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setTypeFilter('all'); }} variant="outline" size="sm" className="text-xs">Limpar Filtros</Button>
         )}
-        <div className="mt-auto pt-4 border-t border-gray-100">
+        <div className="mt-auto pt-4 border-t border-border">
           <Button onClick={() => setShowForm(true)} style={{ background: '#2575D1' }} className="text-white w-full hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> Novo Transbordo
           </Button>
@@ -288,17 +288,17 @@ export default function Transbordo() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="shrink-0 p-4 border-b border-gray-100">
-          <h1 className="text-xl font-bold" style={{ color: '#1A1A2E' }}>🔄 Transbordo</h1>
+      <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border">
+          <h1 className="text-xl font-bold">🔄 Transbordo</h1>
           <p className="text-sm text-muted-foreground">{filtered.length} de {transfers.length} registro(s)</p>
         </div>
         <div className="flex-1 overflow-auto">
-          {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : filtered.length === 0 ? (
+          {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : filtered.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhum transbordo registrado.</div>
         ) : (
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-gray-50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
                 <th className="px-4 py-3 text-left">Registro</th><th className="px-4 py-3 text-left">Tipo</th><th className="px-4 py-3 text-left">Data</th><th className="px-4 py-3 text-left">Produto</th>
                 <th className="px-4 py-3 text-left">Cliente</th><th className="px-4 py-3 text-left">Lote</th><th className="px-4 py-3 text-right">Vol. Total (L)</th><th className="px-4 py-3 text-left">Destino</th><th className="px-4 py-3 text-center">Ações</th>
               </tr></thead>
@@ -323,7 +323,7 @@ export default function Transbordo() {
                     destinoLabel = dests.map(d => d.placa || '—').filter(Boolean).join(', ');
                   }
                   return (
-                    <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={t.id} className="border-b border-gray-50 hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{t.transfer_number || '—'}</td>
                       <td className="px-4 py-2.5 text-sm">{tipo}</td>
                       <td className="px-4 py-2.5 text-sm">{moment(t.date).format('DD/MM/YYYY')}</td>
@@ -333,7 +333,7 @@ export default function Transbordo() {
                       <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(totalVol)}</td>
                       <td className="px-4 py-2.5 text-sm font-medium">{destinoLabel}</td>
                       <td className="px-4 py-2.5 text-center">
-                        <button onClick={() => setViewTransfer(t)} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => setViewTransfer(t)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       </td>
                     </tr>
                   );
@@ -344,10 +344,10 @@ export default function Transbordo() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-1.5">
+        <div className="shrink-0 border-t border-border bg-muted/50 px-4 py-1.5">
           <div className="flex items-center justify-between text-xs flex-wrap gap-2">
             <div className="flex items-center gap-4">
-              <span className="text-muted-foreground">Registros: <span className="font-bold" style={{ color: '#1A1A2E' }}>{stats.count}</span></span>
+              <span className="text-muted-foreground">Registros: <span className="font-bold">{stats.count}</span></span>
               <span className="text-muted-foreground">Vol. Total: <span className="font-bold" style={{ color: '#2575D1' }}>{fmt(stats.totalVol)} L</span></span>
             </div>
             <div className="flex items-center gap-4">
@@ -361,7 +361,7 @@ export default function Transbordo() {
       {/* Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-base font-semibold" style={{ color: '#1A1A2E' }}>Novo Transbordo</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base font-semibold">Novo Transbordo</DialogTitle></DialogHeader>
           <div className="grid gap-5">
             {/* Dados Gerais */}
             <div>
@@ -382,7 +382,7 @@ export default function Transbordo() {
                 </div>
                 <div>
                   <FieldLabel>Cliente (automático)</FieldLabel>
-                  <Input value={form.client} readOnly className="bg-gray-50 text-sm" placeholder="Automático" />
+                  <Input value={form.client} readOnly className="bg-muted/50 text-sm" placeholder="Automático" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 mt-3">
@@ -392,7 +392,7 @@ export default function Transbordo() {
                 </div>
                 <div>
                   <FieldLabel>Operador (auto)</FieldLabel>
-                  <Input value={user?.nome || user?.full_name || user?.email || ''} readOnly className="bg-gray-50 text-sm" />
+                  <Input value={user?.nome || user?.full_name || user?.email || ''} readOnly className="bg-muted/50 text-sm" />
                 </div>
               </div>
             </div>
@@ -422,7 +422,7 @@ export default function Transbordo() {
                   </div>
                   <div>
                     <FieldLabel>Lote (auto)</FieldLabel>
-                    <Input value={o.lot} readOnly className="bg-gray-50 text-sm" placeholder="auto" />
+                    <Input value={o.lot} readOnly className="bg-muted/50 text-sm" placeholder="auto" />
                   </div>
                   <div>
                     <FieldLabel>Vol. Retirado (L)</FieldLabel>
@@ -430,7 +430,7 @@ export default function Transbordo() {
                   </div>
                   <div>
                     <FieldLabel>Saldo Restante (L)</FieldLabel>
-                    <Input value={fmt3(o.remaining_stock)} readOnly className="bg-gray-50 text-sm font-semibold" style={{ color: o.remaining_stock < 0 ? '#EF4444' : '#065F46' }} />
+                    <Input value={fmt3(o.remaining_stock)} readOnly className="bg-muted/50 text-sm font-semibold" style={{ color: o.remaining_stock < 0 ? '#EF4444' : '#065F46' }} />
                   </div>
                 </div>
               ))}
@@ -463,7 +463,7 @@ export default function Transbordo() {
               ))}
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+          <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={save} disabled={saving} style={{ background: '#1B5E9C', color: 'white' }}>
               {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registrando...</> : 'Registrar Transbordo'}

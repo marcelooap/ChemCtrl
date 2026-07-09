@@ -86,7 +86,7 @@ export default function OrdensProducao() {
 
   const totalPendingVolume = activeProds.reduce((s, p) => s + (p.volume || 0), 0);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   const renderActionButton = (prod) => {
     if (isReadOnly) return null;
@@ -112,7 +112,7 @@ export default function OrdensProducao() {
     <div className="pb-20">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Ordens de Produção</h1>
+          <h1 className="text-2xl font-bold">Ordens de Produção</h1>
           <p className="text-sm text-muted-foreground">{activeProds.length} OP(s) em aberto</p>
         </div>
         <div className="flex items-center gap-3">
@@ -153,7 +153,7 @@ export default function OrdensProducao() {
           <DialogHeader><DialogTitle>OP: {viewingOP?.op_number} — {viewingOP?.product}</DialogTitle></DialogHeader>
           {viewingOP && (
             <div>
-              <div className="grid grid-cols-4 gap-3 text-sm mb-4 bg-gray-50 rounded-lg p-3">
+              <div className="grid grid-cols-4 gap-3 text-sm mb-4 bg-muted/50 rounded-lg p-3">
               <div><p className="text-xs text-muted-foreground">Aguardando Início</p><p className="font-medium" style={{ color: '#1e40af' }}>{waitInterval(viewingOP.created_date, viewingOP.start_time)}</p></div>
                 <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{viewingOP.lot}</p></div>
                 <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{brasiliaDate(viewingOP.date)}</p></div>
@@ -162,7 +162,7 @@ export default function OrdensProducao() {
               </div>
               <h4 className="text-sm font-semibold mb-2">Matérias Primas</h4>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
-                <thead><tr className="bg-gray-50 text-xs font-semibold text-muted-foreground">
+                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="px-3 py-2 text-left">CÓDIGO</th><th className="px-3 py-2 text-left">MATÉRIA PRIMA</th><th className="px-3 py-2 text-left">LOTE</th><th className="px-3 py-2 text-right">QTD. OP. (KG)</th>
                 </tr></thead>
                 <tbody>
@@ -174,7 +174,7 @@ export default function OrdensProducao() {
                       <td className="px-3 py-2 text-right font-medium">{fmt3(mp.qty_operational)}</td>
                     </tr>
                   ))}
-                  <tr className="border-t bg-gray-50 font-bold">
+                  <tr className="border-t bg-muted/50 font-bold">
                     <td colSpan={3} className="px-3 py-2">TOTAL</td>
                     <td className="px-3 py-2 text-right" style={{ color: '#1e40af' }}>{fmt3(parseArr(viewingOP.raw_materials_used).reduce((s, m) => s + (m.qty_operational || 0), 0))}</td>
                   </tr>
@@ -206,7 +206,7 @@ export default function OrdensProducao() {
       />
 
       {/* Fixed footer bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export default function OrdensProducao() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground leading-tight">OP's em Aberto</p>
-                <p className="text-lg font-bold leading-tight" style={{ color: '#1A1A2E' }}>{activeProds.length}</p>
+                <p className="text-lg font-bold leading-tight">{activeProds.length}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export default function OrdensProducao() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground leading-tight">Volume Pendente</p>
-                <p className="text-lg font-bold leading-tight" style={{ color: '#1A1A2E' }}>{fmt3(totalPendingVolume)} L</p>
+                <p className="text-lg font-bold leading-tight">{fmt3(totalPendingVolume)} L</p>
               </div>
             </div>
           </div>

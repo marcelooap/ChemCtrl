@@ -141,7 +141,7 @@ export default function Pedidos() {
 
   const StatusBadge = ({ status }) => {
     const c = { Pendente: 'bg-amber-100 text-amber-700', 'Em produção': 'bg-blue-100 text-blue-700', Finalizado: 'bg-green-100 text-green-700' };
-    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-gray-100 text-gray-700'}`}>{status}</span>;
+    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{status}</span>;
   };
 
   return (
@@ -149,7 +149,7 @@ export default function Pedidos() {
       {/* Fixed Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>📋 Pedidos de Produção</h1>
+          <h1 className="text-2xl font-bold">📋 Pedidos de Produção</h1>
           <p className="text-sm text-muted-foreground">{orders.length} pedido(s) registrado(s)</p>
         </div>
         {!isReadOnly && (
@@ -160,8 +160,8 @@ export default function Pedidos() {
       </div>
 
       {/* Card: fixed search, scrollable table, fixed footer */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por ID, produto, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -180,7 +180,7 @@ export default function Pedidos() {
         {/* Scrollable Table */}
         <div className="flex-1 overflow-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
@@ -203,7 +203,7 @@ export default function Pedidos() {
                 {filtered.map(o => {
                   const isLate = o.status !== 'Finalizado' && o.expected_date && moment(o.expected_date).isBefore(moment());
                   return (
-                    <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={o.id} className="border-b border-gray-50 hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
                       <td className="px-4 py-2.5 text-sm">{o.date ? moment(o.date).format('DD/MM/YYYY') : '—'}</td>
                       <td className="px-4 py-2.5 text-sm">{o.requester}</td>
@@ -222,10 +222,10 @@ export default function Pedidos() {
                       <td className="px-4 py-2.5 text-center"><StatusBadge status={o.status} /></td>
                       <td className="px-4 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-gray-100" title="Visualizar">
+                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title="Visualizar">
                             <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
-                          {!isReadOnly && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-gray-100" title="Editar">
+                          {!isReadOnly && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title="Editar">
                             <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>}
                           {!isReadOnly && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title="Excluir">
@@ -242,7 +242,7 @@ export default function Pedidos() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Total de pedidos: {orders.length}</span>
           <span>Pedidos em aberto: {openOrders.length}</span>
           <span>Volume pendente total: <strong>{fmt(totalPendingVol)} L</strong></span>
@@ -270,7 +270,7 @@ export default function Pedidos() {
                   placeholder="Selecione ou busque..."
                 />
               </div>
-              <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-gray-50" /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">Pedido do Cliente</label><Input value={form.client_order} onChange={e => setForm({ ...form, client_order: e.target.value })} /></div>

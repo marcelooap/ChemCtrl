@@ -26,13 +26,13 @@ const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 
 
 function SummaryCard({ title, count, icon: Icon, color }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
+    <div className="bg-card rounded-xl border border-border p-5 flex items-center gap-4">
       <div className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0" style={{ background: color }}>
         <Icon className="w-5 h-5 text-white" />
       </div>
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
-        <p className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>{count}</p>
+        <p className="text-2xl font-bold">{count}</p>
       </div>
     </div>
   );
@@ -177,13 +177,13 @@ export default function EstoqueCliente() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Estoque Cliente</h1>
+          <h1 className="text-2xl font-bold">Estoque Cliente</h1>
           <p className="text-sm text-muted-foreground">
             {effectiveClient ? `Cliente: ${effectiveClient}` : 'Todos os clientes'} · Estoque de matéria prima, vasilhames e tankagem
           </p>
@@ -235,11 +235,11 @@ export default function EstoqueCliente() {
       </div>
 
       {/* Raw Materials Table */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-6">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+      <div className="bg-card rounded-xl border border-border mb-6">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <Package className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Estoque de Matéria Prima</h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{filteredStocks.length}</span>
+          <h3 className="text-sm font-semibold">Estoque de Matéria Prima</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredStocks.length}</span>
         </div>
         {filteredStocks.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhum item em estoque.</div>
@@ -264,13 +264,13 @@ export default function EstoqueCliente() {
                 {filteredStocks.map(item => {
                   const status = getMPStatus(item);
                   return (
-                    <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                    <tr key={item.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-3 py-2 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code || '—'}</td>
-                      <td className="px-3 py-2 text-sm font-medium" style={{ color: '#333' }}>{item.mp_name}</td>
+                      <td className="px-3 py-2 text-sm font-medium">{item.mp_name}</td>
                       {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{item.client || '—'}</td>}
                       <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{item.lot || '—'}</td>
                       <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{item.supplier || '—'}</td>
-                      <td className="px-3 py-2 text-right text-sm" style={{ color: '#333' }}>{fmt(item.initial_stock)}</td>
+                      <td className="px-3 py-2 text-right text-sm">{fmt(item.initial_stock)}</td>
                       <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#000' }}>{fmt(item.current_stock)}</td>
                       <td className="px-3 py-2 text-center text-sm font-bold" style={{ color: '#000' }}>{item.unit}</td>
                       <td className="px-3 py-2 text-center text-sm" style={{ color: '#6B7280' }}>{item.expiry_date ? moment(item.expiry_date).format('DD/MM/YYYY') : '—'}</td>
@@ -293,11 +293,11 @@ export default function EstoqueCliente() {
       </div>
 
       {/* Containers Table */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-6">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+      <div className="bg-card rounded-xl border border-border mb-6">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <BoxIcon className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Vasilhames</h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{filteredContainers.length}</span>
+          <h3 className="text-sm font-semibold">Vasilhames</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredContainers.length}</span>
         </div>
         {filteredContainers.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhum vasilhame encontrado.</div>
@@ -320,16 +320,16 @@ export default function EstoqueCliente() {
               </thead>
               <tbody>
                 {filteredContainers.map(c => (
-                  <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="px-3 py-2 text-sm font-bold" style={{ color: '#1A1A2E' }}>{c.container_number || '—'}</td>
+                  <tr key={c.id} className="border-b border-border hover:bg-accent/30">
+                    <td className="px-3 py-2 text-sm font-bold">{c.container_number || '—'}</td>
                     <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.barril_number || '—'}</td>
                     {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.client || '—'}</td>}
-                    <td className="px-3 py-2 text-sm font-medium" style={{ color: '#333' }}>{c.product || '—'}</td>
+                    <td className="px-3 py-2 text-sm font-medium">{c.product || '—'}</td>
                     <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{c.lot || '—'}</td>
                     <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{c.type || '—'}</td>
                     <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt3(c.volume)}</td>
                     <td className="px-3 py-2 text-right text-sm" style={{ color: '#065F46' }}>{fmt3(c.net_weight)}</td>
-                    <td className="px-3 py-2 text-right text-sm" style={{ color: '#333' }}>{fmt3(c.gross_weight)}</td>
+                    <td className="px-3 py-2 text-right text-sm">{fmt3(c.gross_weight)}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.status === 'No Pátio' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
                         {c.status || '—'}
@@ -344,11 +344,11 @@ export default function EstoqueCliente() {
       </div>
 
       {/* Tanks Table */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+      <div className="bg-card rounded-xl border border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <Cylinder className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#1A1A2E' }}>Tankagem</h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{filteredTanks.length}</span>
+          <h3 className="text-sm font-semibold">Tankagem</h3>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredTanks.length}</span>
         </div>
         {filteredTanks.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Nenhuma tanka encontrada.</div>
@@ -371,10 +371,10 @@ export default function EstoqueCliente() {
                   const capacity = t.capacity || 26000;
                   const pct = Math.min(100, Math.round((volume / capacity) * 100));
                   return (
-                    <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                      <td className="px-3 py-2 text-sm font-bold" style={{ color: '#1A1A2E' }}>{t.name || '—'}</td>
+                    <tr key={t.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-3 py-2 text-sm font-bold">{t.name || '—'}</td>
                       {!effectiveClient && <td className="px-3 py-2 text-sm" style={{ color: '#6B7280' }}>{t.client || '—'}</td>}
-                      <td className="px-3 py-2 text-sm font-medium" style={{ color: '#333' }}>{t.computed_products.join(', ') || '—'}</td>
+                      <td className="px-3 py-2 text-sm font-medium">{t.computed_products.join(', ') || '—'}</td>
                       <td className="px-3 py-2 text-sm" style={{ color: '#9CA3AF' }}>{t.computed_lot || '—'}</td>
                       <td className="px-3 py-2 text-right text-sm font-bold" style={{ color: '#2575D1' }}>{fmt(volume)}</td>
                       <td className="px-3 py-2">

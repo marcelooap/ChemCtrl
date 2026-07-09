@@ -37,24 +37,24 @@ const fmtDuration = (ms) => {
 
 function KPICard({ title, value, subtitle, icon: Icon, color, footer }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
+    <div className="bg-card rounded-xl border border-border p-5 flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: color }}>
           <Icon className="w-4 h-4 text-white" />
         </div>
       </div>
-      <p className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>{value}</p>
+      <p className="text-2xl font-bold">{value}</p>
       {subtitle && <p className="text-xs mt-1 text-gray-500">{subtitle}</p>}
-      {footer && <p className="text-xs mt-2 pt-2 border-t border-gray-100" style={{ color }}>{footer}</p>}
+      {footer && <p className="text-xs mt-2 pt-2 border-t border-border" style={{ color }}>{footer}</p>}
     </div>
   );
 }
 
 function ChartCard({ title, children, className }) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className || ''}`}>
-      <h3 className="text-sm font-semibold mb-4" style={{ color: '#1A1A2E' }}>{title}</h3>
+    <div className={`bg-card rounded-xl border border-border p-5 ${className || ''}`}>
+      <h3 className="text-sm font-semibold mb-4">{title}</h3>
       {children}
     </div>
   );
@@ -168,12 +168,12 @@ export default function Dashboard() {
       .slice(0, 5);
   }, [productions]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>Dashboard</h1>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Indicadores de Produção · {now.format('DD [de] MMMM [de] YYYY')}</p>
       </div>
 
@@ -187,14 +187,14 @@ export default function Dashboard() {
           color={COLORS.blue}
           footer={`Total geral: ${fmt(metrics.totalVolumeAll)} L`}
         />
-        <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col">
+        <div className="bg-card rounded-xl border border-border p-5 flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Receita Gerada no Mês</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setHideRevenue(h => !h)}
-                className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 cursor-pointer"
+                className="w-9 h-9 rounded-lg flex items-center justify-center bg-muted hover:bg-gray-200 text-gray-600 hover:text-gray-800 cursor-pointer"
                 title={hideRevenue ? 'Mostrar receita' : 'Ocultar receita'}
               >
                 {hideRevenue ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -204,9 +204,9 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <p className="text-2xl font-bold tracking-wider" style={{ color: '#1A1A2E' }}>{hideRevenue ? '••••••' : fmtMoney(metrics.revenueMonth)}</p>
+          <p className="text-2xl font-bold tracking-wider">{hideRevenue ? '••••••' : fmtMoney(metrics.revenueMonth)}</p>
           <p className="text-xs mt-1 text-gray-500">{hideRevenue ? 'valor oculto' : 'receita realizada'}</p>
-          <p className="text-xs mt-2 pt-2 border-t border-gray-100" style={{ color: COLORS.green }}>{hideRevenue ? '••••••' : `Total geral: ${fmtMoney(metrics.revenueAll)}`}</p>
+          <p className="text-xs mt-2 pt-2 border-t border-border" style={{ color: COLORS.green }}>{hideRevenue ? '••••••' : `Total geral: ${fmtMoney(metrics.revenueAll)}`}</p>
         </div>
         <KPICard
           title="Produções Ativas"

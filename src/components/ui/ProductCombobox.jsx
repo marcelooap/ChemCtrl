@@ -62,7 +62,7 @@ export default function ProductCombobox({ value, onChange, options, placeholder 
           <div className="max-h-64 overflow-y-auto p-1">
             {showCreateOption && (
               <div
-                className="px-3 py-1.5 text-sm rounded cursor-pointer hover:bg-accent hover:text-accent-foreground border-b border-gray-100 mb-1 font-medium"
+                className="px-3 py-1.5 text-sm rounded cursor-pointer hover:bg-accent hover:text-accent-foreground border-b border-border mb-1 font-medium"
                 style={{ color: '#2575D1' }}
                 onMouseDown={handleCreate}
               >

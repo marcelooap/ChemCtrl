@@ -44,6 +44,41 @@
     --sidebar-border: 230 20% 20%;
     --sidebar-ring: 212 70% 48%;
   }
+
+  .dark {
+    --background: 230 25% 8%;
+    --foreground: 220 14% 96%;
+    --card: 230 22% 12%;
+    --card-foreground: 220 14% 96%;
+    --popover: 230 22% 12%;
+    --popover-foreground: 220 14% 96%;
+    --primary: 212 70% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 20% 16%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 230 20% 16%;
+    --muted-foreground: 215 14% 65%;
+    --accent: 230 20% 18%;
+    --accent-foreground: 220 14% 96%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 20% 20%;
+    --input: 230 20% 20%;
+    --ring: 212 70% 48%;
+    --chart-1: 212 70% 55%;
+    --chart-2: 38 92% 55%;
+    --chart-3: 262 65% 65%;
+    --chart-4: 173 58% 45%;
+    --chart-5: 27 87% 60%;
+    --sidebar-background: 230 25% 12%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 212 70% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 20% 18%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 230 20% 20%;
+    --sidebar-ring: 212 70% 48%;
+  }
 }
 
 @layer base {
@@ -51,7 +86,10 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-body transition-colors duration-200;
+  }
+  html {
+    @apply transition-colors duration-200;
   }
 }
 
@@ -60,6 +98,8 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(215 14% 75%); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(215 14% 60%); }
+.dark ::-webkit-scrollbar-thumb { background: hsl(230 20% 30%); }
+.dark ::-webkit-scrollbar-thumb:hover { background: hsl(230 20% 40%); }
 
 /* Table styles */
 .chemctrl-table th {
@@ -70,7 +110,7 @@
 }
 table thead tr,
 table thead th {
-  background-color: #e2e8f0 !important;
+  background-color: hsl(var(--muted)) !important;
 }
 
 /* Button click animation */
@@ -83,10 +123,10 @@ button:active:not(:disabled), [role="button"]:active {
 
 /* Table row borders - stronger dividers */
 .chemctrl-table tbody tr {
-  border-bottom: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
 }
 .chemctrl-table thead tr {
-  border-bottom: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
 }
 
 /* Table row hover - light gray highlight on all tables */
@@ -96,5 +136,5 @@ table tbody tr {
 }
 .chemctrl-table tbody tr:hover,
 table tbody tr:hover {
-  background-color: hsl(220 14% 93%) !important;
+  background-color: hsl(var(--accent) / 0.5) !important;
 }

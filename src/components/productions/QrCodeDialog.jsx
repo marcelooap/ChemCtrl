@@ -58,10 +58,10 @@ export default function QrCodeDialog({ open, onOpenChange, token, lotLabel }) {
           {lotLabel && (
             <p className="text-xs text-muted-foreground text-center font-medium">{lotLabel}</p>
           )}
-          <div ref={wrapperRef} className="p-4 bg-white border-2 border-gray-200 rounded-xl">
+          <div ref={wrapperRef} className="p-4 bg-card border-2 border-border rounded-xl">
             <QRCodeSVG value={publicUrl} size={200} level="M" />
           </div>
-          <div className="w-full bg-gray-50 rounded-lg p-2.5 text-[10px] font-mono break-all text-gray-500 max-h-16 overflow-y-auto">
+          <div className="w-full bg-muted/50 rounded-lg p-2.5 text-[10px] font-mono break-all text-gray-500 max-h-16 overflow-y-auto">
             {publicUrl}
           </div>
           <div className="flex gap-2 w-full">

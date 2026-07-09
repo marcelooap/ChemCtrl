@@ -188,7 +188,7 @@ export default function Estoque() {
       {/* Fixed Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#1A1A2E' }}>⚗ Controle de Estoque</h1>
+          <h1 className="text-2xl font-bold">⚗ Controle de Estoque</h1>
           <p className="text-sm text-muted-foreground">Matérias primas · {items.length} item(s)</p>
         </div>
         <div className="flex gap-2">
@@ -209,8 +209,8 @@ export default function Estoque() {
       </div>
 
       {/* Card: fixed search, scrollable table, fixed footer */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por código, nome, cliente ou lote..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -235,7 +235,7 @@ export default function Estoque() {
         {/* Scrollable Table */}
         <div className="flex-1 overflow-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div>
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full" style={{ background: '#F9FAFB' }}>
               <thead className="sticky top-0 z-10">
@@ -260,14 +260,14 @@ export default function Estoque() {
                     <tr key={item.id} style={{ opacity: zeroStock ? 0.45 : 1, borderBottom: '1px solid #E5E7EB', background: '#FFFFFF' }}>
                        <td className="px-4 py-2.5 text-sm font-medium" style={{ color: '#3B82F6' }}>{item.entry_id || `#${idx + 1}`}</td>
                        <td className="px-4 py-2.5 font-mono text-sm" style={{ color: '#6B7280' }}>{item.mp_code}</td>
-                       <td className="px-4 py-2.5 font-medium text-sm" style={{ color: '#333' }}>{item.mp_name}</td>
+                       <td className="px-4 py-2.5 font-medium text-sm">{item.mp_name}</td>
                        <td className="px-4 py-2.5 text-sm" style={{ color: '#9CA3AF' }}>{item.client || '—'}</td>
                        <td className="px-4 py-2.5 font-mono text-sm" style={{ color: '#6B7280' }}>{item.lot || '—'}</td>
                        <td className="px-4 py-2.5 text-right text-sm">
-                         <span className="font-medium" style={{ color: '#333' }}>{fmt(item.current_stock)}</span>{' '}
-                         <span className="font-medium" style={{ color: '#333' }}>{item.unit}</span>
+                         <span className="font-medium">{fmt(item.current_stock)}</span>{' '}
+                         <span className="font-medium">{item.unit}</span>
                        </td>
-                       <td className="px-4 py-2.5 text-right text-sm" style={{ color: '#333' }}>{(item.unit_price || 0).toFixed(4)}</td>
+                       <td className="px-4 py-2.5 text-right text-sm">{(item.unit_price || 0).toFixed(4)}</td>
                        <td className="px-4 py-2.5 text-right text-sm font-semibold" style={{ color: '#065F46' }}>{fmtMoney((item.current_stock || 0) * (item.unit_price || 0))}</td>
                        <td className="px-4 py-2.5 text-center">
                          {status === null ? (
@@ -280,9 +280,9 @@ export default function Estoque() {
                        </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">
-                           <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-gray-100"><Eye className="w-4 h-4 text-gray-400" /></button>
-                           {!isReadOnly && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-gray-100"><Pencil className="w-4 h-4 text-gray-400" /></button>}
-                           {!isReadOnly && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-gray-100"><Trash2 className="w-4 h-4 text-gray-400" /></button>}
+                           <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-muted"><Eye className="w-4 h-4 text-gray-400" /></button>
+                           {!isReadOnly && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-muted"><Pencil className="w-4 h-4 text-gray-400" /></button>}
+                           {!isReadOnly && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-muted"><Trash2 className="w-4 h-4 text-gray-400" /></button>}
                          </div>
                        </td>
                      </tr>
@@ -294,7 +294,7 @@ export default function Estoque() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>Itens exibidos: {filtered.length}</span>
           <span>Qtd. total em estoque: <strong>{fmt(totalQty)}</strong> (und. mistas)</span>
           <span>Qtd. de Embalagens: <strong>{fmt(totalPackages)}</strong></span>
@@ -354,7 +354,7 @@ export default function Estoque() {
             {form.density > 0 && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Densidade (g/mL)</label>
-                <Input value={`${form.density} g/mL`} readOnly className="bg-gray-50 text-blue-700 font-semibold" />
+                <Input value={`${form.density} g/mL`} readOnly className="bg-muted/50 text-blue-700 font-semibold" />
               </div>
             )}
             <div className="border-t pt-3 mt-1">
@@ -380,7 +380,7 @@ export default function Estoque() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Qtd. Embalagens</label>
-                  <Input value={calcPackagingQty(stockForPackaging(), form.packaging_capacity)} readOnly className="bg-gray-50 font-semibold" />
+                  <Input value={calcPackagingQty(stockForPackaging(), form.packaging_capacity)} readOnly className="bg-muted/50 font-semibold" />
                 </div>
               </div>
             </div>
