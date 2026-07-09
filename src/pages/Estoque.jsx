@@ -85,8 +85,15 @@ export default function Estoque() {
     return matchesSearch && matchesFilter && matchesClient;
   });
 
+  const calcPackagingQty = (stock, capacity) => {
+    const s = parseFloat(stock) || 0;
+    const c = parseFloat(capacity) || 0;
+    return c > 0 ? Math.round((s / c) * 100) / 100 : 0;
+  };
+
   const totalQty = filtered.reduce((s, i) => s + (i.current_stock || 0), 0);
   const totalCost = filtered.reduce((s, i) => s + (i.current_stock || 0) * (i.unit_price || 0), 0);
+  const totalPackages = filtered.reduce((s, i) => s + calcPackagingQty(i.current_stock, i.packaging_capacity), 0);
 
   const openNew = () => { setEditing(null); setForm({ ...emptyItem }); setShowForm(true); };
   const openEdit = (item) => { setEditing(item); setForm({ ...item, tank_entries: item.tank_entries || (item.tank_name ? [{ tank_name: item.tank_name, volume: item.tank_volume, mass: item.tank_mass }] : []) }); setShowForm(true); };
@@ -99,12 +106,6 @@ export default function Estoque() {
   // Ao editar, o cálculo de qtd. de embalagens usa o saldo atual;
   // ao criar, usa o estoque inicial (que também é o saldo atual no momento).
   const stockForPackaging = () => editing ? (parseFloat(form.current_stock) || 0) : (parseFloat(form.initial_stock) || 0);
-
-  const calcPackagingQty = (stock, capacity) => {
-    const s = parseFloat(stock) || 0;
-    const c = parseFloat(capacity) || 0;
-    return c > 0 ? Math.round((s / c) * 100) / 100 : 0;
-  };
 
   const save = async () => {
     const initialStock = parseFloat(form.initial_stock) || 0;
@@ -296,6 +297,7 @@ export default function Estoque() {
         <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6 text-xs text-muted-foreground">
           <span>Itens exibidos: {filtered.length}</span>
           <span>Qtd. total em estoque: <strong>{fmt(totalQty)}</strong> (und. mistas)</span>
+          <span>Qtd. de Embalagens: <strong>{fmt(totalPackages)}</strong></span>
           <span>Custo total MP: <strong style={{ color: '#16a34a' }}>{fmtMoney(totalCost)}</strong></span>
         </div>
       </div>

@@ -2,7 +2,8 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 2000;
+const TOAST_DURATION = 1000;
+const TOAST_REMOVE_DELAY = 500;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -19,6 +20,15 @@ function genId() {
 }
 
 const toastTimeouts = new Map();
+const toastDismissTimeouts = new Map();
+
+const clearDismissTimeout = (toastId) => {
+  const timeout = toastDismissTimeouts.get(toastId);
+  if (timeout) {
+    clearTimeout(timeout);
+    toastDismissTimeouts.delete(toastId);
+  }
+};
 
 const addToRemoveQueue = (toastId) => {
   if (toastTimeouts.has(toastId)) {
@@ -110,7 +120,12 @@ function dispatch(action) {
   });
 }
 
-function toast({ ...props }) {
+function dismissToast(toastId) {
+  if (toastId) clearDismissTimeout(toastId);
+  dispatch({ type: actionTypes.DISMISS_TOAST, toastId });
+}
+
+function toast({ duration = TOAST_DURATION, ...props }) {
   const id = genId();
   dispatch({
     type: actionTypes.ADD_TOAST,
@@ -120,8 +135,12 @@ function toast({ ...props }) {
       open: true,
     },
   });
-  const dismiss = () => dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
+  const dismiss = () => dismissToast(id);
   const update = (props) => dispatch({ type: actionTypes.UPDATE_TOAST, toast: { ...props, id } });
+  if (duration > 0) {
+    const timeout = setTimeout(() => dismiss(), duration);
+    toastDismissTimeouts.set(id, timeout);
+  }
   return { id, dismiss, update };
 }
 
@@ -141,7 +160,7 @@ function useToast() {
   return {
     ...state,
     toast,
-    dismiss: (toastId) => dispatch({ type: actionTypes.DISMISS_TOAST, toastId }),
+    dismiss: dismissToast,
   };
 }
 

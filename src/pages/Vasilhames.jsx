@@ -2,16 +2,18 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Eye, Pencil, Truck, FileText, Printer, Loader2, Plus, ArrowUpRight, History } from 'lucide-react';
+import { Search, Eye, Pencil, Truck, FileText, Printer, Loader2, Plus, ArrowUpRight, History, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { generateBoletaPDF, generateVasilhamesReportPDF } from '@/lib/pdfReports';
 import { printContainerLabel } from '@/lib/labelprint';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
+import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { brasiliaDate } from '@/lib/brasilTime';
 import AddTankDialog from '@/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@/components/vasilhames/HistoryDialog';
@@ -37,7 +39,7 @@ const findTransferForContainer = (container, transfers) => {
 };
 
 export default function Vasilhames() {
-  const { isReadOnly } = useOutletContext();
+  const { user, isReadOnly } = useOutletContext();
   const { data: containers, loading, reload: load } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
@@ -58,7 +60,10 @@ export default function Vasilhames() {
   const [savingDepart, setSavingDepart] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [sending, setSending] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const { toast } = useToast();
+
+  const canDelete = user?.nivel === 'administrador';
 
   const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
 
@@ -159,6 +164,18 @@ export default function Vasilhames() {
       toast({ title: 'Erro ao registrar saída', description: err.message, variant: 'destructive' });
     } finally {
       setSavingDepart(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await base44.entities.Container.delete(deleteTarget.id);
+      toast({ title: 'Vasilhame excluído' });
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      toast({ title: 'Erro ao excluir vasilhame', description: err.message, variant: 'destructive' });
     }
   };
 
@@ -267,6 +284,7 @@ export default function Vasilhames() {
                         }} className="p-1 rounded hover:bg-gray-100" title="Imprimir Etiqueta"><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-gray-100"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                        {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title="Excluir"><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
                         {!isReadOnly && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-gray-100"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
                       </div>
                     </td>
@@ -442,9 +460,14 @@ export default function Vasilhames() {
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-                <Input value={editing.type || ''} onChange={e => setEditing({ ...editing, type: e.target.value })} />
+                <Select value={editing.type || ''} onValueChange={v => setEditing({ ...editing, type: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {PACKAGING_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="col-span-2">
+              <div>
                 <label className="text-xs font-medium text-muted-foreground">Lote</label>
                 <Input value={editing.lot || ''} onChange={e => setEditing({ ...editing, lot: e.target.value })} placeholder="Lote do vasilhame" />
               </div>
@@ -514,6 +537,13 @@ export default function Vasilhames() {
         productions={productions}
         recipes={recipes}
       />
+
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}
+        title="Excluir Vasilhame"
+        message={`Tem certeza que deseja excluir o vasilhame ${deleteTarget?.container_number || ''}${deleteTarget?.barril_number ? ` / Barril ${deleteTarget.barril_number}` : ''}? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        confirmColor="#DC2626"
+        onConfirm={confirmDelete} />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createSupabaseEntities } from '@/api/supabaseClient';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
+import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 const supabase = createSupabaseEntities();
@@ -180,10 +181,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
                       <Select value={c.type} onValueChange={v => updateContainer(idx, 'type', v)}>
                         <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Contentor">Contentor</SelectItem>
-                          <SelectItem value="IBC – 1.000 L">IBC – 1.000 L</SelectItem>
-                          <SelectItem value="Tambor 200 L">Tambor 200 L</SelectItem>
-                          <SelectItem value="Tankagem">Tankagem</SelectItem>
+                          {PACKAGING_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>

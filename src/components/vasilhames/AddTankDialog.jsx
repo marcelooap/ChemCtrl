@@ -10,10 +10,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { brasiliaDate } from '@/lib/brasilTime';
 import ProductCombobox from '@/components/ui/ProductCombobox';
+import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 
 const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-
-const TANK_TYPES = ['Contentor', 'IBC – 1.000 L', 'Tambor 200 L', 'Tankagem'];
 
 const emptyForm = () => ({
   container_number: '',
@@ -161,7 +160,7 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
                 <Select value={form.type} onValueChange={v => set('type', v)}>
                   <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {TANK_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {PACKAGING_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

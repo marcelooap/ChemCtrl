@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 // eslint-disable-next-line
 import { uploadFileToSupabase } from '@/api/storage'; // storage module (split from supabaseClient)
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Pencil, FileText, Camera, Trash2, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,7 +22,9 @@ export default function COA() {
   const { isReadOnly } = useOutletContext();
   const parseResults = (r) => ({ ...r, results: parseArr(r.results) });
   const { data: results, loading, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500), [], parseResults);
+  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const [search, setSearch] = useState('');
+  const [clientFilter, setClientFilter] = useState('all');
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ analyst: '', observations: '', results: [] });
@@ -31,7 +34,19 @@ export default function COA() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const filtered = results.filter(r => { const q = search.toLowerCase(); return !q || [r.product, r.lot, r.op_number].some(v => (v || '').toLowerCase().includes(q)); });
+  const clientOptions = useMemo(() => {
+    const set = new Set();
+    (recipes || []).forEach(r => { if (r.client?.trim()) set.add(r.client.trim()); });
+    results.forEach(r => { if (r.client?.trim()) set.add(r.client.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [recipes, results]);
+
+  const filtered = results.filter(r => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || [r.product, r.lot, r.op_number].some(v => (v || '').toLowerCase().includes(q));
+    const matchClient = clientFilter === 'all' || (r.client || '') === clientFilter;
+    return matchSearch && matchClient;
+  });
 
   const openEdit = (r) => { setEditing(r); setEditForm({ analyst: r.analyst, observations: r.observations || '', results: parseArr(r.results), sample_photo_url: r.sample_photo_url || '' }); setShowEdit(true); };
 
@@ -106,8 +121,15 @@ export default function COA() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-100 shrink-0">
-          <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar por produto ou lote..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="p-4 border-b border-gray-100 shrink-0 flex items-center gap-3">
+          <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar por produto ou lote..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Clientes</SelectItem>
+              {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-gray-200 border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
@@ -123,7 +145,14 @@ export default function COA() {
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{r.op_number}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{r.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
-                    <td className="px-4 py-2.5 text-sm">{r.lot}</td>
+                    <td className="px-4 py-2.5 text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        {r.lot}
+                        {r.sample_photo_url && (
+                          <Camera className="w-3.5 h-3.5 text-muted-foreground" title="Foto da amostra registrada" />
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-sm">{r.date ? brasiliaDate(r.date) : '—'}</td>
                     <td className="px-4 py-2.5 text-sm">{r.analyst}</td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(r.status)}</td>

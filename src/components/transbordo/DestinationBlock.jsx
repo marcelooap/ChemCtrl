@@ -4,8 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FieldLabel from './FieldLabel';
-
-const PACKAGING_TYPES = ['Contentor', 'IBC – 1.000 L', 'Tambor 200 L', 'Tankagem'];
+import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 
 const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 const fmt0 = (n) => Math.round(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });

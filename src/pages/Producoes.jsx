@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { Search, Eye, Pencil, FileText, Ban, Loader2, QrCode } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -40,6 +41,7 @@ export default function Producoes() {
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const [search, setSearch] = useState('');
+  const [clientFilter, setClientFilter] = useState('todos');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showView, setShowView] = useState(false);
@@ -57,6 +59,13 @@ export default function Producoes() {
   const [qrLabel, setQrLabel] = useState('');
   const { toast } = useToast();
 
+  const clientOptions = useMemo(() => {
+    const set = new Set();
+    (recipes || []).forEach(r => { if (r.client?.trim()) set.add(r.client.trim()); });
+    productions.forEach(p => { if (p.client?.trim()) set.add(p.client.trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [recipes, productions]);
+
   const filtered = productions.filter(p => {
     const q = search.toLowerCase();
     const opContainersOf = (p) => containers.filter(c => c.op_number === p.op_number);
@@ -66,7 +75,8 @@ export default function Producoes() {
     const endDate = p.end_time ? moment(p.end_time) : null;
     const matchFrom = !dateFrom || (endDate && endDate.isSameOrAfter(moment(dateFrom), 'day'));
     const matchTo = !dateTo || (endDate && endDate.isSameOrBefore(moment(dateTo), 'day'));
-    return matchSearch && matchFrom && matchTo;
+    const matchesClient = clientFilter === 'todos' || (p.client || '') === clientFilter;
+    return matchSearch && matchFrom && matchTo && matchesClient;
   });
 
   const totalOPs = filtered.length;
@@ -200,6 +210,13 @@ export default function Producoes() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar por OP, produto, lote, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
           </div>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os clientes</SelectItem>
+              {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Data finaliz. de</span>
             <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-9 text-xs" />
