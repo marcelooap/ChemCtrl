@@ -8,8 +8,10 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { InternalAuthProvider } from '@/lib/InternalAuthContext';
 import ScrollToTop from './components/ScrollToTop';
-import PWAUpdatePrompt from '@/components/PWAUpdatePrompt';
 import RealtimeProvider from '@/components/RealtimeProvider';
+import { NotificationProvider } from '@/notifications/context/NotificationProvider';
+import { UpdateProvider } from '@/pwa/context/UpdateProvider';
+import { UpdateModal } from '@/pwa/components/UpdateModal';
 
 // Auth pages
 import Login from '@/pages/Login';
@@ -40,6 +42,7 @@ import Inventario from '@/pages/Inventario';
 import InventarioConferencia from '@/pages/InventarioConferencia';
 import Usuarios from '@/pages/Usuarios';
 import ConsultaPublica from '@/pages/ConsultaPublica';
+import HistoricoNotificacoes from '@/pages/HistoricoNotificacoes';
 
 const AuthenticatedApp = () => {
   return (
@@ -70,6 +73,7 @@ const AuthenticatedApp = () => {
           <Route path="/inventario" element={<Inventario />} />
           <Route path="/inventario/:id" element={<InventarioConferencia />} />
           <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/notificacoes" element={<HistoricoNotificacoes />} />
         </Route>
       </Route>
 
@@ -84,14 +88,18 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
-          <InternalAuthProvider>
-            <RealtimeProvider>
-            <AuthenticatedApp />
-          </RealtimeProvider>
-          </InternalAuthProvider>
+          <UpdateProvider>
+            <InternalAuthProvider>
+              <RealtimeProvider>
+                <NotificationProvider>
+                  <AuthenticatedApp />
+                </NotificationProvider>
+              </RealtimeProvider>
+            </InternalAuthProvider>
+            <UpdateModal />
+          </UpdateProvider>
         </Router>
         <Toaster />
-        <PWAUpdatePrompt />
       </QueryClientProvider>
     </AuthProvider>
   )

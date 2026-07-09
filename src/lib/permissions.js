@@ -5,9 +5,9 @@
 export function canAccessRoute(user, path) {
   if (!user) return false;
 
-  // Externo: somente Tela Clientes
+  // Externo: somente Tela Clientes e Notificações
   if (user.tipo === 'externo') {
-    return path === '/tela-clientes';
+    return path === '/tela-clientes' || path === '/notificacoes';
   }
 
   const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -21,11 +21,11 @@ export function canAccessRoute(user, path) {
   if (nivel === 'operacional' || nivel === 'operador') {
     return path === '/ordens' || path.startsWith('/producao/') ||
       path === '/inventario' || path.startsWith('/inventario/') ||
-      path === '/vasilhames' || path === '/estoque';
+      path === '/vasilhames' || path === '/estoque' || path === '/notificacoes';
   }
 
   if (nivel === 'visualizacao') {
-    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa'];
+    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa', '/notificacoes'];
     return allowed.includes(path);
   }
 

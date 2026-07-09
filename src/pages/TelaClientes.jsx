@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Eye, Building2, Package, Box as BoxIcon, Factory } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 
 
 export default function TelaClientes() {
   const { user } = useOutletContext();
+  const [searchParams] = useSearchParams();
+  const highlightProdId = searchParams.get('prod');
   const { data: allProductions, loading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: allStocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: allContainers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -102,6 +104,8 @@ export default function TelaClientes() {
           productions={inProgressProds}
           showBypass={false}
           showClient={!effectiveClient}
+          highlightProdId={highlightProdId}
+          maxRows={highlightProdId ? inProgressProds.length : 10}
         />
       </div>
 

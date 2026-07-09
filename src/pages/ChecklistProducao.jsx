@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { brasiliaDate, brasiliaDateTime } from '@/lib/brasilTime';
 import moment from 'moment';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { NotificationService } from '@/notifications/services/NotificationService';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -111,6 +112,13 @@ export default function ChecklistProducao() {
           updates.envase_start_time = now;
         }
         await base44.entities.Production.update(production.id, updates);
+        if (nextStatus === 'Qualidade') {
+          NotificationService.productionFinished({
+            id: production.id,
+            op_number: production.op_number,
+            client: production.client,
+          });
+        }
         navigate('/ordens');
       },
     });

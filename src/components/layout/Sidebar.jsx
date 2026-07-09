@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
-  Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft,
+  Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Bell,
   Users, ChevronDown,   ChevronRight, LogOut, Building2, Warehouse, ClipboardCheck, Lock, PanelLeftClose, PanelLeft
 } from 'lucide-react';
 import { canAccessRoute, getRoleLabel } from '@/lib/permissions';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { getInstalledVersion } from '@/pwa/version';
 
 const navItems = [
   { label: 'Home', icon: LayoutDashboard, path: '/' },
@@ -30,6 +31,7 @@ const navItems = [
   { label: 'Tankagem', icon: Cylinder, path: '/tankagem' },
   { label: 'Transbordo', icon: ArrowRightLeft, path: '/transbordo' },
   { label: 'Usuários', icon: Users, path: '/usuarios' },
+  { label: 'Notificações', icon: Bell, path: '/notificacoes' },
   { label: 'Tela Clientes', icon: Building2, path: '/tela-clientes' },
   { label: 'Estoque Cliente', icon: Warehouse, path: '/estoque-cliente' },
 ];
@@ -49,10 +51,11 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
   };
 
   const isExterno = user?.tipo === 'externo';
+  const installedVersion = getInstalledVersion();
 
-  // Externo: only Tela Clientes visible in sidebar
+  // Externo: Tela Clientes e Notificações visíveis na sidebar
   const visibleItems = isExterno
-    ? navItems.filter(i => i.path === '/tela-clientes')
+    ? navItems.filter(i => i.path === '/tela-clientes' || i.path === '/notificacoes')
     : navItems;
 
   const renderItem = (item) => {
@@ -179,7 +182,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
               <p className="text-white/40 text-[10px] truncate">{getRoleLabel(user)}</p>
             </div>
           )}
-          {!collapsed && <span className="text-white/30 text-[10px] shrink-0">Ver. 1.00.20</span>}
+          {!collapsed && <span className="text-white/30 text-[10px] shrink-0">Ver. {installedVersion}</span>}
         </div>
         {!collapsed && (
           <button onClick={logout}

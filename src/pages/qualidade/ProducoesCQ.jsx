@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProductionCard from '@/components/ProductionCard';
+import { NotificationService } from '@/notifications/services/NotificationService';
 import SignedImage from '@/components/SignedImage';
 import moment from 'moment';
 
@@ -174,6 +175,14 @@ export default function ProducoesCQ() {
         prodUpdates.envase_start_time = new Date().toISOString();
       }
       await base44.entities.Production.update(selectedProd.id, prodUpdates);
+
+      if (newProdStatus === 'Envase') {
+        NotificationService.cqReleased({
+          id: selectedProd.id,
+          op_number: selectedProd.op_number,
+          client: selectedProd.client,
+        });
+      }
 
       setShowAnalysis(false);
       load();

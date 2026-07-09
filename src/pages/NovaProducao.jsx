@@ -11,6 +11,7 @@ import moment from 'moment';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { generatePublicToken } from '@/lib/publicToken';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { NotificationService } from '@/notifications/services/NotificationService';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -274,7 +275,12 @@ export default function NovaProducao() {
       ),
     };
 
-      await base44.entities.Production.create(data);
+      const created = await base44.entities.Production.create(data);
+      NotificationService.productionCreated({
+        id: created?.id,
+        op_number: created?.op_number || data.op_number,
+        client: created?.client || data.client,
+      });
 
       // Update linked order status to "Em produção"
       if (form.order_id) {

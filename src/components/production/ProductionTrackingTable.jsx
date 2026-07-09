@@ -1,10 +1,18 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Zap, ArrowRight } from 'lucide-react';
 import { EtapaBadge, ProgressSegments } from './ProductionBadges';
 
 const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-export default function ProductionTrackingTable({ productions, onBypass, bypassing, showClient = true, showBypass = true, onViewAll, maxRows = 10 }) {
+export default function ProductionTrackingTable({ productions, onBypass, bypassing, showClient = true, showBypass = true, onViewAll, maxRows = 10, highlightProdId = null }) {
+  const highlightRef = useRef(null);
+
+  useEffect(() => {
+    if (highlightProdId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightProdId, productions]);
+
   if (!productions || productions.length === 0) {
     return (
       <div className="px-5 py-8 text-center text-sm text-muted-foreground">
@@ -31,7 +39,12 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
           </thead>
           <tbody>
             {productions.slice(0, maxRows).map(p => (
-              <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50" style={{ height: '48px' }}>
+              <tr
+                key={p.id}
+                ref={highlightProdId === p.id ? highlightRef : undefined}
+                className={`border-b border-gray-100 hover:bg-gray-50/50 ${highlightProdId === p.id ? 'bg-blue-50 ring-2 ring-inset ring-[#2575D1]' : ''}`}
+                style={{ height: '48px' }}
+              >
                 <td className="px-5 py-2 font-bold text-sm font-mono" style={{ color: '#2E5AAC' }}>{p.op_number}</td>
                 <td className="px-5 py-2 text-sm" style={{ color: '#333' }}>{p.product}</td>
                 {showClient && <td className="px-5 py-2 text-sm" style={{ color: '#9CA3AF' }}>{p.client}</td>}

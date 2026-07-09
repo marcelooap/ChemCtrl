@@ -8,6 +8,7 @@ import { createSupabaseEntities } from '@/api/supabaseClient';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { NotificationService } from '@/notifications/services/NotificationService';
 
 const supabase = createSupabaseEntities();
 
@@ -100,11 +101,17 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         nextRegId++;
       }
       
-      await supabase.Production.update(production.id, { 
-        status: 'Finalizado', 
-        end_time: new Date().toISOString(), 
-        packaging_type: containers[0]?.type, 
-        operator: operatorName 
+      await supabase.Production.update(production.id, {
+        status: 'Finalizado',
+        end_time: new Date().toISOString(),
+        packaging_type: containers[0]?.type,
+        operator: operatorName
+      });
+
+      NotificationService.fillingFinished({
+        id: production.id,
+        op_number: production.op_number,
+        client: production.client,
       });
 
       onSave?.();

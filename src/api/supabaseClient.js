@@ -39,6 +39,8 @@ const entityTableMap = {
   Inventory: 'inventories',
   StockMovement: 'stock_movements',
   LabEquipment: 'lab_equipments',
+  Notification: 'notifications',
+  NotificationRead: 'notification_reads',
 };
 export { entityTableMap };
 
