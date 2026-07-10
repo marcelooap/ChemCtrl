@@ -1,11 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap, ArrowRight } from 'lucide-react';
+import { Zap, ArrowRight, Eye } from 'lucide-react';
 import { fmtVolume } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
 import { EtapaBadge, ProgressSegments } from './ProductionBadges';
 
-export default function ProductionTrackingTable({ productions, onBypass, bypassing, showClient = true, showBypass = true, onViewAll, maxRows = 10, highlightProdId = null }) {
+export default function ProductionTrackingTable({ productions, onBypass, bypassing, showClient = true, showBypass = true, onViewAll, onView, maxRows = 10, highlightProdId = null }) {
   const { t, i18n } = useTranslation();
   const highlightRef = useRef(null);
 
@@ -53,7 +53,20 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
                 <td className="px-5 py-2 text-right font-bold text-sm text-foreground">{fmtVolume(p.volume || 0, 'L', i18n.language)}</td>
                 <td className="px-5 py-2 text-sm text-foreground">{translatePackagingType(p.packaging_type)}</td>
                 <td className="px-5 py-2"><EtapaBadge status={p.status} /></td>
-                <td className="px-5 py-2"><ProgressSegments status={p.status} /></td>
+                <td className="px-5 py-2">
+                  <div className="flex items-center gap-2">
+                    <ProgressSegments status={p.status} />
+                    {onView && (
+                      <button
+                        onClick={() => onView(p)}
+                        className="p-1 rounded hover:bg-accent shrink-0"
+                        title={t('clients.screen.view')}
+                      >
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                      </button>
+                    )}
+                  </div>
+                </td>
                 {showBypass && (
                   <td className="px-5 py-2 text-center">
                     <button

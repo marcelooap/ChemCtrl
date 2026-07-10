@@ -67,6 +67,14 @@ export function getUserClient(user) {
   return null;
 }
 
+/** Comparação segura de cliente (case-insensitive, ignora espaços). */
+export function matchesClient(item, client) {
+  if (!client) return true;
+  const itemClient = (item?.client || '').trim().toLowerCase();
+  const target = (client || '').trim().toLowerCase();
+  return Boolean(itemClient && target && itemClient === target);
+}
+
 export function getDefaultRoute(user) {
   if (!user) return '/login';
   if (user.tipo === 'externo') return '/tela-clientes';

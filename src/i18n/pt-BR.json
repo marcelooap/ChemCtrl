@@ -2420,7 +2420,21 @@
       "unitShort": "Un.",
       "view": "Ver",
       "packagingNumber": "N° Embalagem",
-      "massKg": "Massa (kg)"
+      "massKg": "Massa (kg)",
+      "viewStock": "Visualizar Estoque",
+      "viewContainers": "Visualizar Vasilhames",
+      "kpiDistinctMps": "MPs distintas",
+      "kpiTotalLots": "Total de lotes",
+      "kpiTotalStored": "Total armazenado",
+      "kpiTotalPackaging": "Total embalagens",
+      "kpiLastUpdate": "Última atualização",
+      "kpiTotalContainers": "Total embalagens",
+      "kpiDistinctProducts": "Produtos distintos",
+      "kpiTotalVolume": "Volume total",
+      "kpiIbcCount": "IBCs",
+      "kpiContentorCount": "Contentores",
+      "kpiCanisterCount": "Bombonas",
+      "kpiDrumCount": "Tambores"
     },
     "stock": {
       "title": "Estoque Cliente",

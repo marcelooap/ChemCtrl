@@ -3,16 +3,38 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Eye, Package, Box as BoxIcon, Factory } from 'lucide-react';
+import {
+  Eye, Package, Box as BoxIcon, Factory, Layers, Scale, Boxes, Clock,
+  Cylinder, Container, FlaskConical, Drum,
+} from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
+import ProductionViewDialog from '@/components/production/ProductionViewDialog';
 import RawMaterialViewDialog from '@/components/estoque/RawMaterialViewDialog';
 import ContainerViewDialog from '@/components/vasilhames/ContainerViewDialog';
-import { canUseClientFilter, getUserClient } from '@/lib/permissions';
+import { canUseClientFilter, getUserClient, matchesClient } from '@/lib/permissions';
+import { summarizePatioContainers } from '@/lib/containerUtils';
+import { calcPackagingQty } from '@/lib/stockUtils';
 import moment from 'moment';
-import { fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
+import { fmtNumber, fmtVolume, fmtMass, fmtDateTime } from '@/i18n/formatters';
 import { translateStockExpiryStatus } from '@/i18n/domainMaps';
+
+function MiniKpi({ label, value, icon: Icon, color, bg }) {
+  return (
+    <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: bg }}>
+        <Icon className="w-5 h-5" style={{ color }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold text-gray-800 leading-none">{value}</p>
+        <p className="text-xs text-gray-500 mt-1 truncate">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function TelaClientes() {
   const { t, i18n } = useTranslation();
@@ -25,6 +47,10 @@ export default function TelaClientes() {
   const [selectedClient, setSelectedClient] = useState('all');
   const [searchMP, setSearchMP] = useState('');
   const [searchContainer, setSearchContainer] = useState('');
+  const [showStockDialog, setShowStockDialog] = useState(false);
+  const [showContainersDialog, setShowContainersDialog] = useState(false);
+  const [viewingProd, setViewingProd] = useState(null);
+  const [viewContainers, setViewContainers] = useState([]);
   const [viewingMP, setViewingMP] = useState(null);
   const [viewingContainer, setViewingContainer] = useState(null);
 
@@ -40,9 +66,18 @@ export default function TelaClientes() {
     return Array.from(allClients).sort((a, b) => a.localeCompare(b, i18n.language));
   }, [allProductions, allStocks, allContainers, i18n.language]);
 
-  const productions = useMemo(() => effectiveClient ? allProductions.filter(p => p.client === effectiveClient) : allProductions, [allProductions, effectiveClient]);
-  const stocks = useMemo(() => effectiveClient ? allStocks.filter(s => s.client === effectiveClient) : allStocks, [allStocks, effectiveClient]);
-  const containers = useMemo(() => effectiveClient ? allContainers.filter(c => c.client === effectiveClient) : allContainers, [allContainers, effectiveClient]);
+  const productions = useMemo(
+    () => (effectiveClient ? allProductions.filter((p) => matchesClient(p, effectiveClient)) : allProductions),
+    [allProductions, effectiveClient],
+  );
+  const stocks = useMemo(
+    () => (effectiveClient ? allStocks.filter((s) => matchesClient(s, effectiveClient)) : allStocks),
+    [allStocks, effectiveClient],
+  );
+  const containers = useMemo(
+    () => (effectiveClient ? allContainers.filter((c) => matchesClient(c, effectiveClient)) : allContainers),
+    [allContainers, effectiveClient],
+  );
 
   const inProgressProds = useMemo(() =>
     productions.filter(p => !['Finalizado', 'Cancelado'].includes(p.status)),
@@ -54,11 +89,37 @@ export default function TelaClientes() {
     [containers]
   );
 
+  const stocksWithBalance = useMemo(() =>
+    stocks.filter(s => (s.current_stock || 0) > 0),
+    [stocks]
+  );
+
+  const stockKpis = useMemo(() => {
+    const distinctMps = new Set(stocksWithBalance.map(s => s.mp_code).filter(Boolean)).size;
+    const totalStored = stocksWithBalance.reduce((s, i) => s + (i.current_stock || 0), 0);
+    const totalPackaging = stocksWithBalance.reduce((s, i) => s + calcPackagingQty(i.current_stock, i.packaging_capacity), 0);
+    const lastUpdate = stocksWithBalance.reduce((max, i) => {
+      if (!i.updated_date) return max;
+      const d = new Date(i.updated_date).getTime();
+      return d > max ? d : max;
+    }, 0);
+    return {
+      distinctMps,
+      totalLots: stocksWithBalance.length,
+      totalStored,
+      totalPackaging,
+      lastUpdate: lastUpdate ? fmtDateTime(new Date(lastUpdate).toISOString(), undefined, i18n.language) : t('common.notAvailable'),
+    };
+  }, [stocksWithBalance, i18n.language, t]);
+
+  const containerKpis = useMemo(() => summarizePatioContainers(patiotContainers), [patiotContainers]);
+
   const filteredStocks = useMemo(() => {
     const q = searchMP.toLowerCase();
-    if (!q) return stocks;
-    return stocks.filter(s => [s.mp_name, s.mp_code, s.lot, s.client].some(v => (v || '').toLowerCase().includes(q)));
-  }, [stocks, searchMP]);
+    const base = stocksWithBalance;
+    if (!q) return base;
+    return base.filter(s => [s.mp_name, s.mp_code, s.lot, s.client].some(v => (v || '').toLowerCase().includes(q)));
+  }, [stocksWithBalance, searchMP]);
 
   const filteredContainers = useMemo(() => {
     const q = searchContainer.toLowerCase();
@@ -70,6 +131,15 @@ export default function TelaClientes() {
     if (!item.expiry_date) return null;
     if (moment(item.expiry_date).isBefore(moment())) return 'Vencido';
     return 'Válido';
+  };
+
+  const handleViewProd = (p) => {
+    setViewingProd(p);
+    setViewContainers(
+      allContainers.filter(
+        (c) => c.op_number === p.op_number && matchesClient(c, effectiveClient || p.client),
+      ),
+    );
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
@@ -110,115 +180,173 @@ export default function TelaClientes() {
           showClient={!effectiveClient}
           highlightProdId={highlightProdId}
           maxRows={highlightProdId ? inProgressProds.length : 10}
+          onView={handleViewProd}
         />
       </div>
 
-      <div className="bg-card rounded-xl border border-border mb-6">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Estoque KPI Card */}
+        <div className="bg-card rounded-xl border border-border h-full flex flex-col">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <Package className="w-4 h-4" style={{ color: '#2575D1' }} />
             <h3 className="text-sm font-semibold">{t('clients.screen.rawMaterialStock')}</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredStocks.length}</span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{stocksWithBalance.length}</span>
           </div>
-          <div className="relative w-40">
-            <Input placeholder={t('common.searchPlaceholder')} value={searchMP} onChange={e => setSearchMP(e.target.value)} className="h-7 text-xs" />
+          <div className="p-5 flex-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <MiniKpi label={t('clients.screen.kpiDistinctMps')} value={stockKpis.distinctMps} icon={Package} color="#2563EB" bg="#DBEAFE" />
+              <MiniKpi label={t('clients.screen.kpiTotalLots')} value={stockKpis.totalLots} icon={Layers} color="#7C3AED" bg="#EDE9FE" />
+              <MiniKpi label={t('clients.screen.kpiTotalStored')} value={fmt(stockKpis.totalStored)} icon={Scale} color="#059669" bg="#D1FAE5" />
+              <MiniKpi label={t('clients.screen.kpiTotalPackaging')} value={fmt(stockKpis.totalPackaging)} icon={Boxes} color="#D97706" bg="#FEF3C7" />
+              <MiniKpi label={t('clients.screen.kpiLastUpdate')} value={stockKpis.lastUpdate} icon={Clock} color="#6B7280" bg="#F3F4F6" />
+            </div>
+          </div>
+          <div className="px-5 py-4 border-t border-border">
+            <Button variant="outline" onClick={() => setShowStockDialog(true)} className="w-full">
+              {t('clients.screen.viewStock')}
+            </Button>
           </div>
         </div>
-        {filteredStocks.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noStock')}</div>
-        ) : (
-          <div className="overflow-x-auto max-h-80 overflow-y-auto">
-            <table className="w-full chemctrl-table">
-              <thead className="sticky top-0">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.id')}</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.mpCode')}</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.product')}</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.lot')}</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.initialBalance')}</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.currentBalance')}</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.unitShort')}</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold">{t('common.status')}</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.view')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStocks.map(item => {
-                  const status = getMPStatus(item);
-                  return (
-                    <tr key={item.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 text-sm font-medium text-primary">{item.entry_id || t('common.notAvailable')}</td>
-                      <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || t('common.notAvailable')}</td>
-                      <td className="px-3 py-2 text-sm font-medium text-foreground">{item.mp_name}</td>
-                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || t('common.notAvailable')}</td>
-                      <td className="px-3 py-2 text-right text-sm text-foreground">{fmt(item.initial_stock)}</td>
-                      <td className="px-3 py-2 text-right text-sm font-bold text-foreground">{fmt(item.current_stock)}</td>
-                      <td className="px-3 py-2 text-center text-sm font-bold text-foreground">{item.unit}</td>
-                      <td className="px-3 py-2 text-center">
-                        {status === null ? (
-                          <span className="text-sm text-muted-foreground">{t('common.notAvailable')}</span>
-                        ) : status === 'Vencido' ? (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{translateStockExpiryStatus(status)}</span>
-                        ) : (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{translateStockExpiryStatus(status)}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
-      <div className="bg-card rounded-xl border border-border">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        {/* Vasilhames KPI Card */}
+        <div className="bg-card rounded-xl border border-border h-full flex flex-col">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <BoxIcon className="w-4 h-4" style={{ color: '#2575D1' }} />
             <h3 className="text-sm font-semibold">{t('clients.screen.containersInYard')}</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredContainers.length}</span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{containerKpis.total}</span>
           </div>
-          <div className="relative w-40">
-            <Input placeholder={t('common.searchPlaceholder')} value={searchContainer} onChange={e => setSearchContainer(e.target.value)} className="h-7 text-xs" />
+          <div className="p-5 flex-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <MiniKpi label={t('clients.screen.kpiTotalContainers')} value={containerKpis.total} icon={BoxIcon} color="#2563EB" bg="#DBEAFE" />
+              <MiniKpi label={t('clients.screen.kpiDistinctProducts')} value={containerKpis.distinctProducts} icon={Package} color="#7C3AED" bg="#EDE9FE" />
+              <MiniKpi label={t('clients.screen.kpiTotalVolume')} value={fmtVolume(containerKpis.totalVolume, 'L', i18n.language)} icon={Cylinder} color="#059669" bg="#D1FAE5" />
+              <MiniKpi label={t('clients.screen.kpiIbcCount')} value={containerKpis.ibc} icon={Container} color="#D97706" bg="#FEF3C7" />
+              <MiniKpi label={t('clients.screen.kpiContentorCount')} value={containerKpis.contentor} icon={BoxIcon} color="#7C3AED" bg="#EDE9FE" />
+              <MiniKpi label={t('clients.screen.kpiCanisterCount')} value={containerKpis.canister} icon={FlaskConical} color="#DC2626" bg="#FEE2E2" />
+              <MiniKpi label={t('clients.screen.kpiDrumCount')} value={containerKpis.drum} icon={Drum} color="#0891B2" bg="#CFFAFE" />
+            </div>
+          </div>
+          <div className="px-5 py-4 border-t border-border">
+            <Button variant="outline" onClick={() => setShowContainersDialog(true)} className="w-full">
+              {t('clients.screen.viewContainers')}
+            </Button>
           </div>
         </div>
-        {filteredContainers.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noContainers')}</div>
-        ) : (
-          <div className="overflow-x-auto max-h-80 overflow-y-auto">
-            <table className="w-full chemctrl-table">
-              <thead className="sticky top-0">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.packagingNumber')}</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.product')}</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold">{t('production.packaging.volume')}</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.massKg')}</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.lot')}</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.view')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContainers.map(c => (
-                  <tr key={c.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || t('common.notAvailable')}</td>
-                    <td className="px-3 py-2 text-sm text-foreground">{c.product || t('common.notAvailable')}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmtVolume(c.volume, 'L', i18n.language)}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold text-green-600 dark:text-green-400">{fmtMass(c.net_weight, 'kg', i18n.language)}</td>
-                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || t('common.notAvailable')}</td>
-                    <td className="px-3 py-2 text-center">
-                      <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
+
+      <ProductionViewDialog
+        production={viewingProd}
+        containers={viewContainers}
+        stocks={stocks}
+        open={!!viewingProd}
+        onOpenChange={(open) => { if (!open) setViewingProd(null); }}
+        simplified
+      />
+
+      {/* Estoque Dialog */}
+      <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{t('clients.screen.rawMaterialStock')}</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-3">
+            <Input placeholder={t('common.searchPlaceholder')} value={searchMP} onChange={e => setSearchMP(e.target.value)} className="h-9 text-sm" />
+          </div>
+          {filteredStocks.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noStock')}</div>
+          ) : (
+            <div className="overflow-x-auto flex-1 overflow-y-auto max-h-[60vh]">
+              <table className="w-full chemctrl-table">
+                <thead className="sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.id')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.mpCode')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.product')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.lot')}</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.initialBalance')}</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.currentBalance')}</th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.unitShort')}</th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold">{t('common.status')}</th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.view')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStocks.map(item => {
+                    const status = getMPStatus(item);
+                    return (
+                      <tr key={item.id} className="border-b border-border hover:bg-accent/30">
+                        <td className="px-3 py-2 text-sm font-medium text-primary">{item.entry_id || t('common.notAvailable')}</td>
+                        <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || t('common.notAvailable')}</td>
+                        <td className="px-3 py-2 text-sm font-medium text-foreground">{item.mp_name}</td>
+                        <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || t('common.notAvailable')}</td>
+                        <td className="px-3 py-2 text-right text-sm text-foreground">{fmt(item.initial_stock)}</td>
+                        <td className="px-3 py-2 text-right text-sm font-bold text-foreground">{fmt(item.current_stock)}</td>
+                        <td className="px-3 py-2 text-center text-sm font-bold text-foreground">{item.unit}</td>
+                        <td className="px-3 py-2 text-center">
+                          {status === null ? (
+                            <span className="text-sm text-muted-foreground">{t('common.notAvailable')}</span>
+                          ) : status === 'Vencido' ? (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{translateStockExpiryStatus(status)}</span>
+                          ) : (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{translateStockExpiryStatus(status)}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button onClick={() => setViewingMP(item)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Vasilhames Dialog */}
+      <Dialog open={showContainersDialog} onOpenChange={setShowContainersDialog}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{t('clients.screen.containersInYard')}</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-3">
+            <Input placeholder={t('common.searchPlaceholder')} value={searchContainer} onChange={e => setSearchContainer(e.target.value)} className="h-9 text-sm" />
+          </div>
+          {filteredContainers.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noContainers')}</div>
+          ) : (
+            <div className="overflow-x-auto flex-1 overflow-y-auto max-h-[60vh]">
+              <table className="w-full chemctrl-table">
+                <thead className="sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('clients.screen.packagingNumber')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.product')}</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold">{t('production.packaging.volume')}</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold">{t('clients.screen.massKg')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.lot')}</th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.view')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredContainers.map(c => (
+                    <tr key={c.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2 text-sm text-foreground">{c.product || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmtVolume(c.volume, 'L', i18n.language)}</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-green-600 dark:text-green-400">{fmtMass(c.net_weight, 'kg', i18n.language)}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button onClick={() => setViewingContainer(c)} className="p-1 rounded hover:bg-accent"><Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <RawMaterialViewDialog item={viewingMP} open={!!viewingMP} onOpenChange={(open) => { if (!open) setViewingMP(null); }} readOnly />
       <ContainerViewDialog container={viewingContainer} open={!!viewingContainer} onOpenChange={(open) => { if (!open) setViewingContainer(null); }} readOnly />

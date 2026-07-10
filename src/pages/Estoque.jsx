@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import moment from 'moment';
 import { fmtNumber, fmtCurrency, fmtMass } from '@/i18n/formatters';
+import { calcPackagingQty } from '@/lib/stockUtils';
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
 
@@ -87,12 +88,6 @@ export default function Estoque() {
     const matchesClient = clientFilter === 'todos' || (i.client || '') === clientFilter;
     return matchesSearch && matchesFilter && matchesClient;
   });
-
-  const calcPackagingQty = (stock, capacity) => {
-    const s = parseFloat(stock) || 0;
-    const c = parseFloat(capacity) || 0;
-    return c > 0 ? Math.round((s / c) * 100) / 100 : 0;
-  };
 
   const totalQty = filtered.reduce((s, i) => s + (i.current_stock || 0), 0);
   const totalCost = filtered.reduce((s, i) => s + (i.current_stock || 0) * (i.unit_price || 0), 0);
