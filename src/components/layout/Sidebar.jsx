@@ -6,7 +6,7 @@ import {
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Bell,
   Users, ChevronDown, ChevronRight, Building2, Warehouse, ClipboardCheck, Lock
 } from 'lucide-react';
-import { canAccessRoute } from '@/lib/permissions';
+import { canAccessRoute, canAccessNotificationsHistory, getUserClient } from '@/lib/permissions';
 import { SidebarFooter } from '@/components/user/SidebarFooter';
 import { cn } from '@/lib/utils';
 
@@ -61,12 +61,20 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
   const lockedTitle = t('sidebar.lockedTooltip');
 
   const visibleItems = isExterno
-    ? navItems.filter(i => i.path === '/tela-clientes' || i.path === '/notificacoes')
+    ? navItems.filter(i => i.path === '/tela-clientes')
     : navItems;
 
   const renderItem = (item) => {
+    if (item.path === '/notificacoes' && !canAccessNotificationsHistory(user)) {
+      return null;
+    }
+
     const accessible = canAccessRoute(user, item.path);
-    const label = t(item.labelKey);
+    let label = t(item.labelKey);
+    if (isExterno && item.path === '/tela-clientes') {
+      const clientName = getUserClient(user)?.trim();
+      if (clientName) label = clientName;
+    }
 
     if (!accessible) {
       return (

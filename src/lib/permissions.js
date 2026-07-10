@@ -5,11 +5,24 @@ import { ROLE_KEYS } from '@/i18n/domainMaps';
 // nivel_acesso: Administrador, Supervisor, Operacional, Visualização
 // tipo: interno, externo
 
+function normalizeNivel(user) {
+  return (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function canAccessNotificationsHistory(user) {
+  if (!user || user.tipo === 'externo') return false;
+  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+}
+
 export function canAccessRoute(user, path) {
   if (!user) return false;
 
+  if (path.startsWith('/notificacoes')) {
+    return canAccessNotificationsHistory(user);
+  }
+
   if (user.tipo === 'externo') {
-    return path === '/tela-clientes' || path === '/notificacoes';
+    return path === '/tela-clientes';
   }
 
   const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -23,11 +36,11 @@ export function canAccessRoute(user, path) {
   if (nivel === 'operacional' || nivel === 'operador') {
     return path === '/ordens' || path.startsWith('/producao/') ||
       path === '/inventario' || path.startsWith('/inventario/') ||
-      path === '/vasilhames' || path === '/estoque' || path === '/notificacoes';
+      path === '/vasilhames' || path === '/estoque';
   }
 
   if (nivel === 'visualizacao') {
-    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa', '/notificacoes'];
+    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa'];
     return allowed.includes(path);
   }
 
@@ -79,10 +92,6 @@ export function getNivelOptionsForTipo(tipo) {
     return ['Visualização'];
   }
   return ['Administrador', 'Supervisor', 'Operacional', 'Visualização'];
-}
-
-function normalizeNivel(user) {
-  return (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 /** Admin + Supervisor: anexar, substituir, visualizar, baixar FDS na tela de receitas */

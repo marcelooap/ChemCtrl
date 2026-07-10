@@ -10,23 +10,50 @@ import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { NotificationService } from '@/notifications/services/NotificationService';
+import { useToast } from '@/components/ui/use-toast';
 import { fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
 
 const supabase = createSupabaseEntities();
 
-const emptyContainer = () => ({ number: '', barril: '', type: 'Tambor 200 L', volume: '', tare: '', seals: '', sling: '', gps: '', min_test_date: '' });
+const applyTankagemDefaults = (c) => ({
+  ...c,
+  barril: c.barril || '-',
+  tare: c.tare !== '' && c.tare != null ? String(c.tare) : '0',
+  seals: c.seals || '-',
+  sling: c.sling || '-',
+  gps: c.gps || '-',
+});
+
+const newContainer = (preferredType, opVolume) => {
+  const type = PACKAGING_TYPES.includes(preferredType) ? preferredType : 'Tambor 200 L';
+  const c = {
+    number: '',
+    barril: '',
+    type,
+    volume: type === 'Tankagem' && opVolume ? String(opVolume) : '',
+    tare: '',
+    seals: '',
+    sling: '',
+    gps: '',
+    min_test_date: '',
+  };
+  return type === 'Tankagem' ? applyTankagemDefaults(c) : c;
+};
+
+const isTankagemType = (type) => type === 'Tankagem';
 
 export default function EnvaseDialog({ open, onOpenChange, production, onSave }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const [containers, setContainers] = useState([emptyContainer()]);
+  const [containers, setContainers] = useState([newContainer()]);
   const [saving, setSaving] = useState(false);
   const { user: internalUser } = useInternalAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
-      setContainers([emptyContainer()]);
+      setContainers([newContainer(production?.packaging_type, production?.volume)]);
     }
   }, [open, production]);
 
@@ -37,17 +64,12 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     const wasNotTankagem = next[idx].type !== 'Tankagem';
     next[idx] = { ...next[idx], [field]: value };
     if (field === 'type' && value === 'Tankagem' && wasNotTankagem) {
-      if (!next[idx].barril) next[idx].barril = '-';
-      if (!next[idx].tare) next[idx].tare = 0;
-      if (!next[idx].seals) next[idx].seals = '-';
-      if (!next[idx].sling) next[idx].sling = '-';
-      if (!next[idx].gps) next[idx].gps = '-';
-      if (!next[idx].min_test_date) next[idx].min_test_date = '';
+      next[idx] = applyTankagemDefaults(next[idx]);
     }
     setContainers(next);
   };
 
-  const addRow = () => setContainers(prev => [...prev, emptyContainer()]);
+  const addRow = () => setContainers(prev => [...prev, newContainer(production?.packaging_type, production?.volume)]);
   const removeRow = (idx) => setContainers(prev => prev.filter((_, i) => i !== idx));
 
   const calcNet = (c) => (parseFloat(c.volume) || 0) * density;
@@ -57,11 +79,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
   const opVolume = production?.volume || 0;
   const volumeExceeded = totalVolumeEntered > opVolume;
 
-  const allContainersValid = containers.every(c => {
-    const isTankagem = c.type === 'Tankagem';
-    if (isTankagem) return c.number.trim() && c.volume;
-    return c.number.trim() && c.type && c.volume && c.tare !== '' && c.seals.trim();
-  });
+  const isContainerValid = (c) => {
+    const hasVolume = (parseFloat(c.volume) || 0) > 0;
+    if (isTankagemType(c.type)) {
+      return c.number.trim() !== '' && hasVolume;
+    }
+    return c.number.trim() !== '' && c.type && hasVolume && c.tare !== '' && c.seals.trim() !== '';
+  };
+
+  const allContainersValid = containers.every(isContainerValid);
 
   const handleSave = async () => {
     if (volumeExceeded || !allContainersValid || totalVolumeEntered === 0) return;
@@ -75,30 +101,28 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
 
       for (const c of containers) {
         if (!c.volume) continue;
+        const payload = isTankagemType(c.type) ? applyTankagemDefaults(c) : c;
         await supabase.Container.create({
           production_id: production.id,
           op_number: production.op_number,
           product: production.product,
           client: production.client,
           lot: production.lot,
-          container_number: c.number,
-          barril_number: c.barril,
+          container_number: payload.number,
+          barril_number: payload.barril || null,
           registration_id: nextRegId,
-          type: c.type,
-          volume: parseFloat(c.volume) || 0,
-          tare: parseFloat(c.tare) || 0,
-          net_weight: calcNet(c),
-          gross_weight: calcGross(c),
-          seals: c.seals,
-          sling: c.sling,
-          gps: c.gps,
-          min_test_date: c.min_test_date || null,
+          type: payload.type,
+          volume: parseFloat(payload.volume) || 0,
+          tare: parseFloat(payload.tare) || 0,
+          net_weight: calcNet(payload),
+          gross_weight: calcGross(payload),
+          seals: payload.seals || null,
+          sling: payload.sling || null,
+          gps: payload.gps || null,
+          min_test_date: payload.min_test_date || null,
           operator: operatorName,
           status: 'No Pátio',
         });
-        if (c.type === 'Tankagem' && c.number) {
-          await zeroOutTankaStock(c.number);
-        }
         nextRegId++;
       }
 
@@ -108,6 +132,17 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         packaging_type: containers[0]?.type,
         operator: operatorName
       });
+
+      for (const c of containers) {
+        const payload = isTankagemType(c.type) ? applyTankagemDefaults(c) : c;
+        if (isTankagemType(payload.type) && payload.number) {
+          try {
+            await zeroOutTankaStock(payload.number);
+          } catch (stockError) {
+            console.warn('Erro ao zerar estoque da tanka:', stockError);
+          }
+        }
+      }
 
       NotificationService.fillingFinished({
         id: production.id,
@@ -119,6 +154,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
       onOpenChange(false);
     } catch (error) {
       console.error("Erro ao registrar envase:", error);
+      toast({ title: t('common.saveFailed'), description: error?.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
