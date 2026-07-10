@@ -255,7 +255,11 @@ create table if not exists recipes (
   revision text,
   revision_date date,
   validity_days numeric,
-  raw_materials jsonb
+  raw_materials jsonb,
+  fds_url text,
+  fds_filename text,
+  fds_uploaded_at timestamptz,
+  fds_uploaded_by text
 );
 alter table recipes enable row level security;
 drop policy if exists "allow_all_recipes" on recipes;

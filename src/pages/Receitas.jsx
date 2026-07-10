@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { Plus, Search, Eye, Pencil, Trash2, X, FileText, FlaskConical, Loader2 } from 'lucide-react';
@@ -10,12 +11,15 @@ import { useToast } from '@/components/ui/use-toast';
 import { generateRecipePDF } from '@/lib/pdfReports';
 import Combobox from '@/components/ui/combobox';
 import SimuladorReceita from '@/components/receitas/SimuladorReceita';
+import RecipeFdsSection, { RecipeFdsViewSection } from '@/components/receitas/RecipeFdsSection';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
+import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds } from '@/lib/permissions';
+import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES } from '@/api/storage';
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
 
-function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose }) {
+function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, canViewFds }) {
   const { t } = useTranslation();
   const cap = calcCapacidade(viewing);
   return (
@@ -69,6 +73,11 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose })
           </tr>
         </tbody>
       </table>
+      <RecipeFdsViewSection
+        fdsUrl={viewing.fds_url}
+        fdsFilename={viewing.fds_filename}
+        canView={canViewFds}
+      />
       <div className="flex justify-between mt-4">
         <Button variant="outline" onClick={() => generateRecipePDF(viewing)} className="gap-2">
           <FileText className="w-4 h-4" /> {t('buttons.generatePdf')}
@@ -82,6 +91,10 @@ const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density:
 
 export default function Receitas() {
   const { t } = useTranslation();
+  const { user } = useOutletContext();
+  const canManageFds = canManageRecipeFds(user);
+  const canRemoveFds = canRemoveRecipeFds(user);
+  const canViewFds = canViewRecipeFds(user);
   const parseRawMaterials = (r) => ({ ...r, raw_materials: Array.isArray(r.raw_materials) ? r.raw_materials : (typeof r.raw_materials === 'string' ? (() => { try { return JSON.parse(r.raw_materials); } catch { return []; } })() : []) });
   const { data: recipes, loading, reload: load } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), []);
@@ -157,6 +170,7 @@ export default function Receitas() {
   const [form, setForm] = useState(emptyRecipe);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [pendingFdsFile, setPendingFdsFile] = useState(null);
   const { toast } = useToast();
 
   const filtered = recipes.filter(r => {
@@ -164,8 +178,9 @@ export default function Receitas() {
     return !q || [r.product_name, r.client, r.code].some(v => (v || '').toLowerCase().includes(q));
   });
 
-  const openNew = () => { setEditing(null); setForm({ ...emptyRecipe, raw_materials: [{ ...emptyMP }] }); setShowForm(true); };
+  const openNew = () => { setEditing(null); setPendingFdsFile(null); setForm({ ...emptyRecipe, raw_materials: [{ ...emptyMP }] }); setShowForm(true); };
   const openEdit = (r) => {
+    setPendingFdsFile(null);
     const raw = r.raw_materials;
     const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
     setEditing(r);
@@ -197,19 +212,42 @@ export default function Receitas() {
   const totalPct = form.raw_materials.reduce((s, m) => s + (m.percentage || 0), 0);
   const totalKg = form.raw_materials.reduce((s, m) => s + (m.quantity_kg || 0), 0);
 
+  const handleFdsMetadataChange = (metadata) => {
+    setForm((prev) => ({ ...prev, ...metadata }));
+    if (editing) setEditing((prev) => ({ ...prev, ...metadata }));
+  };
+
   const save = async () => {
     if (!form.product_name) { toast({ title: t('recipes.messages.productRequired'), variant: 'destructive' }); return; }
     const codes = form.raw_materials.map(m => (m.mp_code || '').trim()).filter(Boolean);
     const dupCode = codes.find((c, i) => codes.indexOf(c) !== i);
     if (dupCode) { toast({ title: t('recipes.messages.duplicateMpCode', { code: dupCode }), description: t('recipes.messages.duplicateMpDesc'), variant: 'destructive' }); return; }
+    if (pendingFdsFile && !editing) {
+      const validation = await validatePdfFile(pendingFdsFile);
+      if (!validation.valid) {
+        toast({ title: t('recipes.fds.errors.title'), description: t(`recipes.fds.errors.${validation.error}`), variant: 'destructive' });
+        return;
+      }
+    }
     const mps = form.raw_materials.map(m => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }));
-    const data = { ...form, raw_materials: mps };
+    const { fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, ...recipeData } = form;
+    const data = { ...recipeData, raw_materials: mps };
     setSaving(true);
     try {
       if (editing) {
         await base44.entities.Recipe.update(editing.id, data);
       } else {
-        await base44.entities.Recipe.create(data);
+        const created = await base44.entities.Recipe.create(data);
+        if (pendingFdsFile && created?.id) {
+          const path = await uploadRecipeDocument(created.id, DOC_TYPES.SDS, pendingFdsFile);
+          await base44.entities.Recipe.update(created.id, {
+            fds_url: path,
+            fds_filename: pendingFdsFile.name,
+            fds_uploaded_at: new Date().toISOString(),
+            fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
+          });
+          setPendingFdsFile(null);
+        }
       }
       setShowForm(false);
       load();
@@ -224,10 +262,17 @@ export default function Receitas() {
   const remove = (r) => setDeleteTarget(r);
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    await base44.entities.Recipe.delete(deleteTarget.id);
-    setDeleteTarget(null);
-    load();
-    toast({ title: t('success.deleted') });
+    try {
+      if (deleteTarget.fds_url) {
+        await deleteRecipeDocument(deleteTarget.id, DOC_TYPES.SDS).catch(() => {});
+      }
+      await base44.entities.Recipe.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      load();
+      toast({ title: t('success.deleted') });
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    }
   };
 
   const avgPrice = recipes.length ? (recipes.reduce((s, r) => s + (r.price || 0), 0) / recipes.length) : 0;
@@ -368,6 +413,23 @@ export default function Receitas() {
                 </table>
               </div>
             </div>
+
+            {(canManageFds || (editing && form.fds_url && canViewFds)) && (
+              <RecipeFdsSection
+                recipeId={editing?.id || null}
+                fdsUrl={form.fds_url}
+                fdsFilename={form.fds_filename}
+                fdsUploadedAt={form.fds_uploaded_at}
+                canManage={canManageFds}
+                canRemove={canRemoveFds}
+                canView={canViewFds}
+                uploadedBy={user?.nome || user?.full_name || user?.id || ''}
+                onMetadataChange={handleFdsMetadataChange}
+                pendingFile={pendingFdsFile}
+                onPendingFileChange={setPendingFdsFile}
+                mode={editing ? 'edit' : 'create'}
+              />
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
@@ -382,7 +444,7 @@ export default function Receitas() {
       <Dialog open={showView} onOpenChange={setShowView}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>🧪 {viewing?.product_name}</DialogTitle></DialogHeader>
-          {viewing && <ViewRecipeBody viewing={viewing} calcCapacidade={calcCapacidade} generateRecipePDF={generateRecipePDF} onClose={() => setShowView(false)} />}
+          {viewing && <ViewRecipeBody viewing={viewing} calcCapacidade={calcCapacidade} generateRecipePDF={generateRecipePDF} onClose={() => setShowView(false)} canViewFds={canViewFds} />}
         </DialogContent>
       </Dialog>
 

@@ -1391,6 +1391,42 @@
       "duplicateMpCode": "Code MP dupliqué : {{code}}",
       "duplicateMpDesc": "Les matières premières avec le même code ne sont pas autorisées."
     },
+    "fds": {
+      "title": "Fiche de Données de Sécurité (FDS)",
+      "selectFile": "Sélectionner un fichier",
+      "noFileSelected": "Aucun fichier sélectionné",
+      "formatHint": "Format autorisé : PDF",
+      "sizeHint": "Taille maximale : 20 Mo",
+      "noneAttached": "Aucune FDS jointe.",
+      "attach": "Joindre FDS",
+      "view": "Visualiser",
+      "download": "Télécharger",
+      "replace": "Remplacer le fichier",
+      "remove": "Supprimer FDS",
+      "clearSelection": "Effacer la sélection",
+      "uploading": "Envoi en cours...",
+      "uploadedAt": "Envoyé le {{date}}",
+      "replaceConfirm": {
+        "title": "Remplacer FDS",
+        "message": "Voulez-vous remplacer la Fiche de Données de Sécurité actuelle ?\n\nLe document précédent sera remplacé définitivement."
+      },
+      "removeConfirm": {
+        "title": "Supprimer FDS",
+        "message": "Voulez-vous supprimer la Fiche de Données de Sécurité de cette recette ?\n\nCette action est irréversible."
+      },
+      "errors": {
+        "title": "Fichier invalide",
+        "invalidType": "Seuls les fichiers PDF sont autorisés.",
+        "invalidSize": "Le fichier dépasse la taille maximale de 20 Mo.",
+        "invalidContent": "Le fichier n'est pas un PDF valide.",
+        "uploadFailed": "Échec de l'envoi du fichier. Veuillez réessayer."
+      },
+      "success": {
+        "uploaded": "FDS jointe avec succès.",
+        "replaced": "FDS remplacée avec succès.",
+        "removed": "FDS supprimée avec succès."
+      }
+    },
     "simulator": {
       "title": "Simulateur de Volume",
       "product": "Produit",

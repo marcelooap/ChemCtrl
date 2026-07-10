@@ -80,3 +80,25 @@ export function getNivelOptionsForTipo(tipo) {
   }
   return ['Administrador', 'Supervisor', 'Operacional', 'Visualização'];
 }
+
+function normalizeNivel(user) {
+  return (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Admin + Supervisor: anexar, substituir, visualizar, baixar FDS na tela de receitas */
+export function canManageRecipeFds(user) {
+  if (!user || user.tipo === 'externo') return false;
+  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+}
+
+/** Admin only: remover FDS */
+export function canRemoveRecipeFds(user) {
+  if (!user || user.tipo === 'externo') return false;
+  return normalizeNivel(user) === 'administrador';
+}
+
+/** Admin + Supervisor: visualizar/baixar FDS na tela de receitas (view dialog) */
+export function canViewRecipeFds(user) {
+  if (!user || user.tipo === 'externo') return false;
+  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+}

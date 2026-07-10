@@ -1297,6 +1297,42 @@
       "duplicateMpCode": "Código de MP duplicado: {{code}}",
       "duplicateMpDesc": "Não é permitido cadastrar matérias primas com o mesmo código."
     },
+    "fds": {
+      "title": "Ficha de Dados de Segurança (FDS)",
+      "selectFile": "Selecionar arquivo",
+      "noFileSelected": "Nenhum arquivo selecionado",
+      "formatHint": "Formato permitido: PDF",
+      "sizeHint": "Tamanho máximo: 20 MB",
+      "noneAttached": "Nenhuma FDS anexada.",
+      "attach": "Anexar FDS",
+      "view": "Visualizar",
+      "download": "Baixar",
+      "replace": "Substituir",
+      "remove": "Remover FDS",
+      "clearSelection": "Remover seleção",
+      "uploading": "Enviando...",
+      "uploadedAt": "Enviado em {{date}}",
+      "replaceConfirm": {
+        "title": "Substituir FDS",
+        "message": "Deseja substituir a Ficha de Dados de Segurança atual?\n\nO documento anterior será substituído permanentemente."
+      },
+      "removeConfirm": {
+        "title": "Remover FDS",
+        "message": "Deseja remover a Ficha de Dados de Segurança desta receita?\n\nEsta ação não pode ser desfeita."
+      },
+      "errors": {
+        "title": "Arquivo inválido",
+        "invalidType": "Apenas arquivos PDF são permitidos.",
+        "invalidSize": "O arquivo excede o tamanho máximo de 20 MB.",
+        "invalidContent": "O arquivo não é um PDF válido.",
+        "uploadFailed": "Falha ao enviar o arquivo. Tente novamente."
+      },
+      "success": {
+        "uploaded": "FDS anexada com sucesso.",
+        "replaced": "FDS substituída com sucesso.",
+        "removed": "FDS removida com sucesso."
+      }
+    },
     "simulator": {
       "title": "Simulador de Volume",
       "product": "Produto",

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { I18nextProvider, useTranslation } from 'react-i18next';
-import { fetchPublicLotInfo, fetchPublicCoaData } from '@/api/publicApi';
+import { fetchPublicLotInfo, fetchPublicCoaData, fetchPublicSdsSignedUrl } from '@/api/publicApi';
 import { generateCOAPDF } from '@/lib/pdfReports';
 import publicI18n, { initPublicI18n } from '@/i18n/publicI18n';
 import { fmtDate } from '@/i18n/formatters';
@@ -24,7 +24,8 @@ function ConsultaPublicaPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [coaLoading, setCoaLoading] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState(null);
+  const [sdsLoading, setSdsLoading] = useState(false);
+  const [pdfViewer, setPdfViewer] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +57,12 @@ function ConsultaPublicaPage() {
       const blob = await generateCOAPDF(result, coaData.production || {}, containers, coaData.recipe || {}, { returnBlob: true, locale: 'en' });
       const url = URL.createObjectURL(blob);
       if (view) {
-        setPdfUrl(url);
+        setPdfViewer({
+          url,
+          title: t('publicTraceability.coa.viewerTitle', { lot: result.lot || lotInfo?.lot }),
+          downloadName: 'COA ' + (result.lot || 'report') + '.pdf',
+          isBlob: true,
+        });
       } else {
         const a = document.createElement('a');
         a.href = url;
@@ -70,6 +76,44 @@ function ConsultaPublicaPage() {
       alert(t('publicTraceability.coa.generateError'));
     } finally {
       setCoaLoading(false);
+    }
+  };
+
+  const closePdfViewer = () => {
+    if (pdfViewer?.isBlob && pdfViewer.url) {
+      URL.revokeObjectURL(pdfViewer.url);
+    }
+    setPdfViewer(null);
+  };
+
+  const handleSDS = async (view) => {
+    setSdsLoading(true);
+    try {
+      const data = await fetchPublicSdsSignedUrl(token);
+      if (!data?.has_sds || !data?.signed_url) {
+        return;
+      }
+      const filename = data.fds_filename || 'sds.pdf';
+      if (view) {
+        setPdfViewer({
+          url: data.signed_url,
+          title: t('publicTraceability.sds.viewerTitle', { lot: lotInfo?.lot }),
+          downloadName: filename,
+          isBlob: false,
+        });
+      } else {
+        const a = document.createElement('a');
+        a.href = data.signed_url;
+        a.download = filename;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (e) {
+      alert(t('publicTraceability.sds.fetchError'));
+    } finally {
+      setSdsLoading(false);
     }
   };
 
@@ -173,7 +217,7 @@ function ConsultaPublicaPage() {
         </div>
 
         {/* COA Section */}
-        <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
+        <div className="bg-card rounded-2xl shadow-sm border border-border p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">{t('publicTraceability.sections.coa')}</h2>
@@ -214,18 +258,60 @@ function ConsultaPublicaPage() {
           )}
         </div>
 
+        {/* SDS Section */}
+        <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">{t('publicTraceability.sections.sds')}</h2>
+              <p className="text-xs text-gray-500">{t('publicTraceability.sections.sdsSubtitle')}</p>
+            </div>
+            {lotInfo.has_sds ? (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">{t('publicTraceability.sds.available')}</span>
+            ) : (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-gray-500">{t('publicTraceability.sds.unavailable')}</span>
+            )}
+          </div>
+          {lotInfo.has_sds ? (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => handleSDS(true)}
+                disabled={sdsLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors hover:bg-accent/50 disabled:opacity-50"
+                style={{ borderColor: '#1e56a0', color: '#1e56a0' }}
+              >
+                {sdsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                {t('publicTraceability.sds.view')}
+              </button>
+              <button
+                onClick={() => handleSDS(false)}
+                disabled={sdsLoading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ background: '#1e56a0' }}
+              >
+                {sdsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {t('publicTraceability.sds.download')}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 p-4 rounded-xl bg-muted/50">
+              <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+              <p className="text-sm text-gray-500">{t('publicTraceability.sds.notAvailable')}</p>
+            </div>
+          )}
+        </div>
+
         {/* PDF Viewer Overlay */}
-        {pdfUrl && (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }}>
+        {pdfViewer && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={closePdfViewer}>
             <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ background: '#1e56a0' }}>
-                <span className="text-white text-sm font-semibold">{t('publicTraceability.coa.viewerTitle', { lot: lotInfo?.lot })}</span>
+                <span className="text-white text-sm font-semibold">{pdfViewer.title}</span>
                 <div className="flex items-center gap-2">
-                  <a href={pdfUrl} download={'COA ' + (lotInfo?.lot || 'report') + '.pdf'} className="text-white text-xs font-medium px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 flex items-center gap-1"><Download className="w-3.5 h-3.5" /> {t('publicTraceability.coa.downloadButton')}</a>
-                  <button onClick={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }} className="text-white text-xs font-medium px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30">{t('publicTraceability.coa.close')}</button>
+                  <a href={pdfViewer.url} download={pdfViewer.downloadName} target="_blank" rel="noopener noreferrer" className="text-white text-xs font-medium px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 flex items-center gap-1"><Download className="w-3.5 h-3.5" /> {t('publicTraceability.coa.downloadButton')}</a>
+                  <button onClick={closePdfViewer} className="text-white text-xs font-medium px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30">{t('publicTraceability.coa.close')}</button>
                 </div>
               </div>
-              <iframe src={pdfUrl} className="flex-1 w-full rounded-b-2xl" title="COA" />
+              <iframe src={pdfViewer.url} className="flex-1 w-full rounded-b-2xl" title={pdfViewer.downloadName} />
             </div>
           </div>
         )}

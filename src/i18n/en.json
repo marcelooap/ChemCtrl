@@ -1391,6 +1391,42 @@
       "duplicateMpCode": "Duplicate RM code: {{code}}",
       "duplicateMpDesc": "Raw materials with the same code are not allowed."
     },
+    "fds": {
+      "title": "Safety Data Sheet (SDS)",
+      "selectFile": "Select file",
+      "noFileSelected": "No file selected",
+      "formatHint": "Allowed format: PDF",
+      "sizeHint": "Maximum size: 20 MB",
+      "noneAttached": "No SDS attached.",
+      "attach": "Attach SDS",
+      "view": "View",
+      "download": "Download",
+      "replace": "Replace file",
+      "remove": "Remove SDS",
+      "clearSelection": "Clear selection",
+      "uploading": "Uploading...",
+      "uploadedAt": "Uploaded on {{date}}",
+      "replaceConfirm": {
+        "title": "Replace SDS",
+        "message": "Do you want to replace the current Safety Data Sheet?\n\nThe previous document will be permanently replaced."
+      },
+      "removeConfirm": {
+        "title": "Remove SDS",
+        "message": "Do you want to remove the Safety Data Sheet from this recipe?\n\nThis action cannot be undone."
+      },
+      "errors": {
+        "title": "Invalid file",
+        "invalidType": "Only PDF files are allowed.",
+        "invalidSize": "The file exceeds the maximum size of 20 MB.",
+        "invalidContent": "The file is not a valid PDF.",
+        "uploadFailed": "Failed to upload the file. Please try again."
+      },
+      "success": {
+        "uploaded": "SDS attached successfully.",
+        "replaced": "SDS replaced successfully.",
+        "removed": "SDS removed successfully."
+      }
+    },
     "simulator": {
       "title": "Volume Simulator",
       "product": "Product",
@@ -1652,7 +1688,9 @@
     "sections": {
       "lotInfo": "Batch Information",
       "coa": "Certificate of Analysis",
-      "coaSubtitle": "Official quality document"
+      "coaSubtitle": "Official quality document",
+      "sds": "Safety Data Sheet (SDS)",
+      "sdsSubtitle": "Official product safety document"
     },
     "fields": {
       "product": "Product",
@@ -1674,13 +1712,24 @@
     "coa": {
       "available": "Available",
       "unavailable": "Unavailable",
-      "view": "View COA",
-      "download": "Download COA",
+      "view": "View",
+      "download": "Download",
       "notAvailable": "Certificate of Analysis is not yet available.",
       "viewerTitle": "Certificate of Analysis — {{lot}}",
       "downloadButton": "Download",
       "close": "Close",
       "generateError": "Failed to generate Certificate of Analysis. Please try again."
+    },
+    "sds": {
+      "available": "Available",
+      "unavailable": "Not available",
+      "view": "View",
+      "download": "Download",
+      "notAvailable": "Not available",
+      "viewerTitle": "Safety Data Sheet (SDS) — {{lot}}",
+      "downloadButton": "Download",
+      "close": "Close",
+      "fetchError": "Failed to load Safety Data Sheet. Please try again."
     },
     "footer": "ChemCtrl · Chemical Production Control System",
     "footerSub": "Public batch traceability lookup"
