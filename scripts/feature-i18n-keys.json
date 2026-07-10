@@ -1,0 +1,1578 @@
+{
+  "en": {
+    "rawMaterialStock": {
+      "movementDialog": {
+        "title": "Raw Material Stock Movement",
+        "rawMaterial": "Raw Material",
+        "selectMp": "Select raw material...",
+        "selectLot": "Select lot...",
+        "selectEntry": "Select record...",
+        "entryRecord": "Entry Record",
+        "entryLabel": "Entry",
+        "balanceLabel": "Balance",
+        "initialStock": "Initial Stock",
+        "availableBalance": "Available Balance",
+        "supplier": "Supplier",
+        "quantity": "Quantity",
+        "destination": "Movement Destination",
+        "selectDestination": "Select destination...",
+        "observationsPlaceholder": "Reason or additional information...",
+        "registering": "Registering...",
+        "registerMovement": "Register Movement",
+        "errors": {
+          "selectEntry": "Select an entry record.",
+          "selectDestination": "Select the movement destination.",
+          "invalidQuantity": "Enter a quantity greater than zero.",
+          "insufficientBalance": "Insufficient balance. Available: {{available}} {{unit}}.",
+          "saveFailed": "Failed to save: {{message}}",
+          "retry": "Please try again."
+        },
+        "success": "Movement recorded successfully!"
+      },
+      "viewDialog": {
+        "regId": "Record ID",
+        "entryDate": "Entry Date",
+        "manufactureDate": "Manufacture Date",
+        "expiryDate": "Expiry Date",
+        "unitPrice": "Unit Price",
+        "packagingType": "Packaging Type",
+        "packagingCapacity": "Packaging Capacity",
+        "packagingQuantity": "Packaging Qty",
+        "opsSection": "Production Orders that used this lot",
+        "noOps": "No PO has used this lot yet.",
+        "movementsSection": "Movement History",
+        "noMovements": "No movements recorded.",
+        "fiscalQty": "Fiscal Qty",
+        "operationalQtyKg": "Op. Qty (kg)",
+        "totalConsumed": "TOTAL CONSUMED",
+        "totalMoved": "TOTAL MOVED",
+        "report": "Report"
+      },
+      "destinations": {
+        "processLoss": "Process Loss",
+        "unusedReturn": "Unused RM Return"
+      }
+    },
+    "inventory": {
+      "openWizard": {
+        "title": "Open Inventory — Step {{step}} of 3",
+        "steps": { "client": "Client", "product": "Product", "lot": "Lot" },
+        "select": "Select {{label}}",
+        "deselectAll": "Deselect all",
+        "selectAll": "Select all",
+        "noItems": "No items available.",
+        "allIncluded": "ALL will be included",
+        "selectedCount": "{{count}} selected",
+        "createInventory": "Create Inventory",
+        "errors": {
+          "tableMissing": "Inventory table does not exist in the database. Run the migration SQL in Supabase.",
+          "createFailed": "Failed to create inventory: {{message}}"
+        }
+      }
+    },
+    "recipes": {
+      "simulator": {
+        "title": "Volume Simulator",
+        "product": "Product",
+        "selectProduct": "Select a product...",
+        "volumeL": "Volume (L)",
+        "volumePlaceholder": "E.g.: 5000",
+        "density": "Density (g/mL)",
+        "densityPlaceholder": "E.g.: 1.050",
+        "calculatedMass": "Calculated mass:",
+        "rawMaterial": "Raw Material",
+        "percentMass": "% m/m",
+        "currentStockKg": "Current Stock (kg)",
+        "recipeKg": "Recipe (kg)",
+        "sendKg": "Send (kg)",
+        "total": "TOTAL",
+        "enterVolumeDensity": "Enter volume and density to calculate.",
+        "selectProductHint": "Select a product to view the simulation."
+      }
+    },
+    "orders": {
+      "details": {
+        "title": "Order {{number}}",
+        "order": "ORDER",
+        "date": "DATE",
+        "status": "STATUS",
+        "product": "PRODUCT",
+        "client": "CLIENT",
+        "requester": "REQUESTER",
+        "clientOrder": "CLIENT ORDER",
+        "expectedDate": "EXPECTED DELIVERY",
+        "volumeOrdered": "ORDER VOLUME",
+        "volumeProduced": "PRODUCED VOLUME",
+        "volumePending": "PENDING VOLUME",
+        "observations": "NOTES",
+        "linkedOps": "Linked Production Orders · {{count}}",
+        "noLinkedOps": "No PO linked to this order.",
+        "finishDate": "Finish Date",
+        "containers": "Containers",
+        "totalProducedVolume": "TOTAL PRODUCED VOLUME"
+      }
+    },
+    "production": {
+      "tracking": {
+        "empty": "No production in progress.",
+        "volume": "Volume (L)",
+        "packaging": "Packaging",
+        "stage": "Stage",
+        "progress": "Progress",
+        "bypass": "Bypass",
+        "bypassActive": "Active",
+        "viewAll": "View all"
+      },
+      "card": {
+        "view": "View",
+        "lot": "Lot",
+        "waitingStart": "Waiting to start:",
+        "volume": "Volume",
+        "mass": "Mass",
+        "packaging": "Packaging"
+      },
+      "qr": {
+        "title": "Traceability QR Code",
+        "copied": "Copied!",
+        "copy": "Copy",
+        "open": "Open",
+        "png": "PNG"
+      },
+      "invoice": {
+        "sentTitle": "Sent for billing — click to unmark",
+        "pendingTitle": "Pending — click to send",
+        "sent": "Sent",
+        "pending": "Pending"
+      },
+      "envase": {
+        "title": "Packaging — {{product}} · Lot {{lot}}",
+        "destinationPackaging": "Destination Packaging",
+        "packagedContainers": "Packaged Containers",
+        "addPackaging": "Add Packaging",
+        "plateNumber": "Plate No.",
+        "barrelNumber": "Barrel No.",
+        "minTestDate": "Min Test Date",
+        "volumeRegistered": "Registered volume:",
+        "opVolume": "PO volume:",
+        "volumeExceeded": "Volume exceeded!",
+        "registerPackaging": "Register Packaging",
+        "saving": "Saving..."
+      }
+    },
+    "containers": {
+      "viewDialog": {
+        "title": "Container Details",
+        "opData": "PO Data",
+        "packagingData": "Packaging Data",
+        "logistics": "Logistics",
+        "departureDate": "Departure Date",
+        "minTest": "Min Test",
+        "responsible": "Responsible"
+      },
+      "addTank": {
+        "title": "Add Tank — Yard Entry",
+        "productData": "Product Data",
+        "packagingData": "Packaging Data",
+        "selectProduct": "Select or type product...",
+        "platePlaceholder": "Plate number",
+        "barrelPlaceholder": "Barrel number",
+        "netWeight": "Net Weight (kg)",
+        "grossWeight": "Gross Weight (kg)",
+        "registerEntry": "Register Entry",
+        "saving": "Saving...",
+        "errors": {
+          "required": "Fill in required fields",
+          "registerFailed": "Failed to register tank"
+        },
+        "success": {
+          "title": "Tank registered",
+          "description": "{{number}} added to yard."
+        }
+      },
+      "historyDialog": {
+        "title": "Container History",
+        "subtitle": "Select a container (Plate / Barrel No.) to view all usage cycles.",
+        "container": "Container",
+        "searchPlaceholder": "Search by plate or barrel number...",
+        "searching": "Searching...",
+        "search": "Search",
+        "newSearch": "New search"
+      },
+      "historyCycles": {
+        "empty": "No usage cycles found for this container.",
+        "count": "{{count}} cycle(s) found — newest to oldest."
+      },
+      "cycleCard": {
+        "closedByTransfer": "Closed by Transfer",
+        "inProgress": "In progress",
+        "production": "Production",
+        "departure": "Departure",
+        "noDepartureTransfer": "No departure (transfer)",
+        "pending": "Pending",
+        "liquidKg": "Net (kg)",
+        "grossKg": "Gross (kg)",
+        "opStatus": "PO Status",
+        "qcStatus": "QC Status",
+        "outgoingTransfer": "Outgoing Transfer",
+        "origin": "Origin",
+        "transferredVolumeL": "Transferred Vol. (L)"
+      },
+      "status": {
+        "inYard": "In Yard",
+        "shipped": "Shipped"
+      }
+    },
+    "transfer": {
+      "viewDialog": {
+        "generalData": "General Data",
+        "origins": "Origins",
+        "lotSummary": "Lot Summary",
+        "destinations": "Destinations",
+        "grandTotals": "Grand Totals",
+        "container": "Container",
+        "barrel": "Barrel",
+        "volumeWithdrawnL": "Vol. Withdrawn (L)",
+        "remainingBalanceL": "Remaining Balance (L)",
+        "massKg": "Mass (kg)",
+        "totalVolumeWithdrawn": "Total Volume Withdrawn",
+        "totalMassWithdrawn": "Total Mass Withdrawn",
+        "totalDestinationVolume": "Total Destination Volume",
+        "totalDestinationMass": "Total Destination Mass",
+        "noLot": "No Lot",
+        "plateNumber": "Plate No.",
+        "driver": "Driver",
+        "packagingType": "Packaging Type",
+        "sling": "Sling",
+        "minTestDate": "Min Test Date",
+        "netWeightKg": "Net Weight (kg)",
+        "grossWeightKg": "Gross Weight (kg)"
+      },
+      "destination": {
+        "destinationN": "Destination {{n}}",
+        "type": "Type",
+        "transfer": "Transfer",
+        "shipping": "Shipping",
+        "plateNumber": "Plate No.",
+        "barrelNumber": "Barrel No.",
+        "platePlaceholder": "E.g.: TANKA 41",
+        "barrelPlaceholder": "Barrel number",
+        "vehiclePlate": "Vehicle plate",
+        "driver": "Driver",
+        "driverPlaceholder": "Driver name",
+        "volumeAuto": "auto",
+        "massAuto": "auto",
+        "automatic": "Automatic",
+        "packagingType": "Packaging Type",
+        "selectOption": "Select...",
+        "seals": "Seals",
+        "sealsPlaceholder": "Seal numbers",
+        "netWeightAuto": "Net Wt. (kg) auto",
+        "grossWeightAuto": "Gross Wt. (kg) auto",
+        "minTestDate": "Min Test Date"
+      },
+      "fieldLabel": { "auto": "auto" }
+    },
+    "quality": {
+      "equipment": {
+        "types": {
+          "scale": "Scale",
+          "phMeter": "pH Meter",
+          "thermometer": "Thermometer",
+          "viscometer": "Viscometer",
+          "oven": "Oven",
+          "muffle": "Muffle Furnace",
+          "stirrer": "Stirrer",
+          "colorimeter": "Colorimeter",
+          "spectrophotometer": "Spectrophotometer",
+          "densimeter": "Densimeter",
+          "refractometer": "Refractometer",
+          "conductivityMeter": "Conductivity Meter",
+          "titulator": "Titulator",
+          "microscope": "Microscope",
+          "other": "Other"
+        },
+        "calibrationStatus": {
+          "noDate": "No date",
+          "expired": "Expired",
+          "dueSoon": "Due Soon",
+          "compliant": "Compliant",
+          "expiredDaysAgo": "Expired {{days}}d ago",
+          "inDays": "In {{days}}d"
+        },
+        "kpi": {
+          "total": "Total Equipment",
+          "compliant": "Compliant",
+          "dueSoon": "Due Soon",
+          "expired": "Expired"
+        },
+        "card": {
+          "model": "Model",
+          "patrimony": "Asset No.",
+          "certificate": "Certificate",
+          "lastCalibration": "Last Calibration",
+          "view": "View",
+          "edit": "Edit",
+          "registerCalibration": "Register calibration",
+          "attachments": "Attachments",
+          "history": "History",
+          "delete": "Delete"
+        },
+        "viewDialog": {
+          "type": "Type",
+          "manufacturer": "Manufacturer",
+          "model": "Model",
+          "serial": "Serial",
+          "patrimony": "Asset No.",
+          "info": "Information",
+          "historyTab": "History ({{count}})",
+          "attachmentsTab": "Attachments ({{count}})",
+          "location": "Location",
+          "responsible": "Responsible",
+          "labResponsible": "Responsible Lab",
+          "lastCalibration": "Last Calibration",
+          "calibrationCompany": "Calibration Company",
+          "nextCalibration": "Next Calibration",
+          "obs": "Notes",
+          "noHistory": "No history recorded.",
+          "viewCertificate": "View certificate",
+          "certificateLabel": "Certificate",
+          "company": "Company",
+          "next": "Next",
+          "noAttachments": "No attachments."
+        },
+        "calibrationDialog": {
+          "title": "Register Calibration — {{name}}",
+          "date": "Calibration Date",
+          "certificateNumber": "Certificate No.",
+          "company": "Service Company",
+          "responsible": "Responsible",
+          "nextCalibration": "Next Calibration",
+          "certificatePdf": "Certificate (PDF)",
+          "register": "Register",
+          "errors": {
+            "dateRequired": "Enter calibration date",
+            "generic": "Error: {{message}}"
+          }
+        },
+        "formDialog": {
+          "editTitle": "Edit Equipment",
+          "newTitle": "New Equipment",
+          "name": "Name",
+          "type": "Type",
+          "manufacturer": "Manufacturer",
+          "model": "Model",
+          "serialNumber": "Serial Number",
+          "patrimonyNumber": "Asset Number",
+          "location": "Location",
+          "labResponsible": "Responsible Laboratory",
+          "periodicityDays": "Calibration Periodicity (days)",
+          "calibrationCompany": "Calibration Company",
+          "currentCertificate": "Current Certificate No.",
+          "lastCalibration": "Last Calibration",
+          "nextCalibrationAuto": "Next Calibration (auto)",
+          "equipmentImage": "Equipment Image",
+          "currentCertificateFile": "Current Certificate",
+          "manufacturerManual": "Manufacturer Manual",
+          "errors": {
+            "required": "Fill in Name and Type",
+            "saveFailed": "Failed to save: {{message}}"
+          }
+        },
+        "upload": {
+          "uploading": "Uploading...",
+          "uploaded": "Uploaded",
+          "selectFile": "Select file",
+          "uploadError": "Upload error: {{message}}"
+        }
+      }
+    },
+    "realtime": {
+      "disconnected": "Realtime disconnected — reconnecting…",
+      "connected": "Realtime connected",
+      "connecting": "Connecting to Realtime…",
+      "live": "Live"
+    }
+  },
+  "pt-BR": {
+    "rawMaterialStock": {
+      "movementDialog": {
+        "title": "Movimentação de Estoque de MP",
+        "rawMaterial": "Matéria Prima",
+        "selectMp": "Selecione a MP...",
+        "selectLot": "Selecione o lote...",
+        "selectEntry": "Selecione o registro...",
+        "entryRecord": "Registro de Entrada",
+        "entryLabel": "Entrada",
+        "balanceLabel": "Saldo",
+        "initialStock": "Estoque Inicial",
+        "availableBalance": "Saldo Disponível",
+        "supplier": "Fornecedor",
+        "quantity": "Quantidade",
+        "destination": "Destino da Movimentação",
+        "selectDestination": "Selecione o destino...",
+        "observationsPlaceholder": "Motivo ou informações adicionais...",
+        "registering": "Registrando...",
+        "registerMovement": "Registrar Movimentação",
+        "errors": {
+          "selectEntry": "Selecione um registro de entrada.",
+          "selectDestination": "Selecione o destino da movimentação.",
+          "invalidQuantity": "Informe uma quantidade maior que zero.",
+          "insufficientBalance": "Saldo insuficiente. Disponível: {{available}} {{unit}}.",
+          "saveFailed": "Erro ao salvar: {{message}}",
+          "retry": "Tente novamente."
+        },
+        "success": "Movimentação registrada com sucesso!"
+      },
+      "viewDialog": {
+        "regId": "ID Registro",
+        "entryDate": "Data de Entrada",
+        "manufactureDate": "Fabricação",
+        "expiryDate": "Validade",
+        "unitPrice": "Preço Unitário",
+        "packagingType": "Tipo de Embalagem",
+        "packagingCapacity": "Capacidade Embalagem",
+        "packagingQuantity": "Qtd. de Embalagens",
+        "opsSection": "Ordens de Produção que utilizaram este lote",
+        "noOps": "Nenhuma OP utilizou este lote ainda.",
+        "movementsSection": "Histórico de Movimentações",
+        "noMovements": "Nenhuma movimentação registrada.",
+        "fiscalQty": "Qtd. Fiscal",
+        "operationalQtyKg": "Qtd. Op. (kg)",
+        "totalConsumed": "TOTAL CONSUMIDO",
+        "totalMoved": "TOTAL MOVIMENTADO",
+        "report": "Relatório"
+      },
+      "destinations": {
+        "processLoss": "Perda em Processo",
+        "unusedReturn": "Retorno de MP Não Aplicada"
+      }
+    },
+    "inventory": {
+      "openWizard": {
+        "title": "Abrir Inventário — Etapa {{step}} de 3",
+        "steps": { "client": "Cliente", "product": "Produto", "lot": "Lote" },
+        "select": "Selecionar {{label}}",
+        "deselectAll": "Desmarcar todos",
+        "selectAll": "Selecionar todos",
+        "noItems": "Nenhum item disponível.",
+        "allIncluded": "TODOS serão incluídos",
+        "selectedCount": "{{count}} selecionado(s)",
+        "createInventory": "Criar Inventário",
+        "errors": {
+          "tableMissing": "Tabela de inventário não existe no banco. Execute o SQL de migração no Supabase.",
+          "createFailed": "Erro ao criar inventário: {{message}}"
+        }
+      }
+    },
+    "recipes": {
+      "simulator": {
+        "title": "Simulador de Volume",
+        "product": "Produto",
+        "selectProduct": "Selecione um produto...",
+        "volumeL": "Volume (L)",
+        "volumePlaceholder": "Ex: 5000",
+        "density": "Densidade (g/mL)",
+        "densityPlaceholder": "Ex: 1.050",
+        "calculatedMass": "Massa calculada:",
+        "rawMaterial": "Matéria-prima",
+        "percentMass": "% m/m",
+        "currentStockKg": "Estoque Atual (kg)",
+        "recipeKg": "Receita (kg)",
+        "sendKg": "Enviar (kg)",
+        "total": "TOTAL",
+        "enterVolumeDensity": "Informe o volume e a densidade para calcular.",
+        "selectProductHint": "Selecione um produto para ver a simulação."
+      }
+    },
+    "orders": {
+      "details": {
+        "title": "Pedido {{number}}",
+        "order": "PEDIDO",
+        "date": "DATA",
+        "status": "STATUS",
+        "product": "PRODUTO",
+        "client": "CLIENTE",
+        "requester": "SOLICITANTE",
+        "clientOrder": "PEDIDO CLIENTE",
+        "expectedDate": "PREVISÃO ATEND.",
+        "volumeOrdered": "VOLUME PEDIDO",
+        "volumeProduced": "VOLUME PRODUZIDO",
+        "volumePending": "VOLUME PENDENTE",
+        "observations": "OBSERVAÇÕES",
+        "linkedOps": "Ordens de Produção Vinculadas · {{count}}",
+        "noLinkedOps": "Nenhuma OP vinculada a este pedido.",
+        "finishDate": "Data Finaliz.",
+        "containers": "Vasilhames",
+        "totalProducedVolume": "VOLUME TOTAL PRODUZIDO"
+      }
+    },
+    "production": {
+      "tracking": {
+        "empty": "Nenhuma produção em andamento.",
+        "volume": "Volume (L)",
+        "packaging": "Embalagem",
+        "stage": "Etapa",
+        "progress": "Progresso",
+        "bypass": "By-pass",
+        "bypassActive": "Ativo",
+        "viewAll": "Ver todas"
+      },
+      "card": {
+        "view": "Visualizar",
+        "lot": "Lote",
+        "waitingStart": "Aguardando início:",
+        "volume": "Volume",
+        "mass": "Massa",
+        "packaging": "Embalagem"
+      },
+      "qr": {
+        "title": "QR Code de Rastreabilidade",
+        "copied": "Copiado!",
+        "copy": "Copiar",
+        "open": "Abrir",
+        "png": "PNG"
+      },
+      "invoice": {
+        "sentTitle": "Enviado p/ faturamento — clique para desmarcar",
+        "pendingTitle": "Pendente — clique para enviar",
+        "sent": "Enviado",
+        "pending": "Pendente"
+      },
+      "envase": {
+        "title": "Envase — {{product}} · Lote {{lot}}",
+        "destinationPackaging": "Embalagem de Destino",
+        "packagedContainers": "Embalagens Envasadas",
+        "addPackaging": "Incluir Embalagem",
+        "plateNumber": "N° Placa",
+        "barrelNumber": "N° Barril",
+        "minTestDate": "Data Menor Teste",
+        "volumeRegistered": "Volume registrado:",
+        "opVolume": "Volume da OP:",
+        "volumeExceeded": "Volume excedido!",
+        "registerPackaging": "Registrar Envase",
+        "saving": "Salvando..."
+      }
+    },
+    "containers": {
+      "viewDialog": {
+        "title": "Detalhe do Vasilhame",
+        "opData": "Dados da OP",
+        "packagingData": "Dados da Embalagem",
+        "logistics": "Logística",
+        "departureDate": "Data Saída",
+        "minTest": "Menor Teste",
+        "responsible": "Responsável"
+      },
+      "addTank": {
+        "title": "Adicionar Tanque — Entrada no Pátio",
+        "productData": "Dados do Produto",
+        "packagingData": "Dados da Embalagem",
+        "selectProduct": "Selecione ou digite o produto...",
+        "platePlaceholder": "N° da placa",
+        "barrelPlaceholder": "N° do barril",
+        "netWeight": "Peso Líquido (kg)",
+        "grossWeight": "Peso Bruto (kg)",
+        "registerEntry": "Registrar Entrada",
+        "saving": "Salvando...",
+        "errors": {
+          "required": "Preencha os campos obrigatórios",
+          "registerFailed": "Erro ao registrar tanque"
+        },
+        "success": {
+          "title": "Tanque registrado",
+          "description": "{{number}} adicionado ao pátio."
+        }
+      },
+      "historyDialog": {
+        "title": "Histórico do Vasilhame",
+        "subtitle": "Selecione um vasilhame (Nº Placa / Barril) para visualizar todos os seus ciclos de utilização.",
+        "container": "Vasilhame",
+        "searchPlaceholder": "Buscar por nº placa ou nº barril...",
+        "searching": "Buscando...",
+        "search": "Buscar",
+        "newSearch": "Nova consulta"
+      },
+      "historyCycles": {
+        "empty": "Nenhum ciclo de utilização encontrado para este vasilhame.",
+        "count": "{{count}} ciclo(s) encontrado(s) — do mais recente ao mais antigo."
+      },
+      "cycleCard": {
+        "closedByTransfer": "Encerrado p/ Transbordo",
+        "inProgress": "Em andamento",
+        "production": "Produção",
+        "departure": "Saída",
+        "noDepartureTransfer": "Sem saída (transbordo)",
+        "pending": "Pendente",
+        "liquidKg": "Líquido (kg)",
+        "grossKg": "Bruto (kg)",
+        "opStatus": "Status OP",
+        "qcStatus": "Status CQ",
+        "outgoingTransfer": "Transbordo de Saída",
+        "origin": "Origem",
+        "transferredVolumeL": "Vol. Transf. (L)"
+      },
+      "status": {
+        "inYard": "No Pátio",
+        "shipped": "Expedido"
+      }
+    },
+    "transfer": {
+      "viewDialog": {
+        "generalData": "Dados Gerais",
+        "origins": "Origens",
+        "lotSummary": "Resumo por Lote",
+        "destinations": "Destinos",
+        "grandTotals": "Totais Gerais",
+        "container": "Vasilhame",
+        "barrel": "Barril",
+        "volumeWithdrawnL": "Vol. Retirado (L)",
+        "remainingBalanceL": "Saldo Restante (L)",
+        "massKg": "Massa (kg)",
+        "totalVolumeWithdrawn": "Volume Total Retirado",
+        "totalMassWithdrawn": "Massa Total Retirada",
+        "totalDestinationVolume": "Volume Total Destino",
+        "totalDestinationMass": "Massa Total Destino",
+        "noLot": "Sem Lote",
+        "plateNumber": "N° Placa",
+        "driver": "Motorista",
+        "packagingType": "Tipo Embalagem",
+        "sling": "Eslinga",
+        "minTestDate": "Data Menor Teste",
+        "netWeightKg": "Peso Líquido (kg)",
+        "grossWeightKg": "Peso Bruto (kg)"
+      },
+      "destination": {
+        "destinationN": "Destino {{n}}",
+        "type": "Tipo",
+        "transfer": "Transbordo",
+        "shipping": "Expedição",
+        "plateNumber": "N° Placa",
+        "barrelNumber": "N° Barril",
+        "platePlaceholder": "Ex: TANKA 41",
+        "barrelPlaceholder": "N° barril",
+        "vehiclePlate": "Placa do veículo",
+        "driver": "Motorista",
+        "driverPlaceholder": "Nome do motorista",
+        "volumeAuto": "auto",
+        "massAuto": "auto",
+        "automatic": "Automático",
+        "packagingType": "Tipo Embalagem",
+        "selectOption": "Selecione...",
+        "seals": "Lacres",
+        "sealsPlaceholder": "Nº lacres",
+        "netWeightAuto": "Peso Líq. (kg) auto",
+        "grossWeightAuto": "Peso Bruto (kg) auto",
+        "minTestDate": "Data Menor Teste"
+      },
+      "fieldLabel": { "auto": "auto" }
+    },
+    "quality": {
+      "equipment": {
+        "types": {
+          "scale": "Balança",
+          "phMeter": "pHmetro",
+          "thermometer": "Termômetro",
+          "viscometer": "Viscosímetro",
+          "oven": "Estufa",
+          "muffle": "Mufla",
+          "stirrer": "Agitador",
+          "colorimeter": "Colorímetro",
+          "spectrophotometer": "Espectrofotômetro",
+          "densimeter": "Densímetro",
+          "refractometer": "Refratômetro",
+          "conductivityMeter": "Condutivímetro",
+          "titulator": "Titulador",
+          "microscope": "Microscópio",
+          "other": "Outro"
+        },
+        "calibrationStatus": {
+          "noDate": "Sem data",
+          "expired": "Vencido",
+          "dueSoon": "A Vencer",
+          "compliant": "Conforme",
+          "expiredDaysAgo": "Vencido há {{days}}d",
+          "inDays": "Em {{days}}d"
+        },
+        "kpi": {
+          "total": "Total de Equipamentos",
+          "compliant": "Em Conformidade",
+          "dueSoon": "Próximos do Vencimento",
+          "expired": "Vencidos"
+        },
+        "card": {
+          "model": "Modelo",
+          "patrimony": "Patrimônio",
+          "certificate": "Certificado",
+          "lastCalibration": "Últ. Calibração",
+          "view": "Visualizar",
+          "edit": "Editar",
+          "registerCalibration": "Registrar calibração",
+          "attachments": "Anexos",
+          "history": "Histórico",
+          "delete": "Excluir"
+        },
+        "viewDialog": {
+          "type": "Tipo",
+          "manufacturer": "Fabricante",
+          "model": "Modelo",
+          "serial": "Série",
+          "patrimony": "Patrimônio",
+          "info": "Informações",
+          "historyTab": "Histórico ({{count}})",
+          "attachmentsTab": "Anexos ({{count}})",
+          "location": "Localização",
+          "responsible": "Responsável",
+          "labResponsible": "Lab. Responsável",
+          "lastCalibration": "Última Calibração",
+          "calibrationCompany": "Empresa Calibração",
+          "nextCalibration": "Próxima Calibração",
+          "obs": "Obs",
+          "noHistory": "Nenhum histórico registrado.",
+          "viewCertificate": "Ver certificado",
+          "certificateLabel": "Certificado",
+          "company": "Empresa",
+          "next": "Próxima",
+          "noAttachments": "Nenhum anexo."
+        },
+        "calibrationDialog": {
+          "title": "Registrar Calibração — {{name}}",
+          "date": "Data da Calibração",
+          "certificateNumber": "Nº Certificado",
+          "company": "Empresa Executora",
+          "responsible": "Responsável",
+          "nextCalibration": "Próxima Calibração",
+          "certificatePdf": "Certificado (PDF)",
+          "register": "Registrar",
+          "errors": {
+            "dateRequired": "Informe a data da calibração",
+            "generic": "Erro: {{message}}"
+          }
+        },
+        "formDialog": {
+          "editTitle": "Editar Equipamento",
+          "newTitle": "Novo Equipamento",
+          "name": "Nome",
+          "type": "Tipo",
+          "manufacturer": "Fabricante",
+          "model": "Modelo",
+          "serialNumber": "Número de Série",
+          "patrimonyNumber": "Número de Patrimônio",
+          "location": "Localização",
+          "labResponsible": "Laboratório Responsável",
+          "periodicityDays": "Periodicidade Calibração (dias)",
+          "calibrationCompany": "Empresa de Calibração",
+          "currentCertificate": "Nº Certificado Atual",
+          "lastCalibration": "Última Calibração",
+          "nextCalibrationAuto": "Próxima Calibração (auto)",
+          "equipmentImage": "Imagem do Equipamento",
+          "currentCertificateFile": "Certificado Atual",
+          "manufacturerManual": "Manual do Fabricante",
+          "errors": {
+            "required": "Preencha Nome e Tipo",
+            "saveFailed": "Erro ao salvar: {{message}}"
+          }
+        },
+        "upload": {
+          "uploading": "Enviando...",
+          "uploaded": "Enviado",
+          "selectFile": "Selecionar arquivo",
+          "uploadError": "Erro no upload: {{message}}"
+        }
+      }
+    },
+    "realtime": {
+      "disconnected": "Realtime desconectado — reconectando…",
+      "connected": "Realtime conectado",
+      "connecting": "Conectando ao Realtime…",
+      "live": "Tempo real"
+    }
+  },
+  "es": {
+    "rawMaterialStock": {
+      "movementDialog": {
+        "title": "Movimiento de Stock de MP",
+        "rawMaterial": "Materia Prima",
+        "selectMp": "Seleccione la MP...",
+        "selectLot": "Seleccione el lote...",
+        "selectEntry": "Seleccione el registro...",
+        "entryRecord": "Registro de Entrada",
+        "entryLabel": "Entrada",
+        "balanceLabel": "Saldo",
+        "initialStock": "Stock Inicial",
+        "availableBalance": "Saldo Disponible",
+        "supplier": "Proveedor",
+        "quantity": "Cantidad",
+        "destination": "Destino del Movimiento",
+        "selectDestination": "Seleccione el destino...",
+        "observationsPlaceholder": "Motivo o información adicional...",
+        "registering": "Registrando...",
+        "registerMovement": "Registrar Movimiento",
+        "errors": {
+          "selectEntry": "Seleccione un registro de entrada.",
+          "selectDestination": "Seleccione el destino del movimiento.",
+          "invalidQuantity": "Ingrese una cantidad mayor que cero.",
+          "insufficientBalance": "Saldo insuficiente. Disponible: {{available}} {{unit}}.",
+          "saveFailed": "Error al guardar: {{message}}",
+          "retry": "Intente nuevamente."
+        },
+        "success": "¡Movimiento registrado con éxito!"
+      },
+      "viewDialog": {
+        "regId": "ID Registro",
+        "entryDate": "Fecha de Entrada",
+        "manufactureDate": "Fabricación",
+        "expiryDate": "Vencimiento",
+        "unitPrice": "Precio Unitario",
+        "packagingType": "Tipo de Embalaje",
+        "packagingCapacity": "Capacidad de Embalaje",
+        "packagingQuantity": "Cant. de Embalajes",
+        "opsSection": "Órdenes de Producción que utilizaron este lote",
+        "noOps": "Ninguna OP ha utilizado este lote aún.",
+        "movementsSection": "Historial de Movimientos",
+        "noMovements": "Ningún movimiento registrado.",
+        "fiscalQty": "Cant. Fiscal",
+        "operationalQtyKg": "Cant. Op. (kg)",
+        "totalConsumed": "TOTAL CONSUMIDO",
+        "totalMoved": "TOTAL MOVIDO",
+        "report": "Informe"
+      },
+      "destinations": {
+        "processLoss": "Pérdida en Proceso",
+        "unusedReturn": "Devolución de MP No Aplicada"
+      }
+    },
+    "inventory": {
+      "openWizard": {
+        "title": "Abrir Inventario — Etapa {{step}} de 3",
+        "steps": { "client": "Cliente", "product": "Producto", "lot": "Lote" },
+        "select": "Seleccionar {{label}}",
+        "deselectAll": "Desmarcar todos",
+        "selectAll": "Seleccionar todos",
+        "noItems": "No hay elementos disponibles.",
+        "allIncluded": "TODOS serán incluidos",
+        "selectedCount": "{{count}} seleccionado(s)",
+        "createInventory": "Crear Inventario",
+        "errors": {
+          "tableMissing": "La tabla de inventario no existe en la base de datos. Ejecute el SQL de migración en Supabase.",
+          "createFailed": "Error al crear inventario: {{message}}"
+        }
+      }
+    },
+    "recipes": {
+      "simulator": {
+        "title": "Simulador de Volumen",
+        "product": "Producto",
+        "selectProduct": "Seleccione un producto...",
+        "volumeL": "Volumen (L)",
+        "volumePlaceholder": "Ej: 5000",
+        "density": "Densidad (g/mL)",
+        "densityPlaceholder": "Ej: 1.050",
+        "calculatedMass": "Masa calculada:",
+        "rawMaterial": "Materia prima",
+        "percentMass": "% m/m",
+        "currentStockKg": "Stock Actual (kg)",
+        "recipeKg": "Receta (kg)",
+        "sendKg": "Enviar (kg)",
+        "total": "TOTAL",
+        "enterVolumeDensity": "Ingrese el volumen y la densidad para calcular.",
+        "selectProductHint": "Seleccione un producto para ver la simulación."
+      }
+    },
+    "orders": {
+      "details": {
+        "title": "Pedido {{number}}",
+        "order": "PEDIDO",
+        "date": "FECHA",
+        "status": "ESTADO",
+        "product": "PRODUCTO",
+        "client": "CLIENTE",
+        "requester": "SOLICITANTE",
+        "clientOrder": "PEDIDO CLIENTE",
+        "expectedDate": "PREVISIÓN ATEN.",
+        "volumeOrdered": "VOLUMEN PEDIDO",
+        "volumeProduced": "VOLUMEN PRODUCIDO",
+        "volumePending": "VOLUMEN PENDIENTE",
+        "observations": "OBSERVACIONES",
+        "linkedOps": "Órdenes de Producción Vinculadas · {{count}}",
+        "noLinkedOps": "Ninguna OP vinculada a este pedido.",
+        "finishDate": "Fecha Finaliz.",
+        "containers": "Envases",
+        "totalProducedVolume": "VOLUMEN TOTAL PRODUCIDO"
+      }
+    },
+    "production": {
+      "tracking": {
+        "empty": "No hay producción en curso.",
+        "volume": "Volumen (L)",
+        "packaging": "Embalaje",
+        "stage": "Etapa",
+        "progress": "Progreso",
+        "bypass": "Bypass",
+        "bypassActive": "Activo",
+        "viewAll": "Ver todas"
+      },
+      "card": {
+        "view": "Ver",
+        "lot": "Lote",
+        "waitingStart": "Esperando inicio:",
+        "volume": "Volumen",
+        "mass": "Masa",
+        "packaging": "Embalaje"
+      },
+      "qr": {
+        "title": "Código QR de Trazabilidad",
+        "copied": "¡Copiado!",
+        "copy": "Copiar",
+        "open": "Abrir",
+        "png": "PNG"
+      },
+      "invoice": {
+        "sentTitle": "Enviado a facturación — clic para desmarcar",
+        "pendingTitle": "Pendiente — clic para enviar",
+        "sent": "Enviado",
+        "pending": "Pendiente"
+      },
+      "envase": {
+        "title": "Envase — {{product}} · Lote {{lot}}",
+        "destinationPackaging": "Embalaje de Destino",
+        "packagedContainers": "Embalajes Envasados",
+        "addPackaging": "Incluir Embalaje",
+        "plateNumber": "N° Placa",
+        "barrelNumber": "N° Barril",
+        "minTestDate": "Fecha Menor Prueba",
+        "volumeRegistered": "Volumen registrado:",
+        "opVolume": "Volumen de la OP:",
+        "volumeExceeded": "¡Volumen excedido!",
+        "registerPackaging": "Registrar Envase",
+        "saving": "Guardando..."
+      }
+    },
+    "containers": {
+      "viewDialog": {
+        "title": "Detalle del Envase",
+        "opData": "Datos de la OP",
+        "packagingData": "Datos del Embalaje",
+        "logistics": "Logística",
+        "departureDate": "Fecha de Salida",
+        "minTest": "Menor Prueba",
+        "responsible": "Responsable"
+      },
+      "addTank": {
+        "title": "Agregar Tanque — Entrada al Patio",
+        "productData": "Datos del Producto",
+        "packagingData": "Datos del Embalaje",
+        "selectProduct": "Seleccione o escriba el producto...",
+        "platePlaceholder": "N° de placa",
+        "barrelPlaceholder": "N° de barril",
+        "netWeight": "Peso Neto (kg)",
+        "grossWeight": "Peso Bruto (kg)",
+        "registerEntry": "Registrar Entrada",
+        "saving": "Guardando...",
+        "errors": {
+          "required": "Complete los campos obligatorios",
+          "registerFailed": "Error al registrar tanque"
+        },
+        "success": {
+          "title": "Tanque registrado",
+          "description": "{{number}} agregado al patio."
+        }
+      },
+      "historyDialog": {
+        "title": "Historial del Envase",
+        "subtitle": "Seleccione un envase (N° Placa / Barril) para ver todos sus ciclos de uso.",
+        "container": "Envase",
+        "searchPlaceholder": "Buscar por n° placa o n° barril...",
+        "searching": "Buscando...",
+        "search": "Buscar",
+        "newSearch": "Nueva consulta"
+      },
+      "historyCycles": {
+        "empty": "No se encontraron ciclos de uso para este envase.",
+        "count": "{{count}} ciclo(s) encontrado(s) — del más reciente al más antiguo."
+      },
+      "cycleCard": {
+        "closedByTransfer": "Cerrado por Transferencia",
+        "inProgress": "En curso",
+        "production": "Producción",
+        "departure": "Salida",
+        "noDepartureTransfer": "Sin salida (transferencia)",
+        "pending": "Pendiente",
+        "liquidKg": "Neto (kg)",
+        "grossKg": "Bruto (kg)",
+        "opStatus": "Estado OP",
+        "qcStatus": "Estado CQ",
+        "outgoingTransfer": "Transferencia de Salida",
+        "origin": "Origen",
+        "transferredVolumeL": "Vol. Transf. (L)"
+      },
+      "status": {
+        "inYard": "En Patio",
+        "shipped": "Expedido"
+      }
+    },
+    "transfer": {
+      "viewDialog": {
+        "generalData": "Datos Generales",
+        "origins": "Orígenes",
+        "lotSummary": "Resumen por Lote",
+        "destinations": "Destinos",
+        "grandTotals": "Totales Generales",
+        "container": "Envase",
+        "barrel": "Barril",
+        "volumeWithdrawnL": "Vol. Retirado (L)",
+        "remainingBalanceL": "Saldo Restante (L)",
+        "massKg": "Masa (kg)",
+        "totalVolumeWithdrawn": "Volumen Total Retirado",
+        "totalMassWithdrawn": "Masa Total Retirada",
+        "totalDestinationVolume": "Volumen Total Destino",
+        "totalDestinationMass": "Masa Total Destino",
+        "noLot": "Sin Lote",
+        "plateNumber": "N° Placa",
+        "driver": "Conductor",
+        "packagingType": "Tipo de Embalaje",
+        "sling": "Eslinga",
+        "minTestDate": "Fecha Menor Prueba",
+        "netWeightKg": "Peso Neto (kg)",
+        "grossWeightKg": "Peso Bruto (kg)"
+      },
+      "destination": {
+        "destinationN": "Destino {{n}}",
+        "type": "Tipo",
+        "transfer": "Transferencia",
+        "shipping": "Expedición",
+        "plateNumber": "N° Placa",
+        "barrelNumber": "N° Barril",
+        "platePlaceholder": "Ej: TANKA 41",
+        "barrelPlaceholder": "N° barril",
+        "vehiclePlate": "Placa del vehículo",
+        "driver": "Conductor",
+        "driverPlaceholder": "Nombre del conductor",
+        "volumeAuto": "auto",
+        "massAuto": "auto",
+        "automatic": "Automático",
+        "packagingType": "Tipo de Embalaje",
+        "selectOption": "Seleccione...",
+        "seals": "Sellos",
+        "sealsPlaceholder": "N° sellos",
+        "netWeightAuto": "Peso Neto (kg) auto",
+        "grossWeightAuto": "Peso Bruto (kg) auto",
+        "minTestDate": "Fecha Menor Prueba"
+      },
+      "fieldLabel": { "auto": "auto" }
+    },
+    "quality": {
+      "equipment": {
+        "types": {
+          "scale": "Balanza",
+          "phMeter": "pHmetro",
+          "thermometer": "Termómetro",
+          "viscometer": "Viscosímetro",
+          "oven": "Estufa",
+          "muffle": "Mufla",
+          "stirrer": "Agitador",
+          "colorimeter": "Colorímetro",
+          "spectrophotometer": "Espectrofotómetro",
+          "densimeter": "Densímetro",
+          "refractometer": "Refractómetro",
+          "conductivityMeter": "Conductímetro",
+          "titulator": "Titulador",
+          "microscope": "Microscopio",
+          "other": "Otro"
+        },
+        "calibrationStatus": {
+          "noDate": "Sin fecha",
+          "expired": "Vencido",
+          "dueSoon": "Por vencer",
+          "compliant": "Conforme",
+          "expiredDaysAgo": "Vencido hace {{days}}d",
+          "inDays": "En {{days}}d"
+        },
+        "kpi": {
+          "total": "Total de Equipos",
+          "compliant": "En Conformidad",
+          "dueSoon": "Próximos al Vencimiento",
+          "expired": "Vencidos"
+        },
+        "card": {
+          "model": "Modelo",
+          "patrimony": "Patrimonio",
+          "certificate": "Certificado",
+          "lastCalibration": "Últ. Calibración",
+          "view": "Ver",
+          "edit": "Editar",
+          "registerCalibration": "Registrar calibración",
+          "attachments": "Adjuntos",
+          "history": "Historial",
+          "delete": "Eliminar"
+        },
+        "viewDialog": {
+          "type": "Tipo",
+          "manufacturer": "Fabricante",
+          "model": "Modelo",
+          "serial": "Serie",
+          "patrimony": "Patrimonio",
+          "info": "Información",
+          "historyTab": "Historial ({{count}})",
+          "attachmentsTab": "Adjuntos ({{count}})",
+          "location": "Ubicación",
+          "responsible": "Responsable",
+          "labResponsible": "Lab. Responsable",
+          "lastCalibration": "Última Calibración",
+          "calibrationCompany": "Empresa de Calibración",
+          "nextCalibration": "Próxima Calibración",
+          "obs": "Obs",
+          "noHistory": "No hay historial registrado.",
+          "viewCertificate": "Ver certificado",
+          "certificateLabel": "Certificado",
+          "company": "Empresa",
+          "next": "Próxima",
+          "noAttachments": "Sin adjuntos."
+        },
+        "calibrationDialog": {
+          "title": "Registrar Calibración — {{name}}",
+          "date": "Fecha de Calibración",
+          "certificateNumber": "N° Certificado",
+          "company": "Empresa Ejecutora",
+          "responsible": "Responsable",
+          "nextCalibration": "Próxima Calibración",
+          "certificatePdf": "Certificado (PDF)",
+          "register": "Registrar",
+          "errors": {
+            "dateRequired": "Ingrese la fecha de calibración",
+            "generic": "Error: {{message}}"
+          }
+        },
+        "formDialog": {
+          "editTitle": "Editar Equipo",
+          "newTitle": "Nuevo Equipo",
+          "name": "Nombre",
+          "type": "Tipo",
+          "manufacturer": "Fabricante",
+          "model": "Modelo",
+          "serialNumber": "Número de Serie",
+          "patrimonyNumber": "Número de Patrimonio",
+          "location": "Ubicación",
+          "labResponsible": "Laboratorio Responsable",
+          "periodicityDays": "Periodicidad Calibración (días)",
+          "calibrationCompany": "Empresa de Calibración",
+          "currentCertificate": "N° Certificado Actual",
+          "lastCalibration": "Última Calibración",
+          "nextCalibrationAuto": "Próxima Calibración (auto)",
+          "equipmentImage": "Imagen del Equipo",
+          "currentCertificateFile": "Certificado Actual",
+          "manufacturerManual": "Manual del Fabricante",
+          "errors": {
+            "required": "Complete Nombre y Tipo",
+            "saveFailed": "Error al guardar: {{message}}"
+          }
+        },
+        "upload": {
+          "uploading": "Enviando...",
+          "uploaded": "Enviado",
+          "selectFile": "Seleccionar archivo",
+          "uploadError": "Error al subir: {{message}}"
+        }
+      }
+    },
+    "realtime": {
+      "disconnected": "Realtime desconectado — reconectando…",
+      "connected": "Realtime conectado",
+      "connecting": "Conectando al Realtime…",
+      "live": "Tiempo real"
+    }
+  },
+  "fr": {
+    "rawMaterialStock": {
+      "movementDialog": {
+        "title": "Mouvement de Stock MP",
+        "rawMaterial": "Matière Première",
+        "selectMp": "Sélectionnez la MP...",
+        "selectLot": "Sélectionnez le lot...",
+        "selectEntry": "Sélectionnez l'enregistrement...",
+        "entryRecord": "Enregistrement d'Entrée",
+        "entryLabel": "Entrée",
+        "balanceLabel": "Solde",
+        "initialStock": "Stock Initial",
+        "availableBalance": "Solde Disponible",
+        "supplier": "Fournisseur",
+        "quantity": "Quantité",
+        "destination": "Destination du Mouvement",
+        "selectDestination": "Sélectionnez la destination...",
+        "observationsPlaceholder": "Motif ou informations supplémentaires...",
+        "registering": "Enregistrement...",
+        "registerMovement": "Enregistrer le Mouvement",
+        "errors": {
+          "selectEntry": "Sélectionnez un enregistrement d'entrée.",
+          "selectDestination": "Sélectionnez la destination du mouvement.",
+          "invalidQuantity": "Saisissez une quantité supérieure à zéro.",
+          "insufficientBalance": "Solde insuffisant. Disponible : {{available}} {{unit}}.",
+          "saveFailed": "Échec de l'enregistrement : {{message}}",
+          "retry": "Veuillez réessayer."
+        },
+        "success": "Mouvement enregistré avec succès !"
+      },
+      "viewDialog": {
+        "regId": "ID Enregistrement",
+        "entryDate": "Date d'Entrée",
+        "manufactureDate": "Fabrication",
+        "expiryDate": "Expiration",
+        "unitPrice": "Prix Unitaire",
+        "packagingType": "Type d'Emballage",
+        "packagingCapacity": "Capacité d'Emballage",
+        "packagingQuantity": "Qté d'Emballages",
+        "opsSection": "Ordres de Production ayant utilisé ce lot",
+        "noOps": "Aucun OP n'a encore utilisé ce lot.",
+        "movementsSection": "Historique des Mouvements",
+        "noMovements": "Aucun mouvement enregistré.",
+        "fiscalQty": "Qté Fiscale",
+        "operationalQtyKg": "Qté Op. (kg)",
+        "totalConsumed": "TOTAL CONSOMMÉ",
+        "totalMoved": "TOTAL DÉPLACÉ",
+        "report": "Rapport"
+      },
+      "destinations": {
+        "processLoss": "Perte en Processus",
+        "unusedReturn": "Retour MP Non Appliquée"
+      }
+    },
+    "inventory": {
+      "openWizard": {
+        "title": "Ouvrir Inventaire — Étape {{step}} sur 3",
+        "steps": { "client": "Client", "product": "Produit", "lot": "Lot" },
+        "select": "Sélectionner {{label}}",
+        "deselectAll": "Tout désélectionner",
+        "selectAll": "Tout sélectionner",
+        "noItems": "Aucun élément disponible.",
+        "allIncluded": "TOUS seront inclus",
+        "selectedCount": "{{count}} sélectionné(s)",
+        "createInventory": "Créer l'Inventaire",
+        "errors": {
+          "tableMissing": "La table d'inventaire n'existe pas dans la base. Exécutez le SQL de migration dans Supabase.",
+          "createFailed": "Échec de création de l'inventaire : {{message}}"
+        }
+      }
+    },
+    "recipes": {
+      "simulator": {
+        "title": "Simulateur de Volume",
+        "product": "Produit",
+        "selectProduct": "Sélectionnez un produit...",
+        "volumeL": "Volume (L)",
+        "volumePlaceholder": "Ex : 5000",
+        "density": "Densité (g/mL)",
+        "densityPlaceholder": "Ex : 1,050",
+        "calculatedMass": "Masse calculée :",
+        "rawMaterial": "Matière première",
+        "percentMass": "% m/m",
+        "currentStockKg": "Stock Actuel (kg)",
+        "recipeKg": "Recette (kg)",
+        "sendKg": "Envoyer (kg)",
+        "total": "TOTAL",
+        "enterVolumeDensity": "Saisissez le volume et la densité pour calculer.",
+        "selectProductHint": "Sélectionnez un produit pour voir la simulation."
+      }
+    },
+    "orders": {
+      "details": {
+        "title": "Commande {{number}}",
+        "order": "COMMANDE",
+        "date": "DATE",
+        "status": "STATUT",
+        "product": "PRODUIT",
+        "client": "CLIENT",
+        "requester": "DEMANDEUR",
+        "clientOrder": "COMMANDE CLIENT",
+        "expectedDate": "PRÉV. LIVRAISON",
+        "volumeOrdered": "VOLUME COMMANDÉ",
+        "volumeProduced": "VOLUME PRODUIT",
+        "volumePending": "VOLUME EN ATTENTE",
+        "observations": "OBSERVATIONS",
+        "linkedOps": "Ordres de Production Liés · {{count}}",
+        "noLinkedOps": "Aucun OP lié à cette commande.",
+        "finishDate": "Date Fin",
+        "containers": "Conteneurs",
+        "totalProducedVolume": "VOLUME TOTAL PRODUIT"
+      }
+    },
+    "production": {
+      "tracking": {
+        "empty": "Aucune production en cours.",
+        "volume": "Volume (L)",
+        "packaging": "Emballage",
+        "stage": "Étape",
+        "progress": "Progression",
+        "bypass": "Bypass",
+        "bypassActive": "Actif",
+        "viewAll": "Voir tout"
+      },
+      "card": {
+        "view": "Voir",
+        "lot": "Lot",
+        "waitingStart": "En attente de démarrage :",
+        "volume": "Volume",
+        "mass": "Masse",
+        "packaging": "Emballage"
+      },
+      "qr": {
+        "title": "Code QR de Traçabilité",
+        "copied": "Copié !",
+        "copy": "Copier",
+        "open": "Ouvrir",
+        "png": "PNG"
+      },
+      "invoice": {
+        "sentTitle": "Envoyé pour facturation — cliquer pour décocher",
+        "pendingTitle": "En attente — cliquer pour envoyer",
+        "sent": "Envoyé",
+        "pending": "En attente"
+      },
+      "envase": {
+        "title": "Conditionnement — {{product}} · Lot {{lot}}",
+        "destinationPackaging": "Emballage de Destination",
+        "packagedContainers": "Emballages Conditionnés",
+        "addPackaging": "Ajouter Emballage",
+        "plateNumber": "N° Plaque",
+        "barrelNumber": "N° Fût",
+        "minTestDate": "Date Test Min.",
+        "volumeRegistered": "Volume enregistré :",
+        "opVolume": "Volume de l'OP :",
+        "volumeExceeded": "Volume dépassé !",
+        "registerPackaging": "Enregistrer Conditionnement",
+        "saving": "Enregistrement..."
+      }
+    },
+    "containers": {
+      "viewDialog": {
+        "title": "Détail du Conteneur",
+        "opData": "Données OP",
+        "packagingData": "Données d'Emballage",
+        "logistics": "Logistique",
+        "departureDate": "Date de Sortie",
+        "minTest": "Test Min.",
+        "responsible": "Responsable"
+      },
+      "addTank": {
+        "title": "Ajouter Cuve — Entrée au Parc",
+        "productData": "Données Produit",
+        "packagingData": "Données d'Emballage",
+        "selectProduct": "Sélectionnez ou saisissez le produit...",
+        "platePlaceholder": "N° de plaque",
+        "barrelPlaceholder": "N° de fût",
+        "netWeight": "Poids Net (kg)",
+        "grossWeight": "Poids Brut (kg)",
+        "registerEntry": "Enregistrer l'Entrée",
+        "saving": "Enregistrement...",
+        "errors": {
+          "required": "Remplissez les champs obligatoires",
+          "registerFailed": "Échec d'enregistrement de la cuve"
+        },
+        "success": {
+          "title": "Cuve enregistrée",
+          "description": "{{number}} ajoutée au parc."
+        }
+      },
+      "historyDialog": {
+        "title": "Historique du Conteneur",
+        "subtitle": "Sélectionnez un conteneur (N° Plaque / Fût) pour voir tous ses cycles d'utilisation.",
+        "container": "Conteneur",
+        "searchPlaceholder": "Rechercher par n° plaque ou n° fût...",
+        "searching": "Recherche...",
+        "search": "Rechercher",
+        "newSearch": "Nouvelle recherche"
+      },
+      "historyCycles": {
+        "empty": "Aucun cycle d'utilisation trouvé pour ce conteneur.",
+        "count": "{{count}} cycle(s) trouvé(s) — du plus récent au plus ancien."
+      },
+      "cycleCard": {
+        "closedByTransfer": "Clôturé par Transfert",
+        "inProgress": "En cours",
+        "production": "Production",
+        "departure": "Sortie",
+        "noDepartureTransfer": "Pas de sortie (transfert)",
+        "pending": "En attente",
+        "liquidKg": "Net (kg)",
+        "grossKg": "Brut (kg)",
+        "opStatus": "Statut OP",
+        "qcStatus": "Statut CQ",
+        "outgoingTransfer": "Transfert de Sortie",
+        "origin": "Origine",
+        "transferredVolumeL": "Vol. Transféré (L)"
+      },
+      "status": {
+        "inYard": "Au Parc",
+        "shipped": "Expédié"
+      }
+    },
+    "transfer": {
+      "viewDialog": {
+        "generalData": "Données Générales",
+        "origins": "Origines",
+        "lotSummary": "Résumé par Lot",
+        "destinations": "Destinations",
+        "grandTotals": "Totaux Généraux",
+        "container": "Conteneur",
+        "barrel": "Fût",
+        "volumeWithdrawnL": "Vol. Retiré (L)",
+        "remainingBalanceL": "Solde Restant (L)",
+        "massKg": "Masse (kg)",
+        "totalVolumeWithdrawn": "Volume Total Retiré",
+        "totalMassWithdrawn": "Masse Totale Retirée",
+        "totalDestinationVolume": "Volume Total Destination",
+        "totalDestinationMass": "Masse Totale Destination",
+        "noLot": "Sans Lot",
+        "plateNumber": "N° Plaque",
+        "driver": "Chauffeur",
+        "packagingType": "Type d'Emballage",
+        "sling": "Élingue",
+        "minTestDate": "Date Test Min.",
+        "netWeightKg": "Poids Net (kg)",
+        "grossWeightKg": "Poids Brut (kg)"
+      },
+      "destination": {
+        "destinationN": "Destination {{n}}",
+        "type": "Type",
+        "transfer": "Transfert",
+        "shipping": "Expédition",
+        "plateNumber": "N° Plaque",
+        "barrelNumber": "N° Fût",
+        "platePlaceholder": "Ex : TANKA 41",
+        "barrelPlaceholder": "N° fût",
+        "vehiclePlate": "Plaque du véhicule",
+        "driver": "Chauffeur",
+        "driverPlaceholder": "Nom du chauffeur",
+        "volumeAuto": "auto",
+        "massAuto": "auto",
+        "automatic": "Automatique",
+        "packagingType": "Type d'Emballage",
+        "selectOption": "Sélectionnez...",
+        "seals": "Scellés",
+        "sealsPlaceholder": "N° scellés",
+        "netWeightAuto": "Poids Net (kg) auto",
+        "grossWeightAuto": "Poids Brut (kg) auto",
+        "minTestDate": "Date Test Min."
+      },
+      "fieldLabel": { "auto": "auto" }
+    },
+    "quality": {
+      "equipment": {
+        "types": {
+          "scale": "Balance",
+          "phMeter": "pH-mètre",
+          "thermometer": "Thermomètre",
+          "viscometer": "Viscosimètre",
+          "oven": "Étuve",
+          "muffle": "Moufle",
+          "stirrer": "Agitateur",
+          "colorimeter": "Colorimètre",
+          "spectrophotometer": "Spectrophotomètre",
+          "densimeter": "Densimètre",
+          "refractometer": "Réfractomètre",
+          "conductivityMeter": "Conductimètre",
+          "titulator": "Titulateur",
+          "microscope": "Microscope",
+          "other": "Autre"
+        },
+        "calibrationStatus": {
+          "noDate": "Sans date",
+          "expired": "Expiré",
+          "dueSoon": "À échéance",
+          "compliant": "Conforme",
+          "expiredDaysAgo": "Expiré depuis {{days}}j",
+          "inDays": "Dans {{days}}j"
+        },
+        "kpi": {
+          "total": "Total Équipements",
+          "compliant": "Conformes",
+          "dueSoon": "Proches de l'Échéance",
+          "expired": "Expirés"
+        },
+        "card": {
+          "model": "Modèle",
+          "patrimony": "Patrimoine",
+          "certificate": "Certificat",
+          "lastCalibration": "Dernière Calib.",
+          "view": "Voir",
+          "edit": "Modifier",
+          "registerCalibration": "Enregistrer calibration",
+          "attachments": "Pièces jointes",
+          "history": "Historique",
+          "delete": "Supprimer"
+        },
+        "viewDialog": {
+          "type": "Type",
+          "manufacturer": "Fabricant",
+          "model": "Modèle",
+          "serial": "Série",
+          "patrimony": "Patrimoine",
+          "info": "Informations",
+          "historyTab": "Historique ({{count}})",
+          "attachmentsTab": "Pièces jointes ({{count}})",
+          "location": "Emplacement",
+          "responsible": "Responsable",
+          "labResponsible": "Lab. Responsable",
+          "lastCalibration": "Dernière Calibration",
+          "calibrationCompany": "Société de Calibration",
+          "nextCalibration": "Prochaine Calibration",
+          "obs": "Obs",
+          "noHistory": "Aucun historique enregistré.",
+          "viewCertificate": "Voir certificat",
+          "certificateLabel": "Certificat",
+          "company": "Société",
+          "next": "Prochaine",
+          "noAttachments": "Aucune pièce jointe."
+        },
+        "calibrationDialog": {
+          "title": "Enregistrer Calibration — {{name}}",
+          "date": "Date de Calibration",
+          "certificateNumber": "N° Certificat",
+          "company": "Société Exécutrice",
+          "responsible": "Responsable",
+          "nextCalibration": "Prochaine Calibration",
+          "certificatePdf": "Certificat (PDF)",
+          "register": "Enregistrer",
+          "errors": {
+            "dateRequired": "Saisissez la date de calibration",
+            "generic": "Erreur : {{message}}"
+          }
+        },
+        "formDialog": {
+          "editTitle": "Modifier Équipement",
+          "newTitle": "Nouvel Équipement",
+          "name": "Nom",
+          "type": "Type",
+          "manufacturer": "Fabricant",
+          "model": "Modèle",
+          "serialNumber": "Numéro de Série",
+          "patrimonyNumber": "Numéro de Patrimoine",
+          "location": "Emplacement",
+          "labResponsible": "Laboratoire Responsable",
+          "periodicityDays": "Périodicité Calibration (jours)",
+          "calibrationCompany": "Société de Calibration",
+          "currentCertificate": "N° Certificat Actuel",
+          "lastCalibration": "Dernière Calibration",
+          "nextCalibrationAuto": "Prochaine Calibration (auto)",
+          "equipmentImage": "Image de l'Équipement",
+          "currentCertificateFile": "Certificat Actuel",
+          "manufacturerManual": "Manuel du Fabricant",
+          "errors": {
+            "required": "Remplissez Nom et Type",
+            "saveFailed": "Échec de l'enregistrement : {{message}}"
+          }
+        },
+        "upload": {
+          "uploading": "Envoi...",
+          "uploaded": "Envoyé",
+          "selectFile": "Sélectionner fichier",
+          "uploadError": "Erreur d'envoi : {{message}}"
+        }
+      }
+    },
+    "realtime": {
+      "disconnected": "Realtime déconnecté — reconnexion…",
+      "connected": "Realtime connecté",
+      "connecting": "Connexion au Realtime…",
+      "live": "Temps réel"
+    }
+  }
+}

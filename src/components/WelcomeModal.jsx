@@ -1,9 +1,11 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 
 export default function WelcomeModal({ user, onClose }) {
+  const { t } = useTranslation();
   if (!user) return null;
-  const name = user.nome || user.full_name || user.usuario || 'Usuário';
+  const name = user.nome || user.full_name || user.usuario || t('common.defaultUser');
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center"
@@ -20,16 +22,16 @@ export default function WelcomeModal({ user, onClose }) {
         </div>
 
         <h2 className="text-xl font-bold mb-1">
-          Bem-vindo, {name}!
+          {t('welcome.title', { name })}
         </h2>
         <p className="text-sm text-muted-foreground mb-6">
-          De volta ao <span className="font-semibold" style={{ color: '#2575D1' }}>ChemCtrl</span>.
+          {t('welcome.subtitle')}
         </p>
 
         <button onClick={onClose}
           className="w-full py-2.5 rounded-lg text-white font-medium text-sm transition-opacity hover:opacity-90"
           style={{ background: '#2575D1' }}>
-          Continuar
+          {t('welcome.continue')}
         </button>
       </div>
     </div>

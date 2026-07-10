@@ -1,20 +1,25 @@
 import ExcelJS from 'exceljs';
-import moment from 'moment';
+import i18n from '@/i18n';
+import { fmtDate } from '@/i18n/formatters';
 
-/**
- * Exporta itens de estoque de matéria-prima para um arquivo .xlsx formatado.
- * @param {Array} items - Itens filtrados exibidos na tela
- */
 export async function exportEstoqueMPToExcel(items) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'ChemCtrl';
   wb.created = new Date();
 
-  const ws = wb.addWorksheet('Estoque MP', {
+  const ws = wb.addWorksheet(i18n.t('rawMaterialStock.export.sheetName'), {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
 
-  const headers = ['COD. MP', 'MP', 'CLIENTE', 'LOTE', 'SALDO ATUAL', 'UNID.', 'VALIDADE'];
+  const headers = [
+    i18n.t('rawMaterialStock.export.columns.mpCode'),
+    i18n.t('rawMaterialStock.export.columns.mpName'),
+    i18n.t('rawMaterialStock.export.columns.client'),
+    i18n.t('rawMaterialStock.export.columns.lot'),
+    i18n.t('rawMaterialStock.export.columns.currentBalance'),
+    i18n.t('rawMaterialStock.export.columns.unit'),
+    i18n.t('rawMaterialStock.export.columns.expiry'),
+  ];
   ws.columns = [
     { header: headers[0], key: 'mp_code', width: 14 },
     { header: headers[1], key: 'mp_name', width: 36 },
@@ -40,9 +45,7 @@ export async function exportEstoqueMPToExcel(items) {
       lot: item.lot || '',
       current_stock: item.current_stock ?? 0,
       unit: item.unit || '',
-      expiry_date: item.expiry_date
-        ? moment(item.expiry_date).format('DD/MM/YYYY')
-        : '',
+      expiry_date: item.expiry_date ? fmtDate(item.expiry_date, undefined, i18n.language) : '',
     });
     // Saldo Atual como número com casas decimais
     const saldoCell = row.getCell(5);

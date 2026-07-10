@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Bell, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { NotificationBadge } from './NotificationBadge';
 import { NotificationItem } from './NotificationItem';
 
 export function NotificationDropdown() {
+  const { t } = useTranslation();
   const {
     notifications,
     unreadCount,
@@ -28,10 +30,10 @@ export function NotificationDropdown() {
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold text-sm">
-            Notificações
+            {t('notifications.title')}
             {unreadCount > 0 && (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                ({unreadCount} não {unreadCount === 1 ? 'lida' : 'lidas'})
+                ({t(unreadCount === 1 ? 'notifications.unread' : 'notifications.unreadPlural', { count: unreadCount })})
               </span>
             )}
           </h3>
@@ -41,7 +43,7 @@ export function NotificationDropdown() {
               onClick={() => markAllAsRead()}
               className="text-xs text-[#2575D1] hover:underline"
             >
-              Marcar todas como lidas
+              {t('notifications.markAllRead')}
             </button>
           )}
         </div>
@@ -52,7 +54,7 @@ export function NotificationDropdown() {
           </div>
         ) : notifications.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
-            Nenhuma notificação
+            {t('notifications.empty')}
           </div>
         ) : (
           <ScrollArea className="max-h-80">
@@ -74,7 +76,7 @@ export function NotificationDropdown() {
             to="/notificacoes"
             className="text-xs text-[#2575D1] hover:underline"
           >
-            Ver todas as notificações
+            {t('notifications.viewAll')}
           </Link>
         </div>
       </PopoverContent>

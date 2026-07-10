@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FlaskConical, Plus, Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
@@ -13,6 +14,7 @@ import CalibrationDialog from '@/components/equipamentos/CalibrationDialog';
 import EquipmentViewDialog from '@/components/equipamentos/EquipmentViewDialog';
 
 export default function EquipamentosLab() {
+  const { t } = useTranslation();
   const { data: equipments, loading } = useRealtimeEntity('LabEquipment', () => base44.entities.LabEquipment.list('-created_date'));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -41,7 +43,7 @@ export default function EquipamentosLab() {
   };
 
   const handleDelete = async (eq) => {
-    if (!confirm(`Excluir "${eq.name}"?`)) return;
+    if (!confirm(t('quality.equipmentLab.deleteConfirm', { name: eq.name }))) return;
     await base44.entities.LabEquipment.delete(eq.id);
   };
 
@@ -67,12 +69,12 @@ export default function EquipamentosLab() {
               <FlaskConical className="w-5 h-5" style={{ color: '#2563EB' }} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Equipamentos do Laboratório</h1>
-              <p className="text-sm text-gray-500">Controle dos equipamentos laboratoriais e acompanhamento das calibrações.</p>
+              <h1 className="text-xl font-bold text-gray-800">{t('quality.equipmentLab.title')}</h1>
+              <p className="text-sm text-gray-500">{t('quality.equipmentLab.subtitle')}</p>
             </div>
           </div>
           <Button onClick={() => { setEditing(null); setFormOpen(true); }} className="shrink-0" style={{ background: '#2563EB' }}>
-            <Plus className="w-4 h-4" /> Novo Equipamento
+            <Plus className="w-4 h-4" /> {t('quality.equipmentLab.newEquipment')}
           </Button>
         </div>
 
@@ -83,22 +85,22 @@ export default function EquipamentosLab() {
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="flex-1 min-w-48 relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-            <Input placeholder="Buscar por nome, patrimônio, fabricante, modelo..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={t('quality.equipmentLab.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Status: Todos</SelectItem>
-              <SelectItem value="conforme">Conforme</SelectItem>
-              <SelectItem value="vencer">A Vencer</SelectItem>
-              <SelectItem value="vencido">Vencido</SelectItem>
+              <SelectItem value="all">{t('quality.equipmentLab.statusAll')}</SelectItem>
+              <SelectItem value="conforme">{t('quality.equipmentLab.statusConforme')}</SelectItem>
+              <SelectItem value="vencer">{t('quality.equipmentLab.statusExpiring')}</SelectItem>
+              <SelectItem value="vencido">{t('quality.equipmentLab.statusExpired')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tipo: Todos</SelectItem>
-              {EQUIPMENT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              <SelectItem value="all">{t('quality.equipmentLab.typeAll')}</SelectItem>
+              {EQUIPMENT_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -106,12 +108,12 @@ export default function EquipamentosLab() {
 
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <p className="text-center text-gray-400 py-12">Carregando equipamentos...</p>
+          <p className="text-center text-gray-400 py-12">{t('quality.equipmentLab.loading')}</p>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-400 mb-2">Nenhum equipamento encontrado.</p>
+            <p className="text-gray-400 mb-2">{t('quality.equipmentLab.empty')}</p>
             <Button variant="outline" onClick={() => { setEditing(null); setFormOpen(true); }}>
-              <Plus className="w-4 h-4" /> Cadastrar primeiro equipamento
+              <Plus className="w-4 h-4" /> {t('quality.equipmentLab.registerFirst')}
             </Button>
           </div>
         ) : (

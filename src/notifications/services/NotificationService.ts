@@ -1,5 +1,6 @@
+import i18n from '@/i18n';
 import { createNotificationRpc } from '../api/notificationApi';
-import { EVENT_TEMPLATES } from '../constants';
+import { EVENT_TEMPLATE_CONFIG, getNotificationText } from '../constants';
 import type {
   CreateNotificationInput,
   NotificationEvent,
@@ -13,13 +14,14 @@ function buildProductionInput(
   const client = production.client?.trim();
   if (!client) return null;
 
-  const template = EVENT_TEMPLATES[event];
+  const template = EVENT_TEMPLATE_CONFIG[event];
   const opNumber = production.op_number || '—';
   const entityId = production.id;
+  const { title, message } = getNotificationText(i18n.t.bind(i18n), event, opNumber);
 
   return {
-    title: template.title,
-    message: template.message(opNumber),
+    title,
+    message,
     type: template.type,
     priority: 'normal',
     event,

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { Search, Eye, Pencil, FileText, Ban, Loader2, QrCode } from 'lucide-react';
@@ -11,7 +12,8 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import InvoiceToggle from '@/components/productions/InvoiceToggle';
 import { generateProductionPDF } from '@/lib/pdfReports';
 import QrCodeDialog from '@/components/productions/QrCodeDialog';
-import { brasiliaDate, brasiliaDateTime } from '@/lib/brasilTime';
+import { fmtDate, fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
+import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import moment from 'moment';
 
 const parseArr = (val) => {
@@ -32,10 +34,11 @@ const StatusBadge = ({ status }) => {
     'Finalizado': 'bg-green-100 text-green-700',
     'Cancelado': 'bg-red-100 text-red-700',
   };
-  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted'}`}>{status}</span>;
+  return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted'}`}>{translateProductionStatus(status)}</span>;
 };
 
 export default function Producoes() {
+  const { t, i18n } = useTranslation();
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
@@ -63,8 +66,8 @@ export default function Producoes() {
     const set = new Set();
     (recipes || []).forEach(r => { if (r.client?.trim()) set.add(r.client.trim()); });
     productions.forEach(p => { if (p.client?.trim()) set.add(p.client.trim()); });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [recipes, productions]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, i18n.language));
+  }, [recipes, productions, i18n.language]);
 
   const filtered = productions.filter(p => {
     const q = search.toLowerCase();
@@ -82,9 +85,9 @@ export default function Producoes() {
   const totalOPs = filtered.length;
   const activeOPs = filtered.filter(p => !['Finalizado', 'Cancelado'].includes(p.status)).length;
   const totalVol = filtered.filter(p => p.status === 'Finalizado').reduce((s, p) => s + (p.volume || 0), 0);
-  const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
-  const fmtMoney = (n) => `R$ ${(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  const fmt4 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
+  const fmtMoney = (n) => fmtCurrency(n, 'BRL', i18n.language);
+  const fmt4 = (n) => fmtNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }, i18n.language);
   const stockUnitOf = (mp) => {
     if (mp.stock_id) { const s = (stocks || []).find(x => x.id === mp.stock_id); if (s && s.unit) return s.unit; }
     return 'kg';
@@ -130,9 +133,9 @@ export default function Producoes() {
 
       setShowEditPkg(false);
       load();
-      toast({ title: 'Produção atualizada com sucesso' });
+      toast({ title: t('production.messages.updated') });
     } catch (err) {
-      toast({ title: 'Erro ao atualizar produção', description: err.message, variant: 'destructive' });
+      toast({ title: t('production.messages.updateError'), description: err.message, variant: 'destructive' });
     } finally {
       setSavingPkg(false);
     }
@@ -182,11 +185,11 @@ export default function Producoes() {
         end_time: cancelTarget.end_time || new Date().toISOString(),
       });
 
-      toast({ title: `OP ${cancelTarget.op_number} cancelada`, description: 'Matérias primas devolvidas ao estoque.' });
+      toast({ title: t('production.cancel.success', { op: cancelTarget.op_number }), description: t('production.cancel.successDetail') });
       setCancelTarget(null);
       load();
     } catch (err) {
-      toast({ title: 'Erro ao cancelar OP', variant: 'destructive' });
+      toast({ title: t('production.cancel.error'), variant: 'destructive' });
     }
   };
 
@@ -199,8 +202,8 @@ export default function Producoes() {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold">📊 Produções</h1>
-        <p className="text-sm text-muted-foreground">{productions.length} produção(ões) registrada(s)</p>
+        <h1 className="text-2xl font-bold">📊 {t('production.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('production.list.subtitle', { count: productions.length })}</p>
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
@@ -208,22 +211,22 @@ export default function Producoes() {
         <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar por OP, produto, lote, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={t('production.list.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={clientFilter} onValueChange={setClientFilter}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Cliente" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('common.client')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos os clientes</SelectItem>
+              <SelectItem value="todos">{t('production.list.allClients')}</SelectItem>
               {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Data finaliz. de</span>
+            <span>{t('production.list.finishDateFrom')}</span>
             <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-9 text-xs" />
-            <span>até</span>
+            <span>{t('production.list.finishDateUntil')}</span>
             <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-9 text-xs" />
             {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-blue-500 underline text-xs">Limpar</button>
+              <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-blue-500 underline text-xs">{t('common.clear')}</button>
             )}
           </div>
         </div>
@@ -236,23 +239,23 @@ export default function Producoes() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-gray-50">
-                  <th className="px-4 py-3 text-left">OP</th>
-                  <th className="px-4 py-3 text-left">Fabricação</th>
-                  <th className="px-4 py-3 text-left">Produto</th>
-                  <th className="px-4 py-3 text-left">Cliente</th>
-                  <th className="px-4 py-3 text-left">Lote</th>
-                  <th className="px-4 py-3 text-right">Volume (L)</th>
-                  <th className="px-4 py-3 text-left">Embalagem</th>
-                  <th className="px-4 py-3 text-center">Etapa</th>
-                  <th className="px-4 py-3 text-center">Envio p/ Faturamento</th>
-                  <th className="px-4 py-3 text-center">Ações</th>
+                  <th className="px-4 py-3 text-left">{t('production.opNumber')}</th>
+                  <th className="px-4 py-3 text-left">{t('production.list.manufacturing')}</th>
+                  <th className="px-4 py-3 text-left">{t('common.product')}</th>
+                  <th className="px-4 py-3 text-left">{t('common.client')}</th>
+                  <th className="px-4 py-3 text-left">{t('common.lot')}</th>
+                  <th className="px-4 py-3 text-right">{t('production.packaging.volume')}</th>
+                  <th className="px-4 py-3 text-left">{t('production.list.packagingCol')}</th>
+                  <th className="px-4 py-3 text-center">{t('production.list.stage')}</th>
+                  <th className="px-4 py-3 text-center">{t('production.list.billingSend')}</th>
+                  <th className="px-4 py-3 text-center">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{p.op_number}</td>
-                    <td className="px-4 py-2.5 text-sm">{p.end_time ? brasiliaDate(p.end_time) : '—'}</td>
+                    <td className="px-4 py-2.5 text-sm">{p.end_time ? fmtDate(p.end_time, undefined, i18n.language) : t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{p.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{p.client}</td>
                     <td className="px-4 py-2.5 text-sm">{p.lot}</td>
@@ -262,11 +265,11 @@ export default function Producoes() {
                         const opContainers = containers.filter(c => c.op_number === p.op_number);
                         if (opContainers.length > 0) {
                           if (opContainers.length > 1) {
-                            return String(opContainers.length).padStart(2, '0') + ' x Unidades de Carga';
+                            return t('production.packaging.loadUnits', { count: String(opContainers.length).padStart(2, '0') });
                           }
-                          return opContainers.map(c => c.container_number).filter(Boolean).join(', ') || '—';
+                          return opContainers.map(c => c.container_number).filter(Boolean).join(', ') || t('common.notAvailable');
                         }
-                        return p.packaging_type || p.packaging_info || '—';
+                        return p.packaging_type || p.packaging_info || t('common.notAvailable');
                       })()}
                     </td>
                     <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>
@@ -284,7 +287,7 @@ export default function Producoes() {
                         <button onClick={() => openView(p)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canCancel(p.status) && (
-                          <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title="Cancelar OP"><Ban className="w-3.5 h-3.5 text-red-400" /></button>
+                          <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title={t('production.actions.cancel')}><Ban className="w-3.5 h-3.5 text-red-400" /></button>
                         )}
                       </div>
                     </td>
@@ -297,9 +300,9 @@ export default function Producoes() {
 
         {/* Fixed Footer */}
         <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
-          <span>Total de OPs: <strong>{totalOPs}</strong></span>
-          <span>OPs ativas: <strong>{activeOPs}</strong></span>
-          <span>Volume total finalizado: <strong>{fmt(totalVol)} L</strong></span>
+          <span>{t('production.list.totalOps', { count: totalOPs })}</span>
+          <span>{t('production.list.activeOps', { count: activeOPs })}</span>
+          <span>{t('production.list.finishedVolume', { volume: fmt(totalVol) })}</span>
         </div>
       </div>
 
@@ -310,28 +313,28 @@ export default function Producoes() {
           {viewing && (
             <div>
               <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                <div><p className="text-xs text-muted-foreground">OP</p><p className="font-bold" style={{ color: '#2575D1' }}>{viewing.op_number}</p></div>
-                <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{viewing.lot}</p></div>
-                <div><p className="text-xs text-muted-foreground">Data Finalização</p><p className="font-medium">{viewing.end_time ? brasiliaDateTime(viewing.end_time) : '—'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Produto</p><p className="font-bold">{viewing.product}</p></div>
-                <div><p className="text-xs text-muted-foreground">Cliente</p><p className="font-medium">{viewing.client}</p></div>
-                <div><p className="text-xs text-muted-foreground">Volume</p><p className="font-medium">{fmt(viewing.volume)} L</p></div>
-                <div><p className="text-xs text-muted-foreground">Massa</p><p className="font-bold">{fmt(viewing.mass)} kg</p></div>
-                <div><p className="text-xs text-muted-foreground">Revisão</p><p className="font-medium">{viewing.recipe_revision}</p></div>
-                <div><p className="text-xs text-muted-foreground">Prioridade</p><p className="font-medium">{viewing.priority}</p></div>
-                <div><p className="text-xs text-muted-foreground">Etapa</p><StatusBadge status={viewing.status} /></div>
-                <div><p className="text-xs text-muted-foreground">Preço Unit.</p><p className="font-bold" style={{ color: '#2575D1' }}>R$ {(viewing.unit_price || 0).toFixed(2)}/kg</p></div>
-                <div><p className="text-xs text-muted-foreground">Valor Total</p><p className="font-bold">{fmtMoney(viewing.total_value)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.opNumber')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{viewing.op_number}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{viewing.lot}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.list.finishDate')}</p><p className="font-medium">{viewing.end_time ? fmtDateTime(viewing.end_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.product')}</p><p className="font-bold">{viewing.product}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.client')}</p><p className="font-medium">{viewing.client}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(viewing.volume, 'L', i18n.language)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-bold">{fmtMass(viewing.mass, 'kg', i18n.language)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.list.revision')}</p><p className="font-medium">{viewing.recipe_revision}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.fields.priority')}</p><p className="font-medium">{translatePriority(viewing.priority)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.list.stage')}</p><StatusBadge status={viewing.status} /></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.fields.unitPrice')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{t('production.list.unitPricePerKg', { price: fmtCurrency(viewing.unit_price || 0, 'BRL', i18n.language) })}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('production.fields.totalValue')}</p><p className="font-bold">{fmtMoney(viewing.total_value)}</p></div>
               </div>
 
-              <h4 className="text-sm font-semibold mt-4 mb-2">Matérias Primas Utilizadas</h4>
+              <h4 className="text-sm font-semibold mt-4 mb-2">{t('production.list.rawMaterialsUsed')}</h4>
               <table className="w-full text-sm border rounded-lg overflow-hidden mb-4">
                 <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                  <th className="px-3 py-2 text-left">Código</th>
-                  <th className="px-3 py-2 text-left">MP</th>
-                  <th className="px-3 py-2 text-left">Lote</th>
-                  <th className="px-3 py-2 text-right">Qtd. Fiscal</th>
-                  <th className="px-3 py-2 text-right">Qtd. Op. (kg)</th>
+                  <th className="px-3 py-2 text-left">{t('common.code')}</th>
+                  <th className="px-3 py-2 text-left">{t('production.list.mpShort')}</th>
+                  <th className="px-3 py-2 text-left">{t('common.lot')}</th>
+                  <th className="px-3 py-2 text-right">{t('production.checklist.qtyFiscal')}</th>
+                  <th className="px-3 py-2 text-right">{t('production.checklist.qtyOperational')} (kg)</th>
                 </tr></thead>
                 <tbody>
                   {parseArr(viewing.raw_materials_used).map((m, i) => {
@@ -340,7 +343,7 @@ export default function Producoes() {
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
                       <td className="px-3 py-2">{m.mp_name}</td>
-                      <td className="px-3 py-2">{liveLotOf(m) || '—'}</td>
+                      <td className="px-3 py-2">{liveLotOf(m) || t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-right">{fmt(m.qty_fiscal)} {unit}</td>
                       <td className="px-3 py-2 text-right font-medium">{fmt(m.qty_operational)} kg</td>
                     </tr>
@@ -354,7 +357,7 @@ export default function Producoes() {
                     const tOp = mps.reduce((s, m) => s + (m.qty_operational || 0), 0);
                     return (
                     <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>
-                      <td colSpan={3} className="px-3 py-2">TOTAL</td>
+                      <td colSpan={3} className="px-3 py-2">{t('production.checklist.total').toUpperCase()}</td>
                       <td className="px-3 py-2 text-right">{fmt(tFiscal)}{sameUnit ? ' ' + units[0] : ''}</td>
                       <td className="px-3 py-2 text-right">{fmt(tOp)} kg</td>
                     </tr>
@@ -382,51 +385,51 @@ export default function Producoes() {
                 const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
                 return (
                   <div className="mt-4">
-                    <h4 className="text-sm font-semibold mb-2">Análise de Custos</h4>
+                    <h4 className="text-sm font-semibold mb-2">{t('production.list.costAnalysis')}</h4>
                     <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
                       <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                        <th className="px-3 py-2 text-left">MATÉRIA PRIMA</th>
-                        <th className="px-3 py-2 text-right">QTD. FISCAL</th>
-                        <th className="px-3 py-2 text-right">PREÇO UNIT.</th>
-                        <th className="px-3 py-2 text-right">CUSTO</th>
+                        <th className="px-3 py-2 text-left">{t('production.list.rawMaterialCol')}</th>
+                        <th className="px-3 py-2 text-right">{t('production.checklist.qtyFiscal')}</th>
+                        <th className="px-3 py-2 text-right">{t('production.list.unitPriceCol')}</th>
+                        <th className="px-3 py-2 text-right">{t('production.list.costCol')}</th>
                       </tr></thead>
                       <tbody>
                         {mpCostRows.map((r, i) => (
                           <tr key={i} className="border-t">
-                            <td className="px-3 py-2">{r.name || '—'}</td>
+                            <td className="px-3 py-2">{r.name || t('common.notAvailable')}</td>
                             <td className="px-3 py-2 text-right">{fmt(r.qty)} {r.unit}</td>
                             <td className="px-3 py-2 text-right">{fmt4(r.price)}</td>
                             <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
                           </tr>
                         ))}
                         <tr className="border-t bg-muted/50 font-bold">
-                          <td colSpan={3} className="px-3 py-2 text-right">Custo com MP</td>
+                          <td colSpan={3} className="px-3 py-2 text-right">{t('production.list.mpCost')}</td>
                           <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
                         </tr>
                         <tr className="border-t bg-muted/50 font-bold">
-                          <td colSpan={2} className="px-3 py-2">Mão de Obra (preço PA × massa)</td>
-                          <td className="px-3 py-2 text-right">{fmt4(productPrice)} × {fmt(mass)} kg</td>
+                          <td colSpan={2} className="px-3 py-2">{t('production.list.laborCost')}</td>
+                          <td className="px-3 py-2 text-right">{t('production.list.laborFormula', { price: fmt4(productPrice), mass: fmt(mass) })}</td>
                           <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
                         </tr>
                       </tbody>
                     </table>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-blue-50 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">Custo MP</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.costMp')}</p>
                         <p className="font-bold text-sm" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</p>
-                        <p className="text-xs text-muted-foreground">{pctMp.toFixed(1)}% do total</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMp.toFixed(1) })}</p>
                       </div>
                       <div className="bg-purple-50 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">Custo MO</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.costMo')}</p>
                         <p className="font-bold text-sm text-purple-700">{fmtMoney(moCost)}</p>
-                        <p className="text-xs text-muted-foreground">{pctMo.toFixed(1)}% do total</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMo.toFixed(1) })}</p>
                       </div>
                       <div className="bg-green-50 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">Custo Total</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.totalCost')}</p>
                         <p className="font-bold text-sm text-green-700">{fmtMoney(totalCost)}</p>
                       </div>
                       <div className="bg-amber-50 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">Custo por kg</p>
+                        <p className="text-xs text-muted-foreground">{t('production.list.costPerKg')}</p>
                         <p className="font-bold text-sm text-amber-700">{fmtMoney(costPerKg)}</p>
                       </div>
                     </div>
@@ -436,27 +439,27 @@ export default function Producoes() {
 
               {viewContainers.length > 0 ? (
                 <>
-                  <h4 className="text-sm font-semibold mb-2">Embalagens Envasadas</h4>
+                  <h4 className="text-sm font-semibold mb-2">{t('production.list.packagedContainers')}</h4>
                   <table className="w-full text-sm border rounded-lg overflow-hidden">
                     <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                      <th className="px-3 py-2 text-left">Nº Embalagem</th>
-                      <th className="px-3 py-2 text-left">Tipo</th>
-                      <th className="px-3 py-2 text-right">Volume (L)</th>
-                      <th className="px-3 py-2 text-right">Líquido (kg)</th>
-                      <th className="px-3 py-2 text-right">Bruto (kg)</th>
+                      <th className="px-3 py-2 text-left">{t('production.list.packagingNumber')}</th>
+                      <th className="px-3 py-2 text-left">{t('common.type')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.packaging.volume')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.packaging.netWeight')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.packaging.grossWeight')}</th>
                     </tr></thead>
                     <tbody>
                       {viewContainers.map((c, i) => (
                         <tr key={i} className="border-t">
-                          <td className="px-3 py-2 font-medium">{c.container_number || '—'}</td>
-                          <td className="px-3 py-2">{c.type || '—'}</td>
+                          <td className="px-3 py-2 font-medium">{c.container_number || t('common.notAvailable')}</td>
+                          <td className="px-3 py-2">{c.type || t('common.notAvailable')}</td>
                           <td className="px-3 py-2 text-right">{fmt(c.volume)}</td>
                           <td className="px-3 py-2 text-right">{fmt(c.net_weight)}</td>
                           <td className="px-3 py-2 text-right">{fmt(c.gross_weight)}</td>
                         </tr>
                       ))}
                       <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>
-                        <td colSpan={2} className="px-3 py-2">TOTAL</td>
+                        <td colSpan={2} className="px-3 py-2">{t('production.checklist.total').toUpperCase()}</td>
                         <td className="px-3 py-2 text-right">{fmt(viewContainers.reduce((s, c) => s + (c.volume || 0), 0))} L</td>
                         <td className="px-3 py-2 text-right">{fmt(viewContainers.reduce((s, c) => s + (c.net_weight || 0), 0))} kg</td>
                         <td className="px-3 py-2 text-right">{fmt(viewContainers.reduce((s, c) => s + (c.gross_weight || 0), 0))} kg</td>
@@ -466,7 +469,7 @@ export default function Producoes() {
                 </>
               ) : (viewing.packaging_info || viewing.packaging_type) ? (
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold mb-2">Embalagem Sugerida para Envase</h4>
+                  <h4 className="text-sm font-semibold mb-2">{t('production.list.suggestedPackaging')}</h4>
                   <p className="text-sm bg-muted/50 rounded-lg px-3 py-2 font-medium">{viewing.packaging_info || viewing.packaging_type}</p>
                 </div>
               ) : null}
@@ -481,11 +484,11 @@ export default function Producoes() {
                 const pauseMs = p.total_pause_ms || 0;
 
                 const fmtDur = (ms) => {
-                  if (!ms || ms <= 0) return '—';
+                  if (!ms || ms <= 0) return t('common.notAvailable');
                   const totalMin = Math.floor(ms / 60000);
                   const h = Math.floor(totalMin / 60);
                   const m = totalMin % 60;
-                  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+                  return h > 0 ? t('production.list.durationHours', { hours: h, minutes: m }) : t('production.list.durationMinutes', { minutes: m });
                 };
 
                 const prodMs = (qcStartMs && startMs) ? (qcStartMs - startMs - pauseMs) : (endMs && startMs && !qcStartMs) ? (endMs - startMs - pauseMs) : null;
@@ -497,43 +500,39 @@ export default function Producoes() {
 
                 return (
                   <div className="mt-4">
-                    <h4 className="text-sm font-semibold mb-3">Tempos de Produção</h4>
+                    <h4 className="text-sm font-semibold mb-3">{t('production.list.productionTimes')}</h4>
                     <div className="grid grid-cols-1 gap-2 text-sm">
-                      {/* Produção */}
                       <div className="bg-blue-50 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-blue-700 mb-2">⚙️ Produção</p>
+                        <p className="text-xs font-semibold text-blue-700 mb-2">{t('production.list.productionPhase')}</p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.start_time ? brasiliaDateTime(p.start_time) : '—'}</p></div>
-                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{qcStartMs ? brasiliaDateTime(p.qc_start_time) : (endMs ? brasiliaDateTime(p.end_time) : '—')}</p></div>
-                          <div><p className="text-muted-foreground">Tempo (- pausa)</p><p className="font-bold text-blue-700">{fmtDur(prodMs)}{pauseMs > 0 ? ` (pausa: ${fmtDur(pauseMs)})` : ''}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.start_time ? fmtDateTime(p.start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{qcStartMs ? fmtDateTime(p.qc_start_time, undefined, i18n.language) : (endMs ? fmtDateTime(p.end_time, undefined, i18n.language) : t('common.notAvailable'))}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.list.timeMinusPause')}</p><p className="font-bold text-blue-700">{fmtDur(prodMs)}{pauseMs > 0 ? t('production.list.pauseLabel', { duration: fmtDur(pauseMs) }) : ''}</p></div>
                         </div>
                       </div>
-                      {/* Qualidade */}
                       <div className="bg-amber-50 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-amber-700 mb-2">🔬 Controle de Qualidade</p>
+                        <p className="text-xs font-semibold text-amber-700 mb-2">{t('production.list.qualityPhase')}</p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.qc_start_time ? brasiliaDateTime(p.qc_start_time) : '—'}</p></div>
-                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{envaseStartMs ? brasiliaDateTime(p.envase_start_time) : '—'}</p></div>
-                          <div><p className="text-muted-foreground">Tempo</p><p className="font-bold text-amber-700">{fmtDur(qcMs)}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.qc_start_time ? fmtDateTime(p.qc_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{envaseStartMs ? fmtDateTime(p.envase_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                          <div><p className="text-muted-foreground">{t('common.time')}</p><p className="font-bold text-amber-700">{fmtDur(qcMs)}</p></div>
                         </div>
                       </div>
-                      {/* Envase */}
                       <div className="bg-purple-50 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-purple-700 mb-2">📦 Envase</p>
+                        <p className="text-xs font-semibold text-purple-700 mb-2">{t('production.list.packagingPhase')}</p>
                         <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div><p className="text-muted-foreground">Início</p><p className="font-medium">{p.envase_start_time ? brasiliaDateTime(p.envase_start_time) : '—'}</p></div>
-                          <div><p className="text-muted-foreground">Término</p><p className="font-medium">{endMs ? brasiliaDateTime(p.end_time) : '—'}</p></div>
-                          <div><p className="text-muted-foreground">Tempo</p><p className="font-bold text-purple-700">{fmtDur(envaseMs)}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.envase_start_time ? fmtDateTime(p.envase_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                          <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{endMs ? fmtDateTime(p.end_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                          <div><p className="text-muted-foreground">{t('common.time')}</p><p className="font-bold text-purple-700">{fmtDur(envaseMs)}</p></div>
                         </div>
                       </div>
-                      {/* Total */}
                       {totalMs && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold text-green-700">⏱️ Tempo Total da Produção</p>
+                            <p className="text-xs font-semibold text-green-700">{t('production.list.totalProductionTime')}</p>
                             <p className="text-lg font-bold text-green-700">{fmtDur(totalMs)}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">Produção + Qualidade + Envase</p>
+                          <p className="text-xs text-muted-foreground mt-1">{t('production.list.totalTimeBreakdown')}</p>
                         </div>
                       )}
                     </div>
@@ -545,15 +544,15 @@ export default function Producoes() {
           <div className="flex justify-between mt-4">
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => generateProductionPDF(viewing, viewContainers, stocks)} className="gap-2">
-                <FileText className="w-4 h-4" /> Gerar PDF
+                <FileText className="w-4 h-4" /> {t('production.actions.generatePdf')}
               </Button>
               {viewing?.public_token && (
-                <Button variant="outline" onClick={() => { setQrToken(viewing.public_token); setQrLabel(`${viewing.op_number} · ${viewing.product} · Lote ${viewing.lot}`); setShowQr(true); }} className="gap-2">
-                  <QrCode className="w-4 h-4" /> QR Code
+                <Button variant="outline" onClick={() => { setQrToken(viewing.public_token); setQrLabel(`${viewing.op_number} · ${viewing.product} · ${t('common.lot')} ${viewing.lot}`); setShowQr(true); }} className="gap-2">
+                  <QrCode className="w-4 h-4" /> {t('production.list.qrCode')}
                 </Button>
               )}
             </div>
-            <Button variant="outline" onClick={() => setShowView(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setShowView(false)}>{t('buttons.close')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -561,30 +560,30 @@ export default function Producoes() {
       {/* Edit Packaging Dialog */}
       <Dialog open={showEditPkg} onOpenChange={setShowEditPkg}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Editar Produção — {editingPkg?.op_number}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('production.list.editTitle', { op: editingPkg?.op_number })}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Pedido Cliente</label>
-              <Input value={clientOrder} onChange={e => setClientOrder(e.target.value)} placeholder="Nº do pedido do cliente" />
+              <label className="text-xs font-medium text-muted-foreground">{t('production.list.clientOrder')}</label>
+              <Input value={clientOrder} onChange={e => setClientOrder(e.target.value)} placeholder={t('production.list.clientOrderPlaceholder')} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Embalagem</label>
-              <Input value={pkgValue} onChange={e => setPkgValue(e.target.value)} placeholder="Ex: Tambor 200 L" />
+              <label className="text-xs font-medium text-muted-foreground">{t('production.fields.packaging')}</label>
+              <Input value={pkgValue} onChange={e => setPkgValue(e.target.value)} placeholder={t('production.newProduction.packagingPlaceholder')} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Preço Unitário (R$/kg)</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('production.list.unitPriceBrl')}</label>
               <Input type="number" step="0.01" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="0.00" />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Valor Total (auto)</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('production.list.totalValueAuto')}</label>
               <Input value={fmtMoney((parseFloat(unitPrice) || 0) * (editingPkg?.mass || 0))} readOnly className="bg-muted/50 font-semibold" />
-              <p className="text-xs text-muted-foreground mt-1">{fmt(editingPkg?.mass || 0)} kg × R$ {(parseFloat(unitPrice) || 0).toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{fmt(editingPkg?.mass || 0)} kg × {fmtCurrency(parseFloat(unitPrice) || 0, 'BRL', i18n.language)}</p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowEditPkg(false)} disabled={savingPkg}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setShowEditPkg(false)} disabled={savingPkg}>{t('buttons.cancel')}</Button>
             <Button onClick={savePkg} disabled={savingPkg} style={{ background: '#2575D1', color: 'white' }}>
-              {savingPkg ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : 'Salvar'}
+              {savingPkg ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : t('buttons.save')}
             </Button>
           </div>
         </DialogContent>
@@ -593,10 +592,10 @@ export default function Producoes() {
       <ConfirmDialog
         open={!!cancelTarget}
         onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
-        title="Cancelar OP"
-        message={`Tem certeza que deseja cancelar a OP "${cancelTarget?.op_number}"?\n\nO estoque de matérias primas será devolvido. A OP será mantida para registro mas não contará nos volumes e receitas do mês.`}
+        title={t('production.list.cancelTitle')}
+        message={t('production.list.cancelMessage', { op: cancelTarget?.op_number })}
         onConfirm={confirmCancel}
-        confirmLabel="Sim, cancelar"
+        confirmLabel={t('production.list.cancelConfirmLabel')}
         confirmColor="#DC2626"
       />
     </div>

@@ -14,6 +14,8 @@ import { UpdateProvider } from '@/pwa/context/UpdateProvider';
 import { UpdateModal } from '@/pwa/components/UpdateModal';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { I18nextProvider } from 'react-i18next';
+import i18n from '@/i18n';
 
 // Auth pages
 import Login from '@/pages/Login';
@@ -86,28 +88,30 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <TooltipProvider delayDuration={300}>
-        <AuthProvider>
-          <QueryClientProvider client={queryClientInstance}>
-            <Router>
-              <ScrollToTop />
-              <UpdateProvider>
-                <InternalAuthProvider>
-                  <RealtimeProvider>
-                    <NotificationProvider>
-                      <AuthenticatedApp />
-                    </NotificationProvider>
-                  </RealtimeProvider>
-                </InternalAuthProvider>
-                <UpdateModal />
-              </UpdateProvider>
-            </Router>
-            <Toaster />
-          </QueryClientProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </ThemeProvider>
+    <I18nextProvider i18n={i18n}>
+      <ThemeProvider>
+        <TooltipProvider delayDuration={300}>
+          <AuthProvider>
+            <QueryClientProvider client={queryClientInstance}>
+              <Router>
+                <ScrollToTop />
+                <UpdateProvider>
+                  <InternalAuthProvider>
+                    <RealtimeProvider>
+                      <NotificationProvider>
+                        <AuthenticatedApp />
+                      </NotificationProvider>
+                    </RealtimeProvider>
+                  </InternalAuthProvider>
+                  <UpdateModal />
+                </UpdateProvider>
+              </Router>
+              <Toaster />
+            </QueryClientProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </ThemeProvider>
+    </I18nextProvider>
   )
 }
 

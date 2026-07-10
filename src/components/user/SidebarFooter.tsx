@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { LogOut, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -9,6 +10,7 @@ interface SidebarFooterProps {
 }
 
 export function SidebarFooter({ collapsed, onToggleCollapse }: SidebarFooterProps) {
+  const { t } = useTranslation();
   const { logout } = useInternalAuth();
 
   return (
@@ -22,7 +24,7 @@ export function SidebarFooter({ collapsed, onToggleCollapse }: SidebarFooterProp
         <button
           type="button"
           onClick={onToggleCollapse}
-          aria-label={collapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
+          aria-label={collapsed ? t('sidebar.footer.expand') : t('sidebar.footer.collapse')}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0"
         >
           {collapsed ? (
@@ -35,7 +37,7 @@ export function SidebarFooter({ collapsed, onToggleCollapse }: SidebarFooterProp
         <button
           type="button"
           onClick={logout}
-          aria-label="Sair"
+          aria-label={t('sidebar.footer.logout')}
           className={cn(
             'flex items-center gap-2 rounded-lg text-white/60 hover:text-red-400 hover:bg-white/10 transition-all duration-200 shrink-0 overflow-hidden',
             collapsed
@@ -50,7 +52,7 @@ export function SidebarFooter({ collapsed, onToggleCollapse }: SidebarFooterProp
               collapsed ? 'max-w-0 opacity-0' : 'max-w-[4rem] opacity-100'
             )}
           >
-            Sair
+            {t('sidebar.footer.logout')}
           </span>
         </button>
       </div>

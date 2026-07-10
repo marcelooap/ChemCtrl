@@ -1,4 +1,5 @@
 import React from 'react';
+import { translateProductionStatus } from '@/i18n/domainMaps';
 
 export const etapaColors = {
   'Aguardando Início': '#6B7280',
@@ -13,7 +14,7 @@ export function EtapaBadge({ status }) {
   const color = etapaColors[status] || '#6B7280';
   return (
     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${color}1A`, color }}>
-      {status}
+      {translateProductionStatus(status)}
     </span>
   );
 }

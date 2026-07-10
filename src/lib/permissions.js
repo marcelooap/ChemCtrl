@@ -1,3 +1,6 @@
+import i18n from '@/i18n';
+import { ROLE_KEYS } from '@/i18n/domainMaps';
+
 // Role-based access control for ChemCtrl
 // nivel_acesso: Administrador, Supervisor, Operacional, Visualização
 // tipo: interno, externo
@@ -5,7 +8,6 @@
 export function canAccessRoute(user, path) {
   if (!user) return false;
 
-  // Externo: somente Tela Clientes e Notificações
   if (user.tipo === 'externo') {
     return path === '/tela-clientes' || path === '/notificacoes';
   }
@@ -36,7 +38,6 @@ export function isReadOnly(user, path) {
   const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (user?.tipo === 'externo') return true;
   if (nivel === 'visualizacao') return true;
-  // Operacional: read-only on Vasilhames and Estoque de MP
   if (nivel === 'operacional' || nivel === 'operador') {
     return ['/vasilhames', '/estoque'].includes(path);
   }
@@ -64,8 +65,13 @@ export function getDefaultRoute(user) {
 
 export function getRoleLabel(user) {
   if (!user) return '';
-  if (user.tipo === 'externo') return 'Cliente Externo';
-  return user.nivel_acesso || user.nivel || '';
+  if (user.tipo === 'externo') {
+    return i18n.t('users.roles.externalClient');
+  }
+  const role = user.nivel_acesso || user.nivel || '';
+  const key = ROLE_KEYS[role];
+  if (key) return i18n.t(key);
+  return role;
 }
 
 export function getNivelOptionsForTipo(tipo) {

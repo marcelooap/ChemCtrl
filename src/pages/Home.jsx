@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import moment from 'moment';
+import { fmtDate, fmtVolume, fmtCurrency, fmtNumber } from '@/i18n/formatters';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
 
-const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert }) => (
+const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert, showLabel, hideLabel }) => (
   <div className="bg-card rounded-xl border border-border overflow-hidden flex flex-col" style={{ borderBottom: accentBorder ? `3px solid ${accentBorder}` : undefined }}>
     <div className="p-5">
       <div className="flex items-start justify-between mb-3">
@@ -18,7 +20,7 @@ const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Ico
               type="button"
               onClick={onToggleEye}
               className="w-8 h-8 rounded-lg flex items-center justify-center bg-muted hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
-              title={hidden ? 'Mostrar' : 'Ocultar'}
+              title={hidden ? showLabel : hideLabel}
             >
               {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -51,6 +53,7 @@ const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Ico
 );
 
 export default function Home() {
+  const { t } = useTranslation();
   const { user } = useOutletContext();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -78,22 +81,19 @@ export default function Home() {
   const openVolume = openOrders.reduce((s, o) => s + (o.volume_pending || 0), 0);
   const lateOrders = openOrders.filter(o => o.expected_date && moment(o.expected_date).isBefore(now));
 
-  const fmt = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const fmtMoney = (n) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-
   const handleBypass = async (p) => {
     setBypassing(p.id);
     try {
       if (p.bypass_qc) {
         await base44.entities.Production.update(p.id, { bypass_qc: false });
-        toast({ title: `By-pass removido — ${p.op_number}` });
+        toast({ title: t('dashboard.bypass.disabled', { op: p.op_number }) });
       } else {
         const updates = { bypass_qc: true };
         if (p.status === 'Qualidade') {
           updates.status = 'Envase';
         }
         await base44.entities.Production.update(p.id, updates);
-        toast({ title: `By-pass liberado — ${p.op_number}` });
+        toast({ title: t('dashboard.bypass.enabled', { op: p.op_number }) });
       }
       load();
     } finally {
@@ -101,44 +101,45 @@ export default function Home() {
     }
   };
 
+  const subtitleDate = fmtDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Home</h1>
-        <p className="text-sm text-muted-foreground">Visão geral · {now.format('DD [de] MMMM [de] YYYY')}</p>
+        <h1 className="text-2xl font-bold">{t('dashboard.homeTitle')}</h1>
+        <p className="text-sm text-muted-foreground">{t('dashboard.subtitle', { date: subtitleDate })}</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Volume Produzido no Mês" value={`${fmt(totalVolumeMonth)} L`}
-          subtitle={`${finishedThisMonth.length} OP(s) finalizada(s)`} icon={BarChart3} iconBg="#1e56a0"
+        <StatCard title={t('dashboard.stats.volumeProducedMonth')} value={fmtVolume(totalVolumeMonth)}
+          subtitle={t('dashboard.stats.finishedOps', { count: finishedThisMonth.length })} icon={BarChart3} iconBg="#1e56a0"
           showEye hidden={hideVolume} onToggleEye={() => setHideVolume(h => !h)}
+          showLabel={t('common.show')} hideLabel={t('common.hide')}
           footer={[
-            { text: hideVolume ? '+ •••••• em produção' : `+ ${fmt(inProgressVolume)} L em produção`, color: '#1e56a0' },
-            { text: hideVolume ? 'Total provisionado: ••••••' : `Total provisionado: ${fmt(totalVolumeMonth + inProgressVolume)} L`, color: undefined },
+            { text: hideVolume ? `+ ••••••` : t('dashboard.stats.inProgressVolume', { volume: fmtNumber(inProgressVolume, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }), color: '#1e56a0' },
+            { text: hideVolume ? '••••••' : t('dashboard.stats.totalProvisioned', { volume: fmtNumber(totalVolumeMonth + inProgressVolume, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }), color: undefined },
           ]} />
-        <StatCard title="Receita Gerada no Mês" value={fmtMoney(revenueMonth)} valueColor="#00875a"
-          subtitle="receita realizada" icon={DollarSign} iconBg="#00875a" accentBorder="#00875a" showEye
+        <StatCard title={t('dashboard.stats.revenueGeneratedMonth')} value={fmtCurrency(revenueMonth)} valueColor="#00875a"
+          subtitle={t('dashboard.stats.revenueRealized')} icon={DollarSign} iconBg="#00875a" accentBorder="#00875a" showEye
           hidden={hideRevenue} onToggleEye={() => setHideRevenue(h => !h)}
+          showLabel={t('common.show')} hideLabel={t('common.hide')}
           footer={[
-            { text: hideRevenue ? '+ •••••• em produção' : `+ ${fmtMoney(revenueInProcess)} em produção`, color: '#1e56a0' },
-            { text: hideRevenue ? 'Total provisionado: ••••••' : `Total provisionado: ${fmtMoney(revenueMonth + revenueInProcess)}`, color: undefined },
+            { text: hideRevenue ? `+ ••••••` : t('dashboard.stats.revenueInProduction', { amount: fmtCurrency(revenueInProcess) }), color: '#1e56a0' },
+            { text: hideRevenue ? 'Total provisionado: ••••••' : t('dashboard.stats.revenueTotalProvisioned', { amount: fmtCurrency(revenueMonth + revenueInProcess) }), color: undefined },
           ]} />
-        <StatCard title="Pedidos em Aberto"
-          value={<><span className="text-foreground">{openOrders.length}</span> <span className="text-muted-foreground">pedidos</span></>}
-          subtitle={`${fmt(openVolume)} L pendentes`} subtitleColor="#f59e0b"
+        <StatCard title={t('dashboard.stats.openOrders')}
+          value={<><span className="text-foreground">{openOrders.length}</span> <span className="text-muted-foreground">{t('dashboard.stats.ordersLabel')}</span></>}
+          subtitle={t('dashboard.stats.pendingVolume', { volume: fmtNumber(openVolume, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })} subtitleColor="#f59e0b"
           icon={ClipboardList} iconBg="#f59e0b" accentBorder="#f59e0b"
-          alert={lateOrders.length > 0 ? `${lateOrders.length} pedido(s) em atraso · ${fmt(lateOrders.reduce((s, o) => s + (o.volume_pending || 0), 0))} L` : null} />
+          alert={lateOrders.length > 0 ? t('dashboard.stats.lateOrders', { count: lateOrders.length, volume: fmtNumber(lateOrders.reduce((s, o) => s + (o.volume_pending || 0), 0), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : null} />
       </div>
 
-      {/* Active Productions — redesigned */}
       <div className="bg-card rounded-xl border border-border">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">Produções em andamento</h3>
+            <h3 className="text-sm font-semibold">{t('dashboard.stats.productionsInProgress')}</h3>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{inProgressProds.length}</span>
           </div>
-
         </div>
         <ProductionTrackingTable
           productions={inProgressProds}

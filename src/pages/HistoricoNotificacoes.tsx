@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
 import { Bell, ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ type ReadFilter = 'all' | 'read' | 'unread';
 type TypeFilter = NotificationType | 'all';
 
 export default function HistoricoNotificacoes() {
+  const { t } = useTranslation();
   const { user } = useOutletContext<{ user: { id: string } }>();
   const { markAllAsRead, navigateToNotification, unreadCount } = useNotifications();
 
@@ -33,8 +35,8 @@ export default function HistoricoNotificacoes() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   useEffect(() => {
-    const t = setTimeout(() => setSearchDebounced(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSearchDebounced(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const loadPage = useCallback(async () => {
@@ -69,16 +71,16 @@ export default function HistoricoNotificacoes() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Bell className="w-6 h-6" />
-            Histórico de Notificações
+            {t('notifications.history')}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Todas as notificações do sistema
-            {unreadCount > 0 && ` · ${unreadCount} não ${unreadCount === 1 ? 'lida' : 'lidas'}`}
+            {t('notifications.subtitle')}
+            {unreadCount > 0 && ` · ${t(unreadCount === 1 ? 'notifications.unread' : 'notifications.unreadPlural', { count: unreadCount })}`}
           </p>
         </div>
         {unreadCount > 0 && (
           <Button variant="outline" size="sm" onClick={() => markAllAsRead()}>
-            Marcar todas como lidas
+            {t('notifications.markAllRead')}
           </Button>
         )}
       </div>
@@ -88,7 +90,7 @@ export default function HistoricoNotificacoes() {
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por título ou mensagem..."
+              placeholder={t('notifications.filters.searchTitleMessage')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -96,24 +98,24 @@ export default function HistoricoNotificacoes() {
           </div>
           <Select value={readFilter} onValueChange={(v) => setReadFilter(v as ReadFilter)}>
             <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t('common.status')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="unread">Não lidas</SelectItem>
-              <SelectItem value="read">Lidas</SelectItem>
+              <SelectItem value="all">{t('notifications.filters.all')}</SelectItem>
+              <SelectItem value="unread">{t('notifications.filters.unreadOnly')}</SelectItem>
+              <SelectItem value="read">{t('notifications.filters.readOnly')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
             <SelectTrigger className="w-40">
-              <SelectValue placeholder="Tipo" />
+              <SelectValue placeholder={t('notifications.filters.type')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os tipos</SelectItem>
-              <SelectItem value="info">Info</SelectItem>
-              <SelectItem value="success">Sucesso</SelectItem>
-              <SelectItem value="warning">Aviso</SelectItem>
-              <SelectItem value="error">Erro</SelectItem>
+              <SelectItem value="all">{t('notifications.filters.allTypes')}</SelectItem>
+              <SelectItem value="info">{t('notifications.types.info')}</SelectItem>
+              <SelectItem value="success">{t('notifications.types.success')}</SelectItem>
+              <SelectItem value="warning">{t('notifications.types.warning')}</SelectItem>
+              <SelectItem value="error">{t('notifications.types.error')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -126,7 +128,7 @@ export default function HistoricoNotificacoes() {
           </div>
         ) : items.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
-            Nenhuma notificação encontrada
+            {t('notifications.emptyFound')}
           </div>
         ) : (
           <div>
@@ -148,16 +150,16 @@ export default function HistoricoNotificacoes() {
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
-            Anterior
+            {t('buttons.previous')}
           </Button>
-          <span className="text-sm text-muted-foreground">Página {page + 1}</span>
+          <span className="text-sm text-muted-foreground">{t('notifications.pageLabel', { page: page + 1 })}</span>
           <Button
             variant="outline"
             size="sm"
             disabled={!hasMore || loading}
             onClick={() => setPage((p) => p + 1)}
           >
-            Próxima
+            {t('buttons.next')}
             <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>

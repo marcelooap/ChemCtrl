@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
@@ -8,12 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import moment from 'moment';
 import FieldLabel from '@/components/transbordo/FieldLabel';
 import DestinationBlock from '@/components/transbordo/DestinationBlock';
 import TransferViewDialog from '@/components/transbordo/TransferViewDialog';
 import ProductCombobox from '@/components/ui/ProductCombobox';
-import { generateTransferPDF } from '@/lib/pdfReports';
+import { fmtDate, fmtNumber } from '@/i18n/formatters';
 
 const emptyDest = () => ({
   type: 'Transbordo', placa: '', barril: '', volume: 0, mass: 0,
@@ -23,11 +23,15 @@ const emptyDest = () => ({
 
 const emptyOrigin = () => ({ container_id: '', container_number: '', barril_number: '', lot: '', volume_used: 0, remaining_stock: 0 });
 
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
-const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
+const TRANSFER_TYPE_KEYS = {
+  Transbordo: 'containers.transferPage.types.transfer',
+  Expedição: 'containers.transferPage.types.expedition',
+};
+
 export default function Transbordo() {
+  const { t, i18n } = useTranslation();
   const { user } = useOutletContext();
   const { data: transfers, loading, reload: load } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const { data: allContainers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -47,30 +51,41 @@ export default function Transbordo() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  const na = t('common.notAvailable');
+
+  const fmt = useCallback((n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language), [i18n.language]);
+  const fmt3 = useCallback((n) => fmtNumber(n || 0, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language), [i18n.language]);
+
+  const translateTransferType = useCallback((type) => {
+    if (!type || type === '—') return na;
+    const key = TRANSFER_TYPE_KEYS[type];
+    return key ? t(key) : type;
+  }, [t, na]);
+
   const containers = useMemo(() => allContainers.filter(c => c.status === 'No Pátio'), [allContainers]);
 
-  const filtered = transfers.filter(t => {
+  const filtered = transfers.filter(item => {
     const q = search.toLowerCase();
-    const dests = parseArr(t.destinations);
+    const dests = parseArr(item.destinations);
     const destinoText = dests.map(d => d.placa || '').join(' ');
-    const matchesSearch = !q || [t.product, t.client, t.transfer_number, destinoText].some(v => (v || '').toLowerCase().includes(q));
-    const tDate = t.date ? moment(t.date) : null;
-    const matchesStart = !startDate || (tDate && tDate.isSameOrAfter(moment(startDate), 'day'));
-    const matchesEnd = !endDate || (tDate && tDate.isSameOrBefore(moment(endDate), 'day'));
-    const tipo = dests.length > 0 ? (dests[0].type || t.destination_type || '') : (t.destination_type || '');
+    const matchesSearch = !q || [item.product, item.client, item.transfer_number, destinoText].some(v => (v || '').toLowerCase().includes(q));
+    const tDate = item.date ? new Date(item.date) : null;
+    const matchesStart = !startDate || (tDate && tDate >= new Date(startDate));
+    const matchesEnd = !endDate || (tDate && tDate <= new Date(endDate + 'T23:59:59'));
+    const tipo = dests.length > 0 ? (dests[0].type || item.destination_type || '') : (item.destination_type || '');
     const matchesType = typeFilter === 'all' || tipo === typeFilter;
     return matchesSearch && matchesStart && matchesEnd && matchesType;
   });
 
   const stats = useMemo(() => {
     let totalVol = 0, totalMass = 0, expeditions = 0, transbordos = 0;
-    filtered.forEach(t => {
-      const dests = parseArr(t.destinations);
-      const totalVolT = dests.reduce((s, d) => s + (d.volume || 0), 0) || t.volume || 0;
-      const tDensity = recipes.find(r => r.product_name === t.product)?.density || 0;
+    filtered.forEach(item => {
+      const dests = parseArr(item.destinations);
+      const totalVolT = dests.reduce((s, d) => s + (d.volume || 0), 0) || item.volume || 0;
+      const tDensity = recipes.find(r => r.product_name === item.product)?.density || 0;
       totalVol += totalVolT;
       totalMass += Math.round(totalVolT * tDensity);
-      const tipo = dests.length > 0 ? (dests[0].type || t.destination_type || '') : (t.destination_type || '');
+      const tipo = dests.length > 0 ? (dests[0].type || item.destination_type || '') : (item.destination_type || '');
       if (tipo === 'Expedição') expeditions++;
       if (tipo === 'Transbordo') transbordos++;
     });
@@ -152,90 +167,87 @@ export default function Transbordo() {
   };
 
   const save = async () => {
-    if (!form.product) { toast({ title: 'Selecione um produto', variant: 'destructive' }); return; }
-    if (form.origins.length === 0 || !form.origins[0].container_id) { toast({ title: 'Adicione ao menos uma origem', variant: 'destructive' }); return; }
-    if (form.destinations.length === 0) { toast({ title: 'Adicione ao menos um destino', variant: 'destructive' }); return; }
+    if (!form.product) { toast({ title: t('containers.transferPage.messages.selectProduct'), variant: 'destructive' }); return; }
+    if (form.origins.length === 0 || !form.origins[0].container_id) { toast({ title: t('containers.transferPage.messages.addOrigin'), variant: 'destructive' }); return; }
+    if (form.destinations.length === 0) { toast({ title: t('containers.transferPage.messages.addDestination'), variant: 'destructive' }); return; }
 
     setSaving(true);
     try {
       const isSingle = form.destinations.length === 1;
-    const dests = form.destinations.map(d => {
-      const vol = Math.round(isSingle ? originsVolume : (parseFloat(d.volume) || 0));
-      const mass = Math.round(vol * productDensity);
-      const tare = parseFloat(d.tare) || 0;
-      return {
-        ...d,
-        volume: vol,
-        mass,
-        net_weight: mass,
-        gross_weight: mass + tare,
+      const dests = form.destinations.map(d => {
+        const vol = Math.round(isSingle ? originsVolume : (parseFloat(d.volume) || 0));
+        const mass = Math.round(vol * productDensity);
+        const tare = parseFloat(d.tare) || 0;
+        return {
+          ...d,
+          volume: vol,
+          mass,
+          net_weight: mass,
+          gross_weight: mass + tare,
+        };
+      });
+
+      const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
+
+      const data = {
+        ...form,
+        transfer_number: transferNumber,
+        operator: user?.nome || user?.full_name || user?.email || '',
+        date: new Date(form.date).toISOString(),
+        origins: form.origins,
+        destinations: dests,
       };
-    });
+      await base44.entities.Transfer.create(data);
 
-    const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
-
-    const data = {
-      ...form,
-      transfer_number: transferNumber,
-      operator: user?.nome || user?.full_name || user?.email || '',
-      date: new Date(form.date).toISOString(),
-      origins: form.origins,
-      destinations: dests,
-    };
-    await base44.entities.Transfer.create(data);
-
-    // Update origin containers: deduct withdrawn volume, set departure if zero
-    for (const o of form.origins) {
-      if (!o.container_id) continue;
-      const c = containers.find(ct => ct.id === o.container_id);
-      if (!c) continue;
-      const withdrawn = parseFloat(o.volume_used) || 0;
-      const newVolume = Math.max(0, (c.volume || 0) - withdrawn);
-      const updates = { volume: newVolume };
-      if (newVolume === 0) {
-        updates.status = 'Expedido';
-        updates.departure_date = new Date().toISOString().split('T')[0];
+      for (const o of form.origins) {
+        if (!o.container_id) continue;
+        const c = containers.find(ct => ct.id === o.container_id);
+        if (!c) continue;
+        const withdrawn = parseFloat(o.volume_used) || 0;
+        const newVolume = Math.max(0, (c.volume || 0) - withdrawn);
+        const updates = { volume: newVolume };
+        if (newVolume === 0) {
+          updates.status = 'Expedido';
+          updates.departure_date = new Date().toISOString().split('T')[0];
+        }
+        await base44.entities.Container.update(o.container_id, updates);
       }
-      await base44.entities.Container.update(o.container_id, updates);
-    }
 
-    // For each Transbordo destination, create a container in Vasilhame
-    // Fetch all containers to find the max registration_id (guarantees uniqueness)
-    const allContainers = await base44.entities.Container.list('-created_date', 500);
-    let maxRegId = 0;
-    allContainers.forEach(c => { if (c.registration_id != null && c.registration_id > maxRegId) maxRegId = c.registration_id; });
-    const originProductionId = form.origins[0]?.container_id
-      ? (containers.find(ct => ct.id === form.origins[0].container_id)?.production_id || '')
-      : '';
-    for (const d of dests) {
-      if (d.type === 'Transbordo') {
-        maxRegId += 1;
-        await base44.entities.Container.create({
-          production_id: originProductionId,
-          op_number: transferNumber,
-          container_number: d.placa || '',
-          barril_number: d.barril || '',
-          registration_id: maxRegId,
-          product: form.product,
-          client: form.client || '',
-          lot: form.origins[0]?.lot || '',
-          type: d.packaging_type || '',
-          volume: d.volume || 0,
-          tare: parseFloat(d.tare) || 0,
-          net_weight: d.net_weight || 0,
-          gross_weight: d.gross_weight || 0,
-          seals: d.seals || '',
-          sling: d.sling || '',
-          gps: d.gps || '',
-          min_test_date: d.min_test_date || '',
-          operator: user?.nome || user?.full_name || user?.email || '',
-          status: 'No Pátio'
-        });
+      const allContainersList = await base44.entities.Container.list('-created_date', 500);
+      let maxRegId = 0;
+      allContainersList.forEach(c => { if (c.registration_id != null && c.registration_id > maxRegId) maxRegId = c.registration_id; });
+      const originProductionId = form.origins[0]?.container_id
+        ? (containers.find(ct => ct.id === form.origins[0].container_id)?.production_id || '')
+        : '';
+      for (const d of dests) {
+        if (d.type === 'Transbordo') {
+          maxRegId += 1;
+          await base44.entities.Container.create({
+            production_id: originProductionId,
+            op_number: transferNumber,
+            container_number: d.placa || '',
+            barril_number: d.barril || '',
+            registration_id: maxRegId,
+            product: form.product,
+            client: form.client || '',
+            lot: form.origins[0]?.lot || '',
+            type: d.packaging_type || '',
+            volume: d.volume || 0,
+            tare: parseFloat(d.tare) || 0,
+            net_weight: d.net_weight || 0,
+            gross_weight: d.gross_weight || 0,
+            seals: d.seals || '',
+            sling: d.sling || '',
+            gps: d.gps || '',
+            min_test_date: d.min_test_date || '',
+            operator: user?.nome || user?.full_name || user?.email || '',
+            status: 'No Pátio'
+          });
+        }
       }
-    }
 
       setShowForm(false); load();
-      toast({ title: 'Transbordo registrado' });
+      toast({ title: t('containers.transferPage.messages.registered') });
       setForm({
         date: new Date().toISOString().split('T')[0], product: '', client: '',
         observations: '',
@@ -243,7 +255,7 @@ export default function Transbordo() {
         destinations: [emptyDest()]
       });
     } catch (err) {
-      toast({ title: 'Erro ao registrar transbordo', description: err.message, variant: 'destructive' });
+      toast({ title: t('containers.transferPage.messages.registerError'), description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -251,202 +263,195 @@ export default function Transbordo() {
 
   return (
     <div className="flex gap-4" style={{ height: 'calc(100vh - 48px)' }}>
-      {/* Sidebar */}
       <div className="w-60 shrink-0 bg-card rounded-xl shadow-sm border border-border p-4 flex flex-col gap-4 overflow-y-auto">
-        <h3 className="text-sm font-bold">Filtros</h3>
+        <h3 className="text-sm font-bold">{t('containers.transferPage.filters')}</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder={t('common.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Inicial</label>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.startDate')}</label>
           <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Final</label>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.endDate')}</label>
           <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo</label>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('common.type')}</label>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="Transbordo">Transbordo</SelectItem>
-              <SelectItem value="Expedição">Expedição</SelectItem>
+              <SelectItem value="all">{t('common.all')}</SelectItem>
+              <SelectItem value="Transbordo">{t('containers.transferPage.types.transfer')}</SelectItem>
+              <SelectItem value="Expedição">{t('containers.transferPage.types.expedition')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {(search || startDate || endDate || typeFilter !== 'all') && (
-          <Button onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setTypeFilter('all'); }} variant="outline" size="sm" className="text-xs">Limpar Filtros</Button>
+          <Button onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setTypeFilter('all'); }} variant="outline" size="sm" className="text-xs">{t('common.clearFilters')}</Button>
         )}
         <div className="mt-auto pt-4 border-t border-border">
           <Button onClick={() => setShowForm(true)} style={{ background: '#2575D1' }} className="text-white w-full hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" /> Novo Transbordo
+            <Plus className="w-4 h-4 mr-2" /> {t('containers.transferPage.newTransfer')}
           </Button>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden">
         <div className="shrink-0 p-4 border-b border-border">
-          <h1 className="text-xl font-bold">🔄 Transbordo</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} de {transfers.length} registro(s)</p>
+          <h1 className="text-xl font-bold">🔄 {t('containers.transfer.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('containers.transferPage.subtitle', { filtered: filtered.length, total: transfers.length })}</p>
         </div>
         <div className="flex-1 overflow-auto">
           {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : filtered.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Nenhum transbordo registrado.</div>
-        ) : (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('containers.transferPage.empty')}</div>
+          ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
-                <th className="px-4 py-3 text-left">Registro</th><th className="px-4 py-3 text-left">Tipo</th><th className="px-4 py-3 text-left">Data</th><th className="px-4 py-3 text-left">Produto</th>
-                <th className="px-4 py-3 text-left">Cliente</th><th className="px-4 py-3 text-left">Lote</th><th className="px-4 py-3 text-right">Vol. Total (L)</th><th className="px-4 py-3 text-left">Destino</th><th className="px-4 py-3 text-center">Ações</th>
+                <th className="px-4 py-3 text-left">{t('containers.transferPage.table.record')}</th><th className="px-4 py-3 text-left">{t('common.type')}</th><th className="px-4 py-3 text-left">{t('common.date')}</th><th className="px-4 py-3 text-left">{t('containers.fields.product')}</th>
+                <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th><th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-right">{t('containers.transferPage.table.totalVolume')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.destination')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
-                {filtered.map((t) => {
-                  const dests = parseArr(t.destinations);
-                  const originsArr = parseArr(t.origins);
-                  const totalVol = dests.reduce((s, d) => s + (d.volume || 0), 0) || t.volume || 0;
-                  const tipo = dests.length > 0 ? (dests[0].type || t.destination_type || '—') : (t.destination_type || '—');
+                {filtered.map((item) => {
+                  const dests = parseArr(item.destinations);
+                  const originsArr = parseArr(item.origins);
+                  const totalVol = dests.reduce((s, d) => s + (d.volume || 0), 0) || item.volume || 0;
+                  const tipo = dests.length > 0 ? (dests[0].type || item.destination_type || '—') : (item.destination_type || '—');
                   const lotTotals = {};
                   originsArr.forEach(o => { const k = o.lot || ''; lotTotals[k] = (lotTotals[k] || 0) + (parseFloat(o.volume_used) || 0); });
                   let majorityLot = '', maxLotVol = -1;
                   Object.keys(lotTotals).forEach(k => { if (lotTotals[k] > maxLotVol) { maxLotVol = lotTotals[k]; majorityLot = k; } });
-                  const lote = majorityLot || '—';
+                  const lote = majorityLot || na;
                   const isTransbordo = tipo === 'Transbordo';
                   let destinoLabel;
                   if (dests.length === 0) {
-                    destinoLabel = '—';
+                    destinoLabel = na;
                   } else if (isTransbordo && dests.length > 1) {
-                    destinoLabel = `${String(dests.length).padStart(2, '0')} x Unidades de Carga`;
+                    destinoLabel = t('containers.transferPage.loadUnits', { count: dests.length });
                   } else {
-                    destinoLabel = dests.map(d => d.placa || '—').filter(Boolean).join(', ');
+                    destinoLabel = dests.map(d => d.placa || na).filter(Boolean).join(', ');
                   }
                   return (
-                    <tr key={t.id} className="border-b border-gray-50 hover:bg-accent/30">
-                      <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{t.transfer_number || '—'}</td>
-                      <td className="px-4 py-2.5 text-sm">{tipo}</td>
-                      <td className="px-4 py-2.5 text-sm">{moment(t.date).format('DD/MM/YYYY')}</td>
-                      <td className="px-4 py-2.5 font-medium text-sm">{t.product}</td>
-                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{t.client}</td>
+                    <tr key={item.id} className="border-b border-gray-50 hover:bg-accent/30">
+                      <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{item.transfer_number || na}</td>
+                      <td className="px-4 py-2.5 text-sm">{translateTransferType(tipo)}</td>
+                      <td className="px-4 py-2.5 text-sm">{fmtDate(item.date, undefined, i18n.language)}</td>
+                      <td className="px-4 py-2.5 font-medium text-sm">{item.product}</td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>
                       <td className="px-4 py-2.5 text-sm">{lote}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(totalVol)}</td>
                       <td className="px-4 py-2.5 text-sm font-medium">{destinoLabel}</td>
                       <td className="px-4 py-2.5 text-center">
-                        <button onClick={() => setViewTransfer(t)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => setViewTransfer(item)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-        )}
+          )}
         </div>
 
-        {/* Fixed Footer */}
         <div className="shrink-0 border-t border-border bg-muted/50 px-4 py-1.5">
           <div className="flex items-center justify-between text-xs flex-wrap gap-2">
             <div className="flex items-center gap-4">
-              <span className="text-muted-foreground">Registros: <span className="font-bold">{stats.count}</span></span>
-              <span className="text-muted-foreground">Vol. Total: <span className="font-bold" style={{ color: '#2575D1' }}>{fmt(stats.totalVol)} L</span></span>
+              <span className="text-muted-foreground">{t('containers.transferPage.footer.records')}: <span className="font-bold">{stats.count}</span></span>
+              <span className="text-muted-foreground">{t('containers.transferPage.footer.totalVolume')}: <span className="font-bold" style={{ color: '#2575D1' }}>{fmt(stats.totalVol)} L</span></span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-muted-foreground">Transbordos: <span className="font-bold text-blue-600">{stats.transbordos}</span></span>
-              <span className="text-muted-foreground">Expedições: <span className="font-bold text-green-600">{stats.expeditions}</span></span>
+              <span className="text-muted-foreground">{t('containers.transferPage.footer.transfers')}: <span className="font-bold text-blue-600">{stats.transbordos}</span></span>
+              <span className="text-muted-foreground">{t('containers.transferPage.footer.expeditions')}: <span className="font-bold text-green-600">{stats.expeditions}</span></span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Form */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-base font-semibold">Novo Transbordo</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base font-semibold">{t('containers.transferPage.formTitle')}</DialogTitle></DialogHeader>
           <div className="grid gap-5">
-            {/* Dados Gerais */}
             <div>
-              <h4 className="text-sm font-bold mb-3" style={{ color: '#2A5A95' }}>Dados Gerais</h4>
+              <h4 className="text-sm font-bold mb-3" style={{ color: '#2A5A95' }}>{t('containers.transferPage.generalData')}</h4>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <FieldLabel>Data *</FieldLabel>
+                  <FieldLabel>{t('containers.transferPage.dateRequired')}</FieldLabel>
                   <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
                 </div>
                 <div>
-                  <FieldLabel>Produto *</FieldLabel>
+                  <FieldLabel>{t('containers.transferPage.productRequired')}</FieldLabel>
                   <ProductCombobox
                     value={form.product}
                     onChange={handleProductSelect}
                     options={productOptions.map(p => ({ value: p, label: p }))}
-                    placeholder="Selecione ou busque o produto..."
+                    placeholder={t('containers.transferPage.productPlaceholder')}
                   />
                 </div>
                 <div>
-                  <FieldLabel>Cliente (automático)</FieldLabel>
-                  <Input value={form.client} readOnly className="bg-muted/50 text-sm" placeholder="Automático" />
+                  <FieldLabel>{t('containers.transferPage.clientAuto')}</FieldLabel>
+                  <Input value={form.client} readOnly className="bg-muted/50 text-sm" placeholder={t('containers.transferPage.auto')} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 mt-3">
                 <div className="col-span-2">
-                  <FieldLabel>Observações</FieldLabel>
-                  <Input value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder="Observações..." />
+                  <FieldLabel>{t('common.observations')}</FieldLabel>
+                  <Input value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder={t('common.observations') + '...'} />
                 </div>
                 <div>
-                  <FieldLabel>Operador (auto)</FieldLabel>
+                  <FieldLabel>{t('containers.transferPage.operatorAuto')}</FieldLabel>
                   <Input value={user?.nome || user?.full_name || user?.email || ''} readOnly className="bg-muted/50 text-sm" />
                 </div>
               </div>
             </div>
 
-            {/* Origens */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold" style={{ color: '#2A5A95' }}>Origens (Vasilhames)</h4>
+                <h4 className="text-sm font-bold" style={{ color: '#2A5A95' }}>{t('containers.transferPage.originsTitle')}</h4>
                 <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setForm(prev => ({ ...prev, origins: [...prev.origins, emptyOrigin()] }))}>
-                  <Plus className="w-3 h-3 mr-1" /> Adicionar Origem
+                  <Plus className="w-3 h-3 mr-1" /> {t('containers.transferPage.addOrigin')}
                 </Button>
               </div>
               {form.origins.map((o, idx) => (
                 <div key={idx} className="grid grid-cols-4 gap-3 border rounded-lg p-3 mb-2">
                   <div>
-                    <FieldLabel>Vasilhame</FieldLabel>
+                    <FieldLabel>{t('containers.transferPage.container')}</FieldLabel>
                     <Select value={o.container_id} onValueChange={v => handleOriginSelect(idx, v)}>
-                      <SelectTrigger className="text-sm"><SelectValue placeholder="Selecionar vasilhame..." /></SelectTrigger>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder={t('containers.transferPage.selectContainer')} /></SelectTrigger>
                       <SelectContent>
                         {productContainers.map(c => (
                           <SelectItem key={c.id} value={c.id}>
-                            {c.container_number || '—'} - {c.barril_number || '—'}
+                            {c.container_number || na} - {c.barril_number || na}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <FieldLabel>Lote (auto)</FieldLabel>
-                    <Input value={o.lot} readOnly className="bg-muted/50 text-sm" placeholder="auto" />
+                    <FieldLabel>{t('containers.transferPage.lotAuto')}</FieldLabel>
+                    <Input value={o.lot} readOnly className="bg-muted/50 text-sm" placeholder={t('containers.transferPage.auto')} />
                   </div>
                   <div>
-                    <FieldLabel>Vol. Retirado (L)</FieldLabel>
+                    <FieldLabel>{t('containers.transferPage.volumeWithdrawn')}</FieldLabel>
                     <Input type="number" value={o.volume_used || ''} onChange={e => updateOrigin(idx, 'volume_used', e.target.value)} placeholder="0" />
                   </div>
                   <div>
-                    <FieldLabel>Saldo Restante (L)</FieldLabel>
+                    <FieldLabel>{t('containers.transferPage.remainingStock')}</FieldLabel>
                     <Input value={fmt3(o.remaining_stock)} readOnly className="bg-muted/50 text-sm font-semibold" style={{ color: o.remaining_stock < 0 ? '#EF4444' : '#065F46' }} />
                   </div>
                 </div>
               ))}
               {form.origins.length > 1 && (
                 <Button variant="ghost" size="sm" className="text-xs text-red-500" onClick={() => setForm(prev => ({ ...prev, origins: prev.origins.slice(0, -1) }))}>
-                  <Trash2 className="w-3 h-3 mr-1" /> Remover última origem
+                  <Trash2 className="w-3 h-3 mr-1" /> {t('containers.transferPage.removeLastOrigin')}
                 </Button>
               )}
             </div>
 
-            {/* Destino */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold" style={{ color: '#2A5A95' }}>Destino</h4>
+                <h4 className="text-sm font-bold" style={{ color: '#2A5A95' }}>{t('containers.transferPage.destinationTitle')}</h4>
                 <Button variant="outline" size="sm" className="text-xs h-7" onClick={addDestination}>
-                  <Plus className="w-3 h-3 mr-1" /> Adicionar Destino
+                  <Plus className="w-3 h-3 mr-1" /> {t('containers.transferPage.addDestination')}
                 </Button>
               </div>
               {form.destinations.map((d, idx) => (
@@ -464,9 +469,9 @@ export default function Transbordo() {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
             <Button onClick={save} disabled={saving} style={{ background: '#1B5E9C', color: 'white' }}>
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registrando...</> : 'Registrar Transbordo'}
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('containers.transferPage.registering')}</> : t('containers.transferPage.register')}
             </Button>
           </div>
         </DialogContent>

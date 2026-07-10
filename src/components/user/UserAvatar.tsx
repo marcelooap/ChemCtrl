@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import i18n from '@/i18n';
 
 interface ChemCtrlUser {
   nome?: string;
@@ -40,7 +41,7 @@ export function UserAvatar({ user, size = 'md', className }: UserAvatarProps) {
 }
 
 export function getUserDisplayName(user: ChemCtrlUser | null): string {
-  return user?.nome || user?.full_name || user?.nome_completo || 'Usuário';
+  return user?.nome || user?.full_name || user?.nome_completo || i18n.t('common.defaultUser');
 }
 
 export function getUserFirstName(user: ChemCtrlUser | null): string {

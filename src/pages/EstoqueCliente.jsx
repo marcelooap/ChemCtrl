@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
-import { Package, Box as BoxIcon, Cylinder, FileText, Warehouse, Search, FileSpreadsheet } from 'lucide-react';
+import { Package, Box as BoxIcon, Cylinder, FileText, Search, FileSpreadsheet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { canUseClientFilter, getUserClient } from '@/lib/permissions';
 import { generateClientStockPDF } from '@/lib/pdfReports';
 import { exportEstoqueClienteExcel } from '@/lib/exportEstoqueClienteExcel';
-import moment from 'moment';
 import { useToast } from '@/components/ui/use-toast';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
+import { fmtDate, fmtNumber, fmtVolume, fmtMass, fmtPercent } from '@/i18n/formatters';
+import { translateStockExpiryStatus, translateContainerStatus } from '@/i18n/domainMaps';
+import moment from 'moment';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -20,9 +23,6 @@ const parseArr = (val) => {
     return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 };
-
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
-const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 
 function SummaryCard({ title, count, icon: Icon, color }) {
   return (
@@ -39,6 +39,7 @@ function SummaryCard({ title, count, icon: Icon, color }) {
 }
 
 export default function EstoqueCliente() {
+  const { t, i18n } = useTranslation();
   const { user } = useOutletContext();
   const { toast } = useToast();
   const { data: stocks, loading } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
@@ -48,6 +49,8 @@ export default function EstoqueCliente() {
   const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState('');
 
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
+
   const externoClient = getUserClient(user);
   const showClientFilter = canUseClientFilter(user);
   const effectiveClient = externoClient || (showClientFilter && selectedClient !== 'all' ? selectedClient : null);
@@ -55,15 +58,14 @@ export default function EstoqueCliente() {
   const clientList = useMemo(() => {
     const allClients = new Set();
     [...stocks, ...containers, ...tanks].forEach(i => { if (i.client) allClients.add(i.client); });
-    return Array.from(allClients).sort();
-  }, [stocks, containers, tanks]);
+    return Array.from(allClients).sort((a, b) => a.localeCompare(b, i18n.language));
+  }, [stocks, containers, tanks, i18n.language]);
 
   const filteredStocks = useMemo(() => {
     let result = stocks;
     if (effectiveClient) result = result.filter(s => s.client === effectiveClient);
     const q = search.toLowerCase();
     if (q) result = result.filter(s => [s.mp_name, s.mp_code, s.lot, s.supplier].some(v => (v || '').toLowerCase().includes(q)));
-    // Unify by product + lot — sum current_stock and initial_stock
     const lotMap = {};
     const lotOrder = [];
     result.forEach(s => {
@@ -87,7 +89,6 @@ export default function EstoqueCliente() {
     return result;
   }, [containers, effectiveClient, search]);
 
-  // Compute tank volumes same as Tankagem page — from stock entries (tank_entries) and containers
   const tanksWithData = useMemo(() => {
     return tanks.map(tank => {
       let volume = 0;
@@ -148,14 +149,14 @@ export default function EstoqueCliente() {
     setGenerating(true);
     try {
       generateClientStockPDF({
-        client: effectiveClient || 'Todos os Clientes',
+        client: effectiveClient || t('clients.stock.allClientsLabel'),
         stocks: filteredStocks,
         containers: filteredContainers,
         tanks: filteredTanks,
       });
-      toast({ title: 'Relatório gerado com sucesso.' });
+      toast({ title: t('clients.stock.reportSuccess') });
     } catch (e) {
-      toast({ title: 'Erro ao gerar relatório.', variant: 'destructive' });
+      toast({ title: t('clients.stock.reportError'), variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
@@ -165,13 +166,13 @@ export default function EstoqueCliente() {
     setGenerating(true);
     try {
       await exportEstoqueClienteExcel({
-        client: effectiveClient || 'Todos os Clientes',
+        client: effectiveClient || t('clients.stock.allClientsLabel'),
         stocks: filteredStocks,
         containers: filteredContainers,
       });
-      toast({ title: 'Relatório Excel exportado com sucesso.' });
+      toast({ title: t('clients.stock.excelSuccess') });
     } catch (e) {
-      toast({ title: 'Erro ao exportar relatório.', variant: 'destructive' });
+      toast({ title: t('clients.stock.excelError'), variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
@@ -183,18 +184,20 @@ export default function EstoqueCliente() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Estoque Cliente</h1>
+          <h1 className="text-2xl font-bold">{t('clients.stock.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            {effectiveClient ? `Cliente: ${effectiveClient}` : 'Todos os clientes'} · Estoque de matéria prima, vasilhames e tankagem
+            {effectiveClient
+              ? t('clients.stock.subtitleClient', { client: effectiveClient })
+              : t('clients.stock.subtitleAll')}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           {showClientFilter && (
             <div className="w-full sm:w-56">
               <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger><SelectValue placeholder="Todos os clientes" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('clients.screen.allClients')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os clientes</SelectItem>
+                  <SelectItem value="all">{t('clients.screen.allClients')}</SelectItem>
                   {clientList.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -207,7 +210,7 @@ export default function EstoqueCliente() {
             style={{ background: '#2575D1' }}
           >
             <FileText className="w-4 h-4" />
-            {generating ? 'Gerando...' : 'Gerar Relatório PDF'}
+            {generating ? t('clients.stock.generating') : t('clients.stock.generatePdf')}
           </Button>
           <Button
             onClick={handleExcel}
@@ -216,48 +219,45 @@ export default function EstoqueCliente() {
             style={{ background: '#16a34a' }}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            {generating ? 'Gerando...' : 'Exportar Excel'}
+            {generating ? t('clients.stock.generating') : t('clients.stock.exportExcel')}
           </Button>
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <SummaryCard title="Matérias Primas" count={filteredStocks.length} icon={Package} color="#2563eb" />
-        <SummaryCard title="Vasilhames" count={filteredContainers.length} icon={BoxIcon} color="#f59e0b" />
-        <SummaryCard title="Tankagem" count={filteredTanks.length} icon={Cylinder} color="#7c3aed" />
+        <SummaryCard title={t('clients.stock.rawMaterials')} count={filteredStocks.length} icon={Package} color="#2563eb" />
+        <SummaryCard title={t('clients.stock.containers')} count={filteredContainers.length} icon={BoxIcon} color="#f59e0b" />
+        <SummaryCard title={t('clients.stock.tankage')} count={filteredTanks.length} icon={Cylinder} color="#7c3aed" />
       </div>
 
-      {/* Search */}
       <div className="mb-4 relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input placeholder="Buscar em todos os estoques..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        <Input placeholder={t('clients.stock.searchAll')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {/* Raw Materials Table */}
       <div className="bg-card rounded-xl border border-border mb-6">
         <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <Package className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold">Estoque de Matéria Prima</h3>
+          <h3 className="text-sm font-semibold">{t('clients.screen.rawMaterialStock')}</h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredStocks.length}</span>
         </div>
         {filteredStocks.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Nenhum item em estoque.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noStock')}</div>
         ) : (
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left">Cód. MP</th>
-                  <th className="px-3 py-2 text-left">Produto</th>
-                  {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
-                  <th className="px-3 py-2 text-left">Lote</th>
-                  <th className="px-3 py-2 text-left">Fornecedor</th>
-                  <th className="px-3 py-2 text-right">Saldo Inicial</th>
-                  <th className="px-3 py-2 text-right">Saldo Atual</th>
-                  <th className="px-3 py-2 text-center">Un.</th>
-                  <th className="px-3 py-2 text-center">Validade</th>
-                  <th className="px-3 py-2 text-center">Status</th>
+                  <th className="px-3 py-2 text-left">{t('clients.screen.mpCode')}</th>
+                  <th className="px-3 py-2 text-left">{t('common.product')}</th>
+                  {!effectiveClient && <th className="px-3 py-2 text-left">{t('common.client')}</th>}
+                  <th className="px-3 py-2 text-left">{t('common.lot')}</th>
+                  <th className="px-3 py-2 text-left">{t('clients.stock.supplier')}</th>
+                  <th className="px-3 py-2 text-right">{t('clients.screen.initialBalance')}</th>
+                  <th className="px-3 py-2 text-right">{t('clients.screen.currentBalance')}</th>
+                  <th className="px-3 py-2 text-center">{t('clients.screen.unitShort')}</th>
+                  <th className="px-3 py-2 text-center">{t('clients.stock.expiry')}</th>
+                  <th className="px-3 py-2 text-center">{t('common.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,22 +265,22 @@ export default function EstoqueCliente() {
                   const status = getMPStatus(item);
                   return (
                     <tr key={item.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-sm text-muted-foreground">{item.mp_code || t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-sm font-medium text-foreground">{item.mp_name}</td>
-                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{item.client || '—'}</td>}
-                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || '—'}</td>
-                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.supplier || '—'}</td>
+                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{item.client || t('common.notAvailable')}</td>}
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.lot || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{item.supplier || t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-right text-sm text-foreground">{fmt(item.initial_stock)}</td>
                       <td className="px-3 py-2 text-right text-sm font-bold text-foreground">{fmt(item.current_stock)}</td>
                       <td className="px-3 py-2 text-center text-sm font-bold text-foreground">{item.unit}</td>
-                      <td className="px-3 py-2 text-center text-sm text-muted-foreground">{item.expiry_date ? moment(item.expiry_date).format('DD/MM/YYYY') : '—'}</td>
+                      <td className="px-3 py-2 text-center text-sm text-muted-foreground">{item.expiry_date ? fmtDate(item.expiry_date, undefined, i18n.language) : t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-center">
                         {status === null ? (
-                          <span className="text-sm" style={{ color: '#9CA3AF' }}>—</span>
+                          <span className="text-sm" style={{ color: '#9CA3AF' }}>{t('common.notAvailable')}</span>
                         ) : status === 'Vencido' ? (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Vencido</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{translateStockExpiryStatus(status)}</span>
                         ) : (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Válido</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{translateStockExpiryStatus(status)}</span>
                         )}
                       </td>
                     </tr>
@@ -292,47 +292,46 @@ export default function EstoqueCliente() {
         )}
       </div>
 
-      {/* Containers Table */}
       <div className="bg-card rounded-xl border border-border mb-6">
         <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <BoxIcon className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold">Vasilhames</h3>
+          <h3 className="text-sm font-semibold">{t('clients.stock.containers')}</h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredContainers.length}</span>
         </div>
         {filteredContainers.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Nenhum vasilhame encontrado.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.stock.noContainers')}</div>
         ) : (
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left">N° Embalagem</th>
-                  <th className="px-3 py-2 text-left">Barril</th>
-                  {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
-                  <th className="px-3 py-2 text-left">Produto</th>
-                  <th className="px-3 py-2 text-left">Lote</th>
-                  <th className="px-3 py-2 text-left">Tipo</th>
-                  <th className="px-3 py-2 text-right">Volume (L)</th>
-                  <th className="px-3 py-2 text-right">Líquido (kg)</th>
-                  <th className="px-3 py-2 text-right">Bruto (kg)</th>
-                  <th className="px-3 py-2 text-center">Status</th>
+                  <th className="px-3 py-2 text-left">{t('clients.screen.packagingNumber')}</th>
+                  <th className="px-3 py-2 text-left">{t('clients.stock.barrel')}</th>
+                  {!effectiveClient && <th className="px-3 py-2 text-left">{t('common.client')}</th>}
+                  <th className="px-3 py-2 text-left">{t('common.product')}</th>
+                  <th className="px-3 py-2 text-left">{t('common.lot')}</th>
+                  <th className="px-3 py-2 text-left">{t('common.type')}</th>
+                  <th className="px-3 py-2 text-right">{t('production.packaging.volume')}</th>
+                  <th className="px-3 py-2 text-right">{t('production.packaging.netWeight')}</th>
+                  <th className="px-3 py-2 text-right">{t('production.packaging.grossWeight')}</th>
+                  <th className="px-3 py-2 text-center">{t('common.status')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredContainers.map(c => (
                   <tr key={c.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || '—'}</td>
-                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.barril_number || '—'}</td>
-                    {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{c.client || '—'}</td>}
-                    <td className="px-3 py-2 text-sm font-medium text-foreground">{c.product || '—'}</td>
-                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || '—'}</td>
-                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.type || '—'}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmt3(c.volume)}</td>
-                    <td className="px-3 py-2 text-right text-sm text-green-600 dark:text-green-400">{fmt3(c.net_weight)}</td>
-                    <td className="px-3 py-2 text-right text-sm text-foreground">{fmt3(c.gross_weight)}</td>
+                    <td className="px-3 py-2 text-sm font-bold text-foreground">{c.container_number || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.barril_number || t('common.notAvailable')}</td>
+                    {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{c.client || t('common.notAvailable')}</td>}
+                    <td className="px-3 py-2 text-sm font-medium text-foreground">{c.product || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm text-muted-foreground">{c.type || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmtVolume(c.volume, 'L', i18n.language)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-green-600 dark:text-green-400">{fmtMass(c.net_weight, 'kg', i18n.language)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-foreground">{fmtMass(c.gross_weight, 'kg', i18n.language)}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.status === 'No Pátio' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
-                        {c.status || '—'}
+                        {c.status ? translateContainerStatus(c.status) : t('common.notAvailable')}
                       </span>
                     </td>
                   </tr>
@@ -343,46 +342,45 @@ export default function EstoqueCliente() {
         )}
       </div>
 
-      {/* Tanks Table */}
       <div className="bg-card rounded-xl border border-border">
         <div className="px-5 py-4 border-b border-border flex items-center gap-2">
           <Cylinder className="w-4 h-4" style={{ color: '#2575D1' }} />
-          <h3 className="text-sm font-semibold">Tankagem</h3>
+          <h3 className="text-sm font-semibold">{t('clients.stock.tankage')}</h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{filteredTanks.length}</span>
         </div>
         {filteredTanks.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">Nenhuma tanka encontrada.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.stock.noTanks')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left">Tanka</th>
-                  {!effectiveClient && <th className="px-3 py-2 text-left">Cliente</th>}
-                  <th className="px-3 py-2 text-left">Produto</th>
-                  <th className="px-3 py-2 text-left">Lote</th>
-                  <th className="px-3 py-2 text-right">Volume Atual (L)</th>
-                  <th className="px-3 py-2 text-center">Ocupação</th>
+                  <th className="px-3 py-2 text-left">{t('clients.stock.tank')}</th>
+                  {!effectiveClient && <th className="px-3 py-2 text-left">{t('common.client')}</th>}
+                  <th className="px-3 py-2 text-left">{t('common.product')}</th>
+                  <th className="px-3 py-2 text-left">{t('common.lot')}</th>
+                  <th className="px-3 py-2 text-right">{t('clients.stock.currentVolumeL')}</th>
+                  <th className="px-3 py-2 text-center">{t('clients.stock.occupation')}</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTanks.map(t => {
-                  const volume = t.current_volume || 0;
-                  const capacity = t.capacity || 26000;
+                {filteredTanks.map(tank => {
+                  const volume = tank.current_volume || 0;
+                  const capacity = tank.capacity || 26000;
                   const pct = Math.min(100, Math.round((volume / capacity) * 100));
                   return (
-                    <tr key={t.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-3 py-2 text-sm font-bold text-foreground">{t.name || '—'}</td>
-                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{t.client || '—'}</td>}
-                      <td className="px-3 py-2 text-sm font-medium text-foreground">{t.computed_products.join(', ') || '—'}</td>
-                      <td className="px-3 py-2 text-sm text-muted-foreground">{t.computed_lot || '—'}</td>
+                    <tr key={tank.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-3 py-2 text-sm font-bold text-foreground">{tank.name || t('common.notAvailable')}</td>
+                      {!effectiveClient && <td className="px-3 py-2 text-sm text-muted-foreground">{tank.client || t('common.notAvailable')}</td>}
+                      <td className="px-3 py-2 text-sm font-medium text-foreground">{tank.computed_products.join(', ') || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">{tank.computed_lot || t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmt(volume)}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden min-w-[60px]">
                             <div className="h-full rounded-full transition-all bg-green-600" style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-xs font-medium text-muted-foreground shrink-0">{pct}%</span>
+                          <span className="text-xs font-medium text-muted-foreground shrink-0">{fmtPercent(pct / 100, { maximumFractionDigits: 0 }, i18n.language)}</span>
                         </div>
                       </td>
                     </tr>

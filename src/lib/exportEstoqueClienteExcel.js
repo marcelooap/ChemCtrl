@@ -1,4 +1,5 @@
-import ExcelJS from "exceljs";
+import ExcelJS from 'exceljs';
+import i18n from '@/i18n';
 
 export async function exportEstoqueClienteExcel({
   client,
@@ -16,7 +17,7 @@ export async function exportEstoqueClienteExcel({
 
   const wb = new ExcelJS.Workbook();
 
-  const ws = wb.addWorksheet("Estoque Cliente", {
+  const ws = wb.addWorksheet(i18n.t('clients.export.sheetName'), {
     properties: {
       defaultColWidth: 18,
     },
@@ -29,13 +30,13 @@ export async function exportEstoqueClienteExcel({
   });
 
   const headers = [
-    "Cód",
-    "Produto",
-    "Lote",
-    "Quantidade em Estoque",
-    "Unidade de Medida",
-    "Embalagem",
-    "Tipo Armazenagem",
+    i18n.t('clients.export.columns.code'),
+    i18n.t('clients.export.columns.product'),
+    i18n.t('clients.export.columns.lot'),
+    i18n.t('clients.export.columns.stockQty'),
+    i18n.t('clients.export.columns.unit'),
+    i18n.t('clients.export.columns.packaging'),
+    i18n.t('clients.export.columns.storageType'),
   ];
 
   const headerRow = ws.addRow(headers);

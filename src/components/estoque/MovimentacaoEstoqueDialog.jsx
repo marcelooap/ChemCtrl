@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,15 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { AlertTriangle } from 'lucide-react';
-import moment from 'moment';
+import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { STOCK_DESTINATION_KEYS, translateStockDestination } from '@/i18n/domainMaps';
 
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+const DESTINATION_VALUES = Object.keys(STOCK_DESTINATION_KEYS);
 
 export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, onSuccess }) {
+  const { t, i18n } = useTranslation();
   const { user } = useInternalAuth();
   const { toast } = useToast();
 
-  const [selectedMPKey, setSelectedMPKey] = useState(''); // "mp_code|mp_name|client"
+  const [selectedMPKey, setSelectedMPKey] = useState('');
   const [selectedLot, setSelectedLot] = useState('');
   const [selectedStockId, setSelectedStockId] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -24,7 +27,6 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Unique MP options com código + nome + cliente para diferenciar MPs com mesmo nome
   const mpOptions = useMemo(() => {
     const map = new Map();
     stocks.forEach(s => {
@@ -36,12 +38,11 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         map.set(key, { key, label, mp_name: s.mp_name, client: s.client || '' });
       }
     });
-    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  }, [stocks]);
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, i18n.language));
+  }, [stocks, i18n.language]);
 
   const selectedMPOption = mpOptions.find(o => o.key === selectedMPKey);
 
-  // Lotes para a MP selecionada (filtra por mp_name + client para evitar mistura)
   const lotsForMP = useMemo(() => {
     if (!selectedMPOption) return [];
     const set = new Set();
@@ -51,7 +52,6 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
     return Array.from(set).sort();
   }, [stocks, selectedMPOption]);
 
-  // Entradas para a MP + lote selecionados
   const entriesForLot = useMemo(() => {
     if (!selectedMPOption || !selectedLot) return [];
     return stocks.filter(
@@ -99,14 +99,17 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
   const handleSave = async () => {
     setError('');
     const qty = parseFloat(quantity);
-    if (!selectedStockId) { setError('Selecione um registro de entrada.'); return; }
-    if (!destination) { setError('Selecione o destino da movimentação.'); return; }
-    if (!qty || qty <= 0) { setError('Informe uma quantidade maior que zero.'); return; }
+    if (!selectedStockId) { setError(t('rawMaterialStock.movementDialog.errors.selectEntry')); return; }
+    if (!destination) { setError(t('rawMaterialStock.movementDialog.errors.selectDestination')); return; }
+    if (!qty || qty <= 0) { setError(t('rawMaterialStock.movementDialog.errors.invalidQuantity')); return; }
 
     const stock = selectedStock;
     const available = stock.current_stock || 0;
     if (qty > available) {
-      setError(`Saldo insuficiente. Disponível: ${fmt(available)} ${stock.unit}.`);
+      setError(t('rawMaterialStock.movementDialog.errors.insufficientBalance', {
+        available: fmtNumber(available, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language),
+        unit: stock.unit,
+      }));
       return;
     }
 
@@ -135,13 +138,15 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         current_stock: newBalance,
       });
 
-      toast({ title: 'Movimentação registrada com sucesso!' });
+      toast({ title: t('rawMaterialStock.movementDialog.success') });
       reset();
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (e) {
       console.error('Erro ao salvar movimentação:', e);
-      setError(`Erro ao salvar: ${e?.message || 'Tente novamente.'}`);
+      setError(t('rawMaterialStock.movementDialog.errors.saveFailed', {
+        message: e?.message || t('rawMaterialStock.movementDialog.errors.retry'),
+      }));
     } finally {
       setSaving(false);
     }
@@ -151,15 +156,14 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Movimentação de Estoque de MP</DialogTitle>
+          <DialogTitle>{t('rawMaterialStock.movementDialog.title')}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4">
-          {/* Matéria Prima */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Matéria Prima *</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.movementDialog.rawMaterial')} *</label>
             <Select value={selectedMPKey} onValueChange={handleMPChange}>
-              <SelectTrigger><SelectValue placeholder="Selecione a MP..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.movementDialog.selectMp')} /></SelectTrigger>
               <SelectContent>
                 {mpOptions.map(o => (
                   <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
@@ -168,12 +172,11 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
             </Select>
           </div>
 
-          {/* Lote */}
           {selectedMPKey && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Lote *</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('common.lot')} *</label>
               <Select value={selectedLot} onValueChange={handleLotChange}>
-                <SelectTrigger><SelectValue placeholder="Selecione o lote..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.movementDialog.selectLot')} /></SelectTrigger>
                 <SelectContent>
                   {lotsForMP.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
                 </SelectContent>
@@ -181,16 +184,15 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
             </div>
           )}
 
-          {/* Registro de Entrada */}
           {selectedLot && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Registro de Entrada *</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.movementDialog.entryRecord')} *</label>
               <Select value={selectedStockId} onValueChange={handleStockChange}>
-                <SelectTrigger><SelectValue placeholder="Selecione o registro..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.movementDialog.selectEntry')} /></SelectTrigger>
                 <SelectContent>
                   {entriesForLot.map(s => (
                     <SelectItem key={s.id} value={s.id}>
-                      {s.entry_id} · Entrada: {s.entry_date ? moment(s.entry_date).format('DD/MM/YYYY') : '—'} · Saldo: {fmt(s.current_stock)} {s.unit}
+                      {s.entry_id} · {t('rawMaterialStock.movementDialog.entryLabel')}: {fmtDate(s.entry_date, undefined, i18n.language)} · {t('rawMaterialStock.movementDialog.balanceLabel')}: {fmtNumber(s.current_stock, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language)} {s.unit}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -198,22 +200,20 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
             </div>
           )}
 
-          {/* Info do registro selecionado */}
           {selectedStock && (
             <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-sm">
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Estoque Inicial</span><p className="font-semibold">{fmt(selectedStock.initial_stock)} {selectedStock.unit}</p></div>
-                <div><span className="text-muted-foreground">Saldo Disponível</span><p className="font-bold text-blue-700">{fmt(selectedStock.current_stock)} {selectedStock.unit}</p></div>
-                <div><span className="text-muted-foreground">Fornecedor</span><p className="font-semibold">{selectedStock.supplier || '—'}</p></div>
+                <div><span className="text-muted-foreground">{t('rawMaterialStock.movementDialog.initialStock')}</span><p className="font-semibold">{fmtNumber(selectedStock.initial_stock, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language)} {selectedStock.unit}</p></div>
+                <div><span className="text-muted-foreground">{t('rawMaterialStock.movementDialog.availableBalance')}</span><p className="font-bold text-blue-700">{fmtNumber(selectedStock.current_stock, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language)} {selectedStock.unit}</p></div>
+                <div><span className="text-muted-foreground">{t('rawMaterialStock.movementDialog.supplier')}</span><p className="font-semibold">{selectedStock.supplier || '—'}</p></div>
               </div>
             </div>
           )}
 
-          {/* Quantidade e Unidade */}
           {selectedStockId && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Quantidade *</label>
+                <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.movementDialog.quantity')} *</label>
                 <Input
                   type="number"
                   step="0.001"
@@ -224,41 +224,39 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Unidade</label>
+                <label className="text-xs font-medium text-muted-foreground">{t('common.unit')}</label>
                 <Input value={selectedStock?.unit || ''} readOnly className="bg-muted/50 font-semibold" />
               </div>
             </div>
           )}
 
-          {/* Destino */}
           {selectedStockId && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Destino da Movimentação *</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.movementDialog.destination')} *</label>
               <Select value={destination} onValueChange={setDestination}>
-                <SelectTrigger><SelectValue placeholder="Selecione o destino..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.movementDialog.selectDestination')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Perda em Processo">Perda em Processo</SelectItem>
-                  <SelectItem value="Retorno de MP Não Aplicada">Retorno de MP Não Aplicada</SelectItem>
+                  {DESTINATION_VALUES.map((value) => (
+                    <SelectItem key={value} value={value}>{translateStockDestination(value)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           )}
 
-          {/* Observações */}
           {selectedStockId && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Observações</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('common.observations')}</label>
               <textarea
                 className="w-full border rounded-md px-3 py-2 text-sm"
                 rows={2}
                 value={observations}
                 onChange={e => setObservations(e.target.value)}
-                placeholder="Motivo ou informações adicionais..."
+                placeholder={t('rawMaterialStock.movementDialog.observationsPlaceholder')}
               />
             </div>
           )}
 
-          {/* Erro */}
           {error && (
             <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -268,14 +266,14 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => handleClose(false)}>{t('buttons.cancel')}</Button>
           <Button
             onClick={handleSave}
             disabled={saving || !selectedStockId || !destination || !quantity}
             style={{ background: '#2575D1' }}
             className="text-white"
           >
-            {saving ? 'Registrando...' : 'Registrar Movimentação'}
+            {saving ? t('rawMaterialStock.movementDialog.registering') : t('rawMaterialStock.movementDialog.registerMovement')}
           </Button>
         </div>
       </DialogContent>

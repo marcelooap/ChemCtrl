@@ -32,7 +32,9 @@ export const getCalibrationColor = (nextDate) => {
   return { color: '#10B981', bg: '#D1FAE5', label: `Em ${days}d` };
 };
 
+import { fmtDate } from '@/i18n/formatters';
+
 export const formatDate = (d) => {
   if (!d) return '—';
-  try { return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR'); } catch { return '—'; }
+  return fmtDate(d + 'T00:00:00');
 };

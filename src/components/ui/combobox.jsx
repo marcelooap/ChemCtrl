@@ -1,16 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/**
- * A combobox (autocomplete) input that allows typing and selecting from a list.
- * @param {string} value - current input value
- * @param {function} onValueChange - called with the input string on type, or selected item on pick
- * @param {Array<{value: string, label: string, item: object}>} options - dropdown options
- * @param {string} placeholder
- * @param {function} onSelect - called with the selected item object when a suggestion is picked
- */
 export default function Combobox({ value, onValueChange, options = [], placeholder = '', onSelect, inputClassName }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const containerRef = useRef(null);
@@ -78,7 +72,7 @@ export default function Combobox({ value, onValueChange, options = [], placehold
         <div ref={listRef} className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-popover shadow-md">
           {filtered.length === 0 ? (
             <div className="py-4 text-center text-sm text-muted-foreground">
-              {options.length === 0 ? 'Nenhuma matéria prima cadastrada' : 'Nenhum resultado — use o texto digitado'}
+              {options.length === 0 ? t('common.comboboxNoRawMaterial') : t('common.comboboxNoResult')}
             </div>
           ) : (
             filtered.map((opt, idx) => {
@@ -89,12 +83,13 @@ export default function Combobox({ value, onValueChange, options = [], placehold
                   onClick={() => pick(opt)}
                   onMouseEnter={() => setHighlight(idx)}
                   className={cn(
-                    'flex items-center justify-between gap-2 px-3 py-2 text-sm cursor-pointer',
-                    highlight === idx ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                    'flex items-center gap-2 px-3 py-2 text-sm cursor-pointer',
+                    highlight === idx && 'bg-accent',
+                    isSelected && 'font-medium'
                   )}
                 >
+                  <Check className={cn('w-4 h-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
                   <span className="truncate">{opt.label}</span>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
                 </div>
               );
             })

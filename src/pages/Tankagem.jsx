@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { Plus, Cylinder, Pencil, Trash2, Loader2 } from 'lucide-react';
@@ -8,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { fmtNumber } from '@/i18n/formatters';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -35,14 +37,13 @@ function getClientColor(client) {
 function getProductColor(product) {
   if (!product) return null;
   const p = product.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (p.includes('sisbrax') && p.includes('ace') && p.includes('75')) return '#86EFAC'; // verde claro
-  if (p.includes('acido') && p.includes('acet') && p.includes('glacial')) return '#15803D'; // verde escuro
+  if (p.includes('sisbrax') && p.includes('ace') && p.includes('75')) return '#86EFAC';
+  if (p.includes('acido') && p.includes('acet') && p.includes('glacial')) return '#15803D';
   return null;
 }
 
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
 export default function Tankagem() {
+  const { t, i18n } = useTranslation();
   const { data: tanks, loading, reload: load } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const { data: stockEntries } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
@@ -54,19 +55,20 @@ export default function Tankagem() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  const na = t('common.notAvailable');
+
+  const fmt = useCallback((n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language), [i18n.language]);
+
   const clientOptions = useMemo(() => {
     const clients = new Map();
     recipes.forEach(r => { if (r.client && !clients.has(r.client)) clients.set(r.client, true); });
-    tanks.forEach(t => { if (t.client && !clients.has(t.client)) clients.set(t.client, true); });
+    tanks.forEach(item => { if (item.client && !clients.has(item.client)) clients.set(item.client, true); });
     stockEntries.forEach(s => { if (s.client && !clients.has(s.client)) clients.set(s.client, true); });
     return Array.from(clients.keys());
   }, [recipes, tanks, stockEntries]);
 
   const tanksWithData = useMemo(() => {
     return tanks.map(tank => {
-      // Check if there's a vasilhame (container) of type "Tankagem" assigned to this tanka.
-      // If so, the container takes precedence — only its volume/product is shown,
-      // and the MP stock for this tanka should have been zeroed out.
       const tankContainers = containers.filter(c => {
         const isTank = (c.type || '').toLowerCase().includes('tank');
         return isTank && c.container_number === tank.name && c.status === 'No Pátio';
@@ -89,7 +91,6 @@ export default function Tankagem() {
         return { ...tank, current_volume: volume, computed_lot: latestLot, computed_products: Array.from(products), latest_product: latestProduct };
       }
 
-      // No container — use MP stock entries
       let volume = 0;
       let latestLot = tank.lot || '';
       let latestDate = 0;
@@ -123,16 +124,16 @@ export default function Tankagem() {
 
   const tanksByClient = useMemo(() => {
     const groups = {};
-    tanksWithData.forEach(t => {
-      const client = t.client || 'Sem cliente';
+    tanksWithData.forEach(item => {
+      const client = item.client || t('containers.tankagePage.noClient');
       if (!groups[client]) groups[client] = [];
-      groups[client].push(t);
+      groups[client].push(item);
     });
     return groups;
-  }, [tanksWithData]);
+  }, [tanksWithData, t]);
 
-  const totalVolume = tanksWithData.reduce((s, t) => s + (t.current_volume || 0), 0);
-  const totalCapacity = tanksWithData.reduce((s, t) => s + (t.capacity || 26000), 0);
+  const totalVolume = tanksWithData.reduce((s, item) => s + (item.current_volume || 0), 0);
+  const totalCapacity = tanksWithData.reduce((s, item) => s + (item.capacity || 26000), 0);
 
   const openNew = () => {
     setEditing(null);
@@ -140,21 +141,18 @@ export default function Tankagem() {
     setShowForm(true);
   };
 
-  const openEdit = (t) => {
-    setEditing(t);
-    setForm({ name: t.name || '', client: t.client || '' });
+  const openEdit = (item) => {
+    setEditing(item);
+    setForm({ name: item.name || '', client: item.client || '' });
     setShowForm(true);
   };
 
   const save = async () => {
     if (!form.name || !form.client) {
-      toast({ title: 'Preencha o nome da Tanka e o cliente', variant: 'destructive' });
+      toast({ title: t('containers.tankagePage.form.required'), variant: 'destructive' });
       return;
     }
-    const data = {
-      name: form.name,
-      client: form.client,
-    };
+    const data = { name: form.name, client: form.client };
     setSaving(true);
     try {
       if (editing) {
@@ -164,9 +162,9 @@ export default function Tankagem() {
       }
       setShowForm(false);
       load();
-      toast({ title: editing ? 'Tanka atualizada' : 'Tanka cadastrada' });
+      toast({ title: editing ? t('containers.tankagePage.messages.updated') : t('containers.tankagePage.messages.created') });
     } catch (err) {
-      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -177,18 +175,18 @@ export default function Tankagem() {
     await base44.entities.Tank.delete(deleteTarget.id);
     setDeleteTarget(null);
     load();
-    toast({ title: 'Tanka excluída' });
+    toast({ title: t('containers.tankagePage.messages.deleted') });
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">🛢 Tankagem</h1>
-          <p className="text-sm text-muted-foreground">{tanks.length} tanka(s) · {fmt(totalVolume)} L em uso de {fmt(totalCapacity)} L</p>
+          <h1 className="text-2xl font-bold">🛢 {t('containers.tankage.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('containers.tankagePage.subtitle', { count: tanks.length, used: fmt(totalVolume), capacity: fmt(totalCapacity) })}</p>
         </div>
         <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white">
-          <Plus className="w-4 h-4 mr-2" /> Cadastrar Tanka
+          <Plus className="w-4 h-4 mr-2" /> {t('containers.tankagePage.registerTank')}
         </Button>
       </div>
 
@@ -199,14 +197,13 @@ export default function Tankagem() {
       ) : tanks.length === 0 ? (
         <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
           <Cylinder className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-lg font-medium text-muted-foreground">Nenhuma tanka cadastrada</p>
-          <p className="text-sm text-muted-foreground mt-1">Clique em "Cadastrar Tanka" para começar.</p>
+          <p className="text-lg font-medium text-muted-foreground">{t('containers.tankagePage.emptyTitle')}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t('containers.tankagePage.emptyHint')}</p>
         </div>
       ) : (
         <>
-          {/* Silo View — grouped by client */}
           <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
-            <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">Visão Geral — Silos por Cliente</h2>
+            <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">{t('containers.tankagePage.overviewTitle')}</h2>
             {Object.entries(tanksByClient).map(([client, clientTanks]) => {
               const clientColor = getClientColor(client);
               return (
@@ -214,7 +211,7 @@ export default function Tankagem() {
                   <div className="flex items-center gap-2 mb-3 pb-2 border-b" style={{ borderColor: clientColor + '33' }}>
                     <span className="w-3 h-3 rounded-full" style={{ backgroundColor: clientColor }} />
                     <h3 className="text-sm font-bold" style={{ color: clientColor }}>{client}</h3>
-                    <span className="text-xs text-muted-foreground">{clientTanks.length} tanka(s) · {fmt(clientTanks.reduce((s, t) => s + (t.current_volume || 0), 0))} L</span>
+                    <span className="text-xs text-muted-foreground">{t('containers.tankagePage.tankCount', { count: clientTanks.length, volume: fmt(clientTanks.reduce((s, item) => s + (item.current_volume || 0), 0)) })}</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                     {clientTanks.map(tank => {
@@ -236,9 +233,9 @@ export default function Tankagem() {
                           </div>
                           <div className="text-center mt-2 w-full">
                             <p className="font-bold text-sm">{tank.name}</p>
-                             <p className="text-xs font-medium truncate">{tank.latest_product || '—'}</p>
-                            {tank.computed_lot && <p className="text-xs text-muted-foreground">Lote: {tank.computed_lot}</p>}
-                            <p className="text-xs text-muted-foreground mt-0.5">Cap: {fmt(tank.capacity)} L</p>
+                            <p className="text-xs font-medium truncate">{tank.latest_product || na}</p>
+                            {tank.computed_lot && <p className="text-xs text-muted-foreground">{t('quality.fields.lot')}: {tank.computed_lot}</p>}
+                            <p className="text-xs text-muted-foreground mt-0.5">{t('containers.tankagePage.capacityShort')}: {fmt(tank.capacity)} L</p>
                           </div>
                         </div>
                       );
@@ -249,19 +246,18 @@ export default function Tankagem() {
             })}
           </div>
 
-          {/* Detailed Table */}
           <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full chemctrl-table">
                 <thead><tr className="border-b border-gray-50 bg-muted/50/50">
-                  <th className="px-4 py-3 text-left">Tanka</th>
-                  <th className="px-4 py-3 text-left">Cliente</th>
-                  <th className="px-4 py-3 text-left">Produto(s)</th>
-                  <th className="px-4 py-3 text-left">Lote</th>
-                  <th className="px-4 py-3 text-right">Volume Atual (L)</th>
-                  <th className="px-4 py-3 text-right">Capacidade (L)</th>
-                  <th className="px-4 py-3 text-center">Ocupação</th>
-                  <th className="px-4 py-3 text-center">Ações</th>
+                  <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.tank')}</th>
+                  <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th>
+                  <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.products')}</th>
+                  <th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th>
+                  <th className="px-4 py-3 text-right">{t('containers.tankagePage.table.currentVolume')}</th>
+                  <th className="px-4 py-3 text-right">{t('containers.tankagePage.table.capacity')}</th>
+                  <th className="px-4 py-3 text-center">{t('containers.tankagePage.table.occupancy')}</th>
+                  <th className="px-4 py-3 text-center">{t('common.actions')}</th>
                 </tr></thead>
                 <tbody>
                   {tanksWithData.map(tank => {
@@ -273,11 +269,11 @@ export default function Tankagem() {
                         <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: clientColor }} />
-                            {tank.client || '—'}
+                            {tank.client || na}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm">{tank.latest_product || '—'}</td>
-                        <td className="px-4 py-3 text-sm font-mono">{tank.computed_lot || '—'}</td>
+                        <td className="px-4 py-3 text-sm">{tank.latest_product || na}</td>
+                        <td className="px-4 py-3 text-sm font-mono">{tank.computed_lot || na}</td>
                         <td className="px-4 py-3 text-right text-sm font-bold">{fmt(tank.current_volume)}</td>
                         <td className="px-4 py-3 text-right text-sm text-muted-foreground">{fmt(tank.capacity)}</td>
                         <td className="px-4 py-3">
@@ -304,19 +300,18 @@ export default function Tankagem() {
         </>
       )}
 
-      {/* Register/Edit Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Tanka' : 'Cadastrar Tanka'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('containers.tankagePage.form.editTitle') : t('containers.tankagePage.form.registerTitle')}</DialogTitle></DialogHeader>
           <div className="grid gap-4">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Nome da Tanka *</label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex: TANKA 01" />
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.tankagePage.form.nameLabel')}</label>
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('containers.tankagePage.form.namePlaceholder')} />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Cliente *</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.fields.client')} *</label>
               <Select value={form.client} onValueChange={v => setForm({ ...form, client: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('containers.tankagePage.form.clientPlaceholder')} /></SelectTrigger>
                 <SelectContent>
                   {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
@@ -324,9 +319,9 @@ export default function Tankagem() {
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
             <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar' : 'Cadastrar'}
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : editing ? t('buttons.save') : t('buttons.register')}
             </Button>
           </div>
         </DialogContent>
@@ -335,10 +330,10 @@ export default function Tankagem() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title="Excluir Tanka"
-        message={`Tem certeza que deseja excluir a tanka "${deleteTarget?.name}"?\n\nEsta ação não pode ser desfeita.`}
+        title={t('containers.tankagePage.deleteTitle')}
+        message={t('containers.tankagePage.deleteMessage', { name: deleteTarget?.name })}
         onConfirm={confirmDelete}
-        confirmLabel="Sim, excluir"
+        confirmLabel={t('containers.tankagePage.deleteConfirm')}
         confirmColor="#DC2626"
       />
     </div>

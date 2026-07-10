@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Zap, ArrowRight } from 'lucide-react';
+import { fmtVolume } from '@/i18n/formatters';
+import { translatePackagingType } from '@/i18n/domainMaps';
 import { EtapaBadge, ProgressSegments } from './ProductionBadges';
 
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
 export default function ProductionTrackingTable({ productions, onBypass, bypassing, showClient = true, showBypass = true, onViewAll, maxRows = 10, highlightProdId = null }) {
+  const { t, i18n } = useTranslation();
   const highlightRef = useRef(null);
 
   useEffect(() => {
@@ -16,7 +18,7 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
   if (!productions || productions.length === 0) {
     return (
       <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-        Nenhuma produção em andamento.
+        {t('production.tracking.empty')}
       </div>
     );
   }
@@ -27,14 +29,14 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
         <table className="w-full chemctrl-table">
           <thead>
             <tr className="border-b border-border">
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">OP</th>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Produto</th>
-              {showClient && <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</th>}
-              <th className="px-5 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Volume (L)</th>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Embalagem</th>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Etapa</th>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Progresso</th>
-              {showBypass && <th className="px-5 py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">By-pass</th>}
+              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.opNumber')}</th>
+              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('common.product')}</th>
+              {showClient && <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('common.client')}</th>}
+              <th className="px-5 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.tracking.volume')}</th>
+              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.tracking.packaging')}</th>
+              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.tracking.stage')}</th>
+              <th className="px-5 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.tracking.progress')}</th>
+              {showBypass && <th className="px-5 py-2.5 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('production.tracking.bypass')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -48,8 +50,8 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
                 <td className="px-5 py-2 font-bold text-sm font-mono text-primary">{p.op_number}</td>
                 <td className="px-5 py-2 text-sm text-foreground">{p.product}</td>
                 {showClient && <td className="px-5 py-2 text-sm text-muted-foreground">{p.client}</td>}
-                <td className="px-5 py-2 text-right font-bold text-sm text-foreground">{fmt(p.volume || 0)} L</td>
-                <td className="px-5 py-2 text-sm text-foreground">{p.packaging_type || '—'}</td>
+                <td className="px-5 py-2 text-right font-bold text-sm text-foreground">{fmtVolume(p.volume || 0, 'L', i18n.language)}</td>
+                <td className="px-5 py-2 text-sm text-foreground">{translatePackagingType(p.packaging_type)}</td>
                 <td className="px-5 py-2"><EtapaBadge status={p.status} /></td>
                 <td className="px-5 py-2"><ProgressSegments status={p.status} /></td>
                 {showBypass && (
@@ -64,7 +66,7 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
                       }`}
                     >
                       {bypassing === p.id ? <div className="w-3 h-3 border border-border border-t-current rounded-full animate-spin" /> : <Zap className="w-3 h-3" />}
-                      {p.bypass_qc ? 'Ativo' : 'By-pass'}
+                      {p.bypass_qc ? t('production.tracking.bypassActive') : t('production.tracking.bypass')}
                     </button>
                   </td>
                 )}
@@ -76,7 +78,7 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
       {onViewAll && (
         <div className="px-5 py-3 border-t border-border">
           <button onClick={onViewAll} className="text-xs font-medium flex items-center gap-1 text-primary">
-            Ver todas <ArrowRight className="w-3 h-3" />
+            {t('production.tracking.viewAll')} <ArrowRight className="w-3 h-3" />
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
@@ -12,10 +13,13 @@ import { useToast } from '@/components/ui/use-toast';
 import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import moment from 'moment';
+import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { translateOrderStatus } from '@/i18n/domainMaps';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
 
 export default function Pedidos() {
+  const { t } = useTranslation();
   const { isReadOnly } = useOutletContext();
   const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
@@ -100,7 +104,7 @@ export default function Pedidos() {
   const save = async () => {
     const volOrdered = parseFloat(form.volume_ordered) || 0;
     const baseData = { ...form, date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(), volume_ordered: volOrdered };
-    if (!baseData.product || !baseData.volume_ordered) { toast({ title: 'Preencha produto e volume', variant: 'destructive' }); return; }
+    if (!baseData.product || !baseData.volume_ordered) { toast({ title: t('orders.messages.fillRequired'), variant: 'destructive' }); return; }
     setSaving(true);
     try {
       if (editing) {
@@ -117,9 +121,9 @@ export default function Pedidos() {
       }
       setShowForm(false);
       load();
-      toast({ title: editing ? 'Pedido atualizado' : 'Novo pedido registrado' });
+      toast({ title: editing ? t('success.updated') : t('success.created') });
     } catch (err) {
-      toast({ title: 'Erro ao salvar pedido', description: err.message, variant: 'destructive' });
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -129,19 +133,17 @@ export default function Pedidos() {
     if (!deleteTarget) return;
     try {
       await base44.entities.Order.delete(deleteTarget.id);
-      toast({ title: 'Pedido excluído' });
+      toast({ title: t('success.deleted') });
       setDeleteTarget(null);
       load();
     } catch (err) {
-      toast({ title: 'Erro ao excluir pedido', description: err.message, variant: 'destructive' });
+      toast({ title: t('errors.deleteFailed'), description: err.message, variant: 'destructive' });
     }
   };
 
-  const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 });
-
   const StatusBadge = ({ status }) => {
     const c = { Pendente: 'bg-amber-100 text-amber-700', 'Em produção': 'bg-blue-100 text-blue-700', Finalizado: 'bg-green-100 text-green-700' };
-    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{status}</span>;
+    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{translateOrderStatus(status)}</span>;
   };
 
   return (
@@ -149,12 +151,12 @@ export default function Pedidos() {
       {/* Fixed Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">📋 Pedidos de Produção</h1>
-          <p className="text-sm text-muted-foreground">{orders.length} pedido(s) registrado(s)</p>
+          <h1 className="text-2xl font-bold">📋 {t('orders.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('orders.subtitle', { count: orders.length })}</p>
         </div>
         {!isReadOnly && (
           <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
-            <Plus className="w-4 h-4 mr-2" /> Novo Pedido
+            <Plus className="w-4 h-4 mr-2" /> {t('orders.newOrder')}
           </Button>
         )}
       </div>
@@ -164,15 +166,15 @@ export default function Pedidos() {
         <div className="p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar por ID, produto, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={t('orders.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Todos os status" /></SelectTrigger>
+            <SelectTrigger className="w-44"><SelectValue placeholder={t('orders.allStatuses')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              <SelectItem value="Pendente">Pendente</SelectItem>
-              <SelectItem value="Em produção">Em produção</SelectItem>
-              <SelectItem value="Finalizado">Finalizado</SelectItem>
+              <SelectItem value="all">{t('orders.allStatuses')}</SelectItem>
+              <SelectItem value="Pendente">{t('orders.status.pending')}</SelectItem>
+              <SelectItem value="Em produção">{t('orders.status.inProduction')}</SelectItem>
+              <SelectItem value="Finalizado">{t('orders.status.finished')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -185,18 +187,18 @@ export default function Pedidos() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-gray-50">
-                  <th className="px-4 py-3 text-left">ID</th>
-                  <th className="px-4 py-3 text-left">Data</th>
-                  <th className="px-4 py-3 text-left">Solicitante</th>
-                  <th className="px-4 py-3 text-left">Produto</th>
-                  <th className="px-4 py-3 text-left">Cliente</th>
-                  <th className="px-4 py-3 text-left">Ped. Cliente</th>
-                  <th className="px-4 py-3 text-right">Volume (L)</th>
-                  <th className="px-4 py-3 text-right">Vol. Produzido</th>
-                  <th className="px-4 py-3 text-right">Vol. Pendente</th>
-                  <th className="px-4 py-3 text-left">Prev. Atend.</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-center">Ações</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.id')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.date')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.requester')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.product')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.client')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.clientOrder')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volume')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volumeProduced')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volumePending')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.expectedDate')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.status')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,30 +207,30 @@ export default function Pedidos() {
                   return (
                     <tr key={o.id} className="border-b border-gray-50 hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
-                      <td className="px-4 py-2.5 text-sm">{o.date ? moment(o.date).format('DD/MM/YYYY') : '—'}</td>
+                      <td className="px-4 py-2.5 text-sm">{o.date ? fmtDate(o.date) : t('common.notAvailable')}</td>
                       <td className="px-4 py-2.5 text-sm">{o.requester}</td>
                       <td className="px-4 py-2.5 font-medium text-sm">{o.product}</td>
                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{o.client}</td>
-                      <td className="px-4 py-2.5 text-sm">{o.client_order || '—'}</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm">{fmt(o.volume_ordered)} L</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmt(o.volume_produced)} L</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm text-amber-600">{fmt(o.volume_pending)} L</td>
+                      <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-sm text-amber-600">{fmtNumber(o.volume_pending)} L</td>
                       <td className="px-4 py-2.5 text-sm">
                         <span className={isLate ? 'text-red-600 font-medium' : ''}>
                           {isLate && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                          {o.expected_date ? moment(o.expected_date).format('DD/MM/YYYY') : '—'}
+                          {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-center"><StatusBadge status={o.status} /></td>
                       <td className="px-4 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title="Visualizar">
+                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
                             <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
-                          {!isReadOnly && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title="Editar">
+                          {!isReadOnly && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
                             <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>}
-                          {!isReadOnly && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title="Excluir">
+                          {!isReadOnly && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
                             <Trash2 className="w-3.5 h-3.5 text-red-500" />
                           </button>}
                         </div>
@@ -243,9 +245,9 @@ export default function Pedidos() {
 
         {/* Fixed Footer */}
         <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
-          <span>Total de pedidos: {orders.length}</span>
-          <span>Pedidos em aberto: {openOrders.length}</span>
-          <span>Volume pendente total: <strong>{fmt(totalPendingVol)} L</strong></span>
+          <span>{t('orders.footer.total')}: {orders.length}</span>
+          <span>{t('orders.footer.open')}: {openOrders.length}</span>
+          <span>{t('orders.footer.pendingVolume')}: <strong>{fmtNumber(totalPendingVol)} L</strong></span>
         </div>
       </div>
 
@@ -253,37 +255,37 @@ export default function Pedidos() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? `Editar Pedido · ${editing.order_number}` : 'Novo Pedido de Produção'}</DialogTitle>
+            <DialogTitle>{editing ? t('orders.editOrder', { number: editing.order_number }) : t('orders.newOrderTitle')}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted-foreground">Data *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">Solicitante *</label><Input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.date')} *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.requester')} *</label><Input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Produto *</label>
+                <label className="text-xs font-medium text-muted-foreground">{t('orders.form.product')} *</label>
                 <ProductCombobox
                   value={form.product}
                   onChange={handleProductChange}
                   options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
-                  placeholder="Selecione ou busque..."
+                  placeholder={t('orders.form.productPlaceholder')}
                 />
               </div>
-              <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.client')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted-foreground">Pedido do Cliente</label><Input value={form.client_order} onChange={e => setForm({ ...form, client_order: e.target.value })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">Volume (L) *</label><Input type="number" value={form.volume_ordered} onChange={e => setForm({ ...form, volume_ordered: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.clientOrder')}</label><Input value={form.client_order} onChange={e => setForm({ ...form, client_order: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.volume')} *</label><Input type="number" value={form.volume_ordered} onChange={e => setForm({ ...form, volume_ordered: e.target.value })} /></div>
             </div>
 
-            <div><label className="text-xs font-medium text-muted-foreground">Data Prevista para Atendimento *</label><Input type="date" value={form.expected_date} onChange={e => setForm({ ...form, expected_date: e.target.value })} /></div>
-            <div><label className="text-xs font-medium text-muted-foreground">Observação</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
+            <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.expectedDate')} *</label><Input type="date" value={form.expected_date} onChange={e => setForm({ ...form, expected_date: e.target.value })} /></div>
+            <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.observations')}</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
             <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : editing ? 'Salvar Alterações' : 'Registrar Pedido'}
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : editing ? t('orders.form.saveChanges') : t('orders.form.register')}
             </Button>
           </div>
         </DialogContent>
@@ -294,9 +296,9 @@ export default function Pedidos() {
 
       {/* Delete Confirmation */}
       <ConfirmDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}
-        title="Excluir Pedido"
-        message={`Tem certeza que deseja excluir o pedido ${deleteTarget?.order_number}? Esta ação não pode ser desfeita.`}
-        confirmLabel="Excluir"
+        title={t('orders.deleteConfirm.title')}
+        message={t('orders.deleteConfirm.message', { number: deleteTarget?.order_number })}
+        confirmLabel={t('buttons.delete')}
         confirmColor="#DC2626"
         onConfirm={confirmDelete} />
     </div>

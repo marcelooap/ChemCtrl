@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,12 +8,12 @@ import { ArrowLeft, Save, CheckCircle, Lock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import moment from 'moment';
+import { fmtDateTime, fmtNumber } from '@/i18n/formatters';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
-const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export default function InventarioConferencia() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -22,6 +23,8 @@ export default function InventarioConferencia() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
+
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 }, i18n.language);
 
   useEffect(() => {
     base44.entities.Inventory.get(id).then(inv => {
@@ -40,6 +43,11 @@ export default function InventarioConferencia() {
     return reg > 0 ? (calcDifference(it) / reg) * 100 : 0;
   };
 
+  const formatFilterValue = (value) => {
+    if (value === 'TODOS') return t('inventory.page.allItems');
+    return value;
+  };
+
   const updateItem = (idx, field, value) => {
     setItems(prev => prev.map((it, i) => {
       if (i !== idx) return it;
@@ -56,7 +64,7 @@ export default function InventarioConferencia() {
     try {
       await base44.entities.Inventory.update(id, { items });
     } catch (e) {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+      toast({ title: t('inventory.conferencePage.saveError'), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -64,7 +72,7 @@ export default function InventarioConferencia() {
 
   const handleFinish = async () => {
     try {
-      const userName = authUser?.nome || authUser?.full_name || '—';
+      const userName = authUser?.nome || authUser?.full_name || t('common.notAvailable');
       await base44.entities.Inventory.update(id, {
         items,
         status: 'Finalizado',
@@ -73,16 +81,15 @@ export default function InventarioConferencia() {
       });
       navigate('/inventario');
     } catch (e) {
-      toast({ title: 'Erro ao finalizar', variant: 'destructive' });
+      toast({ title: t('inventory.conferencePage.finishError'), variant: 'destructive' });
     }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
-  if (!inventory) return <div className="p-8 text-center text-muted-foreground">Inventário não encontrado.</div>;
+  if (!inventory) return <div className="p-8 text-center text-muted-foreground">{t('inventory.conferencePage.notFound')}</div>;
 
-  const clients = inventory.clients === 'TODOS' ? 'TODOS' : parseArr(inventory.clients).join(', ');
-  const products = inventory.products === 'TODOS' ? 'TODOS' : parseArr(inventory.products).join(', ');
-  const lots = inventory.lots === 'TODOS' ? 'TODOS' : parseArr(inventory.lots).join(', ');
+  const clients = inventory.clients === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inventory.clients).join(', ');
+  const products = inventory.products === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inventory.products).join(', ');
 
   const totalRegistered = items.reduce((s, it) => s + (it.registered_stock || 0), 0);
   const totalPhysical = items.reduce((s, it) => s + calcPhysicalTotal(it), 0);
@@ -90,7 +97,6 @@ export default function InventarioConferencia() {
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/inventario')}>
@@ -99,50 +105,52 @@ export default function InventarioConferencia() {
           <div>
             <h1 className="text-2xl font-bold">{inventory.inventory_number}</h1>
             <p className="text-sm text-muted-foreground">
-              {clients} · {products} · Aberto por {inventory.opened_by || '—'} em {moment(inventory.opening_date).format('DD/MM/YYYY HH:mm')}
+              {clients} · {products} · {t('inventory.conferencePage.openedBy', {
+                user: inventory.opened_by || t('common.notAvailable'),
+                date: fmtDateTime(inventory.opening_date, undefined, i18n.language),
+              })}
             </p>
           </div>
         </div>
         {isFinished ? (
           <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
-            <Lock className="w-4 h-4" /> Inventário Finalizado
+            <Lock className="w-4 h-4" /> {t('inventory.conferencePage.finished')}
           </div>
         ) : (
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSave} disabled={saving}>
               {saving ? <div className="w-4 h-4 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-              Salvar
+              {t('buttons.save')}
             </Button>
             <Button onClick={() => setShowFinish(true)} style={{ background: '#16a34a' }} className="text-white hover:opacity-90">
-              <CheckCircle className="w-4 h-4 mr-1" /> Finalizar
+              <CheckCircle className="w-4 h-4 mr-1" /> {t('buttons.finish')}
             </Button>
           </div>
         )}
       </div>
 
-      {/* Table */}
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-auto">
           <table className="w-full chemctrl-table">
             <thead className="sticky top-0 z-10">
               <tr className="border-b">
-                <th className="px-3 py-3 text-left">Cliente</th>
-                <th className="px-3 py-3 text-left">Produto</th>
-                <th className="px-3 py-3 text-left">Lote</th>
-                <th className="px-3 py-3 text-left">Embalagem</th>
-                <th className="px-3 py-3 text-right">Cap. (kg)</th>
-                <th className="px-3 py-3 text-right">Estoque Reg. (kg)</th>
-                <th className="px-3 py-3 text-right">Embal. Esp.</th>
-                <th className="px-3 py-3 text-right">Embal. Fís.</th>
-                <th className="px-3 py-3 text-right">Fracionado (kg)</th>
-                <th className="px-3 py-3 text-right">Qtd. Física (kg)</th>
-                <th className="px-3 py-3 text-right">Diferença (kg)</th>
-                <th className="px-3 py-3 text-right">Dif. %</th>
+                <th className="px-3 py-3 text-left">{t('common.client')}</th>
+                <th className="px-3 py-3 text-left">{t('common.product')}</th>
+                <th className="px-3 py-3 text-left">{t('common.lot')}</th>
+                <th className="px-3 py-3 text-left">{t('inventory.conferencePage.packaging')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.capacityKg')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.registeredStockKg')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.expectedPackages')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.physicalPackages')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.fractionalKg')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.physicalQtyKg')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.differenceKg')}</th>
+                <th className="px-3 py-3 text-right">{t('inventory.conferencePage.diffPercent')}</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={12} className="text-center py-8 text-sm text-muted-foreground">Nenhum item neste inventário.</td></tr>
+                <tr><td colSpan={12} className="text-center py-8 text-sm text-muted-foreground">{t('inventory.messages.noItems')}</td></tr>
               ) : items.map((it, idx) => {
                 const physTotal = calcPhysicalTotal(it);
                 const diff = calcDifference(it);
@@ -150,10 +158,10 @@ export default function InventarioConferencia() {
                 const diffColor = diff > 0 ? '#16a34a' : diff < 0 ? '#dc2626' : '#666';
                 return (
                   <tr key={idx} className="border-b hover:bg-accent/30">
-                    <td className="px-3 py-2 text-sm">{it.client || '—'}</td>
-                    <td className="px-3 py-2 text-sm font-medium">{it.product || '—'}</td>
-                    <td className="px-3 py-2 text-sm font-mono">{it.lot || '—'}</td>
-                    <td className="px-3 py-2 text-sm">{it.packaging_type || '—'}</td>
+                    <td className="px-3 py-2 text-sm">{it.client || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm font-medium">{it.product || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm font-mono">{it.lot || t('common.notAvailable')}</td>
+                    <td className="px-3 py-2 text-sm">{it.packaging_type || t('common.notAvailable')}</td>
                     <td className="px-3 py-2 text-sm text-right">{fmt(it.packaging_capacity)}</td>
                     <td className="px-3 py-2 text-sm text-right font-medium">{fmt(it.registered_stock)}</td>
                     <td className="px-3 py-2 text-sm text-right">{fmt(it.registered_quantity)}</td>
@@ -181,13 +189,12 @@ export default function InventarioConferencia() {
           </table>
         </div>
 
-        {/* Footer summary */}
         <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-sm bg-muted/50/50">
-          <span>Itens: <strong>{items.length}</strong></span>
-          <span>Estoque Registrado: <strong>{fmt(totalRegistered)} kg</strong></span>
-          <span>Quantidade Física: <strong>{fmt(totalPhysical)} kg</strong></span>
+          <span>{t('inventory.conferencePage.itemsCount', { count: items.length })}</span>
+          <span>{t('inventory.conferencePage.registeredTotal', { value: fmt(totalRegistered) })}</span>
+          <span>{t('inventory.conferencePage.physicalTotal', { value: fmt(totalPhysical) })}</span>
           <span style={{ color: totalDiff > 0 ? '#16a34a' : totalDiff < 0 ? '#dc2626' : '#666' }}>
-            Diferença Total: <strong>{totalDiff >= 0 ? '+' : ''}{fmt(totalDiff)} kg</strong>
+            {t('inventory.conferencePage.totalDifference', { value: `${totalDiff >= 0 ? '+' : ''}${fmt(totalDiff)}` })}
           </span>
         </div>
       </div>
@@ -195,10 +202,10 @@ export default function InventarioConferencia() {
       <ConfirmDialog
         open={showFinish}
         onOpenChange={setShowFinish}
-        title="Finalizar Inventário"
-        message="Tem certeza que deseja finalizar este inventário?\n\nApós a finalização, não será possível realizar novas alterações."
+        title={t('inventory.conferencePage.finishTitle')}
+        message={t('inventory.conferencePage.finishMessage')}
         onConfirm={handleFinish}
-        confirmLabel="Sim, finalizar"
+        confirmLabel={t('inventory.conferencePage.finishConfirmLabel')}
         confirmColor="#16a34a"
       />
     </div>

@@ -1,20 +1,24 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { callRPC, setSessionId, clearSessionId, getSessionId } from '@/api/rpcClient';
+import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
+import i18n from '@/i18n';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';
-const SESSION_ID_KEY = 'chemctrl_session_id';
 const SUPABASE_URL = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
 
-// Fallback: query usuarios table directly (used when RPC functions don't exist yet)
+function normalizeLanguage(value) {
+  return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
+}
+
 const fallbackLogin = async (username, password) => {
   const params = new URLSearchParams();
   params.set('select', '*');
   params.set('usuario', `eq.${username}`);
   params.set('limit', '1');
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/usuarios?${params.toString()}`, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const rows = await resp.json();
@@ -27,9 +31,15 @@ const fallbackLogin = async (username, password) => {
     success: true,
     session_id: sessionId,
     user: {
-      id: u.id, nome_completo: u.nome_completo, usuario: u.usuario,
-      nivel_acesso: u.nivel_acesso, status: u.status, tipo: u.tipo || 'interno',
-      cliente: u.cliente || '', cargo: u.cargo || '',
+      id: u.id,
+      nome_completo: u.nome_completo,
+      usuario: u.usuario,
+      nivel_acesso: u.nivel_acesso,
+      status: u.status,
+      tipo: u.tipo || 'interno',
+      cliente: u.cliente || '',
+      cargo: u.cargo || '',
+      preferred_language: normalizeLanguage(u.preferred_language),
     },
   };
 };
@@ -43,13 +53,23 @@ function mapUser(u) {
     nome: u.nome_completo,
     full_name: u.nome_completo,
     username: u.usuario,
-    nivel: nivel,
+    nivel,
     nivel_acesso: u.nivel_acesso,
     active: u.status === 'Ativo',
     tipo: u.tipo || 'interno',
     cliente: u.cliente || '',
     cargo: u.cargo || '',
+    preferred_language: normalizeLanguage(u.preferred_language),
   };
+}
+
+function persistUserSession(userData) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(userData));
+}
+
+async function syncUserLanguage(userData) {
+  const locale = normalizeLanguage(userData?.preferred_language);
+  await applyLanguage(locale);
 }
 
 export const InternalAuthProvider = ({ children }) => {
@@ -67,22 +87,22 @@ export const InternalAuthProvider = ({ children }) => {
       }
 
       try {
-        // Validate session against the database
         const session = await callRPC('validate_session', { p_session_id: sessionId });
         if (session) {
-          // Session is valid — restore user from stored data
           const userData = JSON.parse(rawSession);
-          setUser(mapUser(userData));
+          const mapped = mapUser(userData);
+          setUser(mapped);
+          await syncUserLanguage(mapped);
         } else {
-          // Session expired or invalid — clear everything
           clearSessionId();
           localStorage.removeItem(SESSION_KEY);
         }
       } catch (e) {
-        // Network error — use stored data optimistically (don't lock user out)
         try {
           const userData = JSON.parse(rawSession);
-          setUser(mapUser(userData));
+          const mapped = mapUser(userData);
+          setUser(mapped);
+          await syncUserLanguage(mapped);
         } catch (_) {
           clearSessionId();
           localStorage.removeItem(SESSION_KEY);
@@ -95,8 +115,6 @@ export const InternalAuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      // Call the login_user RPC (SECURITY DEFINER — bypasses RLS to verify password hash)
-      // Falls back to direct REST query if RPC not yet deployed
       let result;
       try {
         result = await callRPC('login_user', {
@@ -111,18 +129,52 @@ export const InternalAuthProvider = ({ children }) => {
         return { success: false, error: result?.error || 'Usuário ou senha inválidos.' };
       }
 
-      // Store session ID and user data (without senha)
-      const userData = result.user;
+      const userData = {
+        ...result.user,
+        preferred_language: normalizeLanguage(result.user?.preferred_language),
+      };
       setSessionId(result.session_id);
-      localStorage.setItem(SESSION_KEY, JSON.stringify(userData));
+      persistUserSession(userData);
       sessionStorage.setItem('chemctrl_welcome', '1');
 
       const mapped = mapUser(userData);
       setUser(mapped);
+      await syncUserLanguage(mapped);
       return { success: true, user: mapped };
     } catch (e) {
-      return { success: false, error: 'Erro de conexão. Tente novamente.' };
+      return { success: false, error: i18n.t('login.errors.network') };
     }
+  };
+
+  const updateLanguage = async (locale) => {
+    if (!isSupportedLocale(locale)) return { success: false };
+    const sessionId = getSessionId();
+
+    try {
+      if (sessionId) {
+        const result = await callRPC('update_user_language', {
+          p_session_id: sessionId,
+          p_language: locale,
+        });
+        if (result && result.success === false) {
+          // RPC not deployed or session issue — continue with local fallback
+        }
+      }
+    } catch (_) {
+      // Fallback to localStorage only when RPC unavailable
+    }
+
+    await applyLanguage(locale);
+
+    if (user) {
+      const updated = { ...user, preferred_language: locale };
+      const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+      const merged = { ...stored, preferred_language: locale };
+      persistUserSession(merged);
+      setUser(mapUser(updated));
+    }
+
+    return { success: true };
   };
 
   const logout = async () => {
@@ -139,7 +191,7 @@ export const InternalAuthProvider = ({ children }) => {
   const isAuthenticated = !!user;
 
   return (
-    <InternalAuthContext.Provider value={{ user, isAuthenticated, loading, login, logout }}>
+    <InternalAuthContext.Provider value={{ user, isAuthenticated, loading, login, logout, updateLanguage }}>
       {children}
     </InternalAuthContext.Provider>
   );

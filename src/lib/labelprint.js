@@ -5,15 +5,23 @@ import React from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { QRCodeSVG } from 'qrcode.react';
+import i18n from '@/i18n';
+import { fmtDate, fmtNumber } from '@/i18n/formatters';
 
-function calcValidity(fabDateStr, validityDays) {
+function getLabelLabels(locale) {
+  const lang = locale || i18n.language || 'pt-BR';
+  const t = (key, opts) => i18n.t(key, { ...opts, lng: lang });
+  return { lang, t };
+}
+
+function calcValidity(fabDateStr, validityDays, lang) {
   if (!fabDateStr) return '—';
   const d = new Date(fabDateStr);
   if (isNaN(d.getTime())) return '—';
   if (validityDays && validityDays > 0) {
     d.setDate(d.getDate() + Number(validityDays));
   }
-  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return fmtDate(d, { timeZone: 'America/Sao_Paulo' }, lang);
 }
 
 function makeQrElement(publicUrl) {
@@ -23,7 +31,6 @@ function makeQrElement(publicUrl) {
   });
 }
 
-// Abordagem 1: renderToStaticMarkup — síncrono, não precisa de DOM
 async function tryServerRender(publicUrl) {
   try {
     const { renderToStaticMarkup } = await import('react-dom/server');
@@ -35,7 +42,6 @@ async function tryServerRender(publicUrl) {
   return '';
 }
 
-// Abordagem 2: flushSync + createRoot — força commit síncrono do SVG no DOM
 function tryFlushSync(publicUrl) {
   const container = document.createElement('div');
   container.style.cssText = 'position:absolute;left:-9999px;top:0;';
@@ -55,27 +61,25 @@ function tryFlushSync(publicUrl) {
 
 async function buildQrSvgMarkup(publicToken) {
   if (!publicToken) return '';
-  // Usa a URL pública configurada (VITE_APP_URL) em produção; em local, cai para window.location.origin
   const baseUrl = (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
   const publicUrl = `${baseUrl}/consulta/${publicToken}`;
-  // Tenta renderToStaticMarkup primeiro; se falhar, usa flushSync
   let markup = await tryServerRender(publicUrl);
   if (!markup) markup = tryFlushSync(publicUrl);
   return markup;
 }
 
-export const printContainerLabel = async (container, validityDays, publicToken) => {
+export const printContainerLabel = async (container, validityDays, publicToken, options) => {
   if (!container) return;
 
-  // Abre a janela SINCRONAMENTE (dentro do gesto do usuário) para evitar bloqueio de pop-up
-  const win = window.open('', '_blank', 'width=420,height=300');
-  if (!win) { alert('Permita pop-ups para imprimir a etiqueta.'); return; }
+  const { lang, t } = getLabelLabels(options?.locale);
+  const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 
-  // Mensagem de carregamento enquanto gera o QR Code
-  win.document.write('<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">Gerando etiqueta...</body></html>');
+  const win = window.open('', '_blank', 'width=420,height=300');
+  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
+
+  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
   win.document.close();
 
-  // Gera o QR Code SVG
   const qrSvgMarkup = await buildQrSvgMarkup(publicToken);
 
   const opNum = container.op_number || '—';
@@ -86,34 +90,34 @@ export const printContainerLabel = async (container, validityDays, publicToken) 
   const embalagem = barril ? `${placa} (${barril})` : placa || '—';
   const fabDateStr = container.created_date;
   const fabDate = fabDateStr
-    ? new Date(fabDateStr).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    ? fmtDate(fabDateStr, { timeZone: 'America/Sao_Paulo' }, lang)
     : '—';
-  const valDate = calcValidity(fabDateStr, validityDays);
-  const netWeight = (container.net_weight || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
-  const grossWeight = (container.gross_weight || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 });
+  const valDate = calcValidity(fabDateStr, validityDays, lang);
+  const netWeight = numFmt(container.net_weight || 0);
+  const grossWeight = numFmt(container.gross_weight || 0);
 
   const qrColumnHtml = publicToken ? (qrSvgMarkup ? `
     <div class="qr-col">
-      <div class="ref">Ref: ${opNum}</div>
+      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
       <div class="qr-code">${qrSvgMarkup}</div>
-      <div class="qr-hint">LEIA PARA DETALHES DO LOTE</div>
+      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
     </div>` : `
     <div class="qr-col">
-      <div class="ref">Ref: ${opNum}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;">ERRO QR</span></div>
-      <div class="qr-hint">LEIA PARA DETALHES DO LOTE</div>
+      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
+      <div class="qr-code"><span style="font-size:5pt;color:#999;">${t('pdf.label.qrError')}</span></div>
+      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
     </div>`) : `
     <div class="qr-col">
-      <div class="ref">Ref: ${opNum}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">TOKEN<br/>INDISPONÍVEL</span></div>
-      <div class="qr-hint">LEIA PARA DETALHES DO LOTE</div>
+      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
+      <div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div>
+      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
     </div>`;
 
   const html = `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8">
-<title>Etiqueta ${opNum}</title>
+<title>${t('pdf.label.title', { op: opNum })}</title>
 <style>
   @page { size: 105mm 50mm; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -174,9 +178,9 @@ export const printContainerLabel = async (container, validityDays, publicToken) 
           </svg>
         </div>
         <div class="fields">
-          <div class="field-row"><span class="lbl">LOTE</span><span class="sep">•</span><span class="val">${lot}</span></div>
-          <div class="field-row"><span class="lbl">FABRICAÇÃO</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
-          <div class="field-row"><span class="lbl">VALIDADE</span><span class="sep">•</span><span class="val">${valDate}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.lot')}</span><span class="sep">•</span><span class="val">${lot}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.manufacture')}</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.expiry')}</span><span class="sep">•</span><span class="val">${valDate}</span></div>
         </div>
       </div>
     </div>
@@ -184,16 +188,16 @@ export const printContainerLabel = async (container, validityDays, publicToken) 
   </div>
   <table class="weight-table">
     <tr>
-      <td class="wt-title" rowspan="2">MASSA</td>
-      <td class="wt-label">P. LÍQUIDO</td>
+      <td class="wt-title" rowspan="2">${t('pdf.label.mass')}</td>
+      <td class="wt-label">${t('pdf.label.netWeight')}</td>
       <td class="wt-value">${netWeight} kg</td>
     </tr>
     <tr>
-      <td class="wt-label">P. BRUTO</td>
+      <td class="wt-label">${t('pdf.label.grossWeight')}</td>
       <td class="wt-value">${grossWeight} kg</td>
     </tr>
   </table>
-  <div class="footer"><span>EMBALAGEM</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>
+  <div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>
 </div>
 </body>
 </html>`;

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, ListChecks, Save, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { brasiliaDate, brasiliaDateTime } from '@/lib/brasilTime';
-import moment from 'moment';
+import { fmtDate, fmtDateTime, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
+import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { NotificationService } from '@/notifications/services/NotificationService';
 
@@ -29,13 +30,14 @@ const statusBadgeColors = {
 };
 
 export default function ChecklistProducao() {
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: internalUser } = useInternalAuth();
   const [production, setProduction] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: 'Sim', confirmColor: '#2575D1' });
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: t('buttons.yes'), confirmColor: '#2575D1' });
   const [savingProgress, setSavingProgress] = useState(false);
 
   useEffect(() => {
@@ -75,10 +77,10 @@ export default function ChecklistProducao() {
         raw_materials_used: production.raw_materials_used,
         pause_start_time: new Date().toISOString(),
       });
-      toast({ title: 'Progresso salvo' });
+      toast({ title: t('production.checklist.saved') });
       navigate('/ordens');
     } catch (err) {
-      toast({ title: 'Erro ao salvar progresso', description: err.message, variant: 'destructive' });
+      toast({ title: t('production.checklistPage.saveError'), description: err.message, variant: 'destructive' });
     } finally {
       setSavingProgress(false);
     }
@@ -86,14 +88,21 @@ export default function ChecklistProducao() {
 
   const finalizeProduction = () => {
     if (!allMPsChecked) {
-      toast({ title: `Marque todas as MP antes de finalizar. Faltam ${uncheckedCount}.`, variant: 'destructive' });
+      toast({ title: t('production.checklist.uncheckedWarning', { count: uncheckedCount }), variant: 'destructive' });
       return;
     }
+    const nextStep = production.bypass_qc
+      ? t('production.checklist.finishConfirm.nextPackaging')
+      : t('production.checklist.finishConfirm.nextQuality');
     setConfirm({
       open: true,
-      title: `Finalizar Produção — ${production.op_number}`,
-      message: `Deseja finalizar a produção desta OP?\n\nO horário de término será registrado e a OP será movida para a etapa de ${production.bypass_qc ? 'Envase (by-pass CQ ativo)' : 'Qualidade'}.\nProduto: ${production.product}\nLote: ${production.lot}`,
-      confirmLabel: 'Sim, Finalizar',
+      title: t('production.checklist.finishConfirm.title', { op: production.op_number }),
+      message: t('production.checklist.finishConfirm.message', {
+        product: production.product,
+        lot: production.lot,
+        nextStep,
+      }),
+      confirmLabel: t('production.checklistPage.finalizeConfirmLabel'),
       confirmColor: '#22c55e',
       onConfirm: async () => {
         const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
@@ -124,10 +133,10 @@ export default function ChecklistProducao() {
     });
   };
 
-  const fmt = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
-  if (!production) return <div className="p-8 text-center text-muted-foreground">Produção não encontrada.</div>;
+  if (!production) return <div className="p-8 text-center text-muted-foreground">{t('production.checklistPage.notFound')}</div>;
 
   const colors = statusBadgeColors[production.status] || statusBadgeColors['Aguardando Início'];
   const hasSavedProgress = parseArr(production.raw_materials_used).some(mp => mp.checked);
@@ -140,7 +149,7 @@ export default function ChecklistProducao() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">OP: {production.op_number}</h1>
-            <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={{ background: colors.bg, color: colors.text }}>{production.status}</span>
+            <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={{ background: colors.bg, color: colors.text }}>{translateProductionStatus(production.status)}</span>
           </div>
           <p className="text-sm text-muted-foreground">{production.product} {production.client ? `— ${production.client}` : ''}</p>
         </div>
@@ -148,26 +157,25 @@ export default function ChecklistProducao() {
 
       {/* Info Card */}
       <div className="bg-card rounded-xl shadow-sm border border-border p-5 mb-6">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Informações da OP</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t('production.checklistPage.opInfo')}</h3>
         <div className="grid grid-cols-4 gap-4 text-sm">
-          <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{production.lot}</p></div>
-          <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{brasiliaDate(production.date)}</p></div>
-          <div><p className="text-xs text-muted-foreground">Volume</p><p className="font-medium">{fmt(production.volume)} L</p></div>
-          <div><p className="text-xs text-muted-foreground">Massa</p><p className="font-medium">{fmt(production.mass)} kg</p></div>
-          <div><p className="text-xs text-muted-foreground">Revisão Receita</p><p className="font-medium">{production.recipe_revision || '—'}</p></div>
-          <div><p className="text-xs text-muted-foreground">Embalagem</p><p className="font-medium">{production.packaging_info || production.packaging_type || '—'}</p></div>
-          <div><p className="text-xs text-muted-foreground">Prioridade</p><p className="font-medium">{production.priority}</p></div>
-          {production.start_time && <div><p className="text-xs text-muted-foreground">Início</p><p className="font-medium">{brasiliaDateTime(production.start_time)}</p></div>}
+          <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{production.lot}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('common.date')}</p><p className="font-medium">{fmtDate(production.date, undefined, i18n.language)}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(production.volume, 'L', i18n.language)}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-medium">{fmtMass(production.mass, 'kg', i18n.language)}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('production.fields.recipeRevision')}</p><p className="font-medium">{production.recipe_revision || t('common.notAvailable')}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('production.fields.packaging')}</p><p className="font-medium">{production.packaging_info || production.packaging_type || t('common.notAvailable')}</p></div>
+          <div><p className="text-xs text-muted-foreground">{t('production.fields.priority')}</p><p className="font-medium">{translatePriority(production.priority)}</p></div>
+          {production.start_time && <div><p className="text-xs text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{fmtDateTime(production.start_time, undefined, i18n.language)}</p></div>}
         </div>
       </div>
 
-      {/* Checklist */}
       <div className="bg-card rounded-xl shadow-sm border border-border p-5">
         <div className="flex items-center gap-2 mb-1">
           <ListChecks className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Checklist de Matérias Primas</h3>
+          <h3 className="text-sm font-semibold">{t('production.checklistPage.checklistTitle')}</h3>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">Clique em qualquer parte do card para marcar/desmarcar a MP</p>
+        <p className="text-xs text-muted-foreground mb-4">{t('production.checklistPage.clickToToggle')}</p>
         <div className="space-y-3">
           {grouped.map((group, gIdx) => {
             const allChecked = group.lots.every(l => l.checked);
@@ -191,26 +199,26 @@ export default function ChecklistProducao() {
                     </div>
                     {!isMultiLot ? (
                       <>
-                        <p className="text-xs text-muted-foreground mt-1">Lote: {group.lots[0].lot || '—'}</p>
-                        <p className="text-xs text-muted-foreground">Qtd. Operação: <strong>{fmt(group.lots[0].qty_operational)} kg</strong></p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('production.checklistPage.lotLabel', { lot: group.lots[0].lot || t('common.notAvailable') })}</p>
+                        <p className="text-xs text-muted-foreground">{t('production.checklistPage.qtyOperationalLabel', { value: fmt(group.lots[0].qty_operational) })}</p>
                       </>
                     ) : (
                       <div className="mt-2">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-muted-foreground">Total: <strong className="text-foreground">{fmt(totalQty)} kg</strong></span>
+                          <span className="text-xs text-muted-foreground">{t('production.checklistPage.totalLabel', { value: fmt(totalQty) })}</span>
                         </div>
                         <div className="space-y-2 ml-2">
                           {group.lots.map((lot, lIdx) => (
                             <div key={lIdx} className="flex items-center gap-2 pl-3 border-l-2" style={{ borderColor: '#E5E7EB' }}>
                               <input type="checkbox" checked={lot.checked || false} onChange={() => {}} onClick={e => e.stopPropagation()} className="w-3.5 h-3.5 rounded" style={{ accentColor: '#2575D1' }} />
                               <div className="flex-1 text-xs">
-                                <span className="text-muted-foreground">Lote: {lot.lot || '—'}</span>
-                                <span className="ml-3 text-muted-foreground">Qtd. Operação: <strong>{fmt(lot.qty_operational)} kg</strong></span>
+                                <span className="text-muted-foreground">{t('production.checklistPage.lotLabel', { lot: lot.lot || t('common.notAvailable') })}</span>
+                                <span className="ml-3 text-muted-foreground">{t('production.checklistPage.qtyOperationalLabel', { value: fmt(lot.qty_operational) })}</span>
                               </div>
                             </div>
                           ))}
                         </div>
-                        <p className="text-xs font-bold mt-2" style={{ color: '#2575D1' }}>Σ Total: {fmt(totalQty)} kg</p>
+                        <p className="text-xs font-bold mt-2" style={{ color: '#2575D1' }}>{t('production.checklistPage.sigmaTotal', { value: fmt(totalQty) })}</p>
                       </div>
                     )}
                   </div>
@@ -228,17 +236,16 @@ export default function ChecklistProducao() {
         {/* Warning if not all checked */}
         {!allMPsChecked && uncheckedCount > 0 && (
           <div className="mt-4 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            <AlertCircle className="w-3.5 h-3.5" /> {uncheckedCount} MP(s) ainda não marcada(s). Finalize apenas após marcar todas.
+            <AlertCircle className="w-3.5 h-3.5" /> {t('production.checklistPage.uncheckedInline', { count: uncheckedCount })}
           </div>
         )}
 
-        {/* Footer actions */}
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
           <Button variant="outline" onClick={saveProgress} disabled={savingProgress} className="gap-2">
-            {savingProgress ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4" /> Salvar Progresso</>}
+            {savingProgress ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.checklistPage.saving')}</> : <><Save className="w-4 h-4" /> {t('production.actions.saveProgress')}</>}
           </Button>
           <Button onClick={finalizeProduction} className="gap-2 disabled:opacity-50" style={{ background: allMPsChecked ? '#22c55e' : '#94a3b8', color: 'white' }}>
-            <CheckCircle className="w-4 h-4" /> Finalizar Produção
+            <CheckCircle className="w-4 h-4" /> {t('production.actions.finish')}
           </Button>
         </div>
       </div>

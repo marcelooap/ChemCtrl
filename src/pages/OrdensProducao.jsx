@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
@@ -10,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import ProductionCard from '@/components/ProductionCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EnvaseDialog from '@/components/EnvaseDialog';
-import { brasiliaDate, brasiliaDateTime, waitInterval } from '@/lib/brasilTime';
-import moment from 'moment';
+import { waitInterval } from '@/lib/brasilTime';
+import { fmtDate, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
+import { translateProductionStatus } from '@/i18n/domainMaps';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -23,6 +25,7 @@ const parseArr = (val) => {
 };
 
 export default function OrdensProducao() {
+  const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
   const [filter, setFilter] = useState('all');
@@ -30,7 +33,7 @@ export default function OrdensProducao() {
   const [showView, setShowView] = useState(false);
   const [selectedOP, setSelectedOP] = useState(null);
   const [viewingOP, setViewingOP] = useState(null);
-  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: 'Sim', confirmColor: '#2575D1' });
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: t('buttons.yes'), confirmColor: '#2575D1' });
   const navigate = useNavigate();
 
   const canAnalyze = user && (user.nivel === 'administrador' || user.nivel === 'supervisor');
@@ -43,9 +46,13 @@ export default function OrdensProducao() {
   const startProduction = (prod) => {
     setConfirm({
       open: true,
-      title: `Iniciar Produção — ${prod.op_number}`,
-      message: `Deseja iniciar a produção desta OP?\n\nO horário de início será registrado agora e a OP passará para o status "Em Produção".\nProduto: ${prod.product}\nLote: ${prod.lot}\nTempo de espera: ${waitInterval(prod.created_date, null)}`,
-      confirmLabel: 'Sim, Iniciar',
+      title: t('production.orders.startConfirm.title', { op: prod.op_number }),
+      message: t('production.orders.startConfirm.message', {
+        product: prod.product,
+        lot: prod.lot,
+        wait: waitInterval(prod.created_date, null),
+      }),
+      confirmLabel: t('production.orders.startConfirm.confirmLabel'),
       confirmColor: '#1e40af',
       onConfirm: async () => {
         const operatorName = user?.nome || user?.full_name || user?.email || '';
@@ -58,9 +65,12 @@ export default function OrdensProducao() {
   const resumeProduction = (prod) => {
     setConfirm({
       open: true,
-      title: `Retomar Produção — ${prod.op_number}`,
-      message: `Deseja retomar a produção desta OP?\n\nO tempo de pausa será contabilizado e a produção continuará de onde parou.\nProduto: ${prod.product}\nLote: ${prod.lot}`,
-      confirmLabel: 'Sim, Retomar',
+      title: t('production.orders.resumeConfirm.title', { op: prod.op_number }),
+      message: t('production.orders.resumeConfirm.message', {
+        product: prod.product,
+        lot: prod.lot,
+      }),
+      confirmLabel: t('production.orders.resumeConfirm.confirmLabel'),
       confirmColor: '#1e40af',
       onConfirm: async () => {
         const updates = {};
@@ -82,7 +92,7 @@ export default function OrdensProducao() {
     setShowEnvase(true);
   };
 
-  const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const fmt3 = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
 
   const totalPendingVolume = activeProds.reduce((s, p) => s + (p.volume || 0), 0);
 
@@ -91,19 +101,19 @@ export default function OrdensProducao() {
   const renderActionButton = (prod) => {
     if (isReadOnly) return null;
     if (prod.status === 'Aguardando Início') {
-      return <Button onClick={() => startProduction(prod)} className="w-full text-white" style={{ background: '#1e40af' }}><Play className="w-3.5 h-3.5 mr-1.5" /> Iniciar Produção</Button>;
+      return <Button onClick={() => startProduction(prod)} className="w-full text-white" style={{ background: '#1e40af' }}><Play className="w-3.5 h-3.5 mr-1.5" /> {t('production.actions.start')}</Button>;
     }
     if (prod.status === 'Em Produção') {
-      return <Button onClick={() => resumeProduction(prod)} className="w-full text-white" style={{ background: '#1e40af' }}><RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Retomar Produção</Button>;
+      return <Button onClick={() => resumeProduction(prod)} className="w-full text-white" style={{ background: '#1e40af' }}><RotateCcw className="w-3.5 h-3.5 mr-1.5" /> {t('production.orders.resume')}</Button>;
     }
     if (prod.status === 'Qualidade') {
       if (canAnalyze) {
-        return <Button onClick={() => navigate(`/qualidade/producoes?prod=${prod.id}`)} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> Analisar</Button>;
+        return <Button onClick={() => navigate(`/qualidade/producoes?prod=${prod.id}`)} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> {t('production.orders.analyze')}</Button>;
       }
-      return <Button disabled className="w-full text-white" style={{ background: '#94a3b8' }}>Aguardando CQ</Button>;
+      return <Button disabled className="w-full text-white" style={{ background: '#94a3b8' }}>{t('production.orders.waitingQc')}</Button>;
     }
     if (prod.status === 'Envase') {
-      return <Button onClick={() => openEnvase(prod)} className="w-full text-white" style={{ background: '#f59e0b' }}><Package className="w-3.5 h-3.5 mr-1.5" /> Registrar Envase</Button>;
+      return <Button onClick={() => openEnvase(prod)} className="w-full text-white" style={{ background: '#f59e0b' }}><Package className="w-3.5 h-3.5 mr-1.5" /> {t('production.orders.registerPackaging')}</Button>;
     }
     return null;
   };
@@ -112,21 +122,21 @@ export default function OrdensProducao() {
     <div className="pb-20">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Ordens de Produção</h1>
-          <p className="text-sm text-muted-foreground">{activeProds.length} OP(s) em aberto</p>
+          <h1 className="text-2xl font-bold">{t('production.ordersTitle')}</h1>
+          <p className="text-sm text-muted-foreground">{t('production.orders.openCount', { count: activeProds.length })}</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
           </Button>
           <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Todas as etapas" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('production.orders.allStages')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as etapas</SelectItem>
-              <SelectItem value="Aguardando Início">Aguardando Início</SelectItem>
-              <SelectItem value="Em Produção">Em Produção</SelectItem>
-              <SelectItem value="Qualidade">Qualidade</SelectItem>
-              <SelectItem value="Envase">Envase</SelectItem>
+              <SelectItem value="all">{t('production.orders.allStages')}</SelectItem>
+              <SelectItem value="Aguardando Início">{translateProductionStatus('Aguardando Início')}</SelectItem>
+              <SelectItem value="Em Produção">{translateProductionStatus('Em Produção')}</SelectItem>
+              <SelectItem value="Qualidade">{translateProductionStatus('Qualidade')}</SelectItem>
+              <SelectItem value="Envase">{translateProductionStatus('Envase')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -142,40 +152,39 @@ export default function OrdensProducao() {
 
       {filtered.length === 0 && (
         <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg font-medium mb-1">Nenhuma ordem de produção</p>
-          <p className="text-sm">Não há OPs em aberto no momento.</p>
+          <p className="text-lg font-medium mb-1">{t('production.orders.emptyTitle')}</p>
+          <p className="text-sm">{t('production.orders.emptyDetail')}</p>
         </div>
       )}
 
-      {/* View Dialog */}
       <Dialog open={showView} onOpenChange={setShowView}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>OP: {viewingOP?.op_number} — {viewingOP?.product}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('production.orders.viewTitle', { op: viewingOP?.op_number, product: viewingOP?.product })}</DialogTitle></DialogHeader>
           {viewingOP && (
             <div>
               <div className="grid grid-cols-4 gap-3 text-sm mb-4 bg-muted/50 rounded-lg p-3">
-              <div><p className="text-xs text-muted-foreground">Aguardando Início</p><p className="font-medium" style={{ color: '#1e40af' }}>{waitInterval(viewingOP.created_date, viewingOP.start_time)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Lote</p><p className="font-medium">{viewingOP.lot}</p></div>
-                <div><p className="text-xs text-muted-foreground">Data</p><p className="font-medium">{brasiliaDate(viewingOP.date)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Volume</p><p className="font-medium">{fmt3(viewingOP.volume)} L</p></div>
-                <div><p className="text-xs text-muted-foreground">Massa</p><p className="font-medium">{fmt3(viewingOP.mass)} kg</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.orders.waitingStart')}</p><p className="font-medium" style={{ color: '#1e40af' }}>{waitInterval(viewingOP.created_date, viewingOP.start_time)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{viewingOP.lot}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.date')}</p><p className="font-medium">{fmtDate(viewingOP.date, undefined, i18n.language)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(viewingOP.volume, 'L', i18n.language)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-medium">{fmtMass(viewingOP.mass, 'kg', i18n.language)}</p></div>
               </div>
-              <h4 className="text-sm font-semibold mb-2">Matérias Primas</h4>
+              <h4 className="text-sm font-semibold mb-2">{t('production.orders.rawMaterials')}</h4>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
                 <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                  <th className="px-3 py-2 text-left">CÓDIGO</th><th className="px-3 py-2 text-left">MATÉRIA PRIMA</th><th className="px-3 py-2 text-left">LOTE</th><th className="px-3 py-2 text-right">QTD. OP. (KG)</th>
+                  <th className="px-3 py-2 text-left">{t('production.orders.code')}</th><th className="px-3 py-2 text-left">{t('production.orders.rawMaterial')}</th><th className="px-3 py-2 text-left">{t('common.lot')}</th><th className="px-3 py-2 text-right">{t('production.orders.qtyOperationalKg')}</th>
                 </tr></thead>
                 <tbody>
                   {parseArr(viewingOP.raw_materials_used).map((mp, i) => (
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: '#1e40af' }}>{mp.mp_code}</td>
                       <td className="px-3 py-2">{mp.mp_name}</td>
-                      <td className="px-3 py-2">{mp.lot || '—'}</td>
+                      <td className="px-3 py-2">{mp.lot || t('common.notAvailable')}</td>
                       <td className="px-3 py-2 text-right font-medium">{fmt3(mp.qty_operational)}</td>
                     </tr>
                   ))}
                   <tr className="border-t bg-muted/50 font-bold">
-                    <td colSpan={3} className="px-3 py-2">TOTAL</td>
+                    <td colSpan={3} className="px-3 py-2">{t('production.checklist.total').toUpperCase()}</td>
                     <td className="px-3 py-2 text-right" style={{ color: '#1e40af' }}>{fmt3(parseArr(viewingOP.raw_materials_used).reduce((s, m) => s + (m.qty_operational || 0), 0))}</td>
                   </tr>
                 </tbody>
@@ -183,7 +192,7 @@ export default function OrdensProducao() {
             </div>
           )}
           <div className="flex justify-end mt-4">
-            <Button variant="outline" onClick={() => setShowView(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setShowView(false)}>{t('buttons.close')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -214,7 +223,7 @@ export default function OrdensProducao() {
                 <ClipboardList className="w-4 h-4" style={{ color: '#1e40af' }} />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground leading-tight">OP's em Aberto</p>
+                <p className="text-xs text-muted-foreground leading-tight">{t('production.orders.openOps')}</p>
                 <p className="text-lg font-bold leading-tight">{activeProds.length}</p>
               </div>
             </div>
@@ -223,13 +232,13 @@ export default function OrdensProducao() {
                 <Gauge className="w-4 h-4" style={{ color: '#d97706' }} />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground leading-tight">Volume Pendente</p>
-                <p className="text-lg font-bold leading-tight">{fmt3(totalPendingVolume)} L</p>
+                <p className="text-xs text-muted-foreground leading-tight">{t('production.orders.pendingVolume')}</p>
+                <p className="text-lg font-bold leading-tight">{fmtVolume(totalPendingVolume, 'L', i18n.language)}</p>
               </div>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> {t('common.refresh')}
           </Button>
         </div>
       </div>

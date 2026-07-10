@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +13,8 @@ import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { generatePublicToken } from '@/lib/publicToken';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { NotificationService } from '@/notifications/services/NotificationService';
+import { fmtNumber } from '@/i18n/formatters';
+import { translatePriority } from '@/i18n/domainMaps';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -47,6 +50,7 @@ const convertFromKg = (kg, unit, density) => {
 };
 
 export default function NovaProducao() {
+  const { t, i18n } = useTranslation();
   const { data: recipes, loading } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) }));
   const { data: allOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
@@ -225,7 +229,7 @@ export default function NovaProducao() {
   const massDiff = round3(totalOperationQty - totalNeeded);
   const massOk = Math.abs(massDiff) < 0.01 && form.mass > 0;
 
-  const fmt3 = (n) => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const fmt3 = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
 
   const save = async () => {
     if (!form.product || !form.volume) return;
@@ -315,35 +319,35 @@ export default function NovaProducao() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Nova Produção</h1>
-        <p className="text-sm text-muted-foreground">Registre uma nova ordem de produção.</p>
+        <h1 className="text-2xl font-bold">{t('production.newTitle')}</h1>
+        <p className="text-sm text-muted-foreground">{t('production.newProduction.subtitle')}</p>
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border p-6 relative">
-        <LoadingOverlay visible={saving} label="Registrando OP..." />
-        <h3 className="text-sm font-semibold mb-4">Dados da Produção</h3>
+        <LoadingOverlay visible={saving} label={t('production.newProduction.registeringOp')} />
+        <h3 className="text-sm font-semibold mb-4">{t('production.newProduction.dataSection')}</h3>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">Data *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.fields.date')} *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Produto Acabado *</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.finishedProduct')} *</label>
             <ProductCombobox
               value={form.product}
               onChange={handleProductSelect}
               options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
-              placeholder="Selecione ou busque..."
+              placeholder={t('common.selectOption')}
             />
           </div>
-          <div><label className="text-xs font-medium text-muted-foreground">Cliente</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('common.client')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">Revisão da Receita</label><Input value={form.recipe_revision} readOnly className="bg-muted/50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.fields.recipeRevision')}</label><Input value={form.recipe_revision} readOnly className="bg-muted/50" /></div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Pedido Vinculado</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.linkedOrder')}</label>
             <Select value={form.order_id} onValueChange={v => {
               const o = orders.find(ord => ord.id === v);
               setForm(prev => ({ ...prev, order_id: v, client_order: o?.client_order || '', volume_pending: o?.volume_pending || 0 }));
             }}>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('common.selectOption')} /></SelectTrigger>
               <SelectContent>
                 {orders.filter(o => o.product === form.product).map(o => (
                   <SelectItem key={o.id} value={o.id}>{o.order_number} - {o.product}</SelectItem>
@@ -351,38 +355,37 @@ export default function NovaProducao() {
               </SelectContent>
             </Select>
           </div>
-          <div><label className="text-xs font-medium text-muted-foreground">Ped. Cliente</label><Input value={form.client_order} readOnly className="bg-muted/50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.clientOrderShort')}</label><Input value={form.client_order} readOnly className="bg-muted/50" /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">Volume Pendente (L)</label><Input value={form.volume_pending || '—'} readOnly className="bg-muted/50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.pendingVolume')}</label><Input value={form.volume_pending || t('common.notAvailable')} readOnly className="bg-muted/50" /></div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Prioridade</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.fields.priority')}</label>
             <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Baixa">Baixa</SelectItem>
-                <SelectItem value="Média">Média</SelectItem>
-                <SelectItem value="Alta">Alta</SelectItem>
+                <SelectItem value="Baixa">{translatePriority('Baixa')}</SelectItem>
+                <SelectItem value="Média">{translatePriority('Média')}</SelectItem>
+                <SelectItem value="Alta">{translatePriority('Alta')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div><label className="text-xs font-medium text-muted-foreground">Volume desta OP (L) *</label><Input type="number" value={form.volume} onChange={e => handleVolumeChange(e.target.value)} /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.opVolume')} *</label><Input type="number" value={form.volume} onChange={e => handleVolumeChange(e.target.value)} /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div><label className="text-xs font-medium text-muted-foreground">Densidade (g/mL)</label><Input type="number" step="0.001" value={form.density} onChange={e => handleDensityChange(e.target.value)} /></div>
-          <div><label className="text-xs font-medium text-muted-foreground">Massa (kg) — calculado</label><Input value={form.mass.toFixed(3)} readOnly className="bg-muted/50" /></div>
-          <div><label className="text-xs font-medium text-muted-foreground">Embalagem de Destino</label><Input value={form.packaging_type} onChange={e => setForm({ ...form, packaging_type: e.target.value })} placeholder="Ex: Tambor 200L, IBC 1000L..." /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.density')}</label><Input type="number" step="0.001" value={form.density} onChange={e => handleDensityChange(e.target.value)} /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.massCalculated')}</label><Input value={fmt3(form.mass)} readOnly className="bg-muted/50" /></div>
+          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.destinationPackaging')}</label><Input value={form.packaging_type} onChange={e => setForm({ ...form, packaging_type: e.target.value })} placeholder={t('production.newProduction.packagingPlaceholder')} /></div>
         </div>
         <div className="mb-6">
-          <label className="text-xs font-medium text-muted-foreground">Observações</label>
+          <label className="text-xs font-medium text-muted-foreground">{t('common.notes')}</label>
           <textarea className="w-full border rounded-md px-3 py-2 text-sm mt-1" rows={2} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
         </div>
 
-        {/* MP Allocation */}
         {mpList.length > 0 && (
           <div className="mt-6">
-            <h3 className="text-sm font-semibold mb-3">Apontamento de Matérias Primas</h3>
-            <p className="text-xs text-muted-foreground mb-3">As quantidades são calculadas em kg automaticamente. Ao selecionar o lote, a Qtd. Fiscal converte para a unidade do estoque. Use "+ Lote" para misturar lotes.</p>
+            <h3 className="text-sm font-semibold mb-3">{t('production.newProduction.rawMaterialAllocation')}</h3>
+            <p className="text-xs text-muted-foreground mb-3">{t('production.newProduction.rawMaterialAllocationHelp')}</p>
             <div className="space-y-4">
               {mpList.map((mp, idx) => {
                 const totalUsed = mp.lots.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
@@ -392,9 +395,9 @@ export default function NovaProducao() {
                     <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/50/50 flex-wrap">
                       <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#E0E7FF', color: '#4338CA' }}>{mp.mp_code}</span>
                       <span className="text-sm font-semibold">{mp.mp_name}</span>
-                      <span className="text-xs text-muted-foreground">%m/m: {(mp.percentage || 0).toFixed(8)}%</span>
-                      {mp.mp_density && <span className="text-xs text-muted-foreground">p={mp.mp_density} g/mL</span>}
-                      <span className="ml-auto text-xs font-bold">Total usado: {fmt3(totalUsed)} kg</span>
+                      <span className="text-xs text-muted-foreground">{t('production.newProduction.percentMass', { value: (mp.percentage || 0).toFixed(8) })}</span>
+                      {mp.mp_density && <span className="text-xs text-muted-foreground">{t('production.newProduction.densityShort', { value: mp.mp_density })}</span>}
+                      <span className="ml-auto text-xs font-bold">{t('production.newProduction.totalUsed', { value: fmt3(totalUsed) })}</span>
                     </div>
                     {/* Lot rows */}
                     <div className="p-3 space-y-3">
@@ -412,27 +415,27 @@ export default function NovaProducao() {
                         return (
                           <div key={lotIdx} className="grid grid-cols-12 gap-2 items-start">
                             <div className="col-span-4">
-                              <label className="text-xs text-muted-foreground">Lote</label>
+                              <label className="text-xs text-muted-foreground">{t('common.lot')}</label>
                               <Select value={lot.stock_id} onValueChange={v => handleLotSelect(idx, lotIdx, v)}>
-                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar lote..." /></SelectTrigger>
+                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('production.newProduction.selectLot')} /></SelectTrigger>
                                 <SelectContent>
                                   {availableStocks.map(s => (
-                                    <SelectItem key={s.id} value={s.id}>Reg. {s.entry_id || s.id} — {s.lot} — Saldo: {fmt3(s.current_stock)} {s.unit}</SelectItem>
+                                    <SelectItem key={s.id} value={s.id}>{t('production.newProduction.lotOption', { id: s.entry_id || s.id, lot: s.lot, balance: fmt3(s.current_stock), unit: s.unit })}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                               {stock && (
                                 <p className="text-xs mt-1" style={{ color: remaining >= 0 ? '#15803d' : '#dc2626' }}>
-                                  Restará: {fmt3(remaining)} {stock.unit}
+                                  {t('production.newProduction.remaining', { value: fmt3(remaining), unit: stock.unit })}
                                 </p>
                               )}
                             </div>
                             <div className="col-span-3">
-                              <label className="text-xs text-muted-foreground">Qtd. Fiscal ({stock?.unit || 'kg'})</label>
+                              <label className="text-xs text-muted-foreground">{t('production.checklist.qtyFiscal')} ({stock?.unit || 'kg'})</label>
                               <Input type="number" step="0.001" value={lot.qty_fiscal} onChange={e => handleQtyFiscalChange(idx, lotIdx, e.target.value)} className="h-8 text-xs" />
                             </div>
                             <div className="col-span-3">
-                              <label className="text-xs text-muted-foreground">Qtd. Operação (kg)</label>
+                              <label className="text-xs text-muted-foreground">{t('production.checklist.qtyOperational')} (kg)</label>
                               <Input type="number" step="0.001" value={lot.qty_operational} onChange={e => handleQtyOperationalChange(idx, lotIdx, e.target.value)} className="h-8 text-xs" />
                             </div>
                             <div className="col-span-2 flex items-end justify-end gap-1 h-8">
@@ -440,7 +443,7 @@ export default function NovaProducao() {
                                 <Button variant="ghost" size="sm" onClick={() => removeLot(idx, lotIdx)} className="h-8 text-xs text-red-500"><X className="w-3 h-3" /></Button>
                               )}
                               {lotIdx === mp.lots.length - 1 && (
-                                <Button variant="outline" size="sm" onClick={() => addLot(idx)} className="h-8 text-xs">+ Lote</Button>
+                                <Button variant="outline" size="sm" onClick={() => addLot(idx)} className="h-8 text-xs">{t('production.newProduction.addLot')}</Button>
                               )}
                             </div>
                           </div>
@@ -454,20 +457,20 @@ export default function NovaProducao() {
 
             {/* Summary footer */}
             <div className="mt-4 border rounded-lg px-4 py-3 flex items-center gap-2 text-sm" style={{ background: '#f0fdf4', borderColor: '#22c55e' }}>
-              <span>Somatório Qtd. Operação: <strong>{fmt3(totalOperationQty)}</strong> kg / Total Necessário: <strong>{fmt3(totalNeeded)}</strong> kg</span>
+              <span>{t('production.newProduction.operationSummary', { operation: fmt3(totalOperationQty), required: fmt3(totalNeeded) })}</span>
               {massOk ? (
-                <span className="ml-auto flex items-center gap-1 font-semibold text-green-700">✓ Balanço OK</span>
+                <span className="ml-auto flex items-center gap-1 font-semibold text-green-700">{t('production.newProduction.balanceOk')}</span>
               ) : (
-                <span className="ml-auto flex items-center gap-1 font-semibold text-amber-600">⚠ Diferença: {fmt3(Math.abs(massDiff))} kg</span>
+                <span className="ml-auto flex items-center gap-1 font-semibold text-amber-600">{t('production.newProduction.difference', { value: fmt3(Math.abs(massDiff)) })}</span>
               )}
             </div>
           </div>
         )}
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); }} disabled={saving}>Limpar</Button>
+          <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); }} disabled={saving}>{t('buttons.clear')}</Button>
           <Button onClick={save} disabled={!massOk || saving} style={{ background: massOk ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Registrando...</> : 'Registrar Ordem de Produção'}
+            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.newProduction.registering')}</> : t('production.newProduction.registerOrder')}
           </Button>
         </div>
       </div>

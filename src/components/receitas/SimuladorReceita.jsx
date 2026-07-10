@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -7,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ProductCombobox from '@/components/ui/ProductCombobox';
+import { fmtNumber, fmtDate, fmtDateTime } from '@/i18n/formatters';
+import i18n from '@/i18n';
 import jsPDF from 'jspdf';
 
 // ── Conversão de unidades para kg ────────────────────────────────────────────
@@ -21,28 +24,27 @@ const convertToKg = (value, unit, density) => {
   }
 };
 
-const fmt3 = (n) =>
-  (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-
 const isWater = (name) =>
   /^água$/i.test((name || '').trim()) || /^agua$/i.test((name || '').trim());
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
-function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
+function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user, lang }) {
+  const locale = lang || i18n.language || 'pt-BR';
+  const t = (key, opts) => i18n.t(key, { ...opts, lng: locale });
+  const fmt3 = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, locale);
   const doc = new jsPDF();
   const M = 14;
   const PW = 210;
   const CW = PW - 2 * M;
 
   const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR');
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = fmtDate(now, undefined, locale);
+  const timeStr = fmtDateTime(now, { hour: '2-digit', minute: '2-digit' }, locale).split(' ').slice(-1)[0] || '';
 
-  // Header
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(28, 53, 91);
-  doc.text('Simulação de Receita', M, 22);
+  doc.text(t('pdf.simulation.title'), M, 22);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
@@ -56,16 +58,15 @@ function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
 
   let y = 44;
 
-  // Info grid
   const infoItems = [
-    ['Produto', recipe.product_name],
-    ['Cliente', recipe.client || '—'],
-    ['Revisão', recipe.revision || '—'],
-    ['Volume Simulado', `${fmt3(volume)} L`],
-    ['Densidade (g/mL)', fmt3(density)],
-    ['Massa Total (kg)', fmt3(mass)],
-    ['Data / Hora', `${dateStr} ${timeStr}`],
-    ['Usuário', user || '—'],
+    [t('pdf.simulation.fields.product'), recipe.product_name],
+    [t('pdf.simulation.fields.client'), recipe.client || '—'],
+    [t('pdf.simulation.fields.revision'), recipe.revision || '—'],
+    [t('pdf.simulation.fields.simulatedVolume'), `${fmt3(volume)} L`],
+    [t('pdf.simulation.fields.density'), fmt3(density)],
+    [t('pdf.simulation.fields.totalMass'), fmt3(mass)],
+    [t('pdf.simulation.fields.dateTime'), `${dateStr} ${timeStr}`],
+    [t('pdf.simulation.fields.user'), user || '—'],
   ];
 
   const colW = CW / 2;
@@ -104,11 +105,11 @@ function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
 
   // Table header
   const cols = [
-    { label: 'MATÉRIA-PRIMA', w: 60 },
-    { label: '% M/M', w: 25 },
-    { label: 'ESTOQUE ATUAL (KG)', w: 40 },
-    { label: 'RECEITA (KG)', w: 30 },
-    { label: 'ENVIAR (KG)', w: 27 },
+    { label: t('pdf.simulation.columns.rawMaterial'), w: 60 },
+    { label: t('pdf.simulation.columns.percentMM'), w: 25 },
+    { label: t('pdf.simulation.columns.currentStock'), w: 40 },
+    { label: t('pdf.simulation.columns.recipeQty'), w: 30 },
+    { label: t('pdf.simulation.columns.sendQty'), w: 27 },
   ];
 
   doc.setFillColor(28, 53, 91);
@@ -176,7 +177,7 @@ function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(28, 53, 91);
-  const totalCells = ['TOTAL', '', '', fmt3(totalReceita) + ' kg', totalEnviar > 0 ? fmt3(totalEnviar) + ' kg' : '—'];
+  const totalCells = [t('pdf.common.total').toUpperCase(), '', '', fmt3(totalReceita) + ' kg', totalEnviar > 0 ? fmt3(totalEnviar) + ' kg' : '—'];
   let tx = M;
   totalCells.forEach((cell, ci) => {
     doc.text(cell, tx + 2.5, y + 5.5);
@@ -194,8 +195,8 @@ function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(130, 140, 155);
-    doc.text('ChemCtrl · Simulador de Receita', M, 294);
-    doc.text(`Página ${i} de ${pages}`, PW - M, 294, { align: 'right' });
+    doc.text(t('pdf.simulation.footer'), M, 294);
+    doc.text(t('pdf.page', { current: i, total: pages }), PW - M, 294, { align: 'right' });
   }
 
   doc.save(`simulacao-${(recipe.product_name || 'receita').replace(/\s+/g, '-')}.pdf`);
@@ -203,6 +204,8 @@ function generateSimulacaoPDF({ recipe, volume, density, mass, rows, user }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function SimuladorReceita({ recipes, open, onOpenChange }) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { user: internalUser } = useInternalAuth();
   const parseArr = (val) => {
     if (Array.isArray(val)) return val;
@@ -230,7 +233,6 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
     return v * d;
   }, [volume, density]);
 
-  // Estoque total em kg agrupado por mp_code (evita somar MPs de clientes diferentes)
   const stockByMP = useMemo(() => {
     const map = {};
     stocks.forEach((s) => {
@@ -273,6 +275,7 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
       mass,
       rows,
       user,
+      lang,
     });
   };
 
@@ -281,81 +284,80 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
     [recipes]
   );
 
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>🔬 Simulador de Volume</DialogTitle>
+          <DialogTitle>🔬 {t('recipes.simulator.title')}</DialogTitle>
         </DialogHeader>
 
-        {/* Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Produto</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('recipes.simulator.product')}</label>
             <ProductCombobox
               value={selectedProduct}
               onChange={handleProductSelect}
               options={productOptions}
-              placeholder="Selecione um produto..."
+              placeholder={t('recipes.simulator.selectProduct')}
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Volume (L)</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('recipes.simulator.volumeL')}</label>
             <Input
               type="number"
               step="0.001"
-              placeholder="Ex: 5000"
+              placeholder={t('recipes.simulator.volumePlaceholder')}
               value={volume}
               onChange={(e) => setVolume(e.target.value)}
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Densidade (g/mL)</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('recipes.simulator.density')}</label>
             <Input
               type="number"
               step="0.001"
-              placeholder="Ex: 1.050"
+              placeholder={t('recipes.simulator.densityPlaceholder')}
               value={density}
               onChange={(e) => setDensity(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Massa calculada */}
         {mass > 0 && (
           <div className="mb-2 text-xs text-muted-foreground">
-            Massa calculada:{' '}
-            <strong className="text-foreground">{fmt3(mass)} kg</strong>
+            {t('recipes.simulator.calculatedMass')}{' '}
+            <strong className="text-foreground">{fmt(mass)} {t('common.units.kg')}</strong>
           </div>
         )}
 
-        {/* Tabela */}
         {recipe && rows.length > 0 ? (
           <>
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-sm chemctrl-table">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2.5 text-left">Matéria-prima</th>
-                    <th className="px-3 py-2.5 text-right">% m/m</th>
-                    <th className="px-3 py-2.5 text-right">Estoque Atual (kg)</th>
-                    <th className="px-3 py-2.5 text-right">Receita (kg)</th>
-                    <th className="px-3 py-2.5 text-right">Enviar (kg)</th>
+                    <th className="px-3 py-2.5 text-left">{t('recipes.simulator.rawMaterial')}</th>
+                    <th className="px-3 py-2.5 text-right">{t('recipes.simulator.percentMass')}</th>
+                    <th className="px-3 py-2.5 text-right">{t('recipes.simulator.currentStockKg')}</th>
+                    <th className="px-3 py-2.5 text-right">{t('recipes.simulator.recipeKg')}</th>
+                    <th className="px-3 py-2.5 text-right">{t('recipes.simulator.sendKg')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row, i) => (
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-medium">{row.mp_name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmt3(row.percentage)}%</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmt3(row.estoque_kg)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmt(row.percentage)}%</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmt(row.estoque_kg)}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">
-                        {mass > 0 ? fmt3(row.receita_kg) : '—'}
+                        {mass > 0 ? fmt(row.receita_kg) : '—'}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {mass > 0 ? (
                           row.enviar > 0 ? (
-                            <span className="font-semibold text-red-600">{fmt3(row.enviar)}</span>
+                            <span className="font-semibold text-red-600">{fmt(row.enviar)}</span>
                           ) : (
                             <span className="text-green-600 font-medium">—</span>
                           )
@@ -367,19 +369,19 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
                 {mass > 0 && (
                   <tfoot>
                     <tr className="border-t bg-blue-50/60">
-                      <td className="px-3 py-2 font-bold text-xs" style={{ color: '#2575D1' }}>TOTAL</td>
+                      <td className="px-3 py-2 font-bold text-xs" style={{ color: '#2575D1' }}>{t('recipes.simulator.total')}</td>
                       <td className="px-3 py-2 text-right font-bold text-xs" style={{ color: '#2575D1' }}>
-                        {fmt3(rows.reduce((s, r) => s + r.percentage, 0))}%
+                        {fmt(rows.reduce((s, r) => s + r.percentage, 0))}%
                       </td>
                       <td className="px-3 py-2 text-right font-bold text-xs" style={{ color: '#2575D1' }}>
-                        {fmt3(rows.reduce((s, r) => s + r.estoque_kg, 0))}
+                        {fmt(rows.reduce((s, r) => s + r.estoque_kg, 0))}
                       </td>
                       <td className="px-3 py-2 text-right font-bold text-xs" style={{ color: '#2575D1' }}>
-                        {fmt3(rows.reduce((s, r) => s + r.receita_kg, 0))}
+                        {fmt(rows.reduce((s, r) => s + r.receita_kg, 0))}
                       </td>
                       <td className="px-3 py-2 text-right font-bold text-xs text-red-600">
                         {rows.reduce((s, r) => s + r.enviar, 0) > 0
-                          ? fmt3(rows.reduce((s, r) => s + r.enviar, 0))
+                          ? fmt(rows.reduce((s, r) => s + r.enviar, 0))
                           : '—'}
                       </td>
                     </tr>
@@ -391,18 +393,18 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
             {mass > 0 && (
               <div className="flex justify-end mt-3">
                 <Button variant="outline" size="sm" onClick={handleGeneratePDF} className="gap-2">
-                  <FileText className="w-4 h-4" /> Gerar PDF
+                  <FileText className="w-4 h-4" /> {t('buttons.generatePdf')}
                 </Button>
               </div>
             )}
           </>
         ) : recipe ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            Informe o volume e a densidade para calcular.
+            {t('recipes.simulator.enterVolumeDensity')}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            Selecione um produto para ver a simulação.
+            {t('recipes.simulator.selectProductHint')}
           </p>
         )}
       </DialogContent>

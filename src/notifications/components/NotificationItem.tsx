@@ -1,7 +1,7 @@
 import React from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { fmtRelativeTime } from '@/i18n/formatters';
 import { NOTIFICATION_TYPE_CONFIG } from '../constants';
 import type { NotificationWithRead } from '../types';
 
@@ -16,6 +16,7 @@ export function NotificationItem({
   onClick,
   compact = false,
 }: NotificationItemProps) {
+  const { i18n } = useTranslation();
   const config = NOTIFICATION_TYPE_CONFIG[notification.type] ?? NOTIFICATION_TYPE_CONFIG.info;
   const Icon = config.icon;
 
@@ -61,10 +62,7 @@ export function NotificationItem({
           {notification.message}
         </p>
         <p className="text-[11px] text-muted-foreground/70 mt-1">
-          {formatDistanceToNow(new Date(notification.created_at), {
-            addSuffix: true,
-            locale: ptBR,
-          })}
+          {fmtRelativeTime(notification.created_at, i18n.language)}
         </p>
       </div>
     </button>

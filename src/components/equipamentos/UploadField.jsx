@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 // eslint-disable-next-line
@@ -7,6 +8,7 @@ import { uploadFileToSupabase } from '@/api/storage'; // storage module (split f
 const BUCKET = 'equipamentos-lab';
 
 export default function UploadField({ label, value, onChange, accept = '*' }) {
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
 
   const handleFile = async (e) => {
@@ -17,7 +19,7 @@ export default function UploadField({ label, value, onChange, accept = '*' }) {
       const path = await uploadFileToSupabase(file, BUCKET);
       onChange(path);
     } catch (err) {
-      alert('Erro no upload: ' + err.message);
+      alert(t('quality.equipment.upload.uploadError', { message: err.message }));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -33,7 +35,7 @@ export default function UploadField({ label, value, onChange, accept = '*' }) {
             : value ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
             : <Upload className="w-3.5 h-3.5" />}
           <span className="truncate">
-            {uploading ? 'Enviando...' : value ? (value.split('/').pop() || 'Enviado') : 'Selecionar arquivo'}
+            {uploading ? t('quality.equipment.upload.uploading') : value ? (value.split('/').pop() || t('quality.equipment.upload.uploaded')) : t('quality.equipment.upload.selectFile')}
           </span>
           <input type="file" accept={accept} className="hidden" onChange={handleFile} />
         </label>

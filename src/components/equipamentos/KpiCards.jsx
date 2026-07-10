@@ -1,7 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import { Boxes, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { getEquipmentStatus } from '@/lib/equipmentUtils';
 
 export default function KpiCards({ equipments }) {
+  const { t } = useTranslation();
+
   const stats = equipments.reduce((acc, e) => {
     const s = getEquipmentStatus(e.next_calibration_date);
     acc[s.key] = (acc[s.key] || 0) + 1;
@@ -9,10 +12,10 @@ export default function KpiCards({ equipments }) {
   }, {});
 
   const cards = [
-    { label: 'Total de Equipamentos', value: equipments.length, icon: Boxes, color: '#2563EB', bg: '#DBEAFE' },
-    { label: 'Em Conformidade', value: stats.conforme || 0, icon: CheckCircle2, color: '#10B981', bg: '#D1FAE5' },
-    { label: 'Próximos do Vencimento', value: stats.vencer || 0, icon: Clock, color: '#F59E0B', bg: '#FEF3C7' },
-    { label: 'Vencidos', value: stats.vencido || 0, icon: AlertTriangle, color: '#EF4444', bg: '#FEE2E2' },
+    { label: t('quality.equipment.kpi.total'), value: equipments.length, icon: Boxes, color: '#2563EB', bg: '#DBEAFE' },
+    { label: t('quality.equipment.kpi.compliant'), value: stats.conforme || 0, icon: CheckCircle2, color: '#10B981', bg: '#D1FAE5' },
+    { label: t('quality.equipment.kpi.dueSoon'), value: stats.vencer || 0, icon: Clock, color: '#F59E0B', bg: '#FEF3C7' },
+    { label: t('quality.equipment.kpi.expired'), value: stats.vencido || 0, icon: AlertTriangle, color: '#EF4444', bg: '#FEE2E2' },
   ];
 
   return (

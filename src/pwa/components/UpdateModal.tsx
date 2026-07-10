@@ -1,9 +1,11 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUpdate } from '../hooks/useUpdate';
 
 export function UpdateModal() {
+  const { t } = useTranslation();
   const { updateAvailable, currentVersion, availableVersion, isUpdating, applyUpdate } =
     useUpdate();
 
@@ -27,29 +29,26 @@ export function UpdateModal() {
         <h2
           id="update-modal-title"
           className="text-xl font-bold mb-2"
-         
         >
-          Nova versão disponível
+          {t('pwa.update.title')}
         </h2>
 
         <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-          Uma nova versão do <strong className="text-foreground">ChemCtrl</strong> foi
-          publicada.
+          {t('pwa.update.description')}
           <br />
           <br />
-          Atualize o aplicativo para utilizar os recursos mais recentes e correções
-          disponíveis.
+          {t('pwa.update.instruction')}
         </p>
 
         <div className="w-full rounded-xl border border-border bg-muted/50 px-4 py-3 mb-6 text-left text-sm space-y-2">
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Versão atual:</span>
+            <span className="text-muted-foreground">{t('pwa.update.currentVersion')}</span>
             <span className="font-medium">
               {currentVersion}
             </span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Nova versão:</span>
+            <span className="text-muted-foreground">{t('pwa.update.newVersion')}</span>
             <span className="font-semibold text-[#2575D1]">
               {availableVersion ?? '...'}
             </span>
@@ -61,7 +60,7 @@ export function UpdateModal() {
           disabled={isUpdating}
           className="w-full py-6 rounded-xl font-semibold text-sm bg-[#2575D1] hover:bg-[#2575D1]/90 text-white"
         >
-          {isUpdating ? 'Atualizando...' : 'Atualizar Agora'}
+          {isUpdating ? t('pwa.update.updating') : t('pwa.update.updateNow')}
         </Button>
       </div>
     </div>

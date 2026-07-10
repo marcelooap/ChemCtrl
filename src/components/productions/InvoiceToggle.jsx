@@ -1,10 +1,13 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function InvoiceToggle({ invoiced, onToggle }) {
+  const { t } = useTranslation();
+
   return (
     <button
       onClick={onToggle}
-      title={invoiced ? 'Enviado p/ faturamento — clique para desmarcar' : 'Pendente — clique para enviar'}
+      title={invoiced ? t('production.invoice.sentTitle') : t('production.invoice.pendingTitle')}
       className="inline-flex items-center gap-2"
     >
       <span
@@ -19,7 +22,7 @@ export default function InvoiceToggle({ invoiced, onToggle }) {
         />
       </span>
       <span className={`text-xs font-semibold ${invoiced ? 'text-green-700' : 'text-amber-700'}`}>
-        {invoiced ? 'Enviado' : 'Pendente'}
+        {invoiced ? t('production.invoice.sent') : t('production.invoice.pending')}
       </span>
     </button>
   );
