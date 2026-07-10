@@ -1,4 +1,6 @@
 // Storage utilities — fully self-contained (no cross-module imports to avoid Vite cache issues)
+import { openProtectedPdf } from '@/lib/protectedDocument';
+
 const getSessionId = () => localStorage.getItem('chemctrl_session_id') || '';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
@@ -149,19 +151,23 @@ export const getSignedFileUrl = async (url, expiresIn = 3600) => {
 export const getRecipeDocumentSignedUrl = (fdsUrl, expiresIn = 3600) =>
   getSignedFileUrl(fdsUrl, expiresIn);
 
-export const viewRecipeDocument = async (fdsUrl) => {
+export const viewRecipeDocument = async (fdsUrl, filename) => {
   const url = await getRecipeDocumentSignedUrl(fdsUrl);
-  if (url) window.open(url, '_blank');
+  if (!url) return;
+  const { objectUrl } = await openProtectedPdf({
+    signedUrl: url,
+    filename: filename || 'document.pdf',
+    mode: 'view',
+  });
+  window.open(objectUrl, '_blank');
 };
 
 export const downloadRecipeDocument = async (fdsUrl, filename) => {
   const url = await getRecipeDocumentSignedUrl(fdsUrl);
   if (!url) return;
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || 'document.pdf';
-  a.target = '_blank';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  await openProtectedPdf({
+    signedUrl: url,
+    filename: filename || 'document.pdf',
+    mode: 'download',
+  });
 };

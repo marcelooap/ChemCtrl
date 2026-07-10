@@ -36,4 +36,16 @@ Resposta (404): `{ "has_sds": false }`
 
 ### Pré-requisitos
 
-Execute a migration `src/sql/migration_recipe_fds.sql` no SQL Editor do Supabase antes de usar.
+Execute no SQL Editor do Supabase (nesta ordem):
+
+1. `src/sql/migration_recipe_fds.sql` — colunas FDS, bucket e RPCs base
+2. `src/sql/migration_public_sds_legacy.sql` — fallback FDS para produções legadas (estoque antigo)
+3. `src/sql/migration_public_traceability.sql` — `public_token` e backfill (se ainda não executada)
+
+Depois do SQL, faça o deploy da edge function:
+
+```bash
+supabase login
+supabase link --project-ref cpzibnwytukcgxeamfhp
+supabase functions deploy public-sds-url
+```

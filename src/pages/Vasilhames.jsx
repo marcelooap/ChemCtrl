@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { generateBoletaPDF, generateVasilhamesReportPDF } from '@/lib/pdfReports';
 import { printContainerLabel } from '@/lib/labelprint';
+import { ensureProductionPublicToken } from '@/lib/ensurePublicToken';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
@@ -91,6 +92,27 @@ export default function Vasilhames() {
   const productCodeOf = (c) => {
     const r = (recipes || []).find(rc => rc.product_name === c.product);
     return (r && r.code) || c.product;
+  };
+
+  const resolveRecipeForContainer = (container, production) => {
+    if (production?.recipe_id) {
+      const byId = (recipes || []).find((r) => r.id === production.recipe_id);
+      if (byId) return byId;
+    }
+    return (recipes || []).find((r) => r.product_name === container.product);
+  };
+
+  const handlePrintLabel = async (container) => {
+    try {
+      const production = (productions || []).find(
+        (p) => p.id === container.production_id || p.op_number === container.op_number,
+      );
+      const recipe = resolveRecipeForContainer(container, production);
+      const publicToken = await ensureProductionPublicToken(production);
+      await printContainerLabel(container, recipe?.validity_days, publicToken);
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    }
   };
 
   const toggleSelect = (id) => {
@@ -290,11 +312,7 @@ export default function Vasilhames() {
                     <td className="px-4 py-2.5 text-sm">{c.departure_date ? fmtDate(c.departure_date, undefined, i18n.language) : na}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => {
-                          const recipe = (recipes || []).find(r => r.product_name === c.product);
-                          const production = (productions || []).find(p => p.id === c.production_id || p.op_number === c.op_number);
-                          printContainerLabel(c, recipe?.validity_days, production?.public_token);
-                        }} className="p-1 rounded hover:bg-muted" title={t('containers.vasilhames.printLabel')}><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <button onClick={() => handlePrintLabel(c)} className="p-1 rounded hover:bg-muted" title={t('containers.vasilhames.printLabel')}><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
                         {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title={t('containers.vasilhames.delete')}><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
