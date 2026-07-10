@@ -125,7 +125,7 @@ function ConsultaPublicaPage() {
     setSdsLoading(true);
     try {
       const data = await fetchPublicSdsSignedUrl(token);
-      if (!data?.has_sds || !data?.signed_url) {
+      if (!data?.signed_url) {
         alert(t('publicTraceability.sds.notAvailable'));
         return;
       }

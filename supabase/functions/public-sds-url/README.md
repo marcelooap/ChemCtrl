@@ -40,7 +40,8 @@ Execute no SQL Editor do Supabase (nesta ordem):
 
 1. `src/sql/migration_recipe_fds.sql` — colunas FDS, bucket e RPCs base
 2. `src/sql/migration_public_sds_legacy.sql` — fallback FDS para produções legadas (estoque antigo)
-3. `src/sql/migration_public_traceability.sql` — `public_token` e backfill (se ainda não executada)
+3. `src/sql/migration_public_sds_anon_sign.sql` — permite fallback de assinatura sem edge function
+4. `src/sql/migration_public_traceability.sql` — `public_token` e backfill (se ainda não executada)
 
 Depois do SQL, faça o deploy da edge function:
 

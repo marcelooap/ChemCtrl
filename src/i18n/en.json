@@ -1745,7 +1745,7 @@
       "unavailable": "Not available",
       "view": "View",
       "download": "Download",
-      "notAvailable": "Not available",
+      "notAvailable": "Safety Data Sheet is not yet available for this lot.",
       "viewerTitle": "Safety Data Sheet (SDS) — {{lot}}",
       "downloadButton": "Download",
       "close": "Close",
