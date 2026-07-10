@@ -1338,12 +1338,14 @@
       "revision": "Révision",
       "revisionDate": "Date Rév.",
       "mpCount": "Qté MP",
-      "actions": "Actions"
+      "actions": "Actions",
+      "fdsAttached": "FDS jointe"
     },
     "footer": {
       "registered": "Recettes enregistrées",
       "avgPrice": "Prix moyen",
-      "withPrice": "Avec prix défini"
+      "withPrice": "Avec prix défini",
+      "withFds": "Avec FDS jointe : {{count}}"
     },
     "view": {
       "productionCapacity": "Capacité de Production (stock actuel)",

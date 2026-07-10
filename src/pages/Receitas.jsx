@@ -277,6 +277,11 @@ export default function Receitas() {
 
   const avgPrice = recipes.length ? (recipes.reduce((s, r) => s + (r.price || 0), 0) / recipes.length) : 0;
 
+  const recipesWithFdsCount = useMemo(
+    () => recipes.filter((r) => r.fds_url).length,
+    [recipes],
+  );
+
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
@@ -323,7 +328,18 @@ export default function Receitas() {
                 {filtered.map((r, idx) => (
                   <tr key={r.id} className="border-b border-gray-50 hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.id] || 0).padStart(2, '0')}</td>
-                    <td className="px-4 py-2.5 font-medium text-sm">{r.product_name}</td>
+                    <td className="px-4 py-2.5 font-medium text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        {r.product_name}
+                        {r.fds_url && (
+                          <FileText
+                            className="w-3.5 h-3.5 shrink-0 text-red-500"
+                            title={t('recipes.table.fdsAttached')}
+                            aria-label={t('recipes.table.fdsAttached')}
+                          />
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
                     <td className="px-4 py-2.5 text-right text-sm">{(r.price || 0).toFixed(4)}</td>
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>
@@ -347,6 +363,7 @@ export default function Receitas() {
           <span>{t('recipes.footer.registered')}: {recipes.length}</span>
           <span>{t('recipes.footer.avgPrice')}: <strong>{fmtCurrency(avgPrice)}/{t('common.units.kg')}</strong></span>
           <span>{t('recipes.footer.withPrice')}: {recipes.filter(r => r.price).length}</span>
+          <span>{t('recipes.footer.withFds', { count: recipesWithFdsCount })}</span>
         </div>
       </div>
 

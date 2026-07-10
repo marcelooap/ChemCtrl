@@ -1244,12 +1244,14 @@
       "revision": "Revisão",
       "revisionDate": "Dt. Revisão",
       "mpCount": "Qtd. MP",
-      "actions": "Ações"
+      "actions": "Ações",
+      "fdsAttached": "FDS anexada"
     },
     "footer": {
       "registered": "Receitas cadastradas",
       "avgPrice": "Preço médio",
-      "withPrice": "Com preço definido"
+      "withPrice": "Com preço definido",
+      "withFds": "Com FDS anexada: {{count}}"
     },
     "view": {
       "productionCapacity": "Capacidade de Produção (estoque atual)",

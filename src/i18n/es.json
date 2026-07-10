@@ -1355,12 +1355,14 @@
       "revision": "Revisión",
       "revisionDate": "Fecha Rev.",
       "mpCount": "Cant. MP",
-      "actions": "Acciones"
+      "actions": "Acciones",
+      "fdsAttached": "FDS adjunta"
     },
     "footer": {
       "registered": "Recetas registradas",
       "avgPrice": "Precio medio",
-      "withPrice": "Con precio definido"
+      "withPrice": "Con precio definido",
+      "withFds": "Con FDS adjunta: {{count}}"
     },
     "view": {
       "productionCapacity": "Capacidad de Producción (stock actual)",

@@ -1355,12 +1355,14 @@
       "revision": "Revision",
       "revisionDate": "Rev. Date",
       "mpCount": "RM Qty",
-      "actions": "Actions"
+      "actions": "Actions",
+      "fdsAttached": "SDS attached"
     },
     "footer": {
       "registered": "Registered recipes",
       "avgPrice": "Average price",
-      "withPrice": "With defined price"
+      "withPrice": "With defined price",
+      "withFds": "With SDS attached: {{count}}"
     },
     "view": {
       "productionCapacity": "Production Capacity (current stock)",
