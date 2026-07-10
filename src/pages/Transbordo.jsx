@@ -262,48 +262,50 @@ export default function Transbordo() {
   };
 
   return (
-    <div className="flex gap-4" style={{ height: 'calc(100vh - 48px)' }}>
-      <div className="w-60 shrink-0 bg-card rounded-xl shadow-sm border border-border p-4 flex flex-col gap-4 overflow-y-auto">
-        <h3 className="text-sm font-bold">{t('containers.transferPage.filters')}</h3>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder={t('common.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.startDate')}</label>
-          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.endDate')}</label>
-          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('common.type')}</label>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('common.all')}</SelectItem>
-              <SelectItem value="Transbordo">{t('containers.transferPage.types.transfer')}</SelectItem>
-              <SelectItem value="Expedição">{t('containers.transferPage.types.expedition')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {(search || startDate || endDate || typeFilter !== 'all') && (
-          <Button onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setTypeFilter('all'); }} variant="outline" size="sm" className="text-xs">{t('common.clearFilters')}</Button>
-        )}
-        <div className="mt-auto pt-4 border-t border-border">
-          <Button onClick={() => setShowForm(true)} style={{ background: '#2575D1' }} className="text-white w-full hover:opacity-90">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+      <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden min-h-0">
+        <div className="shrink-0 p-4 border-b border-border flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold">🔄 {t('containers.transfer.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('containers.transferPage.subtitle', { filtered: filtered.length, total: transfers.length })}</p>
+          </div>
+          <Button onClick={() => setShowForm(true)} style={{ background: '#2575D1' }} className="text-white shrink-0 hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> {t('containers.transferPage.newTransfer')}
           </Button>
         </div>
-      </div>
 
-      <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-        <div className="shrink-0 p-4 border-b border-border">
-          <h1 className="text-xl font-bold">🔄 {t('containers.transfer.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('containers.transferPage.subtitle', { filtered: filtered.length, total: transfers.length })}</p>
+        <div className="shrink-0 p-4 border-b border-border flex flex-wrap items-end gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder={t('common.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <div className="w-40">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.startDate')}</label>
+            <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+          <div className="w-40">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.transferPage.endDate')}</label>
+            <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+          <div className="w-40">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('common.type')}</label>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="Transbordo">{t('containers.transferPage.types.transfer')}</SelectItem>
+                <SelectItem value="Expedição">{t('containers.transferPage.types.expedition')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {(search || startDate || endDate || typeFilter !== 'all') && (
+            <Button onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setTypeFilter('all'); }} variant="outline" size="sm" className="text-xs">
+              {t('common.clearFilters')}
+            </Button>
+          )}
         </div>
-        <div className="flex-1 overflow-auto">
+
+        <div className="flex-1 min-h-0 overflow-auto">
           {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : filtered.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">{t('containers.transferPage.empty')}</div>
           ) : (

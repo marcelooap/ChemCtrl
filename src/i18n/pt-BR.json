@@ -2435,7 +2435,10 @@
       "kpiIbcCount": "IBCs",
       "kpiContentorCount": "Contentores",
       "kpiCanisterCount": "Bombonas",
-      "kpiDrumCount": "Tambores"
+      "kpiDrumCount": "Tambores",
+      "dialogTotalCurrentStock": "Saldo atual total",
+      "dialogTotalPackaging": "Total embalagens",
+      "dialogTotalVolume": "Volume total"
     },
     "stock": {
       "title": "Estoque Cliente",

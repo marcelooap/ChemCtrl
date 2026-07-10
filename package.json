@@ -1,7 +1,7 @@
 {
   "name": "chemctrl-app",
   "private": true,
-  "version": "1.00.21",
+  "version": "1.00.22",
   "type": "module",
   "scripts": {
     "dev": "vite",

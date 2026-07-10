@@ -41,6 +41,7 @@ export function UserMenu() {
   const displayName = getUserDisplayName(user);
   const firstName = getUserFirstName(user);
   const roleLabel = getRoleLabel(user);
+  const jobTitle = user.cargo?.trim() || '';
   const username = user.usuario || user.username || '—';
   const version = getInstalledVersion();
 
@@ -78,9 +79,12 @@ export function UserMenu() {
                 )}
               >
                 <UserAvatar user={user} size="sm" />
-                <span className="hidden sm:inline text-sm font-medium text-foreground truncate max-w-[120px]">
-                  {firstName}
-                </span>
+                <div className="hidden sm:block min-w-0 max-w-[180px] text-left">
+                  <p className="text-sm font-medium text-foreground truncate leading-tight">{displayName}</p>
+                  {jobTitle && (
+                    <p className="text-[11px] text-muted-foreground truncate leading-tight">{jobTitle}</p>
+                  )}
+                </div>
                 <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               </button>
             </DropdownMenuTrigger>

@@ -863,7 +863,10 @@
       "kpiIbcCount": "IBCs",
       "kpiContentorCount": "Containers",
       "kpiCanisterCount": "Canisters",
-      "kpiDrumCount": "Drums"
+      "kpiDrumCount": "Drums",
+      "dialogTotalCurrentStock": "Total current balance",
+      "dialogTotalPackaging": "Total packaging",
+      "dialogTotalVolume": "Total volume"
     },
     "stock": {
       "title": "Client Stock",
@@ -2556,7 +2559,10 @@
       "kpiIbcCount": "IBCs",
       "kpiContentorCount": "Containers",
       "kpiCanisterCount": "Canisters",
-      "kpiDrumCount": "Drums"
+      "kpiDrumCount": "Drums",
+      "dialogTotalCurrentStock": "Total current balance",
+      "dialogTotalPackaging": "Total packaging",
+      "dialogTotalVolume": "Total volume"
     },
     "stock": {
       "title": "Client Stock",
