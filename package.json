@@ -1,12 +1,13 @@
 {
   "name": "chemctrl-app",
   "private": true,
-  "version": "1.00.20",
+  "version": "1.00.21",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "generate:icons": "node scripts/generate-pwa-icons.mjs",
     "prebuild": "npm run generate:icons && node scripts/generate-version.mjs",
+    "release": "node scripts/release.mjs",
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",

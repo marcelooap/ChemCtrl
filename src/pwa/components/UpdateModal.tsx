@@ -6,7 +6,7 @@ import { useUpdate } from '../hooks/useUpdate';
 
 export function UpdateModal() {
   const { t } = useTranslation();
-  const { updateAvailable, currentVersion, availableVersion, isUpdating, applyUpdate } =
+  const { updateAvailable, currentVersion, nextVersion, isUpdating, applyUpdate } =
     useUpdate();
 
   if (!updateAvailable) return null;
@@ -50,7 +50,7 @@ export function UpdateModal() {
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">{t('pwa.update.newVersion')}</span>
             <span className="font-semibold text-[#2575D1]">
-              {availableVersion ?? '...'}
+              {nextVersion ?? '...'}
             </span>
           </div>
         </div>

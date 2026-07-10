@@ -1567,6 +1567,7 @@
       "currentVersion": "Versão atual:",
       "newVersion": "Nova versão:",
       "updateNow": "Atualizar Agora",
+      "badgeNewVersion": "Nova versão: {{version}}",
       "updating": "Atualizando...",
       "offlineReady": "Aplicativo pronto para uso offline",
       "installPrompt": "Instalar ChemCtrl"
