@@ -38,6 +38,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const userIdRef = useRef<string | null>(null);
+  const pendingReadIdsRef = useRef<Set<string>>(new Set());
 
   const userId = user?.id ?? null;
   userIdRef.current = userId;
@@ -116,6 +117,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         newRecord?.notification_id &&
         newRecord.user_id === userIdRef.current
       ) {
+        const wasPending = pendingReadIdsRef.current.has(newRecord.notification_id);
+        if (wasPending) {
+          pendingReadIdsRef.current.delete(newRecord.notification_id);
+        }
+
         setNotifications((prev) =>
           prev.map((n) =>
             n.id === newRecord.notification_id
@@ -123,7 +129,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               : n
           )
         );
-        setUnreadCount((c) => Math.max(0, c - 1));
+
+        if (!wasPending) {
+          setUnreadCount((c) => Math.max(0, c - 1));
+        }
       }
     };
 
@@ -141,6 +150,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const target = notifications.find((n) => n.id === id);
       if (!target || target.isRead) return;
 
+      pendingReadIdsRef.current.add(id);
+
       setNotifications((prev) =>
         prev.map((n) =>
           n.id === id ? { ...n, isRead: true, read_at: new Date().toISOString() } : n
@@ -151,6 +162,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       try {
         await markNotificationReadRpc(id);
       } catch {
+        pendingReadIdsRef.current.delete(id);
         loadData();
       }
     },

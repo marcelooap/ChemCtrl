@@ -23,6 +23,8 @@ ALTER TABLE public.recipes               REPLICA IDENTITY FULL;
 ALTER TABLE public.quality_results       REPLICA IDENTITY FULL;
 ALTER TABLE public.quality_tests         REPLICA IDENTITY FULL;
 ALTER TABLE public.inventories           REPLICA IDENTITY FULL;
+ALTER TABLE public.notifications         REPLICA IDENTITY FULL;
+ALTER TABLE public.notification_reads    REPLICA IDENTITY FULL;
 
 -- 2. Adicionar todas as tabelas à publication do Supabase Realtime
 -- (necessário para que os eventos sejam transmitidos via WebSocket)
@@ -37,6 +39,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.recipes;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.quality_results;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.quality_tests;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.inventories;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notification_reads;
 
 -- 3. Verificar quais tabelas estão na publication (deve listar todas acima)
 SELECT schemaname, tablename

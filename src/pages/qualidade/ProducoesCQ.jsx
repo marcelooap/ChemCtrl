@@ -191,7 +191,7 @@ export default function ProducoesCQ() {
       await base44.entities.Production.update(selectedProd.id, prodUpdates);
 
       if (newProdStatus === 'Envase') {
-        NotificationService.cqReleased({
+        await NotificationService.cqReleased({
           id: selectedProd.id,
           op_number: selectedProd.op_number,
           client: selectedProd.client,

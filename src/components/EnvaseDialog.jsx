@@ -144,7 +144,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         }
       }
 
-      NotificationService.fillingFinished({
+      await NotificationService.fillingFinished({
         id: production.id,
         op_number: production.op_number,
         client: production.client,

@@ -122,7 +122,13 @@ export default function ChecklistProducao() {
         }
         await base44.entities.Production.update(production.id, updates);
         if (nextStatus === 'Qualidade') {
-          NotificationService.productionFinished({
+          await NotificationService.productionFinished({
+            id: production.id,
+            op_number: production.op_number,
+            client: production.client,
+          });
+        } else {
+          await NotificationService.cqReleased({
             id: production.id,
             op_number: production.op_number,
             client: production.client,

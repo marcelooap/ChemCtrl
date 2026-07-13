@@ -1,7 +1,83 @@
 -- ============================================================================
 -- CHEMCTRL — SISTEMA DE NOTIFICAÇÕES INTERNAS
 -- Execute no: Supabase Dashboard → SQL Editor → New Query
+--
+-- PRÉ-REQUISITO RECOMENDADO: migration_security_audit.sql (login, senhas, RLS completo)
+-- A seção 0 abaixo garante apenas o mínimo de sessão para notificações funcionarem
+-- mesmo se migration_security_audit.sql ainda não foi aplicado.
 -- ============================================================================
+
+-- ============================================================================
+-- 0. PRÉ-REQUISITOS DE SESSÃO (mínimo para notificações)
+-- ============================================================================
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id text NOT NULL,
+  nome_completo text,
+  usuario text,
+  nivel_acesso text,
+  tipo text DEFAULT 'interno',
+  cliente text,
+  cargo text,
+  created_at timestamptz DEFAULT now(),
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '24 hours'),
+  last_activity timestamptz DEFAULT now()
+);
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "no_direct_access_sessions" ON sessions;
+CREATE POLICY "no_direct_access_sessions" ON sessions
+  FOR ALL USING (false) WITH CHECK (false);
+
+CREATE OR REPLACE FUNCTION get_current_session()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT to_jsonb(s.*) FROM sessions s
+  WHERE s.session_id = NULLIF(current_setting('request.header.x-session-id', true), '')
+  AND s.expires_at > now()
+  LIMIT 1
+$$;
+
+CREATE OR REPLACE FUNCTION is_internal_user()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE((get_current_session() ->> 'tipo') = 'interno', false)
+$$;
+
+CREATE OR REPLACE FUNCTION current_user_nivel()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT get_current_session() ->> 'nivel_acesso'
+$$;
+
+CREATE OR REPLACE FUNCTION current_user_cliente()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT get_current_session() ->> 'cliente'
+$$;
+
+GRANT EXECUTE ON FUNCTION get_current_session() TO anon;
+GRANT EXECUTE ON FUNCTION is_internal_user() TO anon;
+GRANT EXECUTE ON FUNCTION current_user_nivel() TO anon;
+GRANT EXECUTE ON FUNCTION current_user_cliente() TO anon;
 
 -- ============================================================================
 -- 1. ENUMS
@@ -296,3 +372,19 @@ AS $$
         AND nr.user_id = current_user_id()
     )
 $$;
+
+-- ============================================================================
+-- 12. PERMISSÕES — PostgREST (role anon)
+-- ============================================================================
+GRANT SELECT ON notifications TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notification_reads TO anon;
+
+GRANT EXECUTE ON FUNCTION current_user_id() TO anon;
+GRANT EXECUTE ON FUNCTION can_view_notification(text, text, text) TO anon;
+GRANT EXECUTE ON FUNCTION create_notification(
+  text, text, notification_type, notification_priority,
+  text, text, text, text, text, text, text, text, text
+) TO anon;
+GRANT EXECUTE ON FUNCTION mark_notification_read(text) TO anon;
+GRANT EXECUTE ON FUNCTION mark_all_notifications_read() TO anon;
+GRANT EXECUTE ON FUNCTION get_unread_notification_count() TO anon;

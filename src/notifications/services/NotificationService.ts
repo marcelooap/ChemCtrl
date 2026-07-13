@@ -1,4 +1,5 @@
 import i18n from '@/i18n';
+import { toast } from '@/components/ui/use-toast';
 import { createNotificationRpc } from '../api/notificationApi';
 import { EVENT_TEMPLATE_CONFIG, getNotificationText } from '../constants';
 import type {
@@ -7,12 +8,21 @@ import type {
   ProductionNotificationPayload,
 } from '../types';
 
+const IS_DEV = import.meta.env.DEV;
+
 function buildProductionInput(
   event: NotificationEvent,
   production: ProductionNotificationPayload
 ): CreateNotificationInput | null {
   const client = production.client?.trim();
-  if (!client) return null;
+  if (!client) {
+    console.warn('[NotificationService] Notificação ignorada — client vazio:', {
+      event,
+      id: production.id,
+      op_number: production.op_number,
+    });
+    return null;
+  }
 
   const template = EVENT_TEMPLATE_CONFIG[event];
   const opNumber = production.op_number || '—';
@@ -34,14 +44,31 @@ function buildProductionInput(
   };
 }
 
+function reportError(context: string, detail: unknown) {
+  console.warn(`[NotificationService] ${context}:`, detail);
+  if (IS_DEV) {
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : detail instanceof Error
+          ? detail.message
+          : JSON.stringify(detail);
+    toast({
+      title: 'Falha ao criar notificação',
+      description: message,
+      variant: 'destructive',
+    });
+  }
+}
+
 async function emit(input: CreateNotificationInput): Promise<void> {
   try {
     const result = await createNotificationRpc(input);
     if (!result?.success) {
-      console.warn('[NotificationService] Falha ao criar notificação:', result?.error);
+      reportError('Falha ao criar notificação', result?.error ?? result);
     }
   } catch (err) {
-    console.warn('[NotificationService] Erro ao criar notificação:', err);
+    reportError('Erro ao criar notificação', err);
   }
 }
 

@@ -7,6 +7,7 @@ import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle } from
 import { useToast } from '@/components/ui/use-toast';
 import moment from 'moment';
 import { fmtDate, fmtVolume, fmtCurrency, fmtNumber } from '@/i18n/formatters';
+import { NotificationService } from '@/notifications/services/NotificationService';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
 
 const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert, showLabel, hideLabel }) => (
@@ -93,6 +94,13 @@ export default function Home() {
           updates.status = 'Envase';
         }
         await base44.entities.Production.update(p.id, updates);
+        if (updates.status === 'Envase') {
+          await NotificationService.cqReleased({
+            id: p.id,
+            op_number: p.op_number,
+            client: p.client,
+          });
+        }
         toast({ title: t('dashboard.bypass.enabled', { op: p.op_number }) });
       }
       load();

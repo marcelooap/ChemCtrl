@@ -432,7 +432,7 @@ export default function NovaProducao() {
       }
 
       const created = await base44.entities.Production.create(data);
-      NotificationService.productionCreated({
+      await NotificationService.productionCreated({
         id: created?.id,
         op_number: created?.op_number || data.op_number,
         client: created?.client || data.client,
