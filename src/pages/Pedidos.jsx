@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
@@ -15,16 +16,19 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import moment from 'moment';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
+import { matchesClient } from '@/lib/permissions';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
 
 export default function Pedidos() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const { isReadOnly } = useOutletContext();
   const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const [search, setSearch] = useState('');
+  const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') || '');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -82,7 +86,8 @@ export default function Pedidos() {
     const q = search.toLowerCase();
     const matchSearch = !q || [o.order_number, o.product, o.client, o.requester].some(v => (v || '').toLowerCase().includes(q));
     const matchStatus = statusFilter === 'all' || o.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchClient = !clientFilter || matchesClient(o, clientFilter);
+    return matchSearch && matchStatus && matchClient;
   });
 
   const openOrders = orders.filter(o => o.status !== 'Finalizado');

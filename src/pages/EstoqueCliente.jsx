@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { fmtDate, fmtNumber, fmtVolume, fmtMass, fmtPercent } from '@/i18n/formatters';
 import { translateStockExpiryStatus, translateContainerStatus } from '@/i18n/domainMaps';
+import { containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@/lib/fractionalSupply';
 import moment from 'moment';
 
 const parseArr = (val) => {
@@ -44,6 +45,8 @@ export default function EstoqueCliente() {
   const { toast } = useToast();
   const { data: stocks, loading } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
+  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const [selectedClient, setSelectedClient] = useState('all');
   const [generating, setGenerating] = useState(false);
@@ -326,9 +329,9 @@ export default function EstoqueCliente() {
                     <td className="px-3 py-2 text-sm font-medium text-foreground">{c.product || t('common.notAvailable')}</td>
                     <td className="px-3 py-2 text-sm text-muted-foreground">{c.lot || t('common.notAvailable')}</td>
                     <td className="px-3 py-2 text-sm text-muted-foreground">{c.type || t('common.notAvailable')}</td>
-                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmtVolume(c.volume, 'L', i18n.language)}</td>
-                    <td className="px-3 py-2 text-right text-sm text-green-600 dark:text-green-400">{fmtMass(c.net_weight, 'kg', i18n.language)}</td>
-                    <td className="px-3 py-2 text-right text-sm text-foreground">{fmtMass(c.gross_weight, 'kg', i18n.language)}</td>
+                    <td className="px-3 py-2 text-right text-sm font-bold text-primary">{fmtVolume(containerDisplayVolume(c, productions), 'L', i18n.language)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-green-600 dark:text-green-400">{fmtMass(containerDisplayNetWeight(c, productions, recipes), 'kg', i18n.language)}</td>
+                    <td className="px-3 py-2 text-right text-sm text-foreground">{fmtMass(containerDisplayGrossWeight(c, productions, recipes), 'kg', i18n.language)}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.status === 'No Pátio' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
                         {c.status ? translateContainerStatus(c.status) : t('common.notAvailable')}

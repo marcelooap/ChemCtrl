@@ -449,7 +449,9 @@
       "volumeColumn": "Volume (L)",
       "percentColumn": "%",
       "totalLabel": "Total",
-      "trendLabel": "Tendance"
+      "trendLabel": "Tendance",
+      "volumeRevenueByClient": "Volume et Revenu par Client",
+      "avgPricePerKgLabel": "Prix Moyen par kg"
     },
     "filters": {
       "period": "Período",

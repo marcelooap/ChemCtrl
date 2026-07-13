@@ -155,3 +155,26 @@ export const containerDisplayVolume = (container, productions) => {
   }
   return container.volume || 0;
 };
+
+export const containerDensity = (container, productions, recipes = []) => {
+  const production = productionOfContainer(container, productions);
+  if (production?.density) return production.density;
+  const recipe = recipes.find((r) => r.product_name === container?.product);
+  if (recipe?.density) return recipe.density;
+  const vol = container?.volume || 0;
+  if (vol > 0 && container?.net_weight) {
+    return container.net_weight / vol;
+  }
+  return 1;
+};
+
+export const containerDisplayNetWeight = (container, productions, recipes = []) => {
+  const volume = containerDisplayVolume(container, productions);
+  const density = containerDensity(container, productions, recipes);
+  return Math.round(volume * density);
+};
+
+export const containerDisplayGrossWeight = (container, productions, recipes = []) => {
+  const net = containerDisplayNetWeight(container, productions, recipes);
+  return Math.round(net + (parseFloat(container?.tare) || 0));
+};

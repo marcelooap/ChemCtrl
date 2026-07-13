@@ -13,10 +13,12 @@ import {
 } from 'recharts';
 import ExecutiveKpiCard from '@/components/dashboard/ExecutiveKpiCard';
 import ProductDistributionSection from '@/components/dashboard/ProductDistributionSection';
+import ClientVolumeRevenueChart from '@/components/dashboard/ClientVolumeRevenueChart';
 import {
   computeExecutiveKpis,
   buildMonthlySeries,
   buildProductDistribution,
+  buildClientVolumeRevenueSeries,
   buildProducoesFilterUrl,
 } from '@/lib/dashboardMetrics';
 import { canAccessRoute } from '@/lib/permissions';
@@ -60,6 +62,10 @@ export default function Dashboard() {
   );
   const distribution = useMemo(
     () => buildProductDistribution(productions, now.toDate()),
+    [productions, now],
+  );
+  const clientVolumeRevenue = useMemo(
+    () => buildClientVolumeRevenueSeries(productions, { year: now.year(), referenceDate: now.toDate() }),
     [productions, now],
   );
 
@@ -198,6 +204,14 @@ export default function Dashboard() {
           )}
         </ChartCard>
       </div>
+
+      <ChartCard title={t('dashboard.charts.volumeRevenueByClient')} className="mb-6">
+        <ClientVolumeRevenueChart
+          data={clientVolumeRevenue}
+          user={user}
+          emptyMessage={emptyMessage}
+        />
+      </ChartCard>
 
       <ProductDistributionSection
         title={t('dashboard.charts.productDistribution')}

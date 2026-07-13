@@ -20,7 +20,7 @@ import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import AddTankDialog from '@/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@/components/vasilhames/HistoryDialog';
 import FractionalBadge from '@/components/production/FractionalBadge';
-import { productionOfContainer, containerDisplayVolume } from '@/lib/fractionalSupply';
+import { productionOfContainer, containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@/lib/fractionalSupply';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -167,6 +167,7 @@ export default function Vasilhames() {
   };
 
   const fmt = (n) => fmtNumber(n || 0, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
+  const fmtWeight = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtFractionalVolume = (n) => {
     const rounded = Math.round(n || 0);
     return fmtNumber(rounded, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
@@ -399,10 +400,10 @@ export default function Vasilhames() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.type')}</p><p className="font-bold">{viewing.type || na}</p></div>
-                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.volume')} (L)</p><p className="font-bold text-base inline-flex items-center gap-1" style={{ color: '#2575D1' }}>{fmt(viewing.volume)}<FractionalBadge production={prodOf(viewing)} variant="container" /></p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.volume')} (L)</p><p className="font-bold text-base inline-flex items-center gap-1" style={{ color: '#2575D1' }}>{prodOf(viewing)?.fractional_supply ? fmtFractionalVolume(prodOf(viewing).volume_apontado) : fmt(containerDisplayVolume(viewing, productions))}<FractionalBadge production={prodOf(viewing)} variant="container" /></p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.tare')}</p><p className="font-medium">{fmt(viewing.tare)}</p></div>
-                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.netWeight')} (kg)</p><p className="font-bold text-base text-green-700">{fmt(viewing.net_weight)}</p></div>
-                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.grossWeight')} (kg)</p><p className="font-bold text-base">{fmt(viewing.gross_weight)}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.netWeight')} (kg)</p><p className="font-bold text-base text-green-700">{fmtWeight(containerDisplayNetWeight(viewing, productions, recipes))}</p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.grossWeight')} (kg)</p><p className="font-bold text-base">{fmtWeight(containerDisplayGrossWeight(viewing, productions, recipes))}</p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.minTest')}</p><p className="font-medium">{viewing.min_test_date ? fmtDate(viewing.min_test_date, undefined, i18n.language) : na}</p></div>
                 </div>
               </div>

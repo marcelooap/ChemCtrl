@@ -1,4 +1,13 @@
 import moment from 'moment';
+import { matchesClient } from '@/lib/permissions';
+
+const CLIENT_LABEL_MAX = 14;
+
+function truncateClientLabel(name) {
+  const s = (name || '—').trim();
+  if (s.length <= CLIENT_LABEL_MAX) return s;
+  return `${s.slice(0, CLIENT_LABEL_MAX)}…`;
+}
 
 export function getFinishDate(production) {
   return production.end_time || production.updated_date || null;
@@ -148,4 +157,47 @@ export function buildProducoesFilterUrl({ product, referenceDate = new Date() } 
   });
   if (product) params.set('product', product);
   return `/producoes?${params.toString()}`;
+}
+
+export function buildClientVolumeRevenueSeries(
+  productions,
+  { year, month, client, product, referenceDate = new Date() } = {},
+) {
+  const ref = moment(referenceDate);
+  const filterYear = year ?? ref.year();
+  const filterOpts = { year: filterYear };
+  if (month != null) filterOpts.month = month;
+
+  let finished = getFinishedProductions(productions, filterOpts);
+  if (client) finished = finished.filter((p) => matchesClient(p, client));
+  if (product) finished = finished.filter((p) => (p.product || '') === product);
+
+  const clientMap = {};
+  finished.forEach((p) => {
+    const key = (p.client || '').trim() || '—';
+    if (!clientMap[key]) {
+      clientMap[key] = { volume: 0, mass: 0, revenue: 0 };
+    }
+    clientMap[key].volume += parseFloat(p.volume) || 0;
+    clientMap[key].mass += getMass(p);
+    clientMap[key].revenue += getRevenue(p);
+  });
+
+  return Object.entries(clientMap)
+    .map(([clientName, agg]) => ({
+      client: clientName,
+      clientLabel: truncateClientLabel(clientName),
+      volume: Math.round(agg.volume),
+      mass: agg.mass,
+      revenue: Math.round(agg.revenue),
+      avgPricePerKg: agg.mass > 0 ? agg.revenue / agg.mass : null,
+    }))
+    .sort((a, b) => b.volume - a.volume);
+}
+
+export function buildPedidosFilterUrl({ client } = {}) {
+  const params = new URLSearchParams();
+  if (client && client !== '—') params.set('client', client);
+  const qs = params.toString();
+  return qs ? `/pedidos?${qs}` : '/pedidos';
 }
