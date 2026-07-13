@@ -119,7 +119,7 @@ export default function OrdensProducao() {
   };
 
   return (
-    <div className="pb-20">
+    <div className="h-full min-h-0 overflow-y-auto pb-20">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">{t('production.ordersTitle')}</h1>

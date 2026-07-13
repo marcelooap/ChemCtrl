@@ -96,7 +96,14 @@ export default function Pedidos() {
   const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
   const openEdit = (o) => {
     setEditing(o);
-    setForm({ ...o, date: o.date ? o.date.split('T')[0] : '', volume_ordered: o.volume_ordered || '', volume_produced: o.volume_produced || '', volume_pending: o.volume_pending || '' });
+    setForm({
+      ...o,
+      date: o.date ? o.date.split('T')[0] : '',
+      expected_date: o.expected_date ? String(o.expected_date).split('T')[0] : '',
+      volume_ordered: o.volume_ordered || '',
+      volume_produced: o.volume_produced || '',
+      volume_pending: o.volume_pending || '',
+    });
     setShowForm(true);
   };
   const openDetails = (o) => { setDetailOrder(o); setShowDetails(true); };
@@ -108,7 +115,12 @@ export default function Pedidos() {
 
   const save = async () => {
     const volOrdered = parseFloat(form.volume_ordered) || 0;
-    const baseData = { ...form, date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(), volume_ordered: volOrdered };
+    const baseData = {
+      ...form,
+      date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
+      expected_date: form.expected_date || null,
+      volume_ordered: volOrdered,
+    };
     if (!baseData.product || !baseData.volume_ordered) { toast({ title: t('orders.messages.fillRequired'), variant: 'destructive' }); return; }
     setSaving(true);
     try {
@@ -208,7 +220,7 @@ export default function Pedidos() {
               </thead>
               <tbody>
                 {filtered.map(o => {
-                  const isLate = o.status !== 'Finalizado' && o.expected_date && moment(o.expected_date).isBefore(moment());
+                  const isLate = o.status !== 'Finalizado' && o.expected_date && moment(o.expected_date, 'YYYY-MM-DD').isBefore(moment(), 'day');
                   return (
                     <tr key={o.id} className="border-b border-gray-50 hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>

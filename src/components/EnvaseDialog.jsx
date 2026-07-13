@@ -162,14 +162,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-sm font-bold text-gray-800">
             {t('production.envase.title', { product: production?.product, lot: production?.lot })}
           </DialogTitle>
         </DialogHeader>
         {production && (
-          <div>
+          <>
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
             <div className="bg-muted/50 rounded-lg p-4 mb-4">
               <div className="grid grid-cols-4 gap-4 text-sm">
                 <div>
@@ -265,13 +266,14 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
               {volumeExceeded && <span className="text-xs font-semibold text-red-600">⚠ {t('production.envase.volumeExceeded')}</span>}
             </div>
 
-            <div className="flex justify-end gap-2 mt-5">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('buttons.cancel')}</Button>
-              <Button onClick={handleSave} disabled={saving || !allContainersValid || volumeExceeded || totalVolumeEntered === 0} className="text-white" style={{ background: '#1E40AF' }}>
-                {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : t('production.envase.registerPackaging')}
-              </Button>
-            </div>
           </div>
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>{t('buttons.cancel')}</Button>
+            <Button onClick={handleSave} disabled={saving || !allContainersValid || volumeExceeded || totalVolumeEntered === 0} className="text-white" style={{ background: '#1E40AF' }}>
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : t('production.envase.registerPackaging')}
+            </Button>
+          </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

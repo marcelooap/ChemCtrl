@@ -30,7 +30,18 @@ export function getDateFnsLocale(language?: string): Locale {
 
 function toDate(value: Date | string | number | null | undefined): Date | null {
   if (value == null || value === '') return null;
-  const d = value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  if (typeof value === 'string') {
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) {
+      const [, y, m, d] = dateOnly;
+      const local = new Date(Number(y), Number(m) - 1, Number(d));
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+  }
+
+  const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 

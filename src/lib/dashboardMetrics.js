@@ -1,5 +1,6 @@
 import moment from 'moment';
 import { matchesClient } from '@/lib/permissions';
+import { getManualMonthlyTotal } from '@/lib/dashboardManualData';
 
 const CLIENT_LABEL_MAX = 14;
 
@@ -42,6 +43,27 @@ export function monthComparison(current, previous) {
   return ((current - previous) / previous) * 100;
 }
 
+function resolveMonthTotals(productions, year, month) {
+  const monthProds = getFinishedProductions(productions, { month, year });
+  const volume = monthProds.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
+  const revenue = monthProds.reduce((s, p) => s + getRevenue(p), 0);
+  const manual = getManualMonthlyTotal(year, month);
+
+  if (manual && volume === 0 && revenue === 0) {
+    return {
+      volume: manual.volume,
+      revenue: manual.revenue,
+      hasData: true,
+    };
+  }
+
+  return {
+    volume,
+    revenue,
+    hasData: monthProds.length > 0 || (manual != null && (volume > 0 || revenue > 0)),
+  };
+}
+
 export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   const ref = moment(referenceDate);
   const currentMonth = ref.month();
@@ -53,11 +75,14 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   const finishedCurrent = getFinishedProductions(productions, { month: currentMonth, year: currentYear });
   const finishedPrevious = getFinishedProductions(productions, { month: prevMonth, year: prevYear });
 
-  const volumeCurrent = finishedCurrent.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
-  const volumePrevious = finishedPrevious.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
+  const currentTotals = resolveMonthTotals(productions, currentYear, currentMonth);
+  const previousTotals = resolveMonthTotals(productions, prevYear, prevMonth);
 
-  const revenueCurrent = finishedCurrent.reduce((s, p) => s + getRevenue(p), 0);
-  const revenuePrevious = finishedPrevious.reduce((s, p) => s + getRevenue(p), 0);
+  const volumeCurrent = currentTotals.volume;
+  const volumePrevious = previousTotals.volume;
+
+  const revenueCurrent = currentTotals.revenue;
+  const revenuePrevious = previousTotals.revenue;
 
   const massCurrent = finishedCurrent.reduce((s, p) => s + getMass(p), 0);
   const massPrevious = finishedPrevious.reduce((s, p) => s + getMass(p), 0);
@@ -93,7 +118,7 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
     avgPricePrevious,
     avgPriceChange: monthComparison(avgPriceCurrent, avgPricePrevious),
     topProduct,
-    hasCurrentData: finishedCurrent.length > 0,
+    hasCurrentData: currentTotals.hasData,
   };
 }
 
@@ -105,15 +130,13 @@ export function buildMonthlySeries(productions, year, referenceDate = new Date()
 
   for (let m = 0; m < 12; m++) {
     const monthMoment = moment({ year, month: m, day: 1 }).locale(locale);
-    const monthProds = getFinishedProductions(productions, { month: m, year });
-    const volume = monthProds.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
-    const revenue = monthProds.reduce((s, p) => s + getRevenue(p), 0);
+    const totals = resolveMonthTotals(productions, year, m);
     months.push({
       monthIndex: m,
       month: monthMoment.format('MMM'),
       monthLabel: monthMoment.format('MMM'),
-      volume: Math.round(volume),
-      revenue: Math.round(revenue),
+      volume: Math.round(totals.volume),
+      revenue: Math.round(totals.revenue),
       isCurrent: year === currentYear && m === currentMonth,
     });
   }

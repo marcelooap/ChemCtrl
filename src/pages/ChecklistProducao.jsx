@@ -148,7 +148,7 @@ export default function ChecklistProducao() {
   const hasSavedProgress = parseArr(production.raw_materials_used).some(mp => mp.checked);
 
   return (
-    <div>
+    <div className="h-full min-h-0 overflow-y-auto pb-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="sm" onClick={() => navigate('/ordens')}><ArrowLeft className="w-4 h-4" /></Button>
