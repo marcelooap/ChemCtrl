@@ -181,7 +181,7 @@ export default function EstoqueCliente() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
   return (
-    <div>
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold">{t('clients.stock.title')}</h1>

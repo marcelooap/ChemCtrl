@@ -226,8 +226,8 @@ export default function Vasilhames() {
   const noPatioVolume = containers.filter(c => c.status === 'No Pátio').reduce((s, c) => s + (c.volume || 0), 0);
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">{t('containers.vasilhames.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('containers.vasilhames.subtitle', { count: containers.length })}</p>
@@ -239,8 +239,8 @@ export default function Vasilhames() {
         )}
       </div>
 
-      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder={t('containers.vasilhames.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32"><SelectValue placeholder={t('common.all')} /></SelectTrigger>
@@ -268,7 +268,7 @@ export default function Vasilhames() {
         </div>
 
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
                 <th className="px-3 py-3 text-center w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label={t('containers.vasilhames.selectAll')} /></th>
@@ -333,7 +333,7 @@ export default function Vasilhames() {
             </table>
           </div>
         )}
-        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>{t('containers.vasilhames.yardCount')}: <strong>{noPatioCount}</strong></span>
           <span>{t('containers.vasilhames.yardVolume')}: <strong>{fmt(noPatioVolume)} L</strong></span>
           <span>{t('containers.vasilhames.displayed')}: {filtered.length}</span>

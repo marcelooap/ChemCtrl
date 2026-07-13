@@ -571,7 +571,7 @@ export default function NovaProducao() {
     : t('production.newProduction.registeringOp');
 
   return (
-    <div>
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{isComplementMode ? t('production.fractional.complementTitle') : t('production.newTitle')}</h1>
         <p className="text-sm text-muted-foreground">

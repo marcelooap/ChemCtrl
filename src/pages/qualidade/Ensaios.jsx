@@ -129,8 +129,8 @@ export default function Ensaios() {
   const remove = async (item) => { if (!confirm(t('quality.ensaios.messages.deleteConfirm'))) return; await base44.entities.QualityTest.delete(item.id); load(); };
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">{t('quality.ensaios.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('quality.ensaios.subtitle', { count: tests.length })}</p>
@@ -138,12 +138,12 @@ export default function Ensaios() {
         <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90"><Plus className="w-4 h-4 mr-2" /> {t('quality.ensaios.newTest')}</Button>
       </div>
 
-      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-border">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border">
           <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder={t('quality.ensaios.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         </div>
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
@@ -171,7 +171,7 @@ export default function Ensaios() {
             </table>
           </div>
         )}
-        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>{t('quality.ensaios.footer.registered')}: <strong>{tests.length}</strong></span>
           <span>{t('quality.ensaios.footer.totalAnalyses')}: <strong>{tests.reduce((s, item) => s + (item.analyses || []).length, 0)}</strong></span>
           <span>{t('quality.ensaios.footer.displayed')}: {filtered.length}</span>

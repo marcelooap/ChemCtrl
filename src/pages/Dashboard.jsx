@@ -83,7 +83,7 @@ export default function Dashboard() {
   const emptyMessage = t('dashboard.empty');
 
   return (
-    <div>
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('dashboard.subtitleProduction', { date: subtitleDate })}</p>

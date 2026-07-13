@@ -179,7 +179,7 @@ export default function Tankagem() {
   };
 
   return (
-    <div>
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">🛢 {t('containers.tankage.title')}</h1>
