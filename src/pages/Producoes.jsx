@@ -273,8 +273,11 @@ export default function Producoes() {
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
-                        <StatusBadge status={p.status} />
-                        <FractionalBadge production={p} />
+                        {isComplementPending(p) ? (
+                          <FractionalBadge production={p} />
+                        ) : (
+                          <StatusBadge status={p.status} />
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-center">

@@ -111,6 +111,7 @@ export default function NovaProducao() {
   const [mpList, setMpList] = useState([]);
   const [deficitMpList, setDeficitMpList] = useState([]);
   const [complementProduction, setComplementProduction] = useState(null);
+  const [complementRecipe, setComplementRecipe] = useState(null);
   const [complementLoading, setComplementLoading] = useState(isComplementMode);
   const [fractionalSupply, setFractionalSupply] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,16 +120,35 @@ export default function NovaProducao() {
 
   useEffect(() => {
     if (!isComplementMode || !complementId) return;
+    let cancelled = false;
     setComplementLoading(true);
-    base44.entities.Production.get(complementId)
-      .then((prod) => {
+
+    (async () => {
+      try {
+        const prod = await base44.entities.Production.get(complementId);
+        if (cancelled) return;
         if (!prod?.fractional_supply || prod.complement_status === 'Completa') {
           toast({ title: t('common.error'), description: t('production.fractional.validationExceeds'), variant: 'destructive' });
           navigate('/producoes');
           return;
         }
-        const recipe = recipes.find(r => r.id === prod.recipe_id) || recipes.find(r => r.product_name === prod.product);
+
+        let recipe = null;
+        if (prod.recipe_id) {
+          try {
+            const fetched = await base44.entities.Recipe.get(prod.recipe_id);
+            recipe = fetched ? { ...fetched, raw_materials: parseArr(fetched.raw_materials) } : null;
+          } catch {
+            recipe = null;
+          }
+        }
+        if (!recipe) {
+          const cached = recipes.find(r => r.id === prod.recipe_id) || recipes.find(r => r.product_name === prod.product);
+          recipe = cached ? { ...cached, raw_materials: parseArr(cached.raw_materials) } : null;
+        }
+
         setComplementProduction(prod);
+        setComplementRecipe(recipe);
         setForm({
           date: prod.date ? moment(prod.date).format('YYYY-MM-DD') : new Date().toISOString().split('T')[0],
           product: prod.product || '',
@@ -146,11 +166,20 @@ export default function NovaProducao() {
           mass: prod.mass || (prod.volume || 0) * (prod.density || 1),
         });
         setMpList(groupUsedIntoMpList(parseArr(prod.raw_materials_used), recipe));
-        setDeficitMpList(calcMpDeficits(recipe, prod, stocks));
-      })
-      .catch(() => navigate('/producoes'))
-      .finally(() => setComplementLoading(false));
-  }, [isComplementMode, complementId, recipes, stocks, navigate, toast, t]);
+      } catch {
+        if (!cancelled) navigate('/producoes');
+      } finally {
+        if (!cancelled) setComplementLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isComplementMode, complementId, navigate, toast, t]);
+
+  useEffect(() => {
+    if (!isComplementMode || !complementProduction || !complementRecipe) return;
+    setDeficitMpList(calcMpDeficits(complementRecipe, complementProduction, stocks));
+  }, [isComplementMode, complementProduction, complementRecipe, stocks]);
 
   const recalculateMp = (mp, mass, density) => {
     const vol = density > 0 ? mass / density : 0;
@@ -458,7 +487,7 @@ export default function NovaProducao() {
       }));
 
       const allUsed = [...existingUsed, ...appended];
-      const recipe = recipes.find(r => r.id === complementProduction.recipe_id);
+      const recipe = complementRecipe || recipes.find(r => r.id === complementProduction.recipe_id);
       const mass = complementProduction.mass || (complementProduction.volume || 0) * (complementProduction.density || 1);
       const totalNeededAll = parseArr(recipe?.raw_materials).reduce(
         (s, rm) => s + mpQtyNeededKg(rm, mass, complementProduction.density || 1),
@@ -557,7 +586,7 @@ export default function NovaProducao() {
     </div>
   );
 
-  if (loading || complementLoading) {
+  if (isComplementMode ? complementLoading : loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   }
 

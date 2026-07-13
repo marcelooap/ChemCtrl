@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import { parseArr, stockUnitOf, liveLotOf, stockUnitPriceOf } from '@/lib/productionViewUtils';
+import FractionalBadge from '@/components/production/FractionalBadge';
+import { isComplementPending } from '@/lib/fractionalSupply';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -55,7 +57,13 @@ export default function ProductionViewDialog({
               <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-bold">{fmtMass(production.mass, 'kg', i18n.language)}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('production.list.revision')}</p><p className="font-medium">{production.recipe_revision}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('production.fields.priority')}</p><p className="font-medium">{translatePriority(production.priority)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('production.list.stage')}</p><StatusBadge status={production.status} /></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.list.stage')}</p>
+                {isComplementPending(production) ? (
+                  <FractionalBadge production={production} />
+                ) : (
+                  <StatusBadge status={production.status} />
+                )}
+              </div>
               {!simplified && (
                 <>
                   <div><p className="text-xs text-muted-foreground">{t('production.fields.unitPrice')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{t('production.list.unitPricePerKg', { price: fmtCurrency(production.unit_price || 0, 'BRL', i18n.language) })}</p></div>

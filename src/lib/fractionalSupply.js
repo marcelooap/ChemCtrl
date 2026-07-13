@@ -109,7 +109,10 @@ export const calcMpDeficits = (recipe, production, stocks) => {
         qty_allocated_kg: round3(allocatedKg),
         deficit_kg: deficitKg,
         deficit_volume_l: volEquiv,
-        lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 }],
+        lots: [
+          { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 },
+          { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 },
+        ],
       };
     })
     .filter(Boolean);
@@ -138,4 +141,17 @@ export const productionOfContainer = (container, productions) => {
     return productions.find((p) => p.op_number === container.op_number) || null;
   }
   return null;
+};
+
+export const getFractionalDisplayVolume = (container, production) => {
+  if (!production?.fractional_supply) return null;
+  return production.volume_apontado ?? 0;
+};
+
+export const containerDisplayVolume = (container, productions) => {
+  const production = productionOfContainer(container, productions);
+  if (production?.fractional_supply) {
+    return Math.round(production.volume_apontado ?? 0);
+  }
+  return container.volume || 0;
 };

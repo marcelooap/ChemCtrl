@@ -20,7 +20,7 @@ import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import AddTankDialog from '@/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@/components/vasilhames/HistoryDialog';
 import FractionalBadge from '@/components/production/FractionalBadge';
-import { productionOfContainer } from '@/lib/fractionalSupply';
+import { productionOfContainer, containerDisplayVolume } from '@/lib/fractionalSupply';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -167,6 +167,10 @@ export default function Vasilhames() {
   };
 
   const fmt = (n) => fmtNumber(n || 0, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
+  const fmtFractionalVolume = (n) => {
+    const rounded = Math.round(n || 0);
+    return fmtNumber(rounded, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
+  };
   const prodOf = (c) => productionOfContainer(c, productions);
   const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : na;
 
@@ -223,7 +227,9 @@ export default function Vasilhames() {
   };
 
   const noPatioCount = containers.filter(c => c.status === 'No Pátio').length;
-  const noPatioVolume = containers.filter(c => c.status === 'No Pátio').reduce((s, c) => s + (c.volume || 0), 0);
+  const noPatioVolume = containers
+    .filter(c => c.status === 'No Pátio')
+    .reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -285,7 +291,9 @@ export default function Vasilhames() {
                 <th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
-                {filtered.map(c => (
+                {filtered.map(c => {
+                  const prod = prodOf(c);
+                  return (
                   <tr key={c.id} className={`border-b border-gray-50 hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={t('containers.vasilhames.selectItem', { label: c.container_number || c.id })} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
@@ -312,8 +320,8 @@ export default function Vasilhames() {
                     <td className="px-4 py-2.5 text-sm">{c.lot}</td>
                     <td className="px-4 py-2.5 text-right text-sm font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        {fmt(c.volume)}
-                        <FractionalBadge production={prodOf(c)} variant="container" />
+                        {prod?.fractional_supply ? fmtFractionalVolume(prod.volume_apontado) : fmt(c.volume)}
+                        <FractionalBadge production={prod} variant="container" />
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(c.status)}</td>
@@ -328,7 +336,7 @@ export default function Vasilhames() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>
