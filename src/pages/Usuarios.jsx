@@ -175,8 +175,8 @@ export default function Usuarios() {
   const nivelOptions = getNivelOptionsForTipo(form.tipo);
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">{t('users.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('users.subtitle', { count: users.length })}</p>
@@ -192,20 +192,19 @@ export default function Usuarios() {
         </div>
       </div>
 
-      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
-        ) : (
-          <>
-            <div className="p-4 border-b border-border shrink-0">
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder={t('users.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-              </div>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <table className="w-full chemctrl-table">
-                <thead className="sticky top-0 z-10"><tr className="border-b border-border">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder={t('users.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
+          ) : (
+            <table className="w-full chemctrl-table">
+              <thead className="sticky top-0 z-10 bg-card"><tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">{t('common.name')}</th>
                   <th className="px-4 py-3 text-left">{t('users.fields.username')}</th>
                   <th className="px-4 py-3 text-left">{t('users.fields.password')}</th>
@@ -266,19 +265,18 @@ export default function Usuarios() {
                   })}
                 </tbody>
               </table>
-            </div>
-            {/* Fixed Footer */}
-            <div className="shrink-0 border-t border-border bg-muted/50 px-4 py-1.5">
-              <div className="flex items-center gap-4 text-xs flex-wrap">
-                <span className="text-muted-foreground">{t('users.footer.total')}: <span className="font-bold">{users.length}</span></span>
-                <span className="text-muted-foreground">{t('users.footer.internal')}: <span className="font-bold text-green-600">{users.filter(u => u.tipo === 'interno').length}</span></span>
-                <span className="text-muted-foreground">{t('users.footer.external')}: <span className="font-bold text-purple-600">{users.filter(u => u.tipo === 'externo').length}</span></span>
-                <span className="text-muted-foreground">{t('users.footer.active')}: <span className="font-bold text-green-600">{users.filter(u => u.status === 'Ativo').length}</span></span>
-                <span className="text-muted-foreground">{t('users.footer.inactive')}: <span className="font-bold text-red-600">{users.filter(u => u.status === 'Inativo').length}</span></span>
-              </div>
-            </div>
-          </>
-        )}
+          )}
+        </div>
+        {/* Fixed Footer */}
+        <div className="shrink-0 border-t border-border bg-muted/50 px-4 py-1.5">
+          <div className="flex items-center gap-4 text-xs flex-wrap">
+            <span className="text-muted-foreground">{t('users.footer.total')}: <span className="font-bold">{users.length}</span></span>
+            <span className="text-muted-foreground">{t('users.footer.internal')}: <span className="font-bold text-green-600">{users.filter(u => u.tipo === 'interno').length}</span></span>
+            <span className="text-muted-foreground">{t('users.footer.external')}: <span className="font-bold text-purple-600">{users.filter(u => u.tipo === 'externo').length}</span></span>
+            <span className="text-muted-foreground">{t('users.footer.active')}: <span className="font-bold text-green-600">{users.filter(u => u.status === 'Ativo').length}</span></span>
+            <span className="text-muted-foreground">{t('users.footer.inactive')}: <span className="font-bold text-red-600">{users.filter(u => u.status === 'Inativo').length}</span></span>
+          </div>
+        </div>
       </div>
 
       {/* Add/Edit User Dialog */}

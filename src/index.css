@@ -128,6 +128,9 @@ button:active:not(:disabled), [role="button"]:active {
 .chemctrl-table thead tr {
   border-bottom: 1px solid hsl(var(--border)) !important;
 }
+.chemctrl-table thead.sticky {
+  @apply bg-card;
+}
 
 /* Table row hover - light gray highlight on all tables */
 .chemctrl-table tbody tr,

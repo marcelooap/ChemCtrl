@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Search, Eye, Pencil, Ban, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Eye, Pencil, Ban, Loader2, PackagePlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,6 +15,8 @@ import InvoiceToggle from '@/components/productions/InvoiceToggle';
 import { generateProductionPDF } from '@/lib/pdfReports';
 import QrCodeDialog from '@/components/productions/QrCodeDialog';
 import ProductionViewDialog from '@/components/production/ProductionViewDialog';
+import FractionalBadge from '@/components/production/FractionalBadge';
+import { isComplementPending } from '@/lib/fractionalSupply';
 import { parseArr } from '@/lib/productionViewUtils';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
@@ -32,14 +36,16 @@ const StatusBadge = ({ status }) => {
 
 export default function Producoes() {
   const { t, i18n } = useTranslation();
-  const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const [searchParams] = useSearchParams();
+  const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('product') || '');
   const [clientFilter, setClientFilter] = useState('todos');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'todos');
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') || '');
+  const [dateTo, setDateTo] = useState(() => searchParams.get('to') || '');
   const [showView, setShowView] = useState(false);
   const [showEditPkg, setShowEditPkg] = useState(false);
   const [viewing, setViewing] = useState(null);
@@ -54,6 +60,7 @@ export default function Producoes() {
   const [qrToken, setQrToken] = useState(null);
   const [qrLabel, setQrLabel] = useState('');
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const clientOptions = useMemo(() => {
     const set = new Set();
@@ -72,7 +79,8 @@ export default function Producoes() {
     const matchFrom = !dateFrom || (endDate && endDate.isSameOrAfter(moment(dateFrom), 'day'));
     const matchTo = !dateTo || (endDate && endDate.isSameOrBefore(moment(dateTo), 'day'));
     const matchesClient = clientFilter === 'todos' || (p.client || '') === clientFilter;
-    return matchSearch && matchFrom && matchTo && matchesClient;
+    const matchStatus = statusFilter === 'todos' || p.status === statusFilter;
+    return matchSearch && matchFrom && matchTo && matchesClient && matchStatus;
   });
 
   const totalOPs = filtered.length;
@@ -199,13 +207,25 @@ export default function Producoes() {
               {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder={t('common.status')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">{t('common.all')}</SelectItem>
+              <SelectItem value="Aguardando Início">{translateProductionStatus('Aguardando Início')}</SelectItem>
+              <SelectItem value="Em Produção">{translateProductionStatus('Em Produção')}</SelectItem>
+              <SelectItem value="Qualidade">{translateProductionStatus('Qualidade')}</SelectItem>
+              <SelectItem value="Envase">{translateProductionStatus('Envase')}</SelectItem>
+              <SelectItem value="Finalizado">{translateProductionStatus('Finalizado')}</SelectItem>
+              <SelectItem value="Cancelado">{translateProductionStatus('Cancelado')}</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>{t('production.list.finishDateFrom')}</span>
             <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-9 text-xs" />
             <span>{t('production.list.finishDateUntil')}</span>
             <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-9 text-xs" />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-blue-500 underline text-xs">{t('common.clear')}</button>
+            {(dateFrom || dateTo || statusFilter !== 'todos') && (
+              <button onClick={() => { setDateFrom(''); setDateTo(''); setStatusFilter('todos'); }} className="text-blue-500 underline text-xs">{t('common.clear')}</button>
             )}
           </div>
         </div>
@@ -251,7 +271,12 @@ export default function Producoes() {
                         return p.packaging_type || p.packaging_info || t('common.notAvailable');
                       })()}
                     </td>
-                    <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>
+                    <td className="px-4 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <StatusBadge status={p.status} />
+                        <FractionalBadge production={p} />
+                      </div>
+                    </td>
                     <td className="px-4 py-2.5 text-center">
                       <InvoiceToggle
                         invoiced={p.invoiced}
@@ -265,6 +290,15 @@ export default function Producoes() {
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(p)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        {isComplementPending(p) && (
+                          <button
+                            onClick={() => navigate(`/nova-producao?complement=${p.id}`)}
+                            className="p-1 rounded hover:bg-amber-50"
+                            title={t('production.fractional.complementAction')}
+                          >
+                            <PackagePlus className="w-3.5 h-3.5 text-amber-600" />
+                          </button>
+                        )}
                         {canCancel(p.status) && (
                           <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title={t('production.actions.cancel')}><Ban className="w-3.5 h-3.5 text-red-400" /></button>
                         )}

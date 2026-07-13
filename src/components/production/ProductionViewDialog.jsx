@@ -62,6 +62,13 @@ export default function ProductionViewDialog({
                   <div><p className="text-xs text-muted-foreground">{t('production.fields.totalValue')}</p><p className="font-bold">{fmtMoney(production.total_value)}</p></div>
                 </>
               )}
+              {production.fractional_supply && (
+                <>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumeApontado')}</p><p className="font-medium">{fmtVolume(production.volume_apontado ?? production.volume, 'L', i18n.language)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumePendente')}</p><p className="font-medium">{fmtVolume(production.volume_pendente ?? 0, 'L', i18n.language)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.complementStatus')}</p><p className="font-medium">{production.complement_status === 'Pendente' ? t('production.fractional.complementStatusPending') : t('production.fractional.complementStatusComplete')}</p></div>
+                </>
+              )}
             </div>
 
             <h4 className="text-sm font-semibold mt-4 mb-2">{t('production.list.rawMaterialsUsed')}</h4>
@@ -102,6 +109,39 @@ export default function ProductionViewDialog({
                 })()}
               </tbody>
             </table>
+
+            {production.fractional_supply && parseArr(production.supply_complements).length > 0 && (
+              <div className="mt-4 mb-4">
+                <h4 className="text-sm font-semibold mb-3">{t('production.fractional.historyTitle')}</h4>
+                <div className="space-y-3">
+                  {parseArr(production.supply_complements).map((entry, i) => (
+                    <div key={i} className="border rounded-lg p-3 text-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold">
+                          {entry.type === 'complement'
+                            ? t('production.fractional.historyComplement')
+                            : t('production.fractional.historyInitial')}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {entry.date ? fmtDateTime(entry.date, undefined, i18n.language) : t('common.notAvailable')}
+                        </span>
+                      </div>
+                      {entry.user && <p className="text-xs text-muted-foreground mb-2">{entry.user}</p>}
+                      <div className="space-y-1">
+                        {parseArr(entry.entries).map((e, j) => (
+                          <div key={j} className="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">
+                            <span className="font-mono" style={{ color: '#2575D1' }}>{e.mp_code}</span>
+                            <span>{e.mp_name}</span>
+                            <span className="text-muted-foreground">{e.lot}</span>
+                            <span className="ml-auto font-medium">{fmt(e.qty_operational)} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {!simplified && (() => {
               const mps = parseArr(production.raw_materials_used);

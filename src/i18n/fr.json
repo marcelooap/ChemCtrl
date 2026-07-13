@@ -414,7 +414,13 @@
       "awaitingAnalysis": "en attente d'analyse",
       "avgProductionTime": "Temps Moyen de Production",
       "completedOps": "{{count}} OF terminé(s)",
-      "productionsInProgress": "Productions en cours"
+      "productionsInProgress": "Productions en cours",
+      "revenueMonth": "Revenus du Mois",
+      "topProduct": "Produit au Plus Grand Volume",
+      "topProductShare": "{{percent}}% de la production du mois",
+      "avgPricePerKg": "Prix Moyen par kg",
+      "vsPreviousMonth": "vs mois précédent",
+      "noComparison": "-"
     },
     "cards": {
       "production": "Production",
@@ -437,7 +443,13 @@
       "topProducts": "Top 5 Produits par Volume Produit (L)",
       "volumeLabel": "Volume (L)",
       "revenueLabel": "Revenus",
-      "quantityLabel": "Qté"
+      "quantityLabel": "Qté",
+      "productDistribution": "Distribution du Volume par Produit",
+      "productColumn": "Produit",
+      "volumeColumn": "Volume (L)",
+      "percentColumn": "%",
+      "totalLabel": "Total",
+      "trendLabel": "Tendance"
     },
     "filters": {
       "period": "Período",
@@ -565,6 +577,33 @@
       "difference": "⚠ Différence : {{value}} kg",
       "registerOrder": "Enregistrer l'Ordre de Production",
       "registering": "Enregistrement..."
+    },
+    "fractional": {
+      "toggle": "Approvisionnement Fractionné",
+      "toggleHelp": "Permet d'enregistrer l'OP même si le bilan massique n'est pas fermé. Le complément peut être fait ultérieurement.",
+      "badge": "Fractionnée",
+      "badgePending": "En Attente de Complément",
+      "badgeContainer": "Fractionné",
+      "pendingBalance": "Solde en attente : {{volume}} L ({{mass}} kg)",
+      "volumeApontado": "Volume alloué",
+      "volumePendente": "Volume en attente",
+      "complementStatus": "Statut du complément",
+      "complementStatusComplete": "Complet",
+      "complementStatusPending": "En attente",
+      "complementAction": "Compléter la Production",
+      "finalizeComplement": "Finaliser le Complément",
+      "complementTitle": "Compléter la Production",
+      "complementSubtitle": "Saisissez les lots restants pour fermer le bilan massique.",
+      "remainingQty": "Quantité restante : {{volume}} L ({{mass}} kg)",
+      "historyTitle": "Historique d'Approvisionnement",
+      "historyInitial": "Production initiale",
+      "historyComplement": "Complément",
+      "validationExceeds": "La quantité dépasse le solde en attente.",
+      "validationNegative": "Les quantités négatives ne sont pas autorisées.",
+      "complementSuccess": "Complément enregistré avec succès.",
+      "finalizingComplement": "Finalisation du complément...",
+      "lockedFields": "Données de l'OP (lecture seule)",
+      "newLotsSection": "Nouvelle allocation"
     },
     "orders": {
       "openCount": "{{count}} OP(s) ouvertes",

@@ -414,7 +414,13 @@
       "awaitingAnalysis": "aguardando análise",
       "avgProductionTime": "Tempo Médio Produção",
       "completedOps": "{{count}} OP(s) concluída(s)",
-      "productionsInProgress": "Produções em andamento"
+      "productionsInProgress": "Produções em andamento",
+      "revenueMonth": "Receita do Mês",
+      "topProduct": "Produto de Maior Volume",
+      "topProductShare": "{{percent}}% da produção do mês",
+      "avgPricePerKg": "Preço Médio por kg",
+      "vsPreviousMonth": "vs mês anterior",
+      "noComparison": "-"
     },
     "cards": {
       "production": "Produção",
@@ -437,7 +443,13 @@
       "topProducts": "Top 5 Produtos por Volume Produzido (L)",
       "volumeLabel": "Volume (L)",
       "revenueLabel": "Receita",
-      "quantityLabel": "Qtd"
+      "quantityLabel": "Qtd",
+      "productDistribution": "Distribuição do Volume por Produto",
+      "productColumn": "Produto",
+      "volumeColumn": "Volume (L)",
+      "percentColumn": "%",
+      "totalLabel": "Total",
+      "trendLabel": "Tendência"
     },
     "filters": {
       "period": "Período",
@@ -565,6 +577,33 @@
       "difference": "⚠ Diferença: {{value}} kg",
       "registerOrder": "Registrar Ordem de Produção",
       "registering": "Registrando..."
+    },
+    "fractional": {
+      "toggle": "Atendimento Fracionado",
+      "toggleHelp": "Permite registrar a OP mesmo com balanço de massa pendente. O complemento pode ser feito posteriormente.",
+      "badge": "Fracionada",
+      "badgePending": "Pendente de Complemento",
+      "badgeContainer": "Fracionado",
+      "pendingBalance": "Saldo pendente: {{volume}} L ({{mass}} kg)",
+      "volumeApontado": "Volume apontado",
+      "volumePendente": "Volume pendente",
+      "complementStatus": "Status do complemento",
+      "complementStatusComplete": "Completa",
+      "complementStatusPending": "Pendente",
+      "complementAction": "Complementar Produção",
+      "finalizeComplement": "Finalizar Complemento",
+      "complementTitle": "Complementar Produção",
+      "complementSubtitle": "Informe os lotes restantes para fechar o balanço de massa.",
+      "remainingQty": "Quantidade restante: {{volume}} L ({{mass}} kg)",
+      "historyTitle": "Histórico de Atendimento",
+      "historyInitial": "Produção inicial",
+      "historyComplement": "Complemento",
+      "validationExceeds": "A quantidade informada ultrapassa o saldo pendente.",
+      "validationNegative": "Quantidades negativas não são permitidas.",
+      "complementSuccess": "Complemento registrado com sucesso.",
+      "finalizingComplement": "Finalizando complemento...",
+      "lockedFields": "Dados da OP (somente leitura)",
+      "newLotsSection": "Novo apontamento"
     },
     "orders": {
       "openCount": "{{count}} OP(s) em aberto",

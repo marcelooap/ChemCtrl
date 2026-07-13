@@ -28,12 +28,14 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen overflow-hidden bg-background">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} user={user} />
-      <main className={`transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
-        <div className="p-4 sm:p-6 w-full">
+      <main className={`flex flex-col h-screen min-h-0 transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
+        <div className="flex flex-col flex-1 min-h-0 p-4 sm:p-6 w-full overflow-hidden">
           <AppTopBar />
-          <Outlet context={{ user, isReadOnly: isReadOnly(user, location.pathname) }} />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <Outlet context={{ user, isReadOnly: isReadOnly(user, location.pathname) }} />
+          </div>
         </div>
       </main>
       {showWelcome && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}

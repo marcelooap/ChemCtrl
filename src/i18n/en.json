@@ -414,7 +414,13 @@
       "awaitingAnalysis": "awaiting analysis",
       "avgProductionTime": "Average Production Time",
       "completedOps": "{{count}} PO(s) completed",
-      "productionsInProgress": "Productions in progress"
+      "productionsInProgress": "Productions in progress",
+      "revenueMonth": "Monthly Revenue",
+      "topProduct": "Top Volume Product",
+      "topProductShare": "{{percent}}% of monthly production",
+      "avgPricePerKg": "Average Price per kg",
+      "vsPreviousMonth": "vs previous month",
+      "noComparison": "-"
     },
     "cards": {
       "production": "Production",
@@ -437,7 +443,13 @@
       "topProducts": "Top 5 Products by Produced Volume (L)",
       "volumeLabel": "Volume (L)",
       "revenueLabel": "Revenue",
-      "quantityLabel": "Qty"
+      "quantityLabel": "Qty",
+      "productDistribution": "Volume Distribution by Product",
+      "productColumn": "Product",
+      "volumeColumn": "Volume (L)",
+      "percentColumn": "%",
+      "totalLabel": "Total",
+      "trendLabel": "Trend"
     },
     "filters": {
       "period": "Period",
@@ -565,6 +577,33 @@
       "difference": "⚠ Difference: {{value}} kg",
       "registerOrder": "Register Production Order",
       "registering": "Registering..."
+    },
+    "fractional": {
+      "toggle": "Fractional Supply",
+      "toggleHelp": "Allows registering the PO even with pending mass balance. Complement can be done later.",
+      "badge": "Fractional",
+      "badgePending": "Pending Complement",
+      "badgeContainer": "Fractional",
+      "pendingBalance": "Pending balance: {{volume}} L ({{mass}} kg)",
+      "volumeApontado": "Allocated volume",
+      "volumePendente": "Pending volume",
+      "complementStatus": "Complement status",
+      "complementStatusComplete": "Complete",
+      "complementStatusPending": "Pending",
+      "complementAction": "Complement Production",
+      "finalizeComplement": "Finalize Complement",
+      "complementTitle": "Complement Production",
+      "complementSubtitle": "Enter the remaining lots to close the mass balance.",
+      "remainingQty": "Remaining quantity: {{volume}} L ({{mass}} kg)",
+      "historyTitle": "Supply History",
+      "historyInitial": "Initial production",
+      "historyComplement": "Complement",
+      "validationExceeds": "The quantity exceeds the pending balance.",
+      "validationNegative": "Negative quantities are not allowed.",
+      "complementSuccess": "Complement registered successfully.",
+      "finalizingComplement": "Finalizing complement...",
+      "lockedFields": "PO data (read-only)",
+      "newLotsSection": "New allocation"
     },
     "orders": {
       "openCount": "{{count}} open PO(s)",

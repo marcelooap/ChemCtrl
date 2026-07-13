@@ -147,9 +147,9 @@ export default function Pedidos() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Fixed Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">📋 {t('orders.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('orders.subtitle', { count: orders.length })}</p>
@@ -162,8 +162,8 @@ export default function Pedidos() {
       </div>
 
       {/* Card: fixed search, scrollable table, fixed footer */}
-      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center gap-3">
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder={t('orders.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
@@ -180,12 +180,12 @@ export default function Pedidos() {
         </div>
 
         {/* Scrollable Table */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10">
+              <thead className="sticky top-0 z-10 bg-card">
                 <tr className="border-b border-gray-50">
                   <th className="px-4 py-3 text-left">{t('orders.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('orders.table.date')}</th>
@@ -244,7 +244,7 @@ export default function Pedidos() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
           <span>{t('orders.footer.total')}: {orders.length}</span>
           <span>{t('orders.footer.open')}: {openOrders.length}</span>
           <span>{t('orders.footer.pendingVolume')}: <strong>{fmtNumber(totalPendingVol)} L</strong></span>
