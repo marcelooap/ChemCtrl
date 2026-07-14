@@ -5,19 +5,18 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
--- Permite limpar texto plano após gerar senha_hash
+-- Permite senha NULL (legado), mas na prática mantemos texto para exibição
 ALTER TABLE usuarios
   ALTER COLUMN senha DROP NOT NULL;
 
--- 1) Rehashear quem ainda tem senha em texto e hash vazio
+-- 1) Rehashear quem ainda tem senha em texto e hash vazio (mantém texto)
 UPDATE usuarios
-SET senha_hash = extensions.crypt(senha, extensions.gen_salt('bf', 10)),
-    senha = NULL
+SET senha_hash = extensions.crypt(senha, extensions.gen_salt('bf', 10))
 WHERE senha IS NOT NULL
   AND btrim(senha) <> ''
   AND (senha_hash IS NULL OR btrim(senha_hash) = '');
 
--- 2) Trigger de hash também no schema extensions
+-- 2) Trigger: gera hash e MANTÉM senha para a coluna na tela Usuários
 CREATE OR REPLACE FUNCTION manage_usuarios()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -27,11 +26,10 @@ AS $$
 BEGIN
   IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.senha IS NOT NULL AND btrim(NEW.senha) <> '') THEN
     NEW.senha_hash := extensions.crypt(NEW.senha, extensions.gen_salt('bf', 10));
-    NEW.senha := NULL;
   ELSIF TG_OP = 'UPDATE' THEN
     NEW.senha_hash := COALESCE(NEW.senha_hash, OLD.senha_hash);
-    IF NEW.senha_hash IS NOT NULL THEN
-      NEW.senha := NULL;
+    IF NEW.senha IS NULL OR btrim(NEW.senha) = '' THEN
+      NEW.senha := OLD.senha;
     END IF;
   END IF;
   RETURN NEW;
@@ -92,8 +90,7 @@ BEGIN
   IF (NOT v_ok) AND v_senha_plain IS NOT NULL AND v_senha_plain = p_password THEN
     v_ok := true;
     UPDATE usuarios
-    SET senha_hash = extensions.crypt(p_password, extensions.gen_salt('bf', 10)),
-        senha = NULL
+    SET senha_hash = extensions.crypt(p_password, extensions.gen_salt('bf', 10))
     WHERE id = v_row->>'id';
   END IF;
 
@@ -206,7 +203,7 @@ GRANT EXECUTE ON FUNCTION manage_usuarios() TO anon;
 -- 4) Reset explícito da senha do usuário admin (descomente se ainda falhar)
 -- UPDATE usuarios
 -- SET senha_hash = extensions.crypt('jesussave', extensions.gen_salt('bf', 10)),
---     senha = NULL
+--     senha = 'jesussave'
 -- WHERE usuario = 'marcelo.amaral';
 
 SELECT pg_notify('pgrst', 'reload schema');
