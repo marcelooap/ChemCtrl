@@ -48,7 +48,7 @@ export default function Perfis() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedModules, setExpandedModules] = useState(() =>
-    Object.fromEntries(permissionModules.map((m) => [m.id, true]))
+    Object.fromEntries(permissionModules.map((m) => [m.id, false]))
   );
   const [mobileShowPanel, setMobileShowPanel] = useState(false);
 

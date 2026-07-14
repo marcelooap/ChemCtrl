@@ -163,6 +163,16 @@ export default function Pedidos() {
         delete data.volume_pending;
         delete data.status;
         await base44.entities.Order.update(editing.id, data);
+
+        // Mantém client_order sincronizado nas OPs vinculadas (campo denormalizado)
+        const nextClientOrder = data.client_order ?? '';
+        const prevClientOrder = editing.client_order ?? '';
+        if (String(nextClientOrder) !== String(prevClientOrder)) {
+          await base44.entities.Production.updateMany(
+            { order_id: editing.id },
+            { client_order: nextClientOrder }
+          ).catch(() => {});
+        }
       } else {
         const data = { ...baseData, volume_produced: 0, volume_pending: volOrdered, status: 'Pendente' };
         const count = orders.length + 1;

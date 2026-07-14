@@ -140,9 +140,15 @@ export default function Producoes() {
       await base44.entities.Production.update(editingPkg.id, updates);
 
       if (clientOrder.trim()) {
+        const syncedClientOrder = clientOrder.trim();
         const opNum = editingPkg.op_number;
         if (editingPkg.order_id) {
-          await base44.entities.Order.update(editingPkg.order_id, { client_order: clientOrder.trim() }).catch(() => {});
+          await base44.entities.Order.update(editingPkg.order_id, { client_order: syncedClientOrder }).catch(() => {});
+          // Propaga para todas as OPs do mesmo pedido (campo denormalizado)
+          await base44.entities.Production.updateMany(
+            { order_id: editingPkg.order_id },
+            { client_order: syncedClientOrder }
+          ).catch(() => {});
         }
         const allQR = await base44.entities.QualityResult.filter({ production_id: editingPkg.id });
         for (const qr of allQR) {

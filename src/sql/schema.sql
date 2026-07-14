@@ -239,6 +239,29 @@ create policy "allow_all_orders" on orders for all using (true) with check (true
 drop trigger if exists update_updated_date_orders on orders;
 create trigger update_updated_date_orders before update on orders for each row execute function update_updated_date();
 
+-- Cascade client_order do pedido para OPs vinculadas
+create or replace function sync_order_client_order_to_productions()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' and new.client_order is distinct from old.client_order then
+    update productions
+    set
+      client_order = new.client_order,
+      updated_date = now()
+    where order_id = new.id
+      and client_order is distinct from new.client_order;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists trg_sync_order_client_order on orders;
+create trigger trg_sync_order_client_order
+  after update of client_order on orders
+  for each row
+  execute function sync_order_client_order_to_productions();
+
 -- ============================================================================
 -- 8. recipes
 -- ============================================================================
