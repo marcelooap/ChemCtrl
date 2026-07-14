@@ -43,6 +43,8 @@ const entityTableMap = {
   LabEquipment: 'lab_equipments',
   Notification: 'notifications',
   NotificationRead: 'notification_reads',
+  /** Sinais opacos para Realtime (auth interna — ver migration_notifications_realtime_fix.sql) */
+  NotificationSignal: 'notification_realtime_signals',
 };
 export { entityTableMap };
 

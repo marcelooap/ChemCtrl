@@ -206,23 +206,23 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
             </div>
             <div className="space-y-4">
               {containers.map((c, idx) => (
-                <div key={idx} className="border border-border rounded-lg p-4 bg-white relative">
+                <div key={idx} className="border border-border rounded-lg p-4 bg-card relative">
                   {containers.length > 1 && (
-                    <button onClick={() => removeRow(idx)} className="absolute top-3 right-3 p-1.5 rounded hover:bg-red-50 z-10">
+                    <button onClick={() => removeRow(idx)} className="absolute top-3 right-3 p-1.5 rounded hover:bg-destructive/10 z-10">
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
                   )}
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('production.envase.plateNumber')} *</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.plateNumber')} *</label>
                       <Input value={c.number} onChange={e => updateContainer(idx, 'number', e.target.value)} className="h-10 text-sm" placeholder="151340690 (806547-8)" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('production.envase.barrelNumber')}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.barrelNumber')}</label>
                       <Input value={c.barril} onChange={e => updateContainer(idx, 'barril', e.target.value)} className="h-10 text-sm" placeholder={c.type === 'Tankagem' ? '-' : t('containers.addTank.barrelPlaceholder')} />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('packaging.fields.type')} *</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.type')} *</label>
                       <Select value={c.type} onValueChange={v => updateContainer(idx, 'type', v)}>
                         <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -231,27 +231,27 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
                       </Select>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('production.packaging.volume')} *</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.packaging.volume')} *</label>
                       <Input type="number" value={c.volume} onChange={e => updateContainer(idx, 'volume', e.target.value)} className="h-10 text-sm text-right" placeholder="25.000" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('containers.vasilhames.tare')}{c.type === 'Tankagem' ? '' : ' *'}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.tare')}{c.type === 'Tankagem' ? '' : ' *'}</label>
                       <Input type="number" value={c.tare} onChange={e => updateContainer(idx, 'tare', e.target.value)} className="h-10 text-sm text-right" placeholder="2023" />
                     </div>
                     <div className="lg:col-span-2">
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('packaging.fields.seals')}{c.type === 'Tankagem' ? '' : ' *'}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.seals')}{c.type === 'Tankagem' ? '' : ' *'}</label>
                       <Input value={c.seals} onChange={e => updateContainer(idx, 'seals', e.target.value)} className="h-10 text-sm" placeholder={c.type === 'Tankagem' ? '-' : '12345 12345 12345 12345 12345'} />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('containers.vasilhames.sling')}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.sling')}</label>
                       <Input value={c.sling} onChange={e => updateContainer(idx, 'sling', e.target.value)} className="h-10 text-sm" placeholder="7005289-2" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('containers.vasilhames.gps')}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.gps')}</label>
                       <Input value={c.gps} onChange={e => updateContainer(idx, 'gps', e.target.value)} className="h-10 text-sm" placeholder="2-35115154" />
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">{t('production.envase.minTestDate')}</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.minTestDate')}</label>
                       <Input type="date" value={c.min_test_date} onChange={e => updateContainer(idx, 'min_test_date', e.target.value)} className="h-10 text-sm" />
                     </div>
                   </div>

@@ -65,15 +65,15 @@ export default function EquipamentosLab() {
       <div className="shrink-0">
         <div className="flex items-start justify-between mb-6 gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#DBEAFE' }}>
-              <FlaskConical className="w-5 h-5" style={{ color: '#2563EB' }} />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-blue-100">
+              <FlaskConical className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">{t('quality.equipmentLab.title')}</h1>
-              <p className="text-sm text-gray-500">{t('quality.equipmentLab.subtitle')}</p>
+              <h1 className="text-xl font-bold text-foreground">{t('quality.equipmentLab.title')}</h1>
+              <p className="text-sm text-muted-foreground">{t('quality.equipmentLab.subtitle')}</p>
             </div>
           </div>
-          <Button onClick={() => { setEditing(null); setFormOpen(true); }} className="shrink-0" style={{ background: '#2563EB' }}>
+          <Button onClick={() => { setEditing(null); setFormOpen(true); }} className="shrink-0 text-white" style={{ background: '#2563EB' }}>
             <Plus className="w-4 h-4" /> {t('quality.equipmentLab.newEquipment')}
           </Button>
         </div>
@@ -84,7 +84,7 @@ export default function EquipamentosLab() {
 
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="flex-1 min-w-48 relative">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input placeholder={t('quality.equipmentLab.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>

@@ -213,14 +213,14 @@ export default function COA() {
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 overflow-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50">
                 <th className="px-4 py-3 text-left">{t('production.opNumber')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
                 <th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-left">{t('quality.coaPage.packagingColumn')}</th><th className="px-4 py-3 text-left">{t('quality.coaPage.analysisDate')}</th><th className="px-4 py-3 text-left">{t('quality.fields.analyst')}</th>
                 <th className="px-4 py-3 text-center">{t('quality.coaPage.qcStatus')}</th><th className="px-4 py-3 text-center">{t('quality.coaPage.editColumn')}</th><th className="px-4 py-3 text-center">{t('quality.coa')}</th>
               </tr></thead>
               <tbody>
                 {filtered.map(r => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-accent/30">
+                  <tr key={r.id} className="border-b border-border hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{r.op_number}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{r.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>

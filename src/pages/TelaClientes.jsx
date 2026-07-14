@@ -22,15 +22,15 @@ import moment from 'moment';
 import { fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateStockExpiryStatus } from '@/i18n/domainMaps';
 
-function MiniKpi({ label, value, icon: Icon, color, bg }) {
+function MiniKpi({ label, value, icon: Icon, iconClass, bgClass }) {
   return (
     <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
-      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: bg }}>
-        <Icon className="w-5 h-5" style={{ color }} />
+      <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 ${bgClass}`}>
+        <Icon className={`w-5 h-5 ${iconClass}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-800 leading-none">{value}</p>
-        <p className="text-xs text-gray-500 mt-1 truncate">{label}</p>
+        <p className="text-2xl font-bold text-foreground leading-none">{value}</p>
+        <p className="text-xs text-muted-foreground mt-1 truncate">{label}</p>
       </div>
     </div>
   );
@@ -198,10 +198,10 @@ export default function TelaClientes() {
           </div>
           <div className="p-5 flex-1">
             <div className="grid grid-cols-2 gap-3">
-              <MiniKpi label={t('clients.screen.kpiDistinctMps')} value={stockKpis.distinctMps} icon={Package} color="#2563EB" bg="#DBEAFE" />
-              <MiniKpi label={t('clients.screen.kpiTotalLots')} value={stockKpis.totalLots} icon={Layers} color="#7C3AED" bg="#EDE9FE" />
-              <MiniKpi label={t('clients.screen.kpiTotalStored')} value={fmt(stockKpis.totalStored)} icon={Scale} color="#059669" bg="#D1FAE5" />
-              <MiniKpi label={t('clients.screen.kpiTotalPackaging')} value={fmt(stockKpis.totalPackaging)} icon={Boxes} color="#D97706" bg="#FEF3C7" />
+              <MiniKpi label={t('clients.screen.kpiDistinctMps')} value={stockKpis.distinctMps} icon={Package} iconClass="text-blue-600" bgClass="bg-blue-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalLots')} value={stockKpis.totalLots} icon={Layers} iconClass="text-purple-600" bgClass="bg-purple-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalStored')} value={fmt(stockKpis.totalStored)} icon={Scale} iconClass="text-green-600" bgClass="bg-green-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalPackaging')} value={fmt(stockKpis.totalPackaging)} icon={Boxes} iconClass="text-amber-600" bgClass="bg-amber-100" />
             </div>
           </div>
           <div className="px-5 py-4 border-t border-border">
@@ -220,12 +220,12 @@ export default function TelaClientes() {
           </div>
           <div className="p-5 flex-1">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <MiniKpi label={t('clients.screen.kpiTotalContainers')} value={containerKpis.total} icon={BoxIcon} color="#2563EB" bg="#DBEAFE" />
-              <MiniKpi label={t('clients.screen.kpiDistinctProducts')} value={containerKpis.distinctProducts} icon={Package} color="#7C3AED" bg="#EDE9FE" />
-              <MiniKpi label={t('clients.screen.kpiTotalVolume')} value={fmtVolume(containerKpis.totalVolume, 'L', i18n.language)} icon={Cylinder} color="#059669" bg="#D1FAE5" />
-              <MiniKpi label={t('clients.screen.kpiIbcCount')} value={containerKpis.ibc} icon={Container} color="#D97706" bg="#FEF3C7" />
-              <MiniKpi label={t('clients.screen.kpiContentorCount')} value={containerKpis.contentor} icon={BoxIcon} color="#7C3AED" bg="#EDE9FE" />
-              <MiniKpi label={t('clients.screen.kpiDrumCount')} value={containerKpis.drum} icon={Drum} color="#0891B2" bg="#CFFAFE" />
+              <MiniKpi label={t('clients.screen.kpiTotalContainers')} value={containerKpis.total} icon={BoxIcon} iconClass="text-blue-600" bgClass="bg-blue-100" />
+              <MiniKpi label={t('clients.screen.kpiDistinctProducts')} value={containerKpis.distinctProducts} icon={Package} iconClass="text-purple-600" bgClass="bg-purple-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalVolume')} value={fmtVolume(containerKpis.totalVolume, 'L', i18n.language)} icon={Cylinder} iconClass="text-green-600" bgClass="bg-green-100" />
+              <MiniKpi label={t('clients.screen.kpiIbcCount')} value={containerKpis.ibc} icon={Container} iconClass="text-amber-600" bgClass="bg-amber-100" />
+              <MiniKpi label={t('clients.screen.kpiContentorCount')} value={containerKpis.contentor} icon={BoxIcon} iconClass="text-purple-600" bgClass="bg-purple-100" />
+              <MiniKpi label={t('clients.screen.kpiDrumCount')} value={containerKpis.drum} icon={Drum} iconClass="text-cyan-600" bgClass="bg-cyan-100" />
             </div>
           </div>
           <div className="px-5 py-4 border-t border-border">

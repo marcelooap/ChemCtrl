@@ -219,8 +219,8 @@ export default function OrdensProducao() {
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#dbeafe' }}>
-                <ClipboardList className="w-4 h-4" style={{ color: '#1e40af' }} />
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-100">
+                <ClipboardList className="w-4 h-4 text-blue-700" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground leading-tight">{t('production.orders.openOps')}</p>
@@ -228,8 +228,8 @@ export default function OrdensProducao() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: '#fef3c7' }}>
-                <Gauge className="w-4 h-4" style={{ color: '#d97706' }} />
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-amber-100">
+                <Gauge className="w-4 h-4 text-amber-600" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground leading-tight">{t('production.orders.pendingVolume')}</p>

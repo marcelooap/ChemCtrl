@@ -9,7 +9,13 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Wifi, WifiOff, Loader2 } from 'lucide-react';
 
 const IS_DEV = import.meta.env.DEV;
-const SKIP_REALTIME = new Set(['Perfil', 'PerfilPermissao']);
+const SKIP_REALTIME = new Set([
+  'Perfil',
+  'PerfilPermissao',
+  'Notification',
+  'NotificationRead',
+  'NotificationSignal',
+]);
 const REALTIME_ENTITIES = Object.keys(entityTableMap).filter((k) => !SKIP_REALTIME.has(k));
 
 export default function RealtimeProvider({ children }) {

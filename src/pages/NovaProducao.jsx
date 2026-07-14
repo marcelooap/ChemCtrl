@@ -611,7 +611,7 @@ export default function NovaProducao() {
         return (
           <div key={mp.mp_code || idx} className="border rounded-lg overflow-hidden bg-card">
             <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/50/50 flex-wrap">
-              <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#E0E7FF', color: '#4338CA' }}>{mp.mp_code}</span>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{mp.mp_code}</span>
               <span className="text-sm font-semibold">{mp.mp_name}</span>
               {mp.deficit_kg != null && (
                 <span className="text-xs text-amber-700 font-medium">
@@ -808,7 +808,7 @@ export default function NovaProducao() {
             {renderLotRows(mpList, setMpList, { readOnly: isComplementMode })}
 
             {!isComplementMode && (
-              <div className="mt-4 border rounded-lg px-4 py-3 flex items-center gap-2 text-sm flex-wrap" style={{ background: '#f0fdf4', borderColor: '#22c55e' }}>
+              <div className="mt-4 border rounded-lg px-4 py-3 flex items-center gap-2 text-sm flex-wrap bg-green-50 border-green-500">
                 <span>{t('production.newProduction.operationSummary', { operation: fmt3(totalOperationQty), required: fmt3(totalNeeded) })}</span>
                 {massOk ? (
                   <span className="ml-auto flex items-center gap-1 font-semibold text-green-700">{t('production.newProduction.balanceOk')}</span>

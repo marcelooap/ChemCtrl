@@ -172,11 +172,61 @@ table tbody tr:hover {
 .dark .text-blue-700 { color: hsl(212 70% 70%); }
 .dark .bg-purple-100 { background-color: hsl(262 40% 22%); }
 .dark .text-purple-700 { color: hsl(262 60% 72%); }
+.dark .bg-indigo-100 { background-color: hsl(239 40% 22%); }
+.dark .text-indigo-700 { color: hsl(239 70% 75%); }
 .dark .bg-gray-200 { background-color: hsl(230 15% 28%); }
 .dark .bg-green-50 { background-color: hsl(142 40% 15%); }
-.dark .text-green-700 { color: hsl(142 60% 65%); }
-.dark .border-green-300 { border-color: hsl(142 40% 35%); }
-.dark .border-gray-300 { border-color: hsl(var(--border)); }
-.dark .text-gray-600 { color: hsl(var(--muted-foreground)); }
+.dark .bg-amber-50 { background-color: hsl(38 40% 15%); }
+.dark .bg-red-50 { background-color: hsl(0 40% 15%); }
+.dark .bg-purple-50 { background-color: hsl(262 35% 16%); }
+.dark .bg-indigo-50 { background-color: hsl(239 35% 16%); }
+.dark .bg-slate-50 { background-color: hsl(230 20% 14%); }
+.dark .bg-gray-50 { background-color: hsl(230 20% 14%); }
+.dark .bg-gray-100 { background-color: hsl(230 15% 18%); }
+.dark .bg-slate-100 { background-color: hsl(230 15% 18%); }
 .dark .bg-blue-50 { background-color: hsl(212 40% 18%); }
+.dark .bg-blue-50\/40 { background-color: hsl(212 40% 18% / 0.4); }
+.dark .bg-blue-50\/50 { background-color: hsl(212 40% 18% / 0.5); }
+.dark .bg-blue-50\/60 { background-color: hsl(212 40% 18% / 0.6); }
 .dark .ring-blue-50 { --tw-ring-color: hsl(212 40% 25%); }
+.dark .border-green-300 { border-color: hsl(142 40% 35%); }
+.dark .border-amber-200 { border-color: hsl(38 40% 30%); }
+.dark .border-gray-300 { border-color: hsl(var(--border)); }
+.dark .border-gray-50 { border-color: hsl(var(--border)); }
+.dark .text-gray-600 { color: hsl(var(--muted-foreground)); }
+.dark .text-gray-800 { color: hsl(var(--card-foreground)); }
+.dark .bg-cyan-100 { background-color: hsl(187 40% 18%); }
+.dark .text-cyan-700 { color: hsl(187 70% 65%); }
+.dark .bg-orange-100 { background-color: hsl(27 50% 18%); }
+.dark .text-orange-700 { color: hsl(27 80% 65%); }
+.dark .hover\:bg-red-50:hover { background-color: hsl(0 40% 15%); }
+.dark .hover\:bg-amber-50:hover { background-color: hsl(38 40% 15%); }
+.dark .hover\:bg-blue-50:hover { background-color: hsl(212 40% 18%); }
+.dark .hover\:bg-green-50:hover { background-color: hsl(142 40% 15%); }
+
+/* Notification bell — pulse suave ao chegar notificação em tempo real */
+@keyframes notif-bell-ring {
+  0% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(10deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+  100% { transform: rotate(0); }
+}
+
+@keyframes notif-bell-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 117, 209, 0.45); }
+  70% { box-shadow: 0 0 0 10px rgba(37, 117, 209, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 117, 209, 0); }
+}
+
+.notif-bell-ring {
+  animation: notif-bell-ring 0.85s ease-in-out;
+  transform-origin: top center;
+}
+
+.notif-bell-pulse {
+  animation: notif-bell-pulse 0.9s ease-out;
+  border-radius: 9999px;
+}

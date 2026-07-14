@@ -226,7 +226,7 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <ComposedChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
                 <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
                 <Tooltip formatter={(v) => [`${fmtVol(v)} L`, t('dashboard.charts.volumeLabel')]} />
@@ -264,7 +264,7 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor={COLORS.purple} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
                 <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
                 <Tooltip formatter={(v) => [fmtCurrency(v, 'BRL', i18n.language), t('dashboard.charts.revenueLabel')]} />
@@ -304,7 +304,7 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor={COLORS.amber} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
                 <YAxis
                   tick={{ fontSize: 11 }}

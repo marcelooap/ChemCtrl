@@ -20,13 +20,13 @@ const parseArr = (val) => {
   } catch (_e) { return []; }
 };
 
-const statusBadgeColors = {
-  'Aguardando Início': { bg: '#FEF3C7', text: '#92400E' },
-  'Em Produção': { bg: '#E0E7FF', text: '#4338CA' },
-  'Qualidade': { bg: '#FEF3C7', text: '#92400E' },
-  'Envase': { bg: '#F3E8FF', text: '#5B21B6' },
-  'Finalizado': { bg: '#D1FAE5', text: '#065F46' },
-  'Cancelado': { bg: '#FEE2E2', text: '#991B1B' },
+const statusBadgeClasses = {
+  'Aguardando Início': 'bg-amber-100 text-amber-700',
+  'Em Produção': 'bg-indigo-100 text-indigo-700',
+  'Qualidade': 'bg-amber-100 text-amber-700',
+  'Envase': 'bg-purple-100 text-purple-700',
+  'Finalizado': 'bg-green-100 text-green-700',
+  'Cancelado': 'bg-red-100 text-red-700',
 };
 
 export default function ChecklistProducao() {
@@ -144,7 +144,7 @@ export default function ChecklistProducao() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   if (!production) return <div className="p-8 text-center text-muted-foreground">{t('production.checklistPage.notFound')}</div>;
 
-  const colors = statusBadgeColors[production.status] || statusBadgeColors['Aguardando Início'];
+  const badgeClass = statusBadgeClasses[production.status] || statusBadgeClasses['Aguardando Início'];
   const hasSavedProgress = parseArr(production.raw_materials_used).some(mp => mp.checked);
 
   return (
@@ -155,7 +155,7 @@ export default function ChecklistProducao() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">OP: {production.op_number}</h1>
-            <span className="text-[10px] font-semibold px-3 py-1 rounded-full" style={{ background: colors.bg, color: colors.text }}>{translateProductionStatus(production.status)}</span>
+            <span className={`text-[10px] font-semibold px-3 py-1 rounded-full ${badgeClass}`}>{translateProductionStatus(production.status)}</span>
           </div>
           <p className="text-sm text-muted-foreground">{production.product} {production.client ? `— ${production.client}` : ''}</p>
         </div>
@@ -190,17 +190,17 @@ export default function ChecklistProducao() {
             return (
               <div key={gIdx}
                 onClick={() => toggleGroup(gIdx)}
-                className="border-2 rounded-lg p-3 cursor-pointer transition-all"
-                style={{
-                  borderColor: allChecked ? '#22c55e' : '#E5E7EB',
-                  background: allChecked ? '#f0fdf4' : '#ffffff',
-                }}
+                className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                  allChecked
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-border bg-card'
+                }`}
               >
                 <div className="flex items-start gap-3">
-                  <input type="checkbox" checked={allChecked} onChange={() => {}} onClick={e => e.stopPropagation()} className="mt-1 w-4 h-4 rounded" style={{ accentColor: '#2575D1' }} />
+                  <input type="checkbox" checked={allChecked} onChange={() => {}} onClick={e => e.stopPropagation()} className="mt-1 w-4 h-4 rounded accent-primary" />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#E0E7FF', color: '#4338CA' }}>{group.mp_code}</span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{group.mp_code}</span>
                       <span className="text-sm font-semibold">{group.mp_name}</span>
                     </div>
                     {!isMultiLot ? (
@@ -215,8 +215,8 @@ export default function ChecklistProducao() {
                         </div>
                         <div className="space-y-2 ml-2">
                           {group.lots.map((lot, lIdx) => (
-                            <div key={lIdx} className="flex items-center gap-2 pl-3 border-l-2" style={{ borderColor: '#E5E7EB' }}>
-                              <input type="checkbox" checked={lot.checked || false} onChange={() => {}} onClick={e => e.stopPropagation()} className="w-3.5 h-3.5 rounded" style={{ accentColor: '#2575D1' }} />
+                            <div key={lIdx} className="flex items-center gap-2 pl-3 border-l-2 border-border">
+                              <input type="checkbox" checked={lot.checked || false} onChange={() => {}} onClick={e => e.stopPropagation()} className="w-3.5 h-3.5 rounded accent-primary" />
                               <div className="flex-1 text-xs">
                                 <span className="text-muted-foreground">{t('production.checklistPage.lotLabel', { lot: lot.lot || t('common.notAvailable') })}</span>
                                 <span className="ml-3 text-muted-foreground">{t('production.checklistPage.qtyOperationalLabel', { value: fmt(lot.qty_operational) })}</span>
@@ -224,13 +224,13 @@ export default function ChecklistProducao() {
                             </div>
                           ))}
                         </div>
-                        <p className="text-xs font-bold mt-2" style={{ color: '#2575D1' }}>{t('production.checklistPage.sigmaTotal', { value: fmt(totalQty) })}</p>
+                        <p className="text-xs font-bold mt-2 text-primary">{t('production.checklistPage.sigmaTotal', { value: fmt(totalQty) })}</p>
                       </div>
                     )}
                   </div>
                   {allChecked && (
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: '#dcfce7' }}>
-                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center bg-green-100">
+                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
                     </div>
                   )}
                 </div>

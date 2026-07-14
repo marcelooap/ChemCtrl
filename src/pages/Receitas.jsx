@@ -318,7 +318,7 @@ export default function Receitas() {
           ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10 bg-card">
-                <tr className="border-b border-gray-50">
+                <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">{t('recipes.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.product')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.client')}</th>
@@ -331,7 +331,7 @@ export default function Receitas() {
               </thead>
               <tbody>
                 {filtered.map((r, idx) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-accent/30">
+                  <tr key={r.id} className="border-b border-border hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.id] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">
                       <span className="inline-flex items-center gap-1.5">

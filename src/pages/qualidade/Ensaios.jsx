@@ -145,13 +145,13 @@ export default function Ensaios() {
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
                 {filtered.map((item) => (
-                  <tr key={item.id} className="border-b border-gray-50 hover:bg-accent/30">
+                  <tr key={item.id} className="border-b border-border hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>EN{String(regNumMap[item.id] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{item.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>

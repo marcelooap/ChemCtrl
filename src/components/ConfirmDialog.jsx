@@ -31,7 +31,7 @@ export default function ConfirmDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!loading) onOpenChange(v); }}>
       <DialogContent className="max-w-md" onInteractOutside={(e) => loading && e.preventDefault()}>
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#FEF3C7' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100">
             <AlertCircle className="w-5 h-5 text-amber-500" />
           </div>
           <div className="flex-1">

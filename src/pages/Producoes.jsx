@@ -302,7 +302,7 @@ export default function Producoes() {
           ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10">
-                <tr className="border-b border-gray-50">
+                <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">{t('production.opNumber')}</th>
                   <th className="px-4 py-3 text-left">{t('production.list.manufacturing')}</th>
                   <th className="px-4 py-3 text-left">{t('common.product')}</th>
@@ -317,7 +317,7 @@ export default function Producoes() {
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <tr key={p.id} className="border-b border-gray-50 hover:bg-accent/30">
+                  <tr key={p.id} className="border-b border-border hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{p.op_number}</td>
                     <td className="px-4 py-2.5 text-sm">{p.end_time ? fmtDate(p.end_time, undefined, i18n.language) : t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{p.product}</td>

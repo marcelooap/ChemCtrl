@@ -30,20 +30,20 @@ export default function ContainerViewDialog({ container, open, onOpenChange, rea
         <DialogHeader><DialogTitle>{t('containers.viewDialog.title')}</DialogTitle></DialogHeader>
         {container && (
           <div className="space-y-5">
-            <div className="flex items-center gap-4 p-4 rounded-lg" style={{ background: '#F0F4FF' }}>
+            <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-50">
               <div className="flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.plateNumber')}</p>
                 <p className="text-lg font-bold mt-0.5">{container.container_number || '—'}</p>
               </div>
-              <div className="w-px h-12 bg-gray-300" />
+              <div className="w-px h-12 bg-border" />
               <div className="flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.barrelNumber')}</p>
                 <p className="text-lg font-bold mt-0.5">{container.barril_number || '—'}</p>
               </div>
-              <div className="w-px h-12 bg-gray-300" />
+              <div className="w-px h-12 bg-border" />
               <div className="flex-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.registrationId')}</p>
-                <p className="text-lg font-bold mt-0.5" style={{ color: '#2575D1' }}>{fmtRegId(container.registration_id)}</p>
+                <p className="text-lg font-bold mt-0.5 text-primary">{fmtRegId(container.registration_id)}</p>
               </div>
             </div>
 

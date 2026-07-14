@@ -20,14 +20,14 @@ export default function EquipmentCard({ equipment, onEdit, onDelete, onView, onC
         {equipment.image_url ? (
           <SignedImage url={equipment.image_url} alt={equipment.name} className="w-full h-full object-cover" fallbackClassName="w-full h-full" />
         ) : (
-          <EquipmentIcon type={equipment.type} className="w-12 h-12 text-gray-300" />
+          <EquipmentIcon type={equipment.type} className="w-12 h-12 text-muted-foreground/40" />
         )}
-        <span className="absolute top-2 left-2 text-xs font-semibold px-2.5 py-0.5 rounded-full shadow-sm" style={{ color: status.color, background: status.bg }}>{translateEquipmentCalibrationStatus(status.key)}</span>
+        <span className={`absolute top-2 left-2 text-xs font-semibold px-2.5 py-0.5 rounded-full shadow-sm ${status.className}`}>{translateEquipmentCalibrationStatus(status.key)}</span>
         <div className="absolute top-1.5 right-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-7 h-7 rounded-lg bg-white/90 backdrop-blur flex items-center justify-center hover:bg-white shadow-sm">
-                <MoreVertical className="w-4 h-4 text-gray-500" />
+              <button className="w-7 h-7 rounded-lg bg-card/90 backdrop-blur flex items-center justify-center hover:bg-card shadow-sm border border-border">
+                <MoreVertical className="w-4 h-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -44,27 +44,27 @@ export default function EquipmentCard({ equipment, onEdit, onDelete, onView, onC
 
       <div className="p-4 flex-1 flex flex-col gap-2">
         <div>
-          <h3 className="font-bold text-gray-800 text-sm leading-tight truncate">{equipment.name}</h3>
-          <p className="text-xs text-gray-500 truncate">{t('quality.equipment.card.model')}: {equipment.model || '—'}</p>
-          <p className="text-xs text-gray-500 truncate">{t('quality.equipment.card.patrimony')}: {equipment.patrimony_number || '—'}</p>
+          <h3 className="font-bold text-foreground text-sm leading-tight truncate">{equipment.name}</h3>
+          <p className="text-xs text-muted-foreground truncate">{t('quality.equipment.card.model')}: {equipment.model || '—'}</p>
+          <p className="text-xs text-muted-foreground truncate">{t('quality.equipment.card.patrimony')}: {equipment.patrimony_number || '—'}</p>
         </div>
         <div className="text-xs space-y-1 mt-auto">
-          <div className="flex items-center gap-1.5 text-gray-600">
-            <FileText className="w-3 h-3 text-gray-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <FileText className="w-3 h-3 text-muted-foreground/60 shrink-0" />
             <span className="truncate">{t('quality.equipment.card.certificate')}: {equipment.certificate_number || '—'}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-gray-600">
-            <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Calendar className="w-3 h-3 text-muted-foreground/60 shrink-0" />
             <span className="truncate">{t('quality.equipment.card.lastCalibration')}: {fmtDate(equipment.last_calibration_date, undefined, lang)}</span>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-2.5 border-t flex items-center gap-2" style={{ background: calColor.bg }}>
-        <Calendar className="w-4 h-4 shrink-0" style={{ color: calColor.color }} />
+      <div className={`px-4 py-2.5 border-t flex items-center gap-2 ${calColor.bgClass}`}>
+        <Calendar className={`w-4 h-4 shrink-0 ${calColor.textClass}`} />
         <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: calColor.color }}>{t('quality.equipment.viewDialog.nextCalibration')}</p>
-          <p className="text-sm font-bold leading-tight" style={{ color: calColor.color }}>
+          <p className={`text-[10px] font-medium uppercase tracking-wide ${calColor.textClass}`}>{t('quality.equipment.viewDialog.nextCalibration')}</p>
+          <p className={`text-sm font-bold leading-tight ${calColor.textClass}`}>
             {fmtDate(equipment.next_calibration_date, undefined, lang)} <span className="text-xs font-medium">· {calDueLabel}</span>
           </p>
         </div>

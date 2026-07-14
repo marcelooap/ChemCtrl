@@ -23,7 +23,7 @@ type TypeFilter = NotificationType | 'all';
 export default function HistoricoNotificacoes() {
   const { t } = useTranslation();
   const { user } = useOutletContext<{ user: { id: string } }>();
-  const { markAllAsRead, navigateToNotification, unreadCount } = useNotifications();
+  const { markAllAsRead, navigateToNotification, unreadCount, pulseToken } = useNotifications();
 
   const [items, setItems] = useState<NotificationWithRead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +60,10 @@ export default function HistoricoNotificacoes() {
   useEffect(() => {
     loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    if (pulseToken > 0) loadPage();
+  }, [pulseToken, loadPage]);
 
   useEffect(() => {
     setPage(0);

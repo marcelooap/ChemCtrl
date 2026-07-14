@@ -43,9 +43,18 @@ ORDER BY proname;
 SELECT 'realtime' AS check_group, tablename AS name
 FROM pg_publication_tables
 WHERE pubname = 'supabase_realtime'
-  AND tablename IN ('notifications', 'notification_reads')
+  AND tablename IN ('notifications', 'notification_reads', 'notification_realtime_signals')
 ORDER BY tablename;
+
+-- 5b. Trigger de sinal
+SELECT 'notification_triggers' AS check_group, tgname AS name
+FROM pg_trigger
+WHERE tgname = 'trg_notification_realtime_signal';
 
 -- 6. Contagem de notificações
 SELECT 'notification_count' AS check_group, COUNT(*)::text AS name
 FROM notifications;
+
+-- 6b. Contagem de sinais
+SELECT 'signal_count' AS check_group, COUNT(*)::text AS name
+FROM notification_realtime_signals;

@@ -7,6 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { subscribeToTable } from '@/lib/realtime';
 import {
@@ -14,15 +15,17 @@ import {
   getUnreadCountRpc,
   markAllNotificationsReadRpc,
   markNotificationReadRpc,
-  mergeNotificationsWithReads,
 } from '../api/notificationApi';
 import { DROPDOWN_LIMIT } from '../constants';
+import { notifTrace } from '../trace';
 import type { NotificationWithRead } from '../types';
 
 export interface NotificationContextValue {
   notifications: NotificationWithRead[];
   unreadCount: number;
   loading: boolean;
+  /** Incrementa quando chega notificação nova — usado para animar o sino */
+  pulseToken: number;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   navigateToNotification: (notification: NotificationWithRead) => Promise<void>;
@@ -37,111 +40,119 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<NotificationWithRead[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pulseToken, setPulseToken] = useState(0);
   const userIdRef = useRef<string | null>(null);
   const pendingReadIdsRef = useRef<Set<string>>(new Set());
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef(false);
+  const reloadInFlightRef = useRef(false);
 
   const userId = user?.id ?? null;
   userIdRef.current = userId;
 
-  const loadData = useCallback(async () => {
-    if (!userId) {
-      setNotifications([]);
-      setUnreadCount(0);
-      setLoading(false);
-      return;
-    }
+  const applyLoadedData = useCallback(
+    (items: NotificationWithRead[], count: number, source: string) => {
+      const prevKnown = knownIdsRef.current;
+      const nextKnown = new Set(items.map((n) => n.id));
 
-    try {
-      const [items, count] = await Promise.all([
-        fetchNotificationsWithReads(userId, { limit: DROPDOWN_LIMIT }),
-        getUnreadCountRpc(),
-      ]);
+      if (initialLoadDoneRef.current && source === 'realtime-signal') {
+        const newestUnread = items.find((n) => !n.isRead && !prevKnown.has(n.id));
+        if (newestUnread) {
+          notifTrace('Lista atualizada com notificação nova', {
+            id: newestUnread.id,
+            title: newestUnread.title,
+            event: newestUnread.event,
+          });
+          setPulseToken((t) => t + 1);
+          toast({
+            title: newestUnread.title,
+            description: newestUnread.message,
+            duration: 3000,
+          });
+          notifTrace('Popup (toast) exibido');
+          notifTrace('Badge atualizado');
+        }
+      }
+
+      knownIdsRef.current = nextKnown;
       setNotifications(items);
       setUnreadCount(count);
-    } catch (err) {
-      console.warn('[NotificationProvider] Erro ao carregar notificações:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+      notifTrace(`Estado aplicado (${source})`, {
+        count: items.length,
+        unread: count,
+      });
+    },
+    []
+  );
+
+  const loadData = useCallback(
+    async (source = 'manual') => {
+      if (!userId) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        knownIdsRef.current = new Set();
+        initialLoadDoneRef.current = false;
+        return;
+      }
+
+      if (reloadInFlightRef.current && source === 'realtime-signal') {
+        notifTrace('Reload já em andamento — sinal enfileirado como no-op debounce');
+      }
+      reloadInFlightRef.current = true;
+
+      try {
+        notifTrace(`Carregando notificações (${source})…`, { userId });
+        const [items, count] = await Promise.all([
+          fetchNotificationsWithReads(userId, { limit: DROPDOWN_LIMIT }),
+          getUnreadCountRpc(),
+        ]);
+        applyLoadedData(items, count, source);
+        initialLoadDoneRef.current = true;
+      } catch (err) {
+        console.error('[NotificationProvider] Erro ao carregar notificações:', err);
+        notifTrace('Falha ao carregar', err);
+      } finally {
+        reloadInFlightRef.current = false;
+        setLoading(false);
+      }
+    },
+    [userId, applyLoadedData]
+  );
 
   useEffect(() => {
     setLoading(true);
-    loadData();
+    initialLoadDoneRef.current = false;
+    loadData('mount');
   }, [loadData]);
 
   useEffect(() => {
     if (!userId) return;
 
-    const handleNotificationChange = (payload: {
-      eventType: string;
-      new?: NotificationWithRead;
-    }) => {
-      const { eventType, new: newRecord } = payload;
+    notifTrace('Subscrevendo NotificationSignal (Realtime invalidate-and-fetch)');
 
-      if (eventType === 'REFRESH') {
-        loadData();
-        return;
-      }
+    const handleSignal = (payload: { eventType: string; new?: { notification_id?: string } }) => {
+      const { eventType, new: row } = payload;
 
-      if (eventType === 'INSERT' && newRecord?.id) {
-        setNotifications((prev) => {
-          const merged = mergeNotificationsWithReads(
-            [newRecord as NotificationWithRead, ...prev.map(({ isRead, read_at, ...n }) => n)],
-            prev.filter((p) => p.isRead).map((p) => ({
-              id: '',
-              notification_id: p.id,
-              user_id: userId,
-              read_at: p.read_at || new Date().toISOString(),
-            }))
-          );
-          return merged.slice(0, DROPDOWN_LIMIT);
+      if (eventType === 'INSERT') {
+        notifTrace('Realtime sinal recebido (INSERT)', {
+          notification_id: row?.notification_id ?? null,
         });
-        setUnreadCount((c) => c + 1);
-      }
-    };
-
-    const handleReadChange = (payload: {
-      eventType: string;
-      new?: { notification_id: string; user_id: string; read_at: string };
-    }) => {
-      const { eventType, new: newRecord } = payload;
-
-      if (eventType === 'REFRESH') {
-        loadData();
+        loadData('realtime-signal');
         return;
       }
 
-      if (
-        eventType === 'INSERT' &&
-        newRecord?.notification_id &&
-        newRecord.user_id === userIdRef.current
-      ) {
-        const wasPending = pendingReadIdsRef.current.has(newRecord.notification_id);
-        if (wasPending) {
-          pendingReadIdsRef.current.delete(newRecord.notification_id);
-        }
-
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === newRecord.notification_id
-              ? { ...n, isRead: true, read_at: newRecord.read_at }
-              : n
-          )
-        );
-
-        if (!wasPending) {
-          setUnreadCount((c) => Math.max(0, c - 1));
-        }
+      if (eventType === 'REFRESH') {
+        notifTrace('Realtime sinal REFRESH — revalidando via REST');
+        loadData('realtime-refresh');
       }
     };
 
-    const unsubNotif = subscribeToTable('Notification', handleNotificationChange);
-    const unsubReads = subscribeToTable('NotificationRead', handleReadChange);
+    const unsubSignal = subscribeToTable('NotificationSignal', handleSignal);
 
     return () => {
-      unsubNotif();
-      unsubReads();
+      notifTrace('Cleanup subscription NotificationSignal');
+      unsubSignal();
     };
   }, [userId, loadData]);
 
@@ -151,6 +162,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (!target || target.isRead) return;
 
       pendingReadIdsRef.current.add(id);
+      notifTrace('Marcando como lida (otimista)', { id });
 
       setNotifications((prev) =>
         prev.map((n) =>
@@ -160,16 +172,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       setUnreadCount((c) => Math.max(0, c - 1));
 
       try {
-        await markNotificationReadRpc(id);
-      } catch {
+        const result = await markNotificationReadRpc(id);
+        if (!result?.success) {
+          console.error('[NotificationProvider] mark_notification_read falhou:', result);
+          pendingReadIdsRef.current.delete(id);
+          await loadData('mark-read-rollback');
+          return;
+        }
         pendingReadIdsRef.current.delete(id);
-        loadData();
+        notifTrace('Marcar como lida OK', { id });
+      } catch (err) {
+        console.error('[NotificationProvider] Erro ao marcar como lida:', err);
+        pendingReadIdsRef.current.delete(id);
+        await loadData('mark-read-error');
       }
     },
     [notifications, loadData]
   );
 
   const markAllAsRead = useCallback(async () => {
+    notifTrace('Marcando todas como lidas');
     setNotifications((prev) =>
       prev.map((n) => ({
         ...n,
@@ -180,9 +202,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setUnreadCount(0);
 
     try {
-      await markAllNotificationsReadRpc();
-    } catch {
-      loadData();
+      const result = await markAllNotificationsReadRpc();
+      if (!result?.success) {
+        console.error('[NotificationProvider] mark_all_notifications_read falhou:', result);
+        await loadData('mark-all-rollback');
+        return;
+      }
+      notifTrace('Marcar todas OK', result);
+    } catch (err) {
+      console.error('[NotificationProvider] Erro ao marcar todas como lidas:', err);
+      await loadData('mark-all-error');
     }
   }, [loadData]);
 
@@ -207,15 +236,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       notifications,
       unreadCount,
       loading,
+      pulseToken,
       markAsRead,
       markAllAsRead,
       navigateToNotification,
-      reload: loadData,
+      reload: () => loadData('manual'),
     }),
     [
       notifications,
       unreadCount,
       loading,
+      pulseToken,
       markAsRead,
       markAllAsRead,
       navigateToNotification,

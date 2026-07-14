@@ -2,6 +2,7 @@ import i18n from '@/i18n';
 import { toast } from '@/components/ui/use-toast';
 import { createNotificationRpc } from '../api/notificationApi';
 import { EVENT_TEMPLATE_CONFIG, getNotificationText } from '../constants';
+import { notifTrace } from '../trace';
 import type {
   CreateNotificationInput,
   NotificationEvent,
@@ -21,6 +22,7 @@ function buildProductionInput(
       id: production.id,
       op_number: production.op_number,
     });
+    notifTrace('Evento ignorado — client vazio', { event, production });
     return null;
   }
 
@@ -45,7 +47,8 @@ function buildProductionInput(
 }
 
 function reportError(context: string, detail: unknown) {
-  console.warn(`[NotificationService] ${context}:`, detail);
+  console.error(`[NotificationService] ${context}:`, detail);
+  notifTrace(context, detail);
   if (IS_DEV) {
     const message =
       typeof detail === 'string'
@@ -62,11 +65,20 @@ function reportError(context: string, detail: unknown) {
 }
 
 async function emit(input: CreateNotificationInput): Promise<void> {
+  notifTrace('Evento aconteceu — criando notificação…', {
+    event: input.event,
+    client: input.client,
+    entity_id: input.entity_id,
+  });
+
   try {
     const result = await createNotificationRpc(input);
     if (!result?.success) {
-      reportError('Falha ao criar notificação', result?.error ?? result);
+      reportError('Falha ao criar notificação (RPC)', result?.error ?? result);
+      return;
     }
+    notifTrace('INSERT OK', { id: result.id, event: input.event });
+    notifTrace('Realtime sinal será emitido pelo trigger no banco');
   } catch (err) {
     reportError('Erro ao criar notificação', err);
   }

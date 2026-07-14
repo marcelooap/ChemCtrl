@@ -310,7 +310,7 @@ export default function Transbordo() {
             <div className="p-8 text-center text-sm text-muted-foreground">{t('containers.transferPage.empty')}</div>
           ) : (
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50">
                 <th className="px-4 py-3 text-left">{t('containers.transferPage.table.record')}</th><th className="px-4 py-3 text-left">{t('common.type')}</th><th className="px-4 py-3 text-left">{t('common.date')}</th><th className="px-4 py-3 text-left">{t('containers.fields.product')}</th>
                 <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th><th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-right">{t('containers.transferPage.table.totalVolume')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.destination')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.driver')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
@@ -339,7 +339,7 @@ export default function Transbordo() {
                     destinoLabel = dests.map(d => d.placa || na).filter(Boolean).join(', ');
                   }
                   return (
-                    <tr key={item.id} className="border-b border-gray-50 hover:bg-accent/30">
+                    <tr key={item.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{item.transfer_number || na}</td>
                       <td className="px-4 py-2.5 text-sm">{translateTransferType(tipo)}</td>
                       <td className="px-4 py-2.5 text-sm">{fmtDate(item.date, undefined, i18n.language)}</td>

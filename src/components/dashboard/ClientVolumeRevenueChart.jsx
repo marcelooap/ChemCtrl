@@ -68,7 +68,7 @@ export default function ClientVolumeRevenueChart({ data, user, emptyMessage }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis
           dataKey="clientLabel"
           tick={{ fontSize: 11 }}

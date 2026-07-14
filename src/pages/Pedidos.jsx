@@ -259,7 +259,7 @@ export default function Pedidos() {
           ) : (
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10 bg-card">
-                <tr className="border-b border-gray-50">
+                <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left">{t('orders.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('orders.table.date')}</th>
                   <th className="px-4 py-3 text-left">{t('orders.table.requester')}</th>
@@ -279,7 +279,7 @@ export default function Pedidos() {
                   const isLate = isOrderLate(o);
                   const displayStatus = getDisplayStatus(o);
                   return (
-                    <tr key={o.id} className="border-b border-gray-50 hover:bg-accent/30">
+                    <tr key={o.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
                       <td className="px-4 py-2.5 text-sm">{o.date ? fmtDate(o.date) : t('common.notAvailable')}</td>
                       <td className="px-4 py-2.5 text-sm">{o.requester}</td>

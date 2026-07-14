@@ -5,6 +5,11 @@
 -- PRÉ-REQUISITO RECOMENDADO: migration_security_audit.sql (login, senhas, RLS completo)
 -- A seção 0 abaixo garante apenas o mínimo de sessão para notificações funcionarem
 -- mesmo se migration_security_audit.sql ainda não foi aplicado.
+--
+-- APÓS ESTA MIGRATION: execute também
+--   migration_notifications_realtime_fix.sql
+-- Sem ela, INSERT em notifications NÃO chega ao frontend via Realtime
+-- (RLS de sessão não é avaliada no WebSocket — ver causa raiz no arquivo).
 -- ============================================================================
 
 -- ============================================================================

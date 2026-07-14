@@ -298,7 +298,7 @@ export default function Vasilhames() {
         {loading ? <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div> : (
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
             <table className="w-full chemctrl-table">
-              <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50/50">
+              <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-3 py-3 text-center w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label={t('containers.vasilhames.selectAll')} /></th>
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th>
                 <th className="px-4 py-3 text-left">{t('production.opNumber')}</th>
@@ -316,7 +316,7 @@ export default function Vasilhames() {
                 {filtered.map(c => {
                   const prod = prodOf(c);
                   return (
-                  <tr key={c.id} className={`border-b border-gray-50 hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
+                  <tr key={c.id} className={`border-b border-border hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={t('containers.vasilhames.selectItem', { label: c.container_number || c.id })} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{c.op_number || <span className="text-muted-foreground">{t('containers.vasilhames.manual')}</span>}</td>
@@ -382,20 +382,20 @@ export default function Vasilhames() {
           <DialogHeader><DialogTitle>{t('containers.vasilhames.viewTitle')}</DialogTitle></DialogHeader>
           {viewing && (
             <div className="space-y-5">
-              <div className="flex items-center gap-4 p-4 rounded-lg" style={{ background: '#F0F4FF' }}>
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-50">
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.plateNumber')}</p>
                   <p className="text-lg font-bold mt-0.5">{viewing.container_number || na}</p>
                 </div>
-                <div className="w-px h-12 bg-gray-300" />
+                <div className="w-px h-12 bg-border" />
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.barrelNumber')}</p>
                   <p className="text-lg font-bold mt-0.5">{viewing.barril_number || na}</p>
                 </div>
-                <div className="w-px h-12 bg-gray-300" />
+                <div className="w-px h-12 bg-border" />
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('containers.fields.registrationId')}</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: '#2575D1' }}>{fmtRegId(viewing.registration_id)}</p>
+                  <p className="text-lg font-bold mt-0.5 text-primary">{fmtRegId(viewing.registration_id)}</p>
                 </div>
               </div>
 
@@ -451,9 +451,9 @@ export default function Vasilhames() {
                 return (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-1 h-4 rounded" style={{ background: '#7C3AED' }} />
-                      <h4 className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7C3AED' }}>{t('containers.transfer.title')}</h4>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EDE9FE', color: '#6D28D9' }}>
+                      <div className="w-1 h-4 rounded bg-purple-600" />
+                      <h4 className="text-xs font-bold uppercase tracking-wide text-purple-700">{t('containers.transfer.title')}</h4>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
                         {role === 'origem' ? t('containers.transferPage.roles.origin') : t('containers.transferPage.roles.destination')}
                       </span>
                     </div>

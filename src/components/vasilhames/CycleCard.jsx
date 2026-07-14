@@ -10,19 +10,26 @@ function DateBadge({ icon: Icon, label, date, highlighted, emptyText }) {
   const { i18n } = useTranslation();
   const formatted = fmtDate(date, undefined, i18n.language);
   const hasDate = date && formatted !== '—';
+  const isHighlight = highlighted && hasDate;
   return (
     <div
-      className="flex items-center gap-2.5 rounded-lg px-3 py-2 border"
-      style={highlighted && hasDate
-        ? { background: '#FFFBEB', borderColor: '#FCD34D' }
-        : { background: '#F9FAFB', borderColor: '#E5E7EB' }}
+      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 border ${
+        isHighlight
+          ? 'bg-amber-50 border-amber-300'
+          : 'bg-muted border-border'
+      }`}
     >
-      <Icon className="w-4 h-4 shrink-0" style={{ color: highlighted && hasDate ? '#B45309' : '#9CA3AF' }} />
+      <Icon className={`w-4 h-4 shrink-0 ${isHighlight ? 'text-amber-700' : 'text-muted-foreground'}`} />
       <div className="flex flex-col min-w-0">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
         <span
-          className={`text-sm leading-tight ${highlighted && hasDate ? 'font-bold' : 'font-medium'}`}
-          style={{ color: highlighted && hasDate ? '#B45309' : !hasDate ? '#9CA3AF' : '#374151' }}
+          className={`text-sm leading-tight ${
+            isHighlight
+              ? 'font-bold text-amber-700'
+              : !hasDate
+                ? 'font-medium text-muted-foreground'
+                : 'font-medium text-foreground'
+          }`}
         >
           {hasDate ? formatted : (emptyText || '—')}
         </span>
@@ -48,7 +55,7 @@ function Field({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-gray-800 truncate" title={value != null ? String(value) : ''}>{fmtVal(value)}</span>
+      <span className="text-sm font-medium text-foreground truncate" title={value != null ? String(value) : ''}>{fmtVal(value)}</span>
     </div>
   );
 }
@@ -60,10 +67,10 @@ function TransbordoCard({ event, container }) {
     ? `${container.container_number || ''}${container.barril_number ? ' / ' + container.barril_number : ''}`
     : '—';
   return (
-    <div className="rounded-lg border overflow-hidden" style={{ borderColor: '#4B008240', background: '#FAF7FF' }}>
-      <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: '#F5F0FF' }}>
-        <ArrowLeftRight className="w-3.5 h-3.5" style={{ color: '#4B0082' }} />
-        <span className="text-xs font-bold" style={{ color: '#4B0082' }}>{t('containers.cycleCard.outgoingTransfer')}</span>
+    <div className="rounded-lg border overflow-hidden border-purple-200 dark:border-purple-800 bg-purple-50">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100">
+        <ArrowLeftRight className="w-3.5 h-3.5 text-purple-700" />
+        <span className="text-xs font-bold text-purple-700">{t('containers.cycleCard.outgoingTransfer')}</span>
         <span className="text-[10px] text-muted-foreground ml-auto">{fmtDateTime(event.date, undefined, i18n.language)}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-3 py-2 bg-card">
@@ -95,13 +102,18 @@ export default function CycleCard({ cycle, index }) {
 
   const statusKey = hasTransbordo ? 'Encerrado p/ Transbordo' : (finished ? 'Finalizado' : 'Em andamento');
   const statusLabel = translateCycleStatus(statusKey);
-  const statusColor = hasTransbordo ? { bg: '#F5F0FF', text: '#4B0082' } : (finished ? { bg: '#DCFCE7', text: '#15803D' } : { bg: '#DBEAFE', text: '#1D4ED8' });
+  const statusClass = hasTransbordo
+    ? 'bg-purple-100 text-purple-700'
+    : finished
+      ? 'bg-green-100 text-green-700'
+      : 'bg-blue-100 text-blue-700';
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       <div
-        className="flex items-center justify-between px-4 py-2 cursor-pointer select-none"
-        style={{ background: finished ? '#F0FDF4' : '#EFF6FF' }}
+        className={`flex items-center justify-between px-4 py-2 cursor-pointer select-none ${
+          finished ? 'bg-green-50' : 'bg-blue-50'
+        }`}
         onClick={() => setExpanded(p => !p)}
       >
         <div className="flex items-center gap-2.5">
@@ -114,10 +126,7 @@ export default function CycleCard({ cycle, index }) {
           <span className="text-sm font-bold">
             {t('production.opNumber')} {header.op}
           </span>
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-            style={{ background: statusColor.bg, color: statusColor.text }}
-          >
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass}`}>
             {statusLabel}
           </span>
         </div>

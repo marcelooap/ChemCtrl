@@ -12,8 +12,8 @@ import { getSignedFileUrl } from '@/api/storage'; // storage module (split from 
 
 function InfoRow({ icon: Icon, label, value }) {
   return (
-    <div className="flex items-center gap-2 text-gray-600">
-      <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+    <div className="flex items-center gap-2 text-muted-foreground">
+      <Icon className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
       <span><b className="text-foreground">{label}:</b> {value || '—'}</span>
     </div>
   );
@@ -53,7 +53,7 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
             )}
           </div>
           <div className="flex-1 text-sm space-y-1">
-            <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mb-1" style={{ color: status.color, background: status.bg }}>{translateEquipmentCalibrationStatus(status.key)}</span>
+            <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mb-1 ${status.className}`}>{translateEquipmentCalibrationStatus(status.key)}</span>
             <p><b className="text-foreground">{t('quality.equipment.viewDialog.type')}:</b> {translateEquipmentType(equipment.type)}</p>
             <p><b className="text-foreground">{t('quality.equipment.viewDialog.manufacturer')}:</b> {equipment.manufacturer || '—'}</p>
             <p><b className="text-foreground">{t('quality.equipment.viewDialog.model')}:</b> {equipment.model || '—'}</p>
@@ -76,11 +76,11 @@ export default function EquipmentViewDialog({ open, onClose, equipment }) {
             <InfoRow icon={FileText} label={t('quality.equipment.viewDialog.certificateLabel')} value={equipment.certificate_number} />
             <InfoRow icon={Calendar} label={t('quality.equipment.viewDialog.lastCalibration')} value={fmtDate(equipment.last_calibration_date, undefined, lang)} />
             <InfoRow icon={Wrench} label={t('quality.equipment.viewDialog.calibrationCompany')} value={equipment.calibration_company} />
-            <div className="rounded-lg p-3 flex items-center gap-2 mt-2" style={{ background: calColor.bg }}>
-              <Calendar className="w-4 h-4 shrink-0" style={{ color: calColor.color }} />
+            <div className={`rounded-lg p-3 flex items-center gap-2 mt-2 ${calColor.bgClass}`}>
+              <Calendar className={`w-4 h-4 shrink-0 ${calColor.textClass}`} />
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: calColor.color }}>{t('quality.equipment.viewDialog.nextCalibration')}</p>
-                <p className="font-bold" style={{ color: calColor.color }}>{fmtDate(equipment.next_calibration_date, undefined, lang)} · {calDueLabel}</p>
+                <p className={`text-[10px] font-medium uppercase tracking-wide ${calColor.textClass}`}>{t('quality.equipment.viewDialog.nextCalibration')}</p>
+                <p className={`font-bold ${calColor.textClass}`}>{fmtDate(equipment.next_calibration_date, undefined, lang)} · {calDueLabel}</p>
               </div>
             </div>
             {equipment.observations && <p className="text-xs text-gray-600 mt-2 p-2 bg-muted/50 rounded"><b>{t('quality.equipment.viewDialog.obs')}:</b> {equipment.observations}</p>}

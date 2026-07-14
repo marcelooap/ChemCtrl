@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { callRPC, setSessionId, clearSessionId, getSessionId } from '@/api/rpcClient';
+import { resetRealtimeClient } from '@/lib/realtime';
 import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
 import i18n from '@/i18n';
 
@@ -164,6 +165,8 @@ export const InternalAuthProvider = ({ children }) => {
       setSessionId(result.session_id);
       persistUserSession(userData);
       sessionStorage.setItem('chemctrl_welcome', '1');
+      // Recria o cliente Realtime com o novo x-session-id (headers são fixados no createClient)
+      resetRealtimeClient();
 
       const mapped = mapUser(userData);
       setUser(mapped);
@@ -208,8 +211,11 @@ export const InternalAuthProvider = ({ children }) => {
   const logout = async () => {
     const sessionId = getSessionId();
     if (sessionId) {
-      try { await callRPC('destroy_session', { p_session_id: sessionId }); } catch (_) {}
+      try { await callRPC('destroy_session', { p_session_id: sessionId }); } catch (err) {
+        console.warn('[Auth] destroy_session falhou no logout:', err);
+      }
     }
+    resetRealtimeClient();
     clearLocalAuth();
     setUser(null);
     window.location.href = '/login';

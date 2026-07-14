@@ -23,10 +23,12 @@ import { getSessionId } from '@/api/rpcClient';
 // Helpers
 // ─────────────────────────────────────────────
 
-function safeExecute(callback) {
+function safeExecute(callback, label = 'realtime-callback') {
   try {
     callback();
-  } catch (_) {}
+  } catch (err) {
+    console.error(`[realtime] Erro em ${label}:`, err);
+  }
 }
 
 
@@ -563,7 +565,15 @@ export function subscribeAllTables(
   onChangeCallback
 ){
 
-  const skipRealtime = new Set(['Perfil', 'PerfilPermissao']);
+  // Notification/NotificationRead: RLS de sessão não avalia no Realtime (sem x-session-id).
+  // Notifications usam NotificationSignal (invalidate-and-fetch). Perfis: sem realtime.
+  const skipRealtime = new Set([
+    'Perfil',
+    'PerfilPermissao',
+    'Notification',
+    'NotificationRead',
+    'NotificationSignal',
+  ]);
 
   const unsubscribers =
     Object.keys(entityTableMap)

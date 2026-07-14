@@ -1,6 +1,7 @@
 import { callRPC } from '@/api/rpcClient';
 import { getSessionId } from '@/api/rpcClient';
 import { supabaseAnonKey } from '@/api/supabaseClient';
+import { notifTrace } from '../trace';
 import type {
   CreateNotificationInput,
   Notification,
@@ -27,6 +28,12 @@ const getHeaders = (extra: Record<string, string> = {}) => {
 export async function createNotificationRpc(
   input: CreateNotificationInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
+  notifTrace('RPC create_notification →', {
+    event: input.event,
+    client: input.client,
+    hasSession: Boolean(getSessionId()),
+  });
+
   const result = await callRPC('create_notification', {
     p_title: input.title,
     p_message: input.message,
@@ -42,6 +49,8 @@ export async function createNotificationRpc(
     p_target_role: input.target_role ?? null,
     p_target_user: input.target_user ?? null,
   });
+
+  notifTrace('RPC create_notification ←', result);
   return result as { success: boolean; id?: string; error?: string };
 }
 
@@ -65,7 +74,9 @@ export async function markAllNotificationsReadRpc(): Promise<{
 
 export async function getUnreadCountRpc(): Promise<number> {
   const result = await callRPC('get_unread_notification_count', {});
-  return typeof result === 'number' ? result : 0;
+  if (typeof result === 'number') return result;
+  console.warn('[notificationApi] get_unread_notification_count retorno inesperado:', result);
+  return 0;
 }
 
 export async function fetchNotifications(
@@ -94,7 +105,13 @@ export async function fetchNotifications(
     cache: 'no-store',
   });
 
-  if (!resp.ok) return [];
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    console.error('[notificationApi] SELECT notifications falhou:', resp.status, body);
+    notifTrace('SELECT falhou', { status: resp.status, body });
+    throw new Error(`Falha ao buscar notificações (HTTP ${resp.status})`);
+  }
+
   return (await resp.json()) as Notification[];
 }
 
@@ -110,7 +127,13 @@ export async function fetchNotificationReads(
     cache: 'no-store',
   });
 
-  if (!resp.ok) return [];
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    console.error('[notificationApi] SELECT notification_reads falhou:', resp.status, body);
+    notifTrace('SELECT reads falhou', { status: resp.status, body });
+    throw new Error(`Falha ao buscar leituras (HTTP ${resp.status})`);
+  }
+
   return (await resp.json()) as NotificationRead[];
 }
 

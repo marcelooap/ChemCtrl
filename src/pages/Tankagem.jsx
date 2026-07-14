@@ -220,16 +220,16 @@ export default function Tankagem() {
                       return (
                         <div key={tank.id} className="flex flex-col items-center">
                           <div className="relative" style={{ width: 100 }}>
-                            <div className="h-7 rounded-t-full border-2 border-b-0" style={{ borderColor: '#cbd5e1', background: '#f1f5f9' }} />
-                            <div className="relative h-52 border-2 border-t-0 overflow-hidden" style={{ borderColor: '#cbd5e1', background: '#f8fafc' }}>
+                            <div className="h-7 rounded-t-full border-2 border-b-0 border-border bg-muted" />
+                            <div className="relative h-52 border-2 border-t-0 overflow-hidden border-border bg-muted/50">
                               <div className="absolute bottom-0 left-0 right-0 transition-all duration-700" style={{ height: `${fillPercent}%`, backgroundColor: productColor, opacity: 0.85 }} />
                               {fillPercent > 3 && <div className="absolute left-0 right-0 border-t-2 border-white/40" style={{ bottom: `${fillPercent}%` }} />}
                               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <p className="text-sm font-bold text-center px-1" style={{ color: fillPercent > 15 ? 'white' : '#1A1A2E', textShadow: fillPercent > 15 ? '0 1px 3px rgba(0,0,0,0.4)' : 'none' }}>{fmt(tank.current_volume)} L</p>
-                                <p className="text-xs" style={{ color: fillPercent > 15 ? 'rgba(255,255,255,0.9)' : '#9CA3AF' }}>{fillPercent.toFixed(1)}%</p>
+                                <p className={`text-sm font-bold text-center px-1 ${fillPercent > 15 ? 'text-white drop-shadow' : 'text-foreground'}`}>{fmt(tank.current_volume)} L</p>
+                                <p className={`text-xs ${fillPercent > 15 ? 'text-white/90' : 'text-muted-foreground'}`}>{fillPercent.toFixed(1)}%</p>
                               </div>
                             </div>
-                            <div className="h-3 rounded-b-full border-2 border-t-0" style={{ borderColor: '#cbd5e1', background: '#f1f5f9' }} />
+                            <div className="h-3 rounded-b-full border-2 border-t-0 border-border bg-muted" />
                           </div>
                           <div className="text-center mt-2 w-full">
                             <p className="font-bold text-sm">{tank.name}</p>
@@ -249,7 +249,7 @@ export default function Tankagem() {
           <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full chemctrl-table">
-                <thead><tr className="border-b border-gray-50 bg-muted/50/50">
+                <thead><tr className="border-b border-border bg-muted/50/50">
                   <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.tank')}</th>
                   <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th>
                   <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.products')}</th>
@@ -264,7 +264,7 @@ export default function Tankagem() {
                     const fillPercent = Math.min(100, ((tank.current_volume || 0) / (tank.capacity || 26000)) * 100);
                     const clientColor = getClientColor(tank.client);
                     return (
-                      <tr key={tank.id} className="border-b border-gray-50 hover:bg-accent/30">
+                      <tr key={tank.id} className="border-b border-border hover:bg-accent/30">
                         <td className="px-4 py-3 font-bold text-sm">{tank.name}</td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex items-center gap-2">

@@ -19,8 +19,8 @@ export default function FractionalBadge({ production, variant = 'pending' }) {
 
   const cls =
     variant === 'container'
-      ? 'text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 ml-1'
-      : 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800';
+      ? 'text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground ml-1'
+      : 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700';
 
   return <span className={cls}>{label}</span>;
 }

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Bell, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 import { useNotifications } from '../hooks/useNotifications';
 import { NotificationBadge } from './NotificationBadge';
 import { NotificationItem } from './NotificationItem';
@@ -15,15 +16,34 @@ export function NotificationDropdown() {
     notifications,
     unreadCount,
     loading,
+    pulseToken,
     markAllAsRead,
     navigateToNotification,
   } = useNotifications();
+  const [ringing, setRinging] = useState(false);
+
+  useEffect(() => {
+    if (pulseToken <= 0) return;
+    setRinging(true);
+    const timer = setTimeout(() => setRinging(false), 900);
+    return () => clearTimeout(timer);
+  }, [pulseToken]);
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
-          <Bell className="h-5 w-5 text-muted-foreground" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('relative h-9 w-9', ringing && 'notif-bell-pulse')}
+          aria-label={t('notifications.title')}
+        >
+          <Bell
+            className={cn(
+              'h-5 w-5 text-muted-foreground transition-transform',
+              ringing && 'notif-bell-ring'
+            )}
+          />
           <NotificationBadge count={unreadCount} />
         </Button>
       </PopoverTrigger>
