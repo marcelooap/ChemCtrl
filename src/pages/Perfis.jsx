@@ -177,10 +177,15 @@ export default function Perfis() {
     });
   }, [search, filteredModules]);
 
-  const isAdminProfile = selected?.slug === RBAC_ADMIN_SLUG || selected?.is_system === true;
+  const isAdminProfile =
+    selected?.slug === RBAC_ADMIN_SLUG
+    || selected?.id === 'perfil_administrador'
+    || (selected?.nome || '').trim().toLowerCase() === 'administrador';
+  const isSystemProfile = Boolean(selected?.is_system) || isAdminProfile;
 
   const savePermissions = async () => {
     if (!selectedId) return;
+    // Proteção só do perfil Administrador — não aplicar a Supervisor/Operacional/etc.
     if (isAdminProfile) {
       const missing = ADMIN_PROTECTED_KEYS.filter((k) => !permSet.has(k));
       if (missing.length) {
@@ -399,7 +404,7 @@ export default function Perfis() {
                     </button>
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                       {selected.nome}
-                      {isAdminProfile && (
+                      {isSystemProfile && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
                           {t('profiles.systemBadge')}
                         </span>
@@ -423,7 +428,7 @@ export default function Perfis() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={isAdminProfile || usersCount(selected) > 0}
+                        disabled={isSystemProfile || usersCount(selected) > 0}
                         onClick={() => setDeleteDialog({ open: true })}
                       >
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" /> {t('buttons.delete')}
