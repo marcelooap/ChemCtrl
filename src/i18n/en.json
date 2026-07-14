@@ -448,11 +448,13 @@
       "productDistribution": "Volume Distribution by Product",
       "productColumn": "Product",
       "volumeColumn": "Volume (L)",
+      "revenueColumn": "Revenue",
       "percentColumn": "%",
       "totalLabel": "Total",
       "trendLabel": "Trend",
       "volumeRevenueByClient": "Volume and Revenue by Client",
-      "avgPricePerKgLabel": "Average Price per kg"
+      "avgPricePerKgLabel": "Average Price per kg",
+      "avgPricePerKgByMonth": "Average Price per kg by Month (R$)"
     },
     "filters": {
       "period": "Period",

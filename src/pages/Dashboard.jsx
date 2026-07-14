@@ -121,8 +121,12 @@ export default function Dashboard() {
   const subtitleDate = isCurrentPeriod
     ? fmtDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' }, i18n.language)
     : fmtDate(referenceDate, { month: 'long', year: 'numeric' }, i18n.language);
-  const hasMonthlyData = monthlyData.some((m) => m.volume > 0 || m.revenue > 0);
+  const hasMonthlyData = monthlyData.some((m) => m.volume > 0 || m.revenue > 0 || m.avgPricePerKg > 0);
   const emptyMessage = t('dashboard.empty');
+  const fmtAvgPrice = (n) => fmtCurrency(n || 0, 'BRL', i18n.language, {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -279,13 +283,54 @@ export default function Dashboard() {
         </ChartCard>
       </div>
 
-      <ChartCard title={t('dashboard.charts.volumeRevenueByClient')} className="mb-6">
-        <ClientVolumeRevenueChart
-          data={clientVolumeRevenue}
-          user={user}
-          emptyMessage={emptyMessage}
-        />
-      </ChartCard>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <ChartCard title={t('dashboard.charts.volumeRevenueByClient')}>
+          <ClientVolumeRevenueChart
+            data={clientVolumeRevenue}
+            user={user}
+            emptyMessage={emptyMessage}
+          />
+        </ChartCard>
+
+        <ChartCard title={t('dashboard.charts.avgPricePerKgByMonth')}>
+          {!hasMonthlyData ? (
+            <p className="text-sm text-muted-foreground text-center py-16">{emptyMessage}</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={monthlyData}>
+                <defs>
+                  <linearGradient id="avgPriceGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.amber} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={COLORS.amber} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="#9ca3af"
+                  tickFormatter={(v) => fmtAvgPrice(v)}
+                />
+                <Tooltip
+                  formatter={(v) => [
+                    `${fmtAvgPrice(v)}/${t('common.units.kg')}`,
+                    t('dashboard.charts.avgPricePerKgLabel'),
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="avgPricePerKg"
+                  stroke={COLORS.amber}
+                  strokeWidth={2.5}
+                  fill="url(#avgPriceGradient)"
+                  dot={{ r: 4, fill: COLORS.amber }}
+                  name={t('dashboard.charts.avgPricePerKgLabel')}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
 
       <ProductDistributionSection
         key={`product-dist-${selectedYear}-${selectedMonth}`}

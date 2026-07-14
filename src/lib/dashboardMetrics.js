@@ -63,6 +63,7 @@ function resolveMonthTotals(productions, year, month) {
     return {
       volume: manual.volume,
       revenue: manual.revenue,
+      mass: parseFloat(manual.mass) || 0,
       hasData: true,
     };
   }
@@ -70,10 +71,12 @@ function resolveMonthTotals(productions, year, month) {
   const monthProds = getFinishedProductions(productions, { month, year });
   const volume = monthProds.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
   const revenue = monthProds.reduce((s, p) => s + getRevenue(p), 0);
+  const mass = sumRegisteredMass(monthProds);
 
   return {
     volume,
     revenue,
+    mass,
     hasData: monthProds.length > 0,
   };
 }
@@ -87,7 +90,6 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   const prevYear = prev.year();
 
   const finishedCurrent = getFinishedProductions(productions, { month: currentMonth, year: currentYear });
-  const finishedPrevious = getFinishedProductions(productions, { month: prevMonth, year: prevYear });
 
   const currentTotals = resolveMonthTotals(productions, currentYear, currentMonth);
   const previousTotals = resolveMonthTotals(productions, prevYear, prevMonth);
@@ -99,8 +101,8 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   const revenuePrevious = previousTotals.revenue;
 
   // massaTotalMes — única fonte para card de volume e preço médio/kg
-  const massCurrent = sumRegisteredMass(finishedCurrent);
-  const massPrevious = sumRegisteredMass(finishedPrevious);
+  const massCurrent = currentTotals.mass;
+  const massPrevious = previousTotals.mass;
 
   const avgPriceCurrent = massCurrent > 0 ? revenueCurrent / massCurrent : 0;
   const avgPricePrevious = massPrevious > 0 ? revenuePrevious / massPrevious : 0;
@@ -164,6 +166,8 @@ export function buildMonthlySeries(productions, year, referenceDate = new Date()
       monthLabel: monthMoment.format('MMM'),
       volume: Math.round(totals.volume),
       revenue: Math.round(totals.revenue),
+      mass: Math.round(totals.mass),
+      avgPricePerKg: totals.mass > 0 ? totals.revenue / totals.mass : 0,
       isCurrent: year === currentYear && m === currentMonth,
     });
   }
@@ -188,16 +192,19 @@ export function buildProductDistribution(
       .map((p) => ({
         product: p.product || '—',
         volume: parseFloat(p.volume) || 0,
+        revenue: parseFloat(p.revenue) || 0,
         percent: 0,
       }))
       .sort((a, b) => b.volume - a.volume);
     const total = items.reduce((s, i) => s + i.volume, 0);
+    const totalRevenue = items.reduce((s, i) => s + i.revenue, 0);
     return {
       items: items.map((i) => ({
         ...i,
         percent: total > 0 ? (i.volume / total) * 100 : 0,
       })),
       total,
+      totalRevenue,
     };
   }
 
@@ -208,19 +215,25 @@ export function buildProductDistribution(
   const productMap = {};
   finished.forEach((p) => {
     const key = p.product || '—';
-    productMap[key] = (productMap[key] || 0) + (parseFloat(p.volume) || 0);
+    if (!productMap[key]) {
+      productMap[key] = { volume: 0, revenue: 0 };
+    }
+    productMap[key].volume += parseFloat(p.volume) || 0;
+    productMap[key].revenue += getRevenue(p);
   });
 
-  const total = Object.values(productMap).reduce((s, v) => s + v, 0);
+  const total = Object.values(productMap).reduce((s, v) => s + v.volume, 0);
+  const totalRevenue = Object.values(productMap).reduce((s, v) => s + v.revenue, 0);
   const items = Object.entries(productMap)
-    .map(([product, volume]) => ({
+    .map(([product, agg]) => ({
       product,
-      volume,
-      percent: total > 0 ? (volume / total) * 100 : 0,
+      volume: agg.volume,
+      revenue: agg.revenue,
+      percent: total > 0 ? (agg.volume / total) * 100 : 0,
     }))
     .sort((a, b) => b.volume - a.volume);
 
-  return { items, total };
+  return { items, total, totalRevenue };
 }
 
 export function buildProducoesFilterUrl({ product, referenceDate = new Date() } = {}) {

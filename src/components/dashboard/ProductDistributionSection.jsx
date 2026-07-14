@@ -1,13 +1,14 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { fmtNumber } from '@/i18n/formatters';
+import { fmtNumber, fmtCurrency } from '@/i18n/formatters';
 
 const COLORS = ['#2563eb', '#00875a', '#f59e0b', '#7c3aed', '#0891b2', '#dc2626', '#6b7280', '#ec4899', '#14b8a6', '#f97316'];
 
 export default function ProductDistributionSection({ title, items, total, emptyMessage }) {
   const { t, i18n } = useTranslation();
   const fmtVol = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
+  const fmtMoney = (n) => fmtCurrency(n || 0, 'BRL', i18n.language);
   const chartData = items.map((item, i) => ({
     name: item.product,
     value: item.volume,
@@ -15,6 +16,8 @@ export default function ProductDistributionSection({ title, items, total, emptyM
     fill: COLORS[i % COLORS.length],
   }));
 
+  const totalRevenue = items.reduce((s, item) => s + (item.revenue || 0), 0);
+  const totalPercent = items.reduce((s, item) => s + (item.percent || 0), 0);
   const totalFormatted = `${fmtVol(total)} L`;
 
   return (
@@ -60,7 +63,8 @@ export default function ProductDistributionSection({ title, items, total, emptyM
                 <tr className="border-b border-border text-xs text-muted-foreground uppercase">
                   <th className="text-left py-2 pr-4">{t('dashboard.charts.productColumn')}</th>
                   <th className="text-right py-2 pr-4">{t('dashboard.charts.volumeColumn')}</th>
-                  <th className="text-right py-2">%</th>
+                  <th className="text-right py-2 pr-4">{t('dashboard.charts.revenueColumn')}</th>
+                  <th className="text-right py-2">{t('dashboard.charts.percentColumn')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -68,13 +72,22 @@ export default function ProductDistributionSection({ title, items, total, emptyM
                   <tr key={item.product} className="border-b border-border/50">
                     <td className="py-2 pr-4 flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
-                      <span className="font-medium truncate max-w-[180px]" title={item.product}>{item.product}</span>
+                      <span className="font-medium truncate max-w-[140px]" title={item.product}>{item.product}</span>
                     </td>
-                    <td className="py-2 pr-4 text-right text-muted-foreground">{fmtVol(item.volume)} L</td>
-                    <td className="py-2 text-right font-medium">{item.percent.toFixed(1)}%</td>
+                    <td className="py-2 pr-4 text-right text-muted-foreground whitespace-nowrap">{fmtVol(item.volume)} L</td>
+                    <td className="py-2 pr-4 text-right text-muted-foreground whitespace-nowrap">{fmtMoney(item.revenue)}</td>
+                    <td className="py-2 text-right font-medium whitespace-nowrap">{item.percent.toFixed(1)}%</td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t border-border">
+                  <td className="pt-3 pr-4 font-semibold">{t('dashboard.charts.totalLabel')}</td>
+                  <td className="pt-3 pr-4 text-right font-semibold whitespace-nowrap">{fmtVol(total)} L</td>
+                  <td className="pt-3 pr-4 text-right font-semibold whitespace-nowrap">{fmtMoney(totalRevenue)}</td>
+                  <td className="pt-3 text-right font-semibold whitespace-nowrap">{totalPercent.toFixed(1)}%</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>

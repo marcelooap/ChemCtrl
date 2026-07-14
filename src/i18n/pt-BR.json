@@ -448,11 +448,13 @@
       "productDistribution": "Distribuição do Volume por Produto",
       "productColumn": "Produto",
       "volumeColumn": "Volume (L)",
+      "revenueColumn": "Receita",
       "percentColumn": "%",
       "totalLabel": "Total",
       "trendLabel": "Tendência",
       "volumeRevenueByClient": "Volume e Receita por Cliente",
-      "avgPricePerKgLabel": "Preço Médio por kg"
+      "avgPricePerKgLabel": "Preço Médio por kg",
+      "avgPricePerKgByMonth": "Preço Médio por kg por Mês (R$)"
     },
     "filters": {
       "period": "Período",
