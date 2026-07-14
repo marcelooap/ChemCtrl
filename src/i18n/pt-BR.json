@@ -419,6 +419,7 @@
       "topProduct": "Produto de Maior Volume",
       "topProductShare": "{{percent}}% da produção do mês",
       "avgPricePerKg": "Preço Médio por kg",
+      "massProduced": "Massa produzida: {{mass}} kg",
       "vsPreviousMonth": "vs mês anterior",
       "noComparison": "-"
     },
@@ -455,6 +456,8 @@
     },
     "filters": {
       "period": "Período",
+      "month": "Mês",
+      "year": "Ano",
       "product": "Produto",
       "client": "Cliente"
     },
@@ -564,7 +567,7 @@
       "density": "Densidade (g/mL)",
       "massCalculated": "Massa (kg) — calculado",
       "destinationPackaging": "Embalagem de Destino",
-      "packagingPlaceholder": "Ex: Tambor 200L, IBC 1000L...",
+      "packagingPlaceholder": "Ex: 1513341008 - 805780-9, TANKA 01...",
       "rawMaterialAllocation": "Apontamento de Matérias Primas",
       "rawMaterialAllocationHelp": "As quantidades são calculadas em kg automaticamente. Ao selecionar o lote, a Qtd. Fiscal converte para a unidade do estoque. Use \"+ Lote\" para misturar lotes.",
       "percentMass": "%m/m: {{value}}%",
@@ -593,6 +596,8 @@
       "complementStatusComplete": "Completa",
       "complementStatusPending": "Pendente",
       "complementAction": "Complementar Produção",
+      "complementConfirmTitle": "Iniciar complemento de produção",
+      "complementConfirmMessage": "Será iniciado o processo de complemento desta Ordem de Produção utilizando o saldo pendente.\n\nDeseja continuar?",
       "finalizeComplement": "Finalizar Complemento",
       "complementTitle": "Complementar Produção",
       "complementSubtitle": "Informe os lotes restantes para fechar o balanço de massa.",
@@ -651,6 +656,7 @@
     },
     "list": {
       "subtitle": "{{count}} produção(ões) registrada(s)",
+      "subtitleFiltered": "{{filtered}} de {{total}} produção(ões)",
       "searchPlaceholder": "Buscar por OP, produto, lote, cliente...",
       "allClients": "Todos os clientes",
       "finishDateFrom": "Data finaliz. de",
@@ -659,9 +665,9 @@
       "packagingCol": "Embalagem",
       "stage": "Etapa",
       "billingSend": "Envio p/ Faturamento",
-      "totalOps": "Total de OPs: {{count}}",
-      "activeOps": "OPs ativas: {{count}}",
-      "finishedVolume": "Volume total finalizado: {{volume}} L",
+      "totalOps": "Total de OPs",
+      "activeOps": "OPs ativas",
+      "finishedVolume": "Volume total finalizado",
       "finishDate": "Data Finalização",
       "revision": "Revisão",
       "unitPricePerKg": "{{price}}/kg",
@@ -828,7 +834,7 @@
     "title": "Controle de Qualidade",
     "tests": "Ensaios",
     "pending": "Pendente de Análise",
-    "coa": "Certificado de Análise (COA)",
+    "coa": "COA",
     "equipment": {
       "title": "Equipamentos",
       "calibration": "Calibração",
@@ -1068,11 +1074,17 @@
     "coaPage": {
       "title": "📜 Certificados de Análise (COA)",
       "subtitle": "{{count}} COA(s) disponível(is)",
-      "searchPlaceholder": "Buscar por produto ou lote...",
+      "searchPlaceholder": "Buscar por produto, lote, OP ou embalagem...",
       "allClients": "Todos os Clientes",
       "analysisDate": "Data Análise",
       "qcStatus": "Status CQ",
-      "editColumn": "Editar",
+      "editColumn": "Ações",
+      "packagingColumn": "Embalagens",
+      "packagingCount": "{{count}} Embalagens",
+      "relatedPackaging": "Embalagens Relacionadas",
+      "coaData": "Dados do COA",
+      "analyticalResults": "Resultados Analíticos",
+      "viewTitle": "Visualizar COA — {{product}} · Lote {{lot}}",
       "samplePhotoTitle": "Foto da amostra registrada",
       "resultsNotRegistered": "Resultados ainda não registrados",
       "approvedCoas": "COAs Aprovados",
@@ -1204,11 +1216,13 @@
     "editOrder": "Editar Pedido · {{number}}",
     "searchPlaceholder": "Buscar por ID, produto, cliente...",
     "allStatuses": "Todos os status",
+    "allClients": "Todos os clientes",
     "status": {
       "pending": "Pendente",
       "inProduction": "Em produção",
       "finished": "Finalizado",
-      "partial": "Parcial"
+      "partial": "Parcial",
+      "late": "Atrasado"
     },
     "table": {
       "id": "ID",
@@ -2291,7 +2305,8 @@
       "table": {
         "record": "Registro",
         "totalVolume": "Vol. Total (L)",
-        "destination": "Destino"
+        "destination": "Destino",
+        "driver": "Motorista"
       },
       "footer": {
         "records": "Registros",

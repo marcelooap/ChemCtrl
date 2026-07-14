@@ -84,8 +84,24 @@ export default function Vasilhames() {
   const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
 
   const filtered = containers.filter(c => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || [c.product, c.client, c.container_number, c.barril_number, c.lot].some(v => (v || '').toLowerCase().includes(q));
+    const q = search.toLowerCase().trim();
+    const fractionalKeywords = new Set([
+      'fracionado',
+      'frac',
+      'fractional',
+      (t('production.fractional.badgeContainer') || '').toLowerCase().trim(),
+      (t('production.fractional.badge') || '').toLowerCase().trim(),
+    ].filter(Boolean));
+    const isFractionalKeyword = q && fractionalKeywords.has(q);
+    let matchSearch;
+    if (!q) {
+      matchSearch = true;
+    } else if (isFractionalKeyword) {
+      const prod = productionOfContainer(c, productions || []);
+      matchSearch = !!prod?.fractional_supply && c.status === 'No Pátio';
+    } else {
+      matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot].some(v => (v || '').toLowerCase().includes(q));
+    }
     const matchStatus = statusFilter === 'all' || c.status === statusFilter;
     const matchClient = clientFilter === 'all' || c.client === clientFilter;
     return matchSearch && matchStatus && matchClient;

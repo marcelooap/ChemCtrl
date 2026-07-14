@@ -91,12 +91,17 @@ export function fmtNumber(
 export function fmtCurrency(
   value: number | string | null | undefined,
   currency = 'BRL',
-  language?: string
+  language?: string,
+  options?: Intl.NumberFormatOptions
 ): string {
   if (value == null || value === '') return '—';
   const n = typeof value === 'number' ? value : Number(value);
   if (Number.isNaN(n)) return '—';
-  return n.toLocaleString(getIntlLocale(language), { style: 'currency', currency });
+  return n.toLocaleString(getIntlLocale(language), {
+    style: 'currency',
+    currency,
+    ...options,
+  });
 }
 
 export function fmtPercent(

@@ -55,12 +55,18 @@ export default function Producoes() {
   const [unitPrice, setUnitPrice] = useState('');
   const [clientOrder, setClientOrder] = useState('');
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [complementTarget, setComplementTarget] = useState(null);
   const [savingPkg, setSavingPkg] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [qrToken, setQrToken] = useState(null);
   const [qrLabel, setQrLabel] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const clearDateFilter = () => {
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const clientOptions = useMemo(() => {
     const set = new Set();
@@ -69,23 +75,48 @@ export default function Producoes() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, i18n.language));
   }, [recipes, productions, i18n.language]);
 
-  const filtered = productions.filter(p => {
+  const hasActiveFilters = Boolean(
+    search.trim()
+    || dateFrom
+    || dateTo
+    || clientFilter !== 'todos'
+    || statusFilter !== 'todos'
+  );
+
+  const filtered = useMemo(() => productions.filter(p => {
     const q = search.toLowerCase();
-    const opContainersOf = (p) => containers.filter(c => c.op_number === p.op_number);
+    const opContainersOf = (row) => containers.filter(c => c.op_number === row.op_number);
     const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
       || opContainersOf(p).some(c => (c.container_number || '').toLowerCase().includes(q))
       || (p.packaging_type || '').toLowerCase().includes(q);
-    const endDate = p.end_time ? moment(p.end_time) : null;
-    const matchFrom = !dateFrom || (endDate && endDate.isSameOrAfter(moment(dateFrom), 'day'));
-    const matchTo = !dateTo || (endDate && endDate.isSameOrBefore(moment(dateTo), 'day'));
+    const fabRaw = p.end_time || p.updated_date || null;
+    const fabDate = fabRaw ? moment(fabRaw) : null;
+    const matchFrom = !dateFrom || (fabDate && !fabDate.isBefore(moment(dateFrom, 'YYYY-MM-DD'), 'day'));
+    const matchTo = !dateTo || (fabDate && !fabDate.isAfter(moment(dateTo, 'YYYY-MM-DD'), 'day'));
     const matchesClient = clientFilter === 'todos' || (p.client || '') === clientFilter;
-    const matchStatus = statusFilter === 'todos' || p.status === statusFilter;
+    const matchStatus = statusFilter === 'todos'
+      ? true
+      : statusFilter === 'pendente_complemento'
+        ? isComplementPending(p)
+        : p.status === statusFilter;
     return matchSearch && matchFrom && matchTo && matchesClient && matchStatus;
-  });
+  }), [productions, containers, search, dateFrom, dateTo, clientFilter, statusFilter]);
 
-  const totalOPs = filtered.length;
-  const activeOPs = filtered.filter(p => !['Finalizado', 'Cancelado'].includes(p.status)).length;
-  const totalVol = filtered.filter(p => p.status === 'Finalizado').reduce((s, p) => s + (p.volume || 0), 0);
+  const footerStats = useMemo(() => {
+    let activeOPs = 0;
+    let finishedVolume = 0;
+    for (const p of filtered) {
+      if (!['Finalizado', 'Cancelado'].includes(p.status)) activeOPs += 1;
+      if (p.status === 'Finalizado') {
+        finishedVolume += parseFloat(p.volume) || 0;
+      }
+    }
+    return {
+      totalOPs: filtered.length,
+      activeOPs,
+      finishedVolume,
+    };
+  }, [filtered]);
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
   const fmtMoney = (n) => fmtCurrency(n, 'BRL', i18n.language);
   const savePkg = async () => {
@@ -188,15 +219,46 @@ export default function Producoes() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 mb-4">
-        <h1 className="text-2xl font-bold">📊 {t('production.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('production.list.subtitle', { count: productions.length })}</p>
+      <div className="shrink-0 mb-4 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">📊 {t('production.title')}</h1>
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters
+              ? t('production.list.subtitleFiltered', { filtered: footerStats.totalOPs, total: productions.length })
+              : t('production.list.subtitle', { count: productions.length })}
+          </p>
+        </div>
+        <div className="bg-card rounded-xl shadow-sm border border-border px-3 py-2 flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.filters.dateFrom')}</label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="h-8 text-xs mt-0.5 w-[140px]"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.filters.dateTo')}</label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="h-8 text-xs mt-0.5 w-[140px]"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button size="sm" variant="outline" onClick={clearDateFilter} className="h-8 text-xs">
+              {t('buttons.clear')}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Filters */}
         <div className="shrink-0 p-4 border-b border-border flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-48">
+          <div className="relative w-full max-w-md min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder={t('production.list.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
           </div>
@@ -211,6 +273,7 @@ export default function Producoes() {
             <SelectTrigger className="w-44"><SelectValue placeholder={t('common.status')} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">{t('common.all')}</SelectItem>
+              <SelectItem value="pendente_complemento">{t('production.fractional.badgePending')}</SelectItem>
               <SelectItem value="Aguardando Início">{translateProductionStatus('Aguardando Início')}</SelectItem>
               <SelectItem value="Em Produção">{translateProductionStatus('Em Produção')}</SelectItem>
               <SelectItem value="Qualidade">{translateProductionStatus('Qualidade')}</SelectItem>
@@ -219,15 +282,6 @@ export default function Producoes() {
               <SelectItem value="Cancelado">{translateProductionStatus('Cancelado')}</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{t('production.list.finishDateFrom')}</span>
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-9 text-xs" />
-            <span>{t('production.list.finishDateUntil')}</span>
-            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-9 text-xs" />
-            {(dateFrom || dateTo || statusFilter !== 'todos') && (
-              <button onClick={() => { setDateFrom(''); setDateTo(''); setStatusFilter('todos'); }} className="text-blue-500 underline text-xs">{t('common.clear')}</button>
-            )}
-          </div>
         </div>
 
         {/* Scrollable Table */}
@@ -295,7 +349,7 @@ export default function Producoes() {
                         <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {isComplementPending(p) && (
                           <button
-                            onClick={() => navigate(`/nova-producao?complement=${p.id}`)}
+                            onClick={() => setComplementTarget(p)}
                             className="p-1 rounded hover:bg-amber-50"
                             title={t('production.fractional.complementAction')}
                           >
@@ -315,10 +369,10 @@ export default function Producoes() {
         </div>
 
         {/* Fixed Footer */}
-        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
-          <span>{t('production.list.totalOps', { count: totalOPs })}</span>
-          <span>{t('production.list.activeOps', { count: activeOPs })}</span>
-          <span>{t('production.list.finishedVolume', { volume: fmt(totalVol) })}</span>
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
+          <span>{t('production.list.totalOps')}: <strong className="text-foreground">{footerStats.totalOPs}</strong></span>
+          <span>{t('production.list.activeOps')}: <strong className="text-foreground">{footerStats.activeOPs}</strong></span>
+          <span>{t('production.list.finishedVolume')}: <strong className="text-foreground">{fmt(footerStats.finishedVolume)} L</strong></span>
         </div>
       </div>
 
@@ -373,6 +427,15 @@ export default function Producoes() {
         onConfirm={confirmCancel}
         confirmLabel={t('production.list.cancelConfirmLabel')}
         confirmColor="#DC2626"
+      />
+      <ConfirmDialog
+        open={!!complementTarget}
+        onOpenChange={(open) => { if (!open) setComplementTarget(null); }}
+        title={t('production.fractional.complementConfirmTitle')}
+        message={t('production.fractional.complementConfirmMessage')}
+        onConfirm={() => {
+          if (complementTarget) navigate(`/nova-producao?complement=${complementTarget.id}`);
+        }}
       />
     </div>
   );

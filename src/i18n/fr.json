@@ -419,6 +419,7 @@
       "topProduct": "Produit au Plus Grand Volume",
       "topProductShare": "{{percent}}% de la production du mois",
       "avgPricePerKg": "Prix Moyen par kg",
+      "massProduced": "Masse produite : {{mass}} kg",
       "vsPreviousMonth": "vs mois précédent",
       "noComparison": "-"
     },
@@ -454,9 +455,11 @@
       "avgPricePerKgLabel": "Prix Moyen par kg"
     },
     "filters": {
-      "period": "Período",
-      "product": "Produto",
-      "client": "Cliente"
+      "period": "Période",
+      "month": "Mois",
+      "year": "Année",
+      "product": "Produit",
+      "client": "Client"
     },
     "empty": "Aucune donnée disponible pour la période sélectionnée."
   },
@@ -564,7 +567,7 @@
       "density": "Densité (g/mL)",
       "massCalculated": "Masse (kg) — calculée",
       "destinationPackaging": "Emballage de Destination",
-      "packagingPlaceholder": "Ex : Fût 200L, IBC 1000L...",
+      "packagingPlaceholder": "Ex : 1513341008 - 805780-9, TANKA 01...",
       "rawMaterialAllocation": "Affectation des Matières Premières",
       "rawMaterialAllocationHelp": "Les quantités sont calculées en kg automatiquement. Lors de la sélection du lot, la Qté Fiscale se convertit en unité de stock. Utilisez \"+ Lot\" pour mélanger les lots.",
       "percentMass": "%m/m : {{value}}%",
@@ -593,6 +596,8 @@
       "complementStatusComplete": "Complet",
       "complementStatusPending": "En attente",
       "complementAction": "Compléter la Production",
+      "complementConfirmTitle": "Démarrer le complément de production",
+      "complementConfirmMessage": "Le processus de complément de cet Ordre de Production sera démarré en utilisant le solde en attente.\n\nVoulez-vous continuer ?",
       "finalizeComplement": "Finaliser le Complément",
       "complementTitle": "Compléter la Production",
       "complementSubtitle": "Saisissez les lots restants pour fermer le bilan massique.",
@@ -651,6 +656,7 @@
     },
     "list": {
       "subtitle": "{{count}} production(s) enregistrée(s)",
+      "subtitleFiltered": "{{filtered}} sur {{total}} production(s)",
       "searchPlaceholder": "Rechercher par OP, produit, lot, client...",
       "allClients": "Tous les clients",
       "finishDateFrom": "Date fin. de",
@@ -659,9 +665,9 @@
       "packagingCol": "Emballage",
       "stage": "Étape",
       "billingSend": "Envoi Facturation",
-      "totalOps": "Total OPs : {{count}}",
-      "activeOps": "OPs actives : {{count}}",
-      "finishedVolume": "Volume total terminé : {{volume}} L",
+      "totalOps": "Total OPs",
+      "activeOps": "OPs actives",
+      "finishedVolume": "Volume total terminé",
       "finishDate": "Date de Fin",
       "revision": "Révision",
       "unitPricePerKg": "{{price}}/kg",
@@ -922,7 +928,7 @@
     "title": "Contrôle Qualité",
     "tests": "Essais",
     "pending": "En Attente d'Analyse",
-    "coa": "Certificat d'Analyse (COA)",
+    "coa": "COA",
     "equipment": {
       "title": "Equipamentos",
       "calibration": "Calibração",
@@ -1162,11 +1168,17 @@
     "coaPage": {
       "title": "📜 Certificats d'Analyse (COA)",
       "subtitle": "{{count}} COA disponible(s)",
-      "searchPlaceholder": "Rechercher par produit ou lot...",
+      "searchPlaceholder": "Rechercher par produit, lot, OP ou emballage...",
       "allClients": "Tous les Clients",
       "analysisDate": "Date Analyse",
       "qcStatus": "Statut CQ",
-      "editColumn": "Modifier",
+      "editColumn": "Actions",
+      "packagingColumn": "Emballages",
+      "packagingCount": "{{count}} Emballages",
+      "relatedPackaging": "Emballages Associés",
+      "coaData": "Données du COA",
+      "analyticalResults": "Résultats Analytiques",
+      "viewTitle": "Voir COA — {{product}} · Lot {{lot}}",
       "samplePhotoTitle": "Photo d'échantillon enregistrée",
       "resultsNotRegistered": "Résultats pas encore enregistrés",
       "approvedCoas": "COA Approuvés",
@@ -1298,11 +1310,13 @@
     "editOrder": "Modifier Commande · {{number}}",
     "searchPlaceholder": "Rechercher par ID, produit, client...",
     "allStatuses": "Tous les statuts",
+    "allClients": "Tous les clients",
     "status": {
       "pending": "En attente",
       "inProduction": "En production",
       "finished": "Terminé",
-      "partial": "Partiel"
+      "partial": "Partiel",
+      "late": "En retard"
     },
     "table": {
       "id": "ID",
@@ -2384,7 +2398,8 @@
       "table": {
         "record": "Enregistrement",
         "totalVolume": "Vol. Total (L)",
-        "destination": "Destination"
+        "destination": "Destination",
+        "driver": "Chauffeur"
       },
       "footer": {
         "records": "Enregistrements",

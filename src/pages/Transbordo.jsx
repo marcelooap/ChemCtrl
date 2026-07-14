@@ -312,7 +312,7 @@ export default function Transbordo() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
                 <th className="px-4 py-3 text-left">{t('containers.transferPage.table.record')}</th><th className="px-4 py-3 text-left">{t('common.type')}</th><th className="px-4 py-3 text-left">{t('common.date')}</th><th className="px-4 py-3 text-left">{t('containers.fields.product')}</th>
-                <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th><th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-right">{t('containers.transferPage.table.totalVolume')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.destination')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
+                <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th><th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-right">{t('containers.transferPage.table.totalVolume')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.destination')}</th><th className="px-4 py-3 text-left">{t('containers.transferPage.table.driver')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
                 {filtered.map((item) => {
@@ -326,6 +326,10 @@ export default function Transbordo() {
                   Object.keys(lotTotals).forEach(k => { if (lotTotals[k] > maxLotVol) { maxLotVol = lotTotals[k]; majorityLot = k; } });
                   const lote = majorityLot || na;
                   const isTransbordo = tipo === 'Transbordo';
+                  const isExpedicao = tipo === 'Expedição';
+                  const motorista = isExpedicao
+                    ? ((dests[0]?.driver || item.driver)?.trim() || '—')
+                    : '-';
                   let destinoLabel;
                   if (dests.length === 0) {
                     destinoLabel = na;
@@ -344,6 +348,7 @@ export default function Transbordo() {
                       <td className="px-4 py-2.5 text-sm">{lote}</td>
                       <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(totalVol)}</td>
                       <td className="px-4 py-2.5 text-sm font-medium">{destinoLabel}</td>
+                      <td className="px-4 py-2.5 text-sm">{motorista}</td>
                       <td className="px-4 py-2.5 text-center">
                         <button onClick={() => setViewTransfer(item)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       </td>

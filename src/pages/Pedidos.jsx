@@ -82,10 +82,38 @@ export default function Pedidos() {
 
   const load = () => { loadOrders(); };
 
+  const isOrderLate = (o) => (
+    o.status !== 'Finalizado'
+    && o.expected_date
+    && moment(o.expected_date, 'YYYY-MM-DD').endOf('day').isBefore(moment())
+  );
+
+  const getDisplayStatus = (o) => (isOrderLate(o) ? 'Atrasado' : o.status);
+
+  const clientOptions = useMemo(() => {
+    const map = new Map();
+    const add = (raw) => {
+      const trimmed = (raw || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) map.set(key, trimmed);
+    };
+    rawOrders.forEach(o => add(o.client));
+    (recipes || []).forEach(r => add(r.client));
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [rawOrders, recipes]);
+
+  useEffect(() => {
+    if (!clientFilter || clientOptions.length === 0) return;
+    const match = clientOptions.find(c => c.toLowerCase() === clientFilter.toLowerCase());
+    if (match && match !== clientFilter) setClientFilter(match);
+  }, [clientOptions, clientFilter]);
+
   const filtered = orders.filter(o => {
     const q = search.toLowerCase();
     const matchSearch = !q || [o.order_number, o.product, o.client, o.requester].some(v => (v || '').toLowerCase().includes(q));
-    const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+    const displayStatus = getDisplayStatus(o);
+    const matchStatus = statusFilter === 'all' || displayStatus === statusFilter;
     const matchClient = !clientFilter || matchesClient(o, clientFilter);
     return matchSearch && matchStatus && matchClient;
   });
@@ -159,7 +187,12 @@ export default function Pedidos() {
   };
 
   const StatusBadge = ({ status }) => {
-    const c = { Pendente: 'bg-amber-100 text-amber-700', 'Em produção': 'bg-blue-100 text-blue-700', Finalizado: 'bg-green-100 text-green-700' };
+    const c = {
+      Pendente: 'bg-amber-100 text-amber-700',
+      'Em produção': 'bg-blue-100 text-blue-700',
+      Finalizado: 'bg-green-100 text-green-700',
+      Atrasado: 'bg-red-100 text-red-700',
+    };
     return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{translateOrderStatus(status)}</span>;
   };
 
@@ -180,17 +213,25 @@ export default function Pedidos() {
 
       {/* Card: fixed search, scrollable table, fixed footer */}
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3">
-          <div className="relative flex-1 max-w-md">
+        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 max-w-md min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder={t('orders.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
           </div>
+          <Select value={clientFilter || 'all'} onValueChange={v => setClientFilter(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('orders.allClients')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('orders.allClients')}</SelectItem>
+              {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-44"><SelectValue placeholder={t('orders.allStatuses')} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('orders.allStatuses')}</SelectItem>
               <SelectItem value="Pendente">{t('orders.status.pending')}</SelectItem>
               <SelectItem value="Em produção">{t('orders.status.inProduction')}</SelectItem>
+              <SelectItem value="Atrasado">{t('orders.status.late')}</SelectItem>
               <SelectItem value="Finalizado">{t('orders.status.finished')}</SelectItem>
             </SelectContent>
           </Select>
@@ -220,7 +261,8 @@ export default function Pedidos() {
               </thead>
               <tbody>
                 {filtered.map(o => {
-                  const isLate = o.status !== 'Finalizado' && o.expected_date && moment(o.expected_date, 'YYYY-MM-DD').isBefore(moment(), 'day');
+                  const isLate = isOrderLate(o);
+                  const displayStatus = getDisplayStatus(o);
                   return (
                     <tr key={o.id} className="border-b border-gray-50 hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
@@ -238,7 +280,7 @@ export default function Pedidos() {
                           {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-center"><StatusBadge status={o.status} /></td>
+                      <td className="px-4 py-2.5 text-center"><StatusBadge status={displayStatus} /></td>
                       <td className="px-4 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>

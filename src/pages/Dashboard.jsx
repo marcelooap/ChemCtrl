@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -14,12 +14,14 @@ import {
 import ExecutiveKpiCard from '@/components/dashboard/ExecutiveKpiCard';
 import ProductDistributionSection from '@/components/dashboard/ProductDistributionSection';
 import ClientVolumeRevenueChart from '@/components/dashboard/ClientVolumeRevenueChart';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   computeExecutiveKpis,
   buildMonthlySeries,
   buildProductDistribution,
   buildClientVolumeRevenueSeries,
   buildProducoesFilterUrl,
+  getFinishDate,
 } from '@/lib/dashboardMetrics';
 import { canAccessRoute } from '@/lib/permissions';
 
@@ -31,6 +33,11 @@ const COLORS = {
   purple: '#7c3aed',
   gray: '#9ca3af',
 };
+
+const MONTH_KEYS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
 
 function ChartCard({ title, children, className }) {
   return (
@@ -50,28 +57,54 @@ export default function Dashboard() {
     () => base44.entities.Production.list('-created_date', 2000),
   );
 
-  const now = useMemo(() => moment(), []);
+  const today = useMemo(() => moment(), []);
+  const [selectedMonth, setSelectedMonth] = useState(today.month());
+  const [selectedYear, setSelectedYear] = useState(today.year());
+
+  const referenceDate = useMemo(() => {
+    const isCurrentPeriod = selectedMonth === today.month() && selectedYear === today.year();
+    if (isCurrentPeriod) return today.clone().toDate();
+    return moment({ year: selectedYear, month: selectedMonth, day: 15 }).toDate();
+  }, [selectedMonth, selectedYear, today]);
+
+  const yearOptions = useMemo(() => {
+    const years = new Set([today.year(), selectedYear]);
+    for (let y = today.year(); y >= today.year() - 5; y -= 1) years.add(y);
+    productions.forEach((p) => {
+      const finishDate = getFinishDate(p);
+      if (finishDate) years.add(moment(finishDate).year());
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [productions, today, selectedYear]);
+
   const canNavigate = canAccessRoute(user, '/producoes');
 
   const fmtVol = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
 
-  const kpis = useMemo(() => computeExecutiveKpis(productions, now.toDate()), [productions, now]);
+  const kpis = useMemo(() => computeExecutiveKpis(productions, referenceDate), [productions, referenceDate]);
   const monthlyData = useMemo(
-    () => buildMonthlySeries(productions, now.year(), now.toDate(), i18n.language),
-    [productions, now, i18n.language],
+    () => buildMonthlySeries(productions, selectedYear, referenceDate, i18n.language),
+    [productions, selectedYear, referenceDate, i18n.language],
   );
   const distribution = useMemo(
-    () => buildProductDistribution(productions, now.toDate()),
-    [productions, now],
+    () => buildProductDistribution(productions, referenceDate, {
+      year: selectedYear,
+      month: selectedMonth,
+    }),
+    [productions, referenceDate, selectedYear, selectedMonth],
   );
   const clientVolumeRevenue = useMemo(
-    () => buildClientVolumeRevenueSeries(productions, { year: now.year(), referenceDate: now.toDate() }),
-    [productions, now],
+    () => buildClientVolumeRevenueSeries(productions, {
+      year: selectedYear,
+      month: selectedMonth,
+      referenceDate,
+    }),
+    [productions, selectedYear, selectedMonth, referenceDate],
   );
 
   const navigateToProducoes = (product) => {
     if (!canNavigate) return;
-    navigate(buildProducoesFilterUrl({ product, referenceDate: now.toDate() }));
+    navigate(buildProducoesFilterUrl({ product, referenceDate }));
   };
 
   const getComparison = (change) => (change == null ? null : change);
@@ -84,21 +117,61 @@ export default function Dashboard() {
     );
   }
 
-  const subtitleDate = fmtDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' }, i18n.language);
+  const isCurrentPeriod = selectedMonth === today.month() && selectedYear === today.year();
+  const subtitleDate = isCurrentPeriod
+    ? fmtDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' }, i18n.language)
+    : fmtDate(referenceDate, { month: 'long', year: 'numeric' }, i18n.language);
   const hasMonthlyData = monthlyData.some((m) => m.volume > 0 || m.revenue > 0);
   const emptyMessage = t('dashboard.empty');
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('dashboard.subtitleProduction', { date: subtitleDate })}</p>
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('dashboard.subtitleProduction', { date: subtitleDate })}</p>
+        </div>
+        <div className="bg-card rounded-xl shadow-sm border border-border px-3 py-2 flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('dashboard.filters.month')}</label>
+            <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+              <SelectTrigger className="h-8 text-xs mt-0.5 w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTH_KEYS.map((key, index) => (
+                  <SelectItem key={key} value={String(index)} className="text-xs">
+                    {t(`common.months.${key}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('dashboard.filters.year')}</label>
+            <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+              <SelectTrigger className="h-8 text-xs mt-0.5 w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => (
+                  <SelectItem key={year} value={String(year)} className="text-xs">
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <ExecutiveKpiCard
           title={t('dashboard.stats.volumeProducedMonth')}
           value={kpis.hasCurrentData ? `${fmtVol(kpis.volumeCurrent)} L` : '-'}
+          subtitle={t('dashboard.stats.massProduced', {
+            mass: fmtNumber(kpis.massCurrent || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language),
+          })}
           comparison={kpis.hasCurrentData ? getComparison(kpis.volumeChange) : undefined}
           comparisonLabel={kpis.hasCurrentData && kpis.volumeChange != null ? t('dashboard.stats.vsPreviousMonth') : undefined}
           icon={BarChart3}
@@ -129,11 +202,12 @@ export default function Dashboard() {
         />
         <ExecutiveKpiCard
           title={t('dashboard.stats.avgPricePerKg')}
-          value={kpis.avgPriceCurrent != null
-            ? `${fmtCurrency(kpis.avgPriceCurrent, 'BRL', i18n.language)}/${t('common.units.kg')}`
-            : '-'}
-          comparison={kpis.avgPriceCurrent != null ? getComparison(kpis.avgPriceChange) : undefined}
-          comparisonLabel={kpis.avgPriceCurrent != null && kpis.avgPriceChange != null ? t('dashboard.stats.vsPreviousMonth') : undefined}
+          value={`${fmtCurrency(kpis.avgPriceCurrent, 'BRL', i18n.language, {
+            minimumFractionDigits: 4,
+            maximumFractionDigits: 4,
+          })}/${t('common.units.kg')}`}
+          comparison={kpis.massCurrent > 0 ? getComparison(kpis.avgPriceChange) : undefined}
+          comparisonLabel={kpis.massCurrent > 0 && kpis.avgPriceChange != null ? t('dashboard.stats.vsPreviousMonth') : undefined}
           icon={Scale}
           color={COLORS.purple}
           clickable={canNavigate}
@@ -214,6 +288,7 @@ export default function Dashboard() {
       </ChartCard>
 
       <ProductDistributionSection
+        key={`product-dist-${selectedYear}-${selectedMonth}`}
         title={t('dashboard.charts.productDistribution')}
         items={distribution.items}
         total={distribution.total}

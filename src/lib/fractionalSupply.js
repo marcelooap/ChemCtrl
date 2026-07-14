@@ -84,7 +84,7 @@ export const mpQtyNeededKg = (mp, mass, density) => {
   return (mp.percentage / 100) * mass;
 };
 
-export const calcMpDeficits = (recipe, production, stocks) => {
+export const calcMpDeficits = (recipe, production) => {
   const rawMaterials = parseArr(recipe?.raw_materials);
   const used = parseArr(production?.raw_materials_used);
   const mass = production?.mass || (production?.volume || 0) * (production?.density || 1);
@@ -98,7 +98,7 @@ export const calcMpDeficits = (recipe, production, stocks) => {
         .reduce((s, u) => s + (u.qty_operational || 0), 0);
       const deficitKg = round3(Math.max(0, neededKg - allocatedKg));
       if (deficitKg < 0.001) return null;
-      const volEquiv = density > 0 ? round3((deficitKg / mass) * (production?.volume || 0)) : 0;
+      const volEquiv = mass > 0 ? round3((deficitKg / mass) * (production?.volume || 0)) : 0;
       return {
         mp_code: rm.mp_code,
         mp_name: rm.mp_name,
@@ -109,13 +109,29 @@ export const calcMpDeficits = (recipe, production, stocks) => {
         qty_allocated_kg: round3(allocatedKg),
         deficit_kg: deficitKg,
         deficit_volume_l: volEquiv,
-        lots: [
-          { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 },
-          { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 },
-        ],
+        lots: [{
+          stock_id: '',
+          lot: '',
+          qty_fiscal: deficitKg,
+          qty_operational: deficitKg,
+          qty_operational_raw: deficitKg,
+        }],
       };
     })
     .filter(Boolean);
+};
+
+/** Merge freshly calculated deficits with existing user lot selections (preserve lots). */
+export const mergeMpDeficitsPreservingLots = (freshDeficits, previousList) => {
+  const prevByCode = new Map((previousList || []).map((mp) => [mp.mp_code, mp]));
+  return freshDeficits.map((fresh) => {
+    const prev = prevByCode.get(fresh.mp_code);
+    if (!prev) return fresh;
+    return {
+      ...fresh,
+      lots: prev.lots?.length ? prev.lots : fresh.lots,
+    };
+  });
 };
 
 export const flattenAllocatedLots = (mpList) =>

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProductCombobox from '@/components/ui/ProductCombobox';
+import Combobox from '@/components/ui/combobox';
 import { X, Loader2 } from 'lucide-react';
 import moment from 'moment';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
@@ -26,6 +27,7 @@ import {
   buildSupplyHistoryEntry,
   flattenAllocatedLots,
   calcMpDeficits,
+  mergeMpDeficitsPreservingLots,
   mpQtyNeededKg,
 } from '@/lib/fractionalSupply';
 
@@ -98,6 +100,8 @@ export default function NovaProducao() {
   const { data: recipes, loading } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) }));
   const { data: allOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
+  const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
+  const { data: productionsList } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const navigate = useNavigate();
   const { user: internalUser } = useInternalAuth();
 
@@ -117,6 +121,49 @@ export default function NovaProducao() {
   const [saving, setSaving] = useState(false);
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);
+
+  const packagingOptions = useMemo(() => {
+    const isDashOnly = (v) => !v || /^[\-–—]+$/.test(v);
+    const normalizeLabel = (raw) => {
+      let s = String(raw || '').trim();
+      if (!s) return '';
+      // Remove hífens/traços soltos nas extremidades (ex.: "- TANKA 38", "TANKA 38 -")
+      s = s.replace(/^(?:[\s\-–—]+)+|(?:[\s\-–—]+)+$/g, '').trim();
+      // Colapsa sufixos tipo "TANKA 38 - -"
+      s = s.replace(/(?:\s*[\-–—]\s*)+$/g, '').trim();
+      return s;
+    };
+
+    const seen = new Map();
+    const add = (raw) => {
+      const trimmed = normalizeLabel(raw);
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!seen.has(key)) seen.set(key, trimmed);
+    };
+
+    (containers || [])
+      .filter(c => c.status === 'No Pátio')
+      .forEach(c => {
+        const plateRaw = (c.container_number || '').trim();
+        const barrilRaw = (c.barril_number || '').trim();
+        const plate = isDashOnly(plateRaw) ? '' : plateRaw;
+        const barril = isDashOnly(barrilRaw) ? '' : barrilRaw;
+        if (!plate && !barril) return;
+        // Só junta placa + barril quando ambos são úteis (evita "TANKA 38 - -")
+        if (plate && barril) add(`${plate} - ${barril}`);
+        else add(plate || barril);
+      });
+
+    (productionsList || []).forEach(p => {
+      add(p.packaging_type);
+      add(p.packaging_info);
+    });
+
+    return Array.from(seen.values())
+      .sort((a, b) => a.localeCompare(b))
+      .map(label => ({ value: label, label }));
+  }, [containers, productionsList]);
 
   useEffect(() => {
     if (!isComplementMode || !complementId) return;
@@ -178,12 +225,19 @@ export default function NovaProducao() {
 
   useEffect(() => {
     if (!isComplementMode || !complementProduction || !complementRecipe) return;
-    setDeficitMpList(calcMpDeficits(complementRecipe, complementProduction, stocks));
+    // Re-run on stocks poll so derived deficit metadata stays fresh; lot selections are preserved.
+    void stocks;
+    const fresh = calcMpDeficits(complementRecipe, complementProduction);
+    setDeficitMpList((prev) => {
+      if (!prev.length) return fresh;
+      return mergeMpDeficitsPreservingLots(fresh, prev);
+    });
   }, [isComplementMode, complementProduction, complementRecipe, stocks]);
 
   const recalculateMp = (mp, mass, density) => {
-    const vol = density > 0 ? mass / density : 0;
-    const qtyNeededKg = mpQtyNeededKg(mp, mass, density);
+    const qtyNeededKg = (isComplementMode && mp.deficit_kg != null)
+      ? mp.deficit_kg
+      : mpQtyNeededKg(mp, mass, density);
     let remainingKg = qtyNeededKg;
     const lots = mp.lots.map(lot => {
       if (lot.locked) return lot;
@@ -211,6 +265,21 @@ export default function NovaProducao() {
       };
     });
     return { ...mp, lots, qty_needed_raw: qtyNeededKg };
+  };
+
+  const ensureSingleEmptyLotIfNeeded = (mp) => {
+    const neededKg = (isComplementMode && mp.deficit_kg != null)
+      ? mp.deficit_kg
+      : (mp.qty_needed_raw ?? 0);
+    const filled = mp.lots.filter((l) => l.stock_id);
+    const totalUsed = filled.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
+    const remaining = neededKg - totalUsed;
+    let lots = [...filled];
+    if (remaining > 0.001 || lots.length === 0) {
+      const empty = mp.lots.find((l) => !l.stock_id);
+      lots.push(empty || { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0, qty_operational_raw: 0 });
+    }
+    return { ...mp, lots };
   };
 
   const handleProductSelect = (productName) => {
@@ -262,15 +331,22 @@ export default function NovaProducao() {
       const recalculated = updated.map((mp, i) => i === mpIdx ? recalculateMp(mp, mass, density) : mp);
 
       const mp = recalculated[mpIdx];
-      const totalUsed = mp.lots.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
-      const neededKg = mp.deficit_kg ?? mp.qty_needed_raw ?? 0;
-      const diff = neededKg - totalUsed;
-      const isLastLot = lotIdx === mp.lots.length - 1;
-      if (isLastLot && diff > 0.001) {
-        recalculated[mpIdx] = {
-          ...mp,
-          lots: [...mp.lots, { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
-        };
+      if (isComplementMode) {
+        let next = ensureSingleEmptyLotIfNeeded(mp);
+        next = recalculateMp(next, mass, density);
+        next = ensureSingleEmptyLotIfNeeded(next);
+        recalculated[mpIdx] = next;
+      } else {
+        const totalUsed = mp.lots.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
+        const neededKg = mp.qty_needed_raw ?? 0;
+        const diff = neededKg - totalUsed;
+        const isLastLot = lotIdx === mp.lots.length - 1;
+        if (isLastLot && diff > 0.001) {
+          recalculated[mpIdx] = {
+            ...mp,
+            lots: [...mp.lots, { stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
+          };
+        }
       }
       return recalculated;
     });
@@ -333,7 +409,18 @@ export default function NovaProducao() {
       const lots = updated[mpIdx].lots.filter((_, i) => i !== lotIdx);
       const newLots = lots.length ? lots : [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }];
       updated[mpIdx] = { ...updated[mpIdx], lots: newLots };
-      return updated.map((mp, i) => i === mpIdx ? recalculateMp(mp, form.mass, parseFloat(form.density) || 1) : mp);
+      const mass = form.mass;
+      const density = parseFloat(form.density) || 1;
+      return updated.map((mp, i) => {
+        if (i !== mpIdx) return mp;
+        let next = recalculateMp(mp, mass, density);
+        if (isComplementMode) {
+          next = ensureSingleEmptyLotIfNeeded(next);
+          next = recalculateMp(next, mass, density);
+          next = ensureSingleEmptyLotIfNeeded(next);
+        }
+        return next;
+      });
     });
   };
 
@@ -516,13 +603,13 @@ export default function NovaProducao() {
     }
   };
 
-  const renderLotRows = (list, listSetter, { readOnly = false, maxKgByMp = null } = {}) => (
+  const renderLotRows = (list, listSetter, { readOnly = false, maxKgByMp = null, hideAddLot = false } = {}) => (
     <div className="space-y-4">
       {list.map((mp, idx) => {
         const totalUsed = mp.lots.reduce((s, l) => s + (l.qty_operational_raw || l.qty_operational || 0), 0);
         const maxKg = maxKgByMp ? (mp.deficit_kg ?? null) : null;
         return (
-          <div key={idx} className="border rounded-lg overflow-hidden bg-card">
+          <div key={mp.mp_code || idx} className="border rounded-lg overflow-hidden bg-card">
             <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/50/50 flex-wrap">
               <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: '#E0E7FF', color: '#4338CA' }}>{mp.mp_code}</span>
               <span className="text-sm font-semibold">{mp.mp_name}</span>
@@ -543,14 +630,15 @@ export default function NovaProducao() {
                 const availableStocks = stocks.filter(s =>
                   s.mp_code === mp.mp_code && !usedStockIds.includes(s.id) && (s.current_stock || 0) > 0
                 );
+                const lotRowKey = `${mp.mp_code}-lot-${lotIdx}`;
                 return (
-                  <div key={lotIdx} className="grid grid-cols-12 gap-2 items-start">
+                  <div key={lotRowKey} className="grid grid-cols-12 gap-2 items-start">
                     <div className="col-span-4">
                       <label className="text-xs text-muted-foreground">{t('common.lot')}</label>
                       {isLocked ? (
                         <Input value={lot.lot || stock?.lot || t('common.notAvailable')} readOnly className="h-8 text-xs bg-muted/50" />
                       ) : (
-                        <Select value={lot.stock_id} onValueChange={v => handleLotSelect(idx, lotIdx, v, listSetter, list)}>
+                        <Select value={lot.stock_id || undefined} onValueChange={v => handleLotSelect(idx, lotIdx, v, listSetter, list)}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('production.newProduction.selectLot')} /></SelectTrigger>
                           <SelectContent>
                             {availableStocks.map(s => (
@@ -572,7 +660,7 @@ export default function NovaProducao() {
                       {!isLocked && lot.stock_id && (
                         <Button variant="ghost" size="sm" onClick={() => removeLot(idx, lotIdx, listSetter)} className="h-8 text-xs text-red-500"><X className="w-3 h-3" /></Button>
                       )}
-                      {!isLocked && lotIdx === mp.lots.length - 1 && (
+                      {!isLocked && !hideAddLot && lotIdx === mp.lots.length - 1 && (
                         <Button variant="outline" size="sm" onClick={() => addLot(idx, listSetter)} className="h-8 text-xs">{t('production.newProduction.addLot')}</Button>
                       )}
                     </div>
@@ -679,7 +767,19 @@ export default function NovaProducao() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.density')}</label><Input type="number" step="0.001" value={form.density} readOnly={isComplementMode} onChange={e => handleDensityChange(e.target.value)} className={isComplementMode ? 'bg-muted/50' : ''} /></div>
           <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.massCalculated')}</label><Input value={fmt3(form.mass)} readOnly className="bg-muted/50" /></div>
-          <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.destinationPackaging')}</label><Input value={form.packaging_type} readOnly={isComplementMode} onChange={e => setForm({ ...form, packaging_type: e.target.value })} className={isComplementMode ? 'bg-muted/50' : ''} placeholder={t('production.newProduction.packagingPlaceholder')} /></div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.destinationPackaging')}</label>
+            {isComplementMode ? (
+              <Input value={form.packaging_type} readOnly className="bg-muted/50" placeholder={t('production.newProduction.packagingPlaceholder')} />
+            ) : (
+              <Combobox
+                value={form.packaging_type}
+                onValueChange={v => setForm({ ...form, packaging_type: v })}
+                options={packagingOptions}
+                placeholder={t('production.newProduction.packagingPlaceholder')}
+              />
+            )}
+          </div>
         </div>
 
         {!isComplementMode && (
@@ -727,7 +827,7 @@ export default function NovaProducao() {
         {isComplementMode && deficitMpList.length > 0 && (
           <div className="mt-6">
             <h3 className="text-sm font-semibold mb-3">{t('production.fractional.newLotsSection')}</h3>
-            {renderLotRows(deficitMpList, setDeficitMpList, { maxKgByMp: true })}
+            {renderLotRows(deficitMpList, setDeficitMpList, { maxKgByMp: true, hideAddLot: true })}
           </div>
         )}
 

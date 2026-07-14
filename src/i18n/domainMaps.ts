@@ -105,6 +105,7 @@ export const ORDER_STATUS_KEYS: Record<string, string> = {
   'Em produção': 'orders.status.inProduction',
   Finalizado: 'orders.status.finished',
   Parcial: 'orders.status.partial',
+  Atrasado: 'orders.status.late',
 };
 
 export const QC_STATUS_KEYS: Record<string, string> = {

@@ -5,15 +5,17 @@ import { base44 } from '@/api/base44Client';
 import { uploadFileToSupabase } from '@/api/storage';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Pencil, FileText, Camera, Trash2, Loader2 } from 'lucide-react';
+import { Search, Pencil, FileText, Camera, Trash2, Loader2, Eye } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { generateCOAPDF } from '@/lib/pdfReports';
 import SignedImage from '@/components/SignedImage';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import COAViewDialog, { formatPackagingLabel } from '@/components/qualidade/COAViewDialog';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
 
@@ -30,10 +32,14 @@ export default function COA() {
   const parseResults = (r) => ({ ...r, results: parseArr(r.results) });
   const { data: results, loading, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500), [], parseResults);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
+  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('all');
   const [showEdit, setShowEdit] = useState(false);
+  const [showView, setShowView] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [editForm, setEditForm] = useState({ analyst: '', observations: '', results: [] });
   const [generatingPDF, setGeneratingPDF] = useState(null);
   const { toast } = useToast();
@@ -54,6 +60,30 @@ export default function COA() {
     return fmtNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }, i18n.language);
   }, [na, i18n.language]);
 
+  const containersByOp = useMemo(() => {
+    const map = new Map();
+    (containers || []).forEach(c => {
+      const op = (c.op_number || '').trim();
+      if (!op) return;
+      if (!map.has(op)) map.set(op, []);
+      map.get(op).push(c);
+    });
+    return map;
+  }, [containers]);
+
+  const packagingByOp = useMemo(() => {
+    const map = new Map();
+    (productions || []).forEach(p => {
+      const op = (p.op_number || '').trim();
+      if (!op) return;
+      const values = [];
+      if (p.packaging_type?.trim()) values.push(p.packaging_type.trim());
+      if (p.packaging_info?.trim()) values.push(p.packaging_info.trim());
+      if (values.length) map.set(op, values);
+    });
+    return map;
+  }, [productions]);
+
   const clientOptions = useMemo(() => {
     const set = new Set();
     (recipes || []).forEach(r => { if (r.client?.trim()) set.add(r.client.trim()); });
@@ -62,13 +92,43 @@ export default function COA() {
   }, [recipes, results, i18n.language]);
 
   const filtered = results.filter(r => {
-    const q = search.toLowerCase();
-    const matchSearch = !q || [r.product, r.lot, r.op_number].some(v => (v || '').toLowerCase().includes(q));
+    const q = search.toLowerCase().trim();
+    const opContainers = containersByOp.get(r.op_number) || [];
+    const packagingTypes = packagingByOp.get(r.op_number) || [];
+    const matchSearch = !q || [
+      r.product,
+      r.lot,
+      r.op_number,
+      ...opContainers.map(c => c.container_number),
+      ...opContainers.map(c => c.barril_number),
+      ...packagingTypes,
+    ].some(v => (v || '').toLowerCase().includes(q));
     const matchClient = clientFilter === 'all' || (r.client || '') === clientFilter;
     return matchSearch && matchClient;
   });
 
   const openEdit = (r) => { setEditing(r); setEditForm({ analyst: r.analyst, observations: r.observations || '', results: parseArr(r.results), sample_photo_url: r.sample_photo_url || '' }); setShowEdit(true); };
+  const openView = (r) => { setViewing(r); setShowView(true); };
+
+  const renderPackagingCell = (r) => {
+    const list = containersByOp.get(r.op_number) || [];
+    if (list.length === 0) return na;
+    if (list.length === 1) {
+      return (list[0].container_number || '').trim() || na;
+    }
+    const countLabel = t('quality.coaPage.packagingCount', { count: String(list.length).padStart(2, '0') });
+    const tooltipText = list.map(formatPackagingLabel).filter(Boolean).join('\n');
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default underline decoration-dotted underline-offset-2">{countLabel}</span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs whitespace-pre-line bg-popover text-popover-foreground border shadow-md">
+          {tooltipText}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -100,18 +160,19 @@ export default function COA() {
   const handleGeneratePDF = async (r) => {
     setGeneratingPDF(r.id);
     try {
-      const productions = await base44.entities.Production.filter({ op_number: r.op_number });
-      const production = productions[0] || null;
-      const containers = await base44.entities.Container.filter({ op_number: r.op_number });
+      const production = (productions || []).find(p => p.op_number === r.op_number) || null;
+      const opContainers = containersByOp.get(r.op_number) || [];
       let recipe = null;
       if (production?.recipe_id) {
-        try { recipe = await base44.entities.Recipe.get(production.recipe_id); } catch (_) {}
+        recipe = (recipes || []).find(rc => rc.id === production.recipe_id) || null;
+        if (!recipe) {
+          try { recipe = await base44.entities.Recipe.get(production.recipe_id); } catch { /* keep null */ }
+        }
       }
       if (!recipe) {
-        const recipeList = await base44.entities.Recipe.filter({ product_name: r.product });
-        recipe = recipeList[0] || null;
+        recipe = (recipes || []).find(rc => rc.product_name === r.product) || null;
       }
-      await generateCOAPDF({ ...r, results: parseArr(r.results) }, production, containers, recipe);
+      await generateCOAPDF({ ...r, results: parseArr(r.results) }, production, opContainers, recipe);
     } catch (e) {
       console.error(e);
       toast({ title: t('errors.pdfFailed'), variant: 'destructive' });
@@ -128,6 +189,7 @@ export default function COA() {
   const aprovados = results.filter(r => r.status === 'Aprovado').length;
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="mb-4 shrink-0">
         <h1 className="text-2xl font-bold">{t('quality.coaPage.title')}</h1>
@@ -150,7 +212,7 @@ export default function COA() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-gray-50 bg-muted/50">
                 <th className="px-4 py-3 text-left">{t('production.opNumber')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
-                <th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-left">{t('quality.coaPage.analysisDate')}</th><th className="px-4 py-3 text-left">{t('quality.fields.analyst')}</th>
+                <th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th><th className="px-4 py-3 text-left">{t('quality.coaPage.packagingColumn')}</th><th className="px-4 py-3 text-left">{t('quality.coaPage.analysisDate')}</th><th className="px-4 py-3 text-left">{t('quality.fields.analyst')}</th>
                 <th className="px-4 py-3 text-center">{t('quality.coaPage.qcStatus')}</th><th className="px-4 py-3 text-center">{t('quality.coaPage.editColumn')}</th><th className="px-4 py-3 text-center">{t('quality.coa')}</th>
               </tr></thead>
               <tbody>
@@ -167,10 +229,22 @@ export default function COA() {
                         )}
                       </span>
                     </td>
+                    <td className="px-4 py-2.5 text-sm">{renderPackagingCell(r)}</td>
                     <td className="px-4 py-2.5 text-sm">{r.date ? fmtDate(r.date, undefined, i18n.language) : na}</td>
                     <td className="px-4 py-2.5 text-sm">{r.analyst}</td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(r.status)}</td>
-                    <td className="px-4 py-2.5 text-center">{!isReadOnly && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
+                          <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                        {!isReadOnly && (
+                          <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
+                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-2.5 text-center">
                       {(() => {
                         const hasResults = parseArr(r.results).length > 0 && parseArr(r.results).some(res => res.result);
@@ -211,6 +285,13 @@ export default function COA() {
           </div>
         </div>
       </div>
+
+      <COAViewDialog
+        open={showView}
+        onOpenChange={setShowView}
+        result={viewing}
+        containers={viewing ? (containersByOp.get(viewing.op_number) || []) : []}
+      />
 
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -266,5 +347,6 @@ export default function COA() {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }

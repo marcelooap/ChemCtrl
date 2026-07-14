@@ -419,6 +419,7 @@
       "topProduct": "Top Volume Product",
       "topProductShare": "{{percent}}% of monthly production",
       "avgPricePerKg": "Average Price per kg",
+      "massProduced": "Mass produced: {{mass}} kg",
       "vsPreviousMonth": "vs previous month",
       "noComparison": "-"
     },
@@ -455,6 +456,8 @@
     },
     "filters": {
       "period": "Period",
+      "month": "Month",
+      "year": "Year",
       "product": "Product",
       "client": "Client"
     },
@@ -564,7 +567,7 @@
       "density": "Density (g/mL)",
       "massCalculated": "Mass (kg) — calculated",
       "destinationPackaging": "Destination Packaging",
-      "packagingPlaceholder": "E.g.: 200L drum, 1000L IBC...",
+      "packagingPlaceholder": "E.g.: 1513341008 - 805780-9, TANKA 01...",
       "rawMaterialAllocation": "Raw Material Allocation",
       "rawMaterialAllocationHelp": "Quantities are calculated in kg automatically. When selecting a lot, Fiscal Qty converts to the stock unit. Use \"+ Lot\" to mix lots.",
       "percentMass": "%m/m: {{value}}%",
@@ -593,6 +596,8 @@
       "complementStatusComplete": "Complete",
       "complementStatusPending": "Pending",
       "complementAction": "Complement Production",
+      "complementConfirmTitle": "Start production complement",
+      "complementConfirmMessage": "The complement process for this Production Order will be started using the pending balance.\n\nDo you want to continue?",
       "finalizeComplement": "Finalize Complement",
       "complementTitle": "Complement Production",
       "complementSubtitle": "Enter the remaining lots to close the mass balance.",
@@ -651,6 +656,7 @@
     },
     "list": {
       "subtitle": "{{count}} production(s) recorded",
+      "subtitleFiltered": "{{filtered}} of {{total}} production(s)",
       "searchPlaceholder": "Search by PO, product, lot, client...",
       "allClients": "All clients",
       "finishDateFrom": "Finish date from",
@@ -659,9 +665,9 @@
       "packagingCol": "Packaging",
       "stage": "Stage",
       "billingSend": "Send to Billing",
-      "totalOps": "Total POs: {{count}}",
-      "activeOps": "Active POs: {{count}}",
-      "finishedVolume": "Total finished volume: {{volume}} L",
+      "totalOps": "Total POs",
+      "activeOps": "Active POs",
+      "finishedVolume": "Total finished volume",
       "finishDate": "Finish Date",
       "revision": "Revision",
       "unitPricePerKg": "{{price}}/kg",
@@ -939,7 +945,7 @@
     "title": "Quality Control",
     "tests": "Tests",
     "pending": "Pending Analysis",
-    "coa": "Certificate of Analysis (COA)",
+    "coa": "COA",
     "equipment": {
       "title": "Equipment",
       "calibration": "Calibration",
@@ -1179,11 +1185,17 @@
     "coaPage": {
       "title": "📜 Certificates of Analysis (COA)",
       "subtitle": "{{count}} COA(s) available",
-      "searchPlaceholder": "Search by product or lot...",
+      "searchPlaceholder": "Search by product, lot, PO or packaging...",
       "allClients": "All Clients",
       "analysisDate": "Analysis Date",
       "qcStatus": "QC Status",
-      "editColumn": "Edit",
+      "editColumn": "Actions",
+      "packagingColumn": "Packaging",
+      "packagingCount": "{{count}} Packages",
+      "relatedPackaging": "Related Packaging",
+      "coaData": "COA Details",
+      "analyticalResults": "Analytical Results",
+      "viewTitle": "View COA — {{product}} · Lot {{lot}}",
       "samplePhotoTitle": "Sample photo recorded",
       "resultsNotRegistered": "Results not yet registered",
       "approvedCoas": "Approved COAs",
@@ -1315,11 +1327,13 @@
     "editOrder": "Edit Order · {{number}}",
     "searchPlaceholder": "Search by ID, product, client...",
     "allStatuses": "All statuses",
+    "allClients": "All clients",
     "status": {
       "pending": "Pending",
       "inProduction": "In production",
       "finished": "Finished",
-      "partial": "Partial"
+      "partial": "Partial",
+      "late": "Late"
     },
     "table": {
       "id": "ID",
@@ -2415,7 +2429,8 @@
       "table": {
         "record": "Record",
         "totalVolume": "Total Vol. (L)",
-        "destination": "Destination"
+        "destination": "Destination",
+        "driver": "Driver"
       },
       "footer": {
         "records": "Records",

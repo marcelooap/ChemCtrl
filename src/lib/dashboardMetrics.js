@@ -1,6 +1,9 @@
 import moment from 'moment';
 import { matchesClient } from '@/lib/permissions';
-import { getManualMonthlyTotal } from '@/lib/dashboardManualData';
+import {
+  getManualMonthlyTotal,
+  getManualMonthlyClients,
+} from '@/lib/dashboardManualData';
 
 const CLIENT_LABEL_MAX = 14;
 
@@ -20,6 +23,17 @@ export function getMass(production) {
   const volume = parseFloat(production.volume) || 0;
   const density = parseFloat(production.density) || 1;
   return volume * density;
+}
+
+/** Massa real registrada na OP (sem estimativa volume × densidade). */
+export function getRegisteredMass(production) {
+  const mass = parseFloat(production.mass);
+  if (!Number.isNaN(mass) && mass > 0) return mass;
+  return 0;
+}
+
+export function sumRegisteredMass(productions) {
+  return productions.reduce((s, p) => s + getRegisteredMass(p), 0);
 }
 
 export function getRevenue(production) {
@@ -44,12 +58,8 @@ export function monthComparison(current, previous) {
 }
 
 function resolveMonthTotals(productions, year, month) {
-  const monthProds = getFinishedProductions(productions, { month, year });
-  const volume = monthProds.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
-  const revenue = monthProds.reduce((s, p) => s + getRevenue(p), 0);
   const manual = getManualMonthlyTotal(year, month);
-
-  if (manual && volume === 0 && revenue === 0) {
+  if (manual) {
     return {
       volume: manual.volume,
       revenue: manual.revenue,
@@ -57,10 +67,14 @@ function resolveMonthTotals(productions, year, month) {
     };
   }
 
+  const monthProds = getFinishedProductions(productions, { month, year });
+  const volume = monthProds.reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
+  const revenue = monthProds.reduce((s, p) => s + getRevenue(p), 0);
+
   return {
     volume,
     revenue,
-    hasData: monthProds.length > 0 || (manual != null && (volume > 0 || revenue > 0)),
+    hasData: monthProds.length > 0,
   };
 }
 
@@ -84,11 +98,12 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   const revenueCurrent = currentTotals.revenue;
   const revenuePrevious = previousTotals.revenue;
 
-  const massCurrent = finishedCurrent.reduce((s, p) => s + getMass(p), 0);
-  const massPrevious = finishedPrevious.reduce((s, p) => s + getMass(p), 0);
+  // massaTotalMes — única fonte para card de volume e preço médio/kg
+  const massCurrent = sumRegisteredMass(finishedCurrent);
+  const massPrevious = sumRegisteredMass(finishedPrevious);
 
-  const avgPriceCurrent = massCurrent > 0 ? revenueCurrent / massCurrent : null;
-  const avgPricePrevious = massPrevious > 0 ? revenuePrevious / massPrevious : null;
+  const avgPriceCurrent = massCurrent > 0 ? revenueCurrent / massCurrent : 0;
+  const avgPricePrevious = massPrevious > 0 ? revenuePrevious / massPrevious : 0;
 
   const productMap = {};
   finishedCurrent.forEach((p) => {
@@ -97,7 +112,15 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
   });
 
   let topProduct = null;
-  const entries = Object.entries(productMap).sort((a, b) => b[1] - a[1]);
+  let entries = Object.entries(productMap).sort((a, b) => b[1] - a[1]);
+
+  const manualEntry = getManualMonthlyTotal(currentYear, currentMonth);
+  if (manualEntry) {
+    entries = (manualEntry.products || [])
+      .map((p) => [p.product || '—', parseFloat(p.volume) || 0])
+      .sort((a, b) => b[1] - a[1]);
+  }
+
   if (entries.length > 0 && volumeCurrent > 0) {
     const [name, volume] = entries[0];
     topProduct = {
@@ -114,9 +137,13 @@ export function computeExecutiveKpis(productions, referenceDate = new Date()) {
     revenueCurrent,
     revenuePrevious,
     revenueChange: monthComparison(revenueCurrent, revenuePrevious),
+    massCurrent,
+    massPrevious,
     avgPriceCurrent,
     avgPricePrevious,
-    avgPriceChange: monthComparison(avgPriceCurrent, avgPricePrevious),
+    avgPriceChange: massCurrent > 0 && massPrevious > 0
+      ? monthComparison(avgPriceCurrent, avgPricePrevious)
+      : null,
     topProduct,
     hasCurrentData: currentTotals.hasData,
   };
@@ -144,13 +171,40 @@ export function buildMonthlySeries(productions, year, referenceDate = new Date()
   return months;
 }
 
-export function buildProductDistribution(productions, referenceDate = new Date()) {
+export function buildProductDistribution(
+  productions,
+  referenceDate = new Date(),
+  { year, month } = {},
+) {
   const ref = moment(referenceDate);
-  const finished = getFinishedProductions(productions, {
-    month: ref.month(),
-    year: ref.year(),
-  });
+  const filterYear = year ?? ref.year();
+  const filterMonth = month ?? ref.month();
 
+  // Mês com consolidado manual: usa apenas o breakdown de produtos (mesmo se vazio).
+  const manualEntry = getManualMonthlyTotal(filterYear, filterMonth);
+  if (manualEntry) {
+    const manualProducts = manualEntry.products || [];
+    const items = manualProducts
+      .map((p) => ({
+        product: p.product || '—',
+        volume: parseFloat(p.volume) || 0,
+        percent: 0,
+      }))
+      .sort((a, b) => b.volume - a.volume);
+    const total = items.reduce((s, i) => s + i.volume, 0);
+    return {
+      items: items.map((i) => ({
+        ...i,
+        percent: total > 0 ? (i.volume / total) * 100 : 0,
+      })),
+      total,
+    };
+  }
+
+  const finished = getFinishedProductions(productions, {
+    month: filterMonth,
+    year: filterYear,
+  });
   const productMap = {};
   finished.forEach((p) => {
     const key = p.product || '—';
@@ -188,10 +242,33 @@ export function buildClientVolumeRevenueSeries(
 ) {
   const ref = moment(referenceDate);
   const filterYear = year ?? ref.year();
-  const filterOpts = { year: filterYear };
-  if (month != null) filterOpts.month = month;
+  const filterMonth = month ?? ref.month();
 
-  let finished = getFinishedProductions(productions, filterOpts);
+  if (!client && !product) {
+    const manualClients = getManualMonthlyClients(filterYear, filterMonth);
+    if (manualClients) {
+      return manualClients
+        .map((row) => {
+          const vol = parseFloat(row.volume) || 0;
+          const rev = parseFloat(row.revenue) || 0;
+          const mass = parseFloat(row.mass) > 0 ? parseFloat(row.mass) : vol;
+          return {
+            client: row.client,
+            clientLabel: truncateClientLabel(row.client),
+            volume: Math.round(vol),
+            mass,
+            revenue: Math.round(rev),
+            avgPricePerKg: mass > 0 ? rev / mass : null,
+          };
+        })
+        .sort((a, b) => b.volume - a.volume);
+    }
+  }
+
+  let finished = getFinishedProductions(productions, {
+    year: filterYear,
+    month: filterMonth,
+  });
   if (client) finished = finished.filter((p) => matchesClient(p, client));
   if (product) finished = finished.filter((p) => (p.product || '') === product);
 
