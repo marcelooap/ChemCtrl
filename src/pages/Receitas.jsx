@@ -14,7 +14,7 @@ import SimuladorReceita from '@/components/receitas/SimuladorReceita';
 import RecipeFdsSection, { RecipeFdsViewSection } from '@/components/receitas/RecipeFdsSection';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
-import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds } from '@/lib/permissions';
+import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds, hasPermission } from '@/lib/permissions';
 import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES } from '@/api/storage';
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
@@ -92,6 +92,9 @@ const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density:
 export default function Receitas() {
   const { t } = useTranslation();
   const { user } = useOutletContext();
+  const canCreate = hasPermission(user, 'recipes.create');
+  const canEdit = hasPermission(user, 'recipes.edit');
+  const canDelete = hasPermission(user, 'recipes.delete');
   const canManageFds = canManageRecipeFds(user);
   const canRemoveFds = canRemoveRecipeFds(user);
   const canViewFds = canViewRecipeFds(user);
@@ -293,9 +296,11 @@ export default function Receitas() {
           <Button onClick={() => setShowSimulador(true)} style={{ background: '#1a5fb4' }} className="text-white hover:opacity-90">
             <FlaskConical className="w-4 h-4 mr-2" /> {t('recipes.simulateVolume')}
           </Button>
+          {canCreate && (
           <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> {t('recipes.newRecipe')}
           </Button>
+          )}
         </div>
       </div>
 
@@ -348,8 +353,8 @@ export default function Receitas() {
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                        {canDelete && <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>}
                       </div>
                     </td>
                   </tr>

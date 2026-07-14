@@ -258,16 +258,79 @@
     "containers": "Conteneurs",
     "tankage": "Stockage en Cuve",
     "transfer": "Transfert",
-    "users": "Usuários",
-    "notifications": "Notificações",
+    "users": "Utilisateurs",
+    "profiles": "Profils et Permissions",
+    "usersAndPermissions": "Utilisateurs et Permissions",
+    "notifications": "Notifications",
     "clientScreen": "Portail Client",
     "clientStock": "Stock Client",
     "lockedTooltip": "Accès non autorisé pour votre niveau",
     "appSubtitle": "Contrôle de Production",
     "footer": {
-      "expand": "Expandir sidebar",
-      "collapse": "Recolher sidebar",
-      "logout": "Sair"
+      "expand": "Développer la sidebar",
+      "collapse": "Réduire la sidebar",
+      "logout": "Quitter"
+    }
+  },
+  "accessDenied": {
+    "title": "Accès refusé",
+    "description": "Votre profil n'a pas la permission d'accéder à cet écran.",
+    "goBack": "Retour à l'accueil"
+  },
+  "profiles": {
+    "title": "Profils et Permissions",
+    "subtitle": "Gérez les profils et contrôlez l'accès aux écrans et actions",
+    "new": "Nouveau Profil",
+    "duplicate": "Dupliquer le Profil",
+    "editName": "Modifier le Nom",
+    "savePermissions": "Enregistrer les permissions",
+    "searchPermission": "Rechercher une permission",
+    "selectAll": "Tout cocher",
+    "deselectAll": "Tout décocher",
+    "selectHint": "Sélectionnez un profil à gauche pour modifier les permissions",
+    "backToList": "Retour à la liste",
+    "empty": "Aucun profil trouvé. Appliquez la migration RBAC dans Supabase.",
+    "systemBadge": "Système",
+    "permSummary": "{{granted}} sur {{total}} permissions ({{percent}}%)",
+    "columns": { "name": "Profil", "users": "Utilisateurs", "perms": "Permissions", "status": "Statut" },
+    "fields": { "name": "Nom", "description": "Description", "status": "Statut" },
+    "messages": {
+      "loadError": "Impossible de charger les profils",
+      "loadPermsError": "Impossible de charger les permissions",
+      "saveError": "Erreur lors de l'enregistrement",
+      "saved": "Permissions enregistrées",
+      "created": "Profil créé",
+      "updated": "Profil mis à jour",
+      "duplicated": "Profil dupliqué",
+      "deleted": "Profil supprimé",
+      "deleteError": "Impossible de supprimer le profil",
+      "nameRequired": "Indiquez le nom du profil",
+      "adminProtected": "Le profil Administrateur doit conserver les permissions administratives"
+    },
+    "deleteConfirm": { "title": "Supprimer le profil", "message": "Voulez-vous vraiment supprimer le profil \"{{name}}\" ?" },
+    "discard": { "title": "Modifications non enregistrées", "message": "Il y a des modifications en attente. Les abandonner ?", "confirm": "Abandonner" }
+  },
+  "rbac": {
+    "modules": {
+      "dashboard": "Tableau de bord", "recipes": "Recettes", "orders": "Commandes", "stock": "Stock",
+      "production": "Production", "quality": "Qualité", "clients": "Clients", "administration": "Administration"
+    },
+    "resources": {
+      "home": "Accueil", "dashboard": "Tableau de bord", "recipes": "Recettes", "orders": "Commandes",
+      "rawMaterialStock": "Stock MP", "inventory": "Inventaire", "containers": "Contenants", "tankage": "Cuves",
+      "transfer": "Transfert", "newProduction": "Nouvelle Production", "productions": "Productions",
+      "productionOrders": "Ordres de Production", "qualityTests": "Essais", "qualityPending": "En attente d'analyse",
+      "qualityCoa": "COA", "labEquipment": "Équipements Lab", "clientPortal": "Portail Client",
+      "clientStock": "Stock Client", "users": "Utilisateurs", "profiles": "Profils et Permissions", "notifications": "Notifications"
+    },
+    "actions": {
+      "view": "Voir", "create": "Créer", "edit": "Modifier", "delete": "Supprimer",
+      "createRecipe": "Créer Recette", "editRecipe": "Modifier Recette", "deleteRecipe": "Supprimer Recette",
+      "approveRecipe": "Approuver Recette", "manageFds": "Gérer FDS", "removeFds": "Retirer FDS",
+      "createOp": "Créer OP", "editOp": "Modifier OP", "complementLot": "Compléter Lot",
+      "cancelOp": "Annuler OP", "finishOp": "Terminer OP", "printLabel": "Imprimer Étiquette",
+      "exportExcel": "Exporter Excel", "registerTest": "Enregistrer Essai",
+      "releaseProduction": "Libérer Production", "issueCoa": "Émettre COA"
     }
   },
   "login": {
@@ -294,7 +357,8 @@
       "network": "Erro de conexão. Verifique sua internet.",
       "generic": "Não foi possível realizar o login. Tente novamente.",
       "sessionExpired": "Sua sessão expirou. Faça login novamente.",
-      "unauthorized": "Acesso não autorizado."
+      "unauthorized": "Acesso não autorizado.",
+      "rpcSchema": "Erreur de schéma au login. Exécutez migration_rbac_login_fix.sql dans Supabase."
     }
   },
   "welcome": {
@@ -1226,7 +1290,8 @@
       "phone": "Telefone",
       "lastLogin": "Dernier Accès",
       "cargo": "Fonction",
-      "type": "Type"
+      "type": "Type",
+      "profile": "Profil"
     },
     "roles": {
       "administrator": "Administrateur",
@@ -1264,6 +1329,7 @@
       "fillRequired": "Preencha nome e usuário",
       "passwordRequired": "Informe a senha inicial",
       "roleRequired": "Selecione o nível de acesso",
+      "profileRequired": "Sélectionnez le profil",
       "externalViewOnly": "Usuários externos devem ter nível Visualização",
       "clientRequired": "Informe o cliente para usuários externos",
       "saveError": "Erro ao salvar usuário",
@@ -1295,7 +1361,8 @@
       "passwordNew": "Nouveau mot de passe ou laisser vide",
       "passwordInitial": "Mot de passe initial",
       "cargo": "Ex: Opérateur, Analyste...",
-      "client": "Nom du client"
+      "client": "Nom du client",
+      "profile": "Sélectionnez le profil"
     },
     "deleteConfirm": {
       "title": "Supprimer Utilisateur",

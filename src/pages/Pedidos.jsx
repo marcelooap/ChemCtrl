@@ -17,6 +17,7 @@ import moment from 'moment';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { matchesClient } from '@/lib/permissions';
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
 
@@ -24,6 +25,10 @@ export default function Pedidos() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('orders.create');
+  const canEdit = hasPermission('orders.edit');
+  const canDelete = hasPermission('orders.delete');
   const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
@@ -204,7 +209,7 @@ export default function Pedidos() {
           <h1 className="text-2xl font-bold">📋 {t('orders.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('orders.subtitle', { count: orders.length })}</p>
         </div>
-        {!isReadOnly && (
+        {canCreate && (
           <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> {t('orders.newOrder')}
           </Button>
@@ -286,10 +291,10 @@ export default function Pedidos() {
                           <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
                             <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
-                          {!isReadOnly && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
+                          {canEdit && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
                             <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>}
-                          {!isReadOnly && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
+                          {canDelete && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
                             <Trash2 className="w-3.5 h-3.5 text-red-500" />
                           </button>}
                         </div>

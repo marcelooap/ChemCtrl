@@ -1,65 +1,68 @@
 import i18n from '@/i18n';
 import { ROLE_KEYS } from '@/i18n/domainMaps';
-
-// Role-based access control for ChemCtrl
-// nivel_acesso: Administrador, Supervisor, Operacional, Visualização
-// tipo: interno, externo
+import {
+  getDefaultRouteFromPermissions,
+  getLegacyPermissionsForUser,
+  getViewPermissionForPath,
+  permissionKey,
+} from '@/lib/rbac/permissionCatalog';
 
 function normalizeNivel(user) {
-  return (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return (user?.nivel || user?.nivel_acesso || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function resolvePermissions(user) {
+  if (!user) return [];
+  if (Array.isArray(user.permissions) && user.permissions.length > 0) {
+    return user.permissions;
+  }
+  return getLegacyPermissionsForUser(user);
+}
+
+export function hasPermission(user, key) {
+  return resolvePermissions(user).includes(key);
 }
 
 export function canAccessNotificationsHistory(user) {
-  if (!user || user.tipo === 'externo') return false;
-  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+  return hasPermission(user, 'notifications.view');
 }
 
 export function canAccessRoute(user, path) {
   if (!user) return false;
-
-  if (path.startsWith('/notificacoes')) {
-    return canAccessNotificationsHistory(user);
+  if (path === '/acesso-negado' || path.startsWith('/acesso-negado')) return true;
+  const viewKey = getViewPermissionForPath(path);
+  if (!viewKey) {
+    return false;
   }
-
-  if (user.tipo === 'externo') {
-    return path === '/tela-clientes';
-  }
-
-  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-  if (nivel === 'administrador') return true;
-
-  if (nivel === 'supervisor') {
-    return path !== '/usuarios';
-  }
-
-  if (nivel === 'operacional' || nivel === 'operador') {
-    return path === '/ordens' || path.startsWith('/producao/') ||
-      path === '/inventario' || path.startsWith('/inventario/') ||
-      path === '/vasilhames' || path === '/estoque';
-  }
-
-  if (nivel === 'visualizacao') {
-    const allowed = ['/pedidos', '/vasilhames', '/tankagem', '/estoque-cliente', '/qualidade/coa'];
-    return allowed.includes(path);
-  }
-
-  return false;
+  return hasPermission(user, viewKey);
 }
 
 export function isReadOnly(user, path) {
-  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (user?.tipo === 'externo') return true;
-  if (nivel === 'visualizacao') return true;
-  if (nivel === 'operacional' || nivel === 'operador') {
-    return ['/vasilhames', '/estoque'].includes(path);
-  }
-  return false;
+  if (!user) return true;
+  const viewKey = getViewPermissionForPath(path);
+  if (!viewKey) return true;
+  if (!hasPermission(user, viewKey)) return true;
+
+  const resourceId = viewKey.replace(/\.view$/, '');
+  const writeCandidates = [
+    'create', 'edit', 'delete', 'create_op', 'edit_op',
+    'register_test', 'release_production', 'issue_coa',
+    'approve', 'manage_fds', 'complement', 'cancel', 'finish',
+  ];
+  return !writeCandidates.some((action) => hasPermission(user, permissionKey(resourceId, action)));
 }
 
 export function canUseClientFilter(user) {
-  const nivel = (user?.nivel || user?.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return user?.tipo === 'interno' && ['administrador', 'supervisor', 'visualizacao'].includes(nivel);
+  if (!user || user.tipo === 'externo') return false;
+  return hasPermission(user, 'orders.view')
+    || hasPermission(user, 'client_stock.view')
+    || hasPermission(user, 'dashboard.view')
+    || normalizeNivel(user) === 'administrador'
+    || normalizeNivel(user) === 'supervisor'
+    || normalizeNivel(user) === 'visualizacao';
 }
 
 export function getUserClient(user) {
@@ -77,15 +80,12 @@ export function matchesClient(item, client) {
 
 export function getDefaultRoute(user) {
   if (!user) return '/login';
-  if (user.tipo === 'externo') return '/tela-clientes';
-  const nivel = (user.nivel || user.nivel_acesso || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (nivel === 'operacional' || nivel === 'operador') return '/ordens';
-  if (nivel === 'visualizacao') return '/vasilhames';
-  return '/';
+  return getDefaultRouteFromPermissions(resolvePermissions(user), user);
 }
 
 export function getRoleLabel(user) {
   if (!user) return '';
+  if (user.perfil?.nome) return user.perfil.nome;
   if (user.tipo === 'externo') {
     return i18n.t('users.roles.externalClient');
   }
@@ -102,20 +102,14 @@ export function getNivelOptionsForTipo(tipo) {
   return ['Administrador', 'Supervisor', 'Operacional', 'Visualização'];
 }
 
-/** Admin + Supervisor: anexar, substituir, visualizar, baixar FDS na tela de receitas */
 export function canManageRecipeFds(user) {
-  if (!user || user.tipo === 'externo') return false;
-  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+  return hasPermission(user, 'recipes.manage_fds');
 }
 
-/** Admin only: remover FDS */
 export function canRemoveRecipeFds(user) {
-  if (!user || user.tipo === 'externo') return false;
-  return normalizeNivel(user) === 'administrador';
+  return hasPermission(user, 'recipes.remove_fds');
 }
 
-/** Admin + Supervisor: visualizar/baixar FDS na tela de receitas (view dialog) */
 export function canViewRecipeFds(user) {
-  if (!user || user.tipo === 'externo') return false;
-  return ['administrador', 'supervisor'].includes(normalizeNivel(user));
+  return hasPermission(user, 'recipes.view') || hasPermission(user, 'recipes.manage_fds');
 }

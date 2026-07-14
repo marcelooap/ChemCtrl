@@ -259,6 +259,8 @@
     "tankage": "Tankagem",
     "transfer": "Transbordo",
     "users": "Usuários",
+    "profiles": "Perfis e Permissões",
+    "usersAndPermissions": "Usuários e Permissões",
     "notifications": "Notificações",
     "clientScreen": "Tela Clientes",
     "clientStock": "Estoque Cliente",
@@ -268,6 +270,117 @@
       "expand": "Expandir sidebar",
       "collapse": "Recolher sidebar",
       "logout": "Sair"
+    }
+  },
+  "accessDenied": {
+    "title": "Acesso negado",
+    "description": "Seu perfil não tem permissão para acessar esta tela. Solicite ao administrador, se necessário.",
+    "goBack": "Voltar ao início"
+  },
+  "profiles": {
+    "title": "Perfis e Permissões",
+    "subtitle": "Gerencie perfis e controle o acesso às telas e ações",
+    "new": "Novo Perfil",
+    "duplicate": "Duplicar Perfil",
+    "editName": "Editar Nome",
+    "savePermissions": "Salvar permissões",
+    "searchPermission": "Pesquisar permissão",
+    "selectAll": "Marcar tudo",
+    "deselectAll": "Desmarcar tudo",
+    "selectHint": "Selecione um perfil à esquerda para editar as permissões",
+    "backToList": "Voltar à lista",
+    "empty": "Nenhum perfil encontrado. Aplique a migration RBAC no Supabase.",
+    "systemBadge": "Sistema",
+    "permSummary": "{{granted}} de {{total}} permissões ({{percent}}%)",
+    "columns": {
+      "name": "Perfil",
+      "users": "Usuários",
+      "perms": "Permissões",
+      "status": "Status"
+    },
+    "fields": {
+      "name": "Nome",
+      "description": "Descrição",
+      "status": "Status"
+    },
+    "messages": {
+      "loadError": "Não foi possível carregar os perfis",
+      "loadPermsError": "Não foi possível carregar as permissões",
+      "saveError": "Erro ao salvar",
+      "saved": "Permissões salvas",
+      "created": "Perfil criado",
+      "updated": "Perfil atualizado",
+      "duplicated": "Perfil duplicado",
+      "deleted": "Perfil excluído",
+      "deleteError": "Não foi possível excluir o perfil",
+      "nameRequired": "Informe o nome do perfil",
+      "adminProtected": "O perfil Administrador deve manter as permissões administrativas"
+    },
+    "deleteConfirm": {
+      "title": "Excluir perfil",
+      "message": "Tem certeza que deseja excluir o perfil \"{{name}}\"?"
+    },
+    "discard": {
+      "title": "Alterações não salvas",
+      "message": "Há alterações pendentes. Deseja descartá-las?",
+      "confirm": "Descartar"
+    }
+  },
+  "rbac": {
+    "modules": {
+      "dashboard": "Dashboard",
+      "recipes": "Receitas",
+      "orders": "Pedidos",
+      "stock": "Estoque",
+      "production": "Produção",
+      "quality": "Qualidade",
+      "clients": "Clientes",
+      "administration": "Administração"
+    },
+    "resources": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "recipes": "Receitas",
+      "orders": "Pedidos",
+      "rawMaterialStock": "Estoque de MP",
+      "inventory": "Inventário",
+      "containers": "Vasilhames",
+      "tankage": "Tankagem",
+      "transfer": "Transbordo",
+      "newProduction": "Nova Produção",
+      "productions": "Produções",
+      "productionOrders": "Ordens de Produção",
+      "qualityTests": "Ensaios",
+      "qualityPending": "Pendente de Análise",
+      "qualityCoa": "COA",
+      "labEquipment": "Equipamentos de Lab",
+      "clientPortal": "Tela Clientes",
+      "clientStock": "Estoque Cliente",
+      "users": "Usuários",
+      "profiles": "Perfis e Permissões",
+      "notifications": "Notificações"
+    },
+    "actions": {
+      "view": "Visualizar",
+      "create": "Inserir",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "createRecipe": "Criar Receita",
+      "editRecipe": "Editar Receita",
+      "deleteRecipe": "Excluir Receita",
+      "approveRecipe": "Aprovar Receita",
+      "manageFds": "Gerenciar FDS",
+      "removeFds": "Remover FDS",
+      "createOp": "Criar OP",
+      "editOp": "Editar OP",
+      "complementLot": "Complementar Lote",
+      "cancelOp": "Cancelar OP",
+      "finishOp": "Finalizar OP",
+      "printLabel": "Imprimir Etiqueta",
+      "exportExcel": "Exportar Excel",
+      "registerTest": "Registrar Ensaio",
+      "releaseProduction": "Liberar Produção",
+      "issueCoa": "Emitir COA"
     }
   },
   "login": {
@@ -294,7 +407,8 @@
       "network": "Erro de conexão. Verifique sua internet.",
       "generic": "Não foi possível realizar o login. Tente novamente.",
       "sessionExpired": "Sua sessão expirou. Faça login novamente.",
-      "unauthorized": "Acesso não autorizado."
+      "unauthorized": "Acesso não autorizado.",
+      "rpcSchema": "Erro de schema no login. Execute novamente o SQL migration_rbac_login_fix.sql no Supabase (versão v2) e tente de novo."
     }
   },
   "welcome": {
@@ -1134,7 +1248,8 @@
       "phone": "Telefone",
       "lastLogin": "Último Acesso",
       "cargo": "Cargo",
-      "type": "Tipo"
+      "type": "Tipo",
+      "profile": "Perfil"
     },
     "roles": {
       "administrator": "Administrador",
@@ -1172,6 +1287,7 @@
       "fillRequired": "Preencha nome e usuário",
       "passwordRequired": "Informe a senha inicial",
       "roleRequired": "Selecione o nível de acesso",
+      "profileRequired": "Selecione o perfil",
       "externalViewOnly": "Usuários externos devem ter nível Visualização",
       "clientRequired": "Informe o cliente para usuários externos",
       "saveError": "Erro ao salvar usuário",
@@ -1203,7 +1319,8 @@
       "passwordNew": "Nova senha ou deixe em branco",
       "passwordInitial": "Senha inicial",
       "cargo": "Ex: Operador, Analista...",
-      "client": "Nome do cliente"
+      "client": "Nome do cliente",
+      "profile": "Selecione o perfil"
     },
     "deleteConfirm": {
       "title": "Excluir Usuário",

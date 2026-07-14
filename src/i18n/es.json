@@ -258,16 +258,79 @@
     "containers": "Envases",
     "tankage": "Almacenamiento en Tanque",
     "transfer": "Transbordo",
-    "users": "Usuários",
-    "notifications": "Notificações",
+    "users": "Usuarios",
+    "profiles": "Perfiles y Permisos",
+    "usersAndPermissions": "Usuarios y Permisos",
+    "notifications": "Notificaciones",
     "clientScreen": "Portal de Clientes",
     "clientStock": "Stock de Cliente",
     "lockedTooltip": "Sin acceso para su nivel",
     "appSubtitle": "Control de Producción",
     "footer": {
       "expand": "Expandir sidebar",
-      "collapse": "Recolher sidebar",
-      "logout": "Sair"
+      "collapse": "Colapsar sidebar",
+      "logout": "Salir"
+    }
+  },
+  "accessDenied": {
+    "title": "Acceso denegado",
+    "description": "Su perfil no tiene permiso para acceder a esta pantalla.",
+    "goBack": "Volver al inicio"
+  },
+  "profiles": {
+    "title": "Perfiles y Permisos",
+    "subtitle": "Administre perfiles y controle el acceso a pantallas y acciones",
+    "new": "Nuevo Perfil",
+    "duplicate": "Duplicar Perfil",
+    "editName": "Editar Nombre",
+    "savePermissions": "Guardar permisos",
+    "searchPermission": "Buscar permiso",
+    "selectAll": "Marcar todo",
+    "deselectAll": "Desmarcar todo",
+    "selectHint": "Seleccione un perfil a la izquierda para editar permisos",
+    "backToList": "Volver a la lista",
+    "empty": "No se encontraron perfiles. Aplique la migración RBAC en Supabase.",
+    "systemBadge": "Sistema",
+    "permSummary": "{{granted}} de {{total}} permisos ({{percent}}%)",
+    "columns": { "name": "Perfil", "users": "Usuarios", "perms": "Permisos", "status": "Estado" },
+    "fields": { "name": "Nombre", "description": "Descripción", "status": "Estado" },
+    "messages": {
+      "loadError": "No se pudieron cargar los perfiles",
+      "loadPermsError": "No se pudieron cargar los permisos",
+      "saveError": "Error al guardar",
+      "saved": "Permisos guardados",
+      "created": "Perfil creado",
+      "updated": "Perfil actualizado",
+      "duplicated": "Perfil duplicado",
+      "deleted": "Perfil eliminado",
+      "deleteError": "No se pudo eliminar el perfil",
+      "nameRequired": "Informe el nombre del perfil",
+      "adminProtected": "El perfil Administrador debe mantener los permisos administrativos"
+    },
+    "deleteConfirm": { "title": "Eliminar perfil", "message": "¿Seguro que desea eliminar el perfil \"{{name}}\"?" },
+    "discard": { "title": "Cambios sin guardar", "message": "Hay cambios pendientes. ¿Descartarlos?", "confirm": "Descartar" }
+  },
+  "rbac": {
+    "modules": {
+      "dashboard": "Dashboard", "recipes": "Recetas", "orders": "Pedidos", "stock": "Stock",
+      "production": "Producción", "quality": "Calidad", "clients": "Clientes", "administration": "Administración"
+    },
+    "resources": {
+      "home": "Home", "dashboard": "Dashboard", "recipes": "Recetas", "orders": "Pedidos",
+      "rawMaterialStock": "Stock MP", "inventory": "Inventario", "containers": "Envases", "tankage": "Tanques",
+      "transfer": "Trasiego", "newProduction": "Nueva Producción", "productions": "Producciones",
+      "productionOrders": "Órdenes de Producción", "qualityTests": "Ensayos", "qualityPending": "Pendiente de Análisis",
+      "qualityCoa": "COA", "labEquipment": "Equipos de Lab", "clientPortal": "Portal Clientes",
+      "clientStock": "Stock Cliente", "users": "Usuarios", "profiles": "Perfiles y Permisos", "notifications": "Notificaciones"
+    },
+    "actions": {
+      "view": "Ver", "create": "Crear", "edit": "Editar", "delete": "Eliminar",
+      "createRecipe": "Crear Receta", "editRecipe": "Editar Receta", "deleteRecipe": "Eliminar Receta",
+      "approveRecipe": "Aprobar Receta", "manageFds": "Gestionar FDS", "removeFds": "Eliminar FDS",
+      "createOp": "Crear OP", "editOp": "Editar OP", "complementLot": "Complementar Lote",
+      "cancelOp": "Cancelar OP", "finishOp": "Finalizar OP", "printLabel": "Imprimir Etiqueta",
+      "exportExcel": "Exportar Excel", "registerTest": "Registrar Ensayo",
+      "releaseProduction": "Liberar Producción", "issueCoa": "Emitir COA"
     }
   },
   "login": {
@@ -294,7 +357,8 @@
       "network": "Erro de conexão. Verifique sua internet.",
       "generic": "Não foi possível realizar o login. Tente novamente.",
       "sessionExpired": "Sua sessão expirou. Faça login novamente.",
-      "unauthorized": "Acesso não autorizado."
+      "unauthorized": "Acesso não autorizado.",
+      "rpcSchema": "Error de schema en el login. Ejecute migration_rbac_login_fix.sql en Supabase."
     }
   },
   "welcome": {
@@ -1243,7 +1307,8 @@
       "phone": "Telefone",
       "lastLogin": "Último Acesso",
       "cargo": "Cargo",
-      "type": "Tipo"
+      "type": "Tipo",
+      "profile": "Perfil"
     },
     "roles": {
       "administrator": "Administrador",
@@ -1281,6 +1346,7 @@
       "fillRequired": "Preencha nome e usuário",
       "passwordRequired": "Informe a senha inicial",
       "roleRequired": "Selecione o nível de acesso",
+      "profileRequired": "Selecione o perfil",
       "externalViewOnly": "Usuários externos devem ter nível Visualização",
       "clientRequired": "Informe o cliente para usuários externos",
       "saveError": "Erro ao salvar usuário",
@@ -1312,7 +1378,8 @@
       "passwordNew": "Nueva contraseña o deje en blanco",
       "passwordInitial": "Contraseña inicial",
       "cargo": "Ej: Operador, Analista...",
-      "client": "Nombre del cliente"
+      "client": "Nombre del cliente",
+      "profile": "Seleccione el perfil"
     },
     "deleteConfirm": {
       "title": "Eliminar Usuario",

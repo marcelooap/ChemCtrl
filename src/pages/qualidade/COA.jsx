@@ -16,6 +16,7 @@ import { generateCOAPDF } from '@/lib/pdfReports';
 import SignedImage from '@/components/SignedImage';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import COAViewDialog, { formatPackagingLabel } from '@/components/qualidade/COAViewDialog';
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
 
@@ -29,6 +30,8 @@ const QC_STATUS_KEYS = {
 export default function COA() {
   const { t, i18n } = useTranslation();
   const { isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canIssue = !isReadOnly && hasPermission('quality_coa.issue_coa');
   const parseResults = (r) => ({ ...r, results: parseArr(r.results) });
   const { data: results, loading, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500), [], parseResults);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
@@ -238,7 +241,7 @@ export default function COA() {
                         <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
                           <Eye className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
-                        {!isReadOnly && (
+                        {canIssue && (
                           <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
                             <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>

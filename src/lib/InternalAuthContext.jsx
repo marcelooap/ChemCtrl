@@ -5,48 +5,33 @@ import i18n from '@/i18n';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';
-const SUPABASE_URL = 'https://cpzibnwytukcgxeamfhp.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
 
 function normalizeLanguage(value) {
   return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
 }
 
-const fallbackLogin = async (username, password) => {
-  const params = new URLSearchParams();
-  params.set('select', '*');
-  params.set('usuario', `eq.${username}`);
-  params.set('limit', '1');
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/usuarios?${params.toString()}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const rows = await resp.json();
-  if (!rows || rows.length === 0) return { success: false, error: 'Usuário ou senha inválidos.' };
-  const u = rows[0];
-  if (u.status === 'Inativo') return { success: false, error: 'Usuário inativo. Contate o administrador.' };
-  if (u.senha !== password) return { success: false, error: 'Usuário ou senha inválidos.' };
-  const sessionId = crypto.randomUUID();
-  return {
-    success: true,
-    session_id: sessionId,
-    user: {
-      id: u.id,
-      nome_completo: u.nome_completo,
-      usuario: u.usuario,
-      nivel_acesso: u.nivel_acesso,
-      status: u.status,
-      tipo: u.tipo || 'interno',
-      cliente: u.cliente || '',
-      cargo: u.cargo || '',
-      preferred_language: normalizeLanguage(u.preferred_language),
-    },
-  };
-};
+function normalizePermissions(raw) {
+  if (Array.isArray(raw)) return raw.filter((k) => typeof k === 'string');
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 function mapUser(u) {
   if (!u) return null;
   const nivel = (u.nivel_acesso || '').toLowerCase();
+  const permissions = normalizePermissions(u.permissions);
+  const perfil = u.perfil && typeof u.perfil === 'object'
+    ? u.perfil
+    : (u.perfil_id
+      ? { id: u.perfil_id, nome: u.perfil_nome || u.nivel_acesso || '', slug: u.perfil_slug || null }
+      : null);
   return {
     ...u,
     id: u.id,
@@ -60,6 +45,9 @@ function mapUser(u) {
     cliente: u.cliente || '',
     cargo: u.cargo || '',
     preferred_language: normalizeLanguage(u.preferred_language),
+    perfil_id: u.perfil_id || perfil?.id || null,
+    perfil,
+    permissions,
   };
 }
 
@@ -70,6 +58,11 @@ function persistUserSession(userData) {
 async function syncUserLanguage(userData) {
   const locale = normalizeLanguage(userData?.preferred_language);
   await applyLanguage(locale);
+}
+
+function clearLocalAuth() {
+  clearSessionId();
+  localStorage.removeItem(SESSION_KEY);
 }
 
 export const InternalAuthProvider = ({ children }) => {
@@ -88,25 +81,26 @@ export const InternalAuthProvider = ({ children }) => {
 
       try {
         const session = await callRPC('validate_session', { p_session_id: sessionId });
-        if (session) {
+        if (session && session.session_id) {
           const userData = JSON.parse(rawSession);
+          userData.permissions = normalizePermissions(
+            session.permissions ?? userData.permissions
+          );
+          if (session.perfil_id) userData.perfil_id = session.perfil_id;
+          if (session.perfil && typeof session.perfil === 'object') userData.perfil = session.perfil;
+          if (session.nivel_acesso) userData.nivel_acesso = session.nivel_acesso;
+          persistUserSession(userData);
           const mapped = mapUser(userData);
           setUser(mapped);
           await syncUserLanguage(mapped);
         } else {
-          clearSessionId();
-          localStorage.removeItem(SESSION_KEY);
+          clearLocalAuth();
+          setUser(null);
         }
-      } catch (e) {
-        try {
-          const userData = JSON.parse(rawSession);
-          const mapped = mapUser(userData);
-          setUser(mapped);
-          await syncUserLanguage(mapped);
-        } catch (_) {
-          clearSessionId();
-          localStorage.removeItem(SESSION_KEY);
-        }
+      } catch (_e) {
+        // Sem fallback de sessão fantasma: se validate falhar, obriga novo login.
+        clearLocalAuth();
+        setUser(null);
       }
       setLoading(false);
     };
@@ -122,16 +116,50 @@ export const InternalAuthProvider = ({ children }) => {
           p_password: password,
         });
       } catch (rpcErr) {
-        result = await fallbackLogin(username, password);
+        // NÃO usar fallback com session_id falso — isso causa “pisca e volta ao login”.
+        let detail = '';
+        try {
+          const parsed = JSON.parse(String(rpcErr?.message || ''));
+          detail = parsed?.message || parsed?.hint || parsed?.code || '';
+        } catch {
+          detail = String(rpcErr?.message || '').slice(0, 180);
+        }
+
+        const msg = String(rpcErr?.message || '');
+        if (
+          msg.includes('42703')
+          || msg.toLowerCase().includes('column')
+          || msg.includes('PGRST')
+          || msg.toLowerCase().includes('schema')
+        ) {
+          return {
+            success: false,
+            error: detail
+              ? `${i18n.t('login.errors.rpcSchema')} (${detail})`
+              : i18n.t('login.errors.rpcSchema'),
+          };
+        }
+        return {
+          success: false,
+          error: detail || i18n.t('login.errors.network'),
+        };
       }
 
       if (!result || !result.success) {
         return { success: false, error: result?.error || 'Usuário ou senha inválidos.' };
       }
 
+      if (!result.session_id || !result.user) {
+        return {
+          success: false,
+          error: i18n.t('login.errors.generic'),
+        };
+      }
+
       const userData = {
         ...result.user,
         preferred_language: normalizeLanguage(result.user?.preferred_language),
+        permissions: normalizePermissions(result.user?.permissions),
       };
       setSessionId(result.session_id);
       persistUserSession(userData);
@@ -141,7 +169,7 @@ export const InternalAuthProvider = ({ children }) => {
       setUser(mapped);
       await syncUserLanguage(mapped);
       return { success: true, user: mapped };
-    } catch (e) {
+    } catch (_e) {
       return { success: false, error: i18n.t('login.errors.network') };
     }
   };
@@ -157,11 +185,11 @@ export const InternalAuthProvider = ({ children }) => {
           p_language: locale,
         });
         if (result && result.success === false) {
-          // RPC not deployed or session issue — continue with local fallback
+          // continue with local fallback
         }
       }
     } catch (_) {
-      // Fallback to localStorage only when RPC unavailable
+      // local only
     }
 
     await applyLanguage(locale);
@@ -182,8 +210,7 @@ export const InternalAuthProvider = ({ children }) => {
     if (sessionId) {
       try { await callRPC('destroy_session', { p_session_id: sessionId }); } catch (_) {}
     }
-    clearSessionId();
-    localStorage.removeItem(SESSION_KEY);
+    clearLocalAuth();
     setUser(null);
     window.location.href = '/login';
   };

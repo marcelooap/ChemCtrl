@@ -4,7 +4,7 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import Sidebar from './Sidebar';
 import { AppTopBar } from './AppTopBar';
 import WelcomeModal from '@/components/WelcomeModal';
-import { canAccessRoute, getDefaultRoute, isReadOnly } from '@/lib/permissions';
+import { canAccessRoute, isReadOnly } from '@/lib/permissions';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -23,8 +23,8 @@ export default function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  if (!canAccessRoute(user, location.pathname)) {
-    return <Navigate to={getDefaultRoute(user)} replace />;
+  if (location.pathname !== '/acesso-negado' && !canAccessRoute(user, location.pathname)) {
+    return <Navigate to="/acesso-negado" replace state={{ from: location.pathname }} />;
   }
 
   return (

@@ -259,6 +259,8 @@
     "tankage": "Tank Storage",
     "transfer": "Transfer",
     "users": "Users",
+    "profiles": "Profiles & Permissions",
+    "usersAndPermissions": "Users & Permissions",
     "notifications": "Notifications",
     "clientScreen": "Client Portal",
     "clientStock": "Client Stock",
@@ -268,6 +270,117 @@
       "expand": "Expand sidebar",
       "collapse": "Collapse sidebar",
       "logout": "Log out"
+    }
+  },
+  "accessDenied": {
+    "title": "Access denied",
+    "description": "Your profile does not have permission to access this screen. Contact an administrator if needed.",
+    "goBack": "Back to home"
+  },
+  "profiles": {
+    "title": "Profiles & Permissions",
+    "subtitle": "Manage profiles and control access to screens and actions",
+    "new": "New Profile",
+    "duplicate": "Duplicate Profile",
+    "editName": "Edit Name",
+    "savePermissions": "Save permissions",
+    "searchPermission": "Search permission",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectHint": "Select a profile on the left to edit permissions",
+    "backToList": "Back to list",
+    "empty": "No profiles found. Apply the RBAC migration in Supabase.",
+    "systemBadge": "System",
+    "permSummary": "{{granted}} of {{total}} permissions ({{percent}}%)",
+    "columns": {
+      "name": "Profile",
+      "users": "Users",
+      "perms": "Permissions",
+      "status": "Status"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "status": "Status"
+    },
+    "messages": {
+      "loadError": "Could not load profiles",
+      "loadPermsError": "Could not load permissions",
+      "saveError": "Error saving",
+      "saved": "Permissions saved",
+      "created": "Profile created",
+      "updated": "Profile updated",
+      "duplicated": "Profile duplicated",
+      "deleted": "Profile deleted",
+      "deleteError": "Could not delete profile",
+      "nameRequired": "Enter the profile name",
+      "adminProtected": "The Administrator profile must keep administrative permissions"
+    },
+    "deleteConfirm": {
+      "title": "Delete profile",
+      "message": "Are you sure you want to delete the profile \"{{name}}\"?"
+    },
+    "discard": {
+      "title": "Unsaved changes",
+      "message": "There are pending changes. Discard them?",
+      "confirm": "Discard"
+    }
+  },
+  "rbac": {
+    "modules": {
+      "dashboard": "Dashboard",
+      "recipes": "Recipes",
+      "orders": "Orders",
+      "stock": "Stock",
+      "production": "Production",
+      "quality": "Quality",
+      "clients": "Clients",
+      "administration": "Administration"
+    },
+    "resources": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "recipes": "Recipes",
+      "orders": "Orders",
+      "rawMaterialStock": "Raw Material Stock",
+      "inventory": "Inventory",
+      "containers": "Containers",
+      "tankage": "Tank Storage",
+      "transfer": "Transfer",
+      "newProduction": "New Production",
+      "productions": "Productions",
+      "productionOrders": "Production Orders",
+      "qualityTests": "Tests",
+      "qualityPending": "Pending Analysis",
+      "qualityCoa": "COA",
+      "labEquipment": "Lab Equipment",
+      "clientPortal": "Client Portal",
+      "clientStock": "Client Stock",
+      "users": "Users",
+      "profiles": "Profiles & Permissions",
+      "notifications": "Notifications"
+    },
+    "actions": {
+      "view": "View",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "createRecipe": "Create Recipe",
+      "editRecipe": "Edit Recipe",
+      "deleteRecipe": "Delete Recipe",
+      "approveRecipe": "Approve Recipe",
+      "manageFds": "Manage SDS",
+      "removeFds": "Remove SDS",
+      "createOp": "Create PO",
+      "editOp": "Edit PO",
+      "complementLot": "Complement Lot",
+      "cancelOp": "Cancel PO",
+      "finishOp": "Finish PO",
+      "printLabel": "Print Label",
+      "exportExcel": "Export Excel",
+      "registerTest": "Register Test",
+      "releaseProduction": "Release Production",
+      "issueCoa": "Issue COA"
     }
   },
   "login": {
@@ -294,7 +407,8 @@
       "network": "Connection error. Check your internet.",
       "generic": "Unable to sign in. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",
-      "unauthorized": "Unauthorized access."
+      "unauthorized": "Unauthorized access.",
+      "rpcSchema": "Login schema error. Run migration_rbac_login_fix.sql in Supabase and try again."
     }
   },
   "welcome": {
@@ -1245,7 +1359,8 @@
       "phone": "Phone",
       "lastLogin": "Last Login",
       "cargo": "Role",
-      "type": "Type"
+      "type": "Type",
+      "profile": "Profile"
     },
     "roles": {
       "administrator": "Administrator",
@@ -1283,6 +1398,7 @@
       "fillRequired": "Fill in name and username",
       "passwordRequired": "Enter initial password",
       "roleRequired": "Select access level",
+      "profileRequired": "Select a profile",
       "externalViewOnly": "External users must have View Only access",
       "clientRequired": "Enter client for external users",
       "saveError": "Failed to save user",
@@ -1314,7 +1430,8 @@
       "passwordNew": "New password or leave blank",
       "passwordInitial": "Initial password",
       "cargo": "E.g. Operator, Analyst...",
-      "client": "Client name"
+      "client": "Client name",
+      "profile": "Select a profile"
     },
     "deleteConfirm": {
       "title": "Delete User",

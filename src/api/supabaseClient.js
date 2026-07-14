@@ -27,6 +27,8 @@ const noCacheFetch = { cache: 'no-store' };
 
 const entityTableMap = {
   Usuario: 'usuarios',
+  Perfil: 'perfis',
+  PerfilPermissao: 'perfil_permissoes',
   Production: 'productions',
   RawMaterialStock: 'raw_material_stocks',
   Tank: 'tanks',

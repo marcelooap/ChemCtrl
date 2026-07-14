@@ -18,6 +18,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import moment from 'moment';
 import { fmtNumber, fmtCurrency, fmtMass } from '@/i18n/formatters';
 import { calcPackagingQty } from '@/lib/stockUtils';
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
 
@@ -26,6 +27,10 @@ const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => {
 export default function Estoque() {
   const { t } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canCreate = !isReadOnly && hasPermission('raw_material_stock.create');
+  const canEdit = !isReadOnly && hasPermission('raw_material_stock.edit');
+  const canDelete = !isReadOnly && hasPermission('raw_material_stock.delete');
   const parseTankEntries = (i) => ({ ...i, tank_entries: parseArr(i.tank_entries) });
   const parseRawMaterials = (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) });
   const { data: items, loading, reload: load } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
@@ -190,12 +195,12 @@ export default function Estoque() {
           <Button onClick={handleExportExcel} disabled={exporting} className="bg-green-600 text-white hover:bg-green-700">
             {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} {t('rawMaterialStock.exportExcel')}
           </Button>
-          {!isReadOnly && (
+          {canEdit && (
             <Button onClick={() => setShowMovimentacao(true)} variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50">
               <ArrowLeftRight className="w-4 h-4 mr-2" /> {t('rawMaterialStock.movement')}
             </Button>
           )}
-          {!isReadOnly && (
+          {canCreate && (
             <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
               <Plus className="w-4 h-4 mr-2" /> {t('rawMaterialStock.newItem')}
             </Button>
@@ -276,8 +281,8 @@ export default function Estoque() {
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">
                            <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-accent"><Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>
-                           {!isReadOnly && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-accent"><Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>}
-                           {!isReadOnly && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-accent"><Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-400" /></button>}
+                           {canEdit && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-accent"><Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>}
+                           {canDelete && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-accent"><Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-400" /></button>}
                          </div>
                        </td>
                      </tr>

@@ -1,5 +1,5 @@
 /**
- * RealtimeProvider — pré-subscreve todos os canais Supabase Realtime ao iniciar.
+ * RealtimeProvider — pré-subscreve canais Supabase Realtime ao autenticar.
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,8 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Wifi, WifiOff, Loader2 } from 'lucide-react';
 
 const IS_DEV = import.meta.env.DEV;
+const SKIP_REALTIME = new Set(['Perfil', 'PerfilPermissao']);
+const REALTIME_ENTITIES = Object.keys(entityTableMap).filter((k) => !SKIP_REALTIME.has(k));
 
 export default function RealtimeProvider({ children }) {
   const { t } = useTranslation();
@@ -16,11 +18,14 @@ export default function RealtimeProvider({ children }) {
   const [statusMap, setStatusMap] = useState({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setStatusMap({});
+      return undefined;
+    }
 
     const statusTimer = setInterval(() => {
       const map = {};
-      Object.keys(entityTableMap).forEach((entityName) => {
+      REALTIME_ENTITIES.forEach((entityName) => {
         map[entityName] = getRealtimeStatus(entityName);
       });
       setStatusMap(map);
@@ -31,13 +36,15 @@ export default function RealtimeProvider({ children }) {
     return () => {
       clearInterval(statusTimer);
       unsubAll();
+      setStatusMap({});
     };
   }, [!!user]);
 
   const statuses = Object.values(statusMap);
   const hasError = statuses.some((s) => s === 'error');
   const allConnected = statuses.length > 0 && statuses.every((s) => s === 'connected');
-  const showBadge = IS_DEV || hasError;
+  // Só mostra badge com usuário autenticado e após receber status dos canais
+  const showBadge = Boolean(user) && statuses.length > 0 && (IS_DEV || hasError);
 
   const badgeTitle = hasError
     ? t('realtime.disconnected')
@@ -45,7 +52,7 @@ export default function RealtimeProvider({ children }) {
       ? t('realtime.connected')
       : t('realtime.connecting');
   const badgeLabel = hasError
-    ? t('realtime.connecting')
+    ? t('realtime.disconnected')
     : allConnected
       ? t('realtime.live')
       : t('realtime.connecting');

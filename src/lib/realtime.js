@@ -563,8 +563,11 @@ export function subscribeAllTables(
   onChangeCallback
 ){
 
+  const skipRealtime = new Set(['Perfil', 'PerfilPermissao']);
+
   const unsubscribers =
     Object.keys(entityTableMap)
+      .filter(entityName => !skipRealtime.has(entityName))
       .map(entityName =>
 
         subscribeToTable(

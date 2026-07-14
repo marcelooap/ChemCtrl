@@ -15,9 +15,14 @@ import { translateInventoryStatus } from '@/i18n/domainMaps';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
 
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
+
 export default function Inventario() {
   const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canCreate = !isReadOnly && hasPermission('inventory.create');
+  const canEdit = !isReadOnly && hasPermission('inventory.edit');
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: inventories, loading, reload } = useRealtimeEntity('Inventory', () => base44.entities.Inventory.list('-created_date', 500));
@@ -76,7 +81,7 @@ export default function Inventario() {
           <h1 className="text-2xl font-bold">📋 {t('inventory.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('inventory.page.subtitle', { count: inventories.length })}</p>
         </div>
-        {!isReadOnly && (
+        {canCreate && (
           <Button onClick={() => setShowWizard(true)} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> {t('inventory.page.openInventory')}
           </Button>
@@ -123,7 +128,7 @@ export default function Inventario() {
                   const clients = inv.clients === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inv.clients).join(', ');
                   const products = inv.products === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inv.products).join(', ');
                   const isFinished = inv.status === 'Finalizado';
-                  const canStart = inv.status === 'Aberto' && !isReadOnly;
+                  const canStart = inv.status === 'Aberto' && canEdit;
                   return (
                     <tr key={inv.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-4 py-3 font-semibold text-sm text-primary">{inv.inventory_number}</td>

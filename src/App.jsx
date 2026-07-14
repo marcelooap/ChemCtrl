@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { InternalAuthProvider } from '@/lib/InternalAuthContext';
+import { PermissionProvider } from '@/lib/rbac/PermissionProvider';
 import ScrollToTop from './components/ScrollToTop';
 import RealtimeProvider from '@/components/RealtimeProvider';
 import { NotificationProvider } from '@/notifications/context/NotificationProvider';
@@ -45,6 +46,8 @@ import Transbordo from '@/pages/Transbordo';
 import Inventario from '@/pages/Inventario';
 import InventarioConferencia from '@/pages/InventarioConferencia';
 import Usuarios from '@/pages/Usuarios';
+import Perfis from '@/pages/Perfis';
+import AcessoNegado from '@/pages/AcessoNegado';
 import ConsultaPublica from '@/pages/ConsultaPublica';
 import HistoricoNotificacoes from '@/pages/HistoricoNotificacoes';
 
@@ -77,6 +80,8 @@ const AuthenticatedApp = () => {
           <Route path="/inventario" element={<Inventario />} />
           <Route path="/inventario/:id" element={<InventarioConferencia />} />
           <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/perfis" element={<Perfis />} />
+          <Route path="/acesso-negado" element={<AcessoNegado />} />
           <Route path="/notificacoes" element={<HistoricoNotificacoes />} />
         </Route>
       </Route>
@@ -97,11 +102,13 @@ function App() {
                 <ScrollToTop />
                 <UpdateProvider>
                   <InternalAuthProvider>
-                    <RealtimeProvider>
-                      <NotificationProvider>
-                        <AuthenticatedApp />
-                      </NotificationProvider>
-                    </RealtimeProvider>
+                    <PermissionProvider>
+                      <RealtimeProvider>
+                        <NotificationProvider>
+                          <AuthenticatedApp />
+                        </NotificationProvider>
+                      </RealtimeProvider>
+                    </PermissionProvider>
                   </InternalAuthProvider>
                   <UpdateModal />
                 </UpdateProvider>

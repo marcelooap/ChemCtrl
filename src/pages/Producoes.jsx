@@ -21,6 +21,7 @@ import { parseArr } from '@/lib/productionViewUtils';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -36,6 +37,10 @@ const StatusBadge = ({ status }) => {
 
 export default function Producoes() {
   const { t, i18n } = useTranslation();
+  const { hasPermission } = usePermissions();
+  const canEditOp = hasPermission('productions.edit_op');
+  const canCancelOp = hasPermission('productions.cancel');
+  const canComplementLot = hasPermission('productions.complement');
   const [searchParams] = useSearchParams();
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -346,8 +351,10 @@ export default function Producoes() {
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(p)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        {isComplementPending(p) && (
+                        {canEditOp && (
+                          <button onClick={() => { setEditingPkg(p); setPkgValue(p.packaging_info || p.packaging_type || ''); setUnitPrice(p.unit_price || ''); setClientOrder(p.client_order || ''); setShowEditPkg(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        )}
+                        {canComplementLot && isComplementPending(p) && (
                           <button
                             onClick={() => setComplementTarget(p)}
                             className="p-1 rounded hover:bg-amber-50"
@@ -356,7 +363,7 @@ export default function Producoes() {
                             <PackagePlus className="w-3.5 h-3.5 text-amber-600" />
                           </button>
                         )}
-                        {canCancel(p.status) && (
+                        {canCancelOp && canCancel(p.status) && (
                           <button onClick={() => setCancelTarget(p)} className="p-1 rounded hover:bg-red-50" title={t('production.actions.cancel')}><Ban className="w-3.5 h-3.5 text-red-400" /></button>
                         )}
                       </div>

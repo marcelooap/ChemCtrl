@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { generateBoletaPDF, generateVasilhamesReportPDF } from '@/lib/pdfReports';
 import { printContainerLabel } from '@/lib/labelprint';
+import { usePermissions } from '@/lib/rbac/PermissionProvider';
 import { ensureProductionPublicToken } from '@/lib/ensurePublicToken';
 import { zeroOutTankaStock } from '@/lib/tankUtils';
 import { PACKAGING_TYPES } from '@/lib/packagingTypes';
@@ -49,6 +50,10 @@ const findTransferForContainer = (container, transfers) => {
 export default function Vasilhames() {
   const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canCreate = !isReadOnly && hasPermission('containers.create');
+  const canEdit = !isReadOnly && hasPermission('containers.edit');
+  const canDeleteContainer = !isReadOnly && hasPermission('containers.delete');
   const { data: containers, loading, reload: load } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
@@ -79,7 +84,7 @@ export default function Vasilhames() {
     return key ? t(key) : status;
   }, [t]);
 
-  const canDelete = user?.nivel === 'administrador';
+  const canDelete = canDeleteContainer;
 
   const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
 
@@ -255,7 +260,7 @@ export default function Vasilhames() {
           <h1 className="text-2xl font-bold">{t('containers.vasilhames.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('containers.vasilhames.subtitle', { count: containers.length })}</p>
         </div>
-        {!isReadOnly && (
+        {canCreate && (
           <Button onClick={() => setShowAddTank(true)} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" /> {t('containers.actions.addTank')}
           </Button>
@@ -347,9 +352,9 @@ export default function Vasilhames() {
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => handlePrintLabel(c)} className="p-1 rounded hover:bg-muted" title={t('containers.vasilhames.printLabel')}><Printer className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        {!isReadOnly && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                        {canEdit && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
                         {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title={t('containers.vasilhames.delete')}><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
-                        {!isReadOnly && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-muted"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
+                        {canEdit && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-muted"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
                       </div>
                     </td>
                   </tr>
