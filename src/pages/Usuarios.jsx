@@ -107,7 +107,8 @@ export default function Usuarios() {
     setForm({
       nome_completo: u.nome_completo || '',
       usuario: u.usuario || '',
-      senha: u.senha || '',
+      // Nunca pré-preencher senha: em branco = manter hash atual
+      senha: '',
       cargo: u.cargo || '',
       perfil_id: u.perfil_id || defaultPerfilIdForTipo(u.tipo || 'interno'),
       status: u.status || 'Ativo',
@@ -197,12 +198,14 @@ export default function Usuarios() {
         tipo: form.tipo,
         cliente: form.tipo === 'externo' ? form.cliente : null,
       };
-      if (form.senha) data.senha = form.senha;
+      const newPassword = (form.senha || '').trim();
+      if (newPassword) data.senha = newPassword;
 
       if (editingId) {
         await base44.entities.Usuario.update(editingId, data);
         toast({ title: t('users.messages.updated') });
       } else {
+        data.senha = newPassword;
         data.criado_por = currentUser?.nome_completo || 'Sistema';
         await base44.entities.Usuario.create(data);
         toast({ title: t('users.messages.created') });
@@ -350,7 +353,13 @@ export default function Usuarios() {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('users.fields.password')} {editingId ? t('users.passwordKeepBlank') : '*'}</label>
-              <Input type="password" value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} placeholder={editingId ? t('users.placeholders.passwordNew') : t('users.placeholders.passwordInitial')} />
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={form.senha}
+                onChange={(e) => setForm({ ...form, senha: e.target.value })}
+                placeholder={editingId ? t('users.placeholders.passwordNew') : t('users.placeholders.passwordInitial')}
+              />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('users.fields.cargo')}</label>

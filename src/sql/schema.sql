@@ -27,7 +27,7 @@ create table if not exists usuarios (
   created_by_id text,
   nome_completo text not null,
   usuario text not null,
-  senha text not null,
+  senha text, -- nullable: cleared after bcrypt hash into senha_hash
   nivel_acesso text default 'Operacional',
   status text default 'Ativo',
   cargo text,

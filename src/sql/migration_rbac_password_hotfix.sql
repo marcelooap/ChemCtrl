@@ -5,9 +5,14 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
+-- Permite limpar texto plano após gerar senha_hash
+ALTER TABLE usuarios
+  ALTER COLUMN senha DROP NOT NULL;
+
 -- 1) Rehashear quem ainda tem senha em texto e hash vazio
 UPDATE usuarios
-SET senha_hash = extensions.crypt(senha, extensions.gen_salt('bf', 10))
+SET senha_hash = extensions.crypt(senha, extensions.gen_salt('bf', 10)),
+    senha = NULL
 WHERE senha IS NOT NULL
   AND btrim(senha) <> ''
   AND (senha_hash IS NULL OR btrim(senha_hash) = '');
@@ -20,11 +25,14 @@ SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
 BEGIN
-  IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.senha IS NOT NULL AND NEW.senha <> '') THEN
+  IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.senha IS NOT NULL AND btrim(NEW.senha) <> '') THEN
     NEW.senha_hash := extensions.crypt(NEW.senha, extensions.gen_salt('bf', 10));
     NEW.senha := NULL;
   ELSIF TG_OP = 'UPDATE' THEN
     NEW.senha_hash := COALESCE(NEW.senha_hash, OLD.senha_hash);
+    IF NEW.senha_hash IS NOT NULL THEN
+      NEW.senha := NULL;
+    END IF;
   END IF;
   RETURN NEW;
 END;

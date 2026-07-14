@@ -75,6 +75,7 @@ CREATE TRIGGER manage_usuarios_trigger
 -- ============================================================================
 -- 6. LIMPAR SENHAS EM TEXTO PLANO (após hash bem-sucedido)
 -- ============================================================================
+ALTER TABLE usuarios ALTER COLUMN senha DROP NOT NULL;
 UPDATE usuarios SET senha = null WHERE senha_hash IS NOT NULL;
 
 -- ============================================================================
