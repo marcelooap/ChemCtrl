@@ -10,7 +10,7 @@ const toDate = (v) => (v ? new Date(v) : null);
 
 /**
  * Consolidates every record related to a physical vasilhame across all tables
- * (Container, Production, Transfer) into chronological CYCLES.
+ * (Container, Production, Transfer, ContainerOrigin) into chronological CYCLES.
  *
  * A cycle = one utilization of the vasilhame (one Container record tied to one OP).
  * The same physical vasilhame (container_number + barril_number) reused in
@@ -19,7 +19,7 @@ const toDate = (v) => (v ? new Date(v) : null);
  * Each cycle: { header, production, events[] }
  * Each event: { date, type, kind, fields, extra }
  */
-export function buildContainerCycles(selected, allContainers = [], transfers = [], productions = [], recipes = []) {
+export function buildContainerCycles(selected, allContainers = [], transfers = [], productions = [], recipes = [], containerOrigins = []) {
   if (!selected || !allContainers) return [];
   const cn = norm(selected.container_number);
   const bn = norm(selected.barril_number);
@@ -30,12 +30,12 @@ export function buildContainerCycles(selected, allContainers = [], transfers = [
     norm(c.container_number) === cn && norm(c.barril_number) === bn
   );
 
-  const cycles = cycleContainers.map(c => buildCycle(c, transfers, productions, recipes));
+  const cycles = cycleContainers.map(c => buildCycle(c, transfers, productions, recipes, containerOrigins));
   cycles.sort((a, b) => (b.startDate?.getTime() || 0) - (a.startDate?.getTime() || 0));
   return cycles;
 }
 
-function buildCycle(container, transfers, productions, recipes) {
+function buildCycle(container, transfers, productions, recipes, containerOrigins = []) {
   const recipe = (recipes || []).find(r => r.product_name === container.product);
   const code = recipe?.code || container.product;
   const production = (productions || []).find(p =>
@@ -51,8 +51,46 @@ function buildCycle(container, transfers, productions, recipes) {
     ? (transfers || []).find(t => t.transfer_number === container.op_number)
     : null;
 
-  // 1. First event: Produção / Registro / Transbordo de Entrada
-  if (production) {
+  const origins = (containerOrigins || [])
+    .filter((o) => o.container_id === container.id)
+    .sort((a, b) => {
+      const ta = a.created_date ? new Date(a.created_date).getTime() : 0;
+      const tb = b.created_date ? new Date(b.created_date).getTime() : 0;
+      return ta - tb;
+    });
+
+  // 1. First event: Produção / multi-origin / Registro / Transbordo de Entrada
+  if (origins.length > 0) {
+    origins.forEach((o, idx) => {
+      const originProd = (productions || []).find(p =>
+        (o.production_id && p.id === o.production_id)
+        || (o.op_number && p.op_number === o.op_number)
+      );
+      const isComplement = idx > 0;
+      events.push({
+        date: toDate(o.created_date) || toDate(originProd?.date) || toDate(container.created_date),
+        type: isComplement ? 'Complemento de Embalagem' : 'Produção',
+        kind: isComplement ? 'complemento_embalagem' : 'producao',
+        fields: {
+          'Nº da OP': o.op_number || originProd?.op_number,
+          'Produto': originProd?.product || container.product,
+          'Código do Produto': (originProd
+            ? (recipes || []).find(r => r.product_name === originProd.product)?.code
+            : code),
+          'Cliente': originProd?.client || container.client,
+          'Lote': o.lot || originProd?.lot || container.lot,
+          'Volume Inicial (L)': o.initial_volume,
+          'Volume Atual (L)': o.volume,
+          'Massa Produzida (kg)': originProd?.mass,
+          'Densidade': originProd?.density,
+          'Status': originProd?.status,
+          'Operador': o.operator || originProd?.operator || container.operator,
+          'Observações': originProd?.observations,
+        },
+        extra: originProd ? { raw_materials: parseArr(originProd.raw_materials_used) } : undefined,
+      });
+    });
+  } else if (production) {
     events.push({
       date: toDate(production.date) || toDate(container.created_date),
       type: 'Produção',
@@ -80,7 +118,7 @@ function buildCycle(container, transfers, productions, recipes) {
       extra: { raw_materials: parseArr(production.raw_materials_used) },
     });
   } else if (incomingTransfer) {
-    const origins = parseArr(incomingTransfer.origins);
+    const transferOrigins = parseArr(incomingTransfer.origins);
     const dests = parseArr(incomingTransfer.destinations);
     const destEntry = dests.find(d => d.placa === container.container_number) || dests[0] || {};
     events.push({
@@ -102,7 +140,7 @@ function buildCycle(container, transfers, productions, recipes) {
         'Lacres': destEntry.seals,
         'Eslinga': destEntry.sling,
         'Operador': incomingTransfer.operator,
-        'Origens': origins.map(o => `${o.container_number || ''}${o.barril_number ? ' / ' + o.barril_number : ''}`).join(', '),
+        'Origens': transferOrigins.map(o => `${o.container_number || ''}${o.barril_number ? ' / ' + o.barril_number : ''}`).join(', '),
         'Observações': incomingTransfer.observations,
       },
     });

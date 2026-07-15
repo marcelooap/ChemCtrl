@@ -15,7 +15,7 @@ import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { generatePublicToken } from '@/lib/publicToken';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { NotificationService } from '@/notifications/services/NotificationService';
-import { fmtNumber } from '@/i18n/formatters';
+import { fmtNumber, fmtVolume } from '@/i18n/formatters';
 import { translatePriority } from '@/i18n/domainMaps';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -29,6 +29,9 @@ import {
   calcMpDeficits,
   mergeMpDeficitsPreservingLots,
   mpQtyNeededKg,
+  isContainerFractional,
+  productionOfContainer,
+  containerDisplayVolume,
 } from '@/lib/fractionalSupply';
 
 const convertToKg = (value, unit, density) => {
@@ -102,6 +105,7 @@ export default function NovaProducao() {
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productionsList } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const navigate = useNavigate();
   const { user: internalUser } = useInternalAuth();
 
@@ -118,6 +122,8 @@ export default function NovaProducao() {
   const [complementRecipe, setComplementRecipe] = useState(null);
   const [complementLoading, setComplementLoading] = useState(isComplementMode);
   const [fractionalSupply, setFractionalSupply] = useState(false);
+  const [complementPackaging, setComplementPackaging] = useState(false);
+  const [complementContainerId, setComplementContainerId] = useState('');
   const [saving, setSaving] = useState(false);
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);
@@ -164,6 +170,42 @@ export default function NovaProducao() {
       .sort((a, b) => a.localeCompare(b))
       .map(label => ({ value: label, label }));
   }, [containers, productionsList]);
+
+  const fractionalContainersForProduct = useMemo(() => {
+    const product = (form.product || '').trim();
+    if (!product) return [];
+    return (containers || []).filter((c) => {
+      if ((c.product || '').trim() !== product) return false;
+      if (c.status && c.status !== 'No Pátio') return false;
+      if ((parseFloat(c.volume) || 0) <= 0.001) return false;
+      const prod = productionOfContainer(c, productionsList || []);
+      return isContainerFractional(c, prod, transfers || []);
+    });
+  }, [containers, form.product, productionsList, transfers]);
+
+  const selectedComplementContainer = useMemo(
+    () => (containers || []).find((c) => c.id === complementContainerId) || null,
+    [containers, complementContainerId]
+  );
+
+  const containerLabel = (c) => {
+    const plate = (c.container_number || '').trim();
+    const barril = (c.barril_number || '').trim();
+    if (plate && barril && !/^[\-–—]+$/.test(barril)) return `${plate} - ${barril}`;
+    return plate || barril || c.registration_id || c.id;
+  };
+
+  useEffect(() => {
+    if (!complementPackaging) return;
+    if (!form.product) {
+      setComplementContainerId('');
+      return;
+    }
+    if (complementContainerId && !fractionalContainersForProduct.some((c) => c.id === complementContainerId)) {
+      setComplementContainerId('');
+      setForm((prev) => ({ ...prev, packaging_type: '' }));
+    }
+  }, [complementPackaging, form.product, complementContainerId, fractionalContainersForProduct]);
 
   useEffect(() => {
     if (!isComplementMode || !complementId) return;
@@ -466,6 +508,7 @@ export default function NovaProducao() {
   const save = async () => {
     if (!form.product || !form.volume) return;
     if (!massOk) return;
+    if (complementPackaging && !complementContainerId) return;
     setSaving(true);
     const volNum = parseFloat(form.volume) || 0;
     const densityNum = parseFloat(form.density) || 0;
@@ -509,6 +552,15 @@ export default function NovaProducao() {
           }))
         ),
       };
+
+      if (complementPackaging && complementContainerId) {
+        data.complement_packaging = true;
+        data.complement_container_id = complementContainerId;
+        const target = selectedComplementContainer;
+        if (target) {
+          data.packaging_type = containerLabel(target);
+        }
+      }
 
       if (fractionalSupply) {
         data.fractional_supply = true;
@@ -678,7 +730,9 @@ export default function NovaProducao() {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   }
 
-  const canSave = isComplementMode ? complementCanSave : massOk;
+  const canSave = isComplementMode
+    ? complementCanSave
+    : massOk && (!complementPackaging || !!complementContainerId);
   const saveHandler = isComplementMode ? saveComplement : save;
   const saveLabel = isComplementMode
     ? t('production.fractional.finalizeComplement')
@@ -768,9 +822,49 @@ export default function NovaProducao() {
           <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.density')}</label><Input type="number" step="0.001" value={form.density} readOnly={isComplementMode} onChange={e => handleDensityChange(e.target.value)} className={isComplementMode ? 'bg-muted/50' : ''} /></div>
           <div><label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.massCalculated')}</label><Input value={fmt3(form.mass)} readOnly className="bg-muted/50" /></div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.destinationPackaging')}</label>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.destinationPackaging')}</label>
+              {!isComplementMode && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">{t('production.complementPackaging.toggle')}</span>
+                  <Switch
+                    checked={complementPackaging}
+                    disabled={!form.product}
+                    onCheckedChange={(v) => {
+                      setComplementPackaging(v);
+                      setComplementContainerId('');
+                      setForm((prev) => ({ ...prev, packaging_type: '' }));
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             {isComplementMode ? (
               <Input value={form.packaging_type} readOnly className="bg-muted/50" placeholder={t('production.newProduction.packagingPlaceholder')} />
+            ) : complementPackaging ? (
+              <Select
+                value={complementContainerId || undefined}
+                onValueChange={(id) => {
+                  setComplementContainerId(id);
+                  const c = (containers || []).find((x) => x.id === id);
+                  setForm((prev) => ({ ...prev, packaging_type: c ? containerLabel(c) : '' }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('production.complementPackaging.selectPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {fractionalContainersForProduct.length === 0 ? (
+                    <SelectItem value="__none" disabled>{t('production.complementPackaging.empty')}</SelectItem>
+                  ) : (
+                    fractionalContainersForProduct.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {containerLabel(c)} · {fmtVolume(containerDisplayVolume(c, productionsList), 'L', i18n.language)}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             ) : (
               <Combobox
                 value={form.packaging_type}
@@ -778,6 +872,14 @@ export default function NovaProducao() {
                 options={packagingOptions}
                 placeholder={t('production.newProduction.packagingPlaceholder')}
               />
+            )}
+            {complementPackaging && selectedComplementContainer && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {t('production.complementPackaging.currentVolume')}:{' '}
+                <span className="font-semibold text-foreground">
+                  {fmtVolume(containerDisplayVolume(selectedComplementContainer, productionsList), 'L', i18n.language)}
+                </span>
+              </p>
             )}
           </div>
         </div>

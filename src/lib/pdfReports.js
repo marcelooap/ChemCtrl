@@ -6,6 +6,12 @@ import {
   fmtNumber,
   fmtCurrency,
 } from '@/i18n/formatters';
+import { containerLiveNetWeight, containerLiveGrossWeight, resolveProductDensity } from '@/lib/productionViewUtils';
+import {
+  allocateMpQuantitiesByNetWeight,
+  aggregateAllocatedMaterials,
+} from '@/lib/productionFiscalShare';
+import { materialsFromOriginRows } from '@/lib/containerOrigins';
 // eslint-disable-next-line
 import { getSignedFileUrl } from '@/api/storage'; // storage module (split from supabaseClient)
 
@@ -468,10 +474,18 @@ export function generateOrderPDF(order, productions, containers) {
   doc.save('pedido-' + (order.order_number || 'relatorio') + '.pdf');
 }
 
-export function generateProductionPDF(production, containers, stocks) {
+/**
+ * Shared OP fiscal report layout.
+ * @param {object} [options]
+ * @param {Array} [options.materials] - override raw materials (tank-scoped reports)
+ * @param {Array} [options.recipes]
+ * @param {string} [options.extraNote] - optional note after the info grid
+ * @param {string} [options.subtitle] - title subtitle override
+ */
+function drawProductionReport(doc, production, containers, stocks, options = {}) {
   const { lang, t } = getPdfLabels();
   const { fmtDate, fmtNum, fmtMoney, na } = makePdfFormatters(lang);
-  const doc = new jsPDF({ format: 'a4' });
+  const recipes = options.recipes || [];
   const stockUnitOf = function(mp) {
     if (stocks && mp.stock_id) {
       const s = stocks.find(function(x) { return x.id === mp.stock_id; });
@@ -488,7 +502,16 @@ export function generateProductionPDF(production, containers, stocks) {
   };
   const opNum = production.op_number || '';
   const opTitle = opNum + (production.product ? ' - ' + production.product : '');
-  let y = addPageTitle(doc, opTitle, t('pdf.production.subtitle'));
+  const pkgs = containers && containers.length > 0 ? containers : [];
+  let packagingLabel = production.packaging_type || production.packaging_info || '-';
+  if (pkgs.length === 1) {
+    packagingLabel = pkgs[0].container_number || packagingLabel;
+  } else if (pkgs.length > 1) {
+    packagingLabel = t('pdf.production.fields.packagingCount', {
+      count: String(pkgs.length).padStart(2, '0'),
+    });
+  }
+  let y = addPageTitle(doc, opTitle, options.subtitle || t('pdf.production.subtitle'));
   y = addInfoGrid(doc, y, [
     [t('pdf.production.fields.op'), production.op_number || '-'],
     [t('pdf.common.lot'), production.lot || '-'],
@@ -504,8 +527,13 @@ export function generateProductionPDF(production, containers, stocks) {
     [t('pdf.production.fields.totalValue'), fmtMoney(production.total_value)],
     [t('pdf.fields.priority'), production.priority || '-'],
     [t('pdf.common.operator'), production.operator || '-'],
-    [t('pdf.production.fields.packaging'), production.packaging_type || production.packaging_info || '-'],
+    [t('pdf.production.fields.packaging'), packagingLabel],
   ], 3);
+  if (options.extraNote) {
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); setColor(doc, GRAY_LABEL);
+    const noteLines = doc.splitTextToSize(options.extraNote, CW);
+    doc.text(noteLines, M, y); y += noteLines.length * 5 + 4; setColor(doc, BLACK);
+  }
   if (production.observations) {
     doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); setColor(doc, GRAY_LABEL);
     doc.text(t('pdf.common.observations'), M, y); y += 5; setColor(doc, BLACK);
@@ -513,7 +541,7 @@ export function generateProductionPDF(production, containers, stocks) {
     doc.text(lines, M, y); y += lines.length * 5 + 6;
   }
   y = addSectionTitle(doc, y, t('pdf.production.sectionRawMaterials'));
-  const mps = parseArr(production.raw_materials_used);
+  const mps = options.materials != null ? options.materials : parseArr(production.raw_materials_used);
   if (mps.length === 0) {
     doc.setFontSize(9); setColor(doc, GRAY_LABEL); doc.text(t('pdf.production.noRawMaterials'), M, y); y += 10;
   } else {
@@ -544,15 +572,133 @@ export function generateProductionPDF(production, containers, stocks) {
     ];
     const cRows = containers.map(function(c) {
       const tareVal = (c.tare != null && c.tare !== '') ? fmtNum(c.tare, 3) : na();
-      return [c.container_number || '-', c.type || '-', fmtNum(c.volume, 1), fmtNum(c.net_weight, 3), fmtNum(c.gross_weight, 3), tareVal];
+      const liveNet = containerLiveNetWeight(c, production, recipes);
+      const liveGross = containerLiveGrossWeight(c, production, recipes);
+      return [c.container_number || '-', c.type || '-', fmtNum(c.volume, 1), fmtNum(liveNet, 0), fmtNum(liveGross, 0), tareVal];
     });
     const tVol = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
-    const tNet = containers.reduce(function(s, c) { return s + (c.net_weight || 0); }, 0);
-    const tGross = containers.reduce(function(s, c) { return s + (c.gross_weight || 0); }, 0);
-    addTable(doc, y, cHeaders, cRows, [42, 36, 26, 26, 26, 26], [t('pdf.common.total'), '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 3) + ' kg', fmtNum(tGross, 3) + ' kg', '']);
+    const tNet = containers.reduce(function(s, c) { return s + containerLiveNetWeight(c, production, recipes); }, 0);
+    const tGross = containers.reduce(function(s, c) { return s + containerLiveGrossWeight(c, production, recipes); }, 0);
+    addTable(doc, y, cHeaders, cRows, [42, 36, 26, 26, 26, 26], [t('pdf.common.total'), '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 0) + ' kg', fmtNum(tGross, 0) + ' kg', '']);
   }
   addFooter(doc, lang);
+}
+
+export function generateProductionPDF(production, containers, stocks) {
+  const doc = new jsPDF({ format: 'a4' });
+  drawProductionReport(doc, production, containers, stocks);
   doc.save((production.op_number || 'producao') + '.pdf');
+}
+
+/**
+ * Fiscal report scoped to selected tanks: MP quantities proportional to live net weight.
+ * Returns false if total net weight is zero (caller should show a toast).
+ */
+export function generateProductionTanksPDF(production, allContainers, selectedContainers, stocks, recipes = []) {
+  const { t } = getPdfLabels();
+  const selected = Array.isArray(selectedContainers) ? selectedContainers : [];
+  const all = Array.isArray(allContainers) ? allContainers : [];
+  if (selected.length === 0) return false;
+
+  const mps = parseArr(production.raw_materials_used);
+  const allocation = allocateMpQuantitiesByNetWeight(mps, all, production, recipes, 3);
+  if (allocation.totalNet <= 0) return false;
+
+  const materials = aggregateAllocatedMaterials(mps, allocation, selected, all);
+  const selectedNet = selected.reduce(function(s, c) {
+    return s + containerLiveNetWeight(c, production, recipes);
+  }, 0);
+  const selectedVol = selected.reduce(function(s, c) {
+    return s + (parseFloat(c.volume) || 0);
+  }, 0);
+  const unitPrice = parseFloat(production.unit_price) || 0;
+  const labels = selected.map(function(c) { return c.container_number || '-'; }).join(', ');
+  const snapshot = {
+    ...production,
+    mass: selectedNet,
+    volume: selectedVol,
+    total_value: unitPrice * selectedNet,
+  };
+
+  const doc = new jsPDF({ format: 'a4' });
+  drawProductionReport(doc, snapshot, selected, stocks, {
+    materials,
+    recipes,
+    subtitle: t('pdf.production.tanksSubtitle'),
+    extraNote: t('pdf.production.selectedTanksNote', { tanks: labels }),
+  });
+  doc.save((production.op_number || 'producao') + '_tanques.pdf');
+  return true;
+}
+
+/**
+ * Fiscal report for selected container-origin rows (multi-OP composition).
+ * Uses each origin OP's real raw_materials_used scaled by origin.volume / production.volume.
+ */
+export function generateProductionOriginsPDF(viewerProduction, selectedRows, productions, stocks, recipes = []) {
+  const { t } = getPdfLabels();
+  const selected = Array.isArray(selectedRows) ? selectedRows : [];
+  if (selected.length === 0) return false;
+
+  const materials = materialsFromOriginRows(selected, productions, 3);
+  if (!materials.length && selected.every((r) => (parseFloat(r.volume) || 0) <= 0)) return false;
+
+  const selectedVol = selected.reduce((s, r) => s + (parseFloat(r.volume) || 0), 0);
+  if (selectedVol <= 0) return false;
+
+  const selectedNet = selected.reduce((s, r) => {
+    const dens = resolveProductDensity(
+      (Array.isArray(productions) ? productions.find((p) => p.id === r.production_id) : null) || viewerProduction,
+      r.container,
+      recipes
+    );
+    const vol = parseFloat(r.volume) || 0;
+    if (dens && vol > 0) return s + Math.round(vol * dens);
+    return s + Math.round(vol * (parseFloat(viewerProduction?.density) || 1));
+  }, 0);
+
+  // Synthetic packaging rows for PDF table (one per origin)
+  const displayContainers = selected.map((r, i) => ({
+    ...(r.container || {}),
+    id: r.key || r.origin?.id || `origin-${i}`,
+    volume: parseFloat(r.volume) || 0,
+    net_weight: (() => {
+      const dens = resolveProductDensity(
+        (Array.isArray(productions) ? productions.find((p) => p.id === r.production_id) : null) || viewerProduction,
+        r.container,
+        recipes
+      );
+      const vol = parseFloat(r.volume) || 0;
+      return dens ? Math.round(vol * dens) : Math.round(vol * (parseFloat(viewerProduction?.density) || 1));
+    })(),
+    op_number: r.op_number || r.container?.op_number,
+    lot: r.lot || r.container?.lot,
+    _origin_label: r.op_number,
+  }));
+
+  const unitPrice = parseFloat(viewerProduction?.unit_price) || 0;
+  const labels = selected.map((r) => {
+    const placa = r.container?.container_number || '-';
+    const op = r.op_number || '';
+    return op ? `${placa} (${op})` : placa;
+  }).join(', ');
+
+  const snapshot = {
+    ...viewerProduction,
+    mass: selectedNet,
+    volume: selectedVol,
+    total_value: unitPrice * selectedNet,
+  };
+
+  const doc = new jsPDF({ format: 'a4' });
+  drawProductionReport(doc, snapshot, displayContainers, stocks, {
+    materials,
+    recipes,
+    subtitle: t('pdf.production.originsSubtitle'),
+    extraNote: t('pdf.production.selectedOriginsNote', { tanks: labels }),
+  });
+  doc.save((viewerProduction?.op_number || 'producao') + '_origens.pdf');
+  return true;
 }
 
 export function generateEnsaioPDF(test) {

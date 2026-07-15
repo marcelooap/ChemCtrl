@@ -62,6 +62,29 @@ export const isComplementPending = (production) =>
   production?.complement_status === 'Pendente' &&
   (production?.volume_pendente || 0) > 0.001;
 
+/** Origem de transbordo com saldo residual (> 0 L). */
+export const isFractionalFromTransfer = (container, transfers = []) => {
+  if (!container?.id) return false;
+  const vol = parseFloat(container.volume) || 0;
+  if (vol <= 0.001) return false;
+  if (container.status && container.status !== 'No Pátio') return false;
+  if (container.is_fractional) return true;
+
+  return (transfers || []).some((tr) => {
+    const origins = parseArr(tr.origins);
+    return origins.some((o) => {
+      if (o.container_id !== container.id) return false;
+      const remaining = parseFloat(o.remaining_stock);
+      if (!Number.isNaN(remaining)) return remaining > 0.001;
+      return (parseFloat(o.volume_used) || 0) > 0.001;
+    });
+  });
+};
+
+/** Badge "Fracionado" no vasilhame: complemento pendente ou residual de transbordo. */
+export const isContainerFractional = (container, production, transfers = []) =>
+  isComplementPending(production) || isFractionalFromTransfer(container, transfers);
+
 export const buildSupplyHistoryEntry = (type, user, lots) => ({
   type,
   date: new Date().toISOString(),
@@ -161,15 +184,33 @@ export const productionOfContainer = (container, productions) => {
 
 export const getFractionalDisplayVolume = (container, production) => {
   if (!production?.fractional_supply) return null;
-  return production.volume_apontado ?? 0;
+  return parseFloat(production.volume_apontado) || 0;
 };
 
+/**
+ * Volume físico/exibível do vasilhame.
+ * Em atendimento fracionado, o envase muitas vezes grava o volume nominal da OP
+ * enquanto o volume realmente apontado (massa) fica em volume_apontado (ex.: 4.993 L).
+ * Nesse caso exibimos o apontado. Após transbordo/redução, containers.volume é a fonte da verdade.
+ */
 export const containerDisplayVolume = (container, productions) => {
+  const containerVol = parseFloat(container?.volume) || 0;
   const production = productionOfContainer(container, productions);
+
   if (production?.fractional_supply) {
-    return Math.round(production.volume_apontado ?? 0);
+    const apontado = parseFloat(production.volume_apontado);
+    const opVol = parseFloat(production.volume) || 0;
+    if (Number.isFinite(apontado) && apontado > 0) {
+      // Volume ainda parece o nominal da OP (não reduzido por TB/expedição)
+      const storedAsOpVolume =
+        opVol > 0 && Math.abs(containerVol - opVol) <= 0.51;
+      if (storedAsOpVolume || containerVol <= 0) {
+        return round3(apontado);
+      }
+    }
   }
-  return container.volume || 0;
+
+  return containerVol;
 };
 
 export const containerDensity = (container, productions, recipes = []) => {

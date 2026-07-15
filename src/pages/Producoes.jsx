@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import InvoiceToggle from '@/components/productions/InvoiceToggle';
-import { generateProductionPDF } from '@/lib/pdfReports';
+import { generateProductionPDF, generateProductionTanksPDF, generateProductionOriginsPDF } from '@/lib/pdfReports';
 import QrCodeDialog from '@/components/productions/QrCodeDialog';
 import ProductionViewDialog from '@/components/production/ProductionViewDialog';
 import FractionalBadge from '@/components/production/FractionalBadge';
 import { isComplementPending } from '@/lib/fractionalSupply';
-import { parseArr } from '@/lib/productionViewUtils';
+import { parseArr, containersOfProductionLot } from '@/lib/productionViewUtils';
+import { packagingRowsForProduction } from '@/lib/containerOrigins';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
@@ -46,6 +47,8 @@ export default function Producoes() {
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
+  const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () => base44.entities.ContainerOrigin.list('-created_date', 2000));
   const [search, setSearch] = useState(() => searchParams.get('product') || '');
   const [clientFilter, setClientFilter] = useState('todos');
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'todos');
@@ -55,6 +58,7 @@ export default function Producoes() {
   const [showEditPkg, setShowEditPkg] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [viewContainers, setViewContainers] = useState([]);
+  const [viewPackagingRows, setViewPackagingRows] = useState([]);
   const [editingPkg, setEditingPkg] = useState(null);
   const [pkgValue, setPkgValue] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
@@ -90,9 +94,20 @@ export default function Producoes() {
 
   const filtered = useMemo(() => productions.filter(p => {
     const q = search.toLowerCase();
-    const opContainersOf = (row) => containers.filter(c => c.op_number === row.op_number);
+    const rows = packagingRowsForProduction(containers, containerOrigins, p);
+    const opContainersOf = () => {
+      const seen = new Set();
+      const list = [];
+      for (const r of rows) {
+        if (r.container?.id && !seen.has(r.container.id)) {
+          seen.add(r.container.id);
+          list.push(r.container);
+        }
+      }
+      return list.length ? list : containersOfProductionLot(containers, p);
+    };
     const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
-      || opContainersOf(p).some(c => (c.container_number || '').toLowerCase().includes(q))
+      || opContainersOf().some(c => (c.container_number || '').toLowerCase().includes(q))
       || (p.packaging_type || '').toLowerCase().includes(q);
     const fabRaw = p.end_time || p.updated_date || null;
     const fabDate = fabRaw ? moment(fabRaw) : null;
@@ -105,7 +120,7 @@ export default function Producoes() {
         ? isComplementPending(p)
         : p.status === statusFilter;
     return matchSearch && matchFrom && matchTo && matchesClient && matchStatus;
-  }), [productions, containers, search, dateFrom, dateTo, clientFilter, statusFilter]);
+  }), [productions, containers, containerOrigins, search, dateFrom, dateTo, clientFilter, statusFilter]);
 
   const footerStats = useMemo(() => {
     let activeOPs = 0;
@@ -224,7 +239,18 @@ export default function Producoes() {
 
   const openView = (p) => {
     setViewing(p);
-    setViewContainers(containers.filter(c => c.op_number === p.op_number));
+    const rows = packagingRowsForProduction(containers, containerOrigins, p);
+    setViewPackagingRows(rows);
+    const uniqueContainers = [];
+    const seen = new Set();
+    for (const row of rows) {
+      if (row.container?.id && !seen.has(row.container.id)) {
+        seen.add(row.container.id);
+        uniqueContainers.push(row.container);
+      }
+    }
+    // Fallback to lot-based list when no origin rows yet
+    setViewContainers(uniqueContainers.length ? uniqueContainers : containersOfProductionLot(containers, p));
     setShowView(true);
   };
 
@@ -326,14 +352,32 @@ export default function Producoes() {
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(p.volume)}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">
                       {(() => {
-                        const opContainers = containers.filter(c => c.op_number === p.op_number);
-                        if (opContainers.length > 0) {
-                          if (opContainers.length > 1) {
-                            return t('production.packaging.loadUnits', { count: String(opContainers.length).padStart(2, '0') });
+                        const rows = packagingRowsForProduction(containers, containerOrigins, p);
+                        const opContainers = [];
+                        const seen = new Set();
+                        for (const r of rows) {
+                          if (r.container?.id && !seen.has(r.container.id)) {
+                            seen.add(r.container.id);
+                            opContainers.push(r.container);
                           }
-                          return opContainers.map(c => c.container_number).filter(Boolean).join(', ') || t('common.notAvailable');
                         }
-                        return p.packaging_type || p.packaging_info || t('common.notAvailable');
+                        if (opContainers.length === 0) {
+                          const legacy = containersOfProductionLot(containers, p);
+                          if (legacy.length > 0) {
+                            if (legacy.length > 1) {
+                              return t('production.packaging.loadUnits', { count: String(legacy.length).padStart(2, '0') });
+                            }
+                            return legacy[0].container_number || p.packaging_type || t('common.notAvailable');
+                          }
+                          return p.packaging_type || t('common.notAvailable');
+                        }
+                        if (rows.length > 1 && opContainers.length === 1) {
+                          return `${opContainers[0].container_number || t('common.notAvailable')} (${rows.length} ${t('production.opNumber').toLowerCase()})`;
+                        }
+                        if (opContainers.length > 1) {
+                          return t('production.packaging.loadUnits', { count: String(opContainers.length).padStart(2, '0') });
+                        }
+                        return opContainers[0].container_number || p.packaging_type || t('common.notAvailable');
                       })()}
                     </td>
                     <td className="px-4 py-2.5 text-center">
@@ -392,11 +436,28 @@ export default function Producoes() {
       <ProductionViewDialog
         production={viewing}
         containers={viewContainers}
+        origins={containerOrigins}
+        packagingRows={viewPackagingRows}
         stocks={stocks}
         recipes={recipes}
+        transfers={transfers}
+        productions={productions}
         open={showView}
         onOpenChange={setShowView}
         onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks)}
+        onGenerateTanksPdf={(selected) => {
+          const isOriginRows = Array.isArray(selected) && selected.length > 0 && selected[0]?.container;
+          const ok = isOriginRows
+            ? generateProductionOriginsPDF(viewing, selected, productions, stocks, recipes)
+            : generateProductionTanksPDF(viewing, viewContainers, selected, stocks, recipes);
+          if (!ok) {
+            toast({
+              title: t('production.messages.tanksPdfError'),
+              description: t('production.messages.tanksPdfZeroNet'),
+              variant: 'destructive',
+            });
+          }
+        }}
         onShowQr={() => { setQrToken(viewing.public_token); setQrLabel(`${viewing.op_number} · ${viewing.product} · ${t('common.lot')} ${viewing.lot}`); setShowQr(true); }}
       />
 

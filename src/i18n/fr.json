@@ -568,6 +568,7 @@
       "viewDetails": "Ver Detalhes",
       "editPackaging": "Editar Envase",
       "generatePdf": "Générer PDF",
+      "generateTanksPdf": "Rapport Fiscal des Cuves",
       "bypassOn": "Liberar By-pass",
       "bypassOff": "Remover By-pass"
     },
@@ -606,7 +607,9 @@
       "updateError": "Erreur lors de la mise à jour",
       "created": "Production créée avec succès",
       "finished": "Produção finalizada",
-      "noRawMaterials": "Sem matérias primas registradas."
+      "noRawMaterials": "Sem matérias primas registradas.",
+      "tanksPdfError": "Impossible de générer le rapport",
+      "tanksPdfZeroNet": "Les emballages sélectionnés n'ont pas de poids net pour la répartition."
     },
     "filters": {
       "status": "Status",
@@ -675,6 +678,18 @@
       "finalizingComplement": "Finalisation du complément...",
       "lockedFields": "Données de l'OP (lecture seule)",
       "newLotsSection": "Nouvelle allocation"
+    },
+    "complementPackaging": {
+      "toggle": "Compléter l'Emballage",
+      "selectPlaceholder": "Sélectionnez un emballage fractionné...",
+      "empty": "Aucun emballage fractionné pour ce produit",
+      "currentVolume": "Volume Actuel",
+      "addVolume": "Volume à ajouter (L)",
+      "envaseTitle": "Compléter l'Emballage — {{product}} · Lot {{lot}}",
+      "envaseSection": "Emballage existant",
+      "targetLoadError": "Impossible de charger l'emballage de destination.",
+      "targetUnavailable": "L'emballage sélectionné n'est plus disponible dans le parc.",
+      "productMismatch": "L'emballage sélectionné appartient à un autre produit."
     },
     "orders": {
       "openCount": "{{count}} OP(s) ouvertes",
@@ -750,7 +765,12 @@
       "costPerKg": "Coût par kg",
       "percentOfTotal": "{{percent}}% du total",
       "packagedContainers": "Emballages Conditionnés",
+      "emptyContainer": "Vide",
       "packagingNumber": "N° Emballage",
+      "selectPackaging": "Sélectionner les emballages",
+      "selectPackagingItem": "Sélectionner l'emballage {{label}}",
+      "selectAllPackaging": "Tout sélectionner",
+      "deselectAllPackaging": "Tout désélectionner",
       "suggestedPackaging": "Emballage Suggéré pour le Conditionnement",
       "productionTimes": "Temps de Production",
       "productionPhase": "⚙️ Production",
@@ -2036,6 +2056,10 @@
     "production": {
       "title": "PO {{number}}",
       "subtitle": "Rapport d'Ordre de Production",
+      "tanksSubtitle": "Rapport Fiscal par Cuve(s)",
+      "selectedTanksNote": "Emballages sélectionnés : {{tanks}}",
+      "originsSubtitle": "Rapport Fiscal par Origine(s)",
+      "selectedOriginsNote": "Origines sélectionnées : {{tanks}}",
       "sectionRawMaterials": "Matières Premières Utilisées",
       "sectionPackaging": "Contenants Conditionnés",
       "noRawMaterials": "Aucune matière première enregistrée.",
@@ -2064,7 +2088,8 @@
         "finishDate": "Completion Date",
         "unitPrice": "Unit Price",
         "totalValue": "Total Value",
-        "packaging": "Packaging"
+        "packaging": "Packaging",
+        "packagingCount": "{{count}} Emballages"
       }
     },
     "coa": {
@@ -2407,6 +2432,7 @@
       "originPackaging": "Emballages d'Origine",
       "destinations": "Destination(s)",
       "volumeWithdrawn": "Vol. retiré",
+      "compositionByOrigin": "Composition par Origine",
       "editTitle": "Modifier Conteneur — {{product}}",
       "lotPlaceholder": "Lot du conteneur",
       "minTestDate": "Date Test Minimum",
@@ -2478,7 +2504,7 @@
       "generalData": "Données Générales",
       "dateRequired": "Date *",
       "productRequired": "Produit *",
-      "productPlaceholder": "Sélectionnez ou recherchez le produit...",
+      "productPlaceholder": "Sélectionnez le produit",
       "clientAuto": "Client (automatique)",
       "auto": "Automatique",
       "operatorAuto": "Opérateur (auto)",

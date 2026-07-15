@@ -620,6 +620,7 @@
       "viewDetails": "Ver Detalhes",
       "editPackaging": "Editar Envase",
       "generatePdf": "Gerar PDF",
+      "generateTanksPdf": "Relatório Fiscal dos Tanques",
       "bypassOn": "Liberar By-pass",
       "bypassOff": "Remover By-pass"
     },
@@ -658,7 +659,9 @@
       "updateError": "Erro ao atualizar produção",
       "created": "Produção criada com sucesso",
       "finished": "Produção finalizada",
-      "noRawMaterials": "Sem matérias primas registradas."
+      "noRawMaterials": "Sem matérias primas registradas.",
+      "tanksPdfError": "Não foi possível gerar o relatório",
+      "tanksPdfZeroNet": "As embalagens selecionadas não possuem peso líquido para rateio."
     },
     "filters": {
       "status": "Status",
@@ -727,6 +730,18 @@
       "finalizingComplement": "Finalizando complemento...",
       "lockedFields": "Dados da OP (somente leitura)",
       "newLotsSection": "Novo apontamento"
+    },
+    "complementPackaging": {
+      "toggle": "Complementar Embalagem",
+      "selectPlaceholder": "Selecione embalagem fracionada...",
+      "empty": "Nenhuma embalagem fracionada deste produto",
+      "currentVolume": "Volume Atual",
+      "addVolume": "Volume a adicionar (L)",
+      "envaseTitle": "Complementar Embalagem — {{product}} · Lote {{lot}}",
+      "envaseSection": "Embalagem existente",
+      "targetLoadError": "Não foi possível carregar a embalagem de destino.",
+      "targetUnavailable": "A embalagem selecionada não está mais disponível no pátio.",
+      "productMismatch": "A embalagem selecionada é de outro produto."
     },
     "orders": {
       "openCount": "{{count}} OP(s) em aberto",
@@ -802,7 +817,12 @@
       "costPerKg": "Custo por kg",
       "percentOfTotal": "{{percent}}% do total",
       "packagedContainers": "Embalagens Envasadas",
+      "emptyContainer": "Vazio",
       "packagingNumber": "Nº Embalagem",
+      "selectPackaging": "Selecionar embalagens",
+      "selectPackagingItem": "Selecionar embalagem {{label}}",
+      "selectAllPackaging": "Selecionar tudo",
+      "deselectAllPackaging": "Desmarcar tudo",
       "suggestedPackaging": "Embalagem Sugerida para Envase",
       "productionTimes": "Tempos de Produção",
       "productionPhase": "⚙️ Produção",
@@ -1995,6 +2015,10 @@
     "production": {
       "title": "OP {{number}}",
       "subtitle": "Relatório de Ordem de Produção",
+      "tanksSubtitle": "Relatório Fiscal por Tanque(s)",
+      "selectedTanksNote": "Embalagens selecionadas: {{tanks}}",
+      "originsSubtitle": "Relatório Fiscal por Origem(ns)",
+      "selectedOriginsNote": "Origens selecionadas: {{tanks}}",
       "sectionRawMaterials": "Matérias Primas Utilizadas",
       "sectionPackaging": "Embalagens Envasadas",
       "noRawMaterials": "Sem matérias primas registradas.",
@@ -2023,7 +2047,8 @@
         "finishDate": "Data Finalização",
         "unitPrice": "Preço Unit.",
         "totalValue": "Valor Total",
-        "packaging": "Embalagem"
+        "packaging": "Embalagem",
+        "packagingCount": "{{count}} Embalagens"
       }
     },
     "coa": {
@@ -2366,6 +2391,7 @@
       "originPackaging": "Embalagens de Origem",
       "destinations": "Destino(s)",
       "volumeWithdrawn": "Vol. retirado",
+      "compositionByOrigin": "Composição por Origem",
       "editTitle": "Editar Vasilhame — {{product}}",
       "lotPlaceholder": "Lote do vasilhame",
       "minTestDate": "Data Menor Teste",
@@ -2437,7 +2463,7 @@
       "generalData": "Dados Gerais",
       "dateRequired": "Data *",
       "productRequired": "Produto *",
-      "productPlaceholder": "Selecione ou busque o produto...",
+      "productPlaceholder": "Selecione o produto",
       "clientAuto": "Cliente (automático)",
       "auto": "Automático",
       "operatorAuto": "Operador (auto)",

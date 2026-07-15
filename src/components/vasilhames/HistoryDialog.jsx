@@ -6,7 +6,7 @@ import ProductCombobox from '@/components/ui/ProductCombobox';
 import HistoryCycles from './HistoryCycles';
 import { buildContainerCycles } from '@/lib/containerHistory';
 
-export default function HistoryDialog({ open, onOpenChange, containers, transfers, productions, recipes }) {
+export default function HistoryDialog({ open, onOpenChange, containers, transfers, productions, recipes, containerOrigins = [] }) {
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState('');
   const [cycles, setCycles] = useState(null);
@@ -27,7 +27,7 @@ export default function HistoryDialog({ open, onOpenChange, containers, transfer
     if (!selectedContainer) return;
     setSearching(true);
     setTimeout(() => {
-      const result = buildContainerCycles(selectedContainer, containers, transfers, productions, recipes);
+      const result = buildContainerCycles(selectedContainer, containers, transfers, productions, recipes, containerOrigins);
       setCycles(result);
       setShowTimeline(true);
       setSearching(false);

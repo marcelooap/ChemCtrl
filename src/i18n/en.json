@@ -620,6 +620,7 @@
       "viewDetails": "View Details",
       "editPackaging": "Edit Packaging",
       "generatePdf": "Generate PDF",
+      "generateTanksPdf": "Tank Fiscal Report",
       "bypassOn": "Enable Bypass",
       "bypassOff": "Remove Bypass"
     },
@@ -658,7 +659,9 @@
       "updateError": "Failed to update production",
       "created": "Production created successfully",
       "finished": "Production finished",
-      "noRawMaterials": "No raw materials recorded."
+      "noRawMaterials": "No raw materials recorded.",
+      "tanksPdfError": "Unable to generate the report",
+      "tanksPdfZeroNet": "Selected packages have no net weight for allocation."
     },
     "filters": {
       "status": "Status",
@@ -727,6 +730,18 @@
       "finalizingComplement": "Finalizing complement...",
       "lockedFields": "PO data (read-only)",
       "newLotsSection": "New allocation"
+    },
+    "complementPackaging": {
+      "toggle": "Complement Packaging",
+      "selectPlaceholder": "Select fractional packaging...",
+      "empty": "No fractional packaging for this product",
+      "currentVolume": "Current Volume",
+      "addVolume": "Volume to add (L)",
+      "envaseTitle": "Complement Packaging — {{product}} · Lot {{lot}}",
+      "envaseSection": "Existing packaging",
+      "targetLoadError": "Could not load the destination packaging.",
+      "targetUnavailable": "The selected packaging is no longer available in the yard.",
+      "productMismatch": "The selected packaging is for a different product."
     },
     "orders": {
       "openCount": "{{count}} open PO(s)",
@@ -802,7 +817,12 @@
       "costPerKg": "Cost per kg",
       "percentOfTotal": "{{percent}}% of total",
       "packagedContainers": "Packaged Containers",
+      "emptyContainer": "Empty",
       "packagingNumber": "Packaging No.",
+      "selectPackaging": "Select packages",
+      "selectPackagingItem": "Select package {{label}}",
+      "selectAllPackaging": "Select all",
+      "deselectAllPackaging": "Deselect all",
       "suggestedPackaging": "Suggested Packaging for Filling",
       "productionTimes": "Production Times",
       "productionPhase": "⚙️ Production",
@@ -2119,6 +2139,10 @@
     "production": {
       "title": "PO {{number}}",
       "subtitle": "Production Order Report",
+      "tanksSubtitle": "Fiscal Report by Tank(s)",
+      "selectedTanksNote": "Selected packages: {{tanks}}",
+      "originsSubtitle": "Fiscal Report by Origin(s)",
+      "selectedOriginsNote": "Selected origins: {{tanks}}",
       "sectionRawMaterials": "Raw Materials Used",
       "sectionPackaging": "Packaged Containers",
       "noRawMaterials": "No raw materials recorded.",
@@ -2147,7 +2171,8 @@
         "finishDate": "Completion Date",
         "unitPrice": "Unit Price",
         "totalValue": "Total Value",
-        "packaging": "Packaging"
+        "packaging": "Packaging",
+        "packagingCount": "{{count}} Packages"
       }
     },
     "coa": {
@@ -2490,6 +2515,7 @@
       "originPackaging": "Origin Packaging",
       "destinations": "Destination(s)",
       "volumeWithdrawn": "Vol. withdrawn",
+      "compositionByOrigin": "Composition by Origin",
       "editTitle": "Edit Container — {{product}}",
       "lotPlaceholder": "Container lot",
       "minTestDate": "Minimum Test Date",
@@ -2561,7 +2587,7 @@
       "generalData": "General Data",
       "dateRequired": "Date *",
       "productRequired": "Product *",
-      "productPlaceholder": "Select or search product...",
+      "productPlaceholder": "Select product",
       "clientAuto": "Client (automatic)",
       "auto": "Automatic",
       "operatorAuto": "Operator (auto)",

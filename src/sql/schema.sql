@@ -213,6 +213,25 @@ drop trigger if exists update_updated_date_containers on containers;
 create trigger update_updated_date_containers before update on containers for each row execute function update_updated_date();
 
 -- ============================================================================
+-- 6b. container_origins (multi-OP composition for complementary packaging)
+-- ============================================================================
+create table if not exists container_origins (
+  id text primary key default gen_random_uuid()::text,
+  created_date timestamptz default now(),
+  updated_date timestamptz default now(),
+  container_id text not null,
+  production_id text,
+  op_number text,
+  lot text,
+  volume numeric not null default 0,
+  initial_volume numeric not null default 0,
+  operator text
+);
+alter table container_origins enable row level security;
+drop policy if exists "allow_all_container_origins" on container_origins;
+create policy "allow_all_container_origins" on container_origins for all using (true) with check (true);
+
+-- ============================================================================
 -- 7. orders
 -- ============================================================================
 create table if not exists orders (

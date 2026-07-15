@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileText, QrCode } from 'lucide-react';
+import { FileText, QrCode, ArrowUpRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
-import { parseArr, stockUnitOf, liveLotOf, stockUnitPriceOf } from '@/lib/productionViewUtils';
+import { parseArr, stockUnitOf, liveLotOf, stockUnitPriceOf, isTransferDestinationContainer, containerLiveNetWeight, resolveProductDensity } from '@/lib/productionViewUtils';
 import FractionalBadge from '@/components/production/FractionalBadge';
 import { isComplementPending } from '@/lib/fractionalSupply';
+import { packagingRowsForProduction, originShareKey } from '@/lib/containerOrigins';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -24,22 +26,85 @@ const StatusBadge = ({ status }) => {
 export default function ProductionViewDialog({
   production,
   containers = [],
+  origins = [],
+  packagingRows: packagingRowsProp,
   stocks = [],
   recipes = [],
+  transfers = [],
+  productions = [],
   open,
   onOpenChange,
   simplified = false,
   onGeneratePdf,
+  onGenerateTanksPdf,
   onShowQr,
 }) {
   const { t, i18n } = useTranslation();
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
+  const fmtGross = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtMoney = (n) => fmtCurrency(n, 'BRL', i18n.language);
   const fmt4 = (n) => fmtNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }, i18n.language);
 
   const unitOf = (mp) => stockUnitOf(mp, stocks);
   const lotOf = (mp) => liveLotOf(mp, stocks);
   const priceOf = (mp) => stockUnitPriceOf(mp, stocks);
+
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  const packagingRows = packagingRowsProp
+    || packagingRowsForProduction(containers, origins, production);
+
+  useEffect(() => {
+    if (!open) setSelectedIds(new Set());
+  }, [open, production?.id]);
+
+  const toggleSelect = (key) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectedRows = packagingRows.filter((row) => selectedIds.has(originShareKey(row)));
+  const hasSelection = selectedRows.length > 0;
+  const allSelected = packagingRows.length > 0 && selectedRows.length === packagingRows.length;
+
+  const selectAllPackaging = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(packagingRows.map((row) => originShareKey(row))));
+  };
+
+  const handleGenerateTanksPdf = () => {
+    if (!hasSelection || !onGenerateTanksPdf) return;
+    onGenerateTanksPdf(selectedRows);
+  };
+
+  const rowLiveNet = (row) => {
+    const dens = resolveProductDensity(production, row.container, recipes);
+    const vol = parseFloat(row.volume) || 0;
+    if (vol <= 0) return 0;
+    if (dens) return Math.round(vol * dens);
+    // Fallback: scale container net
+    const cVol = parseFloat(row.container?.volume) || 0;
+    const cNet = containerLiveNetWeight(row.container, production, recipes);
+    if (cVol > 0) return Math.round(cNet * (vol / cVol));
+    return Math.round(parseFloat(row.container?.net_weight) || 0);
+  };
+
+  const rowLiveGross = (row) => {
+    const net = rowLiveNet(row);
+    // Gross only includes tare once per physical container — for origin rows show net only + proportional tare of full container when single origin
+    const originsOnSame = packagingRows.filter((r) => r.container?.id === row.container?.id);
+    if (originsOnSame.length <= 1) {
+      return Math.round(net + (parseFloat(row.container?.tare) || 0));
+    }
+    return net;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -151,103 +216,109 @@ export default function ProductionViewDialog({
               </div>
             )}
 
-            {!simplified && (() => {
-              const mps = parseArr(production.raw_materials_used);
-              const mpCostRows = mps.map(m => {
-                const price = priceOf(m);
-                const qty = m.qty_fiscal || 0;
-                return { name: m.mp_name, unit: unitOf(m), price, qty, cost: price * qty };
-              });
-              const totalMpCost = mpCostRows.reduce((s, r) => s + r.cost, 0);
-              const recipe = (recipes || []).find(r => r.product_name === production.product);
-              const productPrice = recipe?.price || production.unit_price || 0;
-              const mass = production.mass || 0;
-              const moCost = productPrice * mass;
-              const totalCost = totalMpCost + moCost;
-              const costPerKg = mass > 0 ? totalCost / mass : 0;
-              const pctMp = totalCost > 0 ? (totalMpCost / totalCost) * 100 : 0;
-              const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
-              return (
-                <div className="mt-4">
-                  {/* Análise de Custos (somente na tela, não consta no PDF) */}
-                  <h4 className="text-sm font-semibold mb-2">{t('production.list.costAnalysis')}</h4>
-                  <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
-                    <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                      <th className="px-3 py-2 text-left">{t('production.list.rawMaterialCol')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.checklist.qtyFiscal')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.list.unitPriceCol')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.list.costCol')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {mpCostRows.map((r, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3 py-2">{r.name || t('common.notAvailable')}</td>
-                          <td className="px-3 py-2 text-right">{fmt(r.qty)} {r.unit}</td>
-                          <td className="px-3 py-2 text-right">{fmt4(r.price)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-t bg-muted/50 font-bold">
-                        <td colSpan={3} className="px-3 py-2 text-right">{t('production.list.mpCost')}</td>
-                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
-                      </tr>
-                      <tr className="border-t bg-muted/50 font-bold">
-                        <td colSpan={2} className="px-3 py-2">{t('production.list.laborCost')}</td>
-                        <td className="px-3 py-2 text-right">{t('production.list.laborFormula', { price: fmt4(productPrice), mass: fmt(mass) })}</td>
-                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costMp')}</p>
-                      <p className="font-bold text-sm" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</p>
-                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMp.toFixed(1) })}</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costMo')}</p>
-                      <p className="font-bold text-sm text-purple-700">{fmtMoney(moCost)}</p>
-                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMo.toFixed(1) })}</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.totalCost')}</p>
-                      <p className="font-bold text-sm text-green-700">{fmtMoney(totalCost)}</p>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costPerKg')}</p>
-                      <p className="font-bold text-sm text-amber-700">{fmtMoney(costPerKg)}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {containers.length > 0 ? (
+            {packagingRows.length > 0 ? (
               <>
-                <h4 className="text-sm font-semibold mb-2">{t('production.list.packagedContainers')}</h4>
+                <div className="flex items-center justify-between gap-2 mb-2 mt-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h4 className="text-sm font-semibold">{t('production.list.packagedContainers')}</h4>
+                    {!simplified && packagingRows.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={selectAllPackaging}
+                        className="shrink-0"
+                      >
+                        {allSelected
+                          ? t('production.list.deselectAllPackaging')
+                          : t('production.list.selectAllPackaging')}
+                      </Button>
+                    )}
+                  </div>
+                  {!simplified && hasSelection && (
+                    <Button variant="outline" size="sm" onClick={handleGenerateTanksPdf} className="gap-2 shrink-0">
+                      <FileText className="w-4 h-4" /> {t('production.actions.generateTanksPdf')}
+                    </Button>
+                  )}
+                </div>
                 <table className="w-full text-sm border rounded-lg overflow-hidden">
                   <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
+                    {!simplified && (
+                      <th className="px-2 py-2 text-center w-10">
+                        <span className="sr-only">{t('production.list.selectPackaging')}</span>
+                      </th>
+                    )}
                     <th className="px-3 py-2 text-left">{t('production.list.packagingNumber')}</th>
+                    <th className="px-3 py-2 text-left">{t('production.opNumber')}</th>
                     <th className="px-3 py-2 text-left">{t('common.type')}</th>
                     <th className="px-3 py-2 text-right">{t('production.packaging.volume')}</th>
                     <th className="px-3 py-2 text-right">{t('production.packaging.netWeight')}</th>
                     <th className="px-3 py-2 text-right">{t('production.packaging.grossWeight')}</th>
                   </tr></thead>
                   <tbody>
-                    {containers.map((c, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2 font-medium">{c.container_number || t('common.notAvailable')}</td>
-                        <td className="px-3 py-2">{c.type || t('common.notAvailable')}</td>
-                        <td className="px-3 py-2 text-right">{fmt(c.volume)}</td>
-                        <td className="px-3 py-2 text-right">{fmt(c.net_weight)}</td>
-                        <td className="px-3 py-2 text-right">{fmt(c.gross_weight)}</td>
+                    {packagingRows.map((row, i) => {
+                      const c = row.container;
+                      const seq = String(i + 1).padStart(2, '0');
+                      const fromTransfer = isTransferDestinationContainer(c);
+                      const liveNet = rowLiveNet(row);
+                      const liveGross = rowLiveGross(row);
+                      const key = originShareKey(row);
+                      const isSelected = selectedIds.has(key);
+                      const multiOrigin = packagingRows.filter((r) => r.container?.id === c?.id).length > 1;
+                      return (
+                      <tr key={key} className={`border-t ${isSelected ? 'bg-blue-50/40' : ''}`}>
+                        {!simplified && (
+                          <td className="px-2 py-2 text-center">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(key)}
+                              aria-label={t('production.list.selectPackagingItem', { label: c?.container_number || seq })}
+                              className="rounded-full"
+                            />
+                          </td>
+                        )}
+                        <td className="px-3 py-2 font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="text-muted-foreground tabular-nums">{seq}-</span>
+                            {c?.container_number || t('common.notAvailable')}
+                            {fromTransfer && (
+                              <ArrowUpRight
+                                className="w-3.5 h-3.5 shrink-0"
+                                style={{ color: '#4B0082' }}
+                                title={t('containers.vasilhames.transferDest')}
+                              />
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-medium" style={{ color: multiOrigin ? '#2575D1' : undefined }}>
+                          {row.op_number || c?.op_number || t('common.notAvailable')}
+                        </td>
+                        <td className="px-3 py-2">{c?.type || t('common.notAvailable')}</td>
+                        <td className="px-3 py-2 text-right">
+                          {(parseFloat(row.volume) || 0) <= 0
+                            ? t('production.list.emptyContainer')
+                            : (
+                              <span className="inline-flex items-center justify-end gap-1">
+                                <FractionalBadge
+                                  production={production}
+                                  container={c}
+                                  transfers={transfers}
+                                  variant="container"
+                                />
+                                {fmt(row.volume)}
+                              </span>
+                            )}
+                        </td>
+                        <td className="px-3 py-2 text-right">{fmt(liveNet)}</td>
+                        <td className="px-3 py-2 text-right">{fmtGross(liveGross)}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>
-                      <td colSpan={2} className="px-3 py-2">{t('production.checklist.total').toUpperCase()}</td>
-                      <td className="px-3 py-2 text-right">{fmt(containers.reduce((s, c) => s + (c.volume || 0), 0))} L</td>
-                      <td className="px-3 py-2 text-right">{fmt(containers.reduce((s, c) => s + (c.net_weight || 0), 0))} kg</td>
-                      <td className="px-3 py-2 text-right">{fmt(containers.reduce((s, c) => s + (c.gross_weight || 0), 0))} kg</td>
+                      <td colSpan={simplified ? 3 : 4} className="px-3 py-2">{t('production.checklist.total').toUpperCase()}</td>
+                      <td className="px-3 py-2 text-right">{fmt(packagingRows.reduce((s, r) => s + (parseFloat(r.volume) || 0), 0))} L</td>
+                      <td className="px-3 py-2 text-right">{fmt(packagingRows.reduce((s, r) => s + rowLiveNet(r), 0))} kg</td>
+                      <td className="px-3 py-2 text-right">{fmtGross(packagingRows.reduce((s, r) => s + rowLiveGross(r), 0))} kg</td>
                     </tr>
                   </tbody>
                 </table>
@@ -323,11 +394,81 @@ export default function ProductionViewDialog({
                 </div>
               );
             })()}
+
+            {!simplified && (() => {
+              const mps = parseArr(production.raw_materials_used);
+              const mpCostRows = mps.map(m => {
+                const price = priceOf(m);
+                const qty = m.qty_fiscal || 0;
+                return { name: m.mp_name, unit: unitOf(m), price, qty, cost: price * qty };
+              });
+              const totalMpCost = mpCostRows.reduce((s, r) => s + r.cost, 0);
+              const recipe = (recipes || []).find(r => r.product_name === production.product);
+              const productPrice = recipe?.price || production.unit_price || 0;
+              const mass = production.mass || 0;
+              const moCost = productPrice * mass;
+              const totalCost = totalMpCost + moCost;
+              const costPerKg = mass > 0 ? totalCost / mass : 0;
+              const pctMp = totalCost > 0 ? (totalMpCost / totalCost) * 100 : 0;
+              const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
+              return (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2">{t('production.list.costAnalysis')}</h4>
+                  <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
+                    <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
+                      <th className="px-3 py-2 text-left">{t('production.list.rawMaterialCol')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.checklist.qtyFiscal')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.list.unitPriceCol')}</th>
+                      <th className="px-3 py-2 text-right">{t('production.list.costCol')}</th>
+                    </tr></thead>
+                    <tbody>
+                      {mpCostRows.map((r, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="px-3 py-2">{r.name || t('common.notAvailable')}</td>
+                          <td className="px-3 py-2 text-right">{fmt(r.qty)} {r.unit}</td>
+                          <td className="px-3 py-2 text-right">{fmt4(r.price)}</td>
+                          <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t bg-muted/50 font-bold">
+                        <td colSpan={3} className="px-3 py-2 text-right">{t('production.list.mpCost')}</td>
+                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
+                      </tr>
+                      <tr className="border-t bg-muted/50 font-bold">
+                        <td colSpan={2} className="px-3 py-2">{t('production.list.laborCost')}</td>
+                        <td className="px-3 py-2 text-right">{t('production.list.laborFormula', { price: fmt4(productPrice), mass: fmt(mass) })}</td>
+                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">{t('production.list.costMp')}</p>
+                      <p className="font-bold text-sm" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</p>
+                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMp.toFixed(1) })}</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">{t('production.list.costMo')}</p>
+                      <p className="font-bold text-sm text-purple-700">{fmtMoney(moCost)}</p>
+                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMo.toFixed(1) })}</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">{t('production.list.totalCost')}</p>
+                      <p className="font-bold text-sm text-green-700">{fmtMoney(totalCost)}</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground">{t('production.list.costPerKg')}</p>
+                      <p className="font-bold text-sm text-amber-700">{fmtMoney(costPerKg)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
         <div className={simplified ? 'flex justify-end mt-4' : 'flex justify-between mt-4'}>
           {!simplified && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={onGeneratePdf} className="gap-2">
                 <FileText className="w-4 h-4" /> {t('production.actions.generatePdf')}
               </Button>

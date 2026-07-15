@@ -34,6 +34,7 @@ const entityTableMap = {
   Tank: 'tanks',
   Transfer: 'transfers',
   Container: 'containers',
+  ContainerOrigin: 'container_origins',
   Order: 'orders',
   Recipe: 'recipes',
   QualityResult: 'quality_results',

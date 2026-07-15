@@ -21,7 +21,14 @@ import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import AddTankDialog from '@/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@/components/vasilhames/HistoryDialog';
 import FractionalBadge from '@/components/production/FractionalBadge';
-import { productionOfContainer, containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@/lib/fractionalSupply';
+import {
+  productionOfContainer,
+  containerDisplayVolume,
+  containerDisplayNetWeight,
+  containerDisplayGrossWeight,
+  isContainerFractional,
+} from '@/lib/fractionalSupply';
+import { applyProportionalOriginReduction, effectiveOriginsOfContainer } from '@/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -58,6 +65,7 @@ export default function Vasilhames() {
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
+  const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () => base44.entities.ContainerOrigin.list('-created_date', 2000));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
@@ -103,7 +111,7 @@ export default function Vasilhames() {
       matchSearch = true;
     } else if (isFractionalKeyword) {
       const prod = productionOfContainer(c, productions || []);
-      matchSearch = !!prod?.fractional_supply && c.status === 'No Pátio';
+      matchSearch = isContainerFractional(c, prod, transfers || []) && c.status === 'No Pátio';
     } else {
       matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot].some(v => (v || '').toLowerCase().includes(q));
     }
@@ -189,10 +197,6 @@ export default function Vasilhames() {
 
   const fmt = (n) => fmtNumber(n || 0, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
   const fmtWeight = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
-  const fmtFractionalVolume = (n) => {
-    const rounded = Math.round(n || 0);
-    return fmtNumber(rounded, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
-  };
   const prodOf = (c) => productionOfContainer(c, productions);
   const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : na;
 
@@ -200,6 +204,7 @@ export default function Vasilhames() {
     const updates = { ...editing };
     if (editing.departure_date) {
       updates.status = 'Expedido';
+      updates.is_fractional = false;
     } else {
       updates.status = 'No Pátio';
     }
@@ -221,7 +226,19 @@ export default function Vasilhames() {
   const confirmDepart = async () => {
     setSavingDepart(true);
     try {
-      await base44.entities.Container.update(departItem.id, { status: 'Expedido', departure_date: departDate });
+      const vol = parseFloat(departItem.volume) || 0;
+      if (vol > 0) {
+        const ensured = await base44.entities.ContainerOrigin.filter({ container_id: departItem.id });
+        if (ensured?.length) {
+          await applyProportionalOriginReduction(base44.entities, ensured, departItem.id, vol);
+        }
+      }
+      await base44.entities.Container.update(departItem.id, {
+        status: 'Expedido',
+        departure_date: departDate,
+        is_fractional: false,
+        volume: 0,
+      });
       setShowDepart(false); load();
       toast({ title: t('containers.messages.departRegistered') });
     } catch (err) {
@@ -319,7 +336,20 @@ export default function Vasilhames() {
                   <tr key={c.id} className={`border-b border-border hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={t('containers.vasilhames.selectItem', { label: c.container_number || c.id })} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
-                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{c.op_number || <span className="text-muted-foreground">{t('containers.vasilhames.manual')}</span>}</td>
+                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>
+                      {c.op_number ? (
+                        <span className="inline-flex items-center gap-1">
+                          {c.op_number}
+                          {effectiveOriginsOfContainer(containerOrigins, c).length > 1 && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                              +{effectiveOriginsOfContainer(containerOrigins, c).length - 1}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">{t('containers.vasilhames.manual')}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-sm font-medium">
                       <span className="inline-flex items-center gap-1">
                         {c.container_number}
@@ -342,8 +372,8 @@ export default function Vasilhames() {
                     <td className="px-4 py-2.5 text-sm">{c.lot}</td>
                     <td className="px-4 py-2.5 text-right text-sm font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        {prod?.fractional_supply ? fmtFractionalVolume(prod.volume_apontado) : fmt(c.volume)}
-                        <FractionalBadge production={prod} variant="container" />
+                        <FractionalBadge production={prod} container={c} transfers={transfers} variant="container" />
+                        {fmt(containerDisplayVolume(c, productions))}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(c.status)}</td>
@@ -421,13 +451,36 @@ export default function Vasilhames() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.type')}</p><p className="font-bold">{viewing.type || na}</p></div>
-                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.volume')} (L)</p><p className="font-bold text-base inline-flex items-center gap-1" style={{ color: '#2575D1' }}>{prodOf(viewing)?.fractional_supply ? fmtFractionalVolume(prodOf(viewing).volume_apontado) : fmt(containerDisplayVolume(viewing, productions))}<FractionalBadge production={prodOf(viewing)} variant="container" /></p></div>
+                  <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.volume')} (L)</p><p className="font-bold text-base inline-flex items-center gap-1" style={{ color: '#2575D1' }}><FractionalBadge production={prodOf(viewing)} container={viewing} transfers={transfers} variant="container" />{fmt(containerDisplayVolume(viewing, productions))}</p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.tare')}</p><p className="font-medium">{fmt(viewing.tare)}</p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.netWeight')} (kg)</p><p className="font-bold text-base text-green-700">{fmtWeight(containerDisplayNetWeight(viewing, productions, recipes))}</p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.fields.grossWeight')} (kg)</p><p className="font-bold text-base">{fmtWeight(containerDisplayGrossWeight(viewing, productions, recipes))}</p></div>
                   <div className="bg-muted/50/50 rounded-lg p-3"><p className="text-xs text-muted-foreground mb-1">{t('containers.vasilhames.minTest')}</p><p className="font-medium">{viewing.min_test_date ? fmtDate(viewing.min_test_date, undefined, i18n.language) : na}</p></div>
                 </div>
               </div>
+
+              {(() => {
+                const origins = effectiveOriginsOfContainer(containerOrigins, viewing);
+                if (origins.length === 0) return null;
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-1 h-4 rounded" style={{ background: '#2575D1' }} />
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t('containers.vasilhames.compositionByOrigin')}</h4>
+                    </div>
+                    <div className="bg-muted/50/50 rounded-lg p-4 space-y-1.5 text-sm">
+                      {origins.map((o, i) => (
+                        <div key={o.id || i} className="flex items-center gap-3 text-xs bg-card rounded px-3 py-2 border border-border">
+                          <span className="text-muted-foreground tabular-nums">{String(i + 1).padStart(2, '0')}-</span>
+                          <span className="font-semibold" style={{ color: '#2575D1' }}>{o.op_number || na}</span>
+                          <span className="text-muted-foreground">{t('quality.fields.lot')}: {o.lot || na}</span>
+                          <span className="ml-auto font-medium">{fmt(o.volume)} L</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <div className="flex items-center gap-2 mb-3">
@@ -600,6 +653,7 @@ export default function Vasilhames() {
         transfers={transfers}
         productions={productions}
         recipes={recipes}
+        containerOrigins={containerOrigins}
       />
 
       <ConfirmDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}

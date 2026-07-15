@@ -166,6 +166,32 @@ export default function CycleCard({ cycle, index }) {
           </div>
         )}
 
+        {expanded && (() => {
+          const originEvents = events.filter((e) => e.kind === 'producao' || e.kind === 'complemento_embalagem');
+          if (originEvents.length === 0) return null;
+          return (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                {t('containers.vasilhames.compositionByOrigin')}
+              </p>
+              <div className="space-y-1.5">
+                {originEvents.map((e, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-3 py-1.5 border border-border">
+                    <span className="text-muted-foreground tabular-nums">{String(i + 1).padStart(2, '0')}-</span>
+                    <span className="font-semibold" style={{ color: '#2575D1' }}>
+                      {e.fields['Nº da OP'] || '—'}
+                    </span>
+                    <span className="text-muted-foreground truncate">{e.type}</span>
+                    <span className="ml-auto font-medium shrink-0">
+                      {fmtNumber(e.fields['Volume Atual (L)'] ?? e.fields['Volume Produzido (L)'] ?? e.fields['Volume Inicial (L)'], { maximumFractionDigits: 3 })} L
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {hasTransbordo && transbordoEvent && (
           <>
             <div className="flex justify-center py-1.5">
