@@ -890,6 +890,16 @@ function productionTankFiscalPdfFilename(opNumber, tankLabels, isFullOp) {
   return op + ' - ' + tanks.join(', ') + '.pdf';
 }
 
+/** Prefer the live viewing production when resolving MP data for PDF. */
+function productionsWithViewer(productions, viewerProduction) {
+  if (!viewerProduction?.id) return Array.isArray(productions) ? productions : [];
+  const list = Array.isArray(productions) ? productions.slice() : [];
+  const idx = list.findIndex((p) => p.id === viewerProduction.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...viewerProduction };
+  else list.push(viewerProduction);
+  return list;
+}
+
 /**
  * Full OP fiscal report (all MP quantities, no tank split).
  * Used when envase has not been registered yet.
@@ -908,7 +918,7 @@ export function generateProductionOpFiscalPDF(production, stocks, recipes = []) 
 /**
  * Fiscal report scoped to selected tanks: MP quantities proportional to live net weight.
  * Returns false if total net weight is zero (caller should show a toast).
- * When all tanks are selected, filename is OP.pdf; otherwise OP - tank.pdf.
+ * When all tanks are selected, filename is OP.pdf and MP qtys match the visualization screen.
  */
 export function generateProductionTanksPDF(production, allContainers, selectedContainers, stocks, recipes = []) {
   const { t } = getPdfLabels();
@@ -917,23 +927,31 @@ export function generateProductionTanksPDF(production, allContainers, selectedCo
   if (selected.length === 0) return false;
 
   const mps = parseArr(production.raw_materials_used);
-  const allocation = allocateMpQuantitiesByNetWeight(mps, all, production, recipes, 3);
-  if (allocation.totalNet <= 0) return false;
+  const selectedIds = new Set(selected.map(function(c) { return c.id; }).filter(Boolean));
+  const isFullOp = all.length > 0 && selected.length === all.length
+    && all.every(function(c) { return selectedIds.has(c.id); });
 
-  const materials = aggregateAllocatedMaterials(mps, allocation, selected, all);
+  let materials = mps;
+  if (!isFullOp) {
+    const allocation = allocateMpQuantitiesByNetWeight(mps, all, production, recipes, 3);
+    if (allocation.totalNet <= 0) return false;
+    materials = aggregateAllocatedMaterials(mps, allocation, selected, all);
+  } else if (mps.length === 0) {
+    return false;
+  }
+
   const selectedNet = selected.reduce(function(s, c) {
     return s + containerLiveNetWeight(c, production, recipes);
   }, 0);
   const selectedVol = selected.reduce(function(s, c) {
     return s + (parseFloat(c.volume) || 0);
   }, 0);
+  if (!isFullOp && selectedNet <= 0) return false;
+
   const unitPrice = parseFloat(production.unit_price) || 0;
   const labels = selected.map(function(c) { return c.container_number || '-'; }).join(', ');
   const tankLabels = selected.map(function(c) { return c.container_number; }).filter(Boolean)
     .filter(function(v, i, a) { return a.indexOf(v) === i; });
-  const selectedIds = new Set(selected.map(function(c) { return c.id; }).filter(Boolean));
-  const isFullOp = all.length > 0 && selected.length === all.length
-    && all.every(function(c) { return selectedIds.has(c.id); });
   const snapshot = {
     ...production,
     mass: selectedNet,
@@ -954,14 +972,22 @@ export function generateProductionTanksPDF(production, allContainers, selectedCo
 
 /**
  * Fiscal report for selected container-origin rows (multi-OP composition).
- * Uses each origin OP's real raw_materials_used scaled by origin.volume / production.volume.
+ * Full OP selection → exact raw_materials_used from the OP on screen (same as visualization).
+ * Partial selection → scaled from each origin OP (with viewing production preferred when synced).
  */
 export function generateProductionOriginsPDF(viewerProduction, selectedRows, productions, stocks, recipes = [], allRows = null) {
   const { t } = getPdfLabels();
   const selected = Array.isArray(selectedRows) ? selectedRows : [];
   if (selected.length === 0) return false;
 
-  const materials = materialsFromOriginRows(selected, productions, 3);
+  const syncedProductions = productionsWithViewer(productions, viewerProduction);
+  const totalRows = Array.isArray(allRows) ? allRows.length : selected.length;
+  const isFullOp = totalRows > 0 && selected.length === totalRows;
+
+  const materials = isFullOp
+    ? parseArr(viewerProduction?.raw_materials_used)
+    : materialsFromOriginRows(selected, syncedProductions, 3);
+
   if (!materials.length && selected.every((r) => (parseFloat(r.volume) || 0) <= 0)) return false;
 
   const selectedVol = selected.reduce((s, r) => s + (parseFloat(r.volume) || 0), 0);
@@ -969,7 +995,7 @@ export function generateProductionOriginsPDF(viewerProduction, selectedRows, pro
 
   const selectedNet = selected.reduce((s, r) => {
     const dens = resolveProductDensity(
-      (Array.isArray(productions) ? productions.find((p) => p.id === r.production_id) : null) || viewerProduction,
+      syncedProductions.find((p) => p.id === r.production_id) || viewerProduction,
       r.container,
       recipes
     );
@@ -985,7 +1011,7 @@ export function generateProductionOriginsPDF(viewerProduction, selectedRows, pro
     volume: parseFloat(r.volume) || 0,
     net_weight: (() => {
       const dens = resolveProductDensity(
-        (Array.isArray(productions) ? productions.find((p) => p.id === r.production_id) : null) || viewerProduction,
+        syncedProductions.find((p) => p.id === r.production_id) || viewerProduction,
         r.container,
         recipes
       );
@@ -1005,8 +1031,6 @@ export function generateProductionOriginsPDF(viewerProduction, selectedRows, pro
   }).join(', ');
   const tankLabels = selected.map((r) => r.container?.container_number).filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
-  const totalRows = Array.isArray(allRows) ? allRows.length : selected.length;
-  const isFullOp = totalRows > 0 && selected.length === totalRows;
 
   const snapshot = {
     ...viewerProduction,

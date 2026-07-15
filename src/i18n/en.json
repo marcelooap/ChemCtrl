@@ -622,7 +622,8 @@
       "generatePdf": "Complete Report",
       "generateTanksPdf": "Tank Fiscal Report",
       "bypassOn": "Enable Bypass",
-      "bypassOff": "Remove Bypass"
+      "bypassOff": "Remove Bypass",
+      "editMp": "Edit RM"
     },
     "checklist": {
       "title": "Raw Materials",
@@ -661,7 +662,10 @@
       "finished": "Production finished",
       "noRawMaterials": "No raw materials recorded.",
       "tanksPdfError": "Unable to generate the report",
-      "tanksPdfZeroNet": "Selected packages have no net weight for allocation."
+      "tanksPdfZeroNet": "Selected packages have no net weight for allocation.",
+      "mpUpdated": "Raw material quantities updated successfully",
+      "mpStockInsufficient": "Insufficient stock for the requested increase",
+      "mpStockInsufficientDetail": "{{mp}} · Lot {{lot}} — available: {{available}} {{unit}}"
     },
     "filters": {
       "status": "Status",

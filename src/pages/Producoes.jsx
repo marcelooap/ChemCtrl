@@ -23,6 +23,7 @@ import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
+import { RBAC_ADMIN_SLUG } from '@/lib/rbac/permissionCatalog';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -38,10 +39,16 @@ const StatusBadge = ({ status }) => {
 
 export default function Producoes() {
   const { t, i18n } = useTranslation();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, user, perfil } = usePermissions();
   const canEditOp = hasPermission('productions.edit_op');
   const canCancelOp = hasPermission('productions.cancel');
   const canComplementLot = hasPermission('productions.complement');
+  const isAdmin = Boolean(
+    perfil?.slug === RBAC_ADMIN_SLUG
+    || perfil?.id === 'perfil_administrador'
+    || (user?.nivel || '').toLowerCase() === 'administrador'
+    || (user?.nivel_acesso || '').trim().toLowerCase() === 'administrador'
+  );
   const [searchParams] = useSearchParams();
   const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -66,6 +73,7 @@ export default function Producoes() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [complementTarget, setComplementTarget] = useState(null);
   const [savingPkg, setSavingPkg] = useState(false);
+  const [savingMp, setSavingMp] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [qrToken, setQrToken] = useState(null);
   const [qrLabel, setQrLabel] = useState('');
@@ -186,6 +194,93 @@ export default function Producoes() {
   };
 
   const canCancel = (status) => ['Aguardando Início', 'Em Produção'].includes(status);
+
+  const saveMpQuantities = async (updatedMps) => {
+    if (!viewing) return;
+
+    const oldMps = parseArr(viewing.raw_materials_used);
+    const sumByStock = (list) => {
+      const map = {};
+      for (const mp of list) {
+        if (!mp.stock_id) continue;
+        map[mp.stock_id] = (map[mp.stock_id] || 0) + (parseFloat(mp.qty_fiscal) || 0);
+      }
+      return map;
+    };
+
+    const oldByStock = sumByStock(oldMps);
+    const newByStock = sumByStock(updatedMps);
+    const stockIds = new Set([...Object.keys(oldByStock), ...Object.keys(newByStock)]);
+
+    for (const stockId of stockIds) {
+      const oldQty = oldByStock[stockId] || 0;
+      const newQty = newByStock[stockId] || 0;
+      const delta = newQty - oldQty;
+      if (delta <= 0) continue;
+
+      const stock = stocks.find((s) => s.id === stockId);
+      const available = (stock?.current_stock || 0) + oldQty;
+      if (newQty > available + 0.0005) {
+        const mpLabel = updatedMps.find((m) => m.stock_id === stockId)
+          || oldMps.find((m) => m.stock_id === stockId);
+        toast({
+          title: t('production.messages.mpStockInsufficient'),
+          description: t('production.messages.mpStockInsufficientDetail', {
+            mp: mpLabel?.mp_name || mpLabel?.mp_code || stockId,
+            lot: stock?.lot || mpLabel?.lot || t('common.notAvailable'),
+            available: fmt(available),
+            unit: stock?.unit || 'kg',
+          }),
+          variant: 'destructive',
+        });
+        throw new Error('insufficient_stock');
+      }
+    }
+
+    setSavingMp(true);
+    try {
+      for (const stockId of stockIds) {
+        const oldQty = oldByStock[stockId] || 0;
+        const newQty = newByStock[stockId] || 0;
+        const delta = newQty - oldQty;
+        if (Math.abs(delta) < 0.0005) continue;
+
+        const stock = stocks.find((s) => s.id === stockId);
+        if (!stock) continue;
+
+        const nextStock = parseFloat(((stock.current_stock || 0) - delta).toFixed(3));
+        await base44.entities.RawMaterialStock.update(stockId, {
+          current_stock: nextStock,
+        });
+      }
+
+      const normalized = updatedMps.map((m) => ({
+        ...m,
+        qty_fiscal: parseFloat(m.qty_fiscal) || 0,
+        qty_operational: parseFloat(m.qty_operational) || 0,
+      }));
+
+      await base44.entities.Production.update(viewing.id, {
+        raw_materials_used: normalized,
+      });
+
+      setViewing((prev) => (prev ? { ...prev, raw_materials_used: normalized } : prev));
+      setProductions((prev) =>
+        prev.map((p) => (p.id === viewing.id ? { ...p, raw_materials_used: normalized } : p))
+      );
+      load();
+      toast({ title: t('production.messages.mpUpdated') });
+    } catch (err) {
+      toast({
+        title: t('production.messages.updateError'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+      throw err;
+    } finally {
+      setSavingMp(false);
+    }
+  };
 
   const confirmCancel = async () => {
     if (!cancelTarget) return;
@@ -457,6 +552,9 @@ export default function Producoes() {
         productions={productions}
         open={showView}
         onOpenChange={setShowView}
+        canEditMp={isAdmin}
+        savingMp={savingMp}
+        onSaveMp={saveMpQuantities}
         onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks, recipes)}
         onGenerateTanksPdf={(selected) => {
           if (!selected || selected.length === 0) {

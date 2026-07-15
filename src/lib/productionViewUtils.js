@@ -7,6 +7,30 @@ export const parseArr = (val) => {
   } catch (_e) { return []; }
 };
 
+export const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
+
+export const convertToKg = (value, unit, density) => {
+  const d = density || 1;
+  switch (unit) {
+    case 'kg': return value;
+    case 'L': return value * d;
+    case 'gal': return value * 3.78541 * d;
+    case 'lb': return value * 0.453592;
+    default: return value;
+  }
+};
+
+export const convertFromKg = (kg, unit, density) => {
+  const d = density || 1;
+  switch (unit) {
+    case 'kg': return kg;
+    case 'L': return kg / d;
+    case 'gal': return kg / (3.78541 * d);
+    case 'lb': return kg / 0.453592;
+    default: return kg;
+  }
+};
+
 export const stockUnitOf = (mp, stocks) => {
   if (mp.stock_id) {
     const s = (stocks || []).find(x => x.id === mp.stock_id);

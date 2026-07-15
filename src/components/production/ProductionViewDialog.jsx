@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileText, QrCode, ArrowUpRight } from 'lucide-react';
+import { FileText, QrCode, ArrowUpRight, Pencil, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
-import { parseArr, stockUnitOf, liveLotOf, isTransferDestinationContainer, containerLiveNetWeight, resolveProductDensity } from '@/lib/productionViewUtils';
+import {
+  parseArr,
+  stockUnitOf,
+  liveLotOf,
+  isTransferDestinationContainer,
+  containerLiveNetWeight,
+  resolveProductDensity,
+  convertToKg,
+  convertFromKg,
+  round3,
+} from '@/lib/productionViewUtils';
 import FractionalBadge from '@/components/production/FractionalBadge';
 import { isComplementPending } from '@/lib/fractionalSupply';
 import { packagingRowsForProduction, originShareKey } from '@/lib/containerOrigins';
@@ -35,6 +46,9 @@ export default function ProductionViewDialog({
   open,
   onOpenChange,
   simplified = false,
+  canEditMp = false,
+  savingMp = false,
+  onSaveMp,
   onGeneratePdf,
   onGenerateTanksPdf,
   onShowQr,
@@ -46,15 +60,83 @@ export default function ProductionViewDialog({
 
   const unitOf = (mp) => stockUnitOf(mp, stocks);
   const lotOf = (mp) => liveLotOf(mp, stocks);
+  const densityOf = (mp) => {
+    if (!mp?.stock_id) return 1;
+    const s = stocks.find((x) => x.id === mp.stock_id);
+    return s?.density || 1;
+  };
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [editingMp, setEditingMp] = useState(false);
+  const [draftMps, setDraftMps] = useState([]);
 
   const packagingRows = packagingRowsProp
     || packagingRowsForProduction(containers, origins, production);
 
+  const rawMaterials = editingMp ? draftMps : parseArr(production?.raw_materials_used);
+  const canShowEditMp = !simplified
+    && canEditMp
+    && !!onSaveMp
+    && production
+    && production.status !== 'Cancelado'
+    && parseArr(production.raw_materials_used).length > 0;
+
   useEffect(() => {
-    if (!open) setSelectedIds(new Set());
+    if (!open) {
+      setSelectedIds(new Set());
+      setEditingMp(false);
+      setDraftMps([]);
+    }
   }, [open, production?.id]);
+
+  const startEditMp = () => {
+    setDraftMps(parseArr(production.raw_materials_used).map((m) => ({ ...m })));
+    setEditingMp(true);
+  };
+
+  const cancelEditMp = () => {
+    setEditingMp(false);
+    setDraftMps([]);
+  };
+
+  const handleQtyFiscalChange = (index, rawVal) => {
+    const val = Math.max(0, parseFloat(rawVal) || 0);
+    setDraftMps((prev) => {
+      const next = [...prev];
+      const mp = { ...next[index] };
+      const unit = unitOf(mp);
+      const dens = densityOf(mp);
+      mp.qty_fiscal = round3(val);
+      mp.qty_operational = round3(convertToKg(val, unit, dens));
+      next[index] = mp;
+      return next;
+    });
+  };
+
+  const handleQtyOperationalChange = (index, rawVal) => {
+    const val = Math.max(0, parseFloat(rawVal) || 0);
+    setDraftMps((prev) => {
+      const next = [...prev];
+      const mp = { ...next[index] };
+      const unit = unitOf(mp);
+      const dens = densityOf(mp);
+      mp.qty_operational = round3(val);
+      mp.qty_fiscal = round3(convertFromKg(val, unit, dens));
+      next[index] = mp;
+      return next;
+    });
+  };
+
+  const handleSaveMp = async () => {
+    if (!onSaveMp) return;
+    try {
+      await onSaveMp(draftMps);
+      setEditingMp(false);
+      setDraftMps([]);
+    } catch (_err) {
+      // Parent already toasted; keep edit mode so the user can adjust
+    }
+  };
 
   const toggleSelect = (key) => {
     setSelectedIds((prev) => {
@@ -147,7 +229,48 @@ export default function ProductionViewDialog({
               )}
             </div>
 
-            <h4 className="text-sm font-semibold mt-4 mb-2">{t('production.list.rawMaterialsUsed')}</h4>
+            <div className="flex items-center gap-3 mt-4 mb-2 flex-wrap">
+              <h4 className="text-sm font-semibold">{t('production.list.rawMaterialsUsed')}</h4>
+              {canShowEditMp && (
+                editingMp ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelEditMp}
+                      disabled={savingMp}
+                      className="h-7 text-xs"
+                    >
+                      {t('buttons.cancel')}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveMp}
+                      disabled={savingMp}
+                      className="h-7 text-xs text-white hover:opacity-90"
+                      style={{ background: '#2575D1' }}
+                    >
+                      {savingMp
+                        ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> {t('common.saving')}</>
+                        : t('buttons.save')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={startEditMp}
+                    className="h-7 text-xs gap-1.5"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    {t('production.actions.editMp')}
+                  </Button>
+                )
+              )}
+            </div>
             <table className={`w-full text-sm border rounded-lg overflow-hidden ${!simplified && packagingRows.length === 0 ? 'mb-3' : 'mb-4'}`}>
               <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                 <th className="px-3 py-2 text-left">{t('common.code')}</th>
@@ -157,20 +280,54 @@ export default function ProductionViewDialog({
                 <th className="px-3 py-2 text-right">{t('production.checklist.qtyOperational')} (kg)</th>
               </tr></thead>
               <tbody>
-                {parseArr(production.raw_materials_used).map((m, i) => {
+                {rawMaterials.map((m, i) => {
                   const unit = unitOf(m);
                   return (
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
                       <td className="px-3 py-2">{m.mp_name}</td>
                       <td className="px-3 py-2">{lotOf(m) || t('common.notAvailable')}</td>
-                      <td className="px-3 py-2 text-right">{fmt(m.qty_fiscal)} {unit}</td>
-                      <td className="px-3 py-2 text-right font-medium">{fmt(m.qty_operational)} kg</td>
+                      <td className="px-3 py-2 text-right">
+                        {editingMp ? (
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              step="0.001"
+                              min="0"
+                              value={m.qty_fiscal ?? ''}
+                              onChange={(e) => handleQtyFiscalChange(i, e.target.value)}
+                              disabled={savingMp}
+                              className="h-8 w-[7.5rem] text-xs text-right"
+                            />
+                            <span className="text-xs text-muted-foreground min-w-[1.5rem]">{unit}</span>
+                          </div>
+                        ) : (
+                          <>{fmt(m.qty_fiscal)} {unit}</>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {editingMp ? (
+                          <div className="inline-flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              step="0.001"
+                              min="0"
+                              value={m.qty_operational ?? ''}
+                              onChange={(e) => handleQtyOperationalChange(i, e.target.value)}
+                              disabled={savingMp}
+                              className="h-8 w-[7.5rem] text-xs text-right"
+                            />
+                            <span className="text-xs text-muted-foreground">kg</span>
+                          </div>
+                        ) : (
+                          <>{fmt(m.qty_operational)} kg</>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
                 {(() => {
-                  const mps = parseArr(production.raw_materials_used);
+                  const mps = rawMaterials;
                   const units = mps.map(unitOf);
                   const sameUnit = units.length > 0 && units.every(u => u === units[0]);
                   const tFiscal = mps.reduce((s, m) => s + (m.qty_fiscal || 0), 0);

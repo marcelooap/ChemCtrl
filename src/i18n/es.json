@@ -570,7 +570,8 @@
       "generatePdf": "Informe Completo",
       "generateTanksPdf": "Informe Fiscal de Tanques",
       "bypassOn": "Liberar By-pass",
-      "bypassOff": "Remover By-pass"
+      "bypassOff": "Remover By-pass",
+      "editMp": "Editar MP"
     },
     "checklist": {
       "title": "Matérias Primas",
@@ -609,7 +610,10 @@
       "finished": "Produção finalizada",
       "noRawMaterials": "Sem matérias primas registradas.",
       "tanksPdfError": "No se pudo generar el informe",
-      "tanksPdfZeroNet": "Los embalajes seleccionados no tienen peso líquido para el prorrateo."
+      "tanksPdfZeroNet": "Los embalajes seleccionados no tienen peso líquido para el prorrateo.",
+      "mpUpdated": "Cantidades de MP actualizadas con éxito",
+      "mpStockInsufficient": "Stock insuficiente para el aumento solicitado",
+      "mpStockInsufficientDetail": "{{mp}} · Lote {{lot}} — disponible: {{available}} {{unit}}"
     },
     "filters": {
       "status": "Status",

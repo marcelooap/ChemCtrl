@@ -570,7 +570,8 @@
       "generatePdf": "Rapport Complet",
       "generateTanksPdf": "Rapport Fiscal des Cuves",
       "bypassOn": "Liberar By-pass",
-      "bypassOff": "Remover By-pass"
+      "bypassOff": "Remover By-pass",
+      "editMp": "Modifier MP"
     },
     "checklist": {
       "title": "Matérias Primas",
@@ -609,7 +610,10 @@
       "finished": "Produção finalizada",
       "noRawMaterials": "Sem matérias primas registradas.",
       "tanksPdfError": "Impossible de générer le rapport",
-      "tanksPdfZeroNet": "Les emballages sélectionnés n'ont pas de poids net pour la répartition."
+      "tanksPdfZeroNet": "Les emballages sélectionnés n'ont pas de poids net pour la répartition.",
+      "mpUpdated": "Quantités de MP mises à jour avec succès",
+      "mpStockInsufficient": "Stock insuffisant pour l'augmentation demandée",
+      "mpStockInsufficientDetail": "{{mp}} · Lot {{lot}} — disponible : {{available}} {{unit}}"
     },
     "filters": {
       "status": "Status",
