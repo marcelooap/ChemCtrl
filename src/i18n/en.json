@@ -619,7 +619,7 @@
       "saveProgress": "Save Progress",
       "viewDetails": "View Details",
       "editPackaging": "Edit Packaging",
-      "generatePdf": "Generate PDF",
+      "generatePdf": "Complete Report",
       "generateTanksPdf": "Tank Fiscal Report",
       "bypassOn": "Enable Bypass",
       "bypassOff": "Remove Bypass"
@@ -778,6 +778,8 @@
       "clickToToggle": "Click anywhere on the card to check/uncheck the raw material",
       "lotLabel": "Lot: {{lot}}",
       "qtyOperationalLabel": "Operational Qty: {{value}} kg",
+      "scaleAdjustmentBadge": "Scale ({{resolution}} kg): {{value}} kg",
+      "scaleAdjustmentAria": "Quantity for scale with {{resolution}} kg resolution: {{value}} kg",
       "totalLabel": "Total: {{value}} kg",
       "sigmaTotal": "Σ Total: {{value}} kg",
       "uncheckedInline": "{{count}} raw material(s) not yet checked. Finish only after checking all.",
@@ -1026,6 +1028,8 @@
       "subtitleClient": "Client: {{client}} · Production, stock and container tracking",
       "allClients": "All clients",
       "productionsInProgress": "Productions in progress",
+      "productionHistory": "Production history",
+      "noProductions": "No productions found.",
       "rawMaterialStock": "Raw Material Stock",
       "containersInYard": "Containers in Yard",
       "noStock": "No items in stock.",
@@ -2144,12 +2148,29 @@
     "production": {
       "title": "PO {{number}}",
       "subtitle": "Production Order Report",
+      "completeSubtitle": "Complete Production Order Report",
       "tanksSubtitle": "Fiscal Report by Tank(s)",
       "selectedTanksNote": "Selected packages: {{tanks}}",
       "originsSubtitle": "Fiscal Report by Origin(s)",
       "selectedOriginsNote": "Selected origins: {{tanks}}",
       "sectionRawMaterials": "Raw Materials Used",
       "sectionPackaging": "Packaged Containers",
+      "sectionTimes": "Production Times",
+      "sectionCosts": "Cost Analysis",
+      "phaseProduction": "Production",
+      "phaseQuality": "Quality Control",
+      "phasePackaging": "Packaging",
+      "totalTime": "Total Production Time",
+      "totalTimeBreakdown": "Production + Quality + Packaging",
+      "duration": "Duration",
+      "laborCost": "Labor (PA price × mass)",
+      "laborFormula": "{{price}} × {{mass}} kg",
+      "mpCost": "RM Cost",
+      "costMp": "RM Cost",
+      "costMo": "Labor Cost",
+      "totalCost": "Total Cost",
+      "costPerKg": "Cost per kg",
+      "percentOfTotal": "{{percent}}% of total",
       "noRawMaterials": "No raw materials recorded.",
       "columns": {
         "code": "RM CODE",
@@ -2158,6 +2179,11 @@
         "qtyFiscal": "FISCAL QTY",
         "qtyOperational": "OP. QTY (KG)",
         "unit": "Unit"
+      },
+      "costColumns": {
+        "rawMaterial": "RAW MATERIAL",
+        "unitPrice": "UNIT PRICE",
+        "cost": "COST"
       },
       "packagingColumns": {
         "container": "CONTAINER NO.",
@@ -2177,7 +2203,12 @@
         "unitPrice": "Unit Price",
         "totalValue": "Total Value",
         "packaging": "Packaging",
-        "packagingCount": "{{count}} Packages"
+        "packagingCount": "{{count}} Packages",
+        "revision": "Recipe Revision",
+        "startTime": "Production Start",
+        "qcStart": "QC Start",
+        "packagingStart": "Packaging Start",
+        "bypassQc": "QC Bypass"
       }
     },
     "coa": {
@@ -2742,6 +2773,8 @@
       "subtitleAll": "Consolidated view of all clients",
       "allClients": "All clients",
       "productionsInProgress": "Productions in progress",
+      "productionHistory": "Production history",
+      "noProductions": "No productions found.",
       "rawMaterialStock": "Raw Material Stock",
       "containersInYard": "Containers in Yard",
       "noStock": "No stock items found.",

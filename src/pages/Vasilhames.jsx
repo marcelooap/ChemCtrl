@@ -271,10 +271,9 @@ export default function Vasilhames() {
     return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c[s] || 'bg-muted'}`}>{translateContainerStatus(s)}</span>;
   };
 
-  const noPatioCount = containers.filter(c => c.status === 'No Pátio').length;
-  const noPatioVolume = containers
-    .filter(c => c.status === 'No Pátio')
-    .reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
+  const filteredYard = filtered.filter(c => c.status === 'No Pátio');
+  const noPatioCount = filteredYard.length;
+  const noPatioVolume = filteredYard.reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import InvoiceToggle from '@/components/productions/InvoiceToggle';
-import { generateProductionPDF, generateProductionTanksPDF, generateProductionOriginsPDF } from '@/lib/pdfReports';
+import { generateProductionPDF, generateProductionTanksPDF, generateProductionOriginsPDF, generateProductionOpFiscalPDF } from '@/lib/pdfReports';
 import QrCodeDialog from '@/components/productions/QrCodeDialog';
 import ProductionViewDialog from '@/components/production/ProductionViewDialog';
 import FractionalBadge from '@/components/production/FractionalBadge';
@@ -43,7 +43,7 @@ export default function Producoes() {
   const canCancelOp = hasPermission('productions.cancel');
   const canComplementLot = hasPermission('productions.complement');
   const [searchParams] = useSearchParams();
-  const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
+  const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
@@ -321,9 +321,9 @@ export default function Producoes() {
           </Select>
         </div>
 
-        {/* Scrollable Table */}
+        {/* Scrollable Table — só spinner no fetch inicial; recargas silenciosas preservam scroll */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
-          {loading ? (
+          {loading && productions.length === 0 ? (
             <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full chemctrl-table">
@@ -393,8 +393,21 @@ export default function Producoes() {
                       <InvoiceToggle
                         invoiced={p.invoiced}
                         onToggle={async () => {
-                          await base44.entities.Production.update(p.id, { invoiced: !p.invoiced });
-                          load();
+                          const next = !p.invoiced;
+                          setProductions((prev) =>
+                            prev.map((item) => (item.id === p.id ? { ...item, invoiced: next } : item))
+                          );
+                          try {
+                            await base44.entities.Production.update(p.id, { invoiced: next });
+                          } catch {
+                            setProductions((prev) =>
+                              prev.map((item) => (item.id === p.id ? { ...item, invoiced: !next } : item))
+                            );
+                            toast({
+                              title: t('production.messages.updateError'),
+                              variant: 'destructive',
+                            });
+                          }
                         }}
                       />
                     </td>
@@ -444,11 +457,15 @@ export default function Producoes() {
         productions={productions}
         open={showView}
         onOpenChange={setShowView}
-        onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks)}
+        onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks, recipes)}
         onGenerateTanksPdf={(selected) => {
+          if (!selected || selected.length === 0) {
+            generateProductionOpFiscalPDF(viewing, stocks, recipes);
+            return;
+          }
           const isOriginRows = Array.isArray(selected) && selected.length > 0 && selected[0]?.container;
           const ok = isOriginRows
-            ? generateProductionOriginsPDF(viewing, selected, productions, stocks, recipes)
+            ? generateProductionOriginsPDF(viewing, selected, productions, stocks, recipes, viewPackagingRows)
             : generateProductionTanksPDF(viewing, viewContainers, selected, stocks, recipes);
           if (!ok) {
             toast({

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
-import { parseArr, stockUnitOf, liveLotOf, stockUnitPriceOf, isTransferDestinationContainer, containerLiveNetWeight, resolveProductDensity } from '@/lib/productionViewUtils';
+import { parseArr, stockUnitOf, liveLotOf, isTransferDestinationContainer, containerLiveNetWeight, resolveProductDensity } from '@/lib/productionViewUtils';
 import FractionalBadge from '@/components/production/FractionalBadge';
 import { isComplementPending } from '@/lib/fractionalSupply';
 import { packagingRowsForProduction, originShareKey } from '@/lib/containerOrigins';
@@ -43,11 +43,9 @@ export default function ProductionViewDialog({
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
   const fmtGross = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtMoney = (n) => fmtCurrency(n, 'BRL', i18n.language);
-  const fmt4 = (n) => fmtNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }, i18n.language);
 
   const unitOf = (mp) => stockUnitOf(mp, stocks);
   const lotOf = (mp) => liveLotOf(mp, stocks);
-  const priceOf = (mp) => stockUnitPriceOf(mp, stocks);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
@@ -82,6 +80,11 @@ export default function ProductionViewDialog({
   const handleGenerateTanksPdf = () => {
     if (!hasSelection || !onGenerateTanksPdf) return;
     onGenerateTanksPdf(selectedRows);
+  };
+
+  const handleGenerateOpFiscalPdf = () => {
+    if (!onGenerateTanksPdf) return;
+    onGenerateTanksPdf([]);
   };
 
   const rowLiveNet = (row) => {
@@ -145,7 +148,7 @@ export default function ProductionViewDialog({
             </div>
 
             <h4 className="text-sm font-semibold mt-4 mb-2">{t('production.list.rawMaterialsUsed')}</h4>
-            <table className="w-full text-sm border rounded-lg overflow-hidden mb-4">
+            <table className={`w-full text-sm border rounded-lg overflow-hidden ${!simplified && packagingRows.length === 0 ? 'mb-3' : 'mb-4'}`}>
               <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                 <th className="px-3 py-2 text-left">{t('common.code')}</th>
                 <th className="px-3 py-2 text-left">{t('production.list.mpShort')}</th>
@@ -182,6 +185,18 @@ export default function ProductionViewDialog({
                 })()}
               </tbody>
             </table>
+            {!simplified && packagingRows.length === 0 && (
+              <div className="flex justify-end mb-4">
+                <Button
+                  size="sm"
+                  onClick={handleGenerateOpFiscalPdf}
+                  className="gap-2 text-white hover:opacity-90"
+                  style={{ background: '#2575D1' }}
+                >
+                  <FileText className="w-4 h-4" /> {t('production.actions.generateTanksPdf')}
+                </Button>
+              </div>
+            )}
 
             {production.fractional_supply && parseArr(production.supply_complements).length > 0 && (
               <div className="mt-4 mb-4">
@@ -218,29 +233,7 @@ export default function ProductionViewDialog({
 
             {packagingRows.length > 0 ? (
               <>
-                <div className="flex items-center justify-between gap-2 mb-2 mt-4">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <h4 className="text-sm font-semibold">{t('production.list.packagedContainers')}</h4>
-                    {!simplified && packagingRows.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={selectAllPackaging}
-                        className="shrink-0"
-                      >
-                        {allSelected
-                          ? t('production.list.deselectAllPackaging')
-                          : t('production.list.selectAllPackaging')}
-                      </Button>
-                    )}
-                  </div>
-                  {!simplified && hasSelection && (
-                    <Button variant="outline" size="sm" onClick={handleGenerateTanksPdf} className="gap-2 shrink-0">
-                      <FileText className="w-4 h-4" /> {t('production.actions.generateTanksPdf')}
-                    </Button>
-                  )}
-                </div>
+                <h4 className="text-sm font-semibold mb-2 mt-4">{t('production.list.packagedContainers')}</h4>
                 <table className="w-full text-sm border rounded-lg overflow-hidden">
                   <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                     {!simplified && (
@@ -322,6 +315,30 @@ export default function ProductionViewDialog({
                     </tr>
                   </tbody>
                 </table>
+                {!simplified && (
+                  <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={selectAllPackaging}
+                      className="shrink-0 text-white hover:opacity-90"
+                      style={{ background: '#2575D1' }}
+                    >
+                      {allSelected
+                        ? t('production.list.deselectAllPackaging')
+                        : t('production.list.selectAllPackaging')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleGenerateTanksPdf}
+                      disabled={!hasSelection}
+                      className="gap-2 shrink-0 text-white hover:opacity-90"
+                      style={{ background: '#2575D1' }}
+                    >
+                      <FileText className="w-4 h-4" /> {t('production.actions.generateTanksPdf')}
+                    </Button>
+                  </div>
+                )}
               </>
             ) : (production.packaging_info || production.packaging_type) ? (
               <div className="mt-4">
@@ -329,141 +346,6 @@ export default function ProductionViewDialog({
                 <p className="text-sm bg-muted/50 rounded-lg px-3 py-2 font-medium">{production.packaging_info || production.packaging_type}</p>
               </div>
             ) : null}
-
-            {!simplified && (() => {
-              const p = production;
-              const startMs = p.start_time ? new Date(p.start_time).getTime() : null;
-              const endMs = p.end_time ? new Date(p.end_time).getTime() : null;
-              const qcStartMs = p.qc_start_time ? new Date(p.qc_start_time).getTime() : null;
-              const envaseStartMs = p.envase_start_time ? new Date(p.envase_start_time).getTime() : null;
-              const pauseMs = p.total_pause_ms || 0;
-
-              const fmtDur = (ms) => {
-                if (!ms || ms <= 0) return t('common.notAvailable');
-                const totalMin = Math.floor(ms / 60000);
-                const h = Math.floor(totalMin / 60);
-                const m = totalMin % 60;
-                return h > 0 ? t('production.list.durationHours', { hours: h, minutes: m }) : t('production.list.durationMinutes', { minutes: m });
-              };
-
-              const prodMs = (qcStartMs && startMs) ? (qcStartMs - startMs - pauseMs) : (endMs && startMs && !qcStartMs) ? (endMs - startMs - pauseMs) : null;
-              const qcMs = (envaseStartMs && qcStartMs) ? (envaseStartMs - qcStartMs) : null;
-              const envaseMs = (endMs && envaseStartMs) ? (endMs - envaseStartMs) : null;
-              const totalMs = (endMs && startMs) ? ((prodMs || 0) + (qcMs || 0) + (envaseMs || 0)) : null;
-
-              if (!startMs) return null;
-
-              return (
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold mb-3">{t('production.list.productionTimes')}</h4>
-                  <div className="grid grid-cols-1 gap-2 text-sm">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-blue-700 mb-2">{t('production.list.productionPhase')}</p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.start_time ? fmtDateTime(p.start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-                        <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{qcStartMs ? fmtDateTime(p.qc_start_time, undefined, i18n.language) : (endMs ? fmtDateTime(p.end_time, undefined, i18n.language) : t('common.notAvailable'))}</p></div>
-                        <div><p className="text-muted-foreground">{t('production.list.timeMinusPause')}</p><p className="font-bold text-blue-700">{fmtDur(prodMs)}{pauseMs > 0 ? t('production.list.pauseLabel', { duration: fmtDur(pauseMs) }) : ''}</p></div>
-                      </div>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-amber-700 mb-2">{t('production.list.qualityPhase')}</p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.qc_start_time ? fmtDateTime(p.qc_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-                        <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{envaseStartMs ? fmtDateTime(p.envase_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-                        <div><p className="text-muted-foreground">{t('common.time')}</p><p className="font-bold text-amber-700">{fmtDur(qcMs)}</p></div>
-                      </div>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-purple-700 mb-2">{t('production.list.packagingPhase')}</p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div><p className="text-muted-foreground">{t('production.fields.startTime')}</p><p className="font-medium">{p.envase_start_time ? fmtDateTime(p.envase_start_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-                        <div><p className="text-muted-foreground">{t('production.fields.endTime')}</p><p className="font-medium">{endMs ? fmtDateTime(p.end_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-                        <div><p className="text-muted-foreground">{t('common.time')}</p><p className="font-bold text-purple-700">{fmtDur(envaseMs)}</p></div>
-                      </div>
-                    </div>
-                    {totalMs && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-green-700">{t('production.list.totalProductionTime')}</p>
-                          <p className="text-lg font-bold text-green-700">{fmtDur(totalMs)}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{t('production.list.totalTimeBreakdown')}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {!simplified && (() => {
-              const mps = parseArr(production.raw_materials_used);
-              const mpCostRows = mps.map(m => {
-                const price = priceOf(m);
-                const qty = m.qty_fiscal || 0;
-                return { name: m.mp_name, unit: unitOf(m), price, qty, cost: price * qty };
-              });
-              const totalMpCost = mpCostRows.reduce((s, r) => s + r.cost, 0);
-              const recipe = (recipes || []).find(r => r.product_name === production.product);
-              const productPrice = recipe?.price || production.unit_price || 0;
-              const mass = production.mass || 0;
-              const moCost = productPrice * mass;
-              const totalCost = totalMpCost + moCost;
-              const costPerKg = mass > 0 ? totalCost / mass : 0;
-              const pctMp = totalCost > 0 ? (totalMpCost / totalCost) * 100 : 0;
-              const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
-              return (
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold mb-2">{t('production.list.costAnalysis')}</h4>
-                  <table className="w-full text-sm border rounded-lg overflow-hidden mb-3">
-                    <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                      <th className="px-3 py-2 text-left">{t('production.list.rawMaterialCol')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.checklist.qtyFiscal')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.list.unitPriceCol')}</th>
-                      <th className="px-3 py-2 text-right">{t('production.list.costCol')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {mpCostRows.map((r, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3 py-2">{r.name || t('common.notAvailable')}</td>
-                          <td className="px-3 py-2 text-right">{fmt(r.qty)} {r.unit}</td>
-                          <td className="px-3 py-2 text-right">{fmt4(r.price)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{fmtMoney(r.cost)}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-t bg-muted/50 font-bold">
-                        <td colSpan={3} className="px-3 py-2 text-right">{t('production.list.mpCost')}</td>
-                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</td>
-                      </tr>
-                      <tr className="border-t bg-muted/50 font-bold">
-                        <td colSpan={2} className="px-3 py-2">{t('production.list.laborCost')}</td>
-                        <td className="px-3 py-2 text-right">{t('production.list.laborFormula', { price: fmt4(productPrice), mass: fmt(mass) })}</td>
-                        <td className="px-3 py-2 text-right" style={{ color: '#2575D1' }}>{fmtMoney(moCost)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costMp')}</p>
-                      <p className="font-bold text-sm" style={{ color: '#2575D1' }}>{fmtMoney(totalMpCost)}</p>
-                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMp.toFixed(1) })}</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costMo')}</p>
-                      <p className="font-bold text-sm text-purple-700">{fmtMoney(moCost)}</p>
-                      <p className="text-xs text-muted-foreground">{t('production.list.percentOfTotal', { percent: pctMo.toFixed(1) })}</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.totalCost')}</p>
-                      <p className="font-bold text-sm text-green-700">{fmtMoney(totalCost)}</p>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-3">
-                      <p className="text-xs text-muted-foreground">{t('production.list.costPerKg')}</p>
-                      <p className="font-bold text-sm text-amber-700">{fmtMoney(costPerKg)}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         )}
         <div className={simplified ? 'flex justify-end mt-4' : 'flex justify-between mt-4'}>

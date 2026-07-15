@@ -6,6 +6,7 @@ import { ArrowLeft, ListChecks, Save, CheckCircle, AlertCircle, Loader2 } from '
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import ScaleAdjustmentBadge from '@/components/production/ScaleAdjustmentBadge';
 import { fmtDate, fmtDateTime, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -206,7 +207,12 @@ export default function ChecklistProducao() {
                     {!isMultiLot ? (
                       <>
                         <p className="text-xs text-muted-foreground mt-1">{t('production.checklistPage.lotLabel', { lot: group.lots[0].lot || t('common.notAvailable') })}</p>
-                        <p className="text-xs text-muted-foreground">{t('production.checklistPage.qtyOperationalLabel', { value: fmt(group.lots[0].qty_operational) })}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t('production.checklistPage.qtyOperationalLabel', { value: fmt(group.lots[0].qty_operational) })}
+                          </span>
+                          <ScaleAdjustmentBadge quantity={group.lots[0].qty_operational} />
+                        </div>
                       </>
                     ) : (
                       <div className="mt-2">
@@ -215,11 +221,16 @@ export default function ChecklistProducao() {
                         </div>
                         <div className="space-y-2 ml-2">
                           {group.lots.map((lot, lIdx) => (
-                            <div key={lIdx} className="flex items-center gap-2 pl-3 border-l-2 border-border">
-                              <input type="checkbox" checked={lot.checked || false} onChange={() => {}} onClick={e => e.stopPropagation()} className="w-3.5 h-3.5 rounded accent-primary" />
-                              <div className="flex-1 text-xs">
-                                <span className="text-muted-foreground">{t('production.checklistPage.lotLabel', { lot: lot.lot || t('common.notAvailable') })}</span>
-                                <span className="ml-3 text-muted-foreground">{t('production.checklistPage.qtyOperationalLabel', { value: fmt(lot.qty_operational) })}</span>
+                            <div key={lIdx} className="flex items-start gap-2 pl-3 border-l-2 border-border">
+                              <input type="checkbox" checked={lot.checked || false} onChange={() => {}} onClick={e => e.stopPropagation()} className="mt-0.5 w-3.5 h-3.5 rounded accent-primary" />
+                              <div className="flex-1 min-w-0 text-xs">
+                                <p className="text-muted-foreground">{t('production.checklistPage.lotLabel', { lot: lot.lot || t('common.notAvailable') })}</p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="text-muted-foreground">
+                                    {t('production.checklistPage.qtyOperationalLabel', { value: fmt(lot.qty_operational) })}
+                                  </span>
+                                  <ScaleAdjustmentBadge quantity={lot.qty_operational} />
+                                </div>
                               </div>
                             </div>
                           ))}

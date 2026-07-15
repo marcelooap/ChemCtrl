@@ -6,7 +6,12 @@ import {
   fmtNumber,
   fmtCurrency,
 } from '@/i18n/formatters';
-import { containerLiveNetWeight, containerLiveGrossWeight, resolveProductDensity } from '@/lib/productionViewUtils';
+import {
+  containerLiveNetWeight,
+  containerLiveGrossWeight,
+  resolveProductDensity,
+  stockUnitPriceOf,
+} from '@/lib/productionViewUtils';
 import {
   allocateMpQuantitiesByNetWeight,
   aggregateAllocatedMaterials,
@@ -482,10 +487,253 @@ export function generateOrderPDF(order, productions, containers) {
  * @param {string} [options.extraNote] - optional note after the info grid
  * @param {string} [options.subtitle] - title subtitle override
  */
+function formatProductionDuration(ms, t) {
+  if (!ms || ms <= 0) return null;
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0
+    ? t('production.list.durationHours', { hours: h, minutes: m })
+    : t('production.list.durationMinutes', { minutes: m });
+}
+
+function drawPhaseTimeCard(doc, y, title, accent, rows) {
+  const cardH = 24;
+  y = ensureSpace(doc, y, cardH + 4);
+  setFill(doc, accent.bg);
+  setDraw(doc, accent.border);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(M, y, CW, cardH, 1.5, 1.5, 'FD');
+  setFill(doc, accent.border);
+  doc.rect(M, y, 2.5, cardH, 'F');
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  setColor(doc, accent.title);
+  doc.text(title, M + 6, y + 6.5);
+  const colW = (CW - 12) / Math.max(rows.length, 1);
+  rows.forEach(function(row, i) {
+    const x = M + 6 + i * colW;
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, GRAY_LABEL);
+    doc.text(String(row[0]).toUpperCase(), x, y + 12.5);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, accent.value || BLACK);
+    const lines = doc.splitTextToSize(String(row[1] != null ? row[1] : '-'), colW - 4);
+    doc.text(lines[0] || '-', x, y + 18.5);
+  });
+  setColor(doc, BLACK);
+  return y + cardH + 4;
+}
+
+function drawMetricCards(doc, y, cards) {
+  const gap = 3;
+  const cardW = (CW - gap * (cards.length - 1)) / cards.length;
+  const cardH = 22;
+  y = ensureSpace(doc, y, cardH + 4);
+  cards.forEach(function(card, i) {
+    const x = M + i * (cardW + gap);
+    setFill(doc, card.bg);
+    setDraw(doc, card.border || GRAY_BORDER);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, y, cardW, cardH, 1.5, 1.5, 'FD');
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, GRAY_LABEL);
+    doc.text(String(card.label).toUpperCase(), x + 3, y + 6);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, card.color || BLUE_DARK);
+    doc.text(String(card.value), x + 3, y + 13.5);
+    if (card.sub) {
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      setColor(doc, GRAY_LABEL);
+      doc.text(String(card.sub), x + 3, y + 18.5);
+    }
+  });
+  setColor(doc, BLACK);
+  return y + cardH + 6;
+}
+
+function drawProductionTimesSection(doc, y, production, t, fmtDateTime) {
+  const startMs = production.start_time ? new Date(production.start_time).getTime() : null;
+  if (!startMs) return y;
+
+  const endMs = production.end_time ? new Date(production.end_time).getTime() : null;
+  const qcStartMs = production.qc_start_time ? new Date(production.qc_start_time).getTime() : null;
+  const envaseStartMs = production.envase_start_time ? new Date(production.envase_start_time).getTime() : null;
+  const pauseMs = production.total_pause_ms || 0;
+  const na = t('common.notAvailable');
+
+  const prodMs = (qcStartMs && startMs)
+    ? (qcStartMs - startMs - pauseMs)
+    : (endMs && startMs && !qcStartMs) ? (endMs - startMs - pauseMs) : null;
+  const qcMs = (envaseStartMs && qcStartMs) ? (envaseStartMs - qcStartMs) : null;
+  const envaseMs = (endMs && envaseStartMs) ? (endMs - envaseStartMs) : null;
+  const totalMs = (endMs && startMs) ? ((prodMs || 0) + (qcMs || 0) + (envaseMs || 0)) : null;
+
+  const fmtDur = function(ms) { return formatProductionDuration(ms, t) || na; };
+  const prodDurLabel = fmtDur(prodMs) + (pauseMs > 0
+    ? t('production.list.pauseLabel', { duration: fmtDur(pauseMs) })
+    : '');
+
+  y = ensureSpace(doc, y, 30);
+  y = addSectionTitle(doc, y, t('pdf.production.sectionTimes'));
+
+  y = drawPhaseTimeCard(doc, y, t('pdf.production.phaseProduction'), {
+    bg: [239, 246, 255],
+    border: [37, 99, 195],
+    title: [29, 78, 216],
+    value: [29, 78, 216],
+  }, [
+    [t('production.fields.startTime'), production.start_time ? fmtDateTime(production.start_time) : na],
+    [t('production.fields.endTime'), qcStartMs
+      ? fmtDateTime(production.qc_start_time)
+      : (endMs ? fmtDateTime(production.end_time) : na)],
+    [t('production.list.timeMinusPause'), prodDurLabel],
+  ]);
+
+  y = drawPhaseTimeCard(doc, y, t('pdf.production.phaseQuality'), {
+    bg: [255, 251, 235],
+    border: [217, 119, 6],
+    title: [180, 83, 9],
+    value: [180, 83, 9],
+  }, [
+    [t('production.fields.startTime'), production.qc_start_time ? fmtDateTime(production.qc_start_time) : na],
+    [t('production.fields.endTime'), envaseStartMs ? fmtDateTime(production.envase_start_time) : na],
+    [t('pdf.production.duration'), fmtDur(qcMs)],
+  ]);
+
+  y = drawPhaseTimeCard(doc, y, t('pdf.production.phasePackaging'), {
+    bg: [250, 245, 255],
+    border: [126, 34, 206],
+    title: [107, 33, 168],
+    value: [107, 33, 168],
+  }, [
+    [t('production.fields.startTime'), production.envase_start_time ? fmtDateTime(production.envase_start_time) : na],
+    [t('production.fields.endTime'), endMs ? fmtDateTime(production.end_time) : na],
+    [t('pdf.production.duration'), fmtDur(envaseMs)],
+  ]);
+
+  if (totalMs) {
+    y = ensureSpace(doc, y, 18);
+    setFill(doc, [240, 253, 244]);
+    setDraw(doc, [22, 163, 74]);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(M, y, CW, 14, 1.5, 1.5, 'FD');
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, [21, 128, 61]);
+    doc.text(t('pdf.production.totalTime'), M + 4, y + 5.5);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    setColor(doc, GRAY_LABEL);
+    doc.text(t('pdf.production.totalTimeBreakdown'), M + 4, y + 11);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    setColor(doc, [21, 128, 61]);
+    doc.text(fmtDur(totalMs), PW - M - 4, y + 9, { align: 'right' });
+    setColor(doc, BLACK);
+    y += 18;
+  }
+  return y;
+}
+
+function drawProductionCostSection(doc, y, production, stocks, recipes, t, fmtNum, fmtMoney) {
+  const mps = parseArr(production.raw_materials_used);
+  const mpCostRows = mps.map(function(m) {
+    const price = stockUnitPriceOf(m, stocks);
+    const qty = m.qty_fiscal || 0;
+    const unit = (stocks && m.stock_id)
+      ? ((stocks.find(function(x) { return x.id === m.stock_id; }) || {}).unit || 'kg')
+      : 'kg';
+    return { name: m.mp_name, unit: unit, price: price, qty: qty, cost: price * qty };
+  });
+  const totalMpCost = mpCostRows.reduce(function(s, r) { return s + r.cost; }, 0);
+  const recipe = (recipes || []).find(function(r) { return r.product_name === production.product; });
+  const productPrice = recipe?.price || production.unit_price || 0;
+  const mass = production.mass || 0;
+  const moCost = productPrice * mass;
+  const totalCost = totalMpCost + moCost;
+  const costPerKg = mass > 0 ? totalCost / mass : 0;
+  const pctMp = totalCost > 0 ? (totalMpCost / totalCost) * 100 : 0;
+  const pctMo = totalCost > 0 ? (moCost / totalCost) * 100 : 0;
+
+  y = ensureSpace(doc, y, 40);
+  y = addSectionTitle(doc, y, t('pdf.production.sectionCosts'));
+
+  const costHeaders = [
+    t('pdf.production.costColumns.rawMaterial'),
+    t('pdf.production.columns.qtyFiscal'),
+    t('pdf.production.costColumns.unitPrice'),
+    t('pdf.production.costColumns.cost'),
+  ];
+  const costRows = mpCostRows.map(function(r) {
+    return [
+      r.name || '-',
+      fmtNum(r.qty, 3) + ' ' + r.unit,
+      fmtNum(r.price, 4),
+      fmtMoney(r.cost),
+    ];
+  });
+  costRows.push([
+    t('pdf.production.laborCost'),
+    t('pdf.production.laborFormula', { price: fmtNum(productPrice, 4), mass: fmtNum(mass, 3) }),
+    '',
+    fmtMoney(moCost),
+  ]);
+
+  y = addTable(
+    doc,
+    y,
+    costHeaders,
+    costRows,
+    [70, 42, 36, 34],
+    [t('pdf.production.totalCost'), '', '', fmtMoney(totalCost)],
+  );
+
+  y = drawMetricCards(doc, y, [
+    {
+      label: t('pdf.production.costMp'),
+      value: fmtMoney(totalMpCost),
+      sub: t('pdf.production.percentOfTotal', { percent: pctMp.toFixed(1) }),
+      bg: [239, 246, 255],
+      border: [191, 219, 254],
+      color: BLUE_MID,
+    },
+    {
+      label: t('pdf.production.costMo'),
+      value: fmtMoney(moCost),
+      sub: t('pdf.production.percentOfTotal', { percent: pctMo.toFixed(1) }),
+      bg: [250, 245, 255],
+      border: [221, 214, 254],
+      color: [107, 33, 168],
+    },
+    {
+      label: t('pdf.production.totalCost'),
+      value: fmtMoney(totalCost),
+      bg: [240, 253, 244],
+      border: [187, 247, 208],
+      color: [21, 128, 61],
+    },
+    {
+      label: t('pdf.production.costPerKg'),
+      value: fmtMoney(costPerKg),
+      bg: [255, 251, 235],
+      border: [253, 230, 138],
+      color: [180, 83, 9],
+    },
+  ]);
+  return y;
+}
+
 function drawProductionReport(doc, production, containers, stocks, options = {}) {
   const { lang, t } = getPdfLabels();
-  const { fmtDate, fmtNum, fmtMoney, na } = makePdfFormatters(lang);
+  const { fmtDate, fmtDateTime, fmtNum, fmtMoney, na } = makePdfFormatters(lang);
   const recipes = options.recipes || [];
+  const complete = !!options.complete;
   const stockUnitOf = function(mp) {
     if (stocks && mp.stock_id) {
       const s = stocks.find(function(x) { return x.id === mp.stock_id; });
@@ -511,8 +759,8 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
       count: String(pkgs.length).padStart(2, '0'),
     });
   }
-  let y = addPageTitle(doc, opTitle, options.subtitle || t('pdf.production.subtitle'));
-  y = addInfoGrid(doc, y, [
+
+  const infoPairs = [
     [t('pdf.production.fields.op'), production.op_number || '-'],
     [t('pdf.common.lot'), production.lot || '-'],
     [t('pdf.production.fields.stage'), { __badge: true, status: production.status || '-' }],
@@ -528,7 +776,19 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
     [t('pdf.fields.priority'), production.priority || '-'],
     [t('pdf.common.operator'), production.operator || '-'],
     [t('pdf.production.fields.packaging'), packagingLabel],
-  ], 3);
+  ];
+  if (complete) {
+    infoPairs.push(
+      [t('pdf.production.fields.revision'), production.recipe_revision || '-'],
+      [t('pdf.production.fields.startTime'), production.start_time ? fmtDateTime(production.start_time) : '-'],
+      [t('pdf.production.fields.qcStart'), production.qc_start_time ? fmtDateTime(production.qc_start_time) : '-'],
+      [t('pdf.production.fields.packagingStart'), production.envase_start_time ? fmtDateTime(production.envase_start_time) : '-'],
+      [t('pdf.production.fields.bypassQc'), production.bypass_qc ? t('common.yes') : t('common.no')],
+    );
+  }
+
+  let y = addPageTitle(doc, opTitle, options.subtitle || t('pdf.production.subtitle'));
+  y = addInfoGrid(doc, y, infoPairs, 3);
   if (options.extraNote) {
     doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); setColor(doc, GRAY_LABEL);
     const noteLines = doc.splitTextToSize(options.extraNote, CW);
@@ -570,29 +830,85 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
       t('pdf.production.packagingColumns.grossWeight'),
       t('pdf.production.packagingColumns.tare'),
     ];
-    const cRows = containers.map(function(c) {
+    const cRows = containers.map(function(c, i) {
       const tareVal = (c.tare != null && c.tare !== '') ? fmtNum(c.tare, 3) : na();
       const liveNet = containerLiveNetWeight(c, production, recipes);
       const liveGross = containerLiveGrossWeight(c, production, recipes);
-      return [c.container_number || '-', c.type || '-', fmtNum(c.volume, 1), fmtNum(liveNet, 0), fmtNum(liveGross, 0), tareVal];
+      const seq = String(i + 1).padStart(2, '0');
+      const label = complete
+        ? (seq + ' - ' + (c.container_number || '-'))
+        : (c.container_number || '-');
+      return [label, c.type || '-', fmtNum(c.volume, 1), fmtNum(liveNet, 0), fmtNum(liveGross, 0), tareVal];
     });
     const tVol = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
     const tNet = containers.reduce(function(s, c) { return s + containerLiveNetWeight(c, production, recipes); }, 0);
     const tGross = containers.reduce(function(s, c) { return s + containerLiveGrossWeight(c, production, recipes); }, 0);
-    addTable(doc, y, cHeaders, cRows, [42, 36, 26, 26, 26, 26], [t('pdf.common.total'), '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 0) + ' kg', fmtNum(tGross, 0) + ' kg', '']);
+    y = addTable(doc, y, cHeaders, cRows, [42, 36, 26, 26, 26, 26], [t('pdf.common.total'), '', fmtNum(tVol, 1) + ' L', fmtNum(tNet, 0) + ' kg', fmtNum(tGross, 0) + ' kg', '']);
   }
+
+  if (complete) {
+    y = drawProductionTimesSection(doc, y, production, t, fmtDateTime);
+    y = drawProductionCostSection(doc, y, production, stocks, recipes, t, fmtNum, fmtMoney);
+  }
+
   addFooter(doc, lang);
 }
 
-export function generateProductionPDF(production, containers, stocks) {
+export function generateProductionPDF(production, containers, stocks, recipes = []) {
+  const { t } = getPdfLabels();
   const doc = new jsPDF({ format: 'a4' });
-  drawProductionReport(doc, production, containers, stocks);
-  doc.save((production.op_number || 'producao') + '.pdf');
+  drawProductionReport(doc, production, containers, stocks, {
+    recipes,
+    complete: true,
+    subtitle: t('pdf.production.completeSubtitle'),
+  });
+  doc.save(productionOpPdfFilename(production.op_number));
+}
+
+function safePdfFilenamePart(value) {
+  return String(value || '')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Complete OP report (all tanks or no tanks yet): OP57.pdf */
+function productionOpPdfFilename(opNumber) {
+  return (safePdfFilenamePart(opNumber) || 'producao') + '.pdf';
+}
+
+/**
+ * Tank fiscal report naming:
+ * - full OP (all tanks / no tank split) → OP57.pdf
+ * - specific tank(s) → OP60 - 15918-9.pdf
+ */
+function productionTankFiscalPdfFilename(opNumber, tankLabels, isFullOp) {
+  const op = safePdfFilenamePart(opNumber) || 'producao';
+  if (isFullOp) return op + '.pdf';
+  const tanks = (tankLabels || []).map(safePdfFilenamePart).filter(Boolean);
+  if (tanks.length === 0) return op + '.pdf';
+  return op + ' - ' + tanks.join(', ') + '.pdf';
+}
+
+/**
+ * Full OP fiscal report (all MP quantities, no tank split).
+ * Used when envase has not been registered yet.
+ */
+export function generateProductionOpFiscalPDF(production, stocks, recipes = []) {
+  const { t } = getPdfLabels();
+  const doc = new jsPDF({ format: 'a4' });
+  drawProductionReport(doc, production, [], stocks, {
+    recipes,
+    subtitle: t('pdf.production.tanksSubtitle'),
+  });
+  doc.save(productionOpPdfFilename(production.op_number));
+  return true;
 }
 
 /**
  * Fiscal report scoped to selected tanks: MP quantities proportional to live net weight.
  * Returns false if total net weight is zero (caller should show a toast).
+ * When all tanks are selected, filename is OP.pdf; otherwise OP - tank.pdf.
  */
 export function generateProductionTanksPDF(production, allContainers, selectedContainers, stocks, recipes = []) {
   const { t } = getPdfLabels();
@@ -613,6 +929,11 @@ export function generateProductionTanksPDF(production, allContainers, selectedCo
   }, 0);
   const unitPrice = parseFloat(production.unit_price) || 0;
   const labels = selected.map(function(c) { return c.container_number || '-'; }).join(', ');
+  const tankLabels = selected.map(function(c) { return c.container_number; }).filter(Boolean)
+    .filter(function(v, i, a) { return a.indexOf(v) === i; });
+  const selectedIds = new Set(selected.map(function(c) { return c.id; }).filter(Boolean));
+  const isFullOp = all.length > 0 && selected.length === all.length
+    && all.every(function(c) { return selectedIds.has(c.id); });
   const snapshot = {
     ...production,
     mass: selectedNet,
@@ -625,9 +946,9 @@ export function generateProductionTanksPDF(production, allContainers, selectedCo
     materials,
     recipes,
     subtitle: t('pdf.production.tanksSubtitle'),
-    extraNote: t('pdf.production.selectedTanksNote', { tanks: labels }),
+    extraNote: isFullOp ? null : t('pdf.production.selectedTanksNote', { tanks: labels }),
   });
-  doc.save((production.op_number || 'producao') + '_tanques.pdf');
+  doc.save(productionTankFiscalPdfFilename(production.op_number, tankLabels, isFullOp));
   return true;
 }
 
@@ -635,7 +956,7 @@ export function generateProductionTanksPDF(production, allContainers, selectedCo
  * Fiscal report for selected container-origin rows (multi-OP composition).
  * Uses each origin OP's real raw_materials_used scaled by origin.volume / production.volume.
  */
-export function generateProductionOriginsPDF(viewerProduction, selectedRows, productions, stocks, recipes = []) {
+export function generateProductionOriginsPDF(viewerProduction, selectedRows, productions, stocks, recipes = [], allRows = null) {
   const { t } = getPdfLabels();
   const selected = Array.isArray(selectedRows) ? selectedRows : [];
   if (selected.length === 0) return false;
@@ -682,6 +1003,10 @@ export function generateProductionOriginsPDF(viewerProduction, selectedRows, pro
     const op = r.op_number || '';
     return op ? `${placa} (${op})` : placa;
   }).join(', ');
+  const tankLabels = selected.map((r) => r.container?.container_number).filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
+  const totalRows = Array.isArray(allRows) ? allRows.length : selected.length;
+  const isFullOp = totalRows > 0 && selected.length === totalRows;
 
   const snapshot = {
     ...viewerProduction,
@@ -695,9 +1020,9 @@ export function generateProductionOriginsPDF(viewerProduction, selectedRows, pro
     materials,
     recipes,
     subtitle: t('pdf.production.originsSubtitle'),
-    extraNote: t('pdf.production.selectedOriginsNote', { tanks: labels }),
+    extraNote: isFullOp ? null : t('pdf.production.selectedOriginsNote', { tanks: labels }),
   });
-  doc.save((viewerProduction?.op_number || 'producao') + '_origens.pdf');
+  doc.save(productionTankFiscalPdfFilename(viewerProduction?.op_number, tankLabels, isFullOp));
   return true;
 }
 

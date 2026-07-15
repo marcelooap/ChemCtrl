@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
 import ProductionViewDialog from '@/components/production/ProductionViewDialog';
+import { EtapaBadge } from '@/components/production/ProductionBadges';
 import RawMaterialViewDialog from '@/components/estoque/RawMaterialViewDialog';
 import ContainerViewDialog from '@/components/vasilhames/ContainerViewDialog';
 import { canUseClientFilter, getUserClient, matchesClient } from '@/lib/permissions';
@@ -20,7 +21,7 @@ import { summarizePatioContainers } from '@/lib/containerUtils';
 import { calcPackagingQty } from '@/lib/stockUtils';
 import moment from 'moment';
 import { fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
-import { translateStockExpiryStatus } from '@/i18n/domainMaps';
+import { translatePackagingType, translateStockExpiryStatus } from '@/i18n/domainMaps';
 
 function MiniKpi({ label, value, icon: Icon, iconClass, bgClass }) {
   return (
@@ -47,8 +48,10 @@ export default function TelaClientes() {
   const [selectedClient, setSelectedClient] = useState('all');
   const [searchMP, setSearchMP] = useState('');
   const [searchContainer, setSearchContainer] = useState('');
+  const [searchHistory, setSearchHistory] = useState('');
   const [showStockDialog, setShowStockDialog] = useState(false);
   const [showContainersDialog, setShowContainersDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [viewingProd, setViewingProd] = useState(null);
   const [viewContainers, setViewContainers] = useState([]);
   const [viewingMP, setViewingMP] = useState(null);
@@ -121,6 +124,16 @@ export default function TelaClientes() {
     return patiotContainers.filter(c => [c.container_number, c.barril_number, c.lot, c.product].some(v => (v || '').toLowerCase().includes(q)));
   }, [patiotContainers, searchContainer]);
 
+  const filteredHistoryProds = useMemo(() => {
+    const q = searchHistory.toLowerCase();
+    if (!q) return productions;
+    return productions.filter((p) =>
+      [p.op_number, p.product, p.client, p.lot, p.packaging_type, p.status].some((v) =>
+        (v || '').toLowerCase().includes(q),
+      ),
+    );
+  }, [productions, searchHistory]);
+
   const stockDialogTotals = useMemo(() => ({
     currentStock: filteredStocks.reduce((s, i) => s + (i.current_stock || 0), 0),
     packaging: filteredStocks.reduce((s, i) => s + calcPackagingQty(i.current_stock, i.packaging_capacity), 0),
@@ -177,6 +190,14 @@ export default function TelaClientes() {
           <Factory className="w-4 h-4" style={{ color: '#2575D1' }} />
           <h3 className="text-sm font-semibold">{t('clients.screen.productionsInProgress')}</h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-gray-600">{inProgressProds.length}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={() => setShowHistoryDialog(true)}
+          >
+            {t('clients.screen.productionHistory')}
+          </Button>
         </div>
         <ProductionTrackingTable
           productions={inProgressProds}
@@ -244,6 +265,69 @@ export default function TelaClientes() {
         onOpenChange={(open) => { if (!open) setViewingProd(null); }}
         simplified
       />
+
+      {/* Histórico de produções */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{t('clients.screen.productionHistory')}</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-3">
+            <Input
+              placeholder={t('common.searchPlaceholder')}
+              value={searchHistory}
+              onChange={(e) => setSearchHistory(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          {filteredHistoryProds.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">{t('clients.screen.noProductions')}</div>
+          ) : (
+            <div className="overflow-x-auto flex-1 min-h-0 overflow-y-auto">
+              <table className="w-full chemctrl-table">
+                <thead className="sticky top-0 z-10 bg-card">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('production.opNumber')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.product')}</th>
+                    {!effectiveClient && (
+                      <th className="px-3 py-2 text-left text-xs font-semibold">{t('common.client')}</th>
+                    )}
+                    <th className="px-3 py-2 text-right text-xs font-semibold">{t('production.tracking.volume')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('production.tracking.packaging')}</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold">{t('production.tracking.stage')}</th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold">{t('clients.screen.view')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredHistoryProds.map((p) => (
+                    <tr key={p.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-3 py-2 font-bold text-sm font-mono text-primary">{p.op_number}</td>
+                      <td className="px-3 py-2 text-sm text-foreground">{p.product}</td>
+                      {!effectiveClient && (
+                        <td className="px-3 py-2 text-sm text-muted-foreground">{p.client}</td>
+                      )}
+                      <td className="px-3 py-2 text-right font-bold text-sm text-foreground">
+                        {fmtVolume(p.volume || 0, 'L', i18n.language)}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-foreground">{translatePackagingType(p.packaging_type)}</td>
+                      <td className="px-3 py-2"><EtapaBadge status={p.status} /></td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => handleViewProd(p)}
+                          className="p-1 rounded hover:bg-accent"
+                          title={t('clients.screen.view')}
+                        >
+                          <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Estoque Dialog */}
       <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>

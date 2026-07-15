@@ -582,7 +582,25 @@ export default function NovaProducao() {
       }
 
       await deductStock(mpList);
-      navigate('/ordens');
+
+      // Mantém o usuário na tela — limpa só apontamento de MPs e embalagem de destino
+      const mass = form.mass || (volNum * densityNum);
+      const recipe = recipes.find(r => r.id === form.recipe_id);
+      const resetMps = recipe
+        ? parseArr(recipe.raw_materials).map(m => recalculateMp({
+            mp_code: m.mp_code,
+            mp_name: m.mp_name,
+            percentage: m.percentage,
+            mp_density: m.mp_density,
+            quantity_kg: m.quantity_kg,
+            lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
+          }, mass, densityNum || 1))
+        : [];
+      setMpList(resetMps);
+      setForm(prev => ({ ...prev, packaging_type: '' }));
+      setComplementPackaging(false);
+      setComplementContainerId('');
+      toast({ title: t('production.messages.created') });
     } finally {
       setSaving(false);
     }

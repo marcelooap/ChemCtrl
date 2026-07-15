@@ -619,7 +619,7 @@
       "saveProgress": "Salvar Progresso",
       "viewDetails": "Ver Detalhes",
       "editPackaging": "Editar Envase",
-      "generatePdf": "Gerar PDF",
+      "generatePdf": "Relatório Completo",
       "generateTanksPdf": "Relatório Fiscal dos Tanques",
       "bypassOn": "Liberar By-pass",
       "bypassOff": "Remover By-pass"
@@ -778,6 +778,8 @@
       "clickToToggle": "Clique em qualquer parte do card para marcar/desmarcar a MP",
       "lotLabel": "Lote: {{lot}}",
       "qtyOperationalLabel": "Qtd. Operação: {{value}} kg",
+      "scaleAdjustmentBadge": "Balança ({{resolution}} kg): {{value}} kg",
+      "scaleAdjustmentAria": "Quantidade para balança com resolução de {{resolution}} kg: {{value}} kg",
       "totalLabel": "Total: {{value}} kg",
       "sigmaTotal": "Σ Total: {{value}} kg",
       "uncheckedInline": "{{count}} MP(s) ainda não marcada(s). Finalize apenas após marcar todas.",
@@ -2020,12 +2022,29 @@
     "production": {
       "title": "OP {{number}}",
       "subtitle": "Relatório de Ordem de Produção",
+      "completeSubtitle": "Relatório Completo da Ordem de Produção",
       "tanksSubtitle": "Relatório Fiscal por Tanque(s)",
       "selectedTanksNote": "Embalagens selecionadas: {{tanks}}",
       "originsSubtitle": "Relatório Fiscal por Origem(ns)",
       "selectedOriginsNote": "Origens selecionadas: {{tanks}}",
       "sectionRawMaterials": "Matérias Primas Utilizadas",
       "sectionPackaging": "Embalagens Envasadas",
+      "sectionTimes": "Tempos de Produção",
+      "sectionCosts": "Análise de Custos",
+      "phaseProduction": "Produção",
+      "phaseQuality": "Controle de Qualidade",
+      "phasePackaging": "Envase",
+      "totalTime": "Tempo Total da Produção",
+      "totalTimeBreakdown": "Produção + Qualidade + Envase",
+      "duration": "Tempo",
+      "laborCost": "Mão de Obra (preço PA × massa)",
+      "laborFormula": "{{price}} × {{mass}} kg",
+      "mpCost": "Custo com MP",
+      "costMp": "Custo MP",
+      "costMo": "Custo MO",
+      "totalCost": "Custo Total",
+      "costPerKg": "Custo por kg",
+      "percentOfTotal": "{{percent}}% do total",
       "noRawMaterials": "Sem matérias primas registradas.",
       "columns": {
         "code": "CÓDIGO MP",
@@ -2034,6 +2053,11 @@
         "qtyFiscal": "QTD. FISCAL",
         "qtyOperational": "QTD. OP. (KG)",
         "unit": "Unidade"
+      },
+      "costColumns": {
+        "rawMaterial": "MATÉRIA PRIMA",
+        "unitPrice": "PREÇO UNIT.",
+        "cost": "CUSTO"
       },
       "packagingColumns": {
         "container": "N EMBALAGEM",
@@ -2053,7 +2077,12 @@
         "unitPrice": "Preço Unit.",
         "totalValue": "Valor Total",
         "packaging": "Embalagem",
-        "packagingCount": "{{count}} Embalagens"
+        "packagingCount": "{{count}} Embalagens",
+        "revision": "Revisão Receita",
+        "startTime": "Início Produção",
+        "qcStart": "Início CQ",
+        "packagingStart": "Início Envase",
+        "bypassQc": "By-pass CQ"
       }
     },
     "coa": {
@@ -2618,6 +2647,8 @@
       "subtitleAll": "Visão consolidada de todos os clientes",
       "allClients": "Todos os clientes",
       "productionsInProgress": "Produções em andamento",
+      "productionHistory": "Histórico de produções",
+      "noProductions": "Nenhuma produção encontrada.",
       "rawMaterialStock": "Estoque de Matéria Prima",
       "containersInYard": "Vasilhames no Pátio",
       "noStock": "Nenhum item de estoque encontrado.",
