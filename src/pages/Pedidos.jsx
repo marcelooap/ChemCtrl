@@ -21,6 +21,23 @@ import { usePermissions } from '@/lib/rbac/PermissionProvider';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
 
+/** Tolerância em litros para fechar pedido (float / arredondamento de UI). */
+const VOLUME_EPS = 0.05;
+
+const toNum = (v) => {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Pedido atendido: volume pendente ≈ 0 ou produzido ≥ pedido. */
+const isOrderFullyProduced = (volumeOrdered, volumeProduced, volumePending) => {
+  const ordered = toNum(volumeOrdered);
+  if (ordered <= 0) return false;
+  const produced = toNum(volumeProduced);
+  const pending = toNum(volumePending);
+  return pending <= VOLUME_EPS || produced >= ordered - VOLUME_EPS;
+};
+
 export default function Pedidos() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -47,27 +64,44 @@ export default function Pedidos() {
   // Compute derived order statuses from production data (recomputed automatically on any realtime change)
   const orders = useMemo(() => {
     return rawOrders.map(order => {
-      const linkedOPs = productions.filter(p => p.order_id === order.id);
+      const orderId = String(order.id);
+      const linkedOPs = productions.filter(p => p.order_id != null && String(p.order_id) === orderId);
       const openOPs = linkedOPs.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
       const activeOPs = linkedOPs.filter(p => p.status !== 'Cancelado');
-      const totalProduced = activeOPs.reduce((s, p) => s + (p.volume || 0), 0);
-
-      let newStatus = order.status;
-      if (order.status === 'Parcial') newStatus = 'Em produção';
-      if (order.status !== 'Finalizado') {
-        if (openOPs.length > 0) {
-          newStatus = 'Em produção';
-        } else if (linkedOPs.length > 0 && totalProduced >= (order.volume_ordered || 0)) {
-          newStatus = 'Finalizado';
-        } else {
-          newStatus = 'Pendente';
-        }
+      const opProduced = activeOPs.reduce((s, p) => s + toNum(p.volume), 0);
+      const volumeOrdered = toNum(order.volume_ordered);
+      // Usa o maior entre soma das OPs e valor já gravado no pedido (evita regressão se OPs
+      // não linkarem / lista de productions truncada) e respeita volume_pending já zerado no DB.
+      const dbProduced = toNum(order.volume_produced);
+      const dbPending = order.volume_pending == null || order.volume_pending === ''
+        ? null
+        : toNum(order.volume_pending);
+      const totalProduced = Math.max(opProduced, dbProduced);
+      let volumePending = Math.max(0, volumeOrdered - totalProduced);
+      if (dbPending != null && dbPending <= VOLUME_EPS && volumeOrdered > 0) {
+        volumePending = 0;
       }
+      const fullyProduced = isOrderFullyProduced(volumeOrdered, totalProduced, volumePending);
+
+      let newStatus = order.status === 'Parcial' ? 'Em produção' : order.status;
+      // Sempre força Finalizado quando o volume foi atendido — inclusive após a data prevista
+      if (fullyProduced) {
+        newStatus = 'Finalizado';
+      } else if (newStatus === 'Finalizado' || newStatus === 'Atrasado') {
+        // Status inconsistente no DB: recalcula a partir das OPs
+        if (openOPs.length > 0 || totalProduced > 0) newStatus = 'Em produção';
+        else newStatus = 'Pendente';
+      } else if (openOPs.length > 0 || totalProduced > 0) {
+        newStatus = 'Em produção';
+      } else {
+        newStatus = 'Pendente';
+      }
+
       return {
         ...order,
         status: newStatus,
         volume_produced: totalProduced,
-        volume_pending: (order.volume_ordered || 0) - totalProduced,
+        volume_pending: volumePending,
       };
     });
   }, [rawOrders, productions]);
@@ -76,9 +110,17 @@ export default function Pedidos() {
   const lastSyncRef = useRef('');
   useEffect(() => {
     const updates = orders
-      .filter(o => o.status !== rawOrders.find(r => r.id === o.id)?.status || (o.volume_produced || 0) !== (rawOrders.find(r => r.id === o.id)?.volume_produced || 0) || (o.volume_pending || 0) !== (rawOrders.find(r => r.id === o.id)?.volume_pending || 0))
+      .filter(o => {
+        const raw = rawOrders.find(r => r.id === o.id);
+        if (!raw) return false;
+        return (
+          o.status !== raw.status
+          || toNum(o.volume_produced) !== toNum(raw.volume_produced)
+          || toNum(o.volume_pending) !== toNum(raw.volume_pending)
+        );
+      })
       .map(o => ({ id: o.id, status: o.status, volume_produced: o.volume_produced, volume_pending: o.volume_pending }));
-    const syncKey = updates.map(u => `${u.id}:${u.status}:${u.volume_produced}`).join('|');
+    const syncKey = updates.map(u => `${u.id}:${u.status}:${u.volume_produced}:${u.volume_pending}`).join('|');
     if (updates.length > 0 && syncKey !== lastSyncRef.current) {
       lastSyncRef.current = syncKey;
       base44.entities.Order.bulkUpdate(updates).catch(() => {});
@@ -87,13 +129,24 @@ export default function Pedidos() {
 
   const load = () => { loadOrders(); };
 
-  const isOrderLate = (o) => (
-    o.status !== 'Finalizado'
-    && o.expected_date
-    && moment(o.expected_date, 'YYYY-MM-DD').endOf('day').isBefore(moment())
-  );
+  const isOrderLate = (o) => {
+    if (isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)) return false;
+    if (o.status === 'Finalizado') return false;
+    if (toNum(o.volume_pending) <= VOLUME_EPS) return false;
+    return Boolean(
+      o.expected_date
+      && moment(o.expected_date, 'YYYY-MM-DD').endOf('day').isBefore(moment())
+    );
+  };
 
-  const getDisplayStatus = (o) => (isOrderLate(o) ? 'Atrasado' : o.status);
+  const getDisplayStatus = (o) => {
+    // Regra de UI: volume atendido → Finalizado (nunca Atrasado), mesmo após a prev. atendimento
+    if (isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)) {
+      return 'Finalizado';
+    }
+    if (o.status === 'Finalizado') return 'Finalizado';
+    return isOrderLate(o) ? 'Atrasado' : o.status;
+  };
 
   const clientOptions = useMemo(() => {
     const map = new Map();
@@ -123,7 +176,10 @@ export default function Pedidos() {
     return matchSearch && matchStatus && matchClient;
   });
 
-  const openOrders = orders.filter(o => o.status !== 'Finalizado');
+  const openOrders = orders.filter(o =>
+    o.status !== 'Finalizado'
+    && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
+  );
   const totalPendingVol = openOrders.reduce((s, o) => s + (o.volume_pending || 0), 0);
 
   const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
