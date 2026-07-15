@@ -108,13 +108,26 @@ const cleanData = (data) => {
   return cleaned;
 };
 
-const handleResponse = async (resp) => {
+/** Tables introduced by later migrations — list/filter must not break core flows if absent. */
+const OPTIONAL_TABLES = new Set(['container_origins']);
+
+const isMissingTableError = (code, msg) => {
+  const m = String(msg || '');
+  return code === 'PGRST205'
+    || m.includes('schema cache')
+    || /Could not find the (table|relation)/i.test(m);
+};
+
+const handleResponse = async (resp, { allowMissingTable = false } = {}) => {
   if (!resp.ok) {
     let msg = `HTTP ${resp.status}`;
+    let code = null;
     try {
       const body = await resp.json();
       msg = body.message || body.error || msg;
+      code = body.code || null;
     } catch (_e) { /* ignore */ }
+    if (allowMissingTable && isMissingTableError(code, msg)) return [];
     throw new Error(msg);
   }
   const text = await resp.text();
@@ -130,7 +143,7 @@ const createEntity = (entityName, tableName) => ({
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     if (limit) params.set('limit', String(limit));
     const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    return handleResponse(resp);
+    return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
   },
   filter: async (queryObj, sort, limit) => {
     const params = new URLSearchParams();
@@ -140,14 +153,14 @@ const createEntity = (entityName, tableName) => ({
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     if (limit) params.set('limit', String(limit));
     const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    return handleResponse(resp);
+    return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
   },
   get: async (id) => {
     const params = new URLSearchParams();
     params.set('select', '*');
     params.set('id', `eq.${id}`);
     const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    const data = await handleResponse(resp);
+    const data = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
     if (!data || data.length === 0) throw new Error('Registro não encontrado');
     return data[0];
   },

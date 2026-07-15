@@ -228,9 +228,15 @@ export default function Vasilhames() {
     try {
       const vol = parseFloat(departItem.volume) || 0;
       if (vol > 0) {
-        const ensured = await base44.entities.ContainerOrigin.filter({ container_id: departItem.id });
-        if (ensured?.length) {
-          await applyProportionalOriginReduction(base44.entities, ensured, departItem.id, vol);
+        // Origins reduction is best-effort: saída must succeed even if
+        // container_origins is missing (migration not applied yet).
+        try {
+          const ensured = await base44.entities.ContainerOrigin.filter({ container_id: departItem.id });
+          if (ensured?.length) {
+            await applyProportionalOriginReduction(base44.entities, ensured, departItem.id, vol);
+          }
+        } catch (_originErr) {
+          /* ignore — container update below is authoritative */
         }
       }
       await base44.entities.Container.update(departItem.id, {
