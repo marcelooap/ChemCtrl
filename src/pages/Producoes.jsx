@@ -24,6 +24,7 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
 import { RBAC_ADMIN_SLUG } from '@/lib/rbac/permissionCatalog';
+import { syncOrderFromProductions } from '@/lib/orderProductionStatus';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -301,28 +302,29 @@ export default function Producoes() {
         }
       }
 
-      // Update linked order: subtract cancelled volume and recalculate
-      if (cancelTarget.order_id) {
-        try {
-          const order = await base44.entities.Order.get(cancelTarget.order_id);
-          if (order) {
-            const cancelledVol = cancelTarget.volume || 0;
-            const newProduced = Math.max(0, (order.volume_produced || 0) - cancelledVol);
-            const newPending = Math.max(0, (order.volume_ordered || 0) - newProduced);
-            const newStatus = newProduced <= 0 ? 'Pendente' : newProduced < (order.volume_ordered || 0) ? 'Em produção' : 'Finalizado';
-            await base44.entities.Order.update(cancelTarget.order_id, {
-              volume_produced: newProduced,
-              volume_pending: newPending,
-              status: newStatus,
-            });
-          }
-        } catch (_e) {}
-      }
-
+      // Cancelar OP primeiro; depois recalcular o pedido só com OPs Finalizado / abertas
       await base44.entities.Production.update(cancelTarget.id, {
         status: 'Cancelado',
         end_time: cancelTarget.end_time || new Date().toISOString(),
       });
+
+      if (cancelTarget.order_id) {
+        try {
+          await syncOrderFromProductions(cancelTarget.order_id, base44.entities);
+        } catch (orderErr) {
+          console.error('Falha ao sincronizar pedido após cancelar OP:', orderErr);
+          toast({
+            title: t('production.cancel.success', { op: cancelTarget.op_number }),
+            description: t('production.cancel.orderSyncWarning', {
+              defaultValue: 'OP cancelada, mas o status do pedido pode precisar de atualização. Abra Pedidos para recalcular.',
+            }),
+            variant: 'destructive',
+          });
+          setCancelTarget(null);
+          load();
+          return;
+        }
+      }
 
       toast({ title: t('production.cancel.success', { op: cancelTarget.op_number }), description: t('production.cancel.successDetail') });
       setCancelTarget(null);

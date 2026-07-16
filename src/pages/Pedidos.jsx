@@ -18,25 +18,14 @@ import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { matchesClient } from '@/lib/permissions';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
+import {
+  VOLUME_EPS,
+  toNum,
+  isOrderFullyProduced,
+  deriveOrderFromProductions,
+} from '@/lib/orderProductionStatus';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
-
-/** Tolerância em litros para fechar pedido (float / arredondamento de UI). */
-const VOLUME_EPS = 0.05;
-
-const toNum = (v) => {
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
-};
-
-/** Pedido atendido: volume pendente ≈ 0 ou produzido ≥ pedido. */
-const isOrderFullyProduced = (volumeOrdered, volumeProduced, volumePending) => {
-  const ordered = toNum(volumeOrdered);
-  if (ordered <= 0) return false;
-  const produced = toNum(volumeProduced);
-  const pending = toNum(volumePending);
-  return pending <= VOLUME_EPS || produced >= ordered - VOLUME_EPS;
-};
 
 export default function Pedidos() {
   const { t } = useTranslation();
@@ -64,44 +53,12 @@ export default function Pedidos() {
   // Compute derived order statuses from production data (recomputed automatically on any realtime change)
   const orders = useMemo(() => {
     return rawOrders.map(order => {
-      const orderId = String(order.id);
-      const linkedOPs = productions.filter(p => p.order_id != null && String(p.order_id) === orderId);
-      const openOPs = linkedOPs.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
-      const activeOPs = linkedOPs.filter(p => p.status !== 'Cancelado');
-      const opProduced = activeOPs.reduce((s, p) => s + toNum(p.volume), 0);
-      const volumeOrdered = toNum(order.volume_ordered);
-      // Usa o maior entre soma das OPs e valor já gravado no pedido (evita regressão se OPs
-      // não linkarem / lista de productions truncada) e respeita volume_pending já zerado no DB.
-      const dbProduced = toNum(order.volume_produced);
-      const dbPending = order.volume_pending == null || order.volume_pending === ''
-        ? null
-        : toNum(order.volume_pending);
-      const totalProduced = Math.max(opProduced, dbProduced);
-      let volumePending = Math.max(0, volumeOrdered - totalProduced);
-      if (dbPending != null && dbPending <= VOLUME_EPS && volumeOrdered > 0) {
-        volumePending = 0;
-      }
-      const fullyProduced = isOrderFullyProduced(volumeOrdered, totalProduced, volumePending);
-
-      let newStatus = order.status === 'Parcial' ? 'Em produção' : order.status;
-      // Sempre força Finalizado quando o volume foi atendido — inclusive após a data prevista
-      if (fullyProduced) {
-        newStatus = 'Finalizado';
-      } else if (newStatus === 'Finalizado' || newStatus === 'Atrasado') {
-        // Status inconsistente no DB: recalcula a partir das OPs
-        if (openOPs.length > 0 || totalProduced > 0) newStatus = 'Em produção';
-        else newStatus = 'Pendente';
-      } else if (openOPs.length > 0 || totalProduced > 0) {
-        newStatus = 'Em produção';
-      } else {
-        newStatus = 'Pendente';
-      }
-
+      const derived = deriveOrderFromProductions(order, productions);
       return {
         ...order,
-        status: newStatus,
-        volume_produced: totalProduced,
-        volume_pending: volumePending,
+        status: derived.status,
+        volume_produced: derived.volume_produced,
+        volume_pending: derived.volume_pending,
       };
     });
   }, [rawOrders, productions]);

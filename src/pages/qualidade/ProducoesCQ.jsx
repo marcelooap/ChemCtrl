@@ -16,6 +16,7 @@ import ProductionCard from '@/components/ProductionCard';
 import { NotificationService } from '@/notifications/services/NotificationService';
 import SignedImage from '@/components/SignedImage';
 import { fmtDate, fmtNumber, fmtVolume } from '@/i18n/formatters';
+import { syncOrderFromProductions } from '@/lib/orderProductionStatus';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -189,6 +190,14 @@ export default function ProducoesCQ() {
         prodUpdates.envase_start_time = new Date().toISOString();
       }
       await base44.entities.Production.update(selectedProd.id, prodUpdates);
+
+      if (newProdStatus === 'Cancelado' && selectedProd.order_id) {
+        try {
+          await syncOrderFromProductions(selectedProd.order_id, base44.entities);
+        } catch (orderErr) {
+          console.error('Falha ao sincronizar pedido após reprovação CQ:', orderErr);
+        }
+      }
 
       if (newProdStatus === 'Envase') {
         await NotificationService.cqReleased({
