@@ -13,15 +13,15 @@ import ProductCombobox from '@/components/ui/ProductCombobox';
 import { useToast } from '@/components/ui/use-toast';
 import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import moment from 'moment';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { matchesClient } from '@/lib/permissions';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
 import {
-  VOLUME_EPS,
   toNum,
   isOrderFullyProduced,
+  isPastExpectedDate,
+  getOrderDisplayStatus,
   deriveOrderFromProductions,
 } from '@/lib/orderProductionStatus';
 
@@ -86,24 +86,7 @@ export default function Pedidos() {
 
   const load = () => { loadOrders(); };
 
-  const isOrderLate = (o) => {
-    if (isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)) return false;
-    if (o.status === 'Finalizado') return false;
-    if (toNum(o.volume_pending) <= VOLUME_EPS) return false;
-    return Boolean(
-      o.expected_date
-      && moment(o.expected_date, 'YYYY-MM-DD').endOf('day').isBefore(moment())
-    );
-  };
-
-  const getDisplayStatus = (o) => {
-    // Regra de UI: volume atendido → Finalizado (nunca Atrasado), mesmo após a prev. atendimento
-    if (isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)) {
-      return 'Finalizado';
-    }
-    if (o.status === 'Finalizado') return 'Finalizado';
-    return isOrderLate(o) ? 'Atrasado' : o.status;
-  };
+  const getDisplayStatus = (o) => getOrderDisplayStatus(o);
 
   const clientOptions = useMemo(() => {
     const map = new Map();
@@ -289,7 +272,9 @@ export default function Pedidos() {
               </thead>
               <tbody>
                 {filtered.map(o => {
-                  const isLate = isOrderLate(o);
+                  const pastDue = isPastExpectedDate(o)
+                    && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
+                    && o.status !== 'Finalizado';
                   const displayStatus = getDisplayStatus(o);
                   return (
                     <tr key={o.id} className="border-b border-border hover:bg-accent/30">
@@ -303,8 +288,8 @@ export default function Pedidos() {
                       <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
                       <td className="px-4 py-2.5 text-right font-bold text-sm text-amber-600">{fmtNumber(o.volume_pending)} L</td>
                       <td className="px-4 py-2.5 text-sm">
-                        <span className={isLate ? 'text-red-600 font-medium' : ''}>
-                          {isLate && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                        <span className={pastDue ? 'text-red-600 font-medium' : ''}>
+                          {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
                           {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
                         </span>
                       </td>

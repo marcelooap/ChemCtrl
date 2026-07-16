@@ -15,6 +15,46 @@ export const isOrderFullyProduced = (volumeOrdered, volumeProduced, volumePendin
   return pending <= VOLUME_EPS || produced >= ordered - VOLUME_EPS;
 };
 
+/** Data prevista já passou (ignora status — útil para destaque visual da data). */
+export const isPastExpectedDate = (order, now = new Date()) => {
+  if (!order?.expected_date) return false;
+  const expected = String(order.expected_date).split('T')[0];
+  const [y, m, d] = expected.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const endOfExpected = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return endOfExpected < now;
+};
+
+/**
+ * Pedido atrasado para exibição de status.
+ * Com OP aberta (Em produção) nunca é Atrasado — status operacional prevalece.
+ */
+export const isOrderLate = (order, now = new Date()) => {
+  if (!order) return false;
+  if (order.status === 'Em produção') return false;
+  if (order.status === 'Finalizado') return false;
+  if (isOrderFullyProduced(order.volume_ordered, order.volume_produced, order.volume_pending)) {
+    return false;
+  }
+  if (toNum(order.volume_pending) <= VOLUME_EPS) return false;
+  return isPastExpectedDate(order, now);
+};
+
+/**
+ * Status exibido na UI (Atrasado é só display; nunca grava no DB).
+ * Prioridade: Finalizado > Em produção > Atrasado > status derivado.
+ */
+export const getOrderDisplayStatus = (order, now = new Date()) => {
+  if (!order) return 'Pendente';
+  if (isOrderFullyProduced(order.volume_ordered, order.volume_produced, order.volume_pending)) {
+    return 'Finalizado';
+  }
+  if (order.status === 'Finalizado') return 'Finalizado';
+  if (order.status === 'Em produção') return 'Em produção';
+  if (isOrderLate(order, now)) return 'Atrasado';
+  return order.status || 'Pendente';
+};
+
 /**
  * Deriva volumes e status do pedido a partir das OPs vinculadas.
  * volume_produced = soma apenas de OPs Finalizado (Cancelado e em andamento não contam).

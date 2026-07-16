@@ -80,7 +80,12 @@ export default function Home() {
   const revenueInProcess = inProgressProds.reduce((s, p) => s + ((p.mass || 0) * (p.unit_price || 0)), 0);
   const openOrders = orders.filter(o => o.status !== 'Finalizado' && (o.volume_pending ?? 0) > 0);
   const openVolume = openOrders.reduce((s, o) => s + (o.volume_pending || 0), 0);
-  const lateOrders = openOrders.filter(o => o.expected_date && moment(o.expected_date, 'YYYY-MM-DD').isBefore(now, 'day'));
+  // Atrasado só para pedidos sem OP aberta; Em produção prevalece
+  const lateOrders = openOrders.filter(o =>
+    o.status !== 'Em produção'
+    && o.expected_date
+    && moment(o.expected_date, 'YYYY-MM-DD').isBefore(now, 'day')
+  );
 
   const handleBypass = async (p) => {
     setBypassing(p.id);
