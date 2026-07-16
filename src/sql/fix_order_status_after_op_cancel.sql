@@ -19,7 +19,7 @@ SET
     WHEN COALESCE(t.vol_finalizado, 0) >= COALESCE(o.volume_ordered, 0) - 0.05
       AND COALESCE(o.volume_ordered, 0) > 0
       THEN 'Finalizado'
-    WHEN COALESCE(t.has_open_op, false) OR COALESCE(t.vol_finalizado, 0) > 0
+    WHEN COALESCE(t.has_open_op, false)
       THEN 'Em produção'
     ELSE 'Pendente'
   END,
@@ -32,7 +32,7 @@ WHERE o.id = t.order_id
         WHEN COALESCE(t.vol_finalizado, 0) >= COALESCE(o.volume_ordered, 0) - 0.05
           AND COALESCE(o.volume_ordered, 0) > 0
           THEN 'Finalizado'
-        WHEN COALESCE(t.has_open_op, false) OR COALESCE(t.vol_finalizado, 0) > 0
+        WHEN COALESCE(t.has_open_op, false)
           THEN 'Em produção'
         ELSE 'Pendente'
       END

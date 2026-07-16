@@ -49,10 +49,12 @@ export function deriveOrderFromProductions(order, productions) {
 
   const fullyProduced = isOrderFullyProduced(volumeOrdered, totalProduced, volumePending);
 
+  // Em produção = somente com OP aberta (em andamento). Volume parcial
+  // já produzido sem OP aberta permanece Pendente até nova OP ou Finalizado.
   let status;
   if (fullyProduced) {
     status = 'Finalizado';
-  } else if (openOPs.length > 0 || totalProduced > 0) {
+  } else if (openOPs.length > 0) {
     status = 'Em produção';
   } else {
     status = 'Pendente';
