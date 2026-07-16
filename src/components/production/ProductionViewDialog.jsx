@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
-import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
+import { translateProductionStatus } from '@/i18n/domainMaps';
 import {
   parseArr,
   stockUnitOf,
@@ -206,7 +206,7 @@ export default function ProductionViewDialog({
               <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(production.volume, 'L', i18n.language)}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-bold">{fmtMass(production.mass, 'kg', i18n.language)}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('production.list.revision')}</p><p className="font-medium">{production.recipe_revision}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('production.fields.priority')}</p><p className="font-medium">{translatePriority(production.priority)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.list.clientOrder')}</p><p className="font-medium">{production.client_order || t('common.notAvailable')}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('production.list.stage')}</p>
                 {isComplementPending(production) ? (
                   <FractionalBadge production={production} />

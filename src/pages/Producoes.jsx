@@ -487,26 +487,30 @@ export default function Producoes() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-center">
-                      <InvoiceToggle
-                        invoiced={p.invoiced}
-                        onToggle={async () => {
-                          const next = !p.invoiced;
-                          setProductions((prev) =>
-                            prev.map((item) => (item.id === p.id ? { ...item, invoiced: next } : item))
-                          );
-                          try {
-                            await base44.entities.Production.update(p.id, { invoiced: next });
-                          } catch {
+                      {p.status === 'Cancelado' ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        <InvoiceToggle
+                          invoiced={p.invoiced}
+                          onToggle={async () => {
+                            const next = !p.invoiced;
                             setProductions((prev) =>
-                              prev.map((item) => (item.id === p.id ? { ...item, invoiced: !next } : item))
+                              prev.map((item) => (item.id === p.id ? { ...item, invoiced: next } : item))
                             );
-                            toast({
-                              title: t('production.messages.updateError'),
-                              variant: 'destructive',
-                            });
-                          }
-                        }}
-                      />
+                            try {
+                              await base44.entities.Production.update(p.id, { invoiced: next });
+                            } catch {
+                              setProductions((prev) =>
+                                prev.map((item) => (item.id === p.id ? { ...item, invoiced: !next } : item))
+                              );
+                              toast({
+                                title: t('production.messages.updateError'),
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
