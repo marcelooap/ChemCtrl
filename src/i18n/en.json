@@ -1752,8 +1752,17 @@
       "tankStorageHint": "Product will be stored directly in tanks",
       "tank": "Tank",
       "selectTank": "Select tank",
+      "selectClientFirst": "Select the raw material client first",
+      "noTanksForClient": "No tanks registered for this client",
       "volume": "Volume (L)",
+      "tankCurrentVolume": "Current volume",
+      "tankFinalVolume": "Final stock",
       "massCalc": "Mass: {{mass}} (dens. {{density}} × {{volume}} L)",
+      "tankConference": "Conference (tank × initial stock)",
+      "tankConferenceSummary": "Allocated: {{allocated}} {{unit}} · Initial Stock: {{initialStock}} {{unit}}",
+      "tankConferenceMatch": "Conference OK — total matches the initial stock.",
+      "tankConferenceUnder": "{{diff}} {{unit}} remaining to match the initial stock.",
+      "tankConferenceOver": "Exceeds the initial stock by {{diff}} {{unit}}. Adjust the volume before saving.",
       "addTank": "Add Tank",
       "saveChanges": "Save Changes"
     },
@@ -1772,7 +1781,9 @@
     },
     "messages": {
       "mpRequired": "Enter raw material name",
-      "noItemsExport": "No items to export"
+      "noItemsExport": "No items to export",
+      "tankConferenceExceeded": "Tank quantity exceeds the initial stock",
+      "tankConferenceExceededDetail": "Allocated {{allocated}} {{unit}} — initial stock {{initialStock}} {{unit}}. Reduce tank volume/mass."
     },
     "movementDialog": {
       "title": "Raw Material Stock Movement",

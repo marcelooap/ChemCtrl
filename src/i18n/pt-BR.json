@@ -1639,8 +1639,17 @@
       "tankStorageHint": "Produto será armazenado diretamente em tanques",
       "tank": "Tanka",
       "selectTank": "Selecione a tanka",
+      "selectClientFirst": "Selecione o cliente da MP primeiro",
+      "noTanksForClient": "Nenhuma tanka cadastrada para este cliente",
       "volume": "Volume (L)",
+      "tankCurrentVolume": "Volume atual",
+      "tankFinalVolume": "Estoque final",
       "massCalc": "Massa: {{mass}} (dens. {{density}} × {{volume}} L)",
+      "tankConference": "Conferência (tanka × estoque inicial)",
+      "tankConferenceSummary": "Alocado: {{allocated}} {{unit}} · Estoque Inicial: {{initialStock}} {{unit}}",
+      "tankConferenceMatch": "Conferência OK — somatório igual ao estoque inicial.",
+      "tankConferenceUnder": "Faltam {{diff}} {{unit}} para igualar o estoque inicial.",
+      "tankConferenceOver": "Excede o estoque inicial em {{diff}} {{unit}}. Ajuste o volume antes de salvar.",
       "addTank": "Adicionar Tanka",
       "saveChanges": "Salvar Alterações"
     },
@@ -1659,7 +1668,9 @@
     },
     "messages": {
       "mpRequired": "Informe o nome da matéria prima",
-      "noItemsExport": "Nenhum item para exportar"
+      "noItemsExport": "Nenhum item para exportar",
+      "tankConferenceExceeded": "Quantidade na tanka superior ao estoque inicial",
+      "tankConferenceExceededDetail": "Alocado {{allocated}} {{unit}} — estoque inicial {{initialStock}} {{unit}}. Reduza o volume/massa das tankas."
     },
     "movementDialog": {
       "title": "Movimentação de Estoque de MP",

@@ -89,6 +89,11 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
               <div><p className="text-xs text-muted-foreground">{t('rawMaterialStock.viewDialog.packagingQuantity')}</p><p className="font-medium">{fmt(item.packaging_quantity)}</p></div>
             </div>
 
+            <div className="mb-5">
+              <p className="text-xs text-muted-foreground">{t('rawMaterialStock.form.observations')}</p>
+              <p className="font-medium text-sm whitespace-pre-wrap">{item.observations?.trim() || '—'}</p>
+            </div>
+
             <h4 className="text-sm font-bold mb-2 text-foreground">{t('rawMaterialStock.viewDialog.opsSection')}</h4>
             {loadingConsumption ? (
               <div className="flex items-center justify-center h-16"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>

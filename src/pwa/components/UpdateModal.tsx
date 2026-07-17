@@ -1,14 +1,17 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUpdate } from '../hooks/useUpdate';
 
 export function UpdateModal() {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const { updateAvailable, currentVersion, nextVersion, isUpdating, applyUpdate } =
     useUpdate();
 
+  if (pathname.startsWith('/consulta/')) return null;
   if (!updateAvailable) return null;
 
   return (

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import Combobox from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import moment from 'moment';
@@ -23,6 +24,37 @@ import { usePermissions } from '@/lib/rbac/PermissionProvider';
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
+
+/** Volume atual da tanka (mesma regra da tela Tankagem), opcionalmente excluindo um registro de MP. */
+function computeTankCurrentVolume(tankName, stockEntries, containers, excludeStockId) {
+  if (!tankName) return 0;
+
+  const tankContainers = (containers || []).filter((c) => {
+    const isTank = (c.type || '').toLowerCase().includes('tank');
+    return isTank && c.container_number === tankName && c.status === 'No Pátio';
+  });
+
+  if (tankContainers.length > 0) {
+    return tankContainers.reduce((sum, c) => sum + (c.volume || 0), 0);
+  }
+
+  let volume = 0;
+  (stockEntries || []).forEach((s) => {
+    if (excludeStockId && s.id === excludeStockId) return;
+    if (!s.tank_storage) return;
+    const entries = parseArr(s.tank_entries);
+    if (entries.length) {
+      entries.forEach((te) => {
+        if (te.tank_name === tankName && te.volume) volume += te.volume;
+      });
+    } else if (s.tank_name === tankName && s.tank_volume) {
+      volume += s.tank_volume;
+    }
+  });
+  return volume;
+}
+
+const CONFERENCE_TOLERANCE = 0.01;
 
 export default function Estoque() {
   const { t } = useTranslation();
@@ -36,6 +68,7 @@ export default function Estoque() {
   const { data: items, loading, reload: load } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
+  const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [stockFilter, setStockFilter] = useState('todas');
   const [clientFilter, setClientFilter] = useState('todos');
@@ -69,13 +102,26 @@ export default function Estoque() {
 
   const handleMPSelect = (selected) => {
     if (selected) {
-      setForm(prev => ({
-        ...prev,
-        mp_name: selected.mp_name || prev.mp_name,
-        mp_code: selected.mp_code || prev.mp_code,
-        client: selected.client || prev.client,
-        density: selected.density || prev.density,
-      }));
+      setForm(prev => {
+        const nextClient = selected.client || prev.client;
+        const nextDensity = selected.density || prev.density;
+        const clientChanged = (nextClient || '').trim() !== (prev.client || '').trim();
+        return {
+          ...prev,
+          mp_name: selected.mp_name || prev.mp_name,
+          mp_code: selected.mp_code || prev.mp_code,
+          client: nextClient,
+          density: nextDensity,
+          tank_entries: (prev.tank_entries || []).map((entry) => {
+            const vol = parseFloat(entry.volume) || 0;
+            return {
+              ...entry,
+              tank_name: clientChanged ? '' : entry.tank_name,
+              mass: Math.round((parseFloat(nextDensity) || 0) * vol),
+            };
+          }),
+        };
+      });
     }
   };
 
@@ -106,6 +152,30 @@ export default function Estoque() {
   const updateTankEntry = (idx, patch) => setForm(prev => ({ ...prev, tank_entries: (prev.tank_entries || []).map((e, i) => i === idx ? { ...e, ...patch } : e) }));
   const removeTankEntry = (idx) => setForm(prev => ({ ...prev, tank_entries: (prev.tank_entries || []).filter((_, i) => i !== idx) }));
 
+  const clientTanks = useMemo(() => {
+    const client = (form.client || '').trim();
+    if (!client) return [];
+    return (tanks || []).filter((tank) => (tank.client || '').trim() === client);
+  }, [tanks, form.client]);
+
+  // Conferência sempre usa Estoque Inicial (= quantidade da nota).
+  const usesVolumeConference = (form.unit || '').toLowerCase() === 'l';
+  const conferenceUnit = usesVolumeConference ? 'L' : 'kg';
+  const initialStockQty = parseFloat(form.initial_stock) || 0;
+  const tankConferenceTotal = useMemo(() => {
+    return (form.tank_entries || []).reduce((sum, entry) => {
+      if (usesVolumeConference) return sum + (parseFloat(entry.volume) || 0);
+      return sum + (parseFloat(entry.mass) || 0);
+    }, 0);
+  }, [form.tank_entries, usesVolumeConference]);
+  const tankConferenceDiff = tankConferenceTotal - initialStockQty;
+  const tankConferenceStatus =
+    Math.abs(tankConferenceDiff) <= CONFERENCE_TOLERANCE
+      ? 'match'
+      : tankConferenceDiff > 0
+        ? 'over'
+        : 'under';
+
   // Ao editar, o cálculo de qtd. de embalagens usa o saldo atual;
   // ao criar, usa o estoque inicial (que também é o saldo atual no momento).
   const stockForPackaging = () => editing ? (parseFloat(form.current_stock) || 0) : (parseFloat(form.initial_stock) || 0);
@@ -115,6 +185,24 @@ export default function Estoque() {
     const packagingCapacity = parseFloat(form.packaging_capacity) || 0;
     const data = { ...form, unit_price: parseFloat(form.unit_price) || 0, initial_stock: initialStock, current_stock: editing ? (parseFloat(form.current_stock) || 0) : initialStock, density: parseFloat(form.density) || 0, entry_date: form.entry_date || null, packaging_capacity: packagingCapacity, packaging_quantity: calcPackagingQty(stockForPackaging(), packagingCapacity), tank_entries: form.tank_storage ? (form.tank_entries || []).filter(te => te.tank_name).map(te => ({ tank_name: te.tank_name, volume: parseFloat(te.volume) || 0, mass: te.mass || 0 })) : [] };
     if (!data.mp_name) { toast({ title: t('rawMaterialStock.messages.mpRequired'), variant: 'destructive' }); return; }
+    if (form.tank_storage) {
+      const allocated = (data.tank_entries || []).reduce((sum, entry) => {
+        if (usesVolumeConference) return sum + (entry.volume || 0);
+        return sum + (entry.mass || 0);
+      }, 0);
+      if (allocated - initialStock > CONFERENCE_TOLERANCE) {
+        toast({
+          title: t('rawMaterialStock.messages.tankConferenceExceeded'),
+          description: t('rawMaterialStock.messages.tankConferenceExceededDetail', {
+            allocated: fmtNumber(allocated),
+            initialStock: fmtNumber(initialStock),
+            unit: conferenceUnit,
+          }),
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     setSaving(true);
     try {
       if (editing) {
@@ -319,7 +407,14 @@ export default function Estoque() {
               <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.name')}</label><Input value={form.mp_name} onChange={e => setForm({ ...form, mp_name: e.target.value })} placeholder={t('rawMaterialStock.form.autoFill')} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.client')}</label><Input value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} placeholder={t('rawMaterialStock.form.autoFill')} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.client')}</label><Input value={form.client} onChange={e => {
+                const nextClient = e.target.value;
+                setForm(prev => ({
+                  ...prev,
+                  client: nextClient,
+                  tank_entries: (prev.tank_entries || []).map((entry) => ({ ...entry, tank_name: '' })),
+                }));
+              }} placeholder={t('rawMaterialStock.form.autoFill')} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.lot')}</label><Input value={form.lot} onChange={e => setForm({ ...form, lot: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -384,41 +479,122 @@ export default function Estoque() {
               </div>
             </div>
             <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.observations')}</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} placeholder={t('rawMaterialStock.form.notesPlaceholder')} /></div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={form.tank_storage || false} onChange={e => setForm({ ...form, tank_storage: e.target.checked, tank_entries: e.target.checked ? (form.tank_entries && form.tank_entries.length > 0 ? form.tank_entries : [{ tank_name: '', volume: '', mass: 0 }]) : [] })} className="rounded" />
+            <div className="flex items-center justify-between gap-3 p-4 border rounded-lg bg-muted/30">
               <div>
                 <p className="text-sm font-medium">{t('rawMaterialStock.form.tankStorage')}</p>
-                <p className="text-xs text-muted-foreground">{t('rawMaterialStock.form.tankStorageHint')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('rawMaterialStock.form.tankStorageHint')}</p>
               </div>
+              <Switch
+                checked={form.tank_storage || false}
+                onCheckedChange={(checked) => setForm({
+                  ...form,
+                  tank_storage: checked,
+                  tank_entries: checked
+                    ? (form.tank_entries && form.tank_entries.length > 0 ? form.tank_entries : [{ tank_name: '', volume: '', mass: 0 }])
+                    : [],
+                })}
+              />
             </div>
             {form.tank_storage && (
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
-                {(form.tank_entries || []).map((entry, idx) => (
-                  <div key={idx} className="grid grid-cols-2 gap-3 pb-3 border-b border-blue-100 last:border-0 last:pb-0">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.tank')} *</label>
-                      <Select value={entry.tank_name || ''} onValueChange={v => updateTankEntry(idx, { tank_name: v })}>
-                        <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.form.selectTank')} /></SelectTrigger>
-                        <SelectContent>
-                          {tanks.map(tank => <SelectItem key={tank.id} value={tank.name}>{tank.name} — {tank.client}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900 space-y-3">
+                {(form.tank_entries || []).map((entry, idx) => {
+                  const currentVolume = computeTankCurrentVolume(entry.tank_name, items, containers, editing?.id);
+                  const entryVolume = parseFloat(entry.volume) || 0;
+                  const finalVolume = currentVolume + entryVolume;
+                  return (
+                    <div key={idx} className="grid grid-cols-2 gap-3 pb-3 border-b border-blue-100 dark:border-blue-900 last:border-0 last:pb-0">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.tank')} *</label>
+                        <Select
+                          value={entry.tank_name || ''}
+                          onValueChange={(v) => updateTankEntry(idx, { tank_name: v })}
+                          disabled={!form.client}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={form.client ? t('rawMaterialStock.form.selectTank') : t('rawMaterialStock.form.selectClientFirst')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientTanks.length === 0 ? (
+                              <SelectItem value="__none" disabled>
+                                {form.client
+                                  ? t('rawMaterialStock.form.noTanksForClient')
+                                  : t('rawMaterialStock.form.selectClientFirst')}
+                              </SelectItem>
+                            ) : (
+                              clientTanks.map((tank) => (
+                                <SelectItem key={tank.id} value={tank.name}>{tank.name}</SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.volume')}</label>
+                        <Input
+                          type="number"
+                          step="0.001"
+                          value={entry.volume || ''}
+                          onChange={(e) => {
+                            const vol = parseFloat(e.target.value) || 0;
+                            const mass = Math.round((parseFloat(form.density) || 0) * vol);
+                            updateTankEntry(idx, { volume: e.target.value === '' ? '' : vol, mass });
+                          }}
+                        />
+                        {entry.tank_name && (
+                          <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">
+                            {t('rawMaterialStock.form.tankCurrentVolume')}:{' '}
+                            <span className="font-semibold text-foreground">{fmtNumber(currentVolume)} L</span>
+                            {' → '}
+                            {t('rawMaterialStock.form.tankFinalVolume')}:{' '}
+                            <span className="font-semibold text-blue-700 dark:text-blue-400">{fmtNumber(finalVolume)} L</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="col-span-2 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {t('rawMaterialStock.form.massCalc', {
+                            mass: fmtMass(entry.mass || 0),
+                            density: form.density || 0,
+                            volume: entry.volume || 0,
+                          })}
+                        </span>
+                        <button type="button" onClick={() => removeTankEntry(idx)} className="text-red-500 hover:text-red-700 font-medium">{t('buttons.remove')}</button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.volume')}</label>
-                      <Input type="number" step="0.001" value={entry.volume || ''} onChange={e => {
-                        const vol = parseFloat(e.target.value) || 0;
-                        const mass = Math.round((parseFloat(form.density) || 0) * vol);
-                        updateTankEntry(idx, { volume: vol, mass });
-                      }} />
-                    </div>
-                    <div className="col-span-2 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{t('rawMaterialStock.form.massCalc', { mass: fmtMass(entry.mass || 0), density: form.density || 0, volume: entry.volume || 0 })}</span>
-                      <button type="button" onClick={() => removeTankEntry(idx)} className="text-red-500 hover:text-red-700 font-medium">{t('buttons.remove')}</button>
-                    </div>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={addTankEntry} className="w-full border-blue-200 text-blue-600 hover:bg-blue-50">
+                  );
+                })}
+                <div
+                  className={`rounded-md border px-3 py-2 text-xs ${
+                    tankConferenceStatus === 'match'
+                      ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300'
+                      : tankConferenceStatus === 'over'
+                        ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
+                        : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                  }`}
+                >
+                  <p className="font-semibold mb-0.5">{t('rawMaterialStock.form.tankConference')}</p>
+                  <p>
+                    {t('rawMaterialStock.form.tankConferenceSummary', {
+                      allocated: fmtNumber(tankConferenceTotal),
+                      initialStock: fmtNumber(initialStockQty),
+                      unit: conferenceUnit,
+                    })}
+                  </p>
+                  <p className="mt-0.5">
+                    {tankConferenceStatus === 'match'
+                      ? t('rawMaterialStock.form.tankConferenceMatch')
+                      : tankConferenceStatus === 'over'
+                        ? t('rawMaterialStock.form.tankConferenceOver', {
+                            diff: fmtNumber(Math.abs(tankConferenceDiff)),
+                            unit: conferenceUnit,
+                          })
+                        : t('rawMaterialStock.form.tankConferenceUnder', {
+                            diff: fmtNumber(Math.abs(tankConferenceDiff)),
+                            unit: conferenceUnit,
+                          })}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={addTankEntry} className="w-full border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950/40">
                   <Plus className="w-4 h-4 mr-1" /> {t('rawMaterialStock.form.addTank')}
                 </Button>
               </div>

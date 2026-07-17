@@ -334,7 +334,7 @@ export default function Transbordo() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden min-h-0">
         <div className="shrink-0 p-4 border-b border-border flex items-center justify-between gap-4">
           <div>

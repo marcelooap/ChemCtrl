@@ -1700,8 +1700,17 @@
       "tankStorageHint": "El producto se almacenará directamente en tanques",
       "tank": "Tanque",
       "selectTank": "Seleccione el tanque",
+      "selectClientFirst": "Seleccione primero el cliente de la MP",
+      "noTanksForClient": "No hay tanques registrados para este cliente",
       "volume": "Volumen (L)",
+      "tankCurrentVolume": "Volumen actual",
+      "tankFinalVolume": "Stock final",
       "massCalc": "Masa: {{mass}} (dens. {{density}} × {{volume}} L)",
+      "tankConference": "Conferencia (tanque × stock inicial)",
+      "tankConferenceSummary": "Asignado: {{allocated}} {{unit}} · Stock Inicial: {{initialStock}} {{unit}}",
+      "tankConferenceMatch": "Conferencia OK — el total coincide con el stock inicial.",
+      "tankConferenceUnder": "Faltan {{diff}} {{unit}} para igualar el stock inicial.",
+      "tankConferenceOver": "Excede el stock inicial en {{diff}} {{unit}}. Ajuste el volumen antes de guardar.",
       "addTank": "Agregar Tanque",
       "saveChanges": "Guardar Cambios"
     },
@@ -1720,7 +1729,9 @@
     },
     "messages": {
       "mpRequired": "Ingrese el nombre de la materia prima",
-      "noItemsExport": "Ningún ítem para exportar"
+      "noItemsExport": "Ningún ítem para exportar",
+      "tankConferenceExceeded": "Cantidad en tanque superior al stock inicial",
+      "tankConferenceExceededDetail": "Asignado {{allocated}} {{unit}} — stock inicial {{initialStock}} {{unit}}. Reduzca el volumen/masa de los tanques."
     },
     "movementDialog": {
       "title": "Movimiento de Stock de MP",

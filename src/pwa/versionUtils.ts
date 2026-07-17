@@ -27,8 +27,12 @@ export function compareAppVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Versão remota se mais nova; senão incremento da versão instalada. */
+/**
+ * Versão a exibir no modal de atualização.
+ * Usa apenas a versão publicada em version.json (sobe só com `npm run release`).
+ * Nunca inventa +1 em push/build de sistema com a mesma versão.
+ */
 export function resolveNextVersion(current: string, remote: string | null): string {
-  if (remote && compareAppVersions(remote, current) > 0) return remote;
-  return incrementAppVersion(current);
+  if (remote) return remote;
+  return current;
 }

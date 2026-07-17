@@ -1683,8 +1683,17 @@
       "tankStorageHint": "Le produit sera stocké directement dans les cuves",
       "tank": "Cuve",
       "selectTank": "Sélectionner la cuve",
+      "selectClientFirst": "Sélectionnez d'abord le client de la MP",
+      "noTanksForClient": "Aucune cuve enregistrée pour ce client",
       "volume": "Volume (L)",
+      "tankCurrentVolume": "Volume actuel",
+      "tankFinalVolume": "Stock final",
       "massCalc": "Masse : {{mass}} (dens. {{density}} × {{volume}} L)",
+      "tankConference": "Contrôle (cuve × stock initial)",
+      "tankConferenceSummary": "Alloué : {{allocated}} {{unit}} · Stock Initial : {{initialStock}} {{unit}}",
+      "tankConferenceMatch": "Contrôle OK — le total correspond au stock initial.",
+      "tankConferenceUnder": "Il manque {{diff}} {{unit}} pour égaler le stock initial.",
+      "tankConferenceOver": "Dépasse le stock initial de {{diff}} {{unit}}. Ajustez le volume avant d'enregistrer.",
       "addTank": "Ajouter Cuve",
       "saveChanges": "Enregistrer Modifications"
     },
@@ -1703,7 +1712,9 @@
     },
     "messages": {
       "mpRequired": "Saisissez le nom de la matière première",
-      "noItemsExport": "Aucun article à exporter"
+      "noItemsExport": "Aucun article à exporter",
+      "tankConferenceExceeded": "Quantité en cuve supérieure au stock initial",
+      "tankConferenceExceededDetail": "Alloué {{allocated}} {{unit}} — stock initial {{initialStock}} {{unit}}. Réduisez le volume/masse des cuves."
     },
     "movementDialog": {
       "title": "Mouvement de Stock MP",
