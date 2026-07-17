@@ -28,6 +28,44 @@ export const sumOriginVolumes = (origins) =>
   round3((origins || []).reduce((s, o) => s + (parseFloat(o.volume) || 0), 0));
 
 /**
+ * Packaging header lot = the origin lot with the greatest total volume.
+ * Same lot across multiple origin rows is summed. Tie-break: newest created_date.
+ */
+export function dominantLotFromOrigins(origins) {
+  const totals = new Map();
+  for (const o of origins || []) {
+    const vol = parseFloat(o.volume) || 0;
+    if (vol <= 0.0005) continue;
+    const lot = (o.lot == null ? '' : String(o.lot)).trim();
+    if (!lot) continue;
+    const t = o.created_date ? new Date(o.created_date).getTime() : 0;
+    const prev = totals.get(lot);
+    if (!prev) totals.set(lot, { volume: vol, latest: t });
+    else {
+      prev.volume = round3(prev.volume + vol);
+      if (t > prev.latest) prev.latest = t;
+    }
+  }
+  if (totals.size === 0) return null;
+
+  let bestLot = null;
+  let bestVol = -1;
+  let bestLatest = -1;
+  for (const [lot, info] of totals) {
+    if (
+      info.volume > bestVol
+      || (info.volume === bestVol && info.latest > bestLatest)
+      || (info.volume === bestVol && info.latest === bestLatest && (!bestLot || lot.localeCompare(bestLot) > 0))
+    ) {
+      bestLot = lot;
+      bestVol = info.volume;
+      bestLatest = info.latest;
+    }
+  }
+  return bestLot;
+}
+
+/**
  * Reduce origin volumes proportionally when volume is withdrawn.
  * Last origin absorbs rounding residual so sum(new) === remainingTotal.
  * Returns updated origin objects (same ids); volumes may be 0.

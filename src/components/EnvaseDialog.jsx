@@ -18,7 +18,7 @@ import { NotificationService } from '@/notifications/services/NotificationServic
 import { useToast } from '@/components/ui/use-toast';
 import { fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
-import { ensureContainerHasOrigin } from '@/lib/containerOrigins';
+import { ensureContainerHasOrigin, dominantLotFromOrigins } from '@/lib/containerOrigins';
 import { containerDisplayVolume } from '@/lib/fractionalSupply';
 
 const supabase = createSupabaseEntities();
@@ -205,8 +205,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     await ensureContainerHasOrigin(supabase, { ...complementTarget, volume: baseVol }, operatorName);
 
     // Align existing origins sum with the corrected physical base before adding complement
-    const existingOrigins = await supabase.ContainerOrigin.filter({ container_id: complementTarget.id });
-    if (existingOrigins?.length === 1) {
+    const existingOrigins = await supabase.ContainerOrigin.filter({ container_id: complementTarget.id }) || [];
+    if (existingOrigins.length === 1) {
       const only = existingOrigins[0];
       const originVol = parseFloat(only.volume) || 0;
       if (Math.abs(originVol - baseVol) > 0.001) {
@@ -214,6 +214,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
           volume: baseVol,
           initial_volume: parseFloat(only.initial_volume) > 0 ? only.initial_volume : baseVol,
         });
+        only.volume = baseVol;
       }
     }
 
@@ -222,12 +223,26 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     const net = calcNet(newVolume);
     const gross = calcGross(newVolume, tare);
 
+    const compositionAfter = [
+      ...existingOrigins,
+      {
+        lot: production.lot,
+        volume: addVol,
+        created_date: new Date().toISOString(),
+      },
+    ];
+    const dominantLot = dominantLotFromOrigins(compositionAfter)
+      || production.lot
+      || complementTarget.lot
+      || '';
+
     await supabase.Container.update(complementTarget.id, {
       volume: newVolume,
       net_weight: net,
       gross_weight: gross,
       is_fractional: newVolume > 0.001,
       status: 'No Pátio',
+      lot: dominantLot,
     });
 
     await supabase.ContainerOrigin.create({

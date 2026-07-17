@@ -17,6 +17,7 @@ import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import {
   applyProportionalOriginReduction,
   createOriginsFromSlices,
+  dominantLotFromOrigins,
   ensureContainerHasOrigin,
   sliceOriginsForWithdrawal,
 } from '@/lib/containerOrigins';
@@ -30,6 +31,35 @@ const emptyDest = () => ({
 const emptyOrigin = () => ({ container_id: '', container_number: '', barril_number: '', lot: '', volume_used: 0, remaining_stock: 0 });
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
+
+const normKey = (v) => (v == null ? '' : String(v)).trim().toLowerCase();
+
+/** Find an open patio row for the same physical tank (placa + barril + product). */
+const findExistingPatioContainer = (list, { placa, barril, product, excludeIds = [] }) => {
+  const cn = normKey(placa);
+  if (!cn) return null;
+  const bn = normKey(barril);
+  const excluded = new Set((excludeIds || []).filter(Boolean));
+  return (list || []).find((c) =>
+    c.status === 'No Pátio'
+    && !excluded.has(c.id)
+    && normKey(c.container_number) === cn
+    && normKey(c.barril_number) === bn
+    && (c.product || '') === (product || '')
+  ) || null;
+};
+
+const scaleSlicesForVolume = (slices, destVol) => {
+  const slicesTotal = (slices || []).reduce((s, x) => s + (parseFloat(x.volume) || 0), 0);
+  if (slicesTotal > 0 && Math.abs(slicesTotal - destVol) > 0.001) {
+    const ratio = destVol / slicesTotal;
+    return slices.map((x) => {
+      const vol = Math.round(((parseFloat(x.volume) || 0) * ratio) * 1000) / 1000;
+      return { ...x, volume: vol, initial_volume: vol };
+    });
+  }
+  return slices || [];
+};
 
 const TRANSFER_TYPE_KEYS = {
   Transbordo: 'containers.transferPage.types.transfer',
@@ -227,8 +257,9 @@ export default function Transbordo() {
         const ensured = await base44.entities.ContainerOrigin.filter({ container_id: o.container_id });
         originSlicesByContainer[o.container_id] = sliceOriginsForWithdrawal(ensured, withdrawn);
 
+        let remainingOrigins = ensured;
         if (withdrawn > 0) {
-          await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
+          remainingOrigins = await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
         }
 
         const recipe = recipes.find(r => r.product_name === form.product);
@@ -238,6 +269,9 @@ export default function Transbordo() {
           updates.net_weight = Math.round(newVolume * dens);
           updates.gross_weight = Math.round(newVolume * dens + tare);
         }
+
+        const dominantLot = dominantLotFromOrigins(remainingOrigins);
+        if (dominantLot) updates.lot = dominantLot;
 
         await base44.entities.Container.update(o.container_id, updates);
       }
@@ -267,54 +301,107 @@ export default function Transbordo() {
       }
       const destOriginSlices = Array.from(mergedByKey.values());
 
-      for (const d of dests) {
-        if (d.type === 'Transbordo') {
-          maxRegId += 1;
-          const created = await base44.entities.Container.create({
-            production_id: originProductionId,
-            op_number: transferNumber,
-            container_number: d.placa || '',
-            barril_number: d.barril || '',
-            registration_id: maxRegId,
-            product: form.product,
-            client: form.client || '',
-            lot: form.origins[0]?.lot || '',
-            type: d.packaging_type || '',
-            volume: d.volume || 0,
-            tare: parseFloat(d.tare) || 0,
-            net_weight: d.net_weight || 0,
-            gross_weight: d.gross_weight || 0,
-            seals: d.seals || '',
-            sling: d.sling || '',
-            gps: d.gps || '',
-            min_test_date: d.min_test_date || '',
-            operator: operatorName,
-            status: 'No Pátio',
-            is_fractional: false,
-          });
+      const originIds = form.origins.map((o) => o.container_id).filter(Boolean);
 
-          if (created?.id && destOriginSlices.length > 0) {
-            const destVol = parseFloat(d.volume) || 0;
-            const slicesTotal = destOriginSlices.reduce((s, x) => s + (parseFloat(x.volume) || 0), 0);
-            let scaled = destOriginSlices;
-            if (slicesTotal > 0 && Math.abs(slicesTotal - destVol) > 0.001) {
-              const ratio = destVol / slicesTotal;
-              scaled = destOriginSlices.map((x) => ({
-                ...x,
-                volume: Math.round(((parseFloat(x.volume) || 0) * ratio) * 1000) / 1000,
-                initial_volume: Math.round(((parseFloat(x.volume) || 0) * ratio) * 1000) / 1000,
-              }));
-            }
-            await createOriginsFromSlices(base44.entities, created.id, scaled, operatorName);
-          } else if (created?.id) {
-            await createOriginsFromSlices(base44.entities, created.id, [{
-              production_id: originProductionId || null,
-              op_number: firstOriginContainer?.op_number || null,
-              lot: form.origins[0]?.lot || null,
-              volume: d.volume || 0,
-              initial_volume: d.volume || 0,
-            }], operatorName);
-          }
+      for (const d of dests) {
+        if (d.type !== 'Transbordo') continue;
+
+        const destVol = parseFloat(d.volume) || 0;
+        const scaledSlices = destOriginSlices.length > 0
+          ? scaleSlicesForVolume(destOriginSlices, destVol)
+          : [{
+            production_id: originProductionId || null,
+            op_number: firstOriginContainer?.op_number || null,
+            lot: form.origins[0]?.lot || null,
+            volume: destVol,
+            initial_volume: destVol,
+          }];
+
+        // Same physical tank already on patio → add volume + append origin history
+        // (keeps envase/OP registration; does not create a duplicate patio line).
+        const existingPatio = findExistingPatioContainer(allContainersList, {
+          placa: d.placa,
+          barril: d.barril,
+          product: form.product,
+          excludeIds: originIds,
+        });
+
+        if (existingPatio?.id) {
+          await ensureContainerHasOrigin(base44.entities, existingPatio, operatorName);
+          const existingOrigins = await base44.entities.ContainerOrigin.filter({ container_id: existingPatio.id });
+
+          const newVolume = (parseFloat(existingPatio.volume) || 0) + destVol;
+          const tare = parseFloat(d.tare) > 0
+            ? parseFloat(d.tare)
+            : (parseFloat(existingPatio.tare) || 0);
+          const dens = productDensity > 0
+            ? productDensity
+            : (parseFloat(recipes.find((r) => r.product_name === form.product)?.density) || 0);
+          const net_weight = dens > 0
+            ? Math.round(newVolume * dens)
+            : Math.round((parseFloat(existingPatio.net_weight) || 0) + (d.net_weight || 0));
+          const gross_weight = net_weight + tare;
+
+          const compositionAfter = [
+            ...(existingOrigins || []),
+            ...scaledSlices,
+          ];
+          const dominantLot = dominantLotFromOrigins(compositionAfter)
+            || existingPatio.lot
+            || form.origins[0]?.lot
+            || '';
+
+          const updates = {
+            volume: newVolume,
+            tare,
+            net_weight,
+            gross_weight,
+            status: 'No Pátio',
+            lot: dominantLot,
+          };
+          if (d.seals) updates.seals = d.seals;
+          if (d.sling) updates.sling = d.sling;
+          if (d.gps) updates.gps = d.gps;
+          if (d.min_test_date) updates.min_test_date = d.min_test_date;
+          if (d.packaging_type) updates.type = d.packaging_type;
+
+          await base44.entities.Container.update(existingPatio.id, updates);
+          await createOriginsFromSlices(base44.entities, existingPatio.id, scaledSlices, operatorName);
+
+          Object.assign(existingPatio, updates);
+          continue;
+        }
+
+        maxRegId += 1;
+        const destLot = dominantLotFromOrigins(scaledSlices)
+          || form.origins[0]?.lot
+          || '';
+        const created = await base44.entities.Container.create({
+          production_id: originProductionId,
+          op_number: transferNumber,
+          container_number: d.placa || '',
+          barril_number: d.barril || '',
+          registration_id: maxRegId,
+          product: form.product,
+          client: form.client || '',
+          lot: destLot,
+          type: d.packaging_type || '',
+          volume: destVol,
+          tare: parseFloat(d.tare) || 0,
+          net_weight: d.net_weight || 0,
+          gross_weight: d.gross_weight || 0,
+          seals: d.seals || '',
+          sling: d.sling || '',
+          gps: d.gps || '',
+          min_test_date: d.min_test_date || '',
+          operator: operatorName,
+          status: 'No Pátio',
+          is_fractional: false,
+        });
+
+        if (created?.id) {
+          await createOriginsFromSlices(base44.entities, created.id, scaledSlices, operatorName);
+          allContainersList.push({ ...created, status: 'No Pátio' });
         }
       }
 

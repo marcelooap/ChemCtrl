@@ -51,6 +51,20 @@ const findTransferForContainer = (container, transfers) => {
     return origins.some(o => o.container_id === container.id);
   });
   if (asOrigin) return { transfer: asOrigin, role: 'origem' };
+  // Destination: patio tank that received a later TB (volume merged into existing row)
+  const cn = (container.container_number || '').trim().toLowerCase();
+  const bn = (container.barril_number || '').trim().toLowerCase();
+  if (cn) {
+    const asDest = transfers.find((tr) => {
+      const dests = parseArr(tr.destinations);
+      return dests.some((d) =>
+        (d.type || tr.destination_type) === 'Transbordo'
+        && (d.placa || '').trim().toLowerCase() === cn
+        && (d.barril || '').trim().toLowerCase() === bn
+      );
+    });
+    if (asDest) return { transfer: asDest, role: 'destino' };
+  }
   return null;
 };
 
