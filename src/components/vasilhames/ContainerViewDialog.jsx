@@ -14,7 +14,14 @@ const statusBadgeClass = (s) => {
   return c[s] || 'bg-muted';
 };
 
-export default function ContainerViewDialog({ container, open, onOpenChange, readOnly = false }) {
+export default function ContainerViewDialog({
+  container,
+  open,
+  onOpenChange,
+  readOnly = false,
+  productions = [],
+  recipes = [],
+}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
 
@@ -93,7 +100,7 @@ export default function ContainerViewDialog({ container, open, onOpenChange, rea
         )}
         <div className="flex justify-between mt-4 pt-4 border-t">
           {!readOnly && container && (
-            <Button variant="outline" onClick={() => generateBoletaPDF(container)} className="gap-2">
+            <Button variant="outline" onClick={() => generateBoletaPDF(container, productions, recipes)} className="gap-2">
               <FileText className="w-4 h-4" /> {t('containers.actions.generateBoleta')}
             </Button>
           )}

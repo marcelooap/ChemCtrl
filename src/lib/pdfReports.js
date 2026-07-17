@@ -17,6 +17,11 @@ import {
   aggregateAllocatedMaterials,
 } from '@/lib/productionFiscalShare';
 import { materialsFromOriginRows } from '@/lib/containerOrigins';
+import {
+  containerDisplayVolume,
+  containerDisplayNetWeight,
+  containerDisplayGrossWeight,
+} from '@/lib/fractionalSupply';
 // eslint-disable-next-line
 import { getSignedFileUrl } from '@/api/storage'; // storage module (split from supabaseClient)
 
@@ -1206,12 +1211,15 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
   }
 }
 
-export function generateBoletaPDF(container) {
+export function generateBoletaPDF(container, productions = [], recipes = []) {
   const { lang, t } = getPdfLabels();
   const { fmtDate, fmtNum } = makePdfFormatters(lang);
   const doc = new jsPDF({ orientation: 'landscape' });
   const PH_L = 210;
   const HALF = 297 / 2;
+  const displayVolume = containerDisplayVolume(container, productions);
+  const displayNetWeight = containerDisplayNetWeight(container, productions, recipes);
+  const displayGrossWeight = containerDisplayGrossWeight(container, productions, recipes);
 
   function drawSide(offsetX) {
     const bM = offsetX + 8;
@@ -1283,8 +1291,8 @@ export function generateBoletaPDF(container) {
     const wCellX = bM + bW * 0.38; const wCellW = bW * 0.62; const wCX = wCellX + wCellW / 2; const wRowH = s4H / 3;
     const weightRows = [
       { label: t('pdf.boleta.tare'), value: fmtNum(container.tare, 3) + ' kg' },
-      { label: t('pdf.boleta.netWeight'), value: fmtNum(container.net_weight, 3) + ' kg' },
-      { label: t('pdf.boleta.grossWeight'), value: fmtNum(container.gross_weight, 3) + ' kg' },
+      { label: t('pdf.boleta.netWeight'), value: fmtNum(displayNetWeight, 0) + ' kg' },
+      { label: t('pdf.boleta.grossWeight'), value: fmtNum(displayGrossWeight, 0) + ' kg' },
     ];
     weightRows.forEach(function(r, i) {
       const rowY = y + i * wRowH;
@@ -1302,7 +1310,7 @@ export function generateBoletaPDF(container) {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); setColor(doc, BLUE_DARK);
     doc.text(t('pdf.boleta.packagedQty'), bM + 4, y + 8);
     doc.setFontSize(16); doc.setFont('helvetica', 'bold'); setColor(doc, BLACK);
-    doc.text(fmtNum(container.volume, 3) + ' L', bM + bW - 4, y + 13, { align: 'right' });
+    doc.text(fmtNum(displayVolume, 0) + ' L', bM + bW - 4, y + 13, { align: 'right' });
   }
 
   drawSide(0);

@@ -459,7 +459,13 @@ export default function TelaClientes() {
       </Dialog>
 
       <RawMaterialViewDialog item={viewingMP} open={!!viewingMP} onOpenChange={(open) => { if (!open) setViewingMP(null); }} readOnly />
-      <ContainerViewDialog container={viewingContainer} open={!!viewingContainer} onOpenChange={(open) => { if (!open) setViewingContainer(null); }} readOnly />
+      <ContainerViewDialog
+        container={viewingContainer}
+        open={!!viewingContainer}
+        onOpenChange={(open) => { if (!open) setViewingContainer(null); }}
+        readOnly
+        productions={productions}
+      />
     </div>
   );
 }

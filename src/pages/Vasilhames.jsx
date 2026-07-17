@@ -28,7 +28,7 @@ import {
   containerDisplayGrossWeight,
   isContainerFractional,
 } from '@/lib/fractionalSupply';
-import { applyProportionalOriginReduction, effectiveOriginsOfContainer } from '@/lib/containerOrigins';
+import { effectiveOriginsOfContainer } from '@/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -240,24 +240,12 @@ export default function Vasilhames() {
   const confirmDepart = async () => {
     setSavingDepart(true);
     try {
-      const vol = parseFloat(departItem.volume) || 0;
-      if (vol > 0) {
-        // Origins reduction is best-effort: saída must succeed even if
-        // container_origins is missing (migration not applied yet).
-        try {
-          const ensured = await base44.entities.ContainerOrigin.filter({ container_id: departItem.id });
-          if (ensured?.length) {
-            await applyProportionalOriginReduction(base44.entities, ensured, departItem.id, vol);
-          }
-        } catch (_originErr) {
-          /* ignore — container update below is authoritative */
-        }
-      }
+      // Manual saída ships the container as-is: keep volume and origins for history.
+      // Volume is only reduced when product is withdrawn via transbordo.
       await base44.entities.Container.update(departItem.id, {
         status: 'Expedido',
         departure_date: departDate,
         is_fractional: false,
-        volume: 0,
       });
       setShowDepart(false); load();
       toast({ title: t('containers.messages.departRegistered') });
@@ -572,7 +560,7 @@ export default function Vasilhames() {
             </div>
           )}
           <div className="flex justify-between mt-4 pt-4 border-t">
-            <Button variant="outline" onClick={() => generateBoletaPDF(viewing)} className="gap-2">
+            <Button variant="outline" onClick={() => generateBoletaPDF(viewing, productions, recipes)} className="gap-2">
               <FileText className="w-4 h-4" /> {t('containers.actions.generateBoleta')}
             </Button>
             <Button variant="outline" onClick={() => setShowView(false)}>{t('buttons.close')}</Button>
