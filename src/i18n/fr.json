@@ -1494,7 +1494,8 @@
       "revisionDate": "Date Rév.",
       "mpCount": "Qté MP",
       "actions": "Actions",
-      "fdsAttached": "FDS jointe"
+      "fdsAttached": "FDS jointe",
+      "needsN2": "Nécessite inertage à l'N2"
     },
     "footer": {
       "registered": "Recettes enregistrées",
@@ -1512,6 +1513,7 @@
       "validity": "VALIDITÉ",
       "revision": "RÉVISION",
       "revisionDate": "DATE DE RÉVISION",
+      "needsN2": "NÉCESSITE N2",
       "rawMaterials": "Matières Premières",
       "mpCode": "Code MP",
       "mpName": "Matière Première",
@@ -1529,6 +1531,8 @@
       "validityDays": "Validité (jours)",
       "revision": "Révision",
       "revisionDate": "Date de Révision",
+      "needsN2": "Nécessite N2 ?",
+      "needsN2Hint": "Activez si le produit est inflammable et nécessite un inertage à l'azote",
       "rawMaterials": "Matières Premières",
       "addMp": "Ajouter MP",
       "mpCode": "CODE MP",

@@ -301,7 +301,8 @@ create table if not exists recipes (
   fds_url text,
   fds_filename text,
   fds_uploaded_at timestamptz,
-  fds_uploaded_by text
+  fds_uploaded_by text,
+  necessita_n2 boolean not null default false
 );
 alter table recipes enable row level security;
 drop policy if exists "allow_all_recipes" on recipes;

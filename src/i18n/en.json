@@ -1563,7 +1563,8 @@
       "revisionDate": "Rev. Date",
       "mpCount": "RM Qty",
       "actions": "Actions",
-      "fdsAttached": "SDS attached"
+      "fdsAttached": "SDS attached",
+      "needsN2": "Requires N2 inertization"
     },
     "footer": {
       "registered": "Registered recipes",
@@ -1581,6 +1582,7 @@
       "validity": "SHELF LIFE",
       "revision": "REVISION",
       "revisionDate": "REVISION DATE",
+      "needsN2": "REQUIRES N2",
       "rawMaterials": "Raw Materials",
       "mpCode": "RM Code",
       "mpName": "Raw Material",
@@ -1598,6 +1600,8 @@
       "validityDays": "Shelf Life (days)",
       "revision": "Revision",
       "revisionDate": "Revision Date",
+      "needsN2": "Requires N2?",
+      "needsN2Hint": "Enable if the product is flammable and needs nitrogen inertization",
       "rawMaterials": "Raw Materials",
       "addMp": "Add RM",
       "mpCode": "RM CODE",

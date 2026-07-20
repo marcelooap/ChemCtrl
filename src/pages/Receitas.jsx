@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Plus, Search, Eye, Pencil, Trash2, X, FileText, FlaskConical, Loader2 } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { generateRecipePDF } from '@/lib/pdfReports';
@@ -46,6 +47,15 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.validity')}</p><p className="font-medium">{viewing.validity_days} {t('common.days')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revisionDate')}</p><p className="font-medium">{viewing.revision_date}</p></div>
+        <div>
+          <p className="text-xs text-muted-foreground">{t('recipes.view.needsN2')}</p>
+          <p className="font-medium inline-flex items-center gap-1.5">
+            {viewing.necessita_n2 ? t('common.yes') : t('common.no')}
+            {viewing.necessita_n2 && (
+              <Flame className="w-3.5 h-3.5 text-red-500" aria-hidden />
+            )}
+          </p>
+        </div>
       </div>
       <h4 className="text-sm font-semibold mb-2">{t('recipes.view.rawMaterials')}</h4>
       <table className="w-full text-sm border rounded-lg overflow-hidden">
@@ -87,7 +97,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
     </div>
   );
 }
-const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density: '', validity_days: 365, revision: 'Revisão 01', revision_date: new Date().toISOString().split('T')[0], raw_materials: [{ ...emptyMP }] };
+const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density: '', validity_days: 365, revision: 'Revisão 01', revision_date: new Date().toISOString().split('T')[0], necessita_n2: false, raw_materials: [{ ...emptyMP }] };
 
 export default function Receitas() {
   const { t } = useTranslation();
@@ -187,7 +197,7 @@ export default function Receitas() {
     const raw = r.raw_materials;
     const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
     setEditing(r);
-    setForm({ ...r, raw_materials: parsed.length ? parsed : [{ ...emptyMP }] });
+    setForm({ ...r, necessita_n2: Boolean(r.necessita_n2), raw_materials: parsed.length ? parsed : [{ ...emptyMP }] });
     setShowForm(true);
   };
   const openView = (r) => {
@@ -234,7 +244,7 @@ export default function Receitas() {
     }
     const mps = form.raw_materials.map(m => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }));
     const { fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, ...recipeData } = form;
-    const data = { ...recipeData, raw_materials: mps };
+    const data = { ...recipeData, necessita_n2: Boolean(form.necessita_n2), raw_materials: mps };
     setSaving(true);
     try {
       if (editing) {
@@ -336,9 +346,16 @@ export default function Receitas() {
                     <td className="px-4 py-2.5 font-medium text-sm">
                       <span className="inline-flex items-center gap-1.5">
                         {r.product_name}
+                        {r.necessita_n2 && (
+                          <Flame
+                            className="w-3.5 h-3.5 shrink-0 text-red-500"
+                            title={t('recipes.table.needsN2')}
+                            aria-label={t('recipes.table.needsN2')}
+                          />
+                        )}
                         {r.fds_url && (
                           <FileText
-                            className="w-3.5 h-3.5 shrink-0 text-red-500"
+                            className="w-3.5 h-3.5 shrink-0 text-muted-foreground"
                             title={t('recipes.table.fdsAttached')}
                             aria-label={t('recipes.table.fdsAttached')}
                           />
@@ -397,6 +414,24 @@ export default function Receitas() {
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.validityDays')}</label><Input type="number" value={form.validity_days} onChange={e => setForm({ ...form, validity_days: parseInt(e.target.value) || 0 })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revision')} *</label><Input value={form.revision} onChange={e => setForm({ ...form, revision: e.target.value })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionDate')}</label><Input type="date" value={form.revision_date} onChange={e => setForm({ ...form, revision_date: e.target.value })} /></div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 p-4 border rounded-lg bg-muted/30">
+              <div>
+                <p className="text-sm font-medium inline-flex items-center gap-1.5">
+                  {t('recipes.form.needsN2')}
+                  {form.necessita_n2 && <Flame className="w-3.5 h-3.5 text-red-500" aria-hidden />}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('recipes.form.needsN2Hint')}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">{form.necessita_n2 ? t('common.yes') : t('common.no')}</span>
+                <Switch
+                  checked={Boolean(form.necessita_n2)}
+                  onCheckedChange={(checked) => setForm({ ...form, necessita_n2: checked })}
+                  aria-label={t('recipes.form.needsN2')}
+                />
+              </div>
             </div>
 
             <div>
@@ -465,7 +500,14 @@ export default function Receitas() {
       {/* View Dialog */}
       <Dialog open={showView} onOpenChange={setShowView}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>🧪 {viewing?.product_name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="inline-flex items-center gap-1.5">
+              🧪 {viewing?.product_name}
+              {viewing?.necessita_n2 && (
+                <Flame className="w-4 h-4 text-red-500" title={t('recipes.table.needsN2')} aria-label={t('recipes.table.needsN2')} />
+              )}
+            </DialogTitle>
+          </DialogHeader>
           {viewing && <ViewRecipeBody viewing={viewing} calcCapacidade={calcCapacidade} generateRecipePDF={generateRecipePDF} onClose={() => setShowView(false)} canViewFds={canViewFds} />}
         </DialogContent>
       </Dialog>

@@ -1511,7 +1511,8 @@
       "revisionDate": "Fecha Rev.",
       "mpCount": "Cant. MP",
       "actions": "Acciones",
-      "fdsAttached": "FDS adjunta"
+      "fdsAttached": "FDS adjunta",
+      "needsN2": "Requiere inertización con N2"
     },
     "footer": {
       "registered": "Recetas registradas",
@@ -1529,6 +1530,7 @@
       "validity": "VALIDEZ",
       "revision": "REVISIÓN",
       "revisionDate": "FECHA DE REVISIÓN",
+      "needsN2": "REQUIERE N2",
       "rawMaterials": "Materias Primas",
       "mpCode": "Código MP",
       "mpName": "Materia Prima",
@@ -1546,6 +1548,8 @@
       "validityDays": "Validez (días)",
       "revision": "Revisión",
       "revisionDate": "Fecha de Revisión",
+      "needsN2": "¿Necesita N2?",
+      "needsN2Hint": "Active si el producto es inflamable y requiere inertización con nitrógeno",
       "rawMaterials": "Materias Primas",
       "addMp": "Agregar MP",
       "mpCode": "CÓDIGO MP",
