@@ -791,6 +791,75 @@
       "finalizeConfirmLabel": "Yes, Finish",
       "saving": "Saving..."
     },
+    "operationalChecklist": {
+      "titles": {
+        "generic": "Operational Checklist",
+        "startProduction": "Checklist — Start Production",
+        "pauseProduction": "Checklist — Pause Production",
+        "startFilling": "Checklist — Start Filling",
+        "finishFilling": "Checklist — Finish Filling"
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "back": "Back",
+        "confirm": "Confirm",
+        "confirmChecklist": "Confirm Checklist",
+        "finishFilling": "Finish Filling"
+      },
+      "answers": {
+        "yes": "Yes",
+        "no": "No",
+        "notApplicable": "Not applicable"
+      },
+      "observation": "Notes",
+      "observationPlaceholder": "Describe the reason or details...",
+      "observationRequired": "Notes required",
+      "subtitle": "PO {{op}} — {{product}}",
+      "submitError": "Could not save the checklist",
+      "start": {
+        "equipmentGrounding": "Were the mixer and equipment properly grounded?",
+        "n2Inertization": "Was the mixer inerted with N₂ and oxygen content verified (O₂ ≤ 8%)?",
+        "scaleOk": "Was the scale turned on and is it working properly?",
+        "mixerEmpty": "Was it verified that the mixer is truly empty before starting a new production?",
+        "jointsHoses": "Were all joints and hoses checked to prevent possible leaks?",
+        "ppeUsed": "Are the mandatory PPEs being used?"
+      },
+      "pause": {
+        "valvesDoubleBlock": "I confirm that all outlet valves are closed and the equipment is in a safe condition.",
+        "helper": "This confirmation is required before pausing production."
+      },
+      "startFilling": {
+        "packagingClean": "Is the tank/IBC/packaging that will receive the product clean and decontaminated?",
+        "packagingDamage": "Is there any visible damage or wear on the packaging?",
+        "packagingGrounding": "Is the packaging properly grounded?"
+      },
+      "finishFilling": {
+        "packagingSealed": "Were the packages properly sealed?",
+        "packagingLabeled": "Were the packages properly identified with product and lot labels?",
+        "packagingExternallyClean": "Were the packages cleaned externally to avoid product residue after filling?"
+      },
+      "errors": {
+        "answerRequired": "Select an answer.",
+        "invalidAnswer": "Invalid answer for this question.",
+        "mustBeYes": "Yes is required.",
+        "observationRequired": "Please provide the required notes.",
+        "flammableGrounding": "Flammable products may only be produced with properly grounded equipment.",
+        "flammableN2": "Flammable products may only be produced after mixer inertization with N₂ and confirmation of oxygen content at or below 8%.",
+        "ppeRequired": "PPE is mandatory before starting production.",
+        "pauseRequired": "This confirmation is required before pausing production.",
+        "flammablePackagingGrounding": "Flammable products require packaging grounding during filling.",
+        "labelsRequired": "All packages must be labeled before finishing.",
+        "externalCleanRequired": "Packages must be cleaned before finishing filling."
+      },
+      "banner": {
+        "title": "WARNING – FLAMMABLE PRODUCT",
+        "intro": "This product requires:",
+        "itemN2": "Mixer inerted with N₂",
+        "itemO2": "Atmosphere with O₂ ≤ 8%",
+        "itemGrounding": "Properly grounded equipment",
+        "itemMaintain": "Maintaining safety conditions throughout production"
+      }
+    },
     "list": {
       "subtitle": "{{count}} production(s) recorded",
       "subtitleFiltered": "{{filtered}} of {{total}} production(s)",

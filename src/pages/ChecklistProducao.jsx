@@ -6,11 +6,15 @@ import { ArrowLeft, ListChecks, Save, CheckCircle, AlertCircle, Loader2 } from '
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import OperationalChecklistModal from '@/components/checklists/OperationalChecklistModal';
+import FlammableProductionBanner from '@/components/checklists/FlammableProductionBanner';
 import ScaleAdjustmentBadge from '@/components/production/ScaleAdjustmentBadge';
 import { fmtDate, fmtDateTime, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { NotificationService } from '@/notifications/services/NotificationService';
+import { CHECKLIST_ETAPAS, isFlammableRecipe } from '@/lib/checklists/operationalChecklistConfig';
+import { loadRecipeForProduction } from '@/lib/checklists/loadRecipeForProduction';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -37,12 +41,26 @@ export default function ChecklistProducao() {
   const { toast } = useToast();
   const { user: internalUser } = useInternalAuth();
   const [production, setProduction] = useState(null);
+  const [recipe, setRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: t('buttons.yes'), confirmColor: '#2575D1' });
   const [savingProgress, setSavingProgress] = useState(false);
+  const [pauseChecklistOpen, setPauseChecklistOpen] = useState(false);
 
   useEffect(() => {
-    base44.entities.Production.get(id).then(setProduction).finally(() => setLoading(false));
+    let cancelled = false;
+    (async () => {
+      try {
+        const prod = await base44.entities.Production.get(id);
+        if (cancelled) return;
+        setProduction(prod);
+        const loadedRecipe = await loadRecipeForProduction(prod);
+        if (!cancelled) setRecipe(loadedRecipe);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [id]);
 
   const grouped = useMemo(() => {
@@ -71,7 +89,7 @@ export default function ChecklistProducao() {
   const allMPsChecked = grouped.length > 0 && grouped.every(g => g.lots.every(l => l.checked));
   const uncheckedCount = grouped.filter(g => !g.lots.every(l => l.checked)).length;
 
-  const saveProgress = async () => {
+  const persistPause = async () => {
     setSavingProgress(true);
     try {
       await base44.entities.Production.update(production.id, {
@@ -82,9 +100,14 @@ export default function ChecklistProducao() {
       navigate('/ordens');
     } catch (err) {
       toast({ title: t('production.checklistPage.saveError'), description: err.message, variant: 'destructive' });
+      throw err;
     } finally {
       setSavingProgress(false);
     }
+  };
+
+  const saveProgress = () => {
+    setPauseChecklistOpen(true);
   };
 
   const finalizeProduction = () => {
@@ -161,6 +184,8 @@ export default function ChecklistProducao() {
           <p className="text-sm text-muted-foreground">{production.product} {production.client ? `— ${production.client}` : ''}</p>
         </div>
       </div>
+
+      {isFlammableRecipe(recipe) && <FlammableProductionBanner />}
 
       {/* Info Card */}
       <div className="bg-card rounded-xl shadow-sm border border-border p-5 mb-6">
@@ -275,6 +300,15 @@ export default function ChecklistProducao() {
         onConfirm={confirm.onConfirm}
         confirmLabel={confirm.confirmLabel}
         confirmColor={confirm.confirmColor}
+      />
+
+      <OperationalChecklistModal
+        open={pauseChecklistOpen}
+        onOpenChange={setPauseChecklistOpen}
+        etapa={CHECKLIST_ETAPAS.PAUSE_PRODUCTION}
+        production={production}
+        recipe={recipe}
+        onCompleted={persistPause}
       />
     </div>
   );

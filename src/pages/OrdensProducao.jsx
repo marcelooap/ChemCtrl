@@ -2,18 +2,21 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Play, Package, RotateCcw, FileCheck, RefreshCw, ClipboardList, Gauge } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import ProductionCard from '@/components/ProductionCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import EnvaseDialog from '@/components/EnvaseDialog';
+import OperationalChecklistModal from '@/components/checklists/OperationalChecklistModal';
 import { waitInterval } from '@/lib/brasilTime';
 import { fmtDate, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
+import { CHECKLIST_ETAPAS } from '@/lib/checklists/operationalChecklistConfig';
+import { loadRecipeForProduction } from '@/lib/checklists/loadRecipeForProduction';
+import { useToast } from '@/components/ui/use-toast';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -27,6 +30,7 @@ const parseArr = (val) => {
 export default function OrdensProducao() {
   const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
+  const { toast } = useToast();
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
   const [filter, setFilter] = useState('all');
   const [showEnvase, setShowEnvase] = useState(false);
@@ -34,6 +38,14 @@ export default function OrdensProducao() {
   const [selectedOP, setSelectedOP] = useState(null);
   const [viewingOP, setViewingOP] = useState(null);
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: () => {}, confirmLabel: t('buttons.yes'), confirmColor: '#2575D1' });
+  const [checklist, setChecklist] = useState({
+    open: false,
+    etapa: null,
+    production: null,
+    recipe: null,
+    onCompleted: null,
+  });
+  const [envaseRecipe, setEnvaseRecipe] = useState(null);
   const navigate = useNavigate();
 
   const canAnalyze = user && (user.nivel === 'administrador' || user.nivel === 'supervisor');
@@ -43,22 +55,34 @@ export default function OrdensProducao() {
   const sortedProds = [...activeProds].sort((a, b) => opNumeric(a.op_number) - opNumeric(b.op_number));
   const filtered = filter === 'all' ? sortedProds : sortedProds.filter(p => p.status === filter);
 
+  const openChecklist = async (prod, etapa, onCompleted) => {
+    try {
+      const recipe = await loadRecipeForProduction(prod);
+      setChecklist({
+        open: true,
+        etapa,
+        production: prod,
+        recipe,
+        onCompleted: () => onCompleted(recipe),
+      });
+    } catch (err) {
+      toast({
+        title: t('production.operationalChecklist.submitError'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const startProduction = (prod) => {
-    setConfirm({
-      open: true,
-      title: t('production.orders.startConfirm.title', { op: prod.op_number }),
-      message: t('production.orders.startConfirm.message', {
-        product: prod.product,
-        lot: prod.lot,
-        wait: waitInterval(prod.created_date, null),
-      }),
-      confirmLabel: t('production.orders.startConfirm.confirmLabel'),
-      confirmColor: '#1e40af',
-      onConfirm: async () => {
-        const operatorName = user?.nome || user?.full_name || user?.email || '';
-        await base44.entities.Production.update(prod.id, { status: 'Em Produção', start_time: new Date().toISOString(), operator: operatorName });
-        navigate(`/producao/${prod.id}/checklist`);
-      },
+    openChecklist(prod, CHECKLIST_ETAPAS.START_PRODUCTION, async () => {
+      const operatorName = user?.nome || user?.full_name || user?.email || '';
+      await base44.entities.Production.update(prod.id, {
+        status: 'Em Produção',
+        start_time: new Date().toISOString(),
+        operator: operatorName,
+      });
+      navigate(`/producao/${prod.id}/checklist`);
     });
   };
 
@@ -88,8 +112,11 @@ export default function OrdensProducao() {
   const openView = (prod) => { setViewingOP(prod); setShowView(true); };
 
   const openEnvase = (prod) => {
-    setSelectedOP(prod);
-    setShowEnvase(true);
+    openChecklist(prod, CHECKLIST_ETAPAS.START_FILLING, async (recipe) => {
+      setSelectedOP(prod);
+      setEnvaseRecipe(recipe || null);
+      setShowEnvase(true);
+    });
   };
 
   const fmt3 = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
@@ -197,13 +224,26 @@ export default function OrdensProducao() {
         </DialogContent>
       </Dialog>
 
-      {/* Envase Dialog */}
       <EnvaseDialog
         open={showEnvase}
-        onOpenChange={setShowEnvase}
+        onOpenChange={(open) => {
+          setShowEnvase(open);
+          if (!open) setEnvaseRecipe(null);
+        }}
         production={selectedOP}
+        recipe={envaseRecipe}
         onSave={load}
       />
+
+      <OperationalChecklistModal
+        open={checklist.open}
+        onOpenChange={(open) => setChecklist((prev) => ({ ...prev, open }))}
+        etapa={checklist.etapa}
+        production={checklist.production}
+        recipe={checklist.recipe}
+        onCompleted={checklist.onCompleted}
+      />
+
       <ConfirmDialog
         open={confirm.open}
         onOpenChange={(open) => setConfirm(prev => ({ ...prev, open }))}
@@ -214,7 +254,6 @@ export default function OrdensProducao() {
         confirmColor={confirm.confirmColor}
       />
 
-      {/* Fixed footer bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-8">

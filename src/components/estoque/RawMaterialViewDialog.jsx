@@ -31,6 +31,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
         const used = [];
         const prods = Array.isArray(allProductions) ? allProductions : [];
         prods.forEach(prod => {
+          if (prod.status === 'Cancelado') return;
           let rmu = prod.raw_materials_used || [];
           if (typeof rmu === 'string') { try { rmu = JSON.parse(rmu); } catch { rmu = []; } }
           if (!Array.isArray(rmu)) rmu = [];

@@ -739,6 +739,75 @@
       "finalizeConfirmLabel": "Sí, Finalizar",
       "saving": "Guardando..."
     },
+    "operationalChecklist": {
+      "titles": {
+        "generic": "Checklist Operacional",
+        "startProduction": "Checklist — Iniciar Producción",
+        "pauseProduction": "Checklist — Pausar Producción",
+        "startFilling": "Checklist — Iniciar Envasado",
+        "finishFilling": "Checklist — Finalizar Envasado"
+      },
+      "actions": {
+        "cancel": "Cancelar",
+        "back": "Volver",
+        "confirm": "Confirmar",
+        "confirmChecklist": "Confirmar Checklist",
+        "finishFilling": "Finalizar Envasado"
+      },
+      "answers": {
+        "yes": "Sí",
+        "no": "No",
+        "notApplicable": "No aplica"
+      },
+      "observation": "Observaciones",
+      "observationPlaceholder": "Describa el motivo o detalle...",
+      "observationRequired": "Observación obligatoria",
+      "subtitle": "OP {{op}} — {{product}}",
+      "submitError": "No se pudo guardar el checklist",
+      "start": {
+        "equipmentGrounding": "¿El mezclador y los equipos fueron debidamente aterrizados?",
+        "n2Inertization": "¿El mezclador fue inertizado con N₂ y se verificó el teor de oxígeno (O₂ ≤ 8%)?",
+        "scaleOk": "¿La balanza fue encendida y está en buen funcionamiento?",
+        "mixerEmpty": "¿Se verificó que el mezclador está realmente vacío para iniciar una nueva producción?",
+        "jointsHoses": "¿Se verificaron todas las juntas y mangueras para evitar posibles fugas?",
+        "ppeUsed": "¿Se están utilizando los EPIs obligatorios?"
+      },
+      "pause": {
+        "valvesDoubleBlock": "Confirmo que todas las válvulas de salida están cerradas y el equipo está en condición segura.",
+        "helper": "Esta confirmación es obligatoria antes de pausar la producción."
+      },
+      "startFilling": {
+        "packagingClean": "¿El tanque/IBC/envase que recibirá el producto está limpio y descontaminado?",
+        "packagingDamage": "¿Existe algún tipo de avería o desgaste visible en el envase?",
+        "packagingGrounding": "¿El envase está debidamente aterrizado?"
+      },
+      "finishFilling": {
+        "packagingSealed": "¿Los envases fueron debidamente sellados?",
+        "packagingLabeled": "¿Los envases fueron debidamente identificados con etiqueta de producto y etiqueta de lote?",
+        "packagingExternallyClean": "¿Los envases fueron limpios externamente para evitar suciedad de producto tras el envasado?"
+      },
+      "errors": {
+        "answerRequired": "Seleccione una respuesta.",
+        "invalidAnswer": "Respuesta inválida para esta pregunta.",
+        "mustBeYes": "Es obligatorio responder Sí.",
+        "observationRequired": "Informe la observación obligatoria.",
+        "flammableGrounding": "Los productos inflamables solo pueden producirse con equipos debidamente aterrizados.",
+        "flammableN2": "Los productos inflamables solo pueden producirse tras la inertización del mezclador con N₂ y confirmación de teor de oxígeno igual o inferior a 8%.",
+        "ppeRequired": "Es obligatorio utilizar los EPIs antes del inicio de la producción.",
+        "pauseRequired": "Esta confirmación es obligatoria antes de pausar la producción.",
+        "flammablePackagingGrounding": "Los productos inflamables exigen aterrizaje del envase durante el envasado.",
+        "labelsRequired": "Todos los envases deben identificarse antes de la finalización.",
+        "externalCleanRequired": "Los envases deben limpiarse antes de la finalización del envasado."
+      },
+      "banner": {
+        "title": "ATENCIÓN – PRODUCTO INFLAMABLE",
+        "intro": "Este producto requiere:",
+        "itemN2": "Mezclador inertizado con N₂",
+        "itemO2": "Atmósfera con O₂ ≤ 8%",
+        "itemGrounding": "Equipos debidamente aterrizados",
+        "itemMaintain": "Mantenimiento de las condiciones de seguridad durante toda la producción"
+      }
+    },
     "list": {
       "subtitle": "{{count}} producción(es) registrada(s)",
       "subtitleFiltered": "{{filtered}} de {{total}} producción(es)",

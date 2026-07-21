@@ -311,6 +311,41 @@ drop trigger if exists update_updated_date_recipes on recipes;
 create trigger update_updated_date_recipes before update on recipes for each row execute function update_updated_date();
 
 -- ============================================================================
+-- 8b. production_checklists (checklists operacionais obrigatórios)
+-- ============================================================================
+create table if not exists production_checklists (
+  id text primary key default gen_random_uuid()::text,
+  created_date timestamptz not null default now(),
+  updated_date timestamptz not null default now(),
+  production_id text not null,
+  op_number text,
+  product text,
+  recipe_id text,
+  recipe_revision text,
+  etapa text not null
+    check (etapa in (
+      'start_production',
+      'pause_production',
+      'start_filling',
+      'finish_filling'
+    )),
+  question_key text not null,
+  question_label text not null,
+  answer text not null,
+  observacao text,
+  usuario_id text,
+  usuario_nome text,
+  answered_at timestamptz not null default now()
+);
+alter table production_checklists enable row level security;
+drop policy if exists "allow_all_production_checklists" on production_checklists;
+create policy "allow_all_production_checklists" on production_checklists for all using (true) with check (true);
+drop trigger if exists update_updated_date_production_checklists on production_checklists;
+create trigger update_updated_date_production_checklists before update on production_checklists for each row execute function update_updated_date();
+create index if not exists idx_production_checklists_prod_etapa on production_checklists (production_id, etapa);
+create index if not exists idx_production_checklists_etapa_answered on production_checklists (etapa, answered_at);
+
+-- ============================================================================
 -- 9. quality_results
 -- ============================================================================
 create table if not exists quality_results (
@@ -412,6 +447,7 @@ create publication supabase_realtime for table
   containers,
   orders,
   recipes,
+  production_checklists,
   quality_results,
   quality_tests,
   inventories;

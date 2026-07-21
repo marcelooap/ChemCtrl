@@ -791,6 +791,75 @@
       "finalizeConfirmLabel": "Sim, Finalizar",
       "saving": "Salvando..."
     },
+    "operationalChecklist": {
+      "titles": {
+        "generic": "Checklist Operacional",
+        "startProduction": "Checklist — Iniciar Produção",
+        "pauseProduction": "Checklist — Pausar Produção",
+        "startFilling": "Checklist — Iniciar Envase",
+        "finishFilling": "Checklist — Finalizar Envase"
+      },
+      "actions": {
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "confirm": "Confirmar",
+        "confirmChecklist": "Confirmar Checklist",
+        "finishFilling": "Finalizar Envase"
+      },
+      "answers": {
+        "yes": "Sim",
+        "no": "Não",
+        "notApplicable": "Não se aplica"
+      },
+      "observation": "Observações",
+      "observationPlaceholder": "Descreva o motivo ou detalhe...",
+      "observationRequired": "Observação obrigatória",
+      "subtitle": "OP {{op}} — {{product}}",
+      "submitError": "Não foi possível salvar o checklist",
+      "start": {
+        "equipmentGrounding": "O misturador e equipamentos foram devidamente aterrados?",
+        "n2Inertization": "O misturador foi inertizado com N₂ e verificado o teor de oxigênio (O₂ ≤ 8%)?",
+        "scaleOk": "A balança foi ligada e está em bom funcionamento?",
+        "mixerEmpty": "Foi verificado se o misturador está realmente vazio para iniciar uma nova produção?",
+        "jointsHoses": "Foram verificadas todas as juntas e mangotes a fim de evitar possíveis vazamentos?",
+        "ppeUsed": "Os EPIs obrigatórios estão sendo utilizados?"
+      },
+      "pause": {
+        "valvesDoubleBlock": "Confirmo que todas as válvulas encontram-se fechadas e o equipamento está em condição segura.",
+        "helper": "Esta confirmação é obrigatória antes de pausar a produção."
+      },
+      "startFilling": {
+        "packagingClean": "O tanque/IBC/embalagem que receberá o produto está limpo e descontaminado?",
+        "packagingDamage": "Existe algum tipo de avaria ou desgaste visível na embalagem?",
+        "packagingGrounding": "A embalagem está devidamente aterrada?"
+      },
+      "finishFilling": {
+        "packagingSealed": "As embalagens foram devidamente lacradas?",
+        "packagingLabeled": "As embalagens foram devidamente identificadas com etiqueta de produto e etiqueta de lote?",
+        "packagingExternallyClean": "As embalagens foram limpas externamente para evitar sujidades de produto após o envase?"
+      },
+      "errors": {
+        "answerRequired": "Selecione uma resposta.",
+        "invalidAnswer": "Resposta inválida para esta pergunta.",
+        "mustBeYes": "É obrigatório responder Sim.",
+        "observationRequired": "Informe a observação obrigatória.",
+        "flammableGrounding": "Produtos inflamáveis somente podem ser produzidos com equipamentos devidamente aterrados.",
+        "flammableN2": "Produtos inflamáveis somente podem ser produzidos após a inertização do misturador com N₂ e confirmação de teor de oxigênio igual ou inferior a 8%.",
+        "ppeRequired": "É obrigatório utilizar os EPIs antes do início da produção.",
+        "pauseRequired": "Esta confirmação é obrigatória antes de pausar a produção.",
+        "flammablePackagingGrounding": "Produtos inflamáveis exigem aterramento da embalagem durante o envase.",
+        "labelsRequired": "Todas as embalagens devem ser identificadas antes da finalização.",
+        "externalCleanRequired": "As embalagens devem ser limpas antes da finalização do envase."
+      },
+      "banner": {
+        "title": "ATENÇÃO – PRODUTO INFLAMÁVEL",
+        "intro": "Este produto requer:",
+        "itemN2": "Misturador inertizado com N₂",
+        "itemO2": "Atmosfera com O₂ ≤ 8%",
+        "itemGrounding": "Equipamentos devidamente aterrados",
+        "itemMaintain": "Manutenção das condições de segurança durante toda a produção"
+      }
+    },
     "list": {
       "subtitle": "{{count}} produção(ões) registrada(s)",
       "subtitleFiltered": "{{filtered}} de {{total}} produção(ões)",

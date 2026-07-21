@@ -20,6 +20,9 @@ import { fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
 import { ensureContainerHasOrigin, dominantLotFromOrigins } from '@/lib/containerOrigins';
 import { containerDisplayVolume } from '@/lib/fractionalSupply';
+import OperationalChecklistModal from '@/components/checklists/OperationalChecklistModal';
+import { CHECKLIST_ETAPAS } from '@/lib/checklists/operationalChecklistConfig';
+import { loadRecipeForProduction } from '@/lib/checklists/loadRecipeForProduction';
 
 const supabase = createSupabaseEntities();
 
@@ -58,7 +61,7 @@ const parsePackageQty = (value) => {
   return Number.isFinite(qty) && qty >= 1 ? qty : 0;
 };
 
-export default function EnvaseDialog({ open, onOpenChange, production, onSave }) {
+export default function EnvaseDialog({ open, onOpenChange, production, recipe: recipeProp, onSave }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const isComplement = !!(production?.complement_packaging && production?.complement_container_id);
@@ -68,6 +71,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
   const [complementVolume, setComplementVolume] = useState('');
   const [loadingTarget, setLoadingTarget] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [recipe, setRecipe] = useState(recipeProp || null);
+  const [finishChecklistOpen, setFinishChecklistOpen] = useState(false);
   const { user: internalUser } = useInternalAuth();
   const { toast } = useToast();
 
@@ -77,6 +82,13 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     setComplementVolume(production?.volume != null ? String(production.volume) : '');
     setComplementTarget(null);
     setComplementDisplayVolume(null);
+    setFinishChecklistOpen(false);
+
+    if (recipeProp) {
+      setRecipe(recipeProp);
+    } else {
+      loadRecipeForProduction(production).then(setRecipe);
+    }
 
     if (isComplement && production?.complement_container_id) {
       setLoadingTarget(true);
@@ -105,7 +117,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         }
       })();
     }
-  }, [open, production, isComplement, t, toast]);
+  }, [open, production, isComplement, recipeProp, t, toast]);
 
   const density = production?.density || 1;
 
@@ -369,6 +381,10 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
 
   const handleSave = async () => {
     if (volumeExceeded || !allContainersValid || totalVolumeEntered === 0) return;
+    setFinishChecklistOpen(true);
+  };
+
+  const persistEnvase = async () => {
     setSaving(true);
     try {
       const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
@@ -390,6 +406,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     } catch (error) {
       console.error('Erro ao registrar envase:', error);
       toast({ title: t('common.saveFailed'), description: error?.message, variant: 'destructive' });
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -400,7 +417,14 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
     : '—';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (finishChecklistOpen && !v) return;
+        onOpenChange(v);
+      }}
+    >
       <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-sm font-bold text-gray-800">
@@ -623,5 +647,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, onSave })
         )}
       </DialogContent>
     </Dialog>
+
+    <OperationalChecklistModal
+      open={finishChecklistOpen}
+      onOpenChange={setFinishChecklistOpen}
+      etapa={CHECKLIST_ETAPAS.FINISH_FILLING}
+      production={production}
+      recipe={recipe}
+      onCompleted={persistEnvase}
+    />
+    </>
   );
 }

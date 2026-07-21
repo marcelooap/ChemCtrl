@@ -739,6 +739,75 @@
       "finalizeConfirmLabel": "Oui, Finaliser",
       "saving": "Sauvegarde..."
     },
+    "operationalChecklist": {
+      "titles": {
+        "generic": "Checklist Opérationnelle",
+        "startProduction": "Checklist — Démarrer la Production",
+        "pauseProduction": "Checklist — Mettre en Pause",
+        "startFilling": "Checklist — Démarrer le Conditionnement",
+        "finishFilling": "Checklist — Finaliser le Conditionnement"
+      },
+      "actions": {
+        "cancel": "Annuler",
+        "back": "Retour",
+        "confirm": "Confirmer",
+        "confirmChecklist": "Confirmer le Checklist",
+        "finishFilling": "Finaliser le Conditionnement"
+      },
+      "answers": {
+        "yes": "Oui",
+        "no": "Non",
+        "notApplicable": "Non applicable"
+      },
+      "observation": "Observations",
+      "observationPlaceholder": "Décrivez le motif ou le détail...",
+      "observationRequired": "Observation obligatoire",
+      "subtitle": "OP {{op}} — {{product}}",
+      "submitError": "Impossible d'enregistrer le checklist",
+      "start": {
+        "equipmentGrounding": "Le mélangeur et les équipements ont-ils été correctement mis à la terre ?",
+        "n2Inertization": "Le mélangeur a-t-il été inerté au N₂ et la teneur en oxygène vérifiée (O₂ ≤ 8 %) ?",
+        "scaleOk": "La balance a-t-elle été allumée et fonctionne-t-elle correctement ?",
+        "mixerEmpty": "A-t-on vérifié que le mélangeur est vraiment vide pour démarrer une nouvelle production ?",
+        "jointsHoses": "Tous les joints et flexibles ont-ils été vérifiés afin d'éviter d'éventuelles fuites ?",
+        "ppeUsed": "Les EPI obligatoires sont-ils utilisés ?"
+      },
+      "pause": {
+        "valvesDoubleBlock": "Je confirme que toutes les vannes de sortie sont fermées et que l'équipement est en condition sûre.",
+        "helper": "Cette confirmation est obligatoire avant de mettre la production en pause."
+      },
+      "startFilling": {
+        "packagingClean": "Le réservoir/IBC/emballage qui recevra le produit est-il propre et décontaminé ?",
+        "packagingDamage": "Y a-t-il un type d'avarie ou d'usure visible sur l'emballage ?",
+        "packagingGrounding": "L'emballage est-il correctement mis à la terre ?"
+      },
+      "finishFilling": {
+        "packagingSealed": "Les emballages ont-ils été correctement scellés ?",
+        "packagingLabeled": "Les emballages ont-ils été correctement identifiés avec étiquette produit et étiquette de lot ?",
+        "packagingExternallyClean": "Les emballages ont-ils été nettoyés extérieurement pour éviter des salissures de produit après le conditionnement ?"
+      },
+      "errors": {
+        "answerRequired": "Sélectionnez une réponse.",
+        "invalidAnswer": "Réponse invalide pour cette question.",
+        "mustBeYes": "Il est obligatoire de répondre Oui.",
+        "observationRequired": "Veuillez renseigner l'observation obligatoire.",
+        "flammableGrounding": "Les produits inflammables ne peuvent être produits qu'avec des équipements correctement mis à la terre.",
+        "flammableN2": "Les produits inflammables ne peuvent être produits qu'après inertage du mélangeur au N₂ et confirmation d'une teneur en oxygène égale ou inférieure à 8 %.",
+        "ppeRequired": "Il est obligatoire d'utiliser les EPI avant le début de la production.",
+        "pauseRequired": "Cette confirmation est obligatoire avant de mettre la production en pause.",
+        "flammablePackagingGrounding": "Les produits inflammables exigent la mise à la terre de l'emballage pendant le conditionnement.",
+        "labelsRequired": "Tous les emballages doivent être identifiés avant la finalisation.",
+        "externalCleanRequired": "Les emballages doivent être nettoyés avant la finalisation du conditionnement."
+      },
+      "banner": {
+        "title": "ATTENTION – PRODUIT INFLAMMABLE",
+        "intro": "Ce produit nécessite :",
+        "itemN2": "Mélangeur inerté au N₂",
+        "itemO2": "Atmosphère avec O₂ ≤ 8 %",
+        "itemGrounding": "Équipements correctement mis à la terre",
+        "itemMaintain": "Maintien des conditions de sécurité pendant toute la production"
+      }
+    },
     "list": {
       "subtitle": "{{count}} production(s) enregistrée(s)",
       "subtitleFiltered": "{{filtered}} sur {{total}} production(s)",
