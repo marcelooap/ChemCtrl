@@ -271,7 +271,13 @@ AS $$
       'orders.edit','recipes.edit','inventory.edit','raw_material_stock.edit',
       'containers.edit','tankage.edit','transfer.edit','quality_tests.register_test'
     ])
-    OR (get_current_session() ->> 'nivel_acesso') IN ('Administrador', 'Supervisor', 'Operacional'),
+    OR lower(
+      translate(
+        coalesce(get_current_session() ->> 'nivel_acesso', ''),
+        'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
+        'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
+      )
+    ) IN ('administrador', 'supervisor', 'operacional', 'operador'),
     false
   );
 $$;

@@ -1,100 +1,108 @@
 -- ============================================================
--- Migration: Checklists Operacionais Obrigatórios
--- Tabela production_checklists + RPC + trigger de gate
+-- Hotfix: permissão para registrar checklist operacional
+--
+-- Problema:
+--   Operadores conseguiam abrir o checklist (UI com fallback legacy
+--   por nivel_acesso), mas submit_operational_checklist falhava com
+--   P0001 "sem permissão para registrar checklist operacional"
+--   porque can_write() não reconhecia "Operador" e não era
+--   case-insensitive — e perfis sem grants na sessão ficavam
+--   bloqueados no backend (enquanto o frontend liberava).
+--
 -- Execute no: Supabase Dashboard → SQL Editor
 -- ============================================================
 
 -- ---------------------------------------------------------------------------
--- 1. Tabela
+-- 1. can_write(): inclui Operador + comparação case-insensitive
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS production_checklists (
-  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  created_date timestamptz NOT NULL DEFAULT now(),
-  updated_date timestamptz NOT NULL DEFAULT now(),
-  production_id text NOT NULL,
-  op_number text,
-  product text,
-  recipe_id text,
-  recipe_revision text,
-  etapa text NOT NULL
-    CHECK (etapa IN (
-      'start_production',
-      'pause_production',
-      'start_filling',
-      'finish_filling'
-    )),
-  question_key text NOT NULL,
-  question_label text NOT NULL,
-  answer text NOT NULL,
-  observacao text,
-  usuario_id text,
-  usuario_nome text,
-  answered_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_production_checklists_prod_etapa
-  ON production_checklists (production_id, etapa);
-
-CREATE INDEX IF NOT EXISTS idx_production_checklists_etapa_answered
-  ON production_checklists (etapa, answered_at);
-
-DROP TRIGGER IF EXISTS update_updated_date_production_checklists ON production_checklists;
-CREATE TRIGGER update_updated_date_production_checklists
-  BEFORE UPDATE ON production_checklists
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_date();
-
--- ---------------------------------------------------------------------------
--- 2. RLS
--- ---------------------------------------------------------------------------
-ALTER TABLE production_checklists ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "production_checklists_select" ON production_checklists;
-DROP POLICY IF EXISTS "production_checklists_insert" ON production_checklists;
-DROP POLICY IF EXISTS "production_checklists_update" ON production_checklists;
-DROP POLICY IF EXISTS "production_checklists_delete" ON production_checklists;
-
-CREATE POLICY "production_checklists_select" ON production_checklists
-  FOR SELECT USING (is_internal_user() OR can_write());
-
-CREATE POLICY "production_checklists_insert" ON production_checklists
-  FOR INSERT WITH CHECK (can_write());
-
-CREATE POLICY "production_checklists_update" ON production_checklists
-  FOR UPDATE USING (can_write()) WITH CHECK (can_write());
-
-CREATE POLICY "production_checklists_delete" ON production_checklists
-  FOR DELETE USING (is_admin());
-
--- ---------------------------------------------------------------------------
--- 3. Helper: checklist concluído para etapa
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION has_operational_checklist(
-  p_production_id text,
-  p_etapa text,
-  p_since timestamptz DEFAULT NULL
-)
+CREATE OR REPLACE FUNCTION can_write()
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM production_checklists pc
-    WHERE pc.production_id = p_production_id
-      AND pc.etapa = p_etapa
-      AND (p_since IS NULL OR pc.answered_at >= p_since)
+  SELECT COALESCE(
+    has_any_permission(ARRAY[
+      'productions.edit_op', 'productions.create_op', 'production_orders.edit',
+      'orders.edit', 'recipes.edit', 'inventory.edit', 'raw_material_stock.edit',
+      'containers.edit', 'tankage.edit', 'transfer.edit', 'quality_tests.register_test'
+    ])
+    OR lower(
+      translate(
+        coalesce(get_current_session() ->> 'nivel_acesso', ''),
+        'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
+        'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
+      )
+    ) IN ('administrador', 'supervisor', 'operacional', 'operador'),
+    false
   );
 $$;
 
-GRANT EXECUTE ON FUNCTION has_operational_checklist(text, text, timestamptz) TO anon;
-GRANT EXECUTE ON FUNCTION has_operational_checklist(text, text, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION can_write() TO anon;
+GRANT EXECUTE ON FUNCTION can_write() TO authenticated;
 
 -- ---------------------------------------------------------------------------
--- 4. RPC: submit_operational_checklist
--- p_answers: jsonb array of { question_key, question_label, answer, observacao }
+-- 2. Helper específico: pode registrar checklist de chão de fábrica
+--    (alinhado ao quem opera OP / Ordens de Produção)
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION can_register_operational_checklist()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    can_write()
+    OR has_any_permission(ARRAY[
+      'production_orders.edit',
+      'production_orders.create',
+      'productions.edit_op',
+      'productions.create_op',
+      'productions.finish',
+      'productions.complement'
+    ])
+    OR (
+      (get_current_session() ->> 'tipo') = 'interno'
+      AND lower(
+        translate(
+          coalesce(get_current_session() ->> 'nivel_acesso', ''),
+          'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
+          'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
+        )
+      ) IN ('administrador', 'supervisor', 'operacional', 'operador')
+    ),
+    false
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION can_register_operational_checklist() TO anon;
+GRANT EXECUTE ON FUNCTION can_register_operational_checklist() TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. RLS de production_checklists: insert/update via helper
+-- ---------------------------------------------------------------------------
+DROP POLICY IF EXISTS "production_checklists_select" ON production_checklists;
+DROP POLICY IF EXISTS "production_checklists_insert" ON production_checklists;
+DROP POLICY IF EXISTS "production_checklists_update" ON production_checklists;
+DROP POLICY IF EXISTS "production_checklists_delete" ON production_checklists;
+
+CREATE POLICY "production_checklists_select" ON production_checklists
+  FOR SELECT USING (is_internal_user() OR can_register_operational_checklist());
+
+CREATE POLICY "production_checklists_insert" ON production_checklists
+  FOR INSERT WITH CHECK (can_register_operational_checklist());
+
+CREATE POLICY "production_checklists_update" ON production_checklists
+  FOR UPDATE USING (can_register_operational_checklist())
+  WITH CHECK (can_register_operational_checklist());
+
+CREATE POLICY "production_checklists_delete" ON production_checklists
+  FOR DELETE USING (is_admin());
+
+-- ---------------------------------------------------------------------------
+-- 4. RPC: usa o helper (e valida sessão antes, para erro mais claro)
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION submit_operational_checklist(
   p_production_id text,
@@ -138,7 +146,7 @@ BEGIN
     RAISE EXCEPTION 'sessão inválida';
   END IF;
 
-  IF NOT can_write() THEN
+  IF NOT can_register_operational_checklist() THEN
     RAISE EXCEPTION 'sem permissão para registrar checklist operacional';
   END IF;
 
@@ -164,7 +172,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- Index answers by key for validation
   FOR v_answer IN SELECT * FROM jsonb_array_elements(p_answers)
   LOOP
     v_key := v_answer ->> 'question_key';
@@ -181,7 +188,6 @@ BEGIN
 
     v_keys := array_append(v_keys, v_key);
 
-    -- ---- Validação por etapa / pergunta (espelha o frontend) ----
     IF p_etapa = 'start_production' THEN
       IF v_key = 'equipment_grounding' THEN
         IF v_necessita_n2 THEN
@@ -285,7 +291,6 @@ BEGIN
     v_inserted := v_inserted + 1;
   END LOOP;
 
-  -- Perguntas obrigatórias presentes
   IF p_etapa = 'start_production' THEN
     v_required := ARRAY['equipment_grounding', 'scale_ok', 'mixer_empty', 'joints_hoses', 'ppe_used'];
     IF v_necessita_n2 THEN
@@ -306,7 +311,6 @@ BEGIN
     RAISE EXCEPTION 'checklist incompleto para a etapa %', p_etapa;
   END IF;
 
-  -- Perguntas extras não permitidas (ex.: n2 quando não inflamável)
   IF p_etapa = 'start_production' AND NOT v_necessita_n2 AND 'n2_inertization' = ANY (v_keys) THEN
     RAISE EXCEPTION 'pergunta de inertização N2 não se aplica a esta receita';
   END IF;
@@ -322,50 +326,3 @@ $$;
 
 GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb) TO anon;
 GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb) TO authenticated;
-
--- ---------------------------------------------------------------------------
--- 5. Trigger: impedir ações sem checklist
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION require_operational_checklist_on_production()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  -- Início da produção
-  IF OLD.status IS DISTINCT FROM NEW.status
-     AND OLD.status = 'Aguardando Início'
-     AND NEW.status = 'Em Produção'
-  THEN
-    IF NOT has_operational_checklist(NEW.id, 'start_production', now() - interval '15 minutes') THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes de iniciar a produção (start_production).';
-    END IF;
-  END IF;
-
-  -- Pausa (Salvar Progresso)
-  IF OLD.pause_start_time IS NULL AND NEW.pause_start_time IS NOT NULL THEN
-    IF NOT has_operational_checklist(NEW.id, 'pause_production', now() - interval '15 minutes') THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes de pausar a produção (pause_production).';
-    END IF;
-  END IF;
-
-  -- Finalizar envase
-  IF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'Finalizado' THEN
-    IF NOT has_operational_checklist(NEW.id, 'start_filling', NULL) THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes do envase (start_filling).';
-    END IF;
-    IF NOT has_operational_checklist(NEW.id, 'finish_filling', now() - interval '15 minutes') THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes de finalizar o envase (finish_filling).';
-    END IF;
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_require_operational_checklist ON productions;
-CREATE TRIGGER trg_require_operational_checklist
-  BEFORE UPDATE ON productions
-  FOR EACH ROW
-  EXECUTE FUNCTION require_operational_checklist_on_production();
