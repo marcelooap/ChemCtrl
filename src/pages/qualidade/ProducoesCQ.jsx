@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProductionCard from '@/components/ProductionCard';
-import { NotificationService } from '@/notifications/services/NotificationService';
 import SignedImage from '@/components/SignedImage';
 import { fmtDate, fmtNumber, fmtVolume } from '@/i18n/formatters';
 import { syncOrderFromProductions } from '@/lib/orderProductionStatus';
@@ -197,14 +196,6 @@ export default function ProducoesCQ() {
         } catch (orderErr) {
           console.error('Falha ao sincronizar pedido após reprovação CQ:', orderErr);
         }
-      }
-
-      if (newProdStatus === 'Envase') {
-        await NotificationService.cqReleased({
-          id: selectedProd.id,
-          op_number: selectedProd.op_number,
-          client: selectedProd.client,
-        });
       }
 
       setShowAnalysis(false);

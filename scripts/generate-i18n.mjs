@@ -261,7 +261,6 @@ const ptBR = {
     tankage: 'Tankagem',
     transfer: 'Transbordo',
     users: 'Usuários',
-    notifications: 'Notificações',
     clientScreen: 'Tela Clientes',
     clientStock: 'Estoque Cliente',
     lockedTooltip: 'Sem acesso para seu nível',
@@ -378,9 +377,6 @@ const ptBR = {
     operationComplete: 'Operação concluída!',
     pdfGenerated: 'PDF gerado com sucesso!',
     reportGenerated: 'Relatório gerado com sucesso!',
-    notificationSent: 'Notificação enviada!',
-    markedAsRead: 'Marcado como lido.',
-    allMarkedAsRead: 'Todas marcadas como lidas.',
   },
 };
 
@@ -693,56 +689,6 @@ Object.assign(ptBR, {
     types: {
       internal: 'Interno',
       external: 'Externo',
-    },
-  },
-
-  notifications: {
-    title: 'Notificações',
-    history: 'Histórico de Notificações',
-    subtitle: 'Todas as notificações do sistema',
-    unread: '{{count}} não lida',
-    unreadPlural: '{{count}} não lidas',
-    markAllRead: 'Marcar todas como lidas',
-    empty: 'Nenhuma notificação',
-    noUnread: 'Nenhuma notificação não lida',
-    viewAll: 'Ver todas',
-    filters: {
-      search: 'Buscar notificações...',
-      read: 'Leitura',
-      type: 'Tipo',
-      all: 'Todas',
-      readOnly: 'Lidas',
-      unreadOnly: 'Não lidas',
-    },
-    types: {
-      info: 'Informação',
-      success: 'Sucesso',
-      warning: 'Aviso',
-      error: 'Erro',
-    },
-    events: {
-      production_created: {
-        title: 'Nova Ordem de Produção',
-        message: 'A OP {{op}} foi registrada e está disponível para produção.',
-      },
-      production_finished: {
-        title: 'Produção Finalizada',
-        message: 'A OP {{op}} foi enviada para o Controle de Qualidade.',
-      },
-      cq_released: {
-        title: 'CQ Liberou Produção',
-        message: 'A OP {{op}} foi liberada para Envase.',
-      },
-      filling_finished: {
-        title: 'Envase Finalizado',
-        message: 'A OP {{op}} foi concluída com sucesso.',
-      },
-    },
-    time: {
-      justNow: 'Agora',
-      minutesAgo: '{{count}} min atrás',
-      hoursAgo: '{{count}} h atrás',
-      daysAgo: '{{count}} dia(s) atrás',
     },
   },
 
@@ -1114,7 +1060,7 @@ const enOverrides = {
     home: 'Home', dashboard: 'Dashboard', recipes: 'Recipes', orders: 'Orders', rawMaterialStock: 'Raw Material Stock',
     inventory: 'Inventory', newProduction: 'New Production', productions: 'Productions', productionOrders: 'Production Orders',
     qualityControl: 'Quality Control', tests: 'Tests', pendingAnalysis: 'Pending Analysis', coa: 'Certificate of Analysis (COA)',
-    containers: 'Containers', tankage: 'Tank Storage', transfer: 'Transfer', users: 'Users', notifications: 'Notifications',
+    containers: 'Containers', tankage: 'Tank Storage', transfer: 'Transfer', users: 'Users',
     clientScreen: 'Client Portal', clientStock: 'Client Stock', lockedTooltip: 'No access for your role',
     appSubtitle: 'Production Control',
     footer: { expand: 'Expand sidebar', collapse: 'Collapse sidebar', logout: 'Log out' },
@@ -1161,7 +1107,6 @@ const enOverrides = {
     finished: 'Finished successfully!', cancelled: 'Cancelled successfully!', activated: 'Activated successfully!',
     deactivated: 'Deactivated successfully!', passwordChanged: 'Password changed successfully!', settingsSaved: 'Settings saved!',
     operationComplete: 'Operation completed!', pdfGenerated: 'PDF generated successfully!', reportGenerated: 'Report generated successfully!',
-    notificationSent: 'Notification sent!', markedAsRead: 'Marked as read.', allMarkedAsRead: 'All marked as read.',
   },
   publicTraceability: {
     loading: 'Looking up batch...',
@@ -1328,22 +1273,6 @@ Object.assign(en, {
     },
     types: { internal: 'Internal', external: 'External' },
   },
-  notifications: {
-    title: 'Notifications', history: 'Notification History', subtitle: 'All system notifications',
-    unread: '{{count}} unread', unreadPlural: '{{count}} unread', markAllRead: 'Mark all as read',
-    empty: 'No notifications', noUnread: 'No unread notifications', viewAll: 'View all',
-    filters: {
-      search: 'Search notifications...', read: 'Read status', type: 'Type', all: 'All', readOnly: 'Read', unreadOnly: 'Unread',
-    },
-    types: { info: 'Information', success: 'Success', warning: 'Warning', error: 'Error' },
-    events: {
-      production_created: { title: 'New Production Order', message: 'PO {{op}} has been registered and is ready for production.' },
-      production_finished: { title: 'Production Finished', message: 'PO {{op}} has been sent to Quality Control.' },
-      cq_released: { title: 'QC Released Production', message: 'PO {{op}} has been released for packaging.' },
-      filling_finished: { title: 'Packaging Finished', message: 'PO {{op}} has been completed successfully.' },
-    },
-    time: { justNow: 'Just now', minutesAgo: '{{count}} min ago', hoursAgo: '{{count}} h ago', daysAgo: '{{count}} day(s) ago' },
-  },
   pwa: {
     update: {
       title: 'New version available',
@@ -1438,12 +1367,6 @@ en.users.roles = {
   administrator: 'Administrator', supervisor: 'Supervisor', operational: 'Operational',
   viewOnly: 'View Only', externalClient: 'External Client',
 };
-en.notifications.events = {
-  production_created: { title: 'New Production Order', message: 'PO {{op}} has been registered and is ready for production.' },
-  production_finished: { title: 'Production Finished', message: 'PO {{op}} has been sent to Quality Control.' },
-  cq_released: { title: 'QC Released Production', message: 'PO {{op}} has been released for packaging.' },
-  filling_finished: { title: 'Packaging Finished', message: 'PO {{op}} has been completed successfully.' },
-};
 en.pwa.update = {
   title: 'New version available',
   description: 'A new version of ChemCtrl has been published.',
@@ -1525,16 +1448,6 @@ deepMerge(es, {
     status: { active: 'Activo', inactive: 'Inactivo' },
     menu: { fullName: 'Nombre completo:', role: 'Nivel:', username: 'Usuario:', version: 'Versión:' },
     messages: { created: 'Usuario registrado con éxito.', updated: 'Usuario actualizado con éxito!', deleted: 'Usuario eliminado con éxito.' },
-  },
-  notifications: {
-    title: 'Notificaciones', history: 'Historial de Notificaciones', subtitle: 'Todas las notificaciones del sistema',
-    unread: '{{count}} no leída', unreadPlural: '{{count}} no leídas', markAllRead: 'Marcar todas como leídas',
-    events: {
-      production_created: { title: 'Nueva Orden de Producción', message: 'La OP {{op}} fue registrada y está disponible para producción.' },
-      production_finished: { title: 'Producción Finalizada', message: 'La OP {{op}} fue enviada al Control de Calidad.' },
-      cq_released: { title: 'CQ Liberó Producción', message: 'La OP {{op}} fue liberada para Envasado.' },
-      filling_finished: { title: 'Envasado Finalizado', message: 'La OP {{op}} fue concluida con éxito.' },
-    },
   },
   pwa: {
     update: {
@@ -1643,16 +1556,6 @@ deepMerge(fr, {
     status: { active: 'Actif', inactive: 'Inactif' },
     menu: { fullName: 'Nom complet :', role: 'Niveau :', username: 'Utilisateur :', version: 'Version :' },
     messages: { created: 'Utilisateur enregistré avec succès.', updated: 'Utilisateur mis à jour avec succès !', deleted: 'Utilisateur supprimé avec succès.' },
-  },
-  notifications: {
-    title: 'Notifications', history: 'Historique des Notifications', subtitle: 'Toutes les notifications du système',
-    unread: '{{count}} non lue', unreadPlural: '{{count}} non lues', markAllRead: 'Tout marquer comme lu',
-    events: {
-      production_created: { title: 'Nouvel Ordre de Production', message: 'L\'OF {{op}} a été enregistré et est disponible pour la production.' },
-      production_finished: { title: 'Production Terminée', message: 'L\'OF {{op}} a été envoyé au Contrôle Qualité.' },
-      cq_released: { title: 'CQ a Libéré la Production', message: 'L\'OF {{op}} a été libéré pour le Conditionnement.' },
-      filling_finished: { title: 'Conditionnement Terminé', message: 'L\'OF {{op}} a été achevé avec succès.' },
-    },
   },
   pwa: {
     update: {

@@ -261,7 +261,6 @@
     "users": "Usuários",
     "profiles": "Perfis e Permissões",
     "usersAndPermissions": "Usuários e Permissões",
-    "notifications": "Notificações",
     "clientScreen": "Tela Clientes",
     "clientStock": "Estoque Cliente",
     "lockedTooltip": "Sem acesso para seu nível",
@@ -357,8 +356,7 @@
       "clientPortal": "Tela Clientes",
       "clientStock": "Estoque Cliente",
       "users": "Usuários",
-      "profiles": "Perfis e Permissões",
-      "notifications": "Notificações"
+      "profiles": "Perfis e Permissões"
     },
     "actions": {
       "view": "Visualizar",
@@ -483,10 +481,7 @@
     "settingsSaved": "Configurações salvas!",
     "operationComplete": "Operação concluída!",
     "pdfGenerated": "PDF gerado com sucesso!",
-    "reportGenerated": "Relatório gerado com sucesso!",
-    "notificationSent": "Notificação enviada!",
-    "markedAsRead": "Marcado como lido.",
-    "allMarkedAsRead": "Todas marcadas como lidas."
+    "reportGenerated": "Relatório gerado com sucesso!"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1796,59 +1791,6 @@
       "processLoss": "Perda em Processo",
       "unusedReturn": "Retorno de MP Não Aplicada"
     }
-  },
-  "notifications": {
-    "title": "Notificações",
-    "history": "Histórico de Notificações",
-    "subtitle": "Todas as notificações do sistema",
-    "unread": "{{count}} não lida",
-    "unreadPlural": "{{count}} não lidas",
-    "markAllRead": "Marcar todas como lidas",
-    "empty": "Nenhuma notificação",
-    "emptyFound": "Nenhuma notificação encontrada",
-    "noUnread": "Nenhuma notificação não lida",
-    "viewAll": "Ver todas",
-    "filters": {
-      "search": "Buscar notificações...",
-      "searchTitleMessage": "Buscar por título ou mensagem...",
-      "read": "Leitura",
-      "type": "Tipo",
-      "all": "Todas",
-      "allTypes": "Todos os tipos",
-      "readOnly": "Lidas",
-      "unreadOnly": "Não lidas"
-    },
-    "types": {
-      "info": "Informação",
-      "success": "Sucesso",
-      "warning": "Aviso",
-      "error": "Erro"
-    },
-    "events": {
-      "production_created": {
-        "title": "Nova Ordem de Produção",
-        "message": "A OP {{op}} foi registrada e está disponível para produção."
-      },
-      "production_finished": {
-        "title": "Produção Finalizada",
-        "message": "A OP {{op}} foi enviada para o Controle de Qualidade."
-      },
-      "cq_released": {
-        "title": "CQ Liberou Produção",
-        "message": "A OP {{op}} foi liberada para Envase."
-      },
-      "filling_finished": {
-        "title": "Envase Finalizado",
-        "message": "A OP {{op}} foi concluída com sucesso."
-      }
-    },
-    "time": {
-      "justNow": "Agora",
-      "minutesAgo": "{{count}} min atrás",
-      "hoursAgo": "{{count}} h atrás",
-      "daysAgo": "{{count}} dia(s) atrás"
-    },
-    "pageLabel": "Página {{page}}"
   },
   "pwa": {
     "update": {

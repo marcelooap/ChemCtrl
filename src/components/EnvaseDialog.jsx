@@ -14,7 +14,6 @@ import {
   suggestPackageQty,
 } from '@/lib/packagingTypes';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { NotificationService } from '@/notifications/services/NotificationService';
 import { useToast } from '@/components/ui/use-toast';
 import { fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
@@ -394,12 +393,6 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       } else {
         await handleSaveStandard(operatorName);
       }
-
-      await NotificationService.fillingFinished({
-        id: production.id,
-        op_number: production.op_number,
-        client: production.client,
-      });
 
       onSave?.();
       onOpenChange(false);

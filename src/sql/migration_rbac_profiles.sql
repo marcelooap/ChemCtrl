@@ -101,8 +101,7 @@ DECLARE
     'lab_equipment.view','lab_equipment.create','lab_equipment.edit','lab_equipment.delete',
     'client_portal.view','client_stock.view',
     'users.view','users.create','users.edit','users.delete',
-    'profiles.view','profiles.create','profiles.edit','profiles.delete',
-    'notifications.view'
+    'profiles.view','profiles.create','profiles.edit','profiles.delete'
   ];
   supervisor_keys text[];
 BEGIN

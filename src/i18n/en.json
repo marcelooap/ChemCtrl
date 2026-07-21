@@ -261,7 +261,6 @@
     "users": "Users",
     "profiles": "Profiles & Permissions",
     "usersAndPermissions": "Users & Permissions",
-    "notifications": "Notifications",
     "clientScreen": "Client Portal",
     "clientStock": "Client Stock",
     "lockedTooltip": "No access for your role",
@@ -357,8 +356,7 @@
       "clientPortal": "Client Portal",
       "clientStock": "Client Stock",
       "users": "Users",
-      "profiles": "Profiles & Permissions",
-      "notifications": "Notifications"
+      "profiles": "Profiles & Permissions"
     },
     "actions": {
       "view": "View",
@@ -483,10 +481,7 @@
     "settingsSaved": "Settings saved!",
     "operationComplete": "Operation completed!",
     "pdfGenerated": "PDF generated successfully!",
-    "reportGenerated": "Report generated successfully!",
-    "notificationSent": "Notification sent!",
-    "markedAsRead": "Marked as read.",
-    "allMarkedAsRead": "All marked as read."
+    "reportGenerated": "Report generated successfully!"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1088,24 +1083,17 @@
     }
   },
   "clients": {
-    "expiryStatus": {
-      "expired": "Expired",
-      "valid": "Valid"
-    },
-    "containerStatus": {
-      "inYard": "In Yard"
-    },
     "screen": {
       "title": "Client Portal",
-      "subtitleAll": "All clients · Production, stock and container tracking",
-      "subtitleClient": "Client: {{client}} · Production, stock and container tracking",
+      "subtitleClient": "Client: {{client}}",
+      "subtitleAll": "Consolidated view of all clients",
       "allClients": "All clients",
       "productionsInProgress": "Productions in progress",
       "productionHistory": "Production history",
       "noProductions": "No productions found.",
       "rawMaterialStock": "Raw Material Stock",
       "containersInYard": "Containers in Yard",
-      "noStock": "No items in stock.",
+      "noStock": "No stock items found.",
       "noContainers": "No containers in yard.",
       "id": "ID",
       "mpCode": "RM Code",
@@ -1135,28 +1123,44 @@
     },
     "stock": {
       "title": "Client Stock",
-      "subtitleAll": "All clients · Raw material stock, containers and tank storage",
-      "subtitleClient": "Client: {{client}} · Raw material stock, containers and tank storage",
-      "allClientsLabel": "All Clients",
-      "generating": "Generating...",
-      "generatePdf": "Generate PDF Report",
-      "exportExcel": "Export Excel",
+      "subtitleClient": "Client: {{client}}",
+      "subtitleAll": "Consolidated view of all clients",
+      "allClientsLabel": "All clients",
       "rawMaterials": "Raw Materials",
       "containers": "Containers",
       "tankage": "Tank Storage",
       "searchAll": "Search all stock...",
+      "generatePdf": "Generate PDF",
+      "exportExcel": "Export Excel",
+      "generating": "Generating...",
+      "reportSuccess": "Report generated successfully.",
+      "reportError": "Error generating report",
+      "excelSuccess": "Spreadsheet exported successfully.",
+      "excelError": "Error exporting spreadsheet",
       "supplier": "Supplier",
       "expiry": "Expiry",
-      "barrel": "Barrel",
       "noContainers": "No containers found.",
+      "barrel": "Barrel",
       "noTanks": "No tanks found.",
       "tank": "Tank",
       "currentVolumeL": "Current Volume (L)",
-      "occupation": "Occupancy",
-      "reportSuccess": "Report generated successfully.",
-      "reportError": "Failed to generate report.",
-      "excelSuccess": "Excel report exported successfully.",
-      "excelError": "Failed to export report."
+      "occupation": "Occupancy"
+    },
+    "expiryStatus": {
+      "expired": "Expired",
+      "valid": "Valid"
+    },
+    "export": {
+      "sheetName": "Client Stock",
+      "columns": {
+        "code": "Code",
+        "product": "Product",
+        "lot": "Lot",
+        "stockQty": "Stock Quantity",
+        "unit": "Unit of Measure",
+        "packaging": "Packaging",
+        "storageType": "Storage Type"
+      }
     }
   },
   "quality": {
@@ -1909,59 +1913,6 @@
       "processLoss": "Process Loss",
       "unusedReturn": "Unused RM Return"
     }
-  },
-  "notifications": {
-    "title": "Notifications",
-    "history": "Notification History",
-    "subtitle": "All system notifications",
-    "unread": "{{count}} unread",
-    "unreadPlural": "{{count}} unread",
-    "markAllRead": "Mark all as read",
-    "empty": "No notifications",
-    "emptyFound": "No notifications found",
-    "noUnread": "No unread notifications",
-    "viewAll": "View all",
-    "filters": {
-      "search": "Search notifications...",
-      "searchTitleMessage": "Search by title or message...",
-      "read": "Read status",
-      "type": "Type",
-      "all": "All",
-      "allTypes": "All types",
-      "readOnly": "Read",
-      "unreadOnly": "Unread"
-    },
-    "types": {
-      "info": "Information",
-      "success": "Success",
-      "warning": "Warning",
-      "error": "Error"
-    },
-    "events": {
-      "production_created": {
-        "title": "New Production Order",
-        "message": "PO {{op}} has been registered and is ready for production."
-      },
-      "production_finished": {
-        "title": "Production Finished",
-        "message": "PO {{op}} has been sent to Quality Control."
-      },
-      "cq_released": {
-        "title": "QC Released Production",
-        "message": "PO {{op}} has been released for packaging."
-      },
-      "filling_finished": {
-        "title": "Packaging Finished",
-        "message": "PO {{op}} has been completed successfully."
-      }
-    },
-    "time": {
-      "justNow": "Just now",
-      "minutesAgo": "{{count}} min ago",
-      "hoursAgo": "{{count}} h ago",
-      "daysAgo": "{{count}} day(s) ago"
-    },
-    "pageLabel": "Page {{page}}"
   },
   "pwa": {
     "update": {
@@ -2852,87 +2803,6 @@
     },
     "fieldLabel": {
       "auto": "auto"
-    }
-  },
-  "clients": {
-    "screen": {
-      "title": "Client Portal",
-      "subtitleClient": "Client: {{client}}",
-      "subtitleAll": "Consolidated view of all clients",
-      "allClients": "All clients",
-      "productionsInProgress": "Productions in progress",
-      "productionHistory": "Production history",
-      "noProductions": "No productions found.",
-      "rawMaterialStock": "Raw Material Stock",
-      "containersInYard": "Containers in Yard",
-      "noStock": "No stock items found.",
-      "noContainers": "No containers in yard.",
-      "id": "ID",
-      "mpCode": "RM Code",
-      "initialBalance": "Initial Balance",
-      "currentBalance": "Current Balance",
-      "unitShort": "Unit",
-      "view": "View",
-      "packagingNumber": "Packaging No.",
-      "massKg": "Mass (kg)",
-      "viewStock": "View Stock",
-      "viewContainers": "View Containers",
-      "kpiDistinctMps": "Distinct RMs",
-      "kpiTotalLots": "Total lots",
-      "kpiTotalStored": "Total stored",
-      "kpiTotalPackaging": "Total packaging",
-      "kpiLastUpdate": "Last update",
-      "kpiTotalContainers": "Total containers",
-      "kpiDistinctProducts": "Distinct products",
-      "kpiTotalVolume": "Total volume",
-      "kpiIbcCount": "IBCs",
-      "kpiContentorCount": "Containers",
-      "kpiCanisterCount": "Canisters",
-      "kpiDrumCount": "Drums",
-      "dialogTotalCurrentStock": "Total current balance",
-      "dialogTotalPackaging": "Total packaging",
-      "dialogTotalVolume": "Total volume"
-    },
-    "stock": {
-      "title": "Client Stock",
-      "subtitleClient": "Client: {{client}}",
-      "subtitleAll": "Consolidated view of all clients",
-      "allClientsLabel": "All clients",
-      "rawMaterials": "Raw Materials",
-      "containers": "Containers",
-      "tankage": "Tank Storage",
-      "searchAll": "Search all stock...",
-      "generatePdf": "Generate PDF",
-      "exportExcel": "Export Excel",
-      "generating": "Generating...",
-      "reportSuccess": "Report generated successfully.",
-      "reportError": "Error generating report",
-      "excelSuccess": "Spreadsheet exported successfully.",
-      "excelError": "Error exporting spreadsheet",
-      "supplier": "Supplier",
-      "expiry": "Expiry",
-      "noContainers": "No containers found.",
-      "barrel": "Barrel",
-      "noTanks": "No tanks found.",
-      "tank": "Tank",
-      "currentVolumeL": "Current Volume (L)",
-      "occupation": "Occupancy"
-    },
-    "expiryStatus": {
-      "expired": "Expired",
-      "valid": "Valid"
-    },
-    "export": {
-      "sheetName": "Client Stock",
-      "columns": {
-        "code": "Code",
-        "product": "Product",
-        "lot": "Lot",
-        "stockQty": "Stock Quantity",
-        "unit": "Unit of Measure",
-        "packaging": "Packaging",
-        "storageType": "Storage Type"
-      }
     }
   },
   "realtime": {

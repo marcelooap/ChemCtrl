@@ -1,5 +1,4 @@
 import React from 'react';
-import { NotificationBell } from '@/notifications/components/NotificationBell';
 import { UserMenu } from '@/components/user/UserMenu';
 import { AppVersionBadge } from '@/pwa/components/AppVersionBadge';
 import { TerminalWeatherInfo } from '@/components/layout/TerminalWeatherInfo';
@@ -10,7 +9,6 @@ export function AppTopBar() {
       <TerminalWeatherInfo />
       <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
         <AppVersionBadge />
-        <NotificationBell />
         <UserMenu />
       </div>
     </header>

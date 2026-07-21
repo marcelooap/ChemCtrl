@@ -261,7 +261,6 @@
     "users": "Usuarios",
     "profiles": "Perfiles y Permisos",
     "usersAndPermissions": "Usuarios y Permisos",
-    "notifications": "Notificaciones",
     "clientScreen": "Portal de Clientes",
     "clientStock": "Stock de Cliente",
     "lockedTooltip": "Sin acceso para su nivel",
@@ -292,8 +291,17 @@
     "empty": "No se encontraron perfiles. Aplique la migración RBAC en Supabase.",
     "systemBadge": "Sistema",
     "permSummary": "{{granted}} de {{total}} permisos ({{percent}}%)",
-    "columns": { "name": "Perfil", "users": "Usuarios", "perms": "Permisos", "status": "Estado" },
-    "fields": { "name": "Nombre", "description": "Descripción", "status": "Estado" },
+    "columns": {
+      "name": "Perfil",
+      "users": "Usuarios",
+      "perms": "Permisos",
+      "status": "Estado"
+    },
+    "fields": {
+      "name": "Nombre",
+      "description": "Descripción",
+      "status": "Estado"
+    },
     "messages": {
       "loadError": "No se pudieron cargar los perfiles",
       "loadPermsError": "No se pudieron cargar los permisos",
@@ -307,30 +315,70 @@
       "nameRequired": "Informe el nombre del perfil",
       "adminProtected": "El perfil Administrador debe mantener los permisos administrativos"
     },
-    "deleteConfirm": { "title": "Eliminar perfil", "message": "¿Seguro que desea eliminar el perfil \"{{name}}\"?" },
-    "discard": { "title": "Cambios sin guardar", "message": "Hay cambios pendientes. ¿Descartarlos?", "confirm": "Descartar" }
+    "deleteConfirm": {
+      "title": "Eliminar perfil",
+      "message": "¿Seguro que desea eliminar el perfil \"{{name}}\"?"
+    },
+    "discard": {
+      "title": "Cambios sin guardar",
+      "message": "Hay cambios pendientes. ¿Descartarlos?",
+      "confirm": "Descartar"
+    }
   },
   "rbac": {
     "modules": {
-      "dashboard": "Dashboard", "recipes": "Recetas", "orders": "Pedidos", "stock": "Stock",
-      "production": "Producción", "quality": "Calidad", "clients": "Clientes", "administration": "Administración"
+      "dashboard": "Dashboard",
+      "recipes": "Recetas",
+      "orders": "Pedidos",
+      "stock": "Stock",
+      "production": "Producción",
+      "quality": "Calidad",
+      "clients": "Clientes",
+      "administration": "Administración"
     },
     "resources": {
-      "home": "Home", "dashboard": "Dashboard", "recipes": "Recetas", "orders": "Pedidos",
-      "rawMaterialStock": "Stock MP", "inventory": "Inventario", "containers": "Envases", "tankage": "Tanques",
-      "transfer": "Trasiego", "newProduction": "Nueva Producción", "productions": "Producciones",
-      "productionOrders": "Órdenes de Producción", "qualityTests": "Ensayos", "qualityPending": "Pendiente de Análisis",
-      "qualityCoa": "COA", "labEquipment": "Equipos de Lab", "clientPortal": "Portal Clientes",
-      "clientStock": "Stock Cliente", "users": "Usuarios", "profiles": "Perfiles y Permisos", "notifications": "Notificaciones"
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "recipes": "Recetas",
+      "orders": "Pedidos",
+      "rawMaterialStock": "Stock MP",
+      "inventory": "Inventario",
+      "containers": "Envases",
+      "tankage": "Tanques",
+      "transfer": "Trasiego",
+      "newProduction": "Nueva Producción",
+      "productions": "Producciones",
+      "productionOrders": "Órdenes de Producción",
+      "qualityTests": "Ensayos",
+      "qualityPending": "Pendiente de Análisis",
+      "qualityCoa": "COA",
+      "labEquipment": "Equipos de Lab",
+      "clientPortal": "Portal Clientes",
+      "clientStock": "Stock Cliente",
+      "users": "Usuarios",
+      "profiles": "Perfiles y Permisos"
     },
     "actions": {
-      "view": "Ver", "create": "Crear", "edit": "Editar", "delete": "Eliminar",
-      "createRecipe": "Crear Receta", "editRecipe": "Editar Receta", "deleteRecipe": "Eliminar Receta",
-      "approveRecipe": "Aprobar Receta", "manageFds": "Gestionar FDS", "removeFds": "Eliminar FDS",
-      "createOp": "Crear OP", "editOp": "Editar OP", "complementLot": "Complementar Lote",
-      "cancelOp": "Cancelar OP", "finishOp": "Finalizar OP", "printLabel": "Imprimir Etiqueta",
-      "exportExcel": "Exportar Excel", "registerTest": "Registrar Ensayo",
-      "releaseProduction": "Liberar Producción", "issueCoa": "Emitir COA"
+      "view": "Ver",
+      "create": "Crear",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "createRecipe": "Crear Receta",
+      "editRecipe": "Editar Receta",
+      "deleteRecipe": "Eliminar Receta",
+      "approveRecipe": "Aprobar Receta",
+      "manageFds": "Gestionar FDS",
+      "removeFds": "Eliminar FDS",
+      "createOp": "Crear OP",
+      "editOp": "Editar OP",
+      "complementLot": "Complementar Lote",
+      "cancelOp": "Cancelar OP",
+      "finishOp": "Finalizar OP",
+      "printLabel": "Imprimir Etiqueta",
+      "exportExcel": "Exportar Excel",
+      "registerTest": "Registrar Ensayo",
+      "releaseProduction": "Liberar Producción",
+      "issueCoa": "Emitir COA"
     }
   },
   "login": {
@@ -433,10 +481,7 @@
     "settingsSaved": "Configurações salvas!",
     "operationComplete": "Operação concluída!",
     "pdfGenerated": "PDF gerado com sucesso!",
-    "reportGenerated": "Relatório gerado com sucesso!",
-    "notificationSent": "Notificação enviada!",
-    "markedAsRead": "Marcado como lido.",
-    "allMarkedAsRead": "Todas marcadas como lidas."
+    "reportGenerated": "Relatório gerado com sucesso!"
   },
   "dashboard": {
     "title": "Panel",
@@ -1036,32 +1081,25 @@
     }
   },
   "clients": {
-    "expiryStatus": {
-      "expired": "Vencido",
-      "valid": "Válido"
-    },
-    "containerStatus": {
-      "inYard": "En Patio"
-    },
     "screen": {
-      "title": "Portal de Clientes",
-      "subtitleAll": "Todos los clientes · Seguimiento de producción, stock y envases",
-      "subtitleClient": "Cliente: {{client}} · Seguimiento de producción, stock y envases",
+      "title": "Portal del Cliente",
+      "subtitleClient": "Cliente: {{client}}",
+      "subtitleAll": "Vista consolidada de todos los clientes",
       "allClients": "Todos los clientes",
       "productionsInProgress": "Producciones en curso",
       "productionHistory": "Historial de producciones",
       "noProductions": "No se encontraron producciones.",
-      "rawMaterialStock": "Stock de Materia Prima",
+      "rawMaterialStock": "Inventario de Materia Prima",
       "containersInYard": "Envases en Patio",
-      "noStock": "Ningún ítem en stock.",
-      "noContainers": "Ningún envase en patio.",
+      "noStock": "No se encontraron ítems de inventario.",
+      "noContainers": "No hay envases en el patio.",
       "id": "ID",
-      "mpCode": "Cód. MP",
+      "mpCode": "Código MP",
       "initialBalance": "Saldo Inicial",
       "currentBalance": "Saldo Actual",
-      "unitShort": "Un.",
+      "unitShort": "Unid.",
       "view": "Ver",
-      "packagingNumber": "N° Embalaje",
+      "packagingNumber": "N° Envase",
       "massKg": "Masa (kg)",
       "viewStock": "Ver Inventario",
       "viewContainers": "Ver Envases",
@@ -1082,29 +1120,45 @@
       "dialogTotalVolume": "Volumen total"
     },
     "stock": {
-      "title": "Stock de Cliente",
-      "subtitleAll": "Todos los clientes · Stock de materia prima, envases y tanques",
-      "subtitleClient": "Cliente: {{client}} · Stock de materia prima, envases y tanques",
-      "allClientsLabel": "Todos los Clientes",
-      "generating": "Generando...",
-      "generatePdf": "Generar Informe PDF",
-      "exportExcel": "Exportar Excel",
+      "title": "Inventario del Cliente",
+      "subtitleClient": "Cliente: {{client}}",
+      "subtitleAll": "Vista consolidada de todos los clientes",
+      "allClientsLabel": "Todos los clientes",
       "rawMaterials": "Materias Primas",
       "containers": "Envases",
       "tankage": "Almacenamiento en Tanques",
-      "searchAll": "Buscar en todo el stock...",
+      "searchAll": "Buscar en todos los inventarios...",
+      "generatePdf": "Generar PDF",
+      "exportExcel": "Exportar Excel",
+      "generating": "Generando...",
+      "reportSuccess": "Informe generado con éxito.",
+      "reportError": "Error al generar informe",
+      "excelSuccess": "Hoja de cálculo exportada con éxito.",
+      "excelError": "Error al exportar hoja de cálculo",
       "supplier": "Proveedor",
       "expiry": "Vencimiento",
+      "noContainers": "No se encontraron envases.",
       "barrel": "Barril",
-      "noContainers": "Ningún envase encontrado.",
-      "noTanks": "Ningún tanque encontrado.",
+      "noTanks": "No se encontraron tanques.",
       "tank": "Tanque",
       "currentVolumeL": "Volumen Actual (L)",
-      "occupation": "Ocupación",
-      "reportSuccess": "Informe generado con éxito.",
-      "reportError": "Error al generar informe.",
-      "excelSuccess": "Informe Excel exportado con éxito.",
-      "excelError": "Error al exportar informe."
+      "occupation": "Ocupación"
+    },
+    "expiryStatus": {
+      "expired": "Vencido",
+      "valid": "Válido"
+    },
+    "export": {
+      "sheetName": "Inventario Cliente",
+      "columns": {
+        "code": "Cód",
+        "product": "Producto",
+        "lot": "Lote",
+        "stockQty": "Cantidad en Inventario",
+        "unit": "Unidad de Medida",
+        "packaging": "Embalaje",
+        "storageType": "Tipo de Almacenamiento"
+      }
     }
   },
   "quality": {
@@ -1857,59 +1911,6 @@
       "processLoss": "Pérdida en Proceso",
       "unusedReturn": "Devolución de MP No Aplicada"
     }
-  },
-  "notifications": {
-    "title": "Notificaciones",
-    "history": "Historial de Notificaciones",
-    "subtitle": "Todas las notificaciones del sistema",
-    "unread": "{{count}} no leída",
-    "unreadPlural": "{{count}} no leídas",
-    "markAllRead": "Marcar todas como leídas",
-    "empty": "Ninguna notificación",
-    "emptyFound": "Ninguna notificación encontrada",
-    "noUnread": "Nenhuma notificação não lida",
-    "viewAll": "Ver todas",
-    "filters": {
-      "search": "Buscar notificaciones...",
-      "searchTitleMessage": "Buscar por título o mensaje...",
-      "read": "Lectura",
-      "type": "Tipo",
-      "all": "Todas",
-      "allTypes": "Todos los tipos",
-      "readOnly": "Leídas",
-      "unreadOnly": "No leídas"
-    },
-    "types": {
-      "info": "Informação",
-      "success": "Sucesso",
-      "warning": "Aviso",
-      "error": "Erro"
-    },
-    "events": {
-      "production_created": {
-        "title": "Nueva Orden de Producción",
-        "message": "La OP {{op}} fue registrada y está disponible para producción."
-      },
-      "production_finished": {
-        "title": "Producción Finalizada",
-        "message": "La OP {{op}} fue enviada al Control de Calidad."
-      },
-      "cq_released": {
-        "title": "CQ Liberó Producción",
-        "message": "La OP {{op}} fue liberada para Envasado."
-      },
-      "filling_finished": {
-        "title": "Envasado Finalizado",
-        "message": "La OP {{op}} fue concluida con éxito."
-      }
-    },
-    "time": {
-      "justNow": "Ahora",
-      "minutesAgo": "hace {{count}} min",
-      "hoursAgo": "hace {{count}} h",
-      "daysAgo": "hace {{count}} día(s)"
-    },
-    "pageLabel": "Página {{page}}"
   },
   "pwa": {
     "update": {
@@ -2787,87 +2788,6 @@
     },
     "fieldLabel": {
       "auto": "auto"
-    }
-  },
-  "clients": {
-    "screen": {
-      "title": "Portal del Cliente",
-      "subtitleClient": "Cliente: {{client}}",
-      "subtitleAll": "Vista consolidada de todos los clientes",
-      "allClients": "Todos los clientes",
-      "productionsInProgress": "Producciones en curso",
-      "productionHistory": "Historial de producciones",
-      "noProductions": "No se encontraron producciones.",
-      "rawMaterialStock": "Inventario de Materia Prima",
-      "containersInYard": "Envases en Patio",
-      "noStock": "No se encontraron ítems de inventario.",
-      "noContainers": "No hay envases en el patio.",
-      "id": "ID",
-      "mpCode": "Código MP",
-      "initialBalance": "Saldo Inicial",
-      "currentBalance": "Saldo Actual",
-      "unitShort": "Unid.",
-      "view": "Ver",
-      "packagingNumber": "N° Envase",
-      "massKg": "Masa (kg)",
-      "viewStock": "Ver Inventario",
-      "viewContainers": "Ver Envases",
-      "kpiDistinctMps": "MPs distintas",
-      "kpiTotalLots": "Total de lotes",
-      "kpiTotalStored": "Total almacenado",
-      "kpiTotalPackaging": "Total embalajes",
-      "kpiLastUpdate": "Última actualización",
-      "kpiTotalContainers": "Total envases",
-      "kpiDistinctProducts": "Productos distintos",
-      "kpiTotalVolume": "Volumen total",
-      "kpiIbcCount": "IBCs",
-      "kpiContentorCount": "Contenedores",
-      "kpiCanisterCount": "Bidones",
-      "kpiDrumCount": "Tambores",
-      "dialogTotalCurrentStock": "Saldo actual total",
-      "dialogTotalPackaging": "Total embalajes",
-      "dialogTotalVolume": "Volumen total"
-    },
-    "stock": {
-      "title": "Inventario del Cliente",
-      "subtitleClient": "Cliente: {{client}}",
-      "subtitleAll": "Vista consolidada de todos los clientes",
-      "allClientsLabel": "Todos los clientes",
-      "rawMaterials": "Materias Primas",
-      "containers": "Envases",
-      "tankage": "Almacenamiento en Tanques",
-      "searchAll": "Buscar en todos los inventarios...",
-      "generatePdf": "Generar PDF",
-      "exportExcel": "Exportar Excel",
-      "generating": "Generando...",
-      "reportSuccess": "Informe generado con éxito.",
-      "reportError": "Error al generar informe",
-      "excelSuccess": "Hoja de cálculo exportada con éxito.",
-      "excelError": "Error al exportar hoja de cálculo",
-      "supplier": "Proveedor",
-      "expiry": "Vencimiento",
-      "noContainers": "No se encontraron envases.",
-      "barrel": "Barril",
-      "noTanks": "No se encontraron tanques.",
-      "tank": "Tanque",
-      "currentVolumeL": "Volumen Actual (L)",
-      "occupation": "Ocupación"
-    },
-    "expiryStatus": {
-      "expired": "Vencido",
-      "valid": "Válido"
-    },
-    "export": {
-      "sheetName": "Inventario Cliente",
-      "columns": {
-        "code": "Cód",
-        "product": "Producto",
-        "lot": "Lote",
-        "stockQty": "Cantidad en Inventario",
-        "unit": "Unidad de Medida",
-        "packaging": "Embalaje",
-        "storageType": "Tipo de Almacenamiento"
-      }
     }
   },
   "realtime": {

@@ -565,14 +565,10 @@ export function subscribeAllTables(
   onChangeCallback
 ){
 
-  // Notification/NotificationRead: RLS de sessão não avalia no Realtime (sem x-session-id).
-  // Notifications usam NotificationSignal (invalidate-and-fetch). Perfis: sem realtime.
+  // Perfis: sem realtime (RLS de sessão não avalia no Realtime sem x-session-id).
   const skipRealtime = new Set([
     'Perfil',
     'PerfilPermissao',
-    'Notification',
-    'NotificationRead',
-    'NotificationSignal',
   ]);
 
   const unsubscribers =

@@ -379,17 +379,6 @@ export const permissionModules = [
           { key: 'delete', labelKey: 'rbac.actions.delete' },
         ],
       },
-      {
-        id: 'notifications',
-        labelKey: 'rbac.resources.notifications',
-        icon: 'Bell',
-        route: '/notificacoes',
-        routePrefixes: ['/notificacoes'],
-        nav: { showInSidebar: true, order: 16 },
-        actions: [
-          { key: 'view', labelKey: 'rbac.actions.view' },
-        ],
-      },
     ],
   },
 ];
@@ -506,7 +495,6 @@ function mapResourceToSidebarLabel(resourceId) {
     transfer: 'sidebar.transfer',
     users: 'sidebar.users',
     profiles: 'sidebar.profiles',
-    notifications: 'sidebar.notifications',
     client_portal: 'sidebar.clientScreen',
     client_stock: 'sidebar.clientStock',
   };

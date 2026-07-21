@@ -14,7 +14,6 @@ import moment from 'moment';
 import LoadingOverlay from '@/components/ui/LoadingOverlay';
 import { generatePublicToken } from '@/lib/publicToken';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { NotificationService } from '@/notifications/services/NotificationService';
 import { fmtNumber, fmtVolume } from '@/i18n/formatters';
 import { translatePriority } from '@/i18n/domainMaps';
 import { useToast } from '@/components/ui/use-toast';
@@ -570,12 +569,7 @@ export default function NovaProducao() {
         data.supply_complements = [buildSupplyHistoryEntry('initial', operatorName, allocatedLots)];
       }
 
-      const created = await base44.entities.Production.create(data);
-      await NotificationService.productionCreated({
-        id: created?.id,
-        op_number: created?.op_number || data.op_number,
-        client: created?.client || data.client,
-      });
+      await base44.entities.Production.create(data);
 
       if (form.order_id) {
         await base44.entities.Order.update(form.order_id, { status: 'Em produção' });

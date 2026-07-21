@@ -12,7 +12,6 @@ import ScaleAdjustmentBadge from '@/components/production/ScaleAdjustmentBadge';
 import { fmtDate, fmtDateTime, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateProductionStatus, translatePriority } from '@/i18n/domainMaps';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { NotificationService } from '@/notifications/services/NotificationService';
 import { CHECKLIST_ETAPAS, isFlammableRecipe } from '@/lib/checklists/operationalChecklistConfig';
 import { loadRecipeForProduction } from '@/lib/checklists/loadRecipeForProduction';
 
@@ -145,19 +144,6 @@ export default function ChecklistProducao() {
           updates.envase_start_time = now;
         }
         await base44.entities.Production.update(production.id, updates);
-        if (nextStatus === 'Qualidade') {
-          await NotificationService.productionFinished({
-            id: production.id,
-            op_number: production.op_number,
-            client: production.client,
-          });
-        } else {
-          await NotificationService.cqReleased({
-            id: production.id,
-            op_number: production.op_number,
-            client: production.client,
-          });
-        }
         navigate('/ordens');
       },
     });

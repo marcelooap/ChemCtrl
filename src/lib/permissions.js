@@ -26,10 +26,6 @@ export function hasPermission(user, key) {
   return resolvePermissions(user).includes(key);
 }
 
-export function canAccessNotificationsHistory(user) {
-  return hasPermission(user, 'notifications.view');
-}
-
 export function canAccessRoute(user, path) {
   if (!user) return false;
   if (path === '/acesso-negado' || path.startsWith('/acesso-negado')) return true;

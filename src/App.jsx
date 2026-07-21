@@ -10,7 +10,6 @@ import { InternalAuthProvider } from '@/lib/InternalAuthContext';
 import { PermissionProvider } from '@/lib/rbac/PermissionProvider';
 import ScrollToTop from './components/ScrollToTop';
 import RealtimeProvider from '@/components/RealtimeProvider';
-import { NotificationProvider } from '@/notifications/context/NotificationProvider';
 import { UpdateProvider } from '@/pwa/context/UpdateProvider';
 import { UpdateModal } from '@/pwa/components/UpdateModal';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
@@ -49,7 +48,6 @@ import Usuarios from '@/pages/Usuarios';
 import Perfis from '@/pages/Perfis';
 import AcessoNegado from '@/pages/AcessoNegado';
 import ConsultaPublica from '@/pages/ConsultaPublica';
-import HistoricoNotificacoes from '@/pages/HistoricoNotificacoes';
 
 const AuthenticatedApp = () => {
   return (
@@ -82,7 +80,6 @@ const AuthenticatedApp = () => {
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/perfis" element={<Perfis />} />
           <Route path="/acesso-negado" element={<AcessoNegado />} />
-          <Route path="/notificacoes" element={<HistoricoNotificacoes />} />
         </Route>
       </Route>
 
@@ -104,9 +101,7 @@ function App() {
                   <InternalAuthProvider>
                     <PermissionProvider>
                       <RealtimeProvider>
-                        <NotificationProvider>
-                          <AuthenticatedApp />
-                        </NotificationProvider>
+                        <AuthenticatedApp />
                       </RealtimeProvider>
                     </PermissionProvider>
                   </InternalAuthProvider>

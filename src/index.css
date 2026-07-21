@@ -203,30 +203,3 @@ table tbody tr:hover {
 .dark .hover\:bg-amber-50:hover { background-color: hsl(38 40% 15%); }
 .dark .hover\:bg-blue-50:hover { background-color: hsl(212 40% 18%); }
 .dark .hover\:bg-green-50:hover { background-color: hsl(142 40% 15%); }
-
-/* Notification bell — pulse suave ao chegar notificação em tempo real */
-@keyframes notif-bell-ring {
-  0% { transform: rotate(0); }
-  15% { transform: rotate(14deg); }
-  30% { transform: rotate(-12deg); }
-  45% { transform: rotate(10deg); }
-  60% { transform: rotate(-6deg); }
-  75% { transform: rotate(3deg); }
-  100% { transform: rotate(0); }
-}
-
-@keyframes notif-bell-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(37, 117, 209, 0.45); }
-  70% { box-shadow: 0 0 0 10px rgba(37, 117, 209, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(37, 117, 209, 0); }
-}
-
-.notif-bell-ring {
-  animation: notif-bell-ring 0.85s ease-in-out;
-  transform-origin: top center;
-}
-
-.notif-bell-pulse {
-  animation: notif-bell-pulse 0.9s ease-out;
-  border-radius: 9999px;
-}
