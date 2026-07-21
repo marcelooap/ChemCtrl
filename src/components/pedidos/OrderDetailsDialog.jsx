@@ -31,13 +31,20 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
 
   useEffect(() => {
     if (!open || !order) return;
+    let cancelled = false;
     const linkedOPs = productions.filter(p => p.order_id === order.id);
     const opNumbers = linkedOPs.map(p => p.op_number).filter(Boolean);
     if (opNumbers.length === 0) { setContainers([]); return; }
-    base44.entities.Container.list('-created_date', 500).then(all => {
-      setContainers(all.filter(c => opNumbers.includes(c.op_number)));
-    });
-  }, [open, order, productions]);
+    base44.entities.Container.list('-created_date', 500)
+      .then(all => {
+        if (cancelled) return;
+        setContainers(all.filter(c => opNumbers.includes(c.op_number)));
+      })
+      .catch(() => { if (!cancelled) setContainers([]); });
+    return () => { cancelled = true; };
+    // order?.id identifica o pedido; productions só é usado para recalcular
+    // os números de OP vinculados no momento em que o diálogo abre.
+  }, [open, order?.id]);
 
   if (!order) return null;
   const linkedOPs = productions.filter(p => p.order_id === order.id);

@@ -101,6 +101,8 @@ export default function Home() {
         toast({ title: t('dashboard.bypass.enabled', { op: p.op_number }) });
       }
       load();
+    } catch (err) {
+      toast({ title: t('common.error'), description: err?.message, variant: 'destructive' });
     } finally {
       setBypassing(null);
     }

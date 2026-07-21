@@ -144,6 +144,7 @@ export default function ChecklistProducao() {
           updates.envase_start_time = now;
         }
         await base44.entities.Production.update(production.id, updates);
+        toast({ title: t('production.messages.finished') });
         navigate('/ordens');
       },
     });

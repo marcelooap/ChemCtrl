@@ -29,7 +29,10 @@ import {
   getQuestionsForEtapa,
   validateAnswers,
 } from '@/lib/checklists/operationalChecklistConfig';
-import { submitOperationalChecklist } from '@/lib/checklists/submitOperationalChecklist';
+import {
+  getChecklistErrorMessage,
+  submitOperationalChecklist,
+} from '@/lib/checklists/submitOperationalChecklist';
 import { cn } from '@/lib/utils';
 
 const ICON_MAP = {
@@ -130,11 +133,11 @@ export default function OperationalChecklistModal({
       });
       await onCompleted?.();
       onOpenChange(false);
+      toast({ title: t('production.operationalChecklist.submitSuccess') });
     } catch (err) {
-      console.error(err);
       toast({
         title: t('production.operationalChecklist.submitError'),
-        description: err?.message || String(err),
+        description: getChecklistErrorMessage(err) || String(err),
         variant: 'destructive',
       });
     } finally {

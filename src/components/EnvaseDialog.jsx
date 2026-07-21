@@ -77,6 +77,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
+
     setContainers([newContainer(production?.packaging_type, production?.volume)]);
     setComplementVolume(production?.volume != null ? String(production.volume) : '');
     setComplementTarget(null);
@@ -86,7 +88,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     if (recipeProp) {
       setRecipe(recipeProp);
     } else {
-      loadRecipeForProduction(production).then(setRecipe);
+      loadRecipeForProduction(production).then((r) => { if (!cancelled) setRecipe(r); });
     }
 
     if (isComplement && production?.complement_container_id) {
@@ -94,6 +96,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       (async () => {
         try {
           const c = await supabase.Container.get(production.complement_container_id);
+          if (cancelled) return;
           setComplementTarget(c);
           let linkedProd = null;
           if (c?.production_id) {
@@ -103,20 +106,25 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
               linkedProd = null;
             }
           }
+          if (cancelled) return;
           setComplementDisplayVolume(containerDisplayVolume(c, linkedProd ? [linkedProd] : []));
-        } catch (err) {
-          console.error(err);
+        } catch (_err) {
+          if (cancelled) return;
           toast({
             title: t('common.error'),
             description: t('production.complementPackaging.targetLoadError'),
             variant: 'destructive',
           });
         } finally {
-          setLoadingTarget(false);
+          if (!cancelled) setLoadingTarget(false);
         }
       })();
     }
-  }, [open, production, isComplement, recipeProp, t, toast]);
+
+    return () => { cancelled = true; };
+    // production?.id identifica a OP; demais campos usados no efeito são estáveis
+    // enquanto o diálogo permanece aberto para a mesma OP.
+  }, [open, production?.id, isComplement, recipeProp, t, toast]);
 
   const density = production?.density || 1;
 
@@ -396,9 +404,9 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
 
       onSave?.();
       onOpenChange(false);
+      toast({ title: t('production.envase.saveSuccess') });
     } catch (error) {
-      console.error('Erro ao registrar envase:', error);
-      toast({ title: t('common.saveFailed'), description: error?.message, variant: 'destructive' });
+      toast({ title: t('errors.saveFailed'), description: error?.message, variant: 'destructive' });
       throw error;
     } finally {
       setSaving(false);

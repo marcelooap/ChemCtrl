@@ -23,11 +23,12 @@ import { getSessionId } from '@/api/rpcClient';
 // Helpers
 // ─────────────────────────────────────────────
 
-function safeExecute(callback, label = 'realtime-callback') {
+function safeExecute(callback) {
   try {
     callback();
-  } catch (err) {
-    console.error(`[realtime] Erro em ${label}:`, err);
+  } catch (_err) {
+    // Callback de terceiros (handler local do componente) — isolado para não
+    // derrubar o canal de realtime caso lance um erro inesperado.
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
@@ -100,6 +100,10 @@ export default function NovaProducao() {
   const isComplementMode = !!complementId;
 
   const { data: recipes, loading } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) }));
+  // Ref para acessar a lista mais recente de receitas dentro de efeitos assíncronos
+  // sem precisar re-disparar o efeito a cada atualização de `recipes` (realtime/poll).
+  const recipesRef = useRef(recipes);
+  recipesRef.current = recipes;
   const { data: allOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -231,7 +235,8 @@ export default function NovaProducao() {
           }
         }
         if (!recipe) {
-          const cached = recipes.find(r => r.id === prod.recipe_id) || recipes.find(r => r.product_name === prod.product);
+          const cachedRecipes = recipesRef.current;
+          const cached = cachedRecipes.find(r => r.id === prod.recipe_id) || cachedRecipes.find(r => r.product_name === prod.product);
           recipe = cached ? { ...cached, raw_materials: parseArr(cached.raw_materials) } : null;
         }
 
@@ -595,6 +600,8 @@ export default function NovaProducao() {
       setComplementPackaging(false);
       setComplementContainerId('');
       toast({ title: t('production.messages.created') });
+    } catch (err) {
+      toast({ title: t('common.error'), description: err?.message, variant: 'destructive' });
     } finally {
       setSaving(false);
     }

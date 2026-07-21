@@ -311,8 +311,7 @@ export default function Producoes() {
       if (cancelTarget.order_id) {
         try {
           await syncOrderFromProductions(cancelTarget.order_id, base44.entities);
-        } catch (orderErr) {
-          console.error('Falha ao sincronizar pedido após cancelar OP:', orderErr);
+        } catch (_orderErr) {
           toast({
             title: t('production.cancel.success', { op: cancelTarget.op_number }),
             description: t('production.cancel.orderSyncWarning', {

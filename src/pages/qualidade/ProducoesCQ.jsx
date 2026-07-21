@@ -193,8 +193,13 @@ export default function ProducoesCQ() {
       if (newProdStatus === 'Cancelado' && selectedProd.order_id) {
         try {
           await syncOrderFromProductions(selectedProd.order_id, base44.entities);
-        } catch (orderErr) {
-          console.error('Falha ao sincronizar pedido após reprovação CQ:', orderErr);
+        } catch (_orderErr) {
+          toast({
+            title: t('quality.producoesCq.orderSyncWarning', {
+              defaultValue: 'Análise salva, mas o status do pedido pode precisar de atualização. Abra Pedidos para recalcular.',
+            }),
+            variant: 'destructive',
+          });
         }
       }
 

@@ -141,7 +141,6 @@ export default function COA() {
       const url = await uploadFileToSupabase(file);
       setEditForm(prev => ({ ...prev, sample_photo_url: url }));
     } catch (e) {
-      console.error('[COA] handlePhotoUpload erro:', e);
       toast({ title: t('quality.coaPage.photoUploadError'), description: e.message || t('quality.coaPage.photoBucketHint'), variant: 'destructive' });
     }
     finally { setUploadingPhoto(false); }
@@ -176,8 +175,7 @@ export default function COA() {
         recipe = (recipes || []).find(rc => rc.product_name === r.product) || null;
       }
       await generateCOAPDF({ ...r, results: parseArr(r.results) }, production, opContainers, recipe);
-    } catch (e) {
-      console.error(e);
+    } catch (_e) {
       toast({ title: t('errors.pdfFailed'), variant: 'destructive' });
     } finally {
       setGeneratingPDF(null);

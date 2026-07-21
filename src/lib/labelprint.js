@@ -8,6 +8,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import i18n from '@/i18n';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
+}
+
 function getLabelLabels(locale) {
   const lang = locale || i18n.language || 'pt-BR';
   const t = (key, opts) => i18n.t(key, { ...opts, lng: lang });
@@ -82,12 +87,12 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
 
   const qrSvgMarkup = await buildQrSvgMarkup(publicToken);
 
-  const opNum = container.op_number || '—';
-  const product = container.product || '—';
-  const lot = container.lot || '—';
+  const opNum = escapeHtml(container.op_number || '—');
+  const product = escapeHtml(container.product || '—');
+  const lot = escapeHtml(container.lot || '—');
   const placa = container.container_number || '';
   const barril = container.barril_number || '';
-  const embalagem = barril ? `${placa} (${barril})` : placa || '—';
+  const embalagem = escapeHtml(barril ? `${placa} (${barril})` : placa || '—');
   const fabDateStr = container.created_date;
   const fabDate = fabDateStr
     ? fmtDate(fabDateStr, { timeZone: 'America/Sao_Paulo' }, lang)

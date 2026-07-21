@@ -23,6 +23,7 @@ const POLL_INTERVAL_MS = 15000; // polling universal — garante sincronização
 export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x) => x) {
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
 
   const fetchFnRef    = useRef(fetchFn);
   fetchFnRef.current  = fetchFn;
@@ -33,8 +34,8 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
   const reload = useCallback(() => {
     setLoading(true);
     return fetchFnRef.current()
-      .then((result) => setData((result || []).map(transformRef.current)))
-      .catch(() => {})
+      .then((result) => { setData((result || []).map(transformRef.current)); setError(null); })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
@@ -42,8 +43,8 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
   // ── fetch silencioso (sem loading=true) — usado pelo REFRESH ───────────────
   const silentReload = useCallback(() => {
     return fetchFnRef.current()
-      .then((result) => setData((result || []).map(transformRef.current)))
-      .catch(() => {});
+      .then((result) => { setData((result || []).map(transformRef.current)); setError(null); })
+      .catch((err) => setError(err));
   }, []); // intencionalmente sem deps — sempre usa ref atual
 
   // ── handler incremental de eventos ─────────────────────────────────────────
@@ -109,5 +110,5 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityName, reload]);
 
-  return { data, loading, reload, setData };
+  return { data, loading, error, reload, setData };
 }

@@ -27,11 +27,14 @@ export default function InventarioConferencia() {
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 }, i18n.language);
 
   useEffect(() => {
+    let cancelled = false;
     base44.entities.Inventory.get(id).then(inv => {
+      if (cancelled) return;
       setInventory(inv);
-      setItems(parseArr(inv.items));
+      setItems(parseArr(inv?.items));
       setLoading(false);
-    }).catch(() => { setLoading(false); });
+    }).catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [id]);
 
   const isFinished = inventory?.status === 'Finalizado';
@@ -63,6 +66,7 @@ export default function InventarioConferencia() {
     setSaving(true);
     try {
       await base44.entities.Inventory.update(id, { items });
+      toast({ title: t('inventory.messages.saved') });
     } catch (e) {
       toast({ title: t('inventory.conferencePage.saveError'), variant: 'destructive' });
     } finally {
@@ -79,6 +83,7 @@ export default function InventarioConferencia() {
         closing_date: new Date().toISOString(),
         closed_by: userName,
       });
+      toast({ title: t('inventory.messages.completed') });
       navigate('/inventario');
     } catch (e) {
       toast({ title: t('inventory.conferencePage.finishError'), variant: 'destructive' });

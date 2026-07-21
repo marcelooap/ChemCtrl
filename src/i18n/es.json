@@ -87,6 +87,7 @@
     "invalidValue": "Valor inválido",
     "copied": "Copiado!",
     "copyFailed": "Falha ao copiar",
+    "error": "Error",
     "lastUpdated": "Última atualização",
     "createdBy": "Criado por",
     "updatedBy": "Atualizado por",
@@ -104,7 +105,8 @@
     "confirmDialog": {
       "title": "Confirmar acción",
       "message": "¿Está seguro de que desea continuar?",
-      "processing": "Procesando..."
+      "processing": "Procesando...",
+      "actionError": "No se pudo completar la acción. Intente nuevamente."
     },
     "pageNotFound": {
       "code": "404",
@@ -808,6 +810,7 @@
       "observationPlaceholder": "Describa el motivo o detalle...",
       "observationRequired": "Observación obligatoria",
       "subtitle": "OP {{op}} — {{product}}",
+      "submitSuccess": "Checklist confirmado con éxito",
       "submitError": "No se pudo guardar el checklist",
       "start": {
         "equipmentGrounding": "¿El mezclador y los equipos fueron debidamente aterrizados?",
@@ -961,7 +964,8 @@
       "opVolume": "Volumen de la OP:",
       "volumeExceeded": "¡Volumen excedido!",
       "registerPackaging": "Registrar Envase",
-      "saving": "Guardando..."
+      "saving": "Guardando...",
+      "saveSuccess": "Envase registrado con éxito"
     }
   },
   "inventory": {
@@ -1373,7 +1377,9 @@
         "updated": "Ensayo actualizado",
         "created": "Nuevo ensayo registrado",
         "saveError": "Error al guardar ensayo",
-        "deleteConfirm": "¿Eliminar?"
+        "deleteConfirm": "¿Eliminar?",
+        "deleted": "Ensayo eliminado",
+        "deleteError": "Error al eliminar ensayo"
       }
     },
     "producoesCq": {

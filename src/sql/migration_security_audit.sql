@@ -85,15 +85,38 @@ UPDATE usuarios SET senha = null WHERE senha_hash IS NOT NULL;
 -- Retorna a sessão atual como JSONB (lê o header x-session-id da requisição)
 CREATE OR REPLACE FUNCTION get_current_session()
 RETURNS jsonb
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT to_jsonb(s.*) FROM sessions s
-  WHERE s.session_id = NULLIF(current_setting('request.header.x-session-id', true), '')
-  AND s.expires_at > now()
-  LIMIT 1
+DECLARE
+  v_session_id text;
+  v_headers jsonb;
+BEGIN
+  v_session_id := NULLIF(current_setting('request.header.x-session-id', true), '');
+
+  IF v_session_id IS NULL THEN
+    BEGIN
+      v_headers := NULLIF(current_setting('request.headers', true), '')::jsonb;
+      v_session_id := NULLIF(v_headers ->> 'x-session-id', '');
+    EXCEPTION WHEN OTHERS THEN
+      v_session_id := NULL;
+    END;
+  END IF;
+
+  IF v_session_id IS NULL OR btrim(v_session_id) = '' THEN
+    RETURN NULL;
+  END IF;
+
+  RETURN (
+    SELECT to_jsonb(s.*)
+    FROM sessions s
+    WHERE s.session_id = btrim(v_session_id)
+      AND s.expires_at > now()
+    LIMIT 1
+  );
+END;
 $$;
 
 -- Retorna true se o usuário atual é interno

@@ -13,7 +13,7 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
     if (highlightProdId && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [highlightProdId, productions]);
+  }, [highlightProdId]);
 
   if (!productions || productions.length === 0) {
     return (

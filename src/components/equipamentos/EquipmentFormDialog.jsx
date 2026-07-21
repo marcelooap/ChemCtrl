@@ -28,7 +28,7 @@ export default function EquipmentFormDialog({ open, onClose, onSave, equipment }
 
   useEffect(() => {
     if (open) setForm(equipment ? { ...EMPTY, ...equipment } : EMPTY);
-  }, [equipment, open]);
+  }, [equipment?.id, open]);
 
   const set = (k, v) => {
     setForm((p) => {

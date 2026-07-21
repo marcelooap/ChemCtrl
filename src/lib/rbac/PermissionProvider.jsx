@@ -36,7 +36,7 @@ export function PermissionProvider({ children }) {
 
     const canAccessPath = (pathname) => {
       const viewKey = getViewPermissionForPath(pathname);
-      if (!viewKey) return true;
+      if (!viewKey) return false;
       return hasPermission(viewKey);
     };
 

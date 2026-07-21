@@ -23,11 +23,14 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
 
   useEffect(() => {
     if (!item || !open) return;
+    let cancelled = false;
+    const itemId = item.id;
 
     setLoadingConsumption(true);
     setConsumption([]);
     base44.entities.Production.list('-created_date', 500)
       .then(allProductions => {
+        if (cancelled) return;
         const used = [];
         const prods = Array.isArray(allProductions) ? allProductions : [];
         prods.forEach(prod => {
@@ -36,23 +39,25 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
           if (typeof rmu === 'string') { try { rmu = JSON.parse(rmu); } catch { rmu = []; } }
           if (!Array.isArray(rmu)) rmu = [];
           rmu.forEach(mp => {
-            if (mp.stock_id === item.id) {
+            if (mp.stock_id === itemId) {
               used.push({ op_number: prod.op_number, product: prod.product, date: prod.date, qty_fiscal: mp.qty_fiscal, qty_operational: mp.qty_operational });
             }
           });
         });
         setConsumption(used);
       })
-      .catch(() => setConsumption([]))
-      .finally(() => setLoadingConsumption(false));
+      .catch(() => { if (!cancelled) setConsumption([]); })
+      .finally(() => { if (!cancelled) setLoadingConsumption(false); });
 
     setLoadingMovements(true);
     setMovements([]);
-    base44.entities.StockMovement.filter({ stock_id: item.id }, '-movement_date', 200)
-      .then(data => setMovements(Array.isArray(data) ? data : []))
-      .catch(() => setMovements([]))
-      .finally(() => setLoadingMovements(false));
-  }, [item, open]);
+    base44.entities.StockMovement.filter({ stock_id: itemId }, '-movement_date', 200)
+      .then(data => { if (!cancelled) setMovements(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setMovements([]); })
+      .finally(() => { if (!cancelled) setLoadingMovements(false); });
+
+    return () => { cancelled = true; };
+  }, [item?.id, open]);
 
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language);
 

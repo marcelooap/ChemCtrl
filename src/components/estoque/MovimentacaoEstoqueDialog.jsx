@@ -143,7 +143,6 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (e) {
-      console.error('Erro ao salvar movimentação:', e);
       setError(t('rawMaterialStock.movementDialog.errors.saveFailed', {
         message: e?.message || t('rawMaterialStock.movementDialog.errors.retry'),
       }));

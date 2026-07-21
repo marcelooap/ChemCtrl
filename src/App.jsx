@@ -3,8 +3,6 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { InternalAuthProvider } from '@/lib/InternalAuthContext';
 import { PermissionProvider } from '@/lib/rbac/PermissionProvider';
@@ -93,24 +91,22 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
         <TooltipProvider delayDuration={300}>
-          <AuthProvider>
-            <QueryClientProvider client={queryClientInstance}>
-              <Router>
-                <ScrollToTop />
-                <UpdateProvider>
-                  <InternalAuthProvider>
-                    <PermissionProvider>
-                      <RealtimeProvider>
-                        <AuthenticatedApp />
-                      </RealtimeProvider>
-                    </PermissionProvider>
-                  </InternalAuthProvider>
-                  <UpdateModal />
-                </UpdateProvider>
-              </Router>
-              <Toaster />
-            </QueryClientProvider>
-          </AuthProvider>
+          <QueryClientProvider client={queryClientInstance}>
+            <Router>
+              <ScrollToTop />
+              <UpdateProvider>
+                <InternalAuthProvider>
+                  <PermissionProvider>
+                    <RealtimeProvider>
+                      <AuthenticatedApp />
+                    </RealtimeProvider>
+                  </PermissionProvider>
+                </InternalAuthProvider>
+                <UpdateModal />
+              </UpdateProvider>
+            </Router>
+            <Toaster />
+          </QueryClientProvider>
         </TooltipProvider>
       </ThemeProvider>
     </I18nextProvider>

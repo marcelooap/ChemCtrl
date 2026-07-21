@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function ConfirmDialog({
   open,
@@ -15,15 +16,24 @@ export default function ConfirmDialog({
   confirmColor = '#2575D1',
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
+  // Só fecha o diálogo em caso de sucesso — em falha, mantém aberto e avisa o
+  // usuário, em vez de fechar silenciosamente como se a ação tivesse funcionado.
   const handleConfirm = async () => {
     setLoading(true);
     try {
       await onConfirm();
+      onOpenChange(false);
+    } catch (err) {
+      toast({
+        title: t('common.confirmDialog.actionError'),
+        description: err?.message,
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
-      onOpenChange(false);
     }
   };
 

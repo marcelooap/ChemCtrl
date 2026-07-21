@@ -126,7 +126,16 @@ export default function Ensaios() {
     }
   };
 
-  const remove = async (item) => { if (!confirm(t('quality.ensaios.messages.deleteConfirm'))) return; await base44.entities.QualityTest.delete(item.id); load(); };
+  const remove = async (item) => {
+    if (!confirm(t('quality.ensaios.messages.deleteConfirm'))) return;
+    try {
+      await base44.entities.QualityTest.delete(item.id);
+      load();
+      toast({ title: t('quality.ensaios.messages.deleted') });
+    } catch (err) {
+      toast({ title: t('quality.ensaios.messages.deleteError'), description: err.message, variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">

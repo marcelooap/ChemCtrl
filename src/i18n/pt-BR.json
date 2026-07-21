@@ -87,6 +87,7 @@
     "invalidValue": "Valor inválido",
     "copied": "Copiado!",
     "copyFailed": "Falha ao copiar",
+    "error": "Erro",
     "lastUpdated": "Última atualização",
     "createdBy": "Criado por",
     "updatedBy": "Atualizado por",
@@ -104,7 +105,8 @@
     "confirmDialog": {
       "title": "Confirmar ação",
       "message": "Tem certeza que deseja continuar?",
-      "processing": "Processando..."
+      "processing": "Processando...",
+      "actionError": "Não foi possível concluir a ação. Tente novamente."
     },
     "pageNotFound": {
       "code": "404",
@@ -810,6 +812,7 @@
       "observationPlaceholder": "Descreva o motivo ou detalhe...",
       "observationRequired": "Observação obrigatória",
       "subtitle": "OP {{op}} — {{product}}",
+      "submitSuccess": "Checklist confirmado com sucesso",
       "submitError": "Não foi possível salvar o checklist",
       "start": {
         "equipmentGrounding": "O misturador e equipamentos foram devidamente aterrados?",
@@ -963,7 +966,8 @@
       "opVolume": "Volume da OP:",
       "volumeExceeded": "Volume excedido!",
       "registerPackaging": "Registrar Envase",
-      "saving": "Salvando..."
+      "saving": "Salvando...",
+      "saveSuccess": "Envase registrado com sucesso"
     }
   },
   "inventory": {
@@ -1020,6 +1024,29 @@
       "systemQty": "Qtd. Sistema",
       "countedQty": "Qtd. Contada",
       "diff": "Diferença"
+    },
+    "conferencePage": {
+      "notFound": "Inventário não encontrado.",
+      "openedBy": "Aberto por {{user}} em {{date}}",
+      "finished": "Inventário Finalizado",
+      "saveError": "Erro ao salvar",
+      "finishError": "Erro ao finalizar",
+      "finishTitle": "Finalizar Inventário",
+      "finishMessage": "Tem certeza que deseja finalizar este inventário?\n\nApós a finalização, não será possível realizar novas alterações.",
+      "finishConfirmLabel": "Sim, finalizar",
+      "packaging": "Embalagem",
+      "capacityKg": "Cap. (kg)",
+      "registeredStockKg": "Estoque Reg. (kg)",
+      "expectedPackages": "Embal. Esperadas",
+      "physicalPackages": "Embal. Físicas",
+      "fractionalKg": "Fracionado (kg)",
+      "physicalQtyKg": "Qtd. Física (kg)",
+      "differenceKg": "Diferença (kg)",
+      "diffPercent": "Dif. %",
+      "itemsCount": "Itens: {{count}}",
+      "registeredTotal": "Estoque Registrado: {{value}} kg",
+      "physicalTotal": "Quantidade Física: {{value}} kg",
+      "totalDifference": "Diferença Total: {{value}} kg"
     },
     "openWizard": {
       "title": "Abrir Inventário — Etapa {{step}} de 3",
@@ -1253,7 +1280,9 @@
         "updated": "Ensaio atualizado",
         "created": "Novo ensaio cadastrado",
         "saveError": "Erro ao salvar ensaio",
-        "deleteConfirm": "Excluir?"
+        "deleteConfirm": "Excluir?",
+        "deleted": "Ensaio excluído",
+        "deleteError": "Erro ao excluir ensaio"
       }
     },
     "producoesCq": {

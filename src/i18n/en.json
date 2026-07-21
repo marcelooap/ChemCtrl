@@ -87,6 +87,7 @@
     "invalidValue": "Invalid value",
     "copied": "Copied!",
     "copyFailed": "Failed to copy",
+    "error": "Error",
     "lastUpdated": "Last updated",
     "createdBy": "Created by",
     "updatedBy": "Updated by",
@@ -104,7 +105,8 @@
     "confirmDialog": {
       "title": "Confirm action",
       "message": "Are you sure you want to continue?",
-      "processing": "Processing..."
+      "processing": "Processing...",
+      "actionError": "Could not complete the action. Please try again."
     },
     "pageNotFound": {
       "code": "404",
@@ -810,6 +812,7 @@
       "observationPlaceholder": "Describe the reason or details...",
       "observationRequired": "Notes required",
       "subtitle": "PO {{op}} — {{product}}",
+      "submitSuccess": "Checklist confirmed successfully",
       "submitError": "Could not save the checklist",
       "start": {
         "equipmentGrounding": "Were the mixer and equipment properly grounded?",
@@ -963,7 +966,8 @@
       "opVolume": "PO volume:",
       "volumeExceeded": "Volume exceeded!",
       "registerPackaging": "Register Packaging",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "saveSuccess": "Packaging registered successfully"
     }
   },
   "inventory": {
@@ -1375,7 +1379,9 @@
         "updated": "Test updated",
         "created": "New test registered",
         "saveError": "Failed to save test",
-        "deleteConfirm": "Delete?"
+        "deleteConfirm": "Delete?",
+        "deleted": "Test deleted",
+        "deleteError": "Failed to delete test"
       }
     },
     "producoesCq": {

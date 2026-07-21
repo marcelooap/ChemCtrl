@@ -87,6 +87,7 @@
     "invalidValue": "Valor inválido",
     "copied": "Copiado!",
     "copyFailed": "Falha ao copiar",
+    "error": "Erreur",
     "lastUpdated": "Última atualização",
     "createdBy": "Criado por",
     "updatedBy": "Atualizado por",
@@ -104,7 +105,8 @@
     "confirmDialog": {
       "title": "Confirmer l'action",
       "message": "Êtes-vous sûr de vouloir continuer ?",
-      "processing": "Traitement..."
+      "processing": "Traitement...",
+      "actionError": "Impossible de terminer l'action. Veuillez réessayer."
     },
     "pageNotFound": {
       "code": "404",
@@ -808,6 +810,7 @@
       "observationPlaceholder": "Décrivez le motif ou le détail...",
       "observationRequired": "Observation obligatoire",
       "subtitle": "OP {{op}} — {{product}}",
+      "submitSuccess": "Checklist confirmé avec succès",
       "submitError": "Impossible d'enregistrer le checklist",
       "start": {
         "equipmentGrounding": "Le mélangeur et les équipements ont-ils été correctement mis à la terre ?",
@@ -961,7 +964,8 @@
       "opVolume": "Volume de l'OP :",
       "volumeExceeded": "Volume dépassé !",
       "registerPackaging": "Enregistrer Conditionnement",
-      "saving": "Enregistrement..."
+      "saving": "Enregistrement...",
+      "saveSuccess": "Conditionnement enregistré avec succès"
     }
   },
   "inventory": {
@@ -1356,7 +1360,9 @@
         "updated": "Essai mis à jour",
         "created": "Nouvel essai enregistré",
         "saveError": "Erreur lors de l'enregistrement de l'essai",
-        "deleteConfirm": "Supprimer ?"
+        "deleteConfirm": "Supprimer ?",
+        "deleted": "Essai supprimé",
+        "deleteError": "Erreur lors de la suppression de l'essai"
       }
     },
     "producoesCq": {
