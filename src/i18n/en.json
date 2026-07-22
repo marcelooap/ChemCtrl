@@ -2169,6 +2169,8 @@
       "confidentialNotice": "CONFIDENTIAL DOCUMENT – Internal use only. Disclosure, copying or sharing of this document without authorization is strictly prohibited.",
       "confidentialWatermark": "CONFIDENTIAL DOCUMENT"
     },
+    "order": {
+      "title": "Order {{number}}",
       "subtitle": "Production Order Report",
       "sectionOps": "Linked Production Orders",
       "noOps": "No PO linked to this order.",
