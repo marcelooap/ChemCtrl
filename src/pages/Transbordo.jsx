@@ -229,7 +229,7 @@ export default function Transbordo() {
         ...form,
         transfer_number: transferNumber,
         operator: user?.nome || user?.full_name || user?.email || '',
-        date: new Date(form.date).toISOString(),
+        date: form.date,
         origins: form.origins,
         destinations: dests,
       };

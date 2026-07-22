@@ -37,6 +37,13 @@ const CONTAINER_STATUS_KEYS = {
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
+/** YYYY-MM-DD for comparing transfer vs container lifecycle (avoids timezone edge cases). */
+const toDay = (v) => {
+  if (!v) return null;
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+};
+
 // Finds the transfer (transbordo) related to a container, whether it's an origin or a destination.
 const findTransferForContainer = (container, transfers) => {
   if (!container || !transfers) return null;
@@ -51,11 +58,18 @@ const findTransferForContainer = (container, transfers) => {
     return origins.some(o => o.container_id === container.id);
   });
   if (asOrigin) return { transfer: asOrigin, role: 'origem' };
-  // Destination: patio tank that received a later TB (volume merged into existing row)
+  // Destination: patio tank that received a later TB (volume merged into existing row).
+  // Only match transfers during THIS container record's life — recycled plates
+  // (manual re-entry) must not inherit older transfer history of the same placa.
   const cn = (container.container_number || '').trim().toLowerCase();
   const bn = (container.barril_number || '').trim().toLowerCase();
   if (cn) {
+    const createdDay = toDay(container.created_date);
+    const departedDay = toDay(container.departure_date);
     const asDest = transfers.find((tr) => {
+      const trDay = toDay(tr.date) || toDay(tr.created_date);
+      if (createdDay && trDay && trDay < createdDay) return false;
+      if (departedDay && trDay && trDay > departedDay) return false;
       const dests = parseArr(tr.destinations);
       return dests.some((d) =>
         (d.type || tr.destination_type) === 'Transbordo'
@@ -209,7 +223,7 @@ export default function Vasilhames() {
     }
   };
 
-  const fmt = (n) => fmtNumber(n || 0, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
+  const fmt = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtWeight = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const prodOf = (c) => productionOfContainer(c, productions);
   const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : na;

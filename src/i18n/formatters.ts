@@ -45,12 +45,55 @@ function toDate(value: Date | string | number | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Calendar dates (date inputs / date-only fields) are often persisted as
+ * timestamptz at UTC midnight (e.g. `2026-07-22T00:00:00.000Z`). In Brazil
+ * that instant is still the previous local day — use the UTC Y-M-D as the
+ * intended calendar day for date-only display.
+ */
+function toCalendarDate(value: Date | string | number | null | undefined): Date | null {
+  if (value == null || value === '') return null;
+
+  if (typeof value === 'string') {
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) {
+      const [, y, m, d] = dateOnly;
+      const local = new Date(Number(y), Number(m) - 1, Number(d));
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+
+    const utcMidnight = value.match(
+      /^(\d{4})-(\d{2})-(\d{2})[T ]00:00:00(?:\.\d+)?(?:Z|[+-]00:00)?$/i
+    );
+    if (utcMidnight) {
+      const [, y, m, d] = utcMidnight;
+      const local = new Date(Number(y), Number(m) - 1, Number(d));
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    if (
+      value.getUTCHours() === 0 &&
+      value.getUTCMinutes() === 0 &&
+      value.getUTCSeconds() === 0 &&
+      value.getUTCMilliseconds() === 0
+    ) {
+      return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+    }
+    return value;
+  }
+
+  return toDate(value);
+}
+
 export function fmtDate(
   value: Date | string | number | null | undefined,
   options?: Intl.DateTimeFormatOptions,
   language?: string
 ): string {
-  const d = toDate(value);
+  const d = toCalendarDate(value);
   if (!d) return '—';
   return d.toLocaleDateString(getIntlLocale(language), {
     day: '2-digit',
