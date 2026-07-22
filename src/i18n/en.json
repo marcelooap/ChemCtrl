@@ -1593,9 +1593,9 @@
       "actions": "Actions"
     },
     "footer": {
-      "total": "Total orders",
-      "open": "Open orders",
-      "pendingVolume": "Total pending volume"
+      "orders": "Orders",
+      "volume": "Volume",
+      "revenue": "Revenue"
     },
     "form": {
       "date": "Date",
@@ -1650,6 +1650,8 @@
       "product": "Product",
       "client": "Client",
       "price": "Price (R$)",
+      "priceWithTax": "Price with Tax (R$)",
+      "priceWithoutTax": "Price without Tax (R$)",
       "revision": "Revision",
       "revisionDate": "Rev. Date",
       "mpCount": "RM Qty",
@@ -1669,6 +1671,8 @@
       "productCode": "PRODUCT CODE",
       "client": "CLIENT",
       "unitPrice": "UNIT PRICE",
+      "priceWithTax": "PRICE WITH TAX",
+      "priceWithoutTax": "PRICE WITHOUT TAX",
       "productDensity": "PRODUCT DENSITY",
       "validity": "SHELF LIFE",
       "revision": "REVISION",
@@ -1689,6 +1693,8 @@
       "clientPlaceholder": "Select or type a client...",
       "productCode": "Product Code",
       "unitPrice": "Unit Price (R$)",
+      "priceWithTax": "Price with Tax (R$)",
+      "priceWithoutTax": "Price without Tax (R$)",
       "productDensity": "Product Density (g/mL)",
       "validityDays": "Shelf Life (days)",
       "revision": "Revision",
@@ -1698,7 +1704,9 @@
       "rawMaterials": "Raw Materials",
       "addMp": "Add RM",
       "mpCode": "RM CODE",
+      "mpCodePlaceholder": "Select or type...",
       "mpName": "RAW MATERIAL",
+      "mpNamePlaceholder": "Auto or type...",
       "density": "DENS. (G/ML)",
       "percentMass": "% M/M",
       "quantityKg": "QTY. (KG)",
@@ -2171,6 +2179,8 @@
         "productCode": "Product Code",
         "client": "Client",
         "unitPrice": "Unit Price",
+        "priceWithTax": "Price with Tax",
+        "priceWithoutTax": "Price without Tax",
         "revision": "Revision",
         "revisionDate": "Revision Date",
         "density": "Density",

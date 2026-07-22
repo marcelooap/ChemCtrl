@@ -22,6 +22,7 @@ import {
   containerDisplayNetWeight,
   containerDisplayGrossWeight,
 } from '@/lib/fractionalSupply';
+import { calcPriceWithoutTax } from '@/lib/recipePricing';
 // eslint-disable-next-line
 import { getSignedFileUrl } from '@/api/storage'; // storage module (split from supabaseClient)
 
@@ -441,10 +442,13 @@ export function generateRecipePDF(recipe, options) {
   const doc = new jsPDF();
   const idLabel = recipe.code ? (recipe.code + ' - ' + recipe.product_name) : recipe.product_name;
   let y = addPageTitle(doc, idLabel, t('pdf.recipe.subtitle'));
+  const priceFmt = { minimumFractionDigits: 4, maximumFractionDigits: 4 };
+  const priceWithTax = recipe.price || 0;
   y = addInfoGrid(doc, y, [
     [t('pdf.fields.productCode'), recipe.code || '-'],
     [t('pdf.common.client'), recipe.client || '-'],
-    [t('pdf.recipe.fields.unitPrice'), fmtCurrency(recipe.price || 0, 'BRL', lang, { minimumFractionDigits: 4, maximumFractionDigits: 4 })],
+    [t('pdf.recipe.fields.priceWithTax'), hideMpNames ? '*****' : fmtCurrency(priceWithTax, 'BRL', lang, priceFmt)],
+    [t('pdf.recipe.fields.priceWithoutTax'), hideMpNames ? '*****' : fmtCurrency(calcPriceWithoutTax(priceWithTax), 'BRL', lang, priceFmt)],
     [t('pdf.recipe.fields.revision'), recipe.revision || '-'],
     [t('pdf.fields.revisionDate'), recipe.revision_date || '-'],
     [t('pdf.fields.densityPA'), (recipe.density || '-') + ' ' + t('pdf.common.densityUnit')],

@@ -1574,9 +1574,9 @@
       "actions": "Actions"
     },
     "footer": {
-      "total": "Total commandes",
-      "open": "Commandes ouvertes",
-      "pendingVolume": "Volume en attente total"
+      "orders": "Commandes",
+      "volume": "Volume",
+      "revenue": "Recettes"
     },
     "form": {
       "date": "Date",
@@ -1631,6 +1631,8 @@
       "product": "Produit",
       "client": "Client",
       "price": "Prix (R$)",
+      "priceWithTax": "Prix avec Taxe (R$)",
+      "priceWithoutTax": "Prix hors Taxe (R$)",
       "revision": "Révision",
       "revisionDate": "Date Rév.",
       "mpCount": "Qté MP",
@@ -1650,6 +1652,8 @@
       "productCode": "CODE PRODUIT",
       "client": "CLIENT",
       "unitPrice": "PRIX UNITAIRE",
+      "priceWithTax": "PRIX AVEC TAXE",
+      "priceWithoutTax": "PRIX HORS TAXE",
       "productDensity": "DENSITÉ PA",
       "validity": "VALIDITÉ",
       "revision": "RÉVISION",
@@ -1670,6 +1674,8 @@
       "clientPlaceholder": "Sélectionner ou saisir un client...",
       "productCode": "Code Produit",
       "unitPrice": "Prix Unitaire (R$)",
+      "priceWithTax": "Prix avec Taxe (R$)",
+      "priceWithoutTax": "Prix hors Taxe (R$)",
       "productDensity": "Densité PA (g/mL)",
       "validityDays": "Validité (jours)",
       "revision": "Révision",
@@ -1679,7 +1685,9 @@
       "rawMaterials": "Matières Premières",
       "addMp": "Ajouter MP",
       "mpCode": "CODE MP",
+      "mpCodePlaceholder": "Sélectionner ou saisir...",
       "mpName": "MATIÈRE PREMIÈRE",
+      "mpNamePlaceholder": "Auto ou saisir...",
       "density": "DENS. (G/ML)",
       "percentMass": "% M/M",
       "quantityKg": "QTÉ (KG)",
@@ -2138,6 +2146,8 @@
         "productCode": "Product Code",
         "client": "Client",
         "unitPrice": "Unit Price",
+        "priceWithTax": "Prix avec Taxe",
+        "priceWithoutTax": "Prix hors Taxe",
         "revision": "Revision",
         "revisionDate": "Revision Date",
         "density": "Density",

@@ -16,6 +16,7 @@ import RecipeFdsSection, { RecipeFdsViewSection } from '@/components/receitas/Re
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
 import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds, hasPermission } from '@/lib/permissions';
+import { calcPriceWithoutTax } from '@/lib/recipePricing';
 import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES } from '@/api/storage';
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
@@ -23,12 +24,14 @@ const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quanti
 function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, canViewFds, hideMpNames, onToggleHideMpNames }) {
   const { t } = useTranslation();
   const cap = calcCapacidade(viewing);
+  const priceFmt = { minimumFractionDigits: 4, maximumFractionDigits: 4 };
   return (
     <div>
       <div className="grid grid-cols-3 gap-4 text-sm mb-4">
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productCode')}</p><p className="font-medium">{viewing.code || t('common.notAvailable')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.client')}</p><p className="font-bold">{viewing.client}</p></div>
-        <div><p className="text-xs text-muted-foreground">{t('recipes.view.unitPrice')}</p><p className="font-bold">{fmtCurrency(viewing.price || 0, 'BRL', undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p></div>
+        <div><p className="text-xs text-muted-foreground">{t('recipes.view.priceWithTax')}</p><p className="font-bold">{hideMpNames ? '*****' : fmtCurrency(viewing.price || 0, 'BRL', undefined, priceFmt)}</p></div>
+        <div><p className="text-xs text-muted-foreground">{t('recipes.view.priceWithoutTax')}</p><p className="font-bold">{hideMpNames ? '*****' : fmtCurrency(calcPriceWithoutTax(viewing.price), 'BRL', undefined, priceFmt)}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productDensity')}</p><p className="font-medium">{viewing.density} g/mL</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.validity')}</p><p className="font-medium">{viewing.validity_days} {t('common.days')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
@@ -184,8 +187,40 @@ export default function Receitas() {
   const clientOptions = useMemo(() => {
     const set = new Set();
     recipes.forEach(r => { if (r.client) set.add(r.client); });
+    stocks.forEach(s => { if (s.client) set.add(s.client); });
     return Array.from(set).map(v => ({ value: v, label: v }));
-  }, [recipes]);
+  }, [recipes, stocks]);
+
+  /** Catálogo de MPs já cadastradas (receitas + estoque), chave: cliente|código */
+  const mpCatalogByClient = useMemo(() => {
+    const map = new Map();
+    const upsert = (client, mp_code, mp_name, mp_density) => {
+      const code = (mp_code || '').trim();
+      if (!code) return;
+      const c = (client || '').trim();
+      const key = `${c.toLowerCase()}|${code.toLowerCase()}`;
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, {
+          mp_code: code,
+          mp_name: mp_name || '',
+          mp_density: mp_density != null && mp_density !== '' ? Number(mp_density) : null,
+          client: c,
+        });
+        return;
+      }
+      if (!prev.mp_name && mp_name) prev.mp_name = mp_name;
+      if (prev.mp_density == null && mp_density != null && mp_density !== '') {
+        prev.mp_density = Number(mp_density);
+      }
+    };
+    recipes.forEach((r) => {
+      (r.raw_materials || []).forEach((mp) => upsert(r.client, mp.mp_code, mp.mp_name, mp.mp_density));
+    });
+    stocks.forEach((s) => upsert(s.client, s.mp_code, s.mp_name, s.density));
+    return map;
+  }, [recipes, stocks]);
+
   const [showForm, setShowForm] = useState(false);
   const [showView, setShowView] = useState(false);
   const [showSimulador, setShowSimulador] = useState(false);
@@ -197,6 +232,23 @@ export default function Receitas() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [pendingFdsFile, setPendingFdsFile] = useState(null);
   const { toast } = useToast();
+
+  const mpCodeOptions = useMemo(() => {
+    const clientKey = (form.client || '').trim().toLowerCase();
+    const byCode = new Map();
+    for (const [, mp] of mpCatalogByClient) {
+      if (clientKey && (mp.client || '').trim().toLowerCase() !== clientKey) continue;
+      const codeKey = mp.mp_code.toLowerCase();
+      if (!byCode.has(codeKey)) byCode.set(codeKey, mp);
+    }
+    return Array.from(byCode.values())
+      .sort((a, b) => a.mp_code.localeCompare(b.mp_code, 'pt-BR'))
+      .map((mp) => ({
+        value: mp.mp_code,
+        label: mp.mp_name ? `${mp.mp_code} — ${mp.mp_name}` : mp.mp_code,
+        item: mp,
+      }));
+  }, [mpCatalogByClient, form.client]);
 
   const filtered = recipes.filter(r => {
     const q = search.toLowerCase();
@@ -230,6 +282,29 @@ export default function Receitas() {
       mps[idx].quantity_kg = calcQty(mps[idx].percentage || 0);
     }
     setForm({ ...form, raw_materials: mps });
+  };
+
+  const applyMpCatalogFields = (row, match) => {
+    if (!match) return row;
+    return {
+      ...row,
+      mp_code: match.mp_code || row.mp_code,
+      mp_name: match.mp_name || row.mp_name,
+      mp_density: match.mp_density != null ? match.mp_density : row.mp_density,
+    };
+  };
+
+  const handleMpCodeChange = (idx, code) => {
+    updateMP(idx, 'mp_code', code);
+  };
+
+  const handleMpCodeSelect = (idx, selected) => {
+    if (!selected) return;
+    setForm((prev) => {
+      const mps = [...prev.raw_materials];
+      mps[idx] = applyMpCatalogFields({ ...mps[idx] }, selected);
+      return { ...prev, raw_materials: mps };
+    });
   };
 
   const addMP = () => setForm({ ...form, raw_materials: [...form.raw_materials, { ...emptyMP }] });
@@ -345,7 +420,8 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-left">{t('recipes.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.product')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.client')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.price')}</th>
+                  <th className="px-4 py-3 text-right">{t('recipes.table.priceWithTax')}</th>
+                  <th className="px-4 py-3 text-right">{t('recipes.table.priceWithoutTax')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revisionDate')}</th>
                   <th className="px-4 py-3 text-right">{t('recipes.table.mpCount')}</th>
@@ -377,6 +453,7 @@ export default function Receitas() {
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
                     <td className="px-4 py-2.5 text-right text-sm">{(r.price || 0).toFixed(4)}</td>
+                    <td className="px-4 py-2.5 text-right text-sm">{calcPriceWithoutTax(r.price).toFixed(4)}</td>
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>
                     <td className="px-4 py-2.5 text-sm">{r.revision_date || t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>
@@ -406,16 +483,20 @@ export default function Receitas() {
 
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-visible flex flex-col">
           <DialogHeader><DialogTitle>{editing ? t('recipes.editRecipe', { product: editing.product_name }) : t('recipes.newRecipe')}</DialogTitle></DialogHeader>
-          <div className="grid gap-4">
+          <div className="grid gap-4 overflow-y-auto min-h-0 pr-1" style={{ maxHeight: 'calc(90vh - 8rem)' }}>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productName')} *</label><Input value={form.product_name} onChange={e => setForm({ ...form, product_name: e.target.value })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.client')}</label><Combobox value={form.client} onValueChange={v => setForm({ ...form, client: v })} options={clientOptions} placeholder={t('recipes.form.clientPlaceholder')} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productCode')}</label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.unitPrice')}</label><Input type="number" step="0.0001" value={form.price} onChange={e => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.priceWithTax')}</label><Input type="number" step="0.0001" value={form.price} onChange={e => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} /></div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('recipes.form.priceWithoutTax')}</label>
+                <Input type="number" step="0.0001" value={calcPriceWithoutTax(form.price).toFixed(4)} readOnly tabIndex={-1} className="bg-muted/50" />
+              </div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productDensity')}</label><Input type="number" step="0.001" value={form.density} onChange={e => {
     const raw = e.target.value;
     const parsed = parseFloat(raw);
@@ -452,10 +533,10 @@ export default function Receitas() {
                 <h3 className="text-sm font-semibold">{t('recipes.form.rawMaterials')}</h3>
                 <Button variant="outline" size="sm" onClick={addMP}><Plus className="w-3 h-3 mr-1" /> {t('recipes.form.addMp')}</Button>
               </div>
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg">
                 <table className="w-full text-sm">
                   <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                    <th className="px-3 py-2 text-left">{t('recipes.form.mpCode')}</th>
+                    <th className="px-3 py-2 text-left min-w-[140px]">{t('recipes.form.mpCode')}</th>
                     <th className="px-3 py-2 text-left">{t('recipes.form.mpName')}</th>
                     <th className="px-3 py-2 text-right">{t('recipes.form.density')}</th>
                     <th className="px-3 py-2 text-right">{t('recipes.form.percentMass')}</th>
@@ -465,8 +546,17 @@ export default function Receitas() {
                   <tbody>
                     {form.raw_materials.map((m, idx) => (
                       <tr key={idx} className="border-t">
-                        <td className="px-2 py-1"><Input value={m.mp_code} onChange={e => updateMP(idx, 'mp_code', e.target.value)} className="h-8 text-xs" /></td>
-                        <td className="px-2 py-1"><Input value={m.mp_name} onChange={e => updateMP(idx, 'mp_name', e.target.value)} className="h-8 text-xs" /></td>
+                        <td className="px-2 py-1 align-top relative overflow-visible">
+                          <Combobox
+                            value={m.mp_code}
+                            onValueChange={(v) => handleMpCodeChange(idx, v)}
+                            onSelect={(item) => handleMpCodeSelect(idx, item)}
+                            options={mpCodeOptions}
+                            placeholder={t('recipes.form.mpCodePlaceholder')}
+                            inputClassName="h-8 text-xs pr-8"
+                          />
+                        </td>
+                        <td className="px-2 py-1"><Input value={m.mp_name} onChange={e => updateMP(idx, 'mp_name', e.target.value)} className="h-8 text-xs" placeholder={t('recipes.form.mpNamePlaceholder')} /></td>
                         <td className="px-2 py-1"><Input type="number" step="0.001" value={m.mp_density} onChange={e => updateMP(idx, 'mp_density', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
                         <td className="px-2 py-1"><Input type="number" step="0.01" value={m.percentage} onChange={e => updateMP(idx, 'percentage', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
                         <td className="px-2 py-1 text-right text-xs font-medium text-muted-foreground">{calcQty(m.percentage || 0).toFixed(3)}</td>

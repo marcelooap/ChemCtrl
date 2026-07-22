@@ -1591,9 +1591,9 @@
       "actions": "Acciones"
     },
     "footer": {
-      "total": "Total de pedidos",
-      "open": "Pedidos abiertos",
-      "pendingVolume": "Volumen pendiente total"
+      "orders": "Pedidos",
+      "volume": "Volumen",
+      "revenue": "Ingresos"
     },
     "form": {
       "date": "Fecha",
@@ -1648,6 +1648,8 @@
       "product": "Producto",
       "client": "Cliente",
       "price": "Precio (R$)",
+      "priceWithTax": "Precio con Impuesto (R$)",
+      "priceWithoutTax": "Precio sin Impuesto (R$)",
       "revision": "Revisión",
       "revisionDate": "Fecha Rev.",
       "mpCount": "Cant. MP",
@@ -1667,6 +1669,8 @@
       "productCode": "CÓDIGO DEL PRODUCTO",
       "client": "CLIENTE",
       "unitPrice": "PRECIO UNITARIO",
+      "priceWithTax": "PRECIO CON IMPUESTO",
+      "priceWithoutTax": "PRECIO SIN IMPUESTO",
       "productDensity": "DENSIDAD PA",
       "validity": "VALIDEZ",
       "revision": "REVISIÓN",
@@ -1687,6 +1691,8 @@
       "clientPlaceholder": "Seleccione o escriba un cliente...",
       "productCode": "Código del Producto",
       "unitPrice": "Precio Unitario (R$)",
+      "priceWithTax": "Precio con Impuesto (R$)",
+      "priceWithoutTax": "Precio sin Impuesto (R$)",
       "productDensity": "Densidad PA (g/mL)",
       "validityDays": "Validez (días)",
       "revision": "Revisión",
@@ -1696,7 +1702,9 @@
       "rawMaterials": "Materias Primas",
       "addMp": "Agregar MP",
       "mpCode": "CÓDIGO MP",
+      "mpCodePlaceholder": "Seleccione o escriba...",
       "mpName": "MATERIA PRIMA",
+      "mpNamePlaceholder": "Auto o escriba...",
       "density": "DENS. (G/ML)",
       "percentMass": "% M/M",
       "quantityKg": "CANT. (KG)",
@@ -2156,6 +2164,8 @@
         "productCode": "Product Code",
         "client": "Client",
         "unitPrice": "Unit Price",
+        "priceWithTax": "Precio con Impuesto",
+        "priceWithoutTax": "Precio sin Impuesto",
         "revision": "Revision",
         "revisionDate": "Revision Date",
         "density": "Density",

@@ -13,7 +13,7 @@ import ProductCombobox from '@/components/ui/ProductCombobox';
 import { useToast } from '@/components/ui/use-toast';
 import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { matchesClient } from '@/lib/permissions';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
@@ -28,7 +28,7 @@ import {
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
 
 export default function Pedidos() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams] = useSearchParams();
   const { isReadOnly } = useOutletContext();
   const { hasPermission } = usePermissions();
@@ -107,20 +107,37 @@ export default function Pedidos() {
     if (match && match !== clientFilter) setClientFilter(match);
   }, [clientOptions, clientFilter]);
 
-  const filtered = orders.filter(o => {
+  const filtered = useMemo(() => orders.filter(o => {
     const q = search.toLowerCase();
     const matchSearch = !q || [o.order_number, o.product, o.client, o.requester].some(v => (v || '').toLowerCase().includes(q));
     const displayStatus = getDisplayStatus(o);
     const matchStatus = statusFilter === 'all' || displayStatus === statusFilter;
     const matchClient = !clientFilter || matchesClient(o, clientFilter);
     return matchSearch && matchStatus && matchClient;
-  });
+  }), [orders, search, statusFilter, clientFilter]);
 
-  const openOrders = orders.filter(o =>
-    o.status !== 'Finalizado'
-    && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
-  );
-  const totalPendingVol = openOrders.reduce((s, o) => s + (o.volume_pending || 0), 0);
+  const footerStats = useMemo(() => {
+    const recipeList = recipes || [];
+    let volume = 0;
+    let revenue = 0;
+    for (const o of filtered) {
+      const vol = toNum(o.volume_pending);
+      volume += vol;
+
+      const product = (o.product || '').trim().toLowerCase();
+      if (!product || vol === 0) continue;
+
+      const byProduct = recipeList.filter(r => (r.product_name || '').trim().toLowerCase() === product);
+      if (byProduct.length === 0) continue;
+
+      const client = (o.client || '').trim().toLowerCase();
+      const recipe = (client && byProduct.find(r => (r.client || '').trim().toLowerCase() === client)) || byProduct[0];
+      const density = parseFloat(recipe?.density) || 0;
+      const price = parseFloat(recipe?.price) || 0;
+      revenue += vol * density * price;
+    }
+    return { count: filtered.length, volume, revenue };
+  }, [filtered, recipes]);
 
   const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
   const openEdit = (o) => {
@@ -315,11 +332,11 @@ export default function Pedidos() {
           )}
         </div>
 
-        {/* Fixed Footer */}
-        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
-          <span>{t('orders.footer.total')}: {orders.length}</span>
-          <span>{t('orders.footer.open')}: {openOrders.length}</span>
-          <span>{t('orders.footer.pendingVolume')}: <strong>{fmtNumber(totalPendingVol)} L</strong></span>
+        {/* Fixed Footer — indicators follow active filters */}
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
+          <span>{t('orders.footer.orders')}: <strong>{footerStats.count}</strong></span>
+          <span>{t('orders.footer.volume')}: <strong>{fmtNumber(footerStats.volume)} L</strong></span>
+          <span>{t('orders.footer.revenue')}: <strong style={{ color: '#16a34a' }}>{fmtCurrency(footerStats.revenue, 'BRL', i18n.language)}</strong></span>
         </div>
       </div>
 

@@ -10,9 +10,12 @@ export default function Combobox({ value, onValueChange, options = [], placehold
   const containerRef = useRef(null);
   const listRef = useRef(null);
 
-  const q = value.toLowerCase().trim();
+  const q = (value || '').toLowerCase().trim();
   const filtered = q
-    ? options.filter(o => (o.label || '').toLowerCase().includes(q))
+    ? options.filter(o =>
+        (o.label || '').toLowerCase().includes(q) ||
+        String(o.value ?? '').toLowerCase().includes(q)
+      )
     : options;
 
   useEffect(() => {
@@ -32,7 +35,8 @@ export default function Combobox({ value, onValueChange, options = [], placehold
   }, [highlight]);
 
   const pick = (opt) => {
-    onValueChange(opt.label);
+    const next = opt.value != null && opt.value !== '' ? opt.value : opt.label;
+    onValueChange(next);
     if (onSelect) onSelect(opt.item);
     setOpen(false);
   };
@@ -76,11 +80,14 @@ export default function Combobox({ value, onValueChange, options = [], placehold
             </div>
           ) : (
             filtered.map((opt, idx) => {
-              const isSelected = value === opt.label;
+              const isSelected = value === opt.value || value === opt.label;
               return (
                 <div
-                  key={opt.value}
-                  onClick={() => pick(opt)}
+                  key={`${opt.value}-${idx}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(opt);
+                  }}
                   onMouseEnter={() => setHighlight(idx)}
                   className={cn(
                     'flex items-center gap-2 px-3 py-2 text-sm cursor-pointer',

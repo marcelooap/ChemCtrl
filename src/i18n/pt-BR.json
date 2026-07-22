@@ -1494,9 +1494,9 @@
       "actions": "Ações"
     },
     "footer": {
-      "total": "Total de pedidos",
-      "open": "Pedidos em aberto",
-      "pendingVolume": "Volume pendente total"
+      "orders": "Pedidos",
+      "volume": "Volume",
+      "revenue": "Receita"
     },
     "form": {
       "date": "Data",
@@ -1551,6 +1551,8 @@
       "product": "Produto",
       "client": "Cliente",
       "price": "Preço (R$)",
+      "priceWithTax": "Preço com Imposto (R$)",
+      "priceWithoutTax": "Preço sem Imposto (R$)",
       "revision": "Revisão",
       "revisionDate": "Dt. Revisão",
       "mpCount": "Qtd. MP",
@@ -1570,6 +1572,8 @@
       "productCode": "CÓDIGO DO PRODUTO",
       "client": "CLIENTE",
       "unitPrice": "PREÇO UNITÁRIO",
+      "priceWithTax": "PREÇO COM IMPOSTO",
+      "priceWithoutTax": "PREÇO SEM IMPOSTO",
       "productDensity": "DENSIDADE PA",
       "validity": "VALIDADE",
       "revision": "REVISÃO",
@@ -1590,6 +1594,8 @@
       "clientPlaceholder": "Selecione ou digite um cliente...",
       "productCode": "Código do Produto",
       "unitPrice": "Preço Unitário (R$)",
+      "priceWithTax": "Preço com Imposto (R$)",
+      "priceWithoutTax": "Preço sem Imposto (R$)",
       "productDensity": "Densidade PA (g/mL)",
       "validityDays": "Validade (dias)",
       "revision": "Revisão",
@@ -1599,7 +1605,9 @@
       "rawMaterials": "Matérias Primas",
       "addMp": "Adicionar MP",
       "mpCode": "CÓDIGO MP",
+      "mpCodePlaceholder": "Selecione ou digite...",
       "mpName": "MATÉRIA PRIMA",
+      "mpNamePlaceholder": "Auto ou digite...",
       "density": "DENS. (G/ML)",
       "percentMass": "% M/M",
       "quantityKg": "QTD. (KG)",
@@ -2059,6 +2067,8 @@
         "productCode": "Código Produto",
         "client": "Cliente",
         "unitPrice": "Preço Unitário",
+        "priceWithTax": "Preço com Imposto",
+        "priceWithoutTax": "Preço sem Imposto",
         "revision": "Revisão",
         "revisionDate": "Data Revisão",
         "density": "Densidade",
