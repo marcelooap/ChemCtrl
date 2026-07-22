@@ -199,6 +199,15 @@ export default function Producoes() {
   const saveMpQuantities = async (updatedMps) => {
     if (!viewing) return;
 
+    if (updatedMps.some((m) => !m.stock_id)) {
+      toast({
+        title: t('production.messages.updateError'),
+        description: t('production.newProduction.selectLot'),
+        variant: 'destructive',
+      });
+      throw new Error('missing_lot');
+    }
+
     const oldMps = parseArr(viewing.raw_materials_used);
     const sumByStock = (list) => {
       const map = {};
@@ -255,11 +264,16 @@ export default function Producoes() {
         });
       }
 
-      const normalized = updatedMps.map((m) => ({
-        ...m,
-        qty_fiscal: parseFloat(m.qty_fiscal) || 0,
-        qty_operational: parseFloat(m.qty_operational) || 0,
-      }));
+      const normalized = updatedMps.map((m) => {
+        const stock = m.stock_id ? stocks.find((s) => s.id === m.stock_id) : null;
+        return {
+          ...m,
+          stock_id: m.stock_id || null,
+          lot: stock?.lot || m.lot || '',
+          qty_fiscal: parseFloat(m.qty_fiscal) || 0,
+          qty_operational: parseFloat(m.qty_operational) || 0,
+        };
+      });
 
       await base44.entities.Production.update(viewing.id, {
         raw_materials_used: normalized,

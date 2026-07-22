@@ -658,7 +658,7 @@
       "noRawMaterials": "Sem matérias primas registradas.",
       "tanksPdfError": "Impossible de générer le rapport",
       "tanksPdfZeroNet": "Les emballages sélectionnés n'ont pas de poids net pour la répartition.",
-      "mpUpdated": "Quantités de MP mises à jour avec succès",
+      "mpUpdated": "Matières premières mises à jour avec succès",
       "mpStockInsufficient": "Stock insuffisant pour l'augmentation demandée",
       "mpStockInsufficientDetail": "{{mp}} · Lot {{lot}} — disponible : {{available}} {{unit}}"
     },

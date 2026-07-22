@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtDateTime, fmtNumber, fmtVolume, fmtMass, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
 import {
@@ -122,6 +123,41 @@ export default function ProductionViewDialog({
       const dens = densityOf(mp);
       mp.qty_operational = round3(val);
       mp.qty_fiscal = round3(convertFromKg(val, unit, dens));
+      next[index] = mp;
+      return next;
+    });
+  };
+
+  /** Available stock lots for a MP row (excludes lots already used by sibling rows). */
+  const availableStocksForRow = (mp, index) => {
+    const usedByOthers = new Set(
+      draftMps
+        .filter((row, j) => j !== index && row.mp_code === mp.mp_code)
+        .map((row) => row.stock_id)
+        .filter(Boolean)
+    );
+    return stocks.filter((s) => {
+      if (s.mp_code !== mp.mp_code) return false;
+      if (s.id === mp.stock_id) return true;
+      if (usedByOthers.has(s.id)) return false;
+      return (s.current_stock || 0) > 0;
+    });
+  };
+
+  const handleLotChange = (index, stockId) => {
+    const stock = stocks.find((s) => s.id === stockId);
+    if (!stock) return;
+    setDraftMps((prev) => {
+      const next = [...prev];
+      const mp = { ...next[index] };
+      const opKg = parseFloat(mp.qty_operational) || 0;
+      const unit = stock.unit || 'kg';
+      const dens = stock.density || 1;
+      // Keep operational mass; recalculate fiscal for the new stock unit/density
+      mp.stock_id = stockId;
+      mp.lot = stock.lot || '';
+      mp.qty_operational = round3(opKg);
+      mp.qty_fiscal = round3(convertFromKg(opKg, unit, dens));
       next[index] = mp;
       return next;
     });
@@ -282,11 +318,38 @@ export default function ProductionViewDialog({
               <tbody>
                 {rawMaterials.map((m, i) => {
                   const unit = unitOf(m);
+                  const lotOptions = editingMp ? availableStocksForRow(m, i) : [];
                   return (
                     <tr key={i} className="border-t">
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
                       <td className="px-3 py-2">{m.mp_name}</td>
-                      <td className="px-3 py-2">{lotOf(m) || t('common.notAvailable')}</td>
+                      <td className="px-3 py-2">
+                        {editingMp ? (
+                          <Select
+                            value={m.stock_id || undefined}
+                            onValueChange={(v) => handleLotChange(i, v)}
+                            disabled={savingMp}
+                          >
+                            <SelectTrigger className="h-8 text-xs min-w-[10rem] max-w-[14rem]">
+                              <SelectValue placeholder={t('production.newProduction.selectLot')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {lotOptions.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {t('production.newProduction.lotOption', {
+                                    id: s.entry_id || s.id,
+                                    lot: s.lot || t('common.notAvailable'),
+                                    balance: fmt(s.current_stock || 0),
+                                    unit: s.unit || 'kg',
+                                  })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          lotOf(m) || t('common.notAvailable')
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         {editingMp ? (
                           <div className="inline-flex items-center justify-end gap-1">

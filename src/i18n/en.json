@@ -660,7 +660,7 @@
       "noRawMaterials": "No raw materials recorded.",
       "tanksPdfError": "Unable to generate the report",
       "tanksPdfZeroNet": "Selected packages have no net weight for allocation.",
-      "mpUpdated": "Raw material quantities updated successfully",
+      "mpUpdated": "Raw materials updated successfully",
       "mpStockInsufficient": "Insufficient stock for the requested increase",
       "mpStockInsufficientDetail": "{{mp}} · Lot {{lot}} — available: {{available}} {{unit}}"
     },

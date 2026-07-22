@@ -660,7 +660,7 @@
       "noRawMaterials": "Sem matérias primas registradas.",
       "tanksPdfError": "Não foi possível gerar o relatório",
       "tanksPdfZeroNet": "As embalagens selecionadas não possuem peso líquido para rateio.",
-      "mpUpdated": "Quantidades de MP atualizadas com sucesso",
+      "mpUpdated": "Matérias-primas atualizadas com sucesso",
       "mpStockInsufficient": "Estoque insuficiente para o aumento solicitado",
       "mpStockInsufficientDetail": "{{mp}} · Lote {{lot}} — disponível: {{available}} {{unit}}"
     },
