@@ -18,6 +18,7 @@ import {
 import { UserAvatar, getUserDisplayName, getUserFirstName } from './UserAvatar';
 import { ThemeSelector } from './ThemeSelector';
 import { LanguageSelector } from './LanguageSelector';
+import { SystemManualMenu } from './SystemManualMenu';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -134,6 +135,10 @@ export function UserMenu() {
           <DropdownMenuSeparator />
 
           <LanguageSelector onSelectLocale={handleLanguageSelect} />
+
+          <DropdownMenuSeparator />
+
+          <SystemManualMenu />
 
           <DropdownMenuSeparator />
 

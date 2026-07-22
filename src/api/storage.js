@@ -9,6 +9,12 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 export const TECH_DOCS_BUCKET = 'documentos-tecnicos';
 export const DOC_TYPES = { SDS: 'sds', TDS: 'tds', CERTIFICATES: 'certificates' };
 
+/** Manual do sistema — path fixo no bucket (admin atualiza; todos baixam). */
+export const SYSTEM_MANUAL_OBJECT_PATH = 'manual/guia-uso-chemctrl.pdf';
+export const SYSTEM_MANUAL_STORAGE_URL = `${TECH_DOCS_BUCKET}/${SYSTEM_MANUAL_OBJECT_PATH}`;
+export const SYSTEM_MANUAL_PUBLIC_FALLBACK = '/docs/Guia_de_Uso_ChemCtrl.pdf';
+export const SYSTEM_MANUAL_FILENAME = 'Guia_de_Uso_ChemCtrl.pdf';
+
 const BLOCKED_EXTENSIONS = new Set(['doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'zip', 'rar']);
 const MAX_PDF_SIZE = 20 * 1024 * 1024;
 const ALLOWED_MIME = new Set(['application/pdf']);
@@ -170,4 +176,77 @@ export const downloadRecipeDocument = async (fdsUrl, filename) => {
     filename: filename || 'document.pdf',
     mode: 'download',
   });
+};
+
+const downloadFromPublicFallback = () => {
+  const a = document.createElement('a');
+  a.href = SYSTEM_MANUAL_PUBLIC_FALLBACK;
+  a.download = SYSTEM_MANUAL_FILENAME;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+};
+
+/**
+ * Baixa o guia de uso.
+ * Prioriza a versão no Storage (atualizada pelo admin); se não existir, usa /public/docs.
+ */
+export const downloadSystemManual = async () => {
+  try {
+    const sessionId = getSessionId();
+    const resp = await fetch(`${supabaseUrl}/storage/v1/object/sign/${SYSTEM_MANUAL_STORAGE_URL}`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        ...(sessionId ? { 'x-session-id': sessionId } : {}),
+      },
+      body: JSON.stringify({ expiresIn: 3600 }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.signedURL) {
+        const signedUrl = data.signedURL.startsWith('http')
+          ? data.signedURL
+          : `${supabaseUrl}/storage/v1${data.signedURL}`;
+        await openProtectedPdf({
+          signedUrl,
+          filename: SYSTEM_MANUAL_FILENAME,
+          mode: 'download',
+        });
+        return;
+      }
+    }
+  } catch {
+    // fallback abaixo
+  }
+  downloadFromPublicFallback();
+};
+
+/**
+ * Substitui o guia de uso no Storage.
+ * Somente admin pode chamar esta ação pela UI (isAdminUser).
+ */
+export const uploadSystemManual = async (file) => {
+  const validation = await validatePdfFile(file);
+  if (!validation.valid) {
+    const err = new Error(validation.error);
+    err.code = validation.error;
+    throw err;
+  }
+  const resp = await storageFetch(SYSTEM_MANUAL_STORAGE_URL, {
+    method: 'POST',
+    headers: {
+      'x-upsert': 'true',
+      'Content-Type': 'application/pdf',
+    },
+    body: file,
+  });
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new Error(`Upload falhou (${resp.status}): ${errBody}`);
+  }
+  return SYSTEM_MANUAL_STORAGE_URL;
 };

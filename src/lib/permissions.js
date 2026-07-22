@@ -5,6 +5,7 @@ import {
   getLegacyPermissionsForUser,
   getViewPermissionForPath,
   permissionKey,
+  RBAC_ADMIN_SLUG,
 } from '@/lib/rbac/permissionCatalog';
 
 function normalizeNivel(user) {
@@ -89,6 +90,16 @@ export function getRoleLabel(user) {
   const key = ROLE_KEYS[role];
   if (key) return i18n.t(key);
   return role;
+}
+
+/** Administrador do sistema (perfil slug/id ou nível legado). */
+export function isAdminUser(user) {
+  if (!user) return false;
+  const perfil = user.perfil;
+  if (perfil?.slug === RBAC_ADMIN_SLUG || perfil?.id === 'perfil_administrador') {
+    return true;
+  }
+  return normalizeNivel(user) === 'administrador';
 }
 
 export function getNivelOptionsForTipo(tipo) {

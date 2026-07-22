@@ -1489,6 +1489,18 @@
       "username": "Usuario:",
       "version": "Versión:"
     },
+    "manual": {
+      "downloadButton": "Guía de Uso ChemCtrl",
+      "updateButton": "Actualizar guía (PDF)",
+      "downloadStarted": "Descarga iniciada",
+      "downloadStartedDesc": "La Guía de Uso ChemCtrl se está descargando.",
+      "downloadError": "No se pudo descargar la guía de uso.",
+      "updateSuccess": "Guía actualizada",
+      "updateSuccessDesc": "El nuevo PDF ya está disponible para descargar.",
+      "updateError": "No se pudo actualizar la guía de uso.",
+      "updateForbidden": "Solo los administradores pueden actualizar la guía de uso.",
+      "invalidPdf": "Envíe un archivo PDF válido."
+    },
     "actions": {
       "create": "Cadastrar Usuário",
       "edit": "Editar",

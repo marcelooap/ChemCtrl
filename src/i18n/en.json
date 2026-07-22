@@ -1491,6 +1491,18 @@
       "username": "Username:",
       "version": "Version:"
     },
+    "manual": {
+      "downloadButton": "ChemCtrl User Guide",
+      "updateButton": "Update guide (PDF)",
+      "downloadStarted": "Download started",
+      "downloadStartedDesc": "The ChemCtrl User Guide is downloading.",
+      "downloadError": "Could not download the user guide.",
+      "updateSuccess": "Guide updated",
+      "updateSuccessDesc": "The new PDF is now available for download.",
+      "updateError": "Could not update the user guide.",
+      "updateForbidden": "Only administrators can update the user guide.",
+      "invalidPdf": "Please upload a valid PDF file."
+    },
     "actions": {
       "create": "Create User",
       "edit": "Edit",
