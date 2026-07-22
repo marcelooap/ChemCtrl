@@ -1568,7 +1568,9 @@
       "mpName": "Matéria Prima",
       "mpDensity": "Dens. MP (g/mL)",
       "percentMass": "% m/m",
-      "quantityKg": "Qtd. (kg)"
+      "quantityKg": "Qtd. (kg)",
+      "hideMpNames": "Ocultar nomes das matérias primas",
+      "showMpNames": "Exibir nomes das matérias primas"
     },
     "form": {
       "productName": "Nome do Produto",
@@ -2051,7 +2053,9 @@
         "densityPA": "Densidade PA",
         "validity": "Validade",
         "version": "Versão"
-      }
+      },
+      "confidentialNotice": "DOCUMENTO CONFIDENCIAL – Uso interno. A divulgação, cópia ou compartilhamento deste documento sem autorização é estritamente proibida.",
+      "confidentialWatermark": "DOCUMENTO CONFIDENCIAL"
     },
     "order": {
       "title": "Pedido {{number}}",

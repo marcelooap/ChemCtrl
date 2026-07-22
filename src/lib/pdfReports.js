@@ -120,6 +120,36 @@ function addFooter(doc, lang) {
   }
 }
 
+function addDiagonalWatermark(doc, text) {
+  const pages = doc.internal.getNumberOfPages();
+  const label = String(text);
+  // Diagonal visual: canto inferior esquerdo → canto superior direito
+  const angle = Math.atan(PH / PW) * (180 / Math.PI);
+  const diagonal = Math.sqrt(PW * PW + PH * PH);
+
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.14 }));
+    doc.setFont('helvetica', 'bold');
+
+    // Escala a fonte para a marca percorrer a diagonal sem ultrapassar as bordas
+    doc.setFontSize(10);
+    const unitWidth = doc.getTextWidth(label) || 1;
+    const fontSize = Math.max(18, (diagonal * 0.82) / (unitWidth / 10));
+    doc.setFontSize(fontSize);
+
+    setColor(doc, [160, 168, 180]);
+    doc.text(label, PW / 2, PH / 2, {
+      align: 'center',
+      baseline: 'middle',
+      angle,
+    });
+    doc.restoreGraphicsState();
+    setColor(doc, BLACK);
+  }
+}
+
 function addSectionTitle(doc, y, title) {
   setFill(doc, BLUE_MID);
   doc.rect(M, y, 2.5, 7, 'F');
@@ -404,7 +434,8 @@ function drawStatusBadge(doc, x, y, status) {
   return bW;
 }
 
-export function generateRecipePDF(recipe) {
+export function generateRecipePDF(recipe, options) {
+  const { hideMpNames } = options || {};
   const { lang, t } = getPdfLabels();
   const { fmtDate, fmtNum } = makePdfFormatters(lang);
   const doc = new jsPDF();
@@ -413,7 +444,7 @@ export function generateRecipePDF(recipe) {
   y = addInfoGrid(doc, y, [
     [t('pdf.fields.productCode'), recipe.code || '-'],
     [t('pdf.common.client'), recipe.client || '-'],
-    [t('pdf.recipe.fields.unitPrice'), fmtCurrency(recipe.price || 0, 'BRL', lang)],
+    [t('pdf.recipe.fields.unitPrice'), fmtCurrency(recipe.price || 0, 'BRL', lang, { minimumFractionDigits: 4, maximumFractionDigits: 4 })],
     [t('pdf.recipe.fields.revision'), recipe.revision || '-'],
     [t('pdf.fields.revisionDate'), recipe.revision_date || '-'],
     [t('pdf.fields.densityPA'), (recipe.density || '-') + ' ' + t('pdf.common.densityUnit')],
@@ -429,11 +460,22 @@ export function generateRecipePDF(recipe) {
   ];
   const mps = recipe.raw_materials || [];
   const rows = mps.map(function(m) {
-    return [m.mp_code || '-', m.mp_name || '-', m.mp_density || '-', fmtNum(m.percentage, 2) + '%', fmtNum(m.quantity_kg, 3)];
+    return [m.mp_code || '-', hideMpNames ? '*******' : (m.mp_name || '-'), m.mp_density || '-', fmtNum(m.percentage, 2) + '%', fmtNum(m.quantity_kg, 3)];
   });
   const totalPct = mps.reduce(function(s, m) { return s + (m.percentage || 0); }, 0);
   const totalKg  = mps.reduce(function(s, m) { return s + (m.quantity_kg  || 0); }, 0);
-  addTable(doc, y, headers, rows, [36, 68, 24, 24, 30], [t('pdf.common.total'), '', '', fmtNum(totalPct, 2) + '%', fmtNum(totalKg, 3) + ' kg']);
+  y = addTable(doc, y, headers, rows, [36, 68, 24, 24, 30], [t('pdf.common.total'), '', '', fmtNum(totalPct, 2) + '%', fmtNum(totalKg, 3) + ' kg']);
+
+  const confidential = t('pdf.recipe.confidentialNotice');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  setColor(doc, GRAY_LABEL);
+  const confidentialLines = doc.splitTextToSize(confidential, CW);
+  const confidentialY = Math.max(y + 10, PH - 22 - confidentialLines.length * 4);
+  doc.text(confidentialLines, PW / 2, confidentialY, { align: 'center' });
+  setColor(doc, BLACK);
+
+  addDiagonalWatermark(doc, t('pdf.recipe.confidentialWatermark'));
   addFooter(doc, lang);
   doc.save('receita-' + (recipe.product_name || 'receita').replace(/\s+/g, '-') + '.pdf');
 }

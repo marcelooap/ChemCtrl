@@ -1667,7 +1667,9 @@
       "mpName": "Raw Material",
       "mpDensity": "RM Density (g/mL)",
       "percentMass": "% m/m",
-      "quantityKg": "Qty. (kg)"
+      "quantityKg": "Qty. (kg)",
+      "hideMpNames": "Hide raw material names",
+      "showMpNames": "Show raw material names"
     },
     "form": {
       "productName": "Product Name",
@@ -2163,10 +2165,10 @@
         "densityPA": "FP Density",
         "validity": "Shelf Life",
         "version": "Version"
-      }
+      },
+      "confidentialNotice": "CONFIDENTIAL DOCUMENT – Internal use only. Disclosure, copying or sharing of this document without authorization is strictly prohibited.",
+      "confidentialWatermark": "CONFIDENTIAL DOCUMENT"
     },
-    "order": {
-      "title": "Order {{number}}",
       "subtitle": "Production Order Report",
       "sectionOps": "Linked Production Orders",
       "noOps": "No PO linked to this order.",

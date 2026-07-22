@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
-import { Plus, Search, Eye, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame } from 'lucide-react';
+import { Plus, Search, Eye, EyeOff, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -20,29 +20,15 @@ import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES 
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
 
-function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, canViewFds }) {
+function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, canViewFds, hideMpNames, onToggleHideMpNames }) {
   const { t } = useTranslation();
   const cap = calcCapacidade(viewing);
   return (
     <div>
-      {cap && (
-        <div className="flex items-center gap-6 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4">
-          <div>
-            <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.productionCapacity')}</p>
-            <p className="text-xl font-bold text-blue-800">
-              {cap.volume > 0 ? fmtVolume(cap.volume, 'L') : t('common.notAvailable')}
-            </p>
-          </div>
-          <div className="border-l border-blue-200 pl-6">
-            <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.limitingMp')}</p>
-            <p className="text-sm font-bold text-red-600">{cap.limitante || t('common.notAvailable')}</p>
-          </div>
-        </div>
-      )}
       <div className="grid grid-cols-3 gap-4 text-sm mb-4">
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productCode')}</p><p className="font-medium">{viewing.code || t('common.notAvailable')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.client')}</p><p className="font-bold">{viewing.client}</p></div>
-        <div><p className="text-xs text-muted-foreground">{t('recipes.view.unitPrice')}</p><p className="font-bold">{fmtCurrency(viewing.price || 0)}</p></div>
+        <div><p className="text-xs text-muted-foreground">{t('recipes.view.unitPrice')}</p><p className="font-bold">{fmtCurrency(viewing.price || 0, 'BRL', undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productDensity')}</p><p className="font-medium">{viewing.density} g/mL</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.validity')}</p><p className="font-medium">{viewing.validity_days} {t('common.days')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
@@ -57,7 +43,18 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
           </p>
         </div>
       </div>
-      <h4 className="text-sm font-semibold mb-2">{t('recipes.view.rawMaterials')}</h4>
+      <div className="flex items-center gap-1.5 mb-2">
+        <h4 className="text-sm font-semibold">{t('recipes.view.rawMaterials')}</h4>
+        <button
+          type="button"
+          onClick={onToggleHideMpNames}
+          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+          title={hideMpNames ? t('recipes.view.showMpNames') : t('recipes.view.hideMpNames')}
+          aria-label={hideMpNames ? t('recipes.view.showMpNames') : t('recipes.view.hideMpNames')}
+        >
+          {hideMpNames ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
       <table className="w-full text-sm border rounded-lg overflow-hidden">
         <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
           <th className="px-3 py-2 text-left">{t('recipes.view.mpCode')}</th>
@@ -70,7 +67,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
           {(viewing.raw_materials || []).map((m, i) => (
             <tr key={i} className="border-t">
               <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
-              <td className="px-3 py-2">{m.mp_name}</td>
+              <td className="px-3 py-2">{hideMpNames ? '*******' : m.mp_name}</td>
               <td className="px-3 py-2 text-right">{m.mp_density}</td>
               <td className="px-3 py-2 text-right">{(m.percentage || 0).toFixed(2)}%</td>
               <td className="px-3 py-2 text-right font-medium">{fmtNumber(m.quantity_kg || 0)}</td>
@@ -88,8 +85,22 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
         fdsFilename={viewing.fds_filename}
         canView={canViewFds}
       />
+      {cap && (
+        <div className="flex items-center gap-6 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mt-4">
+          <div>
+            <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.productionCapacity')}</p>
+            <p className="text-xl font-bold text-blue-800">
+              {cap.volume > 0 ? fmtVolume(cap.volume, 'L') : t('common.notAvailable')}
+            </p>
+          </div>
+          <div className="border-l border-blue-200 pl-6">
+            <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.limitingMp')}</p>
+            <p className="text-sm font-bold text-red-600">{cap.limitante || t('common.notAvailable')}</p>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between mt-4">
-        <Button variant="outline" onClick={() => generateRecipePDF(viewing)} className="gap-2">
+        <Button variant="outline" onClick={() => generateRecipePDF(viewing, { hideMpNames })} className="gap-2">
           <FileText className="w-4 h-4" /> {t('buttons.generatePdf')}
         </Button>
         <Button variant="outline" onClick={onClose}>{t('buttons.close')}</Button>
@@ -180,6 +191,7 @@ export default function Receitas() {
   const [showSimulador, setShowSimulador] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
+  const [hideMpNames, setHideMpNames] = useState(false);
   const [form, setForm] = useState(emptyRecipe);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -204,6 +216,7 @@ export default function Receitas() {
     const raw = r.raw_materials;
     const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
     setViewing({ ...r, raw_materials: parsed });
+    setHideMpNames(false);
     setShowView(true);
   };
 
@@ -508,7 +521,17 @@ export default function Receitas() {
               )}
             </DialogTitle>
           </DialogHeader>
-          {viewing && <ViewRecipeBody viewing={viewing} calcCapacidade={calcCapacidade} generateRecipePDF={generateRecipePDF} onClose={() => setShowView(false)} canViewFds={canViewFds} />}
+          {viewing && (
+            <ViewRecipeBody
+              viewing={viewing}
+              calcCapacidade={calcCapacidade}
+              generateRecipePDF={generateRecipePDF}
+              onClose={() => setShowView(false)}
+              canViewFds={canViewFds}
+              hideMpNames={hideMpNames}
+              onToggleHideMpNames={() => setHideMpNames((prev) => !prev)}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

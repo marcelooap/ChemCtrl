@@ -1648,7 +1648,9 @@
       "mpName": "Matière Première",
       "mpDensity": "Dens. MP (g/mL)",
       "percentMass": "% m/m",
-      "quantityKg": "Qté (kg)"
+      "quantityKg": "Qté (kg)",
+      "hideMpNames": "Masquer les noms des matières premières",
+      "showMpNames": "Afficher les noms des matières premières"
     },
     "form": {
       "productName": "Nom du Produit",
@@ -2130,7 +2132,9 @@
         "densityPA": "FP Density",
         "validity": "Shelf Life",
         "version": "Version"
-      }
+      },
+      "confidentialNotice": "DOCUMENT CONFIDENTIEL – Usage interne. La divulgation, la copie ou le partage de ce document sans autorisation est strictement interdit.",
+      "confidentialWatermark": "DOCUMENT CONFIDENTIEL"
     },
     "order": {
       "title": "Order {{number}}",
