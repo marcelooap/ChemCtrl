@@ -123,23 +123,23 @@ function addFooter(doc, lang) {
 function addDiagonalWatermark(doc, text) {
   const pages = doc.internal.getNumberOfPages();
   const label = String(text);
-  // Diagonal visual: canto inferior esquerdo → canto superior direito
-  const angle = Math.atan(PH / PW) * (180 / Math.PI);
-  const diagonal = Math.sqrt(PW * PW + PH * PH);
+  // Referência visual: ~45°, centralizada, atravessando a página sem cortar nas bordas
+  const angle = 45;
 
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
     doc.saveGraphicsState();
-    doc.setGState(new doc.GState({ opacity: 0.14 }));
+    doc.setGState(new doc.GState({ opacity: 0.13 }));
     doc.setFont('helvetica', 'bold');
 
-    // Escala a fonte para a marca percorrer a diagonal sem ultrapassar as bordas
+    // Tamanho proporcional à largura útil (equivalente ao print de referência)
     doc.setFontSize(10);
     const unitWidth = doc.getTextWidth(label) || 1;
-    const fontSize = Math.max(18, (diagonal * 0.82) / (unitWidth / 10));
+    const targetWidth = CW * 0.92;
+    const fontSize = Math.max(32, Math.min(46, (targetWidth) / (unitWidth / 10)));
     doc.setFontSize(fontSize);
 
-    setColor(doc, [160, 168, 180]);
+    setColor(doc, [168, 174, 184]);
     doc.text(label, PW / 2, PH / 2, {
       align: 'center',
       baseline: 'middle',
