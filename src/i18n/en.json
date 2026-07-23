@@ -1665,7 +1665,8 @@
     },
     "footer": {
       "registered": "Registered recipes",
-      "avgPrice": "Average price",
+      "avgPriceWithTax": "Average price with tax",
+      "avgPriceWithoutTax": "Average price without tax",
       "withPrice": "With defined price",
       "withFds": "With SDS attached: {{count}}"
     },
@@ -2275,7 +2276,7 @@
         "volumeL": "Volume (L)",
         "massKg": "Mass (kg)",
         "finishDate": "Completion Date",
-        "unitPrice": "Unit Price",
+        "unitPrice": "Price with tax",
         "totalValue": "Total Value",
         "packaging": "Packaging",
         "packagingCount": "{{count}} Packages",

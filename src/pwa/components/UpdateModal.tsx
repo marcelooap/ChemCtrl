@@ -3,15 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { useUpdate } from '../hooks/useUpdate';
 
 export function UpdateModal() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
+  const { isAuthenticated, loading: authLoading } = useInternalAuth();
   const { updateAvailable, currentVersion, nextVersion, isUpdating, applyUpdate } =
     useUpdate();
 
-  if (pathname.startsWith('/consulta/')) return null;
+  // Public / unauthenticated surfaces must never be blocked by update UI
+  if (pathname.startsWith('/consulta/') || pathname.startsWith('/login')) return null;
+  if (authLoading || !isAuthenticated) return null;
   if (!updateAvailable) return null;
 
   return (

@@ -822,7 +822,7 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
     [t('pdf.production.fields.massKg'), fmtNum(production.mass, 3) + ' kg'],
     [t('pdf.fields.density'), (production.density || '-') + ' ' + t('pdf.common.densityUnit')],
     [t('pdf.production.fields.finishDate'), fmtDate(production.end_time)],
-    [t('pdf.production.fields.unitPrice'), fmtCurrency(production.unit_price || 0, 'BRL', lang) + t('pdf.common.perKg')],
+    [t('pdf.production.fields.unitPrice'), fmtCurrency(production.unit_price || 0, 'BRL', lang, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + t('pdf.common.perKg')],
     [t('pdf.production.fields.totalValue'), fmtMoney(production.total_value)],
     [t('pdf.fields.priority'), production.priority || '-'],
     [t('pdf.common.operator'), production.operator || '-'],

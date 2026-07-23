@@ -116,7 +116,7 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
                 <tr className="border-t-2 border-gray-300 bg-blue-50/50">
                   <td className="px-3 py-2 text-xs font-bold">{t('common.total')}</td>
                   <td className="px-3 py-2 text-sm font-bold text-right">{fmtVolume(totalVolUsed, 'L', lang)}</td>
-                  <td className="px-3 py-2 text-sm font-bold text-right">{fmtMass(totalMassUsed, 'kg', lang)}</td>
+                  <td className="px-3 py-2 text-sm font-bold text-right">{fmt0(totalMassUsed)} kg</td>
                 </tr>
               </tbody>
             </table>

@@ -101,8 +101,8 @@ function App() {
                       <AuthenticatedApp />
                     </RealtimeProvider>
                   </PermissionProvider>
+                  <UpdateModal />
                 </InternalAuthProvider>
-                <UpdateModal />
               </UpdateProvider>
             </Router>
             <Toaster />

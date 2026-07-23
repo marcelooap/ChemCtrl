@@ -1663,7 +1663,8 @@
     },
     "footer": {
       "registered": "Recetas registradas",
-      "avgPrice": "Precio medio",
+      "avgPriceWithTax": "Precio medio con impuesto",
+      "avgPriceWithoutTax": "Precio medio sin impuesto",
       "withPrice": "Con precio definido",
       "withFds": "Con FDS adjunta: {{count}}"
     },
@@ -2260,7 +2261,7 @@
         "volumeL": "Volumen (L)",
         "massKg": "Masa (kg)",
         "finishDate": "Fecha de Finalización",
-        "unitPrice": "Precio Unit.",
+        "unitPrice": "Precio con impuesto",
         "totalValue": "Valor Total",
         "packaging": "Embalaje",
         "packagingCount": "{{count}} Embalajes",

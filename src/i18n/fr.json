@@ -1646,7 +1646,8 @@
     },
     "footer": {
       "registered": "Recettes enregistrées",
-      "avgPrice": "Prix moyen",
+      "avgPriceWithTax": "Prix moyen avec taxe",
+      "avgPriceWithoutTax": "Prix moyen hors taxe",
       "withPrice": "Avec prix défini",
       "withFds": "Avec FDS jointe : {{count}}"
     },
@@ -2242,7 +2243,7 @@
         "volumeL": "Volume (L)",
         "massKg": "Masse (kg)",
         "finishDate": "Date de Fin",
-        "unitPrice": "Prix Unit.",
+        "unitPrice": "Prix avec taxe",
         "totalValue": "Valeur Totale",
         "packaging": "Emballage",
         "packagingCount": "{{count}} Emballages",

@@ -376,12 +376,26 @@ export default function Receitas() {
     }
   };
 
-  const avgPrice = recipes.length ? (recipes.reduce((s, r) => s + (r.price || 0), 0) / recipes.length) : 0;
+  const { avgPriceWithTax, avgPriceWithoutTax, recipesWithPriceCount } = useMemo(() => {
+    const withPrice = recipes.filter((r) => Number(r.price) > 0);
+    if (!withPrice.length) {
+      return { avgPriceWithTax: 0, avgPriceWithoutTax: 0, recipesWithPriceCount: 0 };
+    }
+    const sumWithTax = withPrice.reduce((s, r) => s + Number(r.price), 0);
+    const avgWithTax = sumWithTax / withPrice.length;
+    return {
+      avgPriceWithTax: avgWithTax,
+      avgPriceWithoutTax: calcPriceWithoutTax(avgWithTax),
+      recipesWithPriceCount: withPrice.length,
+    };
+  }, [recipes]);
 
   const recipesWithFdsCount = useMemo(
     () => recipes.filter((r) => r.fds_url).length,
     [recipes],
   );
+
+  const priceFmt = { minimumFractionDigits: 4, maximumFractionDigits: 4 };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -479,10 +493,11 @@ export default function Receitas() {
           )}
         </div>
 
-        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
           <span>{t('recipes.footer.registered')}: {recipes.length}</span>
-          <span>{t('recipes.footer.avgPrice')}: <strong>{fmtCurrency(avgPrice)}/{t('common.units.kg')}</strong></span>
-          <span>{t('recipes.footer.withPrice')}: {recipes.filter(r => r.price).length}</span>
+          <span>{t('recipes.footer.avgPriceWithTax')}: <strong>{fmtCurrency(avgPriceWithTax, 'BRL', undefined, priceFmt)}/{t('common.units.kg')}</strong></span>
+          <span>{t('recipes.footer.avgPriceWithoutTax')}: <strong>{fmtCurrency(avgPriceWithoutTax, 'BRL', undefined, priceFmt)}/{t('common.units.kg')}</strong></span>
+          <span>{t('recipes.footer.withPrice')}: {recipesWithPriceCount}</span>
           <span>{t('recipes.footer.withFds', { count: recipesWithFdsCount })}</span>
         </div>
       </div>
