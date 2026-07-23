@@ -18,6 +18,7 @@ import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
 import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds, hasPermission } from '@/lib/permissions';
 import { calcPriceWithoutTax } from '@/lib/recipePricing';
 import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES } from '@/api/storage';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
 
@@ -176,6 +177,7 @@ export default function Receitas() {
     return { volume, limitante };
   };
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
 
   const regNumMap = useMemo(() => {
     const asc = [...recipes].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
@@ -251,7 +253,7 @@ export default function Receitas() {
   }, [mpCatalogByClient, form.client]);
 
   const filtered = recipes.filter(r => {
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     return !q || [r.product_name, r.client, r.code].some(v => (v || '').toLowerCase().includes(q));
   });
 

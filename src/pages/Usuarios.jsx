@@ -12,6 +12,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { translateUserStatus, translateUserType } from '@/i18n/domainMaps';
 import { listProfiles } from '@/lib/rbac/rbacApi';
 import { Can } from '@/lib/rbac/Can';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const emptyForm = {
   nome_completo: '',
@@ -34,9 +36,12 @@ export default function Usuarios() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, user: null });
   const [hidePasswords, setHidePasswords] = useState(true);
   const { toast } = useToast();
+  const toggleGuard = useSubmitGuard();
+  const deleteGuard = useSubmitGuard();
 
   useEffect(() => {
     listProfiles()
@@ -147,7 +152,7 @@ export default function Usuarios() {
   };
 
   const filtered = users.filter((u) => {
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     const profileName = resolveProfileName(u);
     return !q || [u.nome_completo, u.usuario, u.cargo, profileName, u.cliente].some((v) => (v || '').toLowerCase().includes(q));
   });
@@ -310,7 +315,7 @@ export default function Usuarios() {
                             </button>
                           </Can>
                           <Can permission="users.edit">
-                            <button onClick={() => toggleActive(u)} className="p-1.5 rounded hover:bg-muted" title={inactive ? t('users.actions.activate') : t('users.actions.deactivate')}>
+                            <button onClick={() => toggleGuard.run(() => toggleActive(u))} disabled={toggleGuard.busy} className="p-1.5 rounded hover:bg-muted disabled:opacity-50" title={inactive ? t('users.actions.activate') : t('users.actions.deactivate')}>
                               <Power className={`w-3.5 h-3.5 ${inactive ? 'text-green-500' : 'text-red-400'}`} />
                             </button>
                           </Can>
@@ -426,9 +431,9 @@ export default function Usuarios() {
             {t('users.deleteConfirm.message', { name: confirmDelete.user?.nome_completo, username: confirmDelete.user?.usuario })}
           </p>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setConfirmDelete({ open: false, user: null })}>{t('buttons.cancel')}</Button>
-            <Button onClick={confirmDeleteUser} className="text-white" style={{ background: '#dc2626' }}>
-              {t('buttons.delete')}
+            <Button variant="outline" onClick={() => setConfirmDelete({ open: false, user: null })} disabled={deleteGuard.busy}>{t('buttons.cancel')}</Button>
+            <Button onClick={() => deleteGuard.run(confirmDeleteUser)} disabled={deleteGuard.busy} className="text-white" style={{ background: '#dc2626' }}>
+              {deleteGuard.busy ? t('common.saving') : t('buttons.delete')}
             </Button>
           </div>
         </DialogContent>

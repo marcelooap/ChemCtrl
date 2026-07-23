@@ -6,6 +6,7 @@ import { FileText } from 'lucide-react';
 import { generateBoletaPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateContainerStatus, translatePackagingType } from '@/i18n/domainMaps';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : '—';
 
@@ -24,6 +25,7 @@ export default function ContainerViewDialog({
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const pdfGuard = useSubmitGuard();
 
   const statusBadge = (s) => (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusBadgeClass(s)}`}>
@@ -100,7 +102,7 @@ export default function ContainerViewDialog({
         )}
         <div className="flex justify-between mt-4 pt-4 border-t">
           {!readOnly && container && (
-            <Button variant="outline" onClick={() => generateBoletaPDF(container, productions, recipes)} className="gap-2">
+            <Button variant="outline" disabled={pdfGuard.busy} onClick={() => pdfGuard.run(() => generateBoletaPDF(container, productions, recipes))} className="gap-2">
               <FileText className="w-4 h-4" /> {t('containers.actions.generateBoleta')}
             </Button>
           )}

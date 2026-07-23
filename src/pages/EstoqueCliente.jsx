@@ -15,6 +15,7 @@ import { fmtDate, fmtNumber, fmtVolume, fmtMass, fmtPercent } from '@/i18n/forma
 import { translateStockExpiryStatus, translateContainerStatus } from '@/i18n/domainMaps';
 import { containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@/lib/fractionalSupply';
 import moment from 'moment';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -51,6 +52,7 @@ export default function EstoqueCliente() {
   const [selectedClient, setSelectedClient] = useState('all');
   const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
 
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
 
@@ -67,7 +69,7 @@ export default function EstoqueCliente() {
   const filteredStocks = useMemo(() => {
     let result = stocks;
     if (effectiveClient) result = result.filter(s => s.client === effectiveClient);
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     if (q) result = result.filter(s => [s.mp_name, s.mp_code, s.lot, s.supplier].some(v => (v || '').toLowerCase().includes(q)));
     const lotMap = {};
     const lotOrder = [];
@@ -82,15 +84,15 @@ export default function EstoqueCliente() {
       lotMap[key]._count += 1;
     });
     return lotOrder.map(k => lotMap[k]).filter(s => (s.current_stock || 0) > 0);
-  }, [stocks, effectiveClient, search]);
+  }, [stocks, effectiveClient, debouncedSearch]);
 
   const filteredContainers = useMemo(() => {
     let result = containers.filter(c => c.status === 'No Pátio');
     if (effectiveClient) result = result.filter(c => c.client === effectiveClient);
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     if (q) result = result.filter(c => [c.container_number, c.barril_number, c.lot, c.product].some(v => (v || '').toLowerCase().includes(q)));
     return result;
-  }, [containers, effectiveClient, search]);
+  }, [containers, effectiveClient, debouncedSearch]);
 
   const tanksWithData = useMemo(() => {
     return tanks.map(tank => {
@@ -137,10 +139,10 @@ export default function EstoqueCliente() {
   const filteredTanks = useMemo(() => {
     let result = tanksWithData;
     if (effectiveClient) result = result.filter(t => t.client === effectiveClient);
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     if (q) result = result.filter(t => [t.name, t.computed_lot, ...t.computed_products].some(v => (v || '').toLowerCase().includes(q)));
     return result;
-  }, [tanksWithData, effectiveClient, search]);
+  }, [tanksWithData, effectiveClient, debouncedSearch]);
 
   const getMPStatus = (item) => {
     if (!item.expiry_date) return null;

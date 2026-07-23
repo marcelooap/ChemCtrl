@@ -404,6 +404,7 @@
       "invalidCredentials": "Invalid username or password.",
       "userNotFound": "User not found.",
       "accountInactive": "Account inactive. Contact your administrator.",
+      "rateLimited": "Too many login attempts. Please wait a few minutes before trying again.",
       "network": "Connection error. Check your internet.",
       "generic": "Unable to sign in. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",

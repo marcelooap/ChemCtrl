@@ -4,6 +4,7 @@
 
 import { callRPC } from '@/api/rpcClient';
 import { ProtectedDocumentError, PROTECTED_DOC_ERRORS } from '@/lib/protectedDocument';
+import { rateLimitedFetch } from '@/lib/rateLimitedFetch';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
@@ -22,11 +23,11 @@ export const fetchPublicCoaData = (publicToken) =>
 
 const signPublicStoragePath = async (storagePath, expiresIn = 3600) => {
   if (!storagePath) return null;
-  const resp = await fetch(`${supabaseUrl}/storage/v1/object/sign/${storagePath}`, {
+  const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${storagePath}`, {
     method: 'POST',
     headers: getPublicHeaders(),
     body: JSON.stringify({ expiresIn }),
-  });
+  }, { kind: 'public' });
   if (!resp.ok) return null;
   const data = await resp.json();
   const signed = data.signedURL || data.signedUrl;
@@ -59,11 +60,11 @@ const fetchPublicSdsViaRpc = async (publicToken) => {
 
 export const fetchPublicSdsSignedUrl = async (publicToken) => {
   try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/public-sds-url`, {
+    const resp = await rateLimitedFetch(`${supabaseUrl}/functions/v1/public-sds-url`, {
       method: 'POST',
       headers: getPublicHeaders(),
       body: JSON.stringify({ token: publicToken }),
-    });
+    }, { kind: 'public' });
 
     if (resp.ok) {
       const data = await resp.json();

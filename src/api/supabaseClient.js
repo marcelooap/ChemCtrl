@@ -4,6 +4,10 @@ import { emitEntityChange } from '@/lib/entityEvents';
 
 export { uploadFileToSupabase, getSignedFileUrl };
 import { getSessionId } from '@/api/rpcClient';
+import { rateLimitedFetch } from '@/lib/rateLimitedFetch';
+import { HttpError, parseRetryAfterHeader } from '@/lib/HttpError';
+import { withCache, invalidate } from '@/lib/queryCache';
+import { getCacheTtlForEntity } from '@/lib/rateLimitConfig';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
@@ -68,7 +72,7 @@ const tableColumnsCache = {};
 const getTableColumns = async (tableName) => {
   if (tableColumnsCache[tableName]) return tableColumnsCache[tableName];
   try {
-    const rowResp = await fetch(`${restUrl}/${tableName}?select=*&limit=1`, { headers: getHeaders(), ...noCacheFetch });
+    const rowResp = await rateLimitedFetch(`${restUrl}/${tableName}?select=*&limit=1`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
     if (rowResp.ok) {
       const rowData = await rowResp.json();
       if (rowData && rowData.length > 0) {
@@ -125,22 +129,28 @@ const handleResponse = async (resp, { allowMissingTable = false } = {}) => {
       code = body.code || null;
     } catch (_e) { /* ignore */ }
     if (allowMissingTable && isMissingTableError(code, msg)) return [];
-    throw new Error(msg);
+    throw new HttpError(resp.status, msg, { code, retryAfterSec: parseRetryAfterHeader(resp) });
   }
   const text = await resp.text();
   if (!text) return [];
   try { return JSON.parse(text); } catch { return []; }
 };
 
-const createEntity = (entityName, tableName) => ({
+const createEntity = (entityName, tableName) => {
+  const cacheTtl = getCacheTtlForEntity(entityName);
+
+  return {
   list: async (sort, limit) => {
     const params = new URLSearchParams();
     params.set('select', '*');
     const sortInfo = parseSort(sort);
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     if (limit) params.set('limit', String(limit));
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    const cacheKey = `${entityName}:list:${sort || ''}:${limit || ''}`;
+    return withCache(cacheKey, cacheTtl, async () => {
+      const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
+      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    });
   },
   filter: async (queryObj, sort, limit) => {
     const params = new URLSearchParams();
@@ -149,27 +159,33 @@ const createEntity = (entityName, tableName) => ({
     const sortInfo = parseSort(sort);
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     if (limit) params.set('limit', String(limit));
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    const cacheKey = `${entityName}:filter:${JSON.stringify(queryObj || {})}:${sort || ''}:${limit || ''}`;
+    return withCache(cacheKey, cacheTtl, async () => {
+      const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
+      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    });
   },
   get: async (id) => {
     const params = new URLSearchParams();
     params.set('select', '*');
     params.set('id', `eq.${id}`);
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch });
-    const data = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
-    if (!data || data.length === 0) throw new Error('Registro não encontrado');
-    return data[0];
+    const cacheKey = `${entityName}:get:${id}`;
+    return withCache(cacheKey, cacheTtl, async () => {
+      const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
+      const data = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+      if (!data || data.length === 0) throw new Error('Registro não encontrado');
+      return data[0];
+    });
   },
   create: async (itemData) => {
     delete tableColumnsCache[tableName];
     const cols = await getTableColumns(tableName);
     const body = cleanData(filterKnownColumns(itemData, cols));
-    const resp = await fetch(`${restUrl}/${tableName}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}`, {
       method: 'POST',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(body),
-    });
+    }, { kind: 'write' });
     if (!resp.ok) {
       const errText = await resp.text();
       if (errText.includes('PGRST204') || errText.includes('column')) {
@@ -177,18 +193,20 @@ const createEntity = (entityName, tableName) => ({
         for (const [k, v] of Object.entries(body)) {
           if (!errText.includes(`'${k}'`)) safeBody[k] = v;
         }
-        const retry = await fetch(`${restUrl}/${tableName}`, {
+        const retry = await rateLimitedFetch(`${restUrl}/${tableName}`, {
           method: 'POST',
           headers: getHeaders({ 'Prefer': 'return=representation' }),
           body: JSON.stringify(safeBody),
-        });
+        }, { kind: 'write' });
         const data = await handleResponse(retry);
+        invalidate(entityName);
         if (data[0]) emitEntityChange(entityName, { eventType: 'INSERT', new: data[0], old: null });
         return data[0];
       }
-      throw new Error(errText);
+      throw new HttpError(resp.status, errText, { retryAfterSec: parseRetryAfterHeader(resp) });
     }
     const data = await handleResponse(resp);
+    invalidate(entityName);
     if (data[0]) emitEntityChange(entityName, { eventType: 'INSERT', new: data[0], old: null });
     return data[0];
   },
@@ -204,11 +222,11 @@ const createEntity = (entityName, tableName) => ({
     }
     const params = new URLSearchParams();
     params.set('id', `eq.${id}`);
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
       method: 'PATCH',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(body),
-    });
+    }, { kind: 'write' });
     if (!resp.ok) {
       const errText = await resp.text();
       if (errText.includes('PGRST204') || errText.includes('column')) {
@@ -216,43 +234,47 @@ const createEntity = (entityName, tableName) => ({
         for (const [k, v] of Object.entries(body)) {
           if (!errText.includes(`'${k}'`)) safeBody[k] = v;
         }
-        const retry = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+        const retry = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
           method: 'PATCH',
           headers: getHeaders({ 'Prefer': 'return=representation' }),
           body: JSON.stringify(safeBody),
-        });
+        }, { kind: 'write' });
         const data = await handleResponse(retry);
         const updated = (data && data.length > 0) ? data[0] : { id, ...itemData };
+        invalidate(entityName);
         emitEntityChange(entityName, { eventType: 'UPDATE', new: updated, old: null });
         return updated;
       }
-      throw new Error(errText);
+      throw new HttpError(resp.status, errText, { retryAfterSec: parseRetryAfterHeader(resp) });
     }
     const data = await handleResponse(resp);
     const updated = (data && data.length > 0) ? data[0] : { id, ...itemData };
+    invalidate(entityName);
     emitEntityChange(entityName, { eventType: 'UPDATE', new: updated, old: null });
     return updated;
   },
   delete: async (id) => {
     const params = new URLSearchParams();
     params.set('id', `eq.${id}`);
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
       method: 'DELETE',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
-    });
+    }, { kind: 'write' });
     const data = await handleResponse(resp);
     const old = (data && data[0]) || { id };
+    invalidate(entityName);
     emitEntityChange(entityName, { eventType: 'DELETE', new: null, old });
     return true;
   },
   bulkCreate: async (dataArray) => {
     const cols = await getTableColumns(tableName);
-    const resp = await fetch(`${restUrl}/${tableName}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}`, {
       method: 'POST',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(dataArray.map(d => cleanData(filterKnownColumns(d, cols)))),
-    });
+    }, { kind: 'write' });
     const data = await handleResponse(resp);
+    invalidate(entityName);
     data.forEach((record) => emitEntityChange(entityName, { eventType: 'INSERT', new: record, old: null }));
     return data;
   },
@@ -263,17 +285,18 @@ const createEntity = (entityName, tableName) => ({
       const { id, ...updates } = item;
       const params = new URLSearchParams();
       params.set('id', `eq.${id}`);
-      const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+      const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
         method: 'PATCH',
         headers: getHeaders({ 'Prefer': 'return=representation' }),
         body: JSON.stringify(cleanData(filterKnownColumns(updates, cols))),
-      });
+      }, { kind: 'write' });
       const data = await handleResponse(resp);
       if (data && data.length > 0) {
         results.push(data[0]);
         emitEntityChange(entityName, { eventType: 'UPDATE', new: data[0], old: null });
       }
     }
+    invalidate(entityName);
     return results;
   },
   updateMany: async (queryObj, update) => {
@@ -281,30 +304,32 @@ const createEntity = (entityName, tableName) => ({
     const selectParams = new URLSearchParams();
     selectParams.set('select', 'id');
     applyFilters(selectParams, queryObj);
-    const selectResp = await fetch(`${restUrl}/${tableName}?${selectParams.toString()}`, { headers: getHeaders(), ...noCacheFetch });
+    const selectResp = await rateLimitedFetch(`${restUrl}/${tableName}?${selectParams.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
     const matches = await handleResponse(selectResp);
     if (!matches || matches.length === 0) return { modified: 0, has_more: false };
     const updates = update.$set || update;
     const ids = matches.map((m) => m.id);
     const params = new URLSearchParams();
     params.set('id', `in.(${ids.join(',')})`);
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
       method: 'PATCH',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(cleanData(filterKnownColumns(updates, cols))),
-    });
+    }, { kind: 'write' });
     const data = await handleResponse(resp);
+    invalidate(entityName);
     emitEntityChange(entityName, { eventType: 'REFRESH' });
     return { modified: data?.length || 0, has_more: false };
   },
   deleteMany: async (queryObj) => {
     const params = new URLSearchParams();
     applyFilters(params, queryObj);
-    const resp = await fetch(`${restUrl}/${tableName}?${params.toString()}`, {
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
       method: 'DELETE',
       headers: getHeaders({ 'Prefer': 'return=representation' }),
-    });
+    }, { kind: 'write' });
     const data = await handleResponse(resp);
+    invalidate(entityName);
     if (data && data.length > 0) {
       data.forEach((record) => emitEntityChange(entityName, { eventType: 'DELETE', new: null, old: record }));
     } else {
@@ -314,7 +339,8 @@ const createEntity = (entityName, tableName) => ({
   },
   subscribe: () => () => {},
   schema: () => ({ properties: {} }),
-});
+  };
+};
 
 export const createSupabaseEntities = () => {
   const entities = {};

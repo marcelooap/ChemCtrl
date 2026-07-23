@@ -8,6 +8,7 @@ import { generateOrderPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtVolume } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { toNum, VOLUME_EPS } from '@/lib/orderProductionStatus';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const statusColors = {
   Pendente: 'bg-amber-100 text-amber-700',
@@ -29,6 +30,7 @@ const StatusBadge = ({ status }) => (
 export default function OrderDetailsDialog({ open, onOpenChange, order, productions }) {
   const { t, i18n } = useTranslation();
   const [containers, setContainers] = useState([]);
+  const pdfGuard = useSubmitGuard();
 
   useEffect(() => {
     if (!open || !order) return;
@@ -144,7 +146,7 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
           )}
         </div>
         <div className="flex justify-between mt-4">
-          <Button variant="outline" onClick={() => generateOrderPDF(order, linkedOPs, containers)} className="gap-2">
+          <Button variant="outline" disabled={pdfGuard.busy} onClick={() => pdfGuard.run(() => generateOrderPDF(order, linkedOPs, containers))} className="gap-2">
             <FileText className="w-4 h-4" /> {t('buttons.generatePdf')}
           </Button>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('buttons.close')}</Button>

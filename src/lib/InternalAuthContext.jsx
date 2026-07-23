@@ -3,6 +3,8 @@ import { callRPC, setSessionId, clearSessionId, getSessionId } from '@/api/rpcCl
 import { resetRealtimeClient } from '@/lib/realtime';
 import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
 import i18n from '@/i18n';
+import { isHttpError } from '@/lib/HttpError';
+import { clearAllCache } from '@/lib/queryCache';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';
@@ -126,6 +128,17 @@ export const InternalAuthProvider = ({ children }) => {
           detail = String(rpcErr?.message || '').slice(0, 180);
         }
 
+        // Rate limit de login (HTTP 429): usa a mensagem amigável do backend
+        // diretamente, sem cair nas heurísticas de erro de schema abaixo, e
+        // nunca revela se o bloqueio foi por IP ou por usuário.
+        if (isHttpError(rpcErr) && rpcErr.status === 429) {
+          return {
+            success: false,
+            error: detail || i18n.t('login.errors.rateLimited'),
+            retryAfterSec: rpcErr.retryAfterSec,
+          };
+        }
+
         const msg = String(rpcErr?.message || '');
         if (
           msg.includes('42703')
@@ -217,6 +230,7 @@ export const InternalAuthProvider = ({ children }) => {
     }
     resetRealtimeClient();
     clearLocalAuth();
+    clearAllCache(); // evita que dados da sessão anterior "vazem" para o próximo usuário no mesmo navegador
     setUser(null);
     window.location.href = '/login';
   };

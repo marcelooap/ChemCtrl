@@ -6,12 +6,14 @@ import { FileDown } from 'lucide-react';
 import { generateTransferPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translateTransferType, translatePackagingType } from '@/i18n/domainMaps';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
 export default function TransferViewDialog({ transfer, density, recipeCode, containers, onClose }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const pdfGuard = useSubmitGuard();
 
   if (!transfer) return null;
 
@@ -48,8 +50,8 @@ export default function TransferViewDialog({ transfer, density, recipeCode, cont
             <DialogTitle className="text-base font-semibold">
               {transfer.transfer_number} — {transfer.product}
             </DialogTitle>
-            <Button size="sm" style={{ background: '#2575D1' }} className="text-white hover:opacity-90"
-              onClick={() => generateTransferPDF(transfer, density, containers, recipeCode)}>
+            <Button size="sm" style={{ background: '#2575D1' }} className="text-white hover:opacity-90" disabled={pdfGuard.busy}
+              onClick={() => pdfGuard.run(() => generateTransferPDF(transfer, density, containers, recipeCode))}>
               <FileDown className="w-4 h-4 mr-2" /> {t('buttons.generatePdf')}
             </Button>
           </div>

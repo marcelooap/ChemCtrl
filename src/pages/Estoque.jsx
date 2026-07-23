@@ -20,6 +20,7 @@ import moment from 'moment';
 import { fmtNumber, fmtCurrency, fmtMass } from '@/i18n/formatters';
 import { calcPackagingQty } from '@/lib/stockUtils';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
 
@@ -70,6 +71,7 @@ export default function Estoque() {
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
   const [stockFilter, setStockFilter] = useState('todas');
   const [clientFilter, setClientFilter] = useState('todos');
   const [showForm, setShowForm] = useState(false);
@@ -132,7 +134,7 @@ export default function Estoque() {
   }, [items]);
 
   const filtered = items.filter(i => {
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     const matchesSearch = !q || [i.mp_name, i.mp_code, i.client, i.lot, i.supplier].some(v => (v || '').toLowerCase().includes(q));
     const hasStock = (i.current_stock || 0) > 0;
     const matchesFilter = stockFilter === 'todas' || (stockFilter === 'com_saldo' && hasStock) || (stockFilter === 'sem_saldo' && !hasStock);

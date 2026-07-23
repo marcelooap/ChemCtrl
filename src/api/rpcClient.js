@@ -1,5 +1,8 @@
 // Self-contained RPC + session client — does NOT import from supabaseClient.js
 // (avoids stale Vite module cache issues during migration)
+import { rateLimitedFetch } from '@/lib/rateLimitedFetch';
+import { classifyRpc } from '@/lib/rateLimitConfig';
+import { HttpError, parseRetryAfterHeader, parseRetryAfterFromBody } from '@/lib/HttpError';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
@@ -24,14 +27,18 @@ const getHeaders = (extra = {}) => {
 };
 
 export const callRPC = async (functionName, params = {}) => {
-  const resp = await fetch(`${restUrl}/rpc/${functionName}`, {
+  const kind = classifyRpc(functionName);
+  const resp = await rateLimitedFetch(`${restUrl}/rpc/${functionName}`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(params),
-  });
+  }, { kind, silent429: kind === 'login' });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(text || `HTTP ${resp.status}`);
+    throw new HttpError(resp.status, text || `HTTP ${resp.status}`, {
+      retryAfterSec: parseRetryAfterHeader(resp) ?? parseRetryAfterFromBody(text),
+      endpoint: functionName,
+    });
   }
   const text = await resp.text();
   if (!text) return null;

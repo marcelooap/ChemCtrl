@@ -404,6 +404,7 @@
       "invalidCredentials": "Identifiant ou mot de passe invalide.",
       "userNotFound": "Usuário não encontrado.",
       "accountInactive": "Conta inativa. Contate o administrador.",
+      "rateLimited": "Trop de tentatives de connexion. Veuillez patienter quelques minutes avant de réessayer.",
       "network": "Erro de conexão. Verifique sua internet.",
       "generic": "Não foi possível realizar o login. Tente novamente.",
       "sessionExpired": "Sua sessão expirou. Faça login novamente.",

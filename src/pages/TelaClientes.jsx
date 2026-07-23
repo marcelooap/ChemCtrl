@@ -19,6 +19,7 @@ import ContainerViewDialog from '@/components/vasilhames/ContainerViewDialog';
 import { canUseClientFilter, getUserClient, matchesClient } from '@/lib/permissions';
 import { summarizePatioContainers } from '@/lib/containerUtils';
 import { calcPackagingQty } from '@/lib/stockUtils';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import moment from 'moment';
 import { fmtNumber, fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType, translateStockExpiryStatus } from '@/i18n/domainMaps';
@@ -47,8 +48,11 @@ export default function TelaClientes() {
   const { data: allContainers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const [selectedClient, setSelectedClient] = useState('all');
   const [searchMP, setSearchMP] = useState('');
+  const debouncedSearchMP = useDebouncedValue(searchMP);
   const [searchContainer, setSearchContainer] = useState('');
+  const debouncedSearchContainer = useDebouncedValue(searchContainer);
   const [searchHistory, setSearchHistory] = useState('');
+  const debouncedSearchHistory = useDebouncedValue(searchHistory);
   const [showStockDialog, setShowStockDialog] = useState(false);
   const [showContainersDialog, setShowContainersDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -112,27 +116,27 @@ export default function TelaClientes() {
   const containerKpis = useMemo(() => summarizePatioContainers(patiotContainers), [patiotContainers]);
 
   const filteredStocks = useMemo(() => {
-    const q = searchMP.toLowerCase();
+    const q = debouncedSearchMP.toLowerCase();
     const base = stocksWithBalance;
     if (!q) return base;
     return base.filter(s => [s.mp_name, s.mp_code, s.lot, s.client].some(v => (v || '').toLowerCase().includes(q)));
-  }, [stocksWithBalance, searchMP]);
+  }, [stocksWithBalance, debouncedSearchMP]);
 
   const filteredContainers = useMemo(() => {
-    const q = searchContainer.toLowerCase();
+    const q = debouncedSearchContainer.toLowerCase();
     if (!q) return patiotContainers;
     return patiotContainers.filter(c => [c.container_number, c.barril_number, c.lot, c.product].some(v => (v || '').toLowerCase().includes(q)));
-  }, [patiotContainers, searchContainer]);
+  }, [patiotContainers, debouncedSearchContainer]);
 
   const filteredHistoryProds = useMemo(() => {
-    const q = searchHistory.toLowerCase();
+    const q = debouncedSearchHistory.toLowerCase();
     if (!q) return productions;
     return productions.filter((p) =>
       [p.op_number, p.product, p.client, p.lot, p.packaging_type, p.status].some((v) =>
         (v || '').toLowerCase().includes(q),
       ),
     );
-  }, [productions, searchHistory]);
+  }, [productions, debouncedSearchHistory]);
 
   const stockDialogTotals = useMemo(() => ({
     currentStock: filteredStocks.reduce((s, i) => s + (i.current_stock || 0), 0),

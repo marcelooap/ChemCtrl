@@ -11,6 +11,7 @@ import Combobox from '@/components/ui/combobox';
 import PtBRInput from '@/components/ui/pt-br-input';
 import { generateEnsaioPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
 
@@ -27,6 +28,7 @@ export default function Ensaios() {
   const { data: tests, loading, reload: load } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500), [], parseAnalyses);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const [search, setSearch] = useState('');
+  const pdfGuard = useSubmitGuard();
 
   const fmtSpec = useCallback((a) => {
     if (isTextSpec(a.analysis_name)) return a.specification || t('common.notAvailable');
@@ -274,7 +276,7 @@ export default function Ensaios() {
             </div>
           )}
           <div className="flex justify-between mt-4">
-            <Button variant="outline" onClick={() => generateEnsaioPDF(viewing)} className="gap-2"><FileText className="w-4 h-4" /> {t('buttons.generatePdf')}</Button>
+            <Button variant="outline" disabled={pdfGuard.busy} onClick={() => pdfGuard.run(() => generateEnsaioPDF(viewing))} className="gap-2"><FileText className="w-4 h-4" /> {t('buttons.generatePdf')}</Button>
             <Button variant="outline" onClick={() => setShowView(false)}>{t('buttons.close')}</Button>
           </div>
         </DialogContent>

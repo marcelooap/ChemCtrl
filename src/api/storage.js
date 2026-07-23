@@ -1,5 +1,7 @@
 // Storage utilities — fully self-contained (no cross-module imports to avoid Vite cache issues)
 import { openProtectedPdf } from '@/lib/protectedDocument';
+import { rateLimitedFetch } from '@/lib/rateLimitedFetch';
+import { HttpError, parseRetryAfterHeader } from '@/lib/HttpError';
 
 const getSessionId = () => localStorage.getItem('chemctrl_session_id') || '';
 
@@ -64,9 +66,9 @@ export const validatePdfFile = async (file) => {
   return { valid: true };
 };
 
-const storageFetch = async (path, options = {}) => {
+const storageFetch = async (path, options = {}, kind = 'write') => {
   const sessionId = getSessionId();
-  return fetch(`${supabaseUrl}/storage/v1/object/${path}`, {
+  return rateLimitedFetch(`${supabaseUrl}/storage/v1/object/${path}`, {
     ...options,
     headers: {
       apikey: supabaseAnonKey,
@@ -74,7 +76,7 @@ const storageFetch = async (path, options = {}) => {
       ...(sessionId ? { 'x-session-id': sessionId } : {}),
       ...options.headers,
     },
-  });
+  }, { kind });
 };
 
 export const uploadFileToSupabase = async (file, bucket = 'fotos-cq') => {
@@ -88,10 +90,10 @@ export const uploadFileToSupabase = async (file, bucket = 'fotos-cq') => {
       'Content-Type': contentType,
     },
     body: file,
-  });
+  }, 'upload');
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Upload falhou (${resp.status}): ${errBody}`);
+    throw new HttpError(resp.status, `Upload falhou (${resp.status}): ${errBody}`, { retryAfterSec: parseRetryAfterHeader(resp) });
   }
   return `${bucket}/${fileName}`;
 };
@@ -111,20 +113,20 @@ export const uploadRecipeDocument = async (recipeId, docType, file) => {
       'Content-Type': 'application/pdf',
     },
     body: file,
-  });
+  }, 'upload');
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Upload falhou (${resp.status}): ${errBody}`);
+    throw new HttpError(resp.status, `Upload falhou (${resp.status}): ${errBody}`, { retryAfterSec: parseRetryAfterHeader(resp) });
   }
   return objectPath;
 };
 
 export const deleteRecipeDocument = async (recipeId, docType) => {
   const objectPath = `${TECH_DOCS_BUCKET}/${getRecipeDocPath(recipeId, docType)}`;
-  const resp = await storageFetch(objectPath, { method: 'DELETE' });
+  const resp = await storageFetch(objectPath, { method: 'DELETE' }, 'write');
   if (!resp.ok && resp.status !== 404) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Exclusão falhou (${resp.status}): ${errBody}`);
+    throw new HttpError(resp.status, `Exclusão falhou (${resp.status}): ${errBody}`, { retryAfterSec: parseRetryAfterHeader(resp) });
   }
 };
 
@@ -134,7 +136,7 @@ export const getSignedFileUrl = async (url, expiresIn = 3600) => {
   const publicPrefix = `${supabaseUrl}/storage/v1/object/public/`;
   if (path.startsWith(publicPrefix)) path = path.substring(publicPrefix.length);
   const sessionId = getSessionId();
-  const resp = await fetch(`${supabaseUrl}/storage/v1/object/sign/${path}`, {
+  const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${path}`, {
     method: 'POST',
     headers: {
       apikey: supabaseAnonKey,
@@ -143,7 +145,7 @@ export const getSignedFileUrl = async (url, expiresIn = 3600) => {
       ...(sessionId ? { 'x-session-id': sessionId } : {}),
     },
     body: JSON.stringify({ expiresIn }),
-  });
+  }, { kind: 'download' });
   if (!resp.ok) {
     return url.startsWith('http') ? url : `${supabaseUrl}/storage/v1/object/public/${path}`;
   }
@@ -195,7 +197,7 @@ const downloadFromPublicFallback = () => {
 export const downloadSystemManual = async () => {
   try {
     const sessionId = getSessionId();
-    const resp = await fetch(`${supabaseUrl}/storage/v1/object/sign/${SYSTEM_MANUAL_STORAGE_URL}`, {
+    const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${SYSTEM_MANUAL_STORAGE_URL}`, {
       method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
@@ -204,7 +206,7 @@ export const downloadSystemManual = async () => {
         ...(sessionId ? { 'x-session-id': sessionId } : {}),
       },
       body: JSON.stringify({ expiresIn: 3600 }),
-    });
+    }, { kind: 'download' });
     if (resp.ok) {
       const data = await resp.json();
       if (data.signedURL) {
@@ -243,10 +245,10 @@ export const uploadSystemManual = async (file) => {
       'Content-Type': 'application/pdf',
     },
     body: file,
-  });
+  }, 'upload');
   if (!resp.ok) {
     const errBody = await resp.text().catch(() => '');
-    throw new Error(`Upload falhou (${resp.status}): ${errBody}`);
+    throw new HttpError(resp.status, `Upload falhou (${resp.status}): ${errBody}`, { retryAfterSec: parseRetryAfterHeader(resp) });
   }
   return SYSTEM_MANUAL_STORAGE_URL;
 };
