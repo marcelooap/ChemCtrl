@@ -4,11 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2, Loader2, ArrowDown, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import ProductCombobox from '@/components/ui/ProductCombobox';
 import { useToast } from '@/components/ui/use-toast';
 import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
@@ -19,6 +27,7 @@ import { matchesClient } from '@/lib/permissions';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
 import {
   toNum,
+  VOLUME_EPS,
   isOrderFullyProduced,
   isPastExpectedDate,
   getOrderDisplayStatus,
@@ -26,6 +35,23 @@ import {
 } from '@/lib/orderProductionStatus';
 
 const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
+
+const ORDER_STATUS_OPTIONS = [
+  { value: 'Pendente', labelKey: 'orders.status.pending' },
+  { value: 'Em produção', labelKey: 'orders.status.inProduction' },
+  { value: 'Atrasado', labelKey: 'orders.status.late' },
+  { value: 'Finalizado', labelKey: 'orders.status.finished' },
+];
+
+/** Volume do rodapé: "Em produção" usa volume em OP aberta; demais usam pendente. */
+const getFooterVolumeForOrder = (order, statusFilters) => {
+  const displayStatus = getOrderDisplayStatus(order);
+  const filteringInProduction = statusFilters.length > 0 && statusFilters.includes('Em produção');
+  if (filteringInProduction && displayStatus === 'Em produção') {
+    return toNum(order.volume_in_production);
+  }
+  return toNum(order.volume_pending);
+};
 
 export default function Pedidos() {
   const { t, i18n } = useTranslation();
@@ -40,7 +66,8 @@ export default function Pedidos() {
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') || '');
-  const [statusFilter, setStatusFilter] = useState('all');
+  /** Array vazio = todos os status; caso contrário, OR dos status selecionados. */
+  const [statusFilters, setStatusFilters] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -59,6 +86,7 @@ export default function Pedidos() {
         status: derived.status,
         volume_produced: derived.volume_produced,
         volume_pending: derived.volume_pending,
+        volume_in_production: derived.volume_in_production,
       };
     });
   }, [rawOrders, productions]);
@@ -111,17 +139,38 @@ export default function Pedidos() {
     const q = search.toLowerCase();
     const matchSearch = !q || [o.order_number, o.product, o.client, o.requester].some(v => (v || '').toLowerCase().includes(q));
     const displayStatus = getDisplayStatus(o);
-    const matchStatus = statusFilter === 'all' || displayStatus === statusFilter;
+    const matchStatus = statusFilters.length === 0 || statusFilters.includes(displayStatus);
     const matchClient = !clientFilter || matchesClient(o, clientFilter);
     return matchSearch && matchStatus && matchClient;
-  }), [orders, search, statusFilter, clientFilter]);
+  }), [orders, search, statusFilters, clientFilter]);
+
+  const statusFilterLabel = useMemo(() => {
+    if (statusFilters.length === 0) return t('orders.allStatuses');
+    if (statusFilters.length === 1) {
+      const opt = ORDER_STATUS_OPTIONS.find(o => o.value === statusFilters[0]);
+      return opt ? t(opt.labelKey) : statusFilters[0];
+    }
+    return t('orders.statusSelectedCount', { count: statusFilters.length });
+  }, [statusFilters, t, i18n.language]);
+
+  const toggleStatusFilter = (value) => {
+    setStatusFilters((prev) => {
+      if (prev.length === 0) return [value];
+      if (prev.includes(value)) {
+        const next = prev.filter((s) => s !== value);
+        return next;
+      }
+      const next = [...prev, value];
+      return next.length === ORDER_STATUS_OPTIONS.length ? [] : next;
+    });
+  };
 
   const footerStats = useMemo(() => {
     const recipeList = recipes || [];
     let volume = 0;
     let revenue = 0;
     for (const o of filtered) {
-      const vol = toNum(o.volume_pending);
+      const vol = getFooterVolumeForOrder(o, statusFilters);
       volume += vol;
 
       const product = (o.product || '').trim().toLowerCase();
@@ -133,11 +182,11 @@ export default function Pedidos() {
       const client = (o.client || '').trim().toLowerCase();
       const recipe = (client && byProduct.find(r => (r.client || '').trim().toLowerCase() === client)) || byProduct[0];
       const density = parseFloat(recipe?.density) || 0;
-      const price = parseFloat(recipe?.price) || 0;
+      const price = parseFloat(recipe?.price) || 0; // preço com imposto (R$/kg)
       revenue += vol * density * price;
     }
     return { count: filtered.length, volume, revenue };
-  }, [filtered, recipes]);
+  }, [filtered, recipes, statusFilters]);
 
   const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
   const openEdit = (o) => {
@@ -253,16 +302,40 @@ export default function Pedidos() {
               {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-44"><SelectValue placeholder={t('orders.allStatuses')} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('orders.allStatuses')}</SelectItem>
-              <SelectItem value="Pendente">{t('orders.status.pending')}</SelectItem>
-              <SelectItem value="Em produção">{t('orders.status.inProduction')}</SelectItem>
-              <SelectItem value="Atrasado">{t('orders.status.late')}</SelectItem>
-              <SelectItem value="Finalizado">{t('orders.status.finished')}</SelectItem>
-            </SelectContent>
-          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-48 justify-between font-normal shadow-sm"
+                aria-label={t('orders.allStatuses')}
+              >
+                <span className="truncate">{statusFilterLabel}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuLabel>{t('orders.filterByStatus')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={statusFilters.length === 0}
+                onCheckedChange={(checked) => { if (checked) setStatusFilters([]); }}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {t('orders.allStatuses')}
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {ORDER_STATUS_OPTIONS.map((opt) => (
+                <DropdownMenuCheckboxItem
+                  key={opt.value}
+                  checked={statusFilters.includes(opt.value)}
+                  onCheckedChange={() => toggleStatusFilter(opt.value)}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {t(opt.labelKey)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Scrollable Table */}
@@ -303,7 +376,20 @@ export default function Pedidos() {
                       <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
                       <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
                       <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm text-amber-600">{fmtNumber(o.volume_pending)} L</td>
+                      <td className="px-4 py-2.5 text-right text-sm">
+                        <div className="inline-flex items-center justify-end gap-2">
+                          {toNum(o.volume_in_production) > VOLUME_EPS && (
+                            <span
+                              className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
+                              title={t('orders.table.volumeInProduction')}
+                            >
+                              <ArrowDown className="w-3 h-3 shrink-0" aria-hidden />
+                              {fmtNumber(o.volume_in_production)} L
+                            </span>
+                          )}
+                          <span className="font-bold text-amber-600">{fmtNumber(o.volume_pending)} L</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-2.5 text-sm">
                         <span className={pastDue ? 'text-red-600 font-medium' : ''}>
                           {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}

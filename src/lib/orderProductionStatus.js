@@ -58,6 +58,7 @@ export const getOrderDisplayStatus = (order, now = new Date()) => {
 /**
  * Deriva volumes e status do pedido a partir das OPs vinculadas.
  * volume_produced = soma apenas de OPs Finalizado (Cancelado e em andamento não contam).
+ * volume_in_production = soma das OPs abertas (não Finalizado/Cancelado).
  */
 export function deriveOrderFromProductions(order, productions) {
   const orderId = String(order.id);
@@ -67,6 +68,7 @@ export function deriveOrderFromProductions(order, productions) {
   const openOPs = linkedOPs.filter((p) => !['Finalizado', 'Cancelado'].includes(p.status));
   const finishedOPs = linkedOPs.filter((p) => p.status === 'Finalizado');
   const opProduced = finishedOPs.reduce((s, p) => s + toNum(p.volume), 0);
+  const volumeInProduction = openOPs.reduce((s, p) => s + toNum(p.volume), 0);
   const volumeOrdered = toNum(order.volume_ordered);
 
   let totalProduced;
@@ -104,6 +106,8 @@ export function deriveOrderFromProductions(order, productions) {
     status,
     volume_produced: totalProduced,
     volume_pending: volumePending,
+    // Soma das OPs abertas — só UI, não persiste no pedido.
+    volume_in_production: volumeInProduction,
   };
 }
 

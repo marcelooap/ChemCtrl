@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FileText } from 'lucide-react';
+import { FileText, ArrowDown } from 'lucide-react';
 import { generateOrderPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtVolume } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
+import { toNum, VOLUME_EPS } from '@/lib/orderProductionStatus';
 
 const statusColors = {
   Pendente: 'bg-amber-100 text-amber-700',
@@ -49,6 +50,11 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
   if (!order) return null;
   const linkedOPs = productions.filter(p => p.order_id === order.id);
   const totalVolume = linkedOPs.reduce((s, p) => s + (p.volume || 0), 0);
+  const volumeInProduction = order.volume_in_production != null
+    ? toNum(order.volume_in_production)
+    : linkedOPs
+      .filter((p) => !['Finalizado', 'Cancelado'].includes(p.status))
+      .reduce((s, p) => s + toNum(p.volume), 0);
 
   const getContainersForOP = (op_number) =>
     containers.filter(c => c.op_number === op_number).map(c => c.container_number).filter(Boolean);
@@ -71,7 +77,21 @@ export default function OrderDetailsDialog({ open, onOpenChange, order, producti
             <div><p className="text-xs text-muted-foreground">{t('orders.details.expectedDate')}</p><p className="font-medium">{fmtDate(order.expected_date, undefined, i18n.language)}</p></div>
             <div><p className="text-xs text-muted-foreground">{t('orders.details.volumeOrdered')}</p><p className="font-bold">{fmtVolume(order.volume_ordered, 'L', i18n.language)}</p></div>
             <div><p className="text-xs text-muted-foreground">{t('orders.details.volumeProduced')}</p><p className="font-bold text-green-600">{fmtVolume(order.volume_produced, 'L', i18n.language)}</p></div>
-            <div><p className="text-xs text-muted-foreground">{t('orders.details.volumePending')}</p><p className="font-bold text-amber-600">{fmtVolume(order.volume_pending, 'L', i18n.language)}</p></div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t('orders.details.volumePending')}</p>
+              <p className="font-bold inline-flex items-center gap-2">
+                {volumeInProduction > VOLUME_EPS && (
+                  <span
+                    className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
+                    title={t('orders.table.volumeInProduction')}
+                  >
+                    <ArrowDown className="w-3 h-3 shrink-0" aria-hidden />
+                    {fmtVolume(volumeInProduction, 'L', i18n.language)}
+                  </span>
+                )}
+                <span className="text-amber-600">{fmtVolume(order.volume_pending, 'L', i18n.language)}</span>
+              </p>
+            </div>
           </div>
 
           {order.observations && (

@@ -504,6 +504,7 @@
       "packagingPending": "En attente Conditionnement",
       "revenueGeneratedMonth": "Revenus Générés ce Mois",
       "revenueRealized": "revenus réalisés",
+      "revenueWithoutTax": "revenu hors taxe {{amount}}",
       "revenueInProduction": "+ {{amount}} en production",
       "revenueTotalProvisioned": "Total provisionné : {{amount}}",
       "finishedOps": "{{count}} OF terminé(s)",
@@ -1552,6 +1553,8 @@
     "searchPlaceholder": "Rechercher par ID, produit, client...",
     "allStatuses": "Tous les statuts",
     "allClients": "Tous les clients",
+    "filterByStatus": "Filtrer par statut",
+    "statusSelectedCount": "{{count}} statuts",
     "status": {
       "pending": "En attente",
       "inProduction": "En production",
@@ -1569,6 +1572,7 @@
       "volume": "Volume (L)",
       "volumeProduced": "Vol. Produit",
       "volumePending": "Vol. En attente",
+      "volumeInProduction": "Volume en production (sera déduit du en attente)",
       "expectedDate": "Prév. Livraison",
       "status": "Statut",
       "actions": "Actions"

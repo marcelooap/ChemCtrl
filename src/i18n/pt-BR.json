@@ -504,6 +504,7 @@
       "packagingPending": "Pendente de Envase",
       "revenueGeneratedMonth": "Receita Gerada no Mês",
       "revenueRealized": "receita realizada",
+      "revenueWithoutTax": "receita sem imposto {{amount}}",
       "revenueInProduction": "+ {{amount}} em produção",
       "revenueTotalProvisioned": "Total provisionado: {{amount}}",
       "finishedOps": "{{count}} OP(s) finalizada(s)",
@@ -1472,6 +1473,8 @@
     "searchPlaceholder": "Buscar por ID, produto, cliente...",
     "allStatuses": "Todos os status",
     "allClients": "Todos os clientes",
+    "filterByStatus": "Filtrar por status",
+    "statusSelectedCount": "{{count}} status",
     "status": {
       "pending": "Pendente",
       "inProduction": "Em produção",
@@ -1489,6 +1492,7 @@
       "volume": "Volume (L)",
       "volumeProduced": "Vol. Produzido",
       "volumePending": "Vol. Pendente",
+      "volumeInProduction": "Volume em produção (será baixado do pendente)",
       "expectedDate": "Prev. Atend.",
       "status": "Status",
       "actions": "Ações"

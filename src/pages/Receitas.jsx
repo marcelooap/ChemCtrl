@@ -420,8 +420,8 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-left">{t('recipes.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.product')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.client')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.priceWithTax')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.priceWithoutTax')}</th>
+                  <th className="px-4 py-3 text-center">{t('recipes.table.priceWithTax')}</th>
+                  <th className="px-4 py-3 text-center">{t('recipes.table.priceWithoutTax')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revisionDate')}</th>
                   <th className="px-4 py-3 text-right">{t('recipes.table.mpCount')}</th>
@@ -452,8 +452,16 @@ export default function Receitas() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
-                    <td className="px-4 py-2.5 text-right text-sm">{(r.price || 0).toFixed(4)}</td>
-                    <td className="px-4 py-2.5 text-right text-sm">{calcPriceWithoutTax(r.price).toFixed(4)}</td>
+                    <td className="px-4 py-2.5 text-center text-sm">
+                      <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                        {(r.price || 0).toFixed(4)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-center text-sm">
+                      <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
+                        {calcPriceWithoutTax(r.price).toFixed(4)}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>
                     <td className="px-4 py-2.5 text-sm">{r.revision_date || t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>

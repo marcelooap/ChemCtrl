@@ -504,6 +504,7 @@
       "packagingPending": "Pending Packaging",
       "revenueGeneratedMonth": "Revenue Generated This Month",
       "revenueRealized": "revenue realized",
+      "revenueWithoutTax": "revenue without tax {{amount}}",
       "revenueInProduction": "+ {{amount}} in production",
       "revenueTotalProvisioned": "Total provisioned: {{amount}}",
       "finishedOps": "{{count}} PO(s) finished",
@@ -1571,6 +1572,8 @@
     "searchPlaceholder": "Search by ID, product, client...",
     "allStatuses": "All statuses",
     "allClients": "All clients",
+    "filterByStatus": "Filter by status",
+    "statusSelectedCount": "{{count}} statuses",
     "status": {
       "pending": "Pending",
       "inProduction": "In production",
@@ -1588,6 +1591,7 @@
       "volume": "Volume (L)",
       "volumeProduced": "Vol. Produced",
       "volumePending": "Vol. Pending",
+      "volumeInProduction": "Volume in production (will reduce pending)",
       "expectedDate": "Expected",
       "status": "Status",
       "actions": "Actions"

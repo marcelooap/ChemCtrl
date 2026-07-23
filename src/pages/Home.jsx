@@ -7,6 +7,7 @@ import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle } from
 import { useToast } from '@/components/ui/use-toast';
 import moment from 'moment';
 import { fmtDate, fmtVolume, fmtCurrency, fmtNumber } from '@/i18n/formatters';
+import { calcPriceWithoutTax } from '@/lib/recipePricing';
 import ProductionTrackingTable from '@/components/production/ProductionTrackingTable';
 
 const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert, showLabel, hideLabel }) => (
@@ -76,6 +77,7 @@ export default function Home() {
   const totalVolumeMonth = finishedThisMonth.reduce((s, p) => s + (p.volume || 0), 0);
   const inProgressVolume = inProgressProds.reduce((s, p) => s + (p.volume || 0), 0);
   const revenueMonth = finishedThisMonth.reduce((s, p) => s + ((p.mass || 0) * (p.unit_price || 0)), 0);
+  const revenueMonthWithoutTax = calcPriceWithoutTax(revenueMonth);
   const revenueInProcess = inProgressProds.reduce((s, p) => s + ((p.mass || 0) * (p.unit_price || 0)), 0);
   const openOrders = orders.filter(o => o.status !== 'Finalizado' && (o.volume_pending ?? 0) > 0);
   const openVolume = openOrders.reduce((s, o) => s + (o.volume_pending || 0), 0);
@@ -127,7 +129,8 @@ export default function Home() {
             { text: hideVolume ? '••••••' : t('dashboard.stats.totalProvisioned', { volume: fmtNumber(totalVolumeMonth + inProgressVolume, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }), color: undefined },
           ]} />
         <StatCard title={t('dashboard.stats.revenueGeneratedMonth')} value={fmtCurrency(revenueMonth)} valueColor="#00875a"
-          subtitle={t('dashboard.stats.revenueRealized')} icon={DollarSign} iconBg="#00875a" accentBorder="#00875a" showEye
+          subtitle={hideRevenue ? '••••••' : t('dashboard.stats.revenueWithoutTax', { amount: fmtCurrency(revenueMonthWithoutTax) })}
+          icon={DollarSign} iconBg="#00875a" accentBorder="#00875a" showEye
           hidden={hideRevenue} onToggleEye={() => setHideRevenue(h => !h)}
           showLabel={t('common.show')} hideLabel={t('common.hide')}
           footer={[

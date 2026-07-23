@@ -7,6 +7,7 @@ import { useOutletContext } from 'react-router-dom';
 import { BarChart3, DollarSign, Trophy, Scale } from 'lucide-react';
 import moment from 'moment';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
+import { calcPriceWithoutTax } from '@/lib/recipePricing';
 import {
   ComposedChart, Bar, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -186,6 +187,11 @@ export default function Dashboard() {
         <ExecutiveKpiCard
           title={t('dashboard.stats.revenueMonth')}
           value={kpis.hasCurrentData ? fmtCurrency(kpis.revenueCurrent, 'BRL', i18n.language) : '-'}
+          subtitle={kpis.hasCurrentData
+            ? t('dashboard.stats.revenueWithoutTax', {
+              amount: fmtCurrency(calcPriceWithoutTax(kpis.revenueCurrent), 'BRL', i18n.language),
+            })
+            : undefined}
           comparison={kpis.hasCurrentData ? getComparison(kpis.revenueChange) : undefined}
           comparisonLabel={kpis.hasCurrentData && kpis.revenueChange != null ? t('dashboard.stats.vsPreviousMonth') : undefined}
           icon={DollarSign}
