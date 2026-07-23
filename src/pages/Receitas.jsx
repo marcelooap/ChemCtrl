@@ -93,12 +93,12 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
           <div>
             <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.productionCapacity')}</p>
             <p className="text-xl font-bold text-blue-800">
-              {cap.volume > 0 ? fmtVolume(cap.volume, 'L') : t('common.notAvailable')}
+              {hideMpNames ? '*******' : (cap.volume > 0 ? fmtVolume(cap.volume, 'L') : t('common.notAvailable'))}
             </p>
           </div>
           <div className="border-l border-blue-200 pl-6">
             <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">{t('recipes.view.limitingMp')}</p>
-            <p className="text-sm font-bold text-red-600">{cap.limitante || t('common.notAvailable')}</p>
+            <p className="text-sm font-bold text-red-600">{hideMpNames ? '*******' : (cap.limitante || t('common.notAvailable'))}</p>
           </div>
         </div>
       )}
