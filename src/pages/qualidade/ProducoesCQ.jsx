@@ -263,7 +263,7 @@ export default function ProducoesCQ() {
                   <p className="text-sm font-semibold text-foreground mt-1">{t('quality.producoesCq.analystAutoHint')}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCapturePhoto} />
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handleCapturePhoto} />
                   {analysisForm.sample_photo_url ? (
                     <div className="flex items-center gap-2">
                       <SignedImage url={analysisForm.sample_photo_url} alt={t('quality.producoesCq.sampleAlt')} className="w-16 h-16 object-cover rounded-lg border" />

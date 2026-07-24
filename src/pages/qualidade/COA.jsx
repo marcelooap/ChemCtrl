@@ -305,7 +305,7 @@ export default function COA() {
               </div>
               <div className="mb-4 flex items-center gap-3">
                 <span className="text-xs font-medium text-muted-foreground">{t('quality.sections.samplePhoto')}:</span>
-                <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
                 {editForm.sample_photo_url ? (
                   <div className="flex items-center gap-2">
                     <SignedImage url={editForm.sample_photo_url} alt={t('quality.producoesCq.sampleAlt')} className="w-16 h-16 object-cover rounded-lg border" />
