@@ -1748,7 +1748,7 @@ export function generateVasilhamesReportPDF(containers, recipe) {
   const doc = new jsPDF({ format: 'a4' });
   const product = (containers[0] && containers[0].product) || '-';
   const client = (containers[0] && containers[0].client) || '-';
-  const productCode = (recipe && recipe.code) || '-';
+  const productCode = (recipe && String(recipe.code || '').trim()) || '-';
   const totalVolume = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
   const totalMass = containers.reduce(function(s, c) { return s + (c.net_weight || 0); }, 0);
   const emissionDate = fmtDateTime(new Date());

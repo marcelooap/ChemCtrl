@@ -148,24 +148,34 @@ export default function Vasilhames() {
     return matchSearch && matchStatus && matchClient;
   });
 
-  const productCodeOf = (c) => {
-    const r = (recipes || []).find(rc => rc.product_name === c.product);
-    return (r && r.code) || c.product;
-  };
-
   const resolveRecipeForContainer = (container, production) => {
     if (production?.recipe_id) {
       const byId = (recipes || []).find((r) => r.id === production.recipe_id);
       if (byId) return byId;
     }
-    return (recipes || []).find((r) => r.product_name === container.product);
+    const productName = container?.product || production?.product;
+    if (!productName) return null;
+    const client = container?.client || production?.client;
+    const byNameAndClient = (recipes || []).find(
+      (r) => r.product_name === productName && (!client || r.client === client),
+    );
+    if (byNameAndClient) return byNameAndClient;
+    return (recipes || []).find((r) => r.product_name === productName) || null;
+  };
+
+  const recipeOfContainer = (c) => {
+    const production = productionOfContainer(c, productions || []);
+    return resolveRecipeForContainer(c, production);
+  };
+
+  const productCodeOf = (c) => {
+    const r = recipeOfContainer(c);
+    return (r && r.code) || c.product;
   };
 
   const handlePrintLabel = async (container) => {
     try {
-      const production = (productions || []).find(
-        (p) => p.id === container.production_id || p.op_number === container.op_number,
-      );
+      const production = productionOfContainer(container, productions || []);
       const recipe = resolveRecipeForContainer(container, production);
       const publicToken = await ensureProductionPublicToken(production);
       await printContainerLabel(container, recipe?.validity_days, publicToken);
@@ -213,7 +223,7 @@ export default function Vasilhames() {
     }
     setSending(true);
     try {
-      const recipe = (recipes || []).find(rc => rc.product_name === selectedContainers[0].product);
+      const recipe = recipeOfContainer(selectedContainers[0]);
       generateVasilhamesReportPDF(selectedContainers, recipe);
       toast({ title: t('containers.messages.reportGenerated'), description: t('containers.messages.reportExported', { count: selectedContainers.length }) });
     } catch (err) {
