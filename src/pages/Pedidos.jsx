@@ -23,6 +23,7 @@ import OrderDetailsDialog from '@/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
+import { getLatestRecipeForProduct, getLatestRecipes, getRevisionNumber } from '@/lib/recipeRevisions';
 import { matchesClient } from '@/lib/permissions';
 import { usePermissions } from '@/lib/rbac/PermissionProvider';
 import {
@@ -180,7 +181,12 @@ export default function Pedidos() {
       if (byProduct.length === 0) continue;
 
       const client = (o.client || '').trim().toLowerCase();
-      const recipe = (client && byProduct.find(r => (r.client || '').trim().toLowerCase() === client)) || byProduct[0];
+      const matchedByClient = client ? byProduct.filter(r => (r.client || '').trim().toLowerCase() === client) : [];
+      const candidates = matchedByClient.length ? matchedByClient : byProduct;
+      const recipe = candidates.reduce(
+        (best, r) => (!best || getRevisionNumber(r) > getRevisionNumber(best)) ? r : best,
+        null,
+      );
       const density = parseFloat(recipe?.density) || 0;
       const price = parseFloat(recipe?.price) || 0; // preço com imposto (R$/kg)
       revenue += vol * density * price;
@@ -204,7 +210,7 @@ export default function Pedidos() {
   const openDetails = (o) => { setDetailOrder(o); setShowDetails(true); };
 
   const handleProductChange = (productName) => {
-    const recipe = recipes.find(r => r.product_name === productName);
+    const recipe = getLatestRecipeForProduct(recipes, productName);
     setForm(prev => ({ ...prev, product: productName, client: recipe?.client || prev.client }));
   };
 
@@ -443,7 +449,7 @@ export default function Pedidos() {
                 <ProductCombobox
                   value={form.product}
                   onChange={handleProductChange}
-                  options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
+                  options={getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name }))}
                   placeholder={t('orders.form.productPlaceholder')}
                 />
               </div>

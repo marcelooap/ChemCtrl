@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import i18n from '@/i18n';
+import { getLatestRecipes } from '@/lib/recipeRevisions';
 
 export async function exportEstoqueClienteExcel({
   client,
@@ -9,7 +10,7 @@ export async function exportEstoqueClienteExcel({
 }) {
   const codeByProduct = {};
 
-  recipes.forEach((recipe) => {
+  getLatestRecipes(recipes).forEach((recipe) => {
     if (recipe.product_name && recipe.code) {
       codeByProduct[recipe.product_name] = recipe.code;
     }

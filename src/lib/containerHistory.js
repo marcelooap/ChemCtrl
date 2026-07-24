@@ -1,3 +1,5 @@
+import { getLatestRecipeForProduct } from '@/lib/recipeRevisions';
+
 const parseArr = (v) => {
   if (Array.isArray(v)) return v;
   if (typeof v === 'string') { try { return JSON.parse(v); } catch { return []; } }
@@ -36,13 +38,13 @@ export function buildContainerCycles(selected, allContainers = [], transfers = [
 }
 
 function buildCycle(container, transfers, productions, recipes, containerOrigins = []) {
-  const recipe = (recipes || []).find(r => r.product_name === container.product);
+  const recipe = getLatestRecipeForProduct(recipes, container.product);
   const code = recipe?.code || container.product;
   const production = (productions || []).find(p =>
     (container.production_id && p.id === container.production_id) ||
     (container.op_number && p.op_number === container.op_number)
   );
-  const prodRecipe = production ? (recipes || []).find(r => r.product_name === production.product) : recipe;
+  const prodRecipe = production ? getLatestRecipeForProduct(recipes, production.product) : recipe;
 
   const events = [];
 

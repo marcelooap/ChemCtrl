@@ -1606,6 +1606,12 @@
       "validityDays": "Validade (dias)",
       "revision": "Revisão",
       "revisionDate": "Data da Revisão",
+      "revisionSelect": "Revisão",
+      "newRevision": "Nova Revisão?",
+      "newRevisionHint": "Ative para criar uma nova revisão a partir dos dados atuais, preservando o histórico.",
+      "newRevisionPreview": "Será criada a {{revision}} com data {{date}}. A revisão atual não será alterada.",
+      "deleteRevision": "Excluir Revisão",
+      "saveNewRevision": "Criar Nova Revisão",
       "needsN2": "Necessita de N2?",
       "needsN2Hint": "Marque se o produto é inflamável e precisa de inertização com nitrogênio",
       "rawMaterials": "Matérias Primas",
@@ -1624,10 +1630,15 @@
       "title": "Excluir Receita",
       "message": "Tem certeza que deseja excluir esta receita?"
     },
+    "deleteRevisionConfirm": {
+      "title": "Excluir Revisão",
+      "message": "Tem certeza que deseja excluir a {{revision}}? Esta ação não pode ser desfeita e as demais revisões não serão afetadas."
+    },
     "messages": {
       "productRequired": "Informe o nome do produto",
       "duplicateMpCode": "Código de MP duplicado: {{code}}",
-      "duplicateMpDesc": "Não é permitido cadastrar matérias primas com o mesmo código."
+      "duplicateMpDesc": "Não é permitido cadastrar matérias primas com o mesmo código.",
+      "revisionInUse": "Não é possível excluir: esta revisão já foi utilizada em uma ordem de produção."
     },
     "fds": {
       "title": "Ficha de Dados de Segurança (FDS)",
@@ -1636,6 +1647,7 @@
       "formatHint": "Formato permitido: PDF",
       "sizeHint": "Tamanho máximo: 20 MB",
       "noneAttached": "Nenhuma FDS anexada.",
+      "carriesOverHint": "A revisão anterior tem a FDS \"{{filename}}\" anexada — ela será copiada automaticamente para esta nova revisão. Anexe um novo arquivo apenas se quiser substituí-la.",
       "attach": "Anexar FDS",
       "view": "Visualizar",
       "download": "Baixar",

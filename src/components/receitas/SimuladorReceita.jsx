@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { useRealtimeEntity } from '@/hooks/useRealtimeEntity';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { getLatestRecipeForProduct, getLatestRecipes } from '@/lib/recipeRevisions';
 import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -223,7 +224,7 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
   const [density, setDensity] = useState('');
 
   const recipe = useMemo(
-    () => recipes.find((r) => r.product_name === selectedProduct) || null,
+    () => getLatestRecipeForProduct(recipes, selectedProduct),
     [recipes, selectedProduct]
   );
 
@@ -260,7 +261,7 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
   const handleProductSelect = useCallback(
     (productName) => {
       setSelectedProduct(productName);
-      const r = recipes.find((rec) => rec.product_name === productName);
+      const r = getLatestRecipeForProduct(recipes, productName);
       if (r) setDensity(String(r.density || ''));
     },
     [recipes]
@@ -280,7 +281,7 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
   };
 
   const productOptions = useMemo(
-    () => recipes.map((r) => ({ value: r.product_name, label: r.product_name })),
+    () => getLatestRecipes(recipes).map((r) => ({ value: r.product_name, label: r.product_name })),
     [recipes]
   );
 

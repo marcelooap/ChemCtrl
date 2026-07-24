@@ -13,6 +13,7 @@ import ProductCombobox from '@/components/ui/ProductCombobox';
 import { PACKAGING_TYPES } from '@/lib/packagingTypes';
 import { fmtNumber } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
+import { getLatestRecipeForProduct, getLatestRecipes } from '@/lib/recipeRevisions';
 
 const emptyForm = () => ({
   container_number: '',
@@ -44,12 +45,12 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
   }, [open]);
 
   const productOptions = useMemo(
-    () => (recipes || []).map(r => ({ value: r.product_name, label: r.product_name })).filter(o => o.value),
+    () => getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name })).filter(o => o.value),
     [recipes]
   );
 
   const handleProductSelect = (product) => {
-    const recipe = (recipes || []).find(r => r.product_name === product);
+    const recipe = getLatestRecipeForProduct(recipes, product);
     setForm(prev => ({
       ...prev,
       product,

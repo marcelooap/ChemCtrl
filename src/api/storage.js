@@ -130,6 +130,32 @@ export const deleteRecipeDocument = async (recipeId, docType) => {
   }
 };
 
+/**
+ * Copia um documento técnico (ex.: FDS) de uma receita para outra sem
+ * download/upload manual. Usado ao criar uma nova revisão de receita, para
+ * que a revisão nova herde o arquivo da revisão anterior.
+ */
+export const copyRecipeDocument = async (sourceRecipeId, targetRecipeId, docType) => {
+  const sourceKey = getRecipeDocPath(sourceRecipeId, docType);
+  const destinationKey = getRecipeDocPath(targetRecipeId, docType);
+  const sessionId = getSessionId();
+  const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/copy`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+      ...(sessionId ? { 'x-session-id': sessionId } : {}),
+    },
+    body: JSON.stringify({ bucketId: TECH_DOCS_BUCKET, sourceKey, destinationKey }),
+  }, { kind: 'write' });
+  if (!resp.ok) {
+    const errBody = await resp.text().catch(() => '');
+    throw new HttpError(resp.status, `Cópia falhou (${resp.status}): ${errBody}`, { retryAfterSec: parseRetryAfterHeader(resp) });
+  }
+  return destinationKey;
+};
+
 export const getSignedFileUrl = async (url, expiresIn = 3600) => {
   if (!url) return null;
   let path = url;

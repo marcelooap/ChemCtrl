@@ -32,6 +32,7 @@ import {
   productionOfContainer,
   containerDisplayVolume,
 } from '@/lib/fractionalSupply';
+import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber } from '@/lib/recipeRevisions';
 
 const convertToKg = (value, unit, density) => {
   const d = density || 1;
@@ -330,7 +331,7 @@ export default function NovaProducao() {
 
   const handleProductSelect = (productName) => {
     if (isComplementMode) return;
-    const recipe = recipes.find(r => r.product_name === productName);
+    const recipe = getLatestRecipeForProduct(recipes, productName);
     if (!recipe) return;
     const linkedOrder = orders.find(o => o.product === productName);
     setForm(prev => ({
@@ -344,6 +345,33 @@ export default function NovaProducao() {
       mp_code: m.mp_code, mp_name: m.mp_name, percentage: m.percentage, mp_density: m.mp_density, quantity_kg: m.quantity_kg,
       lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
     }));
+    setMpList(mps);
+  };
+
+  // Permite trocar manualmente a revisão da receita do produto já selecionado.
+  // A produção (OP) sempre usa exatamente a revisão escolhida aqui, nunca a mais
+  // recente automaticamente, caso o usuário selecione outra.
+  const productRevisions = useMemo(
+    () => getRevisionsForProduct(recipes, form.product),
+    [recipes, form.product],
+  );
+
+  const handleRevisionSelect = (recipeId) => {
+    if (isComplementMode) return;
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    setForm(prev => ({
+      ...prev,
+      recipe_id: recipe.id,
+      recipe_revision: recipe.revision || '',
+      density: recipe.density || prev.density,
+    }));
+    const density = parseFloat(recipe.density ?? form.density) || 1;
+    const mass = form.mass || 0;
+    const mps = parseArr(recipe.raw_materials).map(m => recalculateMp({
+      mp_code: m.mp_code, mp_name: m.mp_name, percentage: m.percentage, mp_density: m.mp_density, quantity_kg: m.quantity_kg,
+      lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
+    }, mass, density));
     setMpList(mps);
   };
 
@@ -787,7 +815,7 @@ export default function NovaProducao() {
               <ProductCombobox
                 value={form.product}
                 onChange={handleProductSelect}
-                options={recipes.map(r => ({ value: r.product_name, label: r.product_name }))}
+                options={getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name }))}
                 placeholder={t('common.selectOption')}
               />
             )}
@@ -795,7 +823,23 @@ export default function NovaProducao() {
           <div><label className="text-xs font-medium text-muted-foreground">{t('common.client')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div><label className="text-xs font-medium text-muted-foreground">{t('production.fields.recipeRevision')}</label><Input value={form.recipe_revision} readOnly className="bg-muted/50" /></div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{t('production.fields.recipeRevision')}</label>
+            {isComplementMode ? (
+              <Input value={form.recipe_revision} readOnly className="bg-muted/50" />
+            ) : (
+              <Select value={form.recipe_id || undefined} onValueChange={handleRevisionSelect} disabled={!form.product}>
+                <SelectTrigger><SelectValue placeholder={t('common.selectOption')} /></SelectTrigger>
+                <SelectContent>
+                  {productRevisions.map((rev) => (
+                    <SelectItem key={rev.id} value={rev.id}>
+                      {rev.revision || `Revisão ${String(getRevisionNumber(rev)).padStart(2, '0')}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">{t('production.newProduction.linkedOrder')}</label>
             {isComplementMode ? (

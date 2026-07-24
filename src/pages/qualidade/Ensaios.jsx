@@ -12,6 +12,7 @@ import PtBRInput from '@/components/ui/pt-br-input';
 import { generateEnsaioPDF } from '@/lib/pdfReports';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { getLatestRecipes } from '@/lib/recipeRevisions';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
 
@@ -82,7 +83,7 @@ export default function Ensaios() {
   }, [tests]);
 
   const productOptions = useMemo(() => {
-    return recipes.map(r => ({ value: r.product_name, label: r.product_name, item: r }));
+    return getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name, item: r }));
   }, [recipes]);
 
   const handleProductSelect = (selected) => {

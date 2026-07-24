@@ -12,6 +12,7 @@ import {
   resolveProductDensity,
   stockUnitPriceOf,
 } from '@/lib/productionViewUtils';
+import { getLatestRecipeForProduct } from '@/lib/recipeRevisions';
 import {
   allocateMpQuantitiesByNetWeight,
   aggregateAllocatedMaterials,
@@ -703,7 +704,7 @@ function drawProductionCostSection(doc, y, production, stocks, recipes, t, fmtNu
     return { name: m.mp_name, unit: unit, price: price, qty: qty, cost: price * qty };
   });
   const totalMpCost = mpCostRows.reduce(function(s, r) { return s + r.cost; }, 0);
-  const recipe = (recipes || []).find(function(r) { return r.product_name === production.product; });
+  const recipe = getLatestRecipeForProduct(recipes, production.product);
   const productPrice = recipe?.price || production.unit_price || 0;
   const mass = production.mass || 0;
   const moCost = productPrice * mass;

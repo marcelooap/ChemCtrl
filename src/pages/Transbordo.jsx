@@ -21,6 +21,7 @@ import {
   ensureContainerHasOrigin,
   sliceOriginsForWithdrawal,
 } from '@/lib/containerOrigins';
+import { getLatestRecipeForProduct } from '@/lib/recipeRevisions';
 
 const emptyDest = () => ({
   type: 'Transbordo', placa: '', barril: '', volume: 0, mass: 0,
@@ -118,7 +119,7 @@ export default function Transbordo() {
     filtered.forEach(item => {
       const dests = parseArr(item.destinations);
       const totalVolT = dests.reduce((s, d) => s + (d.volume || 0), 0) || item.volume || 0;
-      const tDensity = recipes.find(r => r.product_name === item.product)?.density || 0;
+      const tDensity = getLatestRecipeForProduct(recipes, item.product)?.density || 0;
       totalVol += totalVolT;
       totalMass += Math.round(totalVolT * tDensity);
       const tipo = dests.length > 0 ? (dests[0].type || item.destination_type || '') : (item.destination_type || '');
@@ -140,7 +141,7 @@ export default function Transbordo() {
   }, [containers, form.product]);
 
   const productDensity = useMemo(() => {
-    const recipe = recipes.find(r => r.product_name === form.product);
+    const recipe = getLatestRecipeForProduct(recipes, form.product);
     return recipe?.density || 0;
   }, [recipes, form.product]);
 
@@ -262,7 +263,7 @@ export default function Transbordo() {
           remainingOrigins = await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
         }
 
-        const recipe = recipes.find(r => r.product_name === form.product);
+        const recipe = getLatestRecipeForProduct(recipes, form.product);
         const dens = parseFloat(recipe?.density) || 0;
         if (dens > 0) {
           const tare = parseFloat(c.tare) || 0;
@@ -336,7 +337,7 @@ export default function Transbordo() {
             : (parseFloat(existingPatio.tare) || 0);
           const dens = productDensity > 0
             ? productDensity
-            : (parseFloat(recipes.find((r) => r.product_name === form.product)?.density) || 0);
+            : (parseFloat(getLatestRecipeForProduct(recipes, form.product)?.density) || 0);
           const net_weight = dens > 0
             ? Math.round(newVolume * dens)
             : Math.round((parseFloat(existingPatio.net_weight) || 0) + (d.net_weight || 0));
@@ -646,8 +647,8 @@ export default function Transbordo() {
       {viewTransfer && (
         <TransferViewDialog
           transfer={viewTransfer}
-          density={recipes.find(r => r.product_name === viewTransfer.product)?.density || 0}
-          recipeCode={recipes.find(r => r.product_name === viewTransfer.product)?.code || ''}
+          density={getLatestRecipeForProduct(recipes, viewTransfer.product)?.density || 0}
+          recipeCode={getLatestRecipeForProduct(recipes, viewTransfer.product)?.code || ''}
           containers={allContainers}
           onClose={() => setViewTransfer(null)}
         />

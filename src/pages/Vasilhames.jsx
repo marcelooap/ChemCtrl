@@ -28,6 +28,7 @@ import {
   containerDisplayGrossWeight,
   isContainerFractional,
 } from '@/lib/fractionalSupply';
+import { getRevisionsForProduct } from '@/lib/recipeRevisions';
 import { effectiveOriginsOfContainer } from '@/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
@@ -156,11 +157,11 @@ export default function Vasilhames() {
     const productName = container?.product || production?.product;
     if (!productName) return null;
     const client = container?.client || production?.client;
-    const byNameAndClient = (recipes || []).find(
-      (r) => r.product_name === productName && (!client || r.client === client),
-    );
-    if (byNameAndClient) return byNameAndClient;
-    return (recipes || []).find((r) => r.product_name === productName) || null;
+    const revisions = getRevisionsForProduct(recipes, productName);
+    if (!revisions.length) return null;
+    const byClient = client ? revisions.filter((r) => r.client === client) : [];
+    const pool = byClient.length ? byClient : revisions;
+    return pool[pool.length - 1];
   };
 
   const recipeOfContainer = (c) => {

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { generateRecipePDF } from '@/lib/pdfReports';
 import Combobox from '@/components/ui/combobox';
@@ -17,8 +18,19 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
 import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds, hasPermission } from '@/lib/permissions';
 import { calcPriceWithoutTax } from '@/lib/recipePricing';
-import { uploadRecipeDocument, deleteRecipeDocument, validatePdfFile, DOC_TYPES } from '@/api/storage';
+import { uploadRecipeDocument, deleteRecipeDocument, copyRecipeDocument, getRecipeDocStorageUrl, validatePdfFile, DOC_TYPES } from '@/api/storage';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import {
+  formatRevisionLabel,
+  getRevisionsForProduct,
+  getLatestRecipeForProduct,
+  getLatestRecipes,
+  nextRevisionNumber,
+  canDeleteRevision,
+  getRevisionNumber,
+} from '@/lib/recipeRevisions';
+
+const todayISO = () => new Date().toISOString().split('T')[0];
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
 
@@ -112,7 +124,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
     </div>
   );
 }
-const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density: '', validity_days: 365, revision: 'Revisão 01', revision_date: new Date().toISOString().split('T')[0], necessita_n2: false, raw_materials: [{ ...emptyMP }] };
+const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density: '', validity_days: 365, revision_number: 1, revision: 'Revisão 01', revision_date: new Date().toISOString().split('T')[0], necessita_n2: false, raw_materials: [{ ...emptyMP }] };
 
 export default function Receitas() {
   const { t } = useTranslation();
@@ -126,6 +138,7 @@ export default function Receitas() {
   const parseRawMaterials = (r) => ({ ...r, raw_materials: Array.isArray(r.raw_materials) ? r.raw_materials : (typeof r.raw_materials === 'string' ? (() => { try { return JSON.parse(r.raw_materials); } catch { return []; } })() : []) });
   const { data: recipes, loading, reload: load } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), []);
+  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500), []);
 
   const convertToKg = (value, unit, density) => {
     const d = density || 1;
@@ -179,12 +192,23 @@ export default function Receitas() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
 
+  // Numeração RC estável por produto (não por linha), já que cada produto agora
+  // pode ter múltiplas revisões; usa a data de criação da 1ª revisão do produto.
   const regNumMap = useMemo(() => {
-    const asc = [...recipes].sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
+    const firstSeen = new Map();
+    recipes.forEach((r) => {
+      const name = r.product_name;
+      const createdAt = new Date(r.created_date).getTime();
+      if (!firstSeen.has(name) || createdAt < firstSeen.get(name)) firstSeen.set(name, createdAt);
+    });
+    const orderedNames = Array.from(firstSeen.entries()).sort((a, b) => a[1] - b[1]).map(([name]) => name);
     const map = {};
-    asc.forEach((r, i) => { map[r.id] = i + 1; });
+    orderedNames.forEach((name, i) => { map[name] = i + 1; });
     return map;
   }, [recipes]);
+
+  /** Uma linha por produto (sempre a revisão mais recente) — usada na listagem. */
+  const latestRecipes = useMemo(() => getLatestRecipes(recipes), [recipes]);
 
   const clientOptions = useMemo(() => {
     const set = new Set();
@@ -232,8 +256,26 @@ export default function Receitas() {
   const [form, setForm] = useState(emptyRecipe);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteRevisionTarget, setDeleteRevisionTarget] = useState(null);
+  const [isNewRevision, setIsNewRevision] = useState(false);
   const [pendingFdsFile, setPendingFdsFile] = useState(null);
   const { toast } = useToast();
+
+  const editRevisions = useMemo(
+    () => (editing ? getRevisionsForProduct(recipes, editing.product_name) : []),
+    [recipes, editing?.product_name],
+  );
+  const viewRevisions = useMemo(
+    () => (viewing ? getRevisionsForProduct(recipes, viewing.product_name) : []),
+    [recipes, viewing?.product_name],
+  );
+  const nextRevNum = useMemo(
+    () => (editing ? nextRevisionNumber(recipes, editing.product_name) : 1),
+    [recipes, editing?.product_name],
+  );
+  const displayRevisionNumber = !editing ? 1 : (isNewRevision ? nextRevNum : getRevisionNumber(editing));
+  const displayRevisionLabel = formatRevisionLabel(displayRevisionNumber);
+  const displayRevisionDate = (!editing || isNewRevision) ? todayISO() : (editing.revision_date || todayISO());
 
   const mpCodeOptions = useMemo(() => {
     const clientKey = (form.client || '').trim().toLowerCase();
@@ -252,25 +294,46 @@ export default function Receitas() {
       }));
   }, [mpCatalogByClient, form.client]);
 
-  const filtered = recipes.filter(r => {
+  const filtered = latestRecipes.filter(r => {
     const q = debouncedSearch.toLowerCase();
     return !q || [r.product_name, r.client, r.code].some(v => (v || '').toLowerCase().includes(q));
   });
 
-  const openNew = () => { setEditing(null); setPendingFdsFile(null); setForm({ ...emptyRecipe, raw_materials: [{ ...emptyMP }] }); setShowForm(true); };
-  const openEdit = (r) => {
+  const parseRawMaterialsField = (raw) =>
+    Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
+
+  const openNew = () => {
+    setEditing(null);
+    setIsNewRevision(false);
     setPendingFdsFile(null);
-    const raw = r.raw_materials;
-    const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
-    setEditing(r);
-    setForm({ ...r, necessita_n2: Boolean(r.necessita_n2), raw_materials: parsed.length ? parsed : [{ ...emptyMP }] });
+    setForm({ ...emptyRecipe, revision_number: 1, revision: formatRevisionLabel(1), revision_date: todayISO(), raw_materials: [{ ...emptyMP }] });
     setShowForm(true);
   };
-  const openView = (r) => {
-    const raw = r.raw_materials;
-    const parsed = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
-    setViewing({ ...r, raw_materials: parsed });
+
+  const switchEditRevision = (row) => {
+    if (!row) return;
+    setPendingFdsFile(null);
+    setIsNewRevision(false);
+    const parsed = parseRawMaterialsField(row.raw_materials);
+    setEditing(row);
+    setForm({ ...row, necessita_n2: Boolean(row.necessita_n2), raw_materials: parsed.length ? parsed : [{ ...emptyMP }] });
+  };
+
+  const openEdit = (r) => {
+    const latest = getLatestRecipeForProduct(recipes, r.product_name) || r;
+    switchEditRevision(latest);
+    setShowForm(true);
+  };
+
+  const loadViewRevision = (row) => {
+    const parsed = parseRawMaterialsField(row.raw_materials);
+    setViewing({ ...row, raw_materials: parsed });
     setHideMpNames(false);
+  };
+
+  const openView = (r) => {
+    const latest = getLatestRecipeForProduct(recipes, r.product_name) || r;
+    loadViewRevision(latest);
     setShowView(true);
   };
 
@@ -325,19 +388,39 @@ export default function Receitas() {
     const codes = form.raw_materials.map(m => (m.mp_code || '').trim()).filter(Boolean);
     const dupCode = codes.find((c, i) => codes.indexOf(c) !== i);
     if (dupCode) { toast({ title: t('recipes.messages.duplicateMpCode', { code: dupCode }), description: t('recipes.messages.duplicateMpDesc'), variant: 'destructive' }); return; }
-    if (pendingFdsFile && !editing) {
+
+    // Nova receita OU nova revisão sempre resultam em um novo registro (nunca sobrescrevem).
+    const isCreatingRow = !editing || isNewRevision;
+
+    if (pendingFdsFile && isCreatingRow) {
       const validation = await validatePdfFile(pendingFdsFile);
       if (!validation.valid) {
         toast({ title: t('recipes.fds.errors.title'), description: t(`recipes.fds.errors.${validation.error}`), variant: 'destructive' });
         return;
       }
     }
+
     const mps = form.raw_materials.map(m => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }));
-    const { fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, ...recipeData } = form;
-    const data = { ...recipeData, necessita_n2: Boolean(form.necessita_n2), raw_materials: mps };
+    const { id: _formId, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, revision, revision_date, revision_number, ...recipeData } = form;
+
+    let revisionMeta;
+    if (!editing) {
+      revisionMeta = { revision_number: 1, revision: formatRevisionLabel(1), revision_date: todayISO() };
+    } else if (isNewRevision) {
+      const nextNum = nextRevisionNumber(recipes, editing.product_name);
+      revisionMeta = { revision_number: nextNum, revision: formatRevisionLabel(nextNum), revision_date: todayISO() };
+    } else {
+      revisionMeta = {
+        revision_number: getRevisionNumber(editing),
+        revision: editing.revision || formatRevisionLabel(1),
+        revision_date: editing.revision_date || todayISO(),
+      };
+    }
+
+    const data = { ...recipeData, ...revisionMeta, necessita_n2: Boolean(form.necessita_n2), raw_materials: mps };
     setSaving(true);
     try {
-      if (editing) {
+      if (editing && !isNewRevision) {
         await base44.entities.Recipe.update(editing.id, data);
       } else {
         const created = await base44.entities.Recipe.create(data);
@@ -350,11 +433,25 @@ export default function Receitas() {
             fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
           });
           setPendingFdsFile(null);
+        } else if (isNewRevision && editing?.fds_url && created?.id) {
+          // A nova revisão herda automaticamente o FDS da revisão anterior.
+          try {
+            await copyRecipeDocument(editing.id, created.id, DOC_TYPES.SDS);
+            await base44.entities.Recipe.update(created.id, {
+              fds_url: getRecipeDocStorageUrl(created.id, DOC_TYPES.SDS),
+              fds_filename: editing.fds_filename || null,
+              fds_uploaded_at: new Date().toISOString(),
+              fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
+            });
+          } catch {
+            // Não bloqueia a criação da revisão; o usuário pode reanexar o FDS depois.
+          }
         }
       }
       setShowForm(false);
+      setIsNewRevision(false);
       load();
-      toast({ title: editing ? t('success.updated') : t('success.created') });
+      toast({ title: editing && !isNewRevision ? t('success.updated') : t('success.created') });
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     } finally {
@@ -378,8 +475,35 @@ export default function Receitas() {
     }
   };
 
+  const requestDeleteRevision = () => {
+    if (!editing || !canDeleteRevision(editing, recipes)) return;
+    setDeleteRevisionTarget(editing);
+  };
+
+  const confirmDeleteRevision = async () => {
+    if (!deleteRevisionTarget) return;
+    const inUse = productions.some((p) => p.recipe_id === deleteRevisionTarget.id);
+    if (inUse) {
+      toast({ title: t('recipes.messages.revisionInUse'), variant: 'destructive' });
+      setDeleteRevisionTarget(null);
+      return;
+    }
+    try {
+      if (deleteRevisionTarget.fds_url) {
+        await deleteRecipeDocument(deleteRevisionTarget.id, DOC_TYPES.SDS).catch(() => {});
+      }
+      await base44.entities.Recipe.delete(deleteRevisionTarget.id);
+      setDeleteRevisionTarget(null);
+      setShowForm(false);
+      load();
+      toast({ title: t('success.deleted') });
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    }
+  };
+
   const { avgPriceWithTax, avgPriceWithoutTax, recipesWithPriceCount } = useMemo(() => {
-    const withPrice = recipes.filter((r) => Number(r.price) > 0);
+    const withPrice = latestRecipes.filter((r) => Number(r.price) > 0);
     if (!withPrice.length) {
       return { avgPriceWithTax: 0, avgPriceWithoutTax: 0, recipesWithPriceCount: 0 };
     }
@@ -390,11 +514,11 @@ export default function Receitas() {
       avgPriceWithoutTax: calcPriceWithoutTax(avgWithTax),
       recipesWithPriceCount: withPrice.length,
     };
-  }, [recipes]);
+  }, [latestRecipes]);
 
   const recipesWithFdsCount = useMemo(
-    () => recipes.filter((r) => r.fds_url).length,
-    [recipes],
+    () => latestRecipes.filter((r) => r.fds_url).length,
+    [latestRecipes],
   );
 
   const priceFmt = { minimumFractionDigits: 4, maximumFractionDigits: 4 };
@@ -404,7 +528,7 @@ export default function Receitas() {
       <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">🧪 {t('recipes.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: recipes.length })}</p>
+          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: latestRecipes.length })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setShowSimulador(true)} style={{ background: '#1a5fb4' }} className="text-white hover:opacity-90">
@@ -447,7 +571,7 @@ export default function Receitas() {
               <tbody>
                 {filtered.map((r, idx) => (
                   <tr key={r.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.id] || 0).padStart(2, '0')}</td>
+                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.product_name] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">
                       <span className="inline-flex items-center gap-1.5">
                         {r.product_name}
@@ -485,7 +609,9 @@ export default function Receitas() {
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
-                        {canDelete && <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>}
+                        {canDelete && getRevisionsForProduct(recipes, r.product_name).length <= 1 && (
+                          <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -496,7 +622,7 @@ export default function Receitas() {
         </div>
 
         <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
-          <span>{t('recipes.footer.registered')}: {recipes.length}</span>
+          <span>{t('recipes.footer.registered')}: {latestRecipes.length}</span>
           <span>{t('recipes.footer.avgPriceWithTax')}: <strong>{fmtCurrency(avgPriceWithTax, 'BRL', undefined, priceFmt)}/{t('common.units.kg')}</strong></span>
           <span>{t('recipes.footer.avgPriceWithoutTax')}: <strong>{fmtCurrency(avgPriceWithoutTax, 'BRL', undefined, priceFmt)}/{t('common.units.kg')}</strong></span>
           <span>{t('recipes.footer.withPrice')}: {recipesWithPriceCount}</span>
@@ -509,8 +635,45 @@ export default function Receitas() {
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-visible flex flex-col">
-          <DialogHeader><DialogTitle>{editing ? t('recipes.editRecipe', { product: editing.product_name }) : t('recipes.newRecipe')}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <span>{editing ? t('recipes.editRecipe', { product: editing.product_name }) : t('recipes.newRecipe')}</span>
+              {editing && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  {formatRevisionLabel(getRevisionNumber(editing))}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
           <div className="grid gap-4 overflow-y-auto min-h-0 pr-1" style={{ maxHeight: 'calc(90vh - 8rem)' }}>
+            {editing && (
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionSelect')}</label>
+                  <Select
+                    value={editing.id}
+                    onValueChange={(id) => {
+                      const target = recipes.find((r) => r.id === id);
+                      if (target) switchEditRevision(target);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {editRevisions.map((rev) => (
+                        <SelectItem key={rev.id} value={rev.id}>
+                          {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date || t('common.notAvailable')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {canDelete && canDeleteRevision(editing, recipes) && (
+                  <Button variant="outline" onClick={requestDeleteRevision} className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" /> {t('recipes.form.deleteRevision')}
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productName')} *</label><Input value={form.product_name} onChange={e => setForm({ ...form, product_name: e.target.value })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.client')}</label><Combobox value={form.client} onValueChange={v => setForm({ ...form, client: v })} options={clientOptions} placeholder={t('recipes.form.clientPlaceholder')} /></div>
@@ -531,8 +694,8 @@ export default function Receitas() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.validityDays')}</label><Input type="number" value={form.validity_days} onChange={e => setForm({ ...form, validity_days: parseInt(e.target.value) || 0 })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revision')} *</label><Input value={form.revision} onChange={e => setForm({ ...form, revision: e.target.value })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionDate')}</label><Input type="date" value={form.revision_date} onChange={e => setForm({ ...form, revision_date: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revision')}</label><Input value={displayRevisionLabel} readOnly tabIndex={-1} className="bg-muted/50" /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionDate')}</label><Input type="date" value={displayRevisionDate} readOnly tabIndex={-1} className="bg-muted/50" /></div>
             </div>
 
             <div className="flex items-center justify-between gap-3 p-4 border rounded-lg bg-muted/30">
@@ -552,6 +715,27 @@ export default function Receitas() {
                 />
               </div>
             </div>
+
+            {editing && (
+              <div className="flex items-center justify-between gap-3 p-4 border rounded-lg bg-muted/30">
+                <div>
+                  <p className="text-sm font-medium">{t('recipes.form.newRevision')}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isNewRevision
+                      ? t('recipes.form.newRevisionPreview', { revision: formatRevisionLabel(nextRevNum), date: todayISO() })
+                      : t('recipes.form.newRevisionHint')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">{isNewRevision ? t('common.yes') : t('common.no')}</span>
+                  <Switch
+                    checked={isNewRevision}
+                    onCheckedChange={(checked) => { setIsNewRevision(checked); setPendingFdsFile(null); }}
+                    aria-label={t('recipes.form.newRevision')}
+                  />
+                </div>
+              </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -599,27 +783,44 @@ export default function Receitas() {
               </div>
             </div>
 
-            {(canManageFds || (editing && form.fds_url && canViewFds)) && (
-              <RecipeFdsSection
-                recipeId={editing?.id || null}
-                fdsUrl={form.fds_url}
-                fdsFilename={form.fds_filename}
-                fdsUploadedAt={form.fds_uploaded_at}
-                canManage={canManageFds}
-                canRemove={canRemoveFds}
-                canView={canViewFds}
-                uploadedBy={user?.nome || user?.full_name || user?.id || ''}
-                onMetadataChange={handleFdsMetadataChange}
-                pendingFile={pendingFdsFile}
-                onPendingFileChange={setPendingFdsFile}
-                mode={editing ? 'edit' : 'create'}
-              />
-            )}
+            {(() => {
+              const fdsMode = (editing && !isNewRevision) ? 'edit' : 'create';
+              const fdsRecipeId = fdsMode === 'edit' ? editing.id : null;
+              const showFds = canManageFds || (fdsMode === 'edit' && form.fds_url && canViewFds);
+              if (!showFds) return null;
+              return (
+                <div>
+                  {isNewRevision && editing?.fds_url && (
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {t('recipes.fds.carriesOverHint', { filename: editing.fds_filename || '' })}
+                    </p>
+                  )}
+                  <RecipeFdsSection
+                    recipeId={fdsRecipeId}
+                    fdsUrl={fdsMode === 'edit' ? form.fds_url : null}
+                    fdsFilename={fdsMode === 'edit' ? form.fds_filename : null}
+                    fdsUploadedAt={fdsMode === 'edit' ? form.fds_uploaded_at : null}
+                    canManage={canManageFds}
+                    canRemove={canRemoveFds}
+                    canView={canViewFds}
+                    uploadedBy={user?.nome || user?.full_name || user?.id || ''}
+                    onMetadataChange={handleFdsMetadataChange}
+                    pendingFile={pendingFdsFile}
+                    onPendingFileChange={setPendingFdsFile}
+                    mode={fdsMode}
+                  />
+                </div>
+              );
+            })()}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
             <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : editing ? t('recipes.form.saveChanges') : t('recipes.form.register')}
+              {saving
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</>
+                : editing
+                  ? (isNewRevision ? t('recipes.form.saveNewRevision') : t('recipes.form.saveChanges'))
+                  : t('recipes.form.register')}
             </Button>
           </div>
         </DialogContent>
@@ -629,13 +830,39 @@ export default function Receitas() {
       <Dialog open={showView} onOpenChange={setShowView}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="inline-flex items-center gap-1.5">
+            <DialogTitle className="inline-flex items-center gap-1.5 flex-wrap">
               🧪 {viewing?.product_name}
               {viewing?.necessita_n2 && (
                 <Flame className="w-4 h-4 text-red-500" title={t('recipes.table.needsN2')} aria-label={t('recipes.table.needsN2')} />
               )}
+              {viewing && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  {formatRevisionLabel(getRevisionNumber(viewing))}
+                </span>
+              )}
             </DialogTitle>
           </DialogHeader>
+          {viewing && viewRevisions.length > 0 && (
+            <div className="max-w-xs">
+              <label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionSelect')}</label>
+              <Select
+                value={viewing.id}
+                onValueChange={(id) => {
+                  const target = recipes.find((r) => r.id === id);
+                  if (target) loadViewRevision(target);
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {viewRevisions.map((rev) => (
+                    <SelectItem key={rev.id} value={rev.id}>
+                      {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date || t('common.notAvailable')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {viewing && (
             <ViewRecipeBody
               viewing={viewing}
@@ -657,6 +884,18 @@ export default function Receitas() {
         message={t('recipes.deleteConfirm.message')}
         onConfirm={confirmDelete}
         confirmLabel={t('buttons.delete')}
+        confirmColor="#DC2626"
+      />
+
+      <ConfirmDialog
+        open={!!deleteRevisionTarget}
+        onOpenChange={(open) => { if (!open) setDeleteRevisionTarget(null); }}
+        title={t('recipes.deleteRevisionConfirm.title')}
+        message={t('recipes.deleteRevisionConfirm.message', {
+          revision: deleteRevisionTarget ? formatRevisionLabel(getRevisionNumber(deleteRevisionTarget)) : '',
+        })}
+        onConfirm={confirmDeleteRevision}
+        confirmLabel={t('recipes.form.deleteRevision')}
         confirmColor="#DC2626"
       />
     </div>

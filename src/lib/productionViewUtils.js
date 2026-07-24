@@ -1,3 +1,5 @@
+import { getLatestRecipeForProduct } from '@/lib/recipeRevisions';
+
 export const parseArr = (val) => {
   if (!val) return [];
   if (Array.isArray(val)) return val;
@@ -111,7 +113,7 @@ export const resolveProductDensity = (production, container, recipes = []) => {
   const fromProd = parseFloat(production?.density);
   if (Number.isFinite(fromProd) && fromProd > 0) return fromProd;
   const product = container?.product || production?.product;
-  const recipe = (recipes || []).find((r) => r.product_name === product);
+  const recipe = getLatestRecipeForProduct(recipes, product);
   const fromRecipe = parseFloat(recipe?.density);
   if (Number.isFinite(fromRecipe) && fromRecipe > 0) return fromRecipe;
   return null;

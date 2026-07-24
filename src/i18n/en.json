@@ -1705,6 +1705,12 @@
       "validityDays": "Shelf Life (days)",
       "revision": "Revision",
       "revisionDate": "Revision Date",
+      "revisionSelect": "Revision",
+      "newRevision": "New Revision?",
+      "newRevisionHint": "Enable to create a new revision from the current data, preserving history.",
+      "newRevisionPreview": "{{revision}} will be created with date {{date}}. The current revision will not be changed.",
+      "deleteRevision": "Delete Revision",
+      "saveNewRevision": "Create New Revision",
       "needsN2": "Requires N2?",
       "needsN2Hint": "Enable if the product is flammable and needs nitrogen inertization",
       "rawMaterials": "Raw Materials",
@@ -1723,10 +1729,15 @@
       "title": "Delete Recipe",
       "message": "Are you sure you want to delete this recipe?"
     },
+    "deleteRevisionConfirm": {
+      "title": "Delete Revision",
+      "message": "Are you sure you want to delete {{revision}}? This action cannot be undone and the other revisions will not be affected."
+    },
     "messages": {
       "productRequired": "Enter product name",
       "duplicateMpCode": "Duplicate RM code: {{code}}",
-      "duplicateMpDesc": "Raw materials with the same code are not allowed."
+      "duplicateMpDesc": "Raw materials with the same code are not allowed.",
+      "revisionInUse": "This revision cannot be deleted: it has already been used in a production order."
     },
     "fds": {
       "title": "Safety Data Sheet (SDS)",
@@ -1735,6 +1746,7 @@
       "formatHint": "Allowed format: PDF",
       "sizeHint": "Maximum size: 20 MB",
       "noneAttached": "No SDS attached.",
+      "carriesOverHint": "The previous revision has \"{{filename}}\" attached — it will be copied automatically to this new revision. Attach a new file only if you want to replace it.",
       "attach": "Attach SDS",
       "view": "View",
       "download": "Download",

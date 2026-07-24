@@ -1,3 +1,5 @@
+import { getLatestRecipeForProduct } from '@/lib/recipeRevisions';
+
 const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
 export const parseArr = (val) => {
@@ -216,7 +218,7 @@ export const containerDisplayVolume = (container, productions) => {
 export const containerDensity = (container, productions, recipes = []) => {
   const production = productionOfContainer(container, productions);
   if (production?.density) return production.density;
-  const recipe = recipes.find((r) => r.product_name === container?.product);
+  const recipe = getLatestRecipeForProduct(recipes, container?.product);
   if (recipe?.density) return recipe.density;
   const vol = container?.volume || 0;
   if (vol > 0 && container?.net_weight) {

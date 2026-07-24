@@ -296,14 +296,17 @@ create table if not exists recipes (
   price numeric,
   revision text,
   revision_date date,
+  revision_number integer not null default 1,
   validity_days numeric,
   raw_materials jsonb,
   fds_url text,
   fds_filename text,
   fds_uploaded_at timestamptz,
   fds_uploaded_by text,
-  necessita_n2 boolean not null default false
+  necessita_n2 boolean not null default false,
+  constraint recipes_product_revision_unique unique (product_name, revision_number)
 );
+create index if not exists idx_recipes_product_revision on recipes (product_name, revision_number desc);
 alter table recipes enable row level security;
 drop policy if exists "allow_all_recipes" on recipes;
 create policy "allow_all_recipes" on recipes for all using (true) with check (true);

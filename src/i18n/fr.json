@@ -1686,6 +1686,12 @@
       "validityDays": "Validité (jours)",
       "revision": "Révision",
       "revisionDate": "Date de Révision",
+      "revisionSelect": "Révision",
+      "newRevision": "Nouvelle Révision ?",
+      "newRevisionHint": "Activez pour créer une nouvelle révision à partir des données actuelles, en préservant l'historique.",
+      "newRevisionPreview": "La {{revision}} sera créée avec la date {{date}}. La révision actuelle ne sera pas modifiée.",
+      "deleteRevision": "Supprimer la Révision",
+      "saveNewRevision": "Créer une Nouvelle Révision",
       "needsN2": "Nécessite N2 ?",
       "needsN2Hint": "Activez si le produit est inflammable et nécessite un inertage à l'azote",
       "rawMaterials": "Matières Premières",
@@ -1704,10 +1710,15 @@
       "title": "Supprimer Recette",
       "message": "Êtes-vous sûr de vouloir supprimer cette recette ?"
     },
+    "deleteRevisionConfirm": {
+      "title": "Supprimer la Révision",
+      "message": "Êtes-vous sûr de vouloir supprimer la {{revision}} ? Cette action est irréversible et les autres révisions ne seront pas affectées."
+    },
     "messages": {
       "productRequired": "Saisissez le nom du produit",
       "duplicateMpCode": "Code MP dupliqué : {{code}}",
-      "duplicateMpDesc": "Les matières premières avec le même code ne sont pas autorisées."
+      "duplicateMpDesc": "Les matières premières avec le même code ne sont pas autorisées.",
+      "revisionInUse": "Impossible de supprimer : cette révision a déjà été utilisée dans un ordre de production."
     },
     "fds": {
       "title": "Fiche de Données de Sécurité (FDS)",
@@ -1716,6 +1727,7 @@
       "formatHint": "Format autorisé : PDF",
       "sizeHint": "Taille maximale : 20 Mo",
       "noneAttached": "Aucune FDS jointe.",
+      "carriesOverHint": "La révision précédente a la FDS « {{filename}} » jointe — elle sera copiée automatiquement vers cette nouvelle révision. Joignez un nouveau fichier seulement si vous souhaitez la remplacer.",
       "attach": "Joindre FDS",
       "view": "Visualiser",
       "download": "Télécharger",
