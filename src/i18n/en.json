@@ -412,6 +412,40 @@
       "rpcSchema": "Login schema error. Run migration_rbac_login_fix.sql in Supabase and try again."
     }
   },
+  "systemSelector": {
+    "brand": "ChemCtrl",
+    "headerSubtitle": "Applications Portal",
+    "title": "System Selection",
+    "subtitle": "Choose which system you want to access",
+    "logout": "Sign out",
+    "comingSoon": "Coming soon",
+    "apps": {
+      "chemctrl": {
+        "name": "ChemCtrl",
+        "description": "Industrial management system for production, inventory, recipes, quality, and operations.",
+        "cta": "Access system",
+        "features": {
+          "production": "Production",
+          "stock": "Inventory",
+          "recipes": "Recipes",
+          "quality": "Quality",
+          "dashboard": "Dashboard"
+        }
+      },
+      "chemflow": {
+        "name": "ChemFlow",
+        "description": "System for transfer operations, filtration, and logistics management.",
+        "ctaDisabled": "System under development",
+        "features": {
+          "truck": "Trucking",
+          "transfer": "Transfer",
+          "filtration": "Filtration",
+          "tanks": "Tanks",
+          "operations": "Operations"
+        }
+      }
+    }
+  },
   "welcome": {
     "title": "Welcome, {{name}}!",
     "subtitle": "Welcome back to ChemCtrl.",

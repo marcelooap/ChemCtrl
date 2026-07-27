@@ -412,6 +412,40 @@
       "rpcSchema": "Erro de schema no login. Execute novamente o SQL migration_rbac_login_fix.sql no Supabase (versão v2) e tente de novo."
     }
   },
+  "systemSelector": {
+    "brand": "ChemCtrl",
+    "headerSubtitle": "Portal de Aplicações",
+    "title": "Seleção de Sistemas",
+    "subtitle": "Escolha qual sistema deseja acessar",
+    "logout": "Sair",
+    "comingSoon": "Em breve",
+    "apps": {
+      "chemctrl": {
+        "name": "ChemCtrl",
+        "description": "Sistema de gestão industrial para produção, estoque, receitas, qualidade e operações.",
+        "cta": "Acessar sistema",
+        "features": {
+          "production": "Produção",
+          "stock": "Estoque",
+          "recipes": "Receitas",
+          "quality": "Qualidade",
+          "dashboard": "Dashboard"
+        }
+      },
+      "chemflow": {
+        "name": "ChemFlow",
+        "description": "Sistema para gestão de transbordo, filtração e operações logísticas.",
+        "ctaDisabled": "Sistema em desenvolvimento",
+        "features": {
+          "truck": "Caminhão",
+          "transfer": "Transbordo",
+          "filtration": "Filtração",
+          "tanks": "Tanques",
+          "operations": "Operações"
+        }
+      }
+    }
+  },
   "welcome": {
     "title": "Bem-vindo, {{name}}!",
     "subtitle": "De volta ao ChemCtrl.",

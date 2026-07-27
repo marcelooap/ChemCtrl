@@ -17,6 +17,7 @@ import i18n from '@/i18n';
 
 // Auth pages
 import Login from '@/pages/Login';
+import SystemSelector from '@/pages/SystemSelector';
 
 // Layout
 import AppLayout from '@/components/layout/AppLayout';
@@ -54,6 +55,9 @@ const AuthenticatedApp = () => {
       <Route path="/login" element={<Login />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        {/* Portal de aplicações — sem sidebar (hub pós-login) */}
+        <Route path="/apps" element={<SystemSelector />} />
+
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />

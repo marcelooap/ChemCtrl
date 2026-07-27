@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Factory, User, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import { getDefaultRoute } from '@/lib/permissions';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -23,7 +22,7 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        window.location.href = getDefaultRoute(result.user);
+        window.location.href = '/apps';
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));
       }

@@ -394,7 +394,7 @@
     "submitting": "Connexion...",
     "showPassword": "Mostrar senha",
     "hidePassword": "Ocultar senha",
-    "footer": "ChemControl © {{year}} — Todos os direitos reservados",
+    "footer": "ChemControl © {{year}} — Tous droits réservés",
     "branding": {
       "title": "ChemControl",
       "subtitle": "Contrôle de Production Industrielle",
@@ -410,6 +410,40 @@
       "sessionExpired": "Sua sessão expirou. Faça login novamente.",
       "unauthorized": "Acesso não autorizado.",
       "rpcSchema": "Erreur de schéma au login. Exécutez migration_rbac_login_fix.sql dans Supabase."
+    }
+  },
+  "systemSelector": {
+    "brand": "ChemCtrl",
+    "headerSubtitle": "Portail des Applications",
+    "title": "Sélection de Systèmes",
+    "subtitle": "Choisissez le système auquel vous souhaitez accéder",
+    "logout": "Déconnexion",
+    "comingSoon": "Bientôt",
+    "apps": {
+      "chemctrl": {
+        "name": "ChemCtrl",
+        "description": "Système de gestion industrielle pour la production, les stocks, les recettes, la qualité et les opérations.",
+        "cta": "Accéder au système",
+        "features": {
+          "production": "Production",
+          "stock": "Stock",
+          "recipes": "Recettes",
+          "quality": "Qualité",
+          "dashboard": "Tableau de bord"
+        }
+      },
+      "chemflow": {
+        "name": "ChemFlow",
+        "description": "Système de gestion du transbordement, de la filtration et des opérations logistiques.",
+        "ctaDisabled": "Système en développement",
+        "features": {
+          "truck": "Camion",
+          "transfer": "Transbordement",
+          "filtration": "Filtration",
+          "tanks": "Réservoirs",
+          "operations": "Opérations"
+        }
+      }
     }
   },
   "welcome": {
