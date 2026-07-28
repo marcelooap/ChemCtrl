@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, LogOut } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute } from '@/lib/permissions';
+import { getDefaultRoute, isAdminUser } from '@chemblend/lib/permissions';
 import { applications } from '@/config/applications';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@shared/components/ui/card';
+import { Button } from '@shared/components/ui/button';
+import { Badge } from '@shared/components/ui/badge';
+import { Separator } from '@shared/components/ui/separator';
+import { cn } from '@shared/lib/utils';
 
 function resolveApplicationRoute(app, user) {
   if (!app.enabled) return null;
@@ -17,15 +17,22 @@ function resolveApplicationRoute(app, user) {
   return getDefaultRoute(user);
 }
 
-function ApplicationCard({ app, onAccess }) {
+/** App acessível no portal: habilitado e, se exige admin, usuário é administrador. */
+function isApplicationAccessible(app, user) {
+  if (!app.enabled) return false;
+  if (app.requiresAdmin && !isAdminUser(user)) return false;
+  return true;
+}
+
+function ApplicationCard({ app, accessible, onAccess }) {
   const { t } = useTranslation();
-  const enabled = app.enabled;
+  const showBadge = !accessible && Boolean(app.badgeKey);
 
   return (
     <Card
       className={cn(
         'flex h-full flex-col border-border/80 shadow-sm transition-shadow duration-200',
-        enabled ? 'hover:shadow-md hover:border-primary/30' : 'opacity-95'
+        accessible ? 'hover:shadow-md hover:border-primary/30' : 'opacity-95'
       )}
     >
       <CardHeader className="space-y-4 pb-4">
@@ -35,14 +42,14 @@ function ApplicationCard({ app, onAccess }) {
               <img
                 src={app.logoSrc}
                 alt=""
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain p-1"
               />
             </div>
             <div className="min-w-0 space-y-1">
               <CardTitle className="text-xl font-semibold tracking-tight text-foreground">
                 {t(app.nameKey)}
               </CardTitle>
-              {!enabled && app.badgeKey && (
+              {showBadge && (
                 <Badge variant="secondary" className="font-medium">
                   {t(app.badgeKey)}
                 </Badge>
@@ -77,7 +84,7 @@ function ApplicationCard({ app, onAccess }) {
       </CardContent>
 
       <CardFooter className="pt-0">
-        {enabled ? (
+        {accessible ? (
           <Button
             className="h-11 w-full text-white font-medium"
             style={{ background: '#2563eb' }}
@@ -94,7 +101,7 @@ function ApplicationCard({ app, onAccess }) {
             aria-disabled="true"
             className="h-11 w-full cursor-not-allowed disabled:pointer-events-auto disabled:opacity-60"
           >
-            {t(app.ctaDisabledKey)}
+            {t(app.ctaDisabledKey || 'systemSelector.comingSoon')}
           </Button>
         )}
       </CardFooter>
@@ -108,6 +115,7 @@ export default function SystemSelector() {
   const { user, logout } = useInternalAuth();
 
   const handleAccess = (app) => {
+    if (!isApplicationAccessible(app, user)) return;
     const route = resolveApplicationRoute(app, user);
     if (!route) return;
     navigate(route);
@@ -159,7 +167,12 @@ export default function SystemSelector() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
             {applications.map((app) => (
-              <ApplicationCard key={app.id} app={app} onAccess={handleAccess} />
+              <ApplicationCard
+                key={app.id}
+                app={app}
+                accessible={isApplicationAccessible(app, user)}
+                onAccess={handleAccess}
+              />
             ))}
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
  * @property {string} descriptionKey
  * @property {string} logoSrc
  * @property {boolean} enabled
+ * @property {boolean} [requiresAdmin] - se true, só administradores acessam
  * @property {string|null} route - rota fixa; se null e enabled, usa getDefaultRoute(user)
  * @property {string} [badgeKey]
  * @property {string} [ctaKey]
@@ -36,29 +37,34 @@ import {
 /** @type {ApplicationDefinition[]} */
 export const applications = [
   {
-    id: 'chemctrl',
-    nameKey: 'systemSelector.apps.chemctrl.name',
-    descriptionKey: 'systemSelector.apps.chemctrl.description',
-    logoSrc: '/icons/chemctrl-logo.svg',
+    id: 'chemblend',
+    nameKey: 'systemSelector.apps.chemblend.name',
+    descriptionKey: 'systemSelector.apps.chemblend.description',
+    logoSrc: '/icons/chemblend-logo.png',
     enabled: true,
+    // null → resolveApplicationRoute usa getDefaultRoute(user)
+    // (ex.: cliente externo → /chemblend/tela-clientes; interno → /chemblend)
     route: null,
-    ctaKey: 'systemSelector.apps.chemctrl.cta',
+    ctaKey: 'systemSelector.apps.chemblend.cta',
     features: [
-      { id: 'production', labelKey: 'systemSelector.apps.chemctrl.features.production', icon: Factory },
-      { id: 'stock', labelKey: 'systemSelector.apps.chemctrl.features.stock', icon: Package },
-      { id: 'recipes', labelKey: 'systemSelector.apps.chemctrl.features.recipes', icon: BookOpen },
-      { id: 'quality', labelKey: 'systemSelector.apps.chemctrl.features.quality', icon: ShieldCheck },
-      { id: 'dashboard', labelKey: 'systemSelector.apps.chemctrl.features.dashboard', icon: LayoutDashboard },
+      { id: 'production', labelKey: 'systemSelector.apps.chemblend.features.production', icon: Factory },
+      { id: 'stock', labelKey: 'systemSelector.apps.chemblend.features.stock', icon: Package },
+      { id: 'recipes', labelKey: 'systemSelector.apps.chemblend.features.recipes', icon: BookOpen },
+      { id: 'quality', labelKey: 'systemSelector.apps.chemblend.features.quality', icon: ShieldCheck },
+      { id: 'dashboard', labelKey: 'systemSelector.apps.chemblend.features.dashboard', icon: LayoutDashboard },
     ],
   },
   {
     id: 'chemflow',
     nameKey: 'systemSelector.apps.chemflow.name',
     descriptionKey: 'systemSelector.apps.chemflow.description',
-    logoSrc: '/icons/chemflow-logo.svg',
-    enabled: false,
-    route: null,
-    badgeKey: 'systemSelector.comingSoon',
+    logoSrc: '/icons/chemflow-logo.png',
+    enabled: true,
+    /** Em desenvolvimento: apenas administradores acessam o módulo. */
+    requiresAdmin: true,
+    route: '/chemflow',
+    badgeKey: 'systemSelector.apps.chemflow.badge',
+    ctaKey: 'systemSelector.apps.chemflow.cta',
     ctaDisabledKey: 'systemSelector.apps.chemflow.ctaDisabled',
     features: [
       { id: 'truck', labelKey: 'systemSelector.apps.chemflow.features.truck', icon: Truck },

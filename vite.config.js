@@ -29,6 +29,9 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@chemblend': path.resolve(__dirname, './src/modules/chemblend'),
+      '@chemflow': path.resolve(__dirname, './src/modules/chemflow'),
+      '@shared': path.resolve(__dirname, './src/shared'),
     },
   },
   define: {

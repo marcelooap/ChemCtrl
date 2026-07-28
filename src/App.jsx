@@ -1,91 +1,109 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
+import { Suspense, lazy } from 'react';
+import { Toaster } from '@shared/components/ui/toaster';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClientInstance } from '@/lib/query-client';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { InternalAuthProvider } from '@/lib/InternalAuthContext';
-import { PermissionProvider } from '@/lib/rbac/PermissionProvider';
+import GuestRoute from '@/components/GuestRoute';
+import AdminRoute from '@/components/AdminRoute';
+import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
+import { InternalAuthProvider, useInternalAuth } from '@/lib/InternalAuthContext';
 import ScrollToTop from './components/ScrollToTop';
-import RealtimeProvider from '@/components/RealtimeProvider';
 import { UpdateProvider } from '@/pwa/context/UpdateProvider';
 import { UpdateModal } from '@/pwa/components/UpdateModal';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@shared/components/ui/tooltip';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 
-// Auth pages
+// Plataforma
 import Login from '@/pages/Login';
 import SystemSelector from '@/pages/SystemSelector';
 
-// Layout
-import AppLayout from '@/components/layout/AppLayout';
+// Módulo ChemBlend (síncrono — comportamento idêntico ao app anterior)
+import ChemBlendRoutes from '@chemblend/routes';
+import ConsultaPublica from '@chemblend/pages/ConsultaPublica';
 
-// Pages
-import Home from '@/pages/Home';
-import Dashboard from '@/pages/Dashboard';
-import EstoqueCliente from '@/pages/EstoqueCliente';
-import TelaClientes from '@/pages/TelaClientes';
-import Estoque from '@/pages/Estoque';
-import Pedidos from '@/pages/Pedidos';
-import Receitas from '@/pages/Receitas';
-import NovaProducao from '@/pages/NovaProducao';
-import OrdensProducao from '@/pages/OrdensProducao';
-import ChecklistProducao from '@/pages/ChecklistProducao';
-import Producoes from '@/pages/Producoes';
-import Ensaios from '@/pages/qualidade/Ensaios';
-import ProducoesCQ from '@/pages/qualidade/ProducoesCQ';
-import COA from '@/pages/qualidade/COA';
-import EquipamentosLab from '@/pages/qualidade/EquipamentosLab';
-import Vasilhames from '@/pages/Vasilhames';
-import Tankagem from '@/pages/Tankagem';
-import Transbordo from '@/pages/Transbordo';
-import Inventario from '@/pages/Inventario';
-import InventarioConferencia from '@/pages/InventarioConferencia';
-import Usuarios from '@/pages/Usuarios';
-import Perfis from '@/pages/Perfis';
-import AcessoNegado from '@/pages/AcessoNegado';
-import ConsultaPublica from '@/pages/ConsultaPublica';
+// Módulo ChemFlow (lazy: isola o cliente Supabase B do bootstrap da plataforma)
+const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));
+
+/**
+ * Paths antigos do ChemBlend (quando era o app raiz).
+ * Após a reestruturação, NÃO entram direto no módulo: vão para a seleção de
+ * módulos, para o usuário escolher ChemBlend ou ChemFlow explicitamente.
+ * Deep links sob `/chemblend/*` continuam válidos (F5 dentro do módulo).
+ */
+const LEGACY_CHEMBLEND_PATHS = [
+  '/dashboard', '/estoque-cliente', '/tela-clientes', '/estoque', '/pedidos',
+  '/receitas', '/nova-producao', '/ordens', '/producao/:id/checklist', '/producoes',
+  '/qualidade/ensaios', '/qualidade/equipamentos', '/qualidade/producoes', '/qualidade/coa',
+  '/vasilhames', '/tankagem', '/transbordo', '/inventario', '/inventario/:id',
+  '/usuarios', '/perfis', '/acesso-negado',
+];
+
+function ModuleLoadingFallback() {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
+/** Rotas desconhecidas: sem sessão → Login; com sessão → 404. */
+function CatchAllRoute() {
+  const { user, loading } = useInternalAuth();
+
+  if (loading) {
+    return <ModuleLoadingFallback />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <PageNotFound />;
+}
 
 const AuthenticatedApp = () => {
   return (
     <Routes>
+      {/* Público: consulta por token (ChemBlend) */}
       <Route path="/consulta/:token" element={<ConsultaPublica />} />
-      <Route path="/login" element={<Login />} />
 
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        {/* Portal de aplicações — sem sidebar (hub pós-login) */}
-        <Route path="/apps" element={<SystemSelector />} />
-
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/estoque-cliente" element={<EstoqueCliente />} />
-          <Route path="/tela-clientes" element={<TelaClientes />} />
-          <Route path="/estoque" element={<Estoque />} />
-          <Route path="/pedidos" element={<Pedidos />} />
-          <Route path="/receitas" element={<Receitas />} />
-          <Route path="/nova-producao" element={<NovaProducao />} />
-          <Route path="/ordens" element={<OrdensProducao />} />
-          <Route path="/producao/:id/checklist" element={<ChecklistProducao />} />
-          <Route path="/producoes" element={<Producoes />} />
-          <Route path="/qualidade/ensaios" element={<Ensaios />} />
-          <Route path="/qualidade/equipamentos" element={<EquipamentosLab />} />
-          <Route path="/qualidade/producoes" element={<ProducoesCQ />} />
-          <Route path="/qualidade/coa" element={<COA />} />
-          <Route path="/vasilhames" element={<Vasilhames />} />
-          <Route path="/tankagem" element={<Tankagem />} />
-          <Route path="/transbordo" element={<Transbordo />} />
-          <Route path="/inventario" element={<Inventario />} />
-          <Route path="/inventario/:id" element={<InventarioConferencia />} />
-          <Route path="/usuarios" element={<Usuarios />} />
-          <Route path="/perfis" element={<Perfis />} />
-          <Route path="/acesso-negado" element={<AcessoNegado />} />
-        </Route>
+      {/* Público: Login — se já autenticado, GuestRoute manda para a seleção de módulos */}
+      <Route element={<GuestRoute />}>
+        <Route path="/login" element={<Login />} />
       </Route>
 
-      <Route path="*" element={<PageNotFound />} />
+      {/* Protegido: exige sessão válida da plataforma */}
+      <Route element={<ProtectedRoute />}>
+        {/* Hub pós-login — seleção de módulos (nunca ChemBlend/ChemFlow automático) */}
+        <Route path="/" element={<SystemSelector />} />
+        <Route path="/apps" element={<Navigate to="/" replace />} />
+        <Route path="/selecionar-modulo" element={<Navigate to="/" replace />} />
+
+        <Route path="/chemblend/*" element={<ChemBlendRoutes />} />
+        <Route element={<AdminRoute />}>
+          <Route
+            path="/chemflow/*"
+            element={
+              <ModuleErrorBoundary title="Não foi possível abrir o ChemFlow">
+                <Suspense fallback={<ModuleLoadingFallback />}>
+                  <ChemFlowRoutes />
+                </Suspense>
+              </ModuleErrorBoundary>
+            }
+          />
+        </Route>
+
+        {/* Bookmarks antigos → seleção de módulos (não abrir módulo direto) */}
+        {LEGACY_CHEMBLEND_PATHS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to="/" replace />} />
+        ))}
+      </Route>
+
+      <Route path="*" element={<CatchAllRoute />} />
     </Routes>
   );
 };
@@ -100,11 +118,7 @@ function App() {
               <ScrollToTop />
               <UpdateProvider>
                 <InternalAuthProvider>
-                  <PermissionProvider>
-                    <RealtimeProvider>
-                      <AuthenticatedApp />
-                    </RealtimeProvider>
-                  </PermissionProvider>
+                  <AuthenticatedApp />
                   <UpdateModal />
                 </InternalAuthProvider>
               </UpdateProvider>
@@ -114,7 +128,7 @@ function App() {
         </TooltipProvider>
       </ThemeProvider>
     </I18nextProvider>
-  )
+  );
 }
 
-export default App
+export default App;

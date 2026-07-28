@@ -1,0 +1,487 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { base44 } from '@chemblend/api/base44Client';
+import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
+import { useOutletContext } from 'react-router-dom';
+import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2, Loader2, ArrowDown, ChevronDown } from 'lucide-react';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@shared/components/ui/dropdown-menu';
+import ProductCombobox from '@shared/components/ui/ProductCombobox';
+import { useToast } from '@shared/components/ui/use-toast';
+import OrderDetailsDialog from '@chemblend/components/pedidos/OrderDetailsDialog';
+import ConfirmDialog from '@chemblend/components/ConfirmDialog';
+import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
+import { translateOrderStatus } from '@/i18n/domainMaps';
+import { getLatestRecipeForProduct, getLatestRecipes, getRevisionNumber } from '@chemblend/lib/recipeRevisions';
+import { matchesClient } from '@chemblend/lib/permissions';
+import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
+import {
+  toNum,
+  VOLUME_EPS,
+  isOrderFullyProduced,
+  isPastExpectedDate,
+  getOrderDisplayStatus,
+  deriveOrderFromProductions,
+} from '@chemblend/lib/orderProductionStatus';
+
+const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
+
+const ORDER_STATUS_OPTIONS = [
+  { value: 'Pendente', labelKey: 'orders.status.pending' },
+  { value: 'Em produção', labelKey: 'orders.status.inProduction' },
+  { value: 'Atrasado', labelKey: 'orders.status.late' },
+  { value: 'Finalizado', labelKey: 'orders.status.finished' },
+];
+
+/** Volume do rodapé: "Em produção" usa volume em OP aberta; demais usam pendente. */
+const getFooterVolumeForOrder = (order, statusFilters) => {
+  const displayStatus = getOrderDisplayStatus(order);
+  const filteringInProduction = statusFilters.length > 0 && statusFilters.includes('Em produção');
+  if (filteringInProduction && displayStatus === 'Em produção') {
+    return toNum(order.volume_in_production);
+  }
+  return toNum(order.volume_pending);
+};
+
+export default function Pedidos() {
+  const { t, i18n } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const { isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('orders.create');
+  const canEdit = hasPermission('orders.edit');
+  const canDelete = hasPermission('orders.delete');
+  const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
+  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const [search, setSearch] = useState('');
+  const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') || '');
+  /** Array vazio = todos os status; caso contrário, OR dos status selecionados. */
+  const [statusFilters, setStatusFilters] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [detailOrder, setDetailOrder] = useState(null);
+  const [form, setForm] = useState(emptyOrder);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  // Compute derived order statuses from production data (recomputed automatically on any realtime change)
+  const orders = useMemo(() => {
+    return rawOrders.map(order => {
+      const derived = deriveOrderFromProductions(order, productions);
+      return {
+        ...order,
+        status: derived.status,
+        volume_produced: derived.volume_produced,
+        volume_pending: derived.volume_pending,
+        volume_in_production: derived.volume_in_production,
+      };
+    });
+  }, [rawOrders, productions]);
+
+  // Sync derived statuses back to DB (only when different) — guarded to avoid loops
+  const lastSyncRef = useRef('');
+  useEffect(() => {
+    const updates = orders
+      .filter(o => {
+        const raw = rawOrders.find(r => r.id === o.id);
+        if (!raw) return false;
+        return (
+          o.status !== raw.status
+          || toNum(o.volume_produced) !== toNum(raw.volume_produced)
+          || toNum(o.volume_pending) !== toNum(raw.volume_pending)
+        );
+      })
+      .map(o => ({ id: o.id, status: o.status, volume_produced: o.volume_produced, volume_pending: o.volume_pending }));
+    const syncKey = updates.map(u => `${u.id}:${u.status}:${u.volume_produced}:${u.volume_pending}`).join('|');
+    if (updates.length > 0 && syncKey !== lastSyncRef.current) {
+      lastSyncRef.current = syncKey;
+      base44.entities.Order.bulkUpdate(updates).catch(() => {});
+    }
+  }, [orders, rawOrders]);
+
+  const load = () => { loadOrders(); };
+
+  const getDisplayStatus = (o) => getOrderDisplayStatus(o);
+
+  const clientOptions = useMemo(() => {
+    const map = new Map();
+    const add = (raw) => {
+      const trimmed = (raw || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) map.set(key, trimmed);
+    };
+    rawOrders.forEach(o => add(o.client));
+    (recipes || []).forEach(r => add(r.client));
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [rawOrders, recipes]);
+
+  useEffect(() => {
+    if (!clientFilter || clientOptions.length === 0) return;
+    const match = clientOptions.find(c => c.toLowerCase() === clientFilter.toLowerCase());
+    if (match && match !== clientFilter) setClientFilter(match);
+  }, [clientOptions, clientFilter]);
+
+  const filtered = useMemo(() => orders.filter(o => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || [o.order_number, o.product, o.client, o.requester].some(v => (v || '').toLowerCase().includes(q));
+    const displayStatus = getDisplayStatus(o);
+    const matchStatus = statusFilters.length === 0 || statusFilters.includes(displayStatus);
+    const matchClient = !clientFilter || matchesClient(o, clientFilter);
+    return matchSearch && matchStatus && matchClient;
+  }), [orders, search, statusFilters, clientFilter]);
+
+  const statusFilterLabel = useMemo(() => {
+    if (statusFilters.length === 0) return t('orders.allStatuses');
+    if (statusFilters.length === 1) {
+      const opt = ORDER_STATUS_OPTIONS.find(o => o.value === statusFilters[0]);
+      return opt ? t(opt.labelKey) : statusFilters[0];
+    }
+    return t('orders.statusSelectedCount', { count: statusFilters.length });
+  }, [statusFilters, t, i18n.language]);
+
+  const toggleStatusFilter = (value) => {
+    setStatusFilters((prev) => {
+      if (prev.length === 0) return [value];
+      if (prev.includes(value)) {
+        const next = prev.filter((s) => s !== value);
+        return next;
+      }
+      const next = [...prev, value];
+      return next.length === ORDER_STATUS_OPTIONS.length ? [] : next;
+    });
+  };
+
+  const footerStats = useMemo(() => {
+    const recipeList = recipes || [];
+    let volume = 0;
+    let revenue = 0;
+    for (const o of filtered) {
+      const vol = getFooterVolumeForOrder(o, statusFilters);
+      volume += vol;
+
+      const product = (o.product || '').trim().toLowerCase();
+      if (!product || vol === 0) continue;
+
+      const byProduct = recipeList.filter(r => (r.product_name || '').trim().toLowerCase() === product);
+      if (byProduct.length === 0) continue;
+
+      const client = (o.client || '').trim().toLowerCase();
+      const matchedByClient = client ? byProduct.filter(r => (r.client || '').trim().toLowerCase() === client) : [];
+      const candidates = matchedByClient.length ? matchedByClient : byProduct;
+      const recipe = candidates.reduce(
+        (best, r) => (!best || getRevisionNumber(r) > getRevisionNumber(best)) ? r : best,
+        null,
+      );
+      const density = parseFloat(recipe?.density) || 0;
+      const price = parseFloat(recipe?.price) || 0; // preço com imposto (R$/kg)
+      revenue += vol * density * price;
+    }
+    return { count: filtered.length, volume, revenue };
+  }, [filtered, recipes, statusFilters]);
+
+  const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
+  const openEdit = (o) => {
+    setEditing(o);
+    setForm({
+      ...o,
+      date: o.date ? o.date.split('T')[0] : '',
+      expected_date: o.expected_date ? String(o.expected_date).split('T')[0] : '',
+      volume_ordered: o.volume_ordered || '',
+      volume_produced: o.volume_produced || '',
+      volume_pending: o.volume_pending || '',
+    });
+    setShowForm(true);
+  };
+  const openDetails = (o) => { setDetailOrder(o); setShowDetails(true); };
+
+  const handleProductChange = (productName) => {
+    const recipe = getLatestRecipeForProduct(recipes, productName);
+    setForm(prev => ({ ...prev, product: productName, client: recipe?.client || prev.client }));
+  };
+
+  const save = async () => {
+    const volOrdered = parseFloat(form.volume_ordered) || 0;
+    const baseData = {
+      ...form,
+      date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
+      expected_date: form.expected_date || null,
+      volume_ordered: volOrdered,
+    };
+    if (!baseData.product || !baseData.volume_ordered) { toast({ title: t('orders.messages.fillRequired'), variant: 'destructive' }); return; }
+    setSaving(true);
+    try {
+      if (editing) {
+        const data = { ...baseData };
+        delete data.volume_produced;
+        delete data.volume_pending;
+        delete data.status;
+        await base44.entities.Order.update(editing.id, data);
+
+        // Mantém client_order sincronizado nas OPs vinculadas (campo denormalizado)
+        const nextClientOrder = data.client_order ?? '';
+        const prevClientOrder = editing.client_order ?? '';
+        if (String(nextClientOrder) !== String(prevClientOrder)) {
+          await base44.entities.Production.updateMany(
+            { order_id: editing.id },
+            { client_order: nextClientOrder }
+          ).catch(() => {});
+        }
+      } else {
+        const data = { ...baseData, volume_produced: 0, volume_pending: volOrdered, status: 'Pendente' };
+        const count = orders.length + 1;
+        data.order_number = `PD${String(count).padStart(2, '0')}`;
+        await base44.entities.Order.create(data);
+      }
+      setShowForm(false);
+      load();
+      toast({ title: editing ? t('success.updated') : t('success.created') });
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await base44.entities.Order.delete(deleteTarget.id);
+      toast({ title: t('success.deleted') });
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      toast({ title: t('errors.deleteFailed'), description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const StatusBadge = ({ status }) => {
+    const c = {
+      Pendente: 'bg-amber-100 text-amber-700',
+      'Em produção': 'bg-blue-100 text-blue-700',
+      Finalizado: 'bg-green-100 text-green-700',
+      Atrasado: 'bg-red-100 text-red-700',
+    };
+    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{translateOrderStatus(status)}</span>;
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Fixed Header */}
+      <div className="shrink-0 flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold">📋 {t('orders.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('orders.subtitle', { count: orders.length })}</p>
+        </div>
+        {canCreate && (
+          <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
+            <Plus className="w-4 h-4 mr-2" /> {t('orders.newOrder')}
+          </Button>
+        )}
+      </div>
+
+      {/* Card: fixed search, scrollable table, fixed footer */}
+      <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 max-w-md min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder={t('orders.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <Select value={clientFilter || 'all'} onValueChange={v => setClientFilter(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('orders.allClients')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('orders.allClients')}</SelectItem>
+              {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-48 justify-between font-normal shadow-sm"
+                aria-label={t('orders.allStatuses')}
+              >
+                <span className="truncate">{statusFilterLabel}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuLabel>{t('orders.filterByStatus')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={statusFilters.length === 0}
+                onCheckedChange={(checked) => { if (checked) setStatusFilters([]); }}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {t('orders.allStatuses')}
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              {ORDER_STATUS_OPTIONS.map((opt) => (
+                <DropdownMenuCheckboxItem
+                  key={opt.value}
+                  checked={statusFilters.includes(opt.value)}
+                  onCheckedChange={() => toggleStatusFilter(opt.value)}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {t(opt.labelKey)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Scrollable Table */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
+          ) : (
+            <table className="w-full chemctrl-table">
+              <thead className="sticky top-0 z-10 bg-card">
+                <tr className="border-b border-border">
+                  <th className="px-4 py-3 text-left">{t('orders.table.id')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.date')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.requester')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.product')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.client')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.clientOrder')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volume')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volumeProduced')}</th>
+                  <th className="px-4 py-3 text-right">{t('orders.table.volumePending')}</th>
+                  <th className="px-4 py-3 text-left">{t('orders.table.expectedDate')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.status')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(o => {
+                  const pastDue = isPastExpectedDate(o)
+                    && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
+                    && o.status !== 'Finalizado';
+                  const displayStatus = getDisplayStatus(o);
+                  return (
+                    <tr key={o.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
+                      <td className="px-4 py-2.5 text-sm">{o.date ? fmtDate(o.date) : t('common.notAvailable')}</td>
+                      <td className="px-4 py-2.5 text-sm">{o.requester}</td>
+                      <td className="px-4 py-2.5 font-medium text-sm">{o.product}</td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{o.client}</td>
+                      <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
+                      <td className="px-4 py-2.5 text-right text-sm">
+                        <div className="inline-flex items-center justify-end gap-2">
+                          {toNum(o.volume_in_production) > VOLUME_EPS && (
+                            <span
+                              className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
+                              title={t('orders.table.volumeInProduction')}
+                            >
+                              <ArrowDown className="w-3 h-3 shrink-0" aria-hidden />
+                              {fmtNumber(o.volume_in_production)} L
+                            </span>
+                          )}
+                          <span className="font-bold text-amber-600">{fmtNumber(o.volume_pending)} L</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm">
+                        <span className={pastDue ? 'text-red-600 font-medium' : ''}>
+                          {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                          {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center"><StatusBadge status={displayStatus} /></td>
+                      <td className="px-4 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
+                            <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                          {canEdit && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
+                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>}
+                          {canDelete && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          </button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Fixed Footer — indicators follow active filters */}
+        <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground flex-wrap">
+          <span>{t('orders.footer.orders')}: <strong>{footerStats.count}</strong></span>
+          <span>{t('orders.footer.volume')}: <strong>{fmtNumber(footerStats.volume)} L</strong></span>
+          <span>{t('orders.footer.revenue')}: <strong style={{ color: '#16a34a' }}>{fmtCurrency(footerStats.revenue, 'BRL', i18n.language)}</strong></span>
+        </div>
+      </div>
+
+      {/* Form Dialog */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? t('orders.editOrder', { number: editing.order_number }) : t('orders.newOrderTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.date')} *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.requester')} *</label><Input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('orders.form.product')} *</label>
+                <ProductCombobox
+                  value={form.product}
+                  onChange={handleProductChange}
+                  options={getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name }))}
+                  placeholder={t('orders.form.productPlaceholder')}
+                />
+              </div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.client')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.clientOrder')}</label><Input value={form.client_order} onChange={e => setForm({ ...form, client_order: e.target.value })} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.volume')} *</label><Input type="number" value={form.volume_ordered} onChange={e => setForm({ ...form, volume_ordered: e.target.value })} /></div>
+            </div>
+
+            <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.expectedDate')} *</label><Input type="date" value={form.expected_date} onChange={e => setForm({ ...form, expected_date: e.target.value })} /></div>
+            <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.observations')}</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
+            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : editing ? t('orders.form.saveChanges') : t('orders.form.register')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Details Dialog */}
+      <OrderDetailsDialog open={showDetails} onOpenChange={setShowDetails} order={detailOrder} productions={productions} />
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}
+        title={t('orders.deleteConfirm.title')}
+        message={t('orders.deleteConfirm.message', { number: deleteTarget?.order_number })}
+        confirmLabel={t('buttons.delete')}
+        confirmColor="#DC2626"
+        onConfirm={confirmDelete} />
+    </div>
+  );
+}

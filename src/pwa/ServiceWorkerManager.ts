@@ -46,6 +46,15 @@ export function initServiceWorkerManager(): () => void {
     return () => {};
   }
 
+  // Em desenvolvimento o SW interfere com HMR e imports dinâmicos do Vite
+  // (ex.: lazy load de /chemflow). Só registra em build de produção.
+  if (import.meta.env.DEV) {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.unregister().catch(() => {}));
+    }).catch(() => {});
+    return () => {};
+  }
+
   const onControllerChange = () => {
     if (isFirstActivation) {
       isFirstActivation = false;

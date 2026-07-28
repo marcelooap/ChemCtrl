@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@chemblend/*": ["./src/modules/chemblend/*"],
+      "@chemflow/*": ["./src/modules/chemflow/*"],
+      "@shared/*": ["./src/shared/*"]
     },
     "jsx": "react-jsx",
     "module": "esnext",

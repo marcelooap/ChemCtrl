@@ -1,0 +1,576 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@shared/components/ui/dialog";
+import { Button } from "@shared/components/ui/button";
+import { Input } from "@shared/components/ui/input";
+import { Label } from "@shared/components/ui/label";
+import { Switch } from "@shared/components/ui/switch";
+import SearchableSelect from "@chemflow/components/cadastro/SearchableSelect";
+import LoteBlock, { emptyLote } from "@chemflow/components/entrada/LoteBlock";
+import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
+import { formatMass, formatCurrency, formatNum } from "@chemflow/lib/format";
+import { loteToKg } from "@chemflow/lib/conversao";
+
+export default function EntradaModal({
+  open,
+  onClose,
+  onSave,
+  editingEntrada,
+  readOnly,
+  clientes,
+  produtos,
+}) {
+  const [clienteId, setClienteId] = useState("");
+  const [clienteNome, setClienteNome] = useState("");
+  const [lotes, setLotes] = useState([emptyLote()]);
+  const [statusWms, setStatusWms] = useState(false);
+  const [granelPesagem, setGranelPesagem] = useState(false);
+  const [granelTicket, setGranelTicket] = useState("");
+  const [granelPesoBruto, setGranelPesoBruto] = useState("");
+  const [granelPesoLiquido, setGranelPesoLiquido] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!open) return;
+    if (editingEntrada) {
+      setClienteId(editingEntrada.cliente_id || "");
+      setClienteNome(editingEntrada.cliente_nome || "");
+      if (editingEntrada.lotes && editingEntrada.lotes.length > 0) {
+        setLotes(
+          editingEntrada.lotes.map((l) => ({
+            produto_id: l.produto_id || editingEntrada.produto_id || "",
+            produto_nome: l.produto_nome || editingEntrada.produto_nome || "",
+            produto_codigo: l.produto_codigo || editingEntrada.produto_codigo || "",
+            nota_fiscal: l.nota_fiscal || "",
+            lote: l.lote || "",
+            densidade: l.densidade || "",
+            quantidade: l.quantidade != null ? String(l.quantidade) : "",
+            unidade_medida: l.unidade_medida || "",
+            data_fabricacao: l.data_fabricacao || "",
+            data_validade: l.data_validade || "",
+            preco_unitario: l.preco_unitario != null ? String(l.preco_unitario) : (editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : ""),
+            embalado: l.embalado != null ? l.embalado : (editingEntrada.embalado || false),
+            peso_liquido: l.peso_liquido != null ? String(l.peso_liquido) : (editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : ""),
+            quantidade_embalagens: l.quantidade_embalagens != null ? String(l.quantidade_embalagens) : (editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : ""),
+          }))
+        );
+      } else {
+        setLotes([
+          {
+            produto_id: editingEntrada.produto_id || "",
+            produto_nome: editingEntrada.produto_nome || "",
+            produto_codigo: editingEntrada.produto_codigo || "",
+            nota_fiscal: editingEntrada.nota_fiscal || "",
+            lote: editingEntrada.lote || "",
+            densidade: editingEntrada.densidade || "",
+            quantidade:
+              editingEntrada.quantidade != null
+                ? String(editingEntrada.quantidade)
+                : "",
+            unidade_medida: editingEntrada.unidade_medida || "",
+            data_fabricacao: editingEntrada.data_fabricacao || "",
+            data_validade: editingEntrada.data_validade || "",
+            preco_unitario: editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : "",
+            embalado: editingEntrada.embalado || false,
+            peso_liquido: editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : "",
+            quantidade_embalagens: editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : "",
+          },
+        ]);
+      }
+      setStatusWms(editingEntrada.status_wms || false);
+      setGranelPesagem(editingEntrada.granel_pesagem || false);
+      setGranelTicket(editingEntrada.granel_ticket || "");
+      setGranelPesoBruto(
+        editingEntrada.granel_peso_bruto != null
+          ? String(editingEntrada.granel_peso_bruto)
+          : ""
+      );
+      setGranelPesoLiquido(
+        editingEntrada.granel_peso_liquido != null
+          ? String(editingEntrada.granel_peso_liquido)
+          : ""
+      );
+    } else {
+      setClienteId("");
+      setClienteNome("");
+      setLotes([emptyLote()]);
+      setStatusWms(false);
+      setGranelPesagem(false);
+      setGranelTicket("");
+      setGranelPesoBruto("");
+      setGranelPesoLiquido("");
+    }
+    setError("");
+  }, [editingEntrada, open]);
+
+  const clientesComProdutos = produtos
+    .filter((p) => p.cliente_nome)
+    .reduce((acc, p) => {
+      if (!acc.find((c) => c.nome === p.cliente_nome)) {
+        const matched = clientes.find(
+          (c) => c.nome.toLowerCase() === p.cliente_nome.toLowerCase()
+        );
+        acc.push({
+          id: matched?.id || p.cliente_id || "",
+          nome: p.cliente_nome,
+        });
+      }
+      return acc;
+    }, []);
+
+  const filteredProdutos = produtos.filter(
+    (p) =>
+      !clienteNome ||
+      p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
+  );
+
+  // ── Totais derivados dos lotes ──
+  const qtd = lotes.reduce(
+    (sum, l) => sum + (parseFloat(l.quantidade) || 0),
+    0
+  );
+
+  // ── Custo total somando todos os lotes ──
+  const custoTotal = lotes.reduce((sum, l) => {
+    const lQtd = parseFloat(l.quantidade) || 0;
+    const lPreco = parseFloat(l.preco_unitario) || 0;
+    return sum + lQtd * lPreco;
+  }, 0);
+
+  // ── Quantidade operacional somando todos os lotes ──
+  const qtdKg = lotes.reduce((sum, l) => sum + loteToKg(l), 0);
+
+  // ── Verifica se todos os lotes têm o mesmo produto ──
+  const allSameProduct =
+    lotes.length > 0 &&
+    lotes.every((l) => l.produto_id && l.produto_id === lotes[0].produto_id);
+
+  const anyEmbalado = lotes.some((l) => l.embalado);
+
+  // ── Pesagem Granel ──
+  const gPb = parseFloat(granelPesoBruto) || 0;
+  const gPl = parseFloat(granelPesoLiquido) || 0;
+  const valBruto = gPb >= 10000 && gPb <= 40000 ? 60 : 80;
+  const valLiquido = gPl >= 10000 && gPl <= 40000 ? 60 : 80;
+  const erroAdmissivel = granelPesagem ? valBruto + valLiquido : 0;
+  const pesoMinimo = qtdKg - erroAdmissivel;
+  const pesoMaximo = qtdKg + erroAdmissivel;
+  const dentroMargem =
+    granelPesagem && gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
+  const foraMargem = granelPesagem && gPl > 0 && !dentroMargem;
+
+  const formatMoeda = (v) => formatCurrency(v);
+
+  // ── Handlers dos lotes ──
+  const addLote = () =>
+    setLotes((prev) => [
+      ...prev,
+      {
+        ...emptyLote(),
+        unidade_medida: prev[0]?.unidade_medida || "",
+      },
+    ]);
+
+  const removeLote = (index) =>
+    setLotes((prev) => prev.filter((_, i) => i !== index));
+
+  const updateLote = (index, data) =>
+    setLotes((prev) => prev.map((l, i) => (i === index ? data : l)));
+
+  const validateAndBuildData = () => {
+    if (!clienteNome) {
+      setError("Cliente é obrigatório.");
+      return null;
+    }
+    if (lotes.length === 0) {
+      setError("Adicione pelo menos um bloco de lote.");
+      return null;
+    }
+
+    for (let i = 0; i < lotes.length; i++) {
+      const l = lotes[i];
+      if (!l.produto_id) {
+        setError(`Produto é obrigatório no bloco ${i + 1}.`);
+        return null;
+      }
+      if (!l.nota_fiscal) {
+        setError(`Nota Fiscal é obrigatória no bloco ${i + 1}.`);
+        return null;
+      }
+      if (!l.lote) {
+        setError(`Lote é obrigatório no bloco ${i + 1}.`);
+        return null;
+      }
+      const lQtd = parseFloat(l.quantidade) || 0;
+      if (!l.quantidade || lQtd <= 0) {
+        setError(`Quantidade deve ser positiva no bloco ${i + 1}.`);
+        return null;
+      }
+      if (!l.unidade_medida) {
+        setError(`Unidade de Medida é obrigatória no bloco ${i + 1}.`);
+        return null;
+      }
+      if (!l.embalado) {
+        const lProduto = produtos.find((p) => p.id === l.produto_id);
+        const lDensidadeTabelada = lProduto?.densidade_tabelada || false;
+        if (!lDensidadeTabelada && !l.densidade) {
+          setError(`Densidade é obrigatória no bloco ${i + 1}.`);
+          return null;
+        }
+      }
+      if (l.embalado) {
+        const lPeso = parseFloat(l.peso_liquido) || 0;
+        const lQtdEmb = parseFloat(l.quantidade_embalagens) || 0;
+        const lTotalCalc = lPeso * lQtdEmb;
+        if (Math.abs(lTotalCalc - lQtd) > 0.001) {
+          setError(
+            `A soma do peso líquido das embalagens deve ser igual à quantidade no bloco ${i + 1}.`
+          );
+          return null;
+        }
+      }
+    }
+
+    const parsedLotes = lotes.map((l) => ({
+      produto_id: l.produto_id,
+      produto_nome: l.produto_nome,
+      produto_codigo: l.produto_codigo,
+      nota_fiscal: l.nota_fiscal,
+      lote: l.lote,
+      densidade: l.embalado ? null : l.densidade,
+      quantidade: parseFloat(l.quantidade) || 0,
+      unidade_medida: l.unidade_medida,
+      data_fabricacao: l.data_fabricacao,
+      data_validade: l.data_validade,
+      preco_unitario: parseFloat(l.preco_unitario) || 0,
+      embalado: l.embalado || false,
+      peso_liquido: l.embalado ? (parseFloat(l.peso_liquido) || 0) : null,
+      quantidade_embalagens: l.embalado ? (parseFloat(l.quantidade_embalagens) || 0) : null,
+    }));
+
+    const firstLote = parsedLotes[0];
+
+    return {
+      cliente_id: clienteId,
+      cliente_nome: clienteNome,
+      produto_id: firstLote.produto_id,
+      produto_nome: firstLote.produto_nome,
+      produto_codigo: firstLote.produto_codigo,
+      nota_fiscal: firstLote.nota_fiscal,
+      lote: firstLote.lote,
+      densidade: firstLote.densidade,
+      data_fabricacao: firstLote.data_fabricacao,
+      data_validade: firstLote.data_validade,
+      quantidade: qtdKg,
+      unidade_medida: "kg",
+      preco_unitario: firstLote.preco_unitario,
+      custo_total: custoTotal,
+      saldo_atual: editingEntrada?.saldo_atual ?? qtdKg,
+      embalado: firstLote.embalado,
+      peso_liquido: firstLote.embalado ? firstLote.peso_liquido : null,
+      quantidade_embalagens: firstLote.embalado ? firstLote.quantidade_embalagens : null,
+      status_wms: statusWms,
+      granel_pesagem: granelPesagem,
+      granel_ticket: granelPesagem ? granelTicket : null,
+      granel_peso_bruto: granelPesagem ? gPb : null,
+      granel_validacao_bruto: granelPesagem ? valBruto : null,
+      granel_peso_liquido: granelPesagem ? gPl : null,
+      granel_validacao_liquido: granelPesagem ? valLiquido : null,
+      granel_erro_admissivel: granelPesagem ? erroAdmissivel : null,
+      granel_peso_minimo: granelPesagem ? pesoMinimo : null,
+      granel_peso_maximo: granelPesagem ? pesoMaximo : null,
+      granel_margem:
+        granelPesagem && gPl > 0 ? (dentroMargem ? "dentro" : "fora") : null,
+      grupo_entrada: editingEntrada?.grupo_entrada || `GRP-${Date.now()}`,
+      origem: editingEntrada?.origem || "convencional",
+      lotes: parsedLotes,
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const data = validateAndBuildData();
+    if (!data) return;
+    try {
+      await onSave(data);
+    } catch (err) {
+      setError(err?.message || "Não foi possível salvar. Tente novamente.");
+    }
+  };
+
+  const handleSaveAndTransbordo = async () => {
+    const data = validateAndBuildData();
+    if (!data) return;
+    let saved;
+    try {
+      saved = await onSave(data);
+    } catch (err) {
+      setError(err?.message || "Não foi possível salvar. Tente novamente.");
+      return;
+    }
+    if (saved) {
+      const savedEstoques = Array.isArray(saved)
+        ? saved
+        : saved.savedEstoques || [];
+      const savedEntrada = Array.isArray(saved) ? null : saved.savedEntrada;
+      navigate("/chemflow/transbordo", {
+        state: {
+          prefillEntrada: {
+            ...data,
+            id: savedEntrada?.id,
+            entrada_codigo: saved.entrada_codigo,
+            savedEstoques,
+          },
+        },
+      });
+    }
+  };
+
+  const title = readOnly
+    ? "Visualizar Entrada"
+    : editingEntrada
+    ? "Editar Entrada"
+    : "Nova Entrada";
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {/* Cliente */}
+          <div className="space-y-1.5">
+            <Label>Cliente *</Label>
+            <SearchableSelect
+              value={clienteNome}
+              onChange={(label, item) => {
+                setClienteNome(label);
+                setClienteId(item?.id || "");
+                setLotes((prev) =>
+                  prev.map((l) => ({
+                    ...l,
+                    produto_id: "",
+                    produto_nome: "",
+                    produto_codigo: "",
+                    densidade: "",
+                  }))
+                );
+              }}
+              options={clientesComProdutos}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Selecione um cliente"
+              disabled={readOnly}
+            />
+          </div>
+
+          {/* Blocos de Lotes */}
+          <div className="space-y-3">
+            {lotes.map((lote, i) => (
+              <LoteBlock
+                key={i}
+                index={i}
+                lote={lote}
+                onChange={(data) => updateLote(i, data)}
+                onRemove={() => removeLote(i)}
+                readOnly={readOnly}
+                produtos={filteredProdutos}
+                canRemove={lotes.length > 1}
+              />
+            ))}
+            {!readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLote}
+                className="w-full border-dashed gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar Bloco
+              </Button>
+            )}
+          </div>
+
+          {/* Total da Entrada */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-blue-200">
+            <span className="text-sm text-muted-foreground">
+              Quantidade Total ({lotes.length}{" "}
+              {lotes.length === 1 ? "bloco" : "blocos"}):
+            </span>
+            <span className="text-lg font-bold text-primary">
+              {formatMass(qtdKg)} kg
+            </span>
+          </div>
+
+          {/* Custo Total Geral */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border">
+            <span className="text-sm text-muted-foreground">
+              Custo Total Geral:
+            </span>
+            <span className="text-lg font-bold text-foreground">
+              {formatMoeda(custoTotal)}
+            </span>
+          </div>
+
+          {/* Dados de Pesagem Granel */}
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
+            <div>
+              <Label>Dados de Pesagem Granel</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ativa os campos de pesagem para produtos a granel
+              </p>
+            </div>
+            <Switch
+              checked={granelPesagem}
+              onCheckedChange={setGranelPesagem}
+              disabled={readOnly}
+            />
+          </div>
+
+          {granelPesagem && (
+            <div className="space-y-4 p-4 rounded-lg border border-border">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Ticket</Label>
+                  <Input
+                    value={granelTicket}
+                    onChange={(e) => setGranelTicket(e.target.value)}
+                    placeholder="Nº do ticket"
+                    disabled={readOnly}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Peso Bruto (kg)</Label>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={granelPesoBruto}
+                    onChange={(e) => setGranelPesoBruto(e.target.value)}
+                    placeholder="0"
+                    disabled={readOnly}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Peso Líquido (kg)</Label>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    value={granelPesoLiquido}
+                    onChange={(e) => setGranelPesoLiquido(e.target.value)}
+                    placeholder="0"
+                    disabled={readOnly}
+                  />
+                </div>
+              </div>
+
+              {qtdKg > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-blue-200">
+                  <span className="text-sm text-muted-foreground">
+                    Peso Esperado (kg)
+                    {lotes[0]?.unidade_medida &&
+                      lotes[0]?.unidade_medida !== "kg" &&
+                      ` — convertido de ${formatNum(qtd, 0)} ${lotes[0]?.unidade_medida}`}
+                    :
+                  </span>
+                  <span className="text-lg font-bold text-primary">
+                    {formatMass(qtdKg)} kg
+                  </span>
+                </div>
+              )}
+
+              {gPl > 0 && (
+                <>
+                  <div
+                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium ${
+                      dentroMargem
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-red-50 text-red-700 border border-red-200"
+                    }`}
+                  >
+                    {dentroMargem ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5" />
+                    )}
+                    {dentroMargem ? "Dentro da margem" : "Fora da margem"}
+                  </div>
+                  {foraMargem && (
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-amber-50 border-2 border-amber-400 text-amber-800">
+                      <span className="text-sm font-semibold">
+                        Valor a considerar: Peso Líquido ={" "}
+                        {formatMass(gPl)} kg
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Status WMS Switch */}
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
+            <div>
+              <Label>Status WMS</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Indica se o saldo está sincronizado com o WMS
+              </p>
+            </div>
+            <Switch
+              checked={statusWms}
+              onCheckedChange={setStatusWms}
+              disabled={readOnly}
+            />
+          </div>
+
+          {!readOnly && (
+            <DialogFooter className="sm:justify-between">
+              {!anyEmbalado ? (
+                <Button
+                  type="button"
+                  onClick={handleSaveAndTransbordo}
+                  disabled={!allSameProduct}
+                  className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    !allSameProduct
+                      ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
+                      : ""
+                  }
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Ir para Transbordo
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  {editingEntrada ? "Salvar Alterações" : "Cadastrar Entrada"}
+                </Button>
+              </div>
+            </DialogFooter>
+          )}
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

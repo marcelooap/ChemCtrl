@@ -1,4 +1,4 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 
@@ -14,15 +14,24 @@ const DefaultFallback = () => {
   );
 };
 
+/**
+ * Gate de rotas autenticadas da plataforma.
+ * Sem sessão válida → Login. Com sessão → renderiza as rotas filhas (Outlet).
+ */
 export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
   const { user, loading } = useInternalAuth();
+  const location = useLocation();
 
   if (loading) {
     return fallback;
   }
 
   if (!user) {
-    return unauthenticatedElement;
+    return (
+      unauthenticatedElement ?? (
+        <Navigate to="/login" replace state={{ from: location.pathname }} />
+      )
+    );
   }
 
   return <Outlet />;

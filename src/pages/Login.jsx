@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '@shared/components/ui/button';
+import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
 import { Factory, User, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -22,7 +22,8 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        window.location.href = '/apps';
+        // Sempre a seleção de módulos — nunca ChemBlend/ChemFlow direto.
+        window.location.href = '/';
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));
       }

@@ -266,11 +266,13 @@
     "clientScreen": "Client Portal",
     "clientStock": "Client Stock",
     "lockedTooltip": "No access for your role",
+    "moduleName": "ChemBlend",
     "appSubtitle": "Production Control",
     "footer": {
       "expand": "Expand sidebar",
       "collapse": "Collapse sidebar",
-      "logout": "Log out"
+      "logout": "Log out",
+      "backToModules": "Back to modules"
     }
   },
   "accessDenied": {
@@ -420,8 +422,8 @@
     "logout": "Sign out",
     "comingSoon": "Coming soon",
     "apps": {
-      "chemctrl": {
-        "name": "ChemCtrl",
+      "chemblend": {
+        "name": "ChemBlend",
         "description": "Industrial management system for production, inventory, recipes, quality, and operations.",
         "cta": "Access system",
         "features": {
@@ -435,7 +437,9 @@
       "chemflow": {
         "name": "ChemFlow",
         "description": "System for transfer operations, filtration, and logistics management.",
+        "cta": "Access system",
         "ctaDisabled": "System under development",
+        "badge": "Under development",
         "features": {
           "truck": "Trucking",
           "transfer": "Transfer",
@@ -448,7 +452,7 @@
   },
   "welcome": {
     "title": "Welcome, {{name}}!",
-    "subtitle": "Welcome back to ChemCtrl.",
+    "subtitle": "Welcome back to ChemBlend.",
     "continue": "Continue",
     "toast": {
       "title": "Welcome back!",
