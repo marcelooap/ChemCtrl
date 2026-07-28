@@ -9,10 +9,20 @@ function normalizeSupabaseUrl(raw) {
   return raw.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
 }
 
+// Credenciais padrão do Supabase Projeto B (ChemFlow).
+// A anon key é pública por design (protegida por RLS) — mesmo padrão do
+// cliente do ChemBlend (Projeto A). As variáveis de ambiente VITE_CHEMFLOW_*
+// têm prioridade e permitem apontar para outro projeto (ex.: staging).
+const DEFAULT_CHEMFLOW_SUPABASE_URL = 'https://putkyadaefivnqyinbnz.supabase.co';
+const DEFAULT_CHEMFLOW_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1dGt5YWRhZWZpdm5xeWluYm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDkzNjksImV4cCI6MjEwMDQ4NTM2OX0.yGWib87SJjZoAzQWjeEsoXN_hT2bVecDtPMU9TEhMVY';
+
 const chemflowSupabaseUrl = normalizeSupabaseUrl(
-  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || DEFAULT_CHEMFLOW_SUPABASE_URL
 );
-const chemflowSupabaseAnonKey = (import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || '').trim();
+const chemflowSupabaseAnonKey = (
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || DEFAULT_CHEMFLOW_SUPABASE_ANON_KEY
+).trim();
 
 /**
  * True quando as credenciais do Supabase Projeto B estão definidas.
