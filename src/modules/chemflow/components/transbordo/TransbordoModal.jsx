@@ -33,6 +33,10 @@ import {
 } from "@chemflow/lib/format";
 import { loteToKg } from "@chemflow/lib/conversao";
 import { computeDisponivelTransbordo } from "@chemflow/lib/estoqueSaldo";
+import {
+  findAllLinkedTransbordos,
+  multipleTransbordosMessage,
+} from "@chemflow/lib/findLinkedTransbordo";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -72,6 +76,65 @@ const OPERADORES = [
 
 const createdAt = (row) => row?.created_at || row?.created_date || 0;
 
+function collapseMap(items = []) {
+  return Object.fromEntries(items.map((_, i) => [i, true]));
+}
+
+/**
+ * Atualiza cabeçalho/lotes do OP com a entrada recém-salva,
+ * preservando destinos e volumes já lançados no transbordo.
+ */
+function applyPrefillIdentity(transbordo, prefill) {
+  if (!transbordo || !prefill) return transbordo;
+
+  const dens = parseDensidade(prefill.densidade);
+  const savedEstoques = prefill.savedEstoques || prefill.savedEntradas || [];
+  const loteByEstoqueId = new Map(
+    savedEstoques
+      .filter((e) => e?.id)
+      .map((e) => [e.id, e.lote || ""])
+  );
+
+  const entradaLotes =
+    prefill.lotes && prefill.lotes.length > 0
+      ? prefill.lotes
+      : [{ lote: prefill.lote || "" }];
+
+  const nextOrigens = (transbordo.origens || []).map((o) => {
+    const next = {
+      ...o,
+      tipo_origem: o.tipo_origem || (o.entrada_id ? "entrada" : o.tipo_origem),
+    };
+    if (o.entrada_id && loteByEstoqueId.has(o.entrada_id)) {
+      const newLote = loteByEstoqueId.get(o.entrada_id);
+      if (newLote) {
+        const oldLote = o.lote || "";
+        next.lote = newLote;
+        if (oldLote && next.entrada_codigo) {
+          next.entrada_codigo = String(next.entrada_codigo).replace(
+            new RegExp(`Lote\\s+${oldLote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+            `Lote ${newLote}`
+          );
+        }
+      }
+    } else if (!o.entrada_id && entradaLotes[0]?.lote) {
+      next.lote = entradaLotes[0].lote;
+    }
+    return next;
+  });
+
+  return {
+    ...transbordo,
+    cliente_id: prefill.cliente_id || transbordo.cliente_id,
+    cliente_nome: prefill.cliente_nome || transbordo.cliente_nome,
+    produto_id: prefill.produto_id || transbordo.produto_id,
+    produto_nome: prefill.produto_nome || transbordo.produto_nome,
+    produto_codigo: prefill.produto_codigo || transbordo.produto_codigo,
+    densidade: dens || parseDensidade(transbordo.densidade),
+    origens: nextOrigens,
+  };
+}
+
 export default function TransbordoModal({
   open,
   onClose,
@@ -102,36 +165,81 @@ export default function TransbordoModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [operadoresOpen, setOperadoresOpen] = useState(false);
+  const [collapsedOrigens, setCollapsedOrigens] = useState({});
   const [collapsedDestinos, setCollapsedDestinos] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [pendingPayload, setPendingPayload] = useState(null);
   const operadoresRef = useRef(null);
+  const resolvedEditIdRef = useRef(null);
+  const [isEditingResolved, setIsEditingResolved] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    if (editingTransbordo) {
-      setData(editingTransbordo.data || "");
-      setClienteId(editingTransbordo.cliente_id || "");
-      setClienteNome(editingTransbordo.cliente_nome || "");
-      setProdutoId(editingTransbordo.produto_id || "");
-      setProdutoNome(editingTransbordo.produto_nome || "");
-      setProdutoCodigo(editingTransbordo.produto_codigo || "");
+
+    let nextOrigens = [];
+    let nextDestinos = [];
+    const fromPrefill = !!prefillEntrada;
+
+    // Se veio da entrada sem editingTransbordo no parent, tenta resolver o OP aqui
+    const allLinkedFromPrefill =
+      !editingTransbordo && prefillEntrada
+        ? findAllLinkedTransbordos(
+            transbordos,
+            prefillEntrada,
+            entradas,
+            vasilhames
+          )
+        : [];
+
+    if (!editingTransbordo && allLinkedFromPrefill.length > 1) {
+      setError(multipleTransbordosMessage(allLinkedFromPrefill));
+      resolvedEditIdRef.current = null;
+      setIsEditingResolved(false);
+      setOrigens([]);
+      setDestinos([]);
+      setCollapsedOrigens({});
+      setCollapsedDestinos({});
+      setSaving(false);
+      setConfirmOpen(false);
+      setConfirmMessage("");
+      setPendingPayload(null);
+      return;
+    }
+
+    const linkedFromPrefill =
+      allLinkedFromPrefill.length === 1 ? allLinkedFromPrefill[0] : null;
+    const effectiveEditing = editingTransbordo || linkedFromPrefill;
+    resolvedEditIdRef.current = effectiveEditing?.id || null;
+    setIsEditingResolved(!!effectiveEditing);
+
+    if (effectiveEditing) {
+      const source = fromPrefill
+        ? applyPrefillIdentity(effectiveEditing, prefillEntrada)
+        : effectiveEditing;
+
+      setData(source.data || "");
+      setClienteId(source.cliente_id || "");
+      setClienteNome(source.cliente_nome || "");
+      setProdutoId(source.produto_id || "");
+      setProdutoNome(source.produto_nome || "");
+      setProdutoCodigo(source.produto_codigo || "");
       setProdutoDisplay(
-        editingTransbordo.produto_codigo
-          ? `${editingTransbordo.produto_codigo} - ${editingTransbordo.produto_nome}`
-          : editingTransbordo.produto_nome || ""
+        source.produto_codigo
+          ? `${source.produto_codigo} - ${source.produto_nome}`
+          : source.produto_nome || ""
       );
-      setDensidade(parseDensidade(editingTransbordo.densidade));
-      setOperadores(editingTransbordo.operadores || []);
-      setObservacoes(editingTransbordo.observacoes || "");
-      setOrigens(
-        (editingTransbordo.origens || []).map((o) =>
-          o.entrada_id && !o.tipo_origem ? { ...o, tipo_origem: "entrada" } : o
-        )
+      setDensidade(parseDensidade(source.densidade));
+      setOperadores(source.operadores || []);
+      setObservacoes(source.observacoes || "");
+      nextOrigens = (source.origens || []).map((o) =>
+        o.entrada_id && !o.tipo_origem ? { ...o, tipo_origem: "entrada" } : o
       );
-      setDestinos(editingTransbordo.destinos || []);
+      nextDestinos = Array.isArray(source.destinos) ? source.destinos : [];
+      setOrigens(nextOrigens);
+      setDestinos(nextDestinos);
     } else if (prefillEntrada) {
+      resolvedEditIdRef.current = null;
       const dens = parseDensidade(prefillEntrada.densidade);
 
       const sorted = [...entradas].sort(
@@ -186,7 +294,7 @@ export default function TransbordoModal({
         const lDens = parseDensidade(lt.densidade || estoqueRow?.densidade || dens);
         let quantidade_kg;
         if (estoqueRow) {
-          quantidade_kg = estoqueRow.saldo_atual ?? estoqueRow.quantidade ?? 0;
+          quantidade_kg = estoqueRow.quantidade ?? estoqueRow.saldo_atual ?? 0;
         } else if ((lt.unidade_medida || "L") === "kg") {
           quantidade_kg = lt.quantidade || 0;
         } else {
@@ -203,7 +311,7 @@ export default function TransbordoModal({
 
       const litrosPorLote = kgLotesToLitrosInteiros(lotesKg);
 
-      const origensFromLotes = lotesKg.map((item, i) => {
+      nextOrigens = lotesKg.map((item, i) => {
         const volumeL = litrosPorLote[i] || 0;
         const lDens = item.densidade || dens;
         return {
@@ -217,9 +325,11 @@ export default function TransbordoModal({
           saldo_disponivel: volumeL,
         };
       });
-      setOrigens(origensFromLotes);
-      setDestinos([]);
+      nextDestinos = [];
+      setOrigens(nextOrigens);
+      setDestinos(nextDestinos);
     } else {
+      resolvedEditIdRef.current = null;
       setData(new Date().toISOString().split("T")[0]);
       setClienteId("");
       setClienteNome("");
@@ -233,13 +343,16 @@ export default function TransbordoModal({
       setOrigens([]);
       setDestinos([]);
     }
+
     setError("");
     setSaving(false);
-    setCollapsedDestinos({});
+    // Ao vir da entrada, origem/destino abrem minimizados
+    setCollapsedOrigens(fromPrefill ? collapseMap(nextOrigens) : {});
+    setCollapsedDestinos(fromPrefill ? collapseMap(nextDestinos) : {});
     setConfirmOpen(false);
     setConfirmMessage("");
     setPendingPayload(null);
-  }, [editingTransbordo, open, prefillEntrada, entradas]);
+  }, [editingTransbordo, open, prefillEntrada, entradas, transbordos, vasilhames]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -466,6 +579,9 @@ export default function TransbordoModal({
   };
 
   const handleAddOrigem = () => {
+    setCollapsedOrigens(
+      Object.fromEntries(origens.map((_, i) => [i, true]))
+    );
     setOrigens((prev) => [
       ...prev,
       { tipo_origem: "", entrada_id: "", entrada_codigo: "", lote: "", volume_retirado: 0, massa_retirada: 0, saldo_restante: 0 },
@@ -484,9 +600,28 @@ export default function TransbordoModal({
 
   const handleRemoveOrigem = (idx) => {
     setOrigens((prev) => prev.filter((_, i) => i !== idx));
+    setCollapsedOrigens((prev) => {
+      const next = {};
+      Object.keys(prev).forEach((key) => {
+        const i = Number(key);
+        if (i < idx) next[i] = prev[i];
+        else if (i > idx) next[i - 1] = prev[i];
+      });
+      return next;
+    });
+  };
+
+  const toggleOrigemCollapse = (idx) => {
+    setCollapsedOrigens((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
   };
 
   const handleAddDestino = () => {
+    setCollapsedOrigens(
+      Object.fromEntries(origens.map((_, i) => [i, true]))
+    );
     setCollapsedDestinos(
       Object.fromEntries(destinos.map((_, i) => [i, true]))
     );
@@ -542,6 +677,7 @@ export default function TransbordoModal({
     });
 
     return {
+      id: resolvedEditIdRef.current || editingTransbordo?.id || null,
       data,
       cliente_id: clienteId || null,
       cliente_nome: clienteNome,
@@ -674,7 +810,7 @@ export default function TransbordoModal({
 
   const title = readOnly
     ? "Visualizar Transbordo"
-    : editingTransbordo
+    : editingTransbordo || isEditingResolved
     ? "Editar Transbordo"
     : "Novo Transbordo";
 
@@ -831,6 +967,8 @@ export default function TransbordoModal({
                     onChange={(data) => handleUpdateOrigem(idx, data)}
                     onRemove={() => handleRemoveOrigem(idx)}
                     readOnly={readOnly}
+                    collapsed={!!collapsedOrigens[idx]}
+                    onToggleCollapse={() => toggleOrigemCollapse(idx)}
                   />
                 ))
               )}

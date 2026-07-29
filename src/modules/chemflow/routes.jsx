@@ -1,7 +1,7 @@
 import { Route, Routes, Navigate } from 'react-router-dom';
 import MainLayout from '@chemflow/layouts/MainLayout';
 import Home from '@chemflow/pages/Home';
-import Placeholder from '@chemflow/pages/Placeholder';
+import Dashboard from '@chemflow/pages/Dashboard';
 import Entrada from '@chemflow/pages/Entrada';
 import Transbordo from '@chemflow/pages/Transbordo';
 import Cadastro from '@chemflow/pages/Cadastro';
@@ -23,7 +23,7 @@ export default function ChemFlowRoutes() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route index element={<Home />} />
-        <Route path="dashboard" element={<Placeholder title="Dashboard" />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="cadastro" element={<Cadastro />} />
         <Route path="entrada" element={<Entrada />} />
         <Route path="saida" element={<Saida />} />

@@ -16,6 +16,14 @@ import LoteBlock, { emptyLote } from "@chemflow/components/entrada/LoteBlock";
 import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
 import { formatMass, formatCurrency, formatNum } from "@chemflow/lib/format";
 import { loteToKg } from "@chemflow/lib/conversao";
+import { entities } from "@chemflow/services/entities";
+import {
+  findLinkedTransbordo,
+  findAllLinkedTransbordos,
+  multipleTransbordosMessage,
+} from "@chemflow/lib/findLinkedTransbordo";
+
+const INPUT_EDITABLE = "bg-white";
 
 export default function EntradaModal({
   open,
@@ -25,6 +33,8 @@ export default function EntradaModal({
   readOnly,
   clientes,
   produtos,
+  transbordos: transbordosProp = [],
+  estoque: estoqueProp = [],
 }) {
   const [clienteId, setClienteId] = useState("");
   const [clienteNome, setClienteNome] = useState("");
@@ -35,55 +45,113 @@ export default function EntradaModal({
   const [granelPesoBruto, setGranelPesoBruto] = useState("");
   const [granelPesoLiquido, setGranelPesoLiquido] = useState("");
   const [error, setError] = useState("");
+  const [collapsedLotes, setCollapsedLotes] = useState({});
+  const [transbordoBlockMessage, setTransbordoBlockMessage] = useState("");
+  const [checkingTransbordos, setCheckingTransbordos] = useState(false);
   const navigate = useNavigate();
+
+  // Bloqueia "Ir para Transbordo" quando há cadeia com 2+ OPs
+  useEffect(() => {
+    if (!open || !editingEntrada?.id || readOnly) {
+      setTransbordoBlockMessage("");
+      return;
+    }
+
+    let cancelled = false;
+    const check = async () => {
+      setCheckingTransbordos(true);
+      try {
+        const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
+          await Promise.all([
+            transbordosProp?.length
+              ? Promise.resolve(transbordosProp)
+              : entities.transbordos.list("-created_date"),
+            entities.estoque.filter({ entrada_id: editingEntrada.id }),
+            entities.vasilhames.list(),
+          ]);
+
+        const prefill = {
+          id: editingEntrada.id,
+          produto_id: editingEntrada.produto_id,
+          produto_nome: editingEntrada.produto_nome,
+          lote: editingEntrada.lote,
+          lotes: editingEntrada.lotes,
+          savedEstoques: estoqueDaEntrada,
+        };
+
+        const linked = findAllLinkedTransbordos(
+          allTransbordos,
+          prefill,
+          estoqueDaEntrada.length ? estoqueDaEntrada : estoqueProp,
+          vasilhamesList
+        );
+
+        if (!cancelled) {
+          setTransbordoBlockMessage(
+            linked.length > 1 ? multipleTransbordosMessage(linked) : ""
+          );
+        }
+      } catch {
+        if (!cancelled) setTransbordoBlockMessage("");
+      } finally {
+        if (!cancelled) setCheckingTransbordos(false);
+      }
+    };
+
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, editingEntrada, readOnly, transbordosProp, estoqueProp]);
 
   useEffect(() => {
     if (!open) return;
     if (editingEntrada) {
       setClienteId(editingEntrada.cliente_id || "");
       setClienteNome(editingEntrada.cliente_nome || "");
-      if (editingEntrada.lotes && editingEntrada.lotes.length > 0) {
-        setLotes(
-          editingEntrada.lotes.map((l) => ({
-            produto_id: l.produto_id || editingEntrada.produto_id || "",
-            produto_nome: l.produto_nome || editingEntrada.produto_nome || "",
-            produto_codigo: l.produto_codigo || editingEntrada.produto_codigo || "",
-            nota_fiscal: l.nota_fiscal || "",
-            lote: l.lote || "",
-            densidade: l.densidade || "",
-            quantidade: l.quantidade != null ? String(l.quantidade) : "",
-            unidade_medida: l.unidade_medida || "",
-            data_fabricacao: l.data_fabricacao || "",
-            data_validade: l.data_validade || "",
-            preco_unitario: l.preco_unitario != null ? String(l.preco_unitario) : (editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : ""),
-            embalado: l.embalado != null ? l.embalado : (editingEntrada.embalado || false),
-            peso_liquido: l.peso_liquido != null ? String(l.peso_liquido) : (editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : ""),
-            quantidade_embalagens: l.quantidade_embalagens != null ? String(l.quantidade_embalagens) : (editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : ""),
-          }))
-        );
-      } else {
-        setLotes([
-          {
-            produto_id: editingEntrada.produto_id || "",
-            produto_nome: editingEntrada.produto_nome || "",
-            produto_codigo: editingEntrada.produto_codigo || "",
-            nota_fiscal: editingEntrada.nota_fiscal || "",
-            lote: editingEntrada.lote || "",
-            densidade: editingEntrada.densidade || "",
-            quantidade:
-              editingEntrada.quantidade != null
-                ? String(editingEntrada.quantidade)
-                : "",
-            unidade_medida: editingEntrada.unidade_medida || "",
-            data_fabricacao: editingEntrada.data_fabricacao || "",
-            data_validade: editingEntrada.data_validade || "",
-            preco_unitario: editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : "",
-            embalado: editingEntrada.embalado || false,
-            peso_liquido: editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : "",
-            quantidade_embalagens: editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : "",
-          },
-        ]);
-      }
+      const lotesCarregados =
+        editingEntrada.lotes && editingEntrada.lotes.length > 0
+          ? editingEntrada.lotes.map((l) => ({
+              produto_id: l.produto_id || editingEntrada.produto_id || "",
+              produto_nome: l.produto_nome || editingEntrada.produto_nome || "",
+              produto_codigo: l.produto_codigo || editingEntrada.produto_codigo || "",
+              nota_fiscal: l.nota_fiscal || "",
+              lote: l.lote || "",
+              densidade: l.densidade || "",
+              quantidade: l.quantidade != null ? String(l.quantidade) : "",
+              unidade_medida: l.unidade_medida || "",
+              data_fabricacao: l.data_fabricacao || "",
+              data_validade: l.data_validade || "",
+              preco_unitario: l.preco_unitario != null ? String(l.preco_unitario) : (editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : ""),
+              embalado: l.embalado != null ? l.embalado : (editingEntrada.embalado || false),
+              peso_liquido: l.peso_liquido != null ? String(l.peso_liquido) : (editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : ""),
+              quantidade_embalagens: l.quantidade_embalagens != null ? String(l.quantidade_embalagens) : (editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : ""),
+            }))
+          : [
+              {
+                produto_id: editingEntrada.produto_id || "",
+                produto_nome: editingEntrada.produto_nome || "",
+                produto_codigo: editingEntrada.produto_codigo || "",
+                nota_fiscal: editingEntrada.nota_fiscal || "",
+                lote: editingEntrada.lote || "",
+                densidade: editingEntrada.densidade || "",
+                quantidade:
+                  editingEntrada.quantidade != null
+                    ? String(editingEntrada.quantidade)
+                    : "",
+                unidade_medida: editingEntrada.unidade_medida || "",
+                data_fabricacao: editingEntrada.data_fabricacao || "",
+                data_validade: editingEntrada.data_validade || "",
+                preco_unitario: editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : "",
+                embalado: editingEntrada.embalado || false,
+                peso_liquido: editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : "",
+                quantidade_embalagens: editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : "",
+              },
+            ];
+      setLotes(lotesCarregados);
+      setCollapsedLotes(
+        Object.fromEntries(lotesCarregados.map((_, i) => [i, true]))
+      );
       setStatusWms(editingEntrada.status_wms || false);
       setGranelPesagem(editingEntrada.granel_pesagem || false);
       setGranelTicket(editingEntrada.granel_ticket || "");
@@ -101,6 +169,7 @@ export default function EntradaModal({
       setClienteId("");
       setClienteNome("");
       setLotes([emptyLote()]);
+      setCollapsedLotes({});
       setStatusWms(false);
       setGranelPesagem(false);
       setGranelTicket("");
@@ -169,7 +238,10 @@ export default function EntradaModal({
   const formatMoeda = (v) => formatCurrency(v);
 
   // ── Handlers dos lotes ──
-  const addLote = () =>
+  const addLote = () => {
+    setCollapsedLotes(
+      Object.fromEntries(lotes.map((_, i) => [i, true]))
+    );
     setLotes((prev) => [
       ...prev,
       {
@@ -177,12 +249,30 @@ export default function EntradaModal({
         unidade_medida: prev[0]?.unidade_medida || "",
       },
     ]);
+  };
 
-  const removeLote = (index) =>
+  const removeLote = (index) => {
     setLotes((prev) => prev.filter((_, i) => i !== index));
+    setCollapsedLotes((prev) => {
+      const next = {};
+      Object.keys(prev).forEach((key) => {
+        const i = Number(key);
+        if (i < index) next[i] = prev[i];
+        else if (i > index) next[i - 1] = prev[i];
+      });
+      return next;
+    });
+  };
 
   const updateLote = (index, data) =>
     setLotes((prev) => prev.map((l, i) => (i === index ? data : l)));
+
+  const toggleLoteCollapse = (index) => {
+    setCollapsedLotes((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }));
+  };
 
   const validateAndBuildData = () => {
     if (!clienteNome) {
@@ -308,6 +398,12 @@ export default function EntradaModal({
   const handleSaveAndTransbordo = async () => {
     const data = validateAndBuildData();
     if (!data) return;
+
+    if (transbordoBlockMessage) {
+      setError(transbordoBlockMessage);
+      return;
+    }
+
     let saved;
     try {
       saved = await onSave(data);
@@ -320,14 +416,54 @@ export default function EntradaModal({
         ? saved
         : saved.savedEstoques || [];
       const savedEntrada = Array.isArray(saved) ? null : saved.savedEntrada;
+      const prefillEntrada = {
+        ...data,
+        id: savedEntrada?.id,
+        entrada_codigo: saved.entrada_codigo,
+        savedEstoques,
+      };
+
+      // Revalida cadeia após salvar (pode ter OPs posteriores)
+      let linkedTransbordo = null;
+      try {
+        const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
+          await Promise.all([
+            entities.transbordos.list("-created_date"),
+            savedEntrada?.id
+              ? entities.estoque.filter({ entrada_id: savedEntrada.id })
+              : Promise.resolve(savedEstoques),
+            entities.vasilhames.list(),
+          ]);
+
+        const linked = findAllLinkedTransbordos(
+          allTransbordos,
+          prefillEntrada,
+          estoqueDaEntrada,
+          vasilhamesList
+        );
+
+        if (linked.length > 1) {
+          const msg = multipleTransbordosMessage(linked);
+          setTransbordoBlockMessage(msg);
+          setError(msg);
+          return;
+        }
+
+        linkedTransbordo = findLinkedTransbordo(
+          allTransbordos,
+          prefillEntrada,
+          estoqueDaEntrada,
+          vasilhamesList
+        );
+      } catch {
+        linkedTransbordo = null;
+      }
+
       navigate("/chemflow/transbordo", {
         state: {
-          prefillEntrada: {
-            ...data,
-            id: savedEntrada?.id,
-            entrada_codigo: saved.entrada_codigo,
-            savedEstoques,
-          },
+          prefillEntrada,
+          linkedTransbordoId: linkedTransbordo?.id || null,
+          linkedTransbordo: linkedTransbordo || null,
         },
       });
     }
@@ -341,7 +477,10 @@ export default function EntradaModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -376,6 +515,7 @@ export default function EntradaModal({
               getOptionValue={(c) => c.id}
               placeholder="Selecione um cliente"
               disabled={readOnly}
+              inputClassName={INPUT_EDITABLE}
             />
           </div>
 
@@ -391,6 +531,8 @@ export default function EntradaModal({
                 readOnly={readOnly}
                 produtos={filteredProdutos}
                 canRemove={lotes.length > 1}
+                collapsed={!!collapsedLotes[i]}
+                onToggleCollapse={() => toggleLoteCollapse(i)}
               />
             ))}
             {!readOnly && (
@@ -452,6 +594,7 @@ export default function EntradaModal({
                     onChange={(e) => setGranelTicket(e.target.value)}
                     placeholder="Nº do ticket"
                     disabled={readOnly}
+                    className={INPUT_EDITABLE}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -464,6 +607,7 @@ export default function EntradaModal({
                     onChange={(e) => setGranelPesoBruto(e.target.value)}
                     placeholder="0"
                     disabled={readOnly}
+                    className={INPUT_EDITABLE}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -476,6 +620,7 @@ export default function EntradaModal({
                     onChange={(e) => setGranelPesoLiquido(e.target.value)}
                     placeholder="0"
                     disabled={readOnly}
+                    className={INPUT_EDITABLE}
                   />
                 </div>
               </div>
@@ -540,22 +685,36 @@ export default function EntradaModal({
           </div>
 
           {!readOnly && (
-            <DialogFooter className="sm:justify-between">
+            <DialogFooter className="sm:justify-between flex-col sm:flex-row gap-3">
               {!anyEmbalado ? (
-                <Button
-                  type="button"
-                  onClick={handleSaveAndTransbordo}
-                  disabled={!allSameProduct}
-                  className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={
-                    !allSameProduct
-                      ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
-                      : ""
-                  }
-                >
-                  <ArrowRight className="w-4 h-4" />
-                  Ir para Transbordo
-                </Button>
+                <div className="flex flex-col gap-2 max-w-md">
+                  <Button
+                    type="button"
+                    onClick={handleSaveAndTransbordo}
+                    disabled={
+                      !allSameProduct ||
+                      !!transbordoBlockMessage ||
+                      checkingTransbordos
+                    }
+                    className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={
+                      transbordoBlockMessage
+                        ? transbordoBlockMessage
+                        : !allSameProduct
+                        ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
+                        : ""
+                    }
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Ir para Transbordo
+                  </Button>
+                  {transbordoBlockMessage && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs leading-relaxed">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{transbordoBlockMessage}</span>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div />
               )}

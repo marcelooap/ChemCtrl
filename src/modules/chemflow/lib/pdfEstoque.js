@@ -6,6 +6,10 @@ import {
   roundVolume,
   roundMass,
 } from "@chemflow/lib/format";
+import {
+  getEstoqueNotaFiscal,
+  getEstoqueNotaFiscalTroca,
+} from "@chemflow/lib/estoqueSaldo";
 
 const M = 14;
 const PW = 210;
@@ -317,6 +321,7 @@ export function generateRelatorioEstoquePDF({
   item,
   displayId,
   destinosList = [],
+  historicoTransbordos = [],
   saidasHistorico = [],
 }) {
   if (!item) return;
@@ -377,8 +382,8 @@ export function generateRelatorioEstoquePDF({
     doc,
     y,
     [
-      ["Nota Fiscal", item.nota_fiscal || "-"],
-      ["Troca Fiscal", item.nota_fiscal_troca || "-"],
+      ["Nota Fiscal", getEstoqueNotaFiscal(item) || "-"],
+      ["Troca Fiscal", getEstoqueNotaFiscalTroca(item) || "-"],
       ["Densidade", formatDensidade(item.densidade) || "-"],
       ["Fabricação", fmtDate(item.data_fabricacao)],
       ["Validade", fmtDate(item.data_validade)],
@@ -464,6 +469,44 @@ export function generateRelatorioEstoquePDF({
           "",
           `${fmtNum(roundVolume(totalVol), 0)} L`,
           `${fmtNum(roundMass(totalMass), 0)} kg`,
+        ]
+      : null
+  );
+
+  const totalVolHist = historicoTransbordos.reduce(
+    (s, d) => s + (Number(d.volume) || 0),
+    0
+  );
+  const totalMassHist = historicoTransbordos.reduce(
+    (s, d) => s + (Number(d.pesoLiq) || 0),
+    0
+  );
+
+  y = ensureSpace(doc, y, 36);
+  y = addSectionTitle(doc, y, "Histórico de Embalagens");
+  y = addTable(
+    doc,
+    y,
+    ["TRANSBORDO", "DATA", "ORIGEM", "DESTINO", "TIPO", "VOLUME (L)", "PESO LÍQ."],
+    historicoTransbordos.map((d) => [
+      d.codigo || "-",
+      fmtDate(d.data),
+      d.origem || "-",
+      d.destino || "-",
+      d.tipo || "-",
+      fmtNum(roundVolume(d.volume || 0), 0),
+      fmtNum(roundMass(d.pesoLiq || 0), 0),
+    ]),
+    [26, 20, 32, 32, 24, 24, 24],
+    historicoTransbordos.length > 0
+      ? [
+          "TOTAL",
+          "",
+          "",
+          "",
+          "",
+          `${fmtNum(roundVolume(totalVolHist), 0)} L`,
+          `${fmtNum(roundMass(totalMassHist), 0)} kg`,
         ]
       : null
   );

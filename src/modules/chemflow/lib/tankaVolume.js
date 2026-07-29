@@ -155,3 +155,72 @@ export async function syncEmptyTankaVasilhames({
     }
   }
 }
+
+/**
+ * Após excluir (ou excluir logicamente) um transbordo, recalcula o volume
+ * das tankas usadas como origem e restaura o registro em vasilhames.
+ */
+export async function restoreTankaVasilhamesAfterExclude({
+  origens = [],
+  excludeTransbordoId,
+  isotanques = [],
+  transbordos = [],
+  entities,
+  vasilhamesList = null,
+}) {
+  const tankaOrigens = origens.filter(
+    (o) => o.tipo_origem === "tanka" && o.entrada_id
+  );
+  if (tankaOrigens.length === 0 || !entities?.vasilhames) return;
+
+  const seen = new Set();
+  const list = vasilhamesList || (await entities.vasilhames.list());
+
+  for (const o of tankaOrigens) {
+    if (seen.has(o.entrada_id)) continue;
+    seen.add(o.entrada_id);
+
+    const iso = isotanques.find((i) => i.id === o.entrada_id);
+    const tankaCodigo = iso?.tanka || o.entrada_codigo || "";
+
+    const remaining = computeTankaSaldo({
+      isotanqueId: o.entrada_id,
+      tankaCodigo,
+      transbordos,
+      excludeTransbordoId,
+    });
+
+    const placas = new Set(
+      [tankaCodigo, iso?.tanka, iso?.codigo_itku, o.entrada_codigo]
+        .filter(Boolean)
+        .map(normPlaca)
+    );
+
+    const matches = list.filter((v) => {
+      if (v.tipo !== "Tankagem") return false;
+      return placas.has(normPlaca(v.placa));
+    });
+
+    const dens =
+      parseFloat(String(iso?.densidade || o.densidade || "0").replace(",", ".")) ||
+      0;
+
+    for (const v of matches) {
+      const peso =
+        dens > 0 ? roundMass(remaining * dens) : roundMass(v.peso_liquido || 0);
+      const patch = {
+        volume: Math.max(0, remaining),
+        peso_liquido: remaining > 0 ? peso : 0,
+        peso_bruto: roundMass((v.tara || 0) + (remaining > 0 ? peso : 0)),
+      };
+      if (remaining > 0) {
+        patch.status = "No Pátio";
+        patch.data_saida = null;
+      } else {
+        patch.status = "Expedido";
+      }
+      await entities.vasilhames.update(v.id, patch);
+      Object.assign(v, patch);
+    }
+  }
+}

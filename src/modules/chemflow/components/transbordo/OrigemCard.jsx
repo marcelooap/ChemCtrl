@@ -1,6 +1,6 @@
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
-import { Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@chemflow/components/cadastro/SearchableSelect";
 import {
   formatVolume,
@@ -27,6 +27,8 @@ export default function OrigemCard({
   onChange,
   onRemove,
   readOnly,
+  collapsed = false,
+  onToggleCollapse,
 }) {
   const tipoOrigem = origem.tipo_origem || "";
   const sourceOptions =
@@ -106,6 +108,58 @@ export default function OrigemCard({
   const excedeuSaldo = volumeRetirado > saldoEmLitros;
   const tipoValue = TIPOS_ORIGEM.find((t) => t.value === tipoOrigem)?.label || "";
 
+  const collapseControls = (
+    <div className="flex items-center gap-2 shrink-0">
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+          title={collapsed ? "Maximizar origem" : "Minimizar origem"}
+          aria-label={collapsed ? "Maximizar origem" : "Minimizar origem"}
+        >
+          {collapsed ? (
+            <ChevronDown className="w-4 h-4" />
+          ) : (
+            <ChevronUp className="w-4 h-4" />
+          )}
+        </button>
+      )}
+      {!readOnly && !isEntradaLocked && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-red-400 hover:text-red-600 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/40/50 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0 flex-1">
+            <span className="text-sm font-semibold text-primary shrink-0">
+              Origem {String(index + 1).padStart(2, "0")}
+            </span>
+            <span className="text-sm text-foreground/80 truncate">
+              <span className="text-muted-foreground">Origem:</span>{" "}
+              {origem.entrada_codigo || "—"}
+            </span>
+            <span className="text-sm text-foreground/80 shrink-0">
+              <span className="text-muted-foreground">Volume:</span>{" "}
+              {formatVolume(volumeRetirado)} L
+            </span>
+          </div>
+          {collapseControls}
+        </div>
+      </div>
+    );
+  }
+
   if (isEntradaLocked) {
     return (
       <div className="rounded-lg border border-border bg-muted/40/50 p-4 space-y-3">
@@ -113,6 +167,7 @@ export default function OrigemCard({
           <span className="text-sm font-semibold text-primary">
             Origem {String(index + 1).padStart(2, "0")}
           </span>
+          {collapseControls}
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5">
@@ -170,14 +225,7 @@ export default function OrigemCard({
         <span className="text-sm font-semibold text-primary">
           Origem {String(index + 1).padStart(2, "0")}
         </span>
-        {!readOnly && (
-          <button
-            onClick={onRemove}
-            className="text-red-400 hover:text-red-600 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
+        {collapseControls}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">

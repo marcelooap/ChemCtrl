@@ -108,7 +108,7 @@ export default function FiltracaoTab() {
 
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
   const volumeTotal = filtered.reduce((sum, f) => sum + (f.volume || 0), 0);
-  const colSpan = 9 + PARTICULA_TAMANHOS.length + 1;
+  const colSpan = 8 + PARTICULA_TAMANHOS.length + 1;
 
   return (
     <div className="space-y-6">
@@ -145,7 +145,6 @@ export default function FiltracaoTab() {
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Nº Placa</th>
                 <th className="px-4 py-3 font-medium">Nº Barril</th>
-                <th className="px-4 py-3 font-medium">Código</th>
                 <th className="px-4 py-3 font-medium">Produto</th>
                 <th className="px-4 py-3 font-medium">Lote</th>
                 <th className="px-4 py-3 font-medium">Volume (L)</th>
@@ -199,9 +198,6 @@ export default function FiltracaoTab() {
                       <td className="px-4 py-3 text-foreground">{f.placa || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {f.barril || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {f.produto_codigo || "-"}
                       </td>
                       <td className="px-4 py-3 text-foreground">
                         {f.produto_nome || "-"}

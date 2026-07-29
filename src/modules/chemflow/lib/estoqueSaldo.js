@@ -22,6 +22,35 @@ export function getEstoqueQuantidade(estoqueItem) {
   return 0;
 }
 
+/** NF original — coluna ou lote embutido. */
+export function getEstoqueNotaFiscal(estoqueItem) {
+  const fromCol = estoqueItem?.nota_fiscal;
+  if (fromCol != null && String(fromCol).trim() !== "") return String(fromCol);
+  const fromLote = estoqueItem?.lotes?.[0]?.nota_fiscal;
+  if (fromLote != null && String(fromLote).trim() !== "") return String(fromLote);
+  return "";
+}
+
+/** Troca fiscal — coluna ou lote embutido (JSONB). */
+export function getEstoqueNotaFiscalTroca(estoqueItem) {
+  const fromCol = estoqueItem?.nota_fiscal_troca;
+  if (fromCol != null && String(fromCol).trim() !== "") return String(fromCol);
+  const fromLote = estoqueItem?.lotes?.[0]?.nota_fiscal_troca;
+  if (fromLote != null && String(fromLote).trim() !== "") return String(fromLote);
+  return "";
+}
+
+/** Hidrata campos fiscais a partir do lote quando a coluna vier vazia. */
+export function hydrateEstoqueFiscal(estoqueItem) {
+  if (!estoqueItem) return estoqueItem;
+  return {
+    ...estoqueItem,
+    nota_fiscal: getEstoqueNotaFiscal(estoqueItem) || estoqueItem.nota_fiscal || null,
+    nota_fiscal_troca:
+      getEstoqueNotaFiscalTroca(estoqueItem) || estoqueItem.nota_fiscal_troca || null,
+  };
+}
+
 /** Unidade a exibir/persistir, com correção para lotes embalados. */
 export function getEstoqueUnidade(estoqueItem) {
   const lote = estoqueItem?.lotes?.[0];
@@ -106,6 +135,195 @@ export function findTransbordosForVasilhame(vasilhame, transbordos = []) {
   }
 
   return [...byId.values()];
+}
+
+function normCodigo(v) {
+  return String(v || "")
+    .trim()
+    .toUpperCase();
+}
+
+/** Chaves que identificam uma embalagem de destino como possível origem futura. */
+function collectEmbalagemKeysFromDestino(destino, transbordoId, vasilhames = []) {
+  const keys = new Set();
+  if (!destino) return keys;
+
+  if (destino.tanka_id) keys.add(`tanka:${destino.tanka_id}`);
+  const tankaCodigo = normCodigo(destino.tanka_codigo);
+  if (tankaCodigo) keys.add(`tanka_codigo:${tankaCodigo}`);
+
+  if (destino.vasilhame_existente_id) {
+    keys.add(`vasilhame:${destino.vasilhame_existente_id}`);
+  }
+
+  const placa = destino.placa || destino.tanka_codigo || "";
+  const barril = destino.barril || "";
+  const pb = placaBarrilKey(placa, barril);
+  if (pb !== "||") keys.add(`placa:${pb}`);
+
+  if (transbordoId) {
+    (vasilhames || []).forEach((v) => {
+      if (v.transbordo_id !== transbordoId) return;
+      const vPb = placaBarrilKey(v.placa, v.barril);
+      if (pb !== "||" && vPb === pb) {
+        if (v.id) keys.add(`vasilhame:${v.id}`);
+      } else if (
+        destino.tipo_embalagem === "Tankagem" &&
+        v.tipo === "Tankagem" &&
+        tankaCodigo &&
+        normCodigo(v.placa) === tankaCodigo
+      ) {
+        if (v.id) keys.add(`vasilhame:${v.id}`);
+      }
+    });
+  }
+
+  return keys;
+}
+
+/** Verifica se a origem de um transbordo consome alguma embalagem rastreada. */
+function origemMatchesEmbalagemKeys(origem, keys, vasilhames = []) {
+  if (!origem || !keys || keys.size === 0) return false;
+  const tipo = origem.tipo_origem || "";
+
+  if (tipo === "tanka") {
+    if (origem.entrada_id && keys.has(`tanka:${origem.entrada_id}`)) return true;
+    const codigo = normCodigo(
+      origem.entrada_codigo || origem.tanka_codigo || ""
+    );
+    if (codigo && keys.has(`tanka_codigo:${codigo}`)) return true;
+    return false;
+  }
+
+  if (tipo === "vasilhame") {
+    if (origem.entrada_id && keys.has(`vasilhame:${origem.entrada_id}`)) {
+      return true;
+    }
+    const v = (vasilhames || []).find((x) => x.id === origem.entrada_id);
+    if (v) {
+      const pb = placaBarrilKey(v.placa, v.barril);
+      if (pb !== "||" && keys.has(`placa:${pb}`)) return true;
+      if (v.tipo === "Tankagem" && normCodigo(v.placa)) {
+        if (keys.has(`tanka_codigo:${normCodigo(v.placa)}`)) return true;
+      }
+    }
+    const codigo = normCodigo(origem.entrada_codigo || "");
+    if (codigo) {
+      // Labels do tipo "PLACA - Produto (N L)" — tenta placa no início
+      const placaHint = codigo.split(/\s*[-–]\s*/)[0];
+      if (placaHint && keys.has(`placa:${placaBarrilKey(placaHint, "")}`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return false;
+}
+
+function labelOrigemTransbordo(origem, vasilhames = []) {
+  if (!origem) return "—";
+  if (origem.entrada_codigo) return origem.entrada_codigo;
+  const tipo = origem.tipo_origem || "";
+  if (tipo === "tanka") {
+    return origem.tanka_codigo || "Tanka";
+  }
+  if (tipo === "vasilhame" && origem.entrada_id) {
+    const v = (vasilhames || []).find((x) => x.id === origem.entrada_id);
+    if (v) {
+      return [v.placa, v.barril].filter(Boolean).join(" / ") || v.codigo || "Vasilhame";
+    }
+  }
+  return tipo || "—";
+}
+
+function labelDestinoTransbordo(destino) {
+  if (!destino) return "—";
+  return (
+    [destino.placa, destino.barril].filter(Boolean).join(" / ") ||
+    destino.tanka_codigo ||
+    "—"
+  );
+}
+
+/**
+ * Histórico de re-transbordos encadeados: todas as embalagens pelas quais
+ * o produto passou após o destino inicial (ex.: tanka → vasilhame).
+ */
+export function listHistoricoTransbordosEncadeados(
+  estoqueItem,
+  transbordos = [],
+  vasilhames = []
+) {
+  const id = estoqueItem?.id;
+  if (!id) return [];
+
+  const firstIds = new Set(
+    (transbordos || [])
+      .filter((t) => (t.origens || []).some((o) => o.entrada_id === id))
+      .map((t) => t.id)
+  );
+
+  const trackedKeys = new Set();
+  (transbordos || []).forEach((t) => {
+    if (!firstIds.has(t.id)) return;
+    (t.destinos || []).forEach((d) => {
+      collectEmbalagemKeysFromDestino(d, t.id, vasilhames).forEach((k) =>
+        trackedKeys.add(k)
+      );
+    });
+  });
+
+  if (trackedKeys.size === 0) return [];
+
+  const visited = new Set(firstIds);
+  const rows = [];
+  let grew = true;
+
+  while (grew) {
+    grew = false;
+    for (const t of transbordos || []) {
+      if (!t?.id || visited.has(t.id)) continue;
+
+      const matchingOrigens = (t.origens || []).filter((o) =>
+        origemMatchesEmbalagemKeys(o, trackedKeys, vasilhames)
+      );
+      if (matchingOrigens.length === 0) continue;
+
+      visited.add(t.id);
+      grew = true;
+
+      const origemLabel = matchingOrigens
+        .map((o) => labelOrigemTransbordo(o, vasilhames))
+        .filter(Boolean)
+        .join(", ");
+
+      (t.destinos || []).forEach((d, idx) => {
+        rows.push({
+          key: `${t.id}-${idx}`,
+          transbordoId: t.id,
+          codigo: t.codigo_transbordo || "—",
+          data: t.data,
+          origem: origemLabel || "—",
+          destino: labelDestinoTransbordo(d),
+          tipo: d.tipo_embalagem || (d.tanka_codigo ? "Tanka" : "—"),
+          volume: d.volume_total || d.volume || 0,
+          pesoLiq: d.peso_liquido || 0,
+          rawDestino: d,
+        });
+        collectEmbalagemKeysFromDestino(d, t.id, vasilhames).forEach((k) =>
+          trackedKeys.add(k)
+        );
+      });
+    }
+  }
+
+  return rows.sort((a, b) => {
+    const da = new Date(a.data || 0).getTime();
+    const db = new Date(b.data || 0).getTime();
+    if (da !== db) return da - db;
+    return String(a.codigo).localeCompare(String(b.codigo));
+  });
 }
 
 /**

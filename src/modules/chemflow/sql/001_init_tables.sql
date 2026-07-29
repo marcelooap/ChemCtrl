@@ -232,6 +232,7 @@ create table if not exists vasilhames (
   lote text,
   densidade text,
   volume numeric not null default 0,
+  capacidade numeric,
   tara numeric,
   peso_liquido numeric,
   peso_bruto numeric,

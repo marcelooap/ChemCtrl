@@ -112,10 +112,21 @@ export default function Saida() {
     return <span className="text-green-600 font-medium">{dias} dia(s)</span>;
   };
 
-  const renderProdutosCount = (s) => {
-    const count = (s.itens || []).length;
+  const renderProdutosLabel = (s) => {
+    const itens = s.itens || [];
+    const distinct = new Map();
+    for (const item of itens) {
+      const key = item.produto_id || item.produto_nome;
+      if (!key) continue;
+      if (!distinct.has(key)) {
+        distinct.set(key, item.produto_nome || "—");
+      }
+    }
+    const count = distinct.size;
+    if (count === 0) return "—";
+    if (count === 1) return [...distinct.values()][0];
     const text = String(count).padStart(2, "0");
-    return count === 1 ? `${text} Produto` : `${text} Produtos`;
+    return `${text} Produtos`;
   };
 
   const handleDelete = async () => {
@@ -294,7 +305,7 @@ export default function Saida() {
                     </td>
                     <td className="px-5 py-3 text-foreground">{s.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {renderProdutosCount(s)}
+                      {renderProdutosLabel(s)}
                     </td>
                     <td className="px-5 py-3 font-medium text-foreground">
                       {formatMass(s.quantidade_total, { empty: "-" })}

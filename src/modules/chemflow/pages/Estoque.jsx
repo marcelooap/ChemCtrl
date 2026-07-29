@@ -20,7 +20,7 @@ import EstoqueEditModal from "@chemflow/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@chemflow/components/estoque/EstoqueViewDialog";
 import { loteToKg, loteUnidadeEstoque } from "@chemflow/lib/conversao";
 import { formatMass, formatCurrency } from "@chemflow/lib/format";
-import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade } from "@chemflow/lib/estoqueSaldo";
+import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, hydrateEstoqueFiscal } from "@chemflow/lib/estoqueSaldo";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -49,8 +49,8 @@ export default function Estoque() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [ests, prods, cliens, trans, saics, ents, vascs] = await Promise.all([
         entities.estoque.list(),
@@ -64,14 +64,15 @@ export default function Estoque() {
 
       // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
       const estoqueWithSaldo = ests.map((e) => {
-        const quantidade = getEstoqueQuantidade(e);
-        const unidade_medida = getEstoqueUnidade(e);
+        const hydrated = hydrateEstoqueFiscal(e);
+        const quantidade = getEstoqueQuantidade(hydrated);
+        const unidade_medida = getEstoqueUnidade(hydrated);
         return {
-          ...e,
+          ...hydrated,
           quantidade,
           unidade_medida,
           saldo_atual: computeEstoqueSaldo(
-            { ...e, quantidade },
+            { ...hydrated, quantidade },
             trans,
             saics,
             vascs
@@ -96,7 +97,11 @@ export default function Estoque() {
           unidade_medida: e.unidade_medida,
         }));
       if (toUpdate.length > 0) {
-        await entities.estoque.bulkUpdate(toUpdate);
+        try {
+          await entities.estoque.bulkUpdate(toUpdate);
+        } catch {
+          // Sync de saldo não deve derrubar a listagem
+        }
       }
 
       setEstoque(estoqueWithSaldo);
@@ -107,9 +112,10 @@ export default function Estoque() {
       setEntradas(ents);
       setVasilhames(vascs);
     } catch {
-      setEstoque([]);
+      if (!silent) setEstoque([]);
+    } finally {
+      if (!silent) setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -145,7 +151,9 @@ export default function Estoque() {
       e.produto_codigo?.toLowerCase().includes(q) ||
       e.produto_nome?.toLowerCase().includes(q) ||
       e.cliente_nome?.toLowerCase().includes(q) ||
-      e.lote?.toLowerCase().includes(q);
+      e.lote?.toLowerCase().includes(q) ||
+      e.nota_fiscal?.toLowerCase().includes(q) ||
+      e.nota_fiscal_troca?.toLowerCase().includes(q);
 
     const matchStatus =
       !statusFilter ||
@@ -182,55 +190,67 @@ export default function Estoque() {
   };
 
   const handleEditSave = async (data) => {
-    if (!editingItem) return;
+    const item = editingItem;
+    if (!item?.id) {
+      throw new Error("Registro de estoque inválido para edição.");
+    }
 
     const quantidade = Number(data.quantidade) || 0;
     const preco = Number(data.preco_unitario) || 0;
-    const saido = Math.max(
-      0,
-      (Number(editingItem.quantidade) || 0) - (Number(editingItem.saldo_atual) || 0)
+
+    const lotes =
+      Array.isArray(item.lotes) && item.lotes.length > 0
+        ? item.lotes.map((l, i) =>
+            i === 0
+              ? {
+                  ...l,
+                  nota_fiscal: data.nota_fiscal,
+                  nota_fiscal_troca: data.nota_fiscal_troca,
+                  lote: data.lote,
+                  quantidade,
+                  unidade_medida: data.unidade_medida,
+                  data_fabricacao: data.data_fabricacao,
+                  data_validade: data.data_validade,
+                  preco_unitario: preco,
+                  peso_liquido: data.peso_liquido,
+                  quantidade_embalagens: data.quantidade_embalagens,
+                }
+              : l
+          )
+        : [
+            {
+              produto_id: item.produto_id,
+              produto_nome: item.produto_nome,
+              produto_codigo: item.produto_codigo,
+              nota_fiscal: data.nota_fiscal,
+              nota_fiscal_troca: data.nota_fiscal_troca,
+              lote: data.lote,
+              densidade: item.densidade,
+              quantidade,
+              unidade_medida: data.unidade_medida,
+              data_fabricacao: data.data_fabricacao,
+              data_validade: data.data_validade,
+              preco_unitario: preco,
+              embalado: item.embalado || false,
+              peso_liquido: data.peso_liquido,
+              quantidade_embalagens: data.quantidade_embalagens,
+            },
+          ];
+
+    const provisional = {
+      ...item,
+      quantidade,
+      unidade_medida: data.unidade_medida,
+      lotes,
+    };
+    const saldo_atual = computeEstoqueSaldo(
+      provisional,
+      transbordos,
+      saidas,
+      vasilhames
     );
-    const saldo_atual = Math.max(0, quantidade - saido);
 
-    const lotes = Array.isArray(editingItem.lotes) && editingItem.lotes.length > 0
-      ? editingItem.lotes.map((l, i) =>
-          i === 0
-            ? {
-                ...l,
-                nota_fiscal: data.nota_fiscal,
-                nota_fiscal_troca: data.nota_fiscal_troca,
-                lote: data.lote,
-                quantidade,
-                unidade_medida: data.unidade_medida,
-                data_fabricacao: data.data_fabricacao,
-                data_validade: data.data_validade,
-                preco_unitario: preco,
-                peso_liquido: data.peso_liquido,
-                quantidade_embalagens: data.quantidade_embalagens,
-              }
-            : l
-        )
-      : [
-          {
-            produto_id: editingItem.produto_id,
-            produto_nome: editingItem.produto_nome,
-            produto_codigo: editingItem.produto_codigo,
-            nota_fiscal: data.nota_fiscal,
-            nota_fiscal_troca: data.nota_fiscal_troca,
-            lote: data.lote,
-            densidade: editingItem.densidade,
-            quantidade,
-            unidade_medida: data.unidade_medida,
-            data_fabricacao: data.data_fabricacao,
-            data_validade: data.data_validade,
-            preco_unitario: preco,
-            embalado: editingItem.embalado || false,
-            peso_liquido: data.peso_liquido,
-            quantidade_embalagens: data.quantidade_embalagens,
-          },
-        ];
-
-    await entities.estoque.update(editingItem.id, {
+    const payload = {
       nota_fiscal: data.nota_fiscal,
       nota_fiscal_troca: nullIfEmpty(data.nota_fiscal_troca),
       lote: data.lote,
@@ -241,16 +261,40 @@ export default function Estoque() {
       preco_unitario: preco,
       custo_total: saldo_atual * preco,
       saldo_atual,
-      peso_liquido: editingItem.embalado ? data.peso_liquido : null,
-      quantidade_embalagens: editingItem.embalado
-        ? data.quantidade_embalagens
-        : null,
+      peso_liquido: item.embalado ? data.peso_liquido : null,
+      quantidade_embalagens: item.embalado ? data.quantidade_embalagens : null,
       lotes,
-    });
+    };
 
-    await loadData();
+    try {
+      await entities.estoque.update(item.id, payload);
+    } catch (err) {
+      const msg = String(err?.message || "").toLowerCase();
+      // Coluna ausente / schema cache desatualizado: mantém troca no JSONB lotes
+      const missingTrocaCol =
+        msg.includes("nota_fiscal_troca") ||
+        (msg.includes("schema cache") && "nota_fiscal_troca" in payload);
+      if (missingTrocaCol) {
+        const { nota_fiscal_troca: _ignored, ...payloadSemColuna } = payload;
+        await entities.estoque.update(item.id, payloadSemColuna);
+      } else {
+        throw err;
+      }
+    }
+
+    // Fecha o modal antes do refresh para evitar flash / estado preso em "Salvando..."
     setEditOpen(false);
     setEditingItem(null);
+
+    setEstoque((prev) =>
+      prev.map((e) =>
+        e.id === item.id
+          ? hydrateEstoqueFiscal({ ...e, ...payload, quantidade, saldo_atual })
+          : e
+      )
+    );
+
+    await loadData({ silent: true });
   };
 
   const handleSave = async (data) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,10 @@ import { Label } from "@shared/components/ui/label";
 import { AlertCircle } from "lucide-react";
 import { UNIDADES } from "@chemflow/components/entrada/LoteBlock";
 import { formatCurrency } from "@chemflow/lib/format";
+import {
+  getEstoqueNotaFiscal,
+  getEstoqueNotaFiscalTroca,
+} from "@chemflow/lib/estoqueSaldo";
 
 function toInputDate(value) {
   if (!value) return "";
@@ -35,13 +39,15 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
   const [qtdEmbalagens, setQtdEmbalagens] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const itemId = item?.id;
 
   const embalado = !!item?.embalado;
 
   useEffect(() => {
     if (!open || !item) return;
-    setNotaFiscal(item.nota_fiscal || "");
-    setNotaFiscalTroca(item.nota_fiscal_troca || "");
+    setNotaFiscal(getEstoqueNotaFiscal(item));
+    setNotaFiscalTroca(getEstoqueNotaFiscalTroca(item));
     setLote(item.lote || "");
     setQuantidade(
       item.quantidade != null && item.quantidade !== ""
@@ -67,8 +73,9 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
         : ""
     );
     setError("");
+    savingRef.current = false;
     setSaving(false);
-  }, [open, item]);
+  }, [open, itemId]);
 
   const qtd = parseFloat(quantidade) || 0;
   const preco = parseFloat(precoUnitario) || 0;
@@ -86,6 +93,9 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (savingRef.current) return;
+
     if (!notaFiscal.trim()) {
       setError("Nota Fiscal é obrigatória.");
       return;
@@ -109,6 +119,7 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     setError("");
     try {
@@ -127,19 +138,24 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
       });
     } catch (err) {
       setError(err?.message || "Não foi possível salvar. Tente novamente.");
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
-  if (!item) return null;
-
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && !saving && onClose()}>
+    <Dialog
+      open={open && !!item}
+      onOpenChange={(v) => {
+        if (!v && !savingRef.current) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Estoque</DialogTitle>
         </DialogHeader>
 
+        {!item ? null : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -352,6 +368,7 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@chemflow/services/entities';
 import { syncEstoqueSaldos } from "@chemflow/lib/estoqueSaldo";
+import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@chemflow/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
@@ -38,7 +39,7 @@ import {
   unifyDuplicateVasilhames,
   seedComposicaoFromVasilhame,
 } from "@chemflow/lib/vasilhameComposicao";
-import { syncEmptyTankaVasilhames } from "@chemflow/lib/tankaVolume";
+import { syncEmptyTankaVasilhames, restoreTankaVasilhamesAfterExclude } from "@chemflow/lib/tankaVolume";
 import {
   buildFiltracaoFromVasilhame,
   getFiltroEmUso,
@@ -62,6 +63,87 @@ const TIPOS_EMBALAGEM_UNITARIA = new Set([
 
 /** Converte string vazia em null (evita erro de UUID/date no Postgres). */
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+
+/**
+ * Reverte top-ups de fracionados feitos por um transbordo (antes de excluir/reeditar).
+ * Remove da composição e do volume a parcela atribuída a esse código.
+ */
+async function revertTopUpsDoTransbordo({
+  transbordo,
+  vasilhamesList,
+  densFallback = 0,
+  produtoFiltrado = false,
+  filtroExtras = {},
+}) {
+  if (!transbordo) return;
+  const codigo = transbordo.codigo_transbordo;
+  const dens = densFallback || parseDensidade(transbordo.densidade);
+
+  for (const d of transbordo.destinos || []) {
+    if (d.tipo_embalagem !== "Vasilhame" || !d.placa) continue;
+    const existing = findFracionadoNoPatio(vasilhamesList, {
+      placa: d.placa,
+      barril: d.barril,
+      id: d.vasilhame_existente_id,
+    });
+    const candidate =
+      existing ||
+      vasilhamesList.find(
+        (v) =>
+          (v.status || "No Pátio") === "No Pátio" &&
+          String(v.placa || "").trim().toUpperCase() ===
+            String(d.placa || "").trim().toUpperCase() &&
+          (v.composicao || []).some((c) => c.transbordo_codigo === codigo)
+      );
+    if (!candidate) continue;
+
+    // Não reverte registros criados por este OP — serão apagados via deleteMany
+    if (candidate.transbordo_id === transbordo.id) continue;
+
+    const cleaned = removeComposicaoByTransbordo(
+      candidate.composicao || [],
+      codigo
+    );
+    const removedVol = roundVolume(
+      (candidate.composicao || [])
+        .filter((c) => c.transbordo_codigo === codigo)
+        .reduce((s, c) => s + (c.quantidade_l || 0), 0)
+    );
+    const subtractVol =
+      removedVol > 0
+        ? removedVol
+        : roundVolume(d.volume_total || d.volume || 0);
+    const newVol = Math.max(
+      0,
+      roundVolume(candidate.volume || 0) - subtractVol
+    );
+    const densCand = parseDensidade(candidate.densidade) || dens;
+    const peso = densCand > 0 ? roundMass(newVol * densCand) : 0;
+    const reverted = await entities.vasilhames.update(candidate.id, {
+      volume: newVol,
+      peso_liquido: peso,
+      peso_bruto: roundMass((candidate.tara || 0) + peso),
+      composicao: cleaned,
+      lote: getDominantLote(cleaned) || candidate.lote || "",
+      fracionado: newVol > 0 ? true : candidate.fracionado,
+    });
+    candidate.volume = newVol;
+    candidate.composicao = cleaned;
+
+    if (produtoFiltrado) {
+      await upsertFiltracaoForVasilhame(
+        entities,
+        reverted || {
+          ...candidate,
+          volume: newVol,
+          composicao: cleaned,
+          lote: getDominantLote(cleaned) || candidate.lote || "",
+        },
+        filtroExtras
+      );
+    }
+  }
+}
 
 function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp) {
   const isTankagem = d.tipo_embalagem === "Tankagem";
@@ -133,8 +215,19 @@ export default function Transbordo() {
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState("");
   const [prefillConsumed, setPrefillConsumed] = useState(false);
+  const [activePrefill, setActivePrefill] = useState(null);
+  const [chainBlockMessage, setChainBlockMessage] = useState("");
   const location = useLocation();
+  const navigate = useNavigate();
   const prefillEntrada = location.state?.prefillEntrada;
+  const linkedTransbordoFromNav = location.state?.linkedTransbordo;
+  const linkedTransbordoIdFromNav = location.state?.linkedTransbordoId;
+
+  const clearPrefillNavigation = () => {
+    if (location.state?.prefillEntrada || location.state?.linkedTransbordo) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -165,13 +258,52 @@ export default function Transbordo() {
 
   useEffect(() => {
     if (prefillEntrada && !loading && !prefillConsumed) {
-      setEditingTransbordo(null);
+      const allLinked = findAllLinkedTransbordos(
+        transbordos,
+        prefillEntrada,
+        entradas,
+        vasilhames
+      );
+
+      if (allLinked.length > 1) {
+        setEditingTransbordo(null);
+        setActivePrefill(null);
+        setModalOpen(false);
+        setPrefillConsumed(true);
+        setChainBlockMessage(multipleTransbordosMessage(allLinked));
+        clearPrefillNavigation();
+        return;
+      }
+
+      // Preferência: OP passado na navegação (já resolvido na Entrada)
+      let linked =
+        (linkedTransbordoIdFromNav &&
+          transbordos.find((t) => t.id === linkedTransbordoIdFromNav)) ||
+        linkedTransbordoFromNav ||
+        findLinkedTransbordo(transbordos, prefillEntrada, entradas, vasilhames);
+
+      // Garante versão fresca da lista carregada (com destinos completos)
+      if (linked?.id) {
+        linked = transbordos.find((t) => t.id === linked.id) || linked;
+      }
+
+      setEditingTransbordo(linked || null);
+      setActivePrefill(prefillEntrada);
       setReadOnly(false);
       setSaveError("");
       setModalOpen(true);
       setPrefillConsumed(true);
     }
-  }, [prefillEntrada, loading, prefillConsumed]);
+  }, [
+    prefillEntrada,
+    loading,
+    prefillConsumed,
+    transbordos,
+    entradas,
+    vasilhames,
+    linkedTransbordoFromNav,
+    linkedTransbordoIdFromNav,
+  ]);
 
   const filtered = transbordos.filter((t) => {
     const q = search.toLowerCase();
@@ -208,6 +340,8 @@ export default function Transbordo() {
 
   const handleNew = () => {
     setEditingTransbordo(null);
+    setActivePrefill(null);
+    clearPrefillNavigation();
     setReadOnly(false);
     setSaveError("");
     setModalOpen(true);
@@ -215,6 +349,8 @@ export default function Transbordo() {
 
   const handleEdit = (t) => {
     setEditingTransbordo(t);
+    setActivePrefill(null);
+    clearPrefillNavigation();
     setReadOnly(false);
     setSaveError("");
     setModalOpen(true);
@@ -295,72 +431,27 @@ export default function Transbordo() {
 
       let savedTransbordo;
       let codigo;
-      if (editingTransbordo) {
-        codigo = editingTransbordo.codigo_transbordo;
+      const editingId = editingTransbordo?.id || data.id || null;
+      const existingForEdit =
+        editingTransbordo ||
+        (editingId ? transbordos.find((t) => t.id === editingId) : null);
+
+      if (editingId && existingForEdit) {
+        codigo = existingForEdit.codigo_transbordo;
         // Reverte top-ups de fracionados feitos por este transbordo antes de reaplicar
-        const oldCodigo = codigo;
-        for (const d of editingTransbordo.destinos || []) {
-          if (d.tipo_embalagem !== "Vasilhame" || !d.placa) continue;
-          const existing = findFracionadoNoPatio(vasilhames, {
-            placa: d.placa,
-            barril: d.barril,
-            id: d.vasilhame_existente_id,
-          });
-          // Também busca qualquer No Pátio com a placa (pode ter deixado de ser fracionado)
-          const candidate =
-            existing ||
-            vasilhames.find(
-              (v) =>
-                (v.status || "No Pátio") === "No Pátio" &&
-                String(v.placa || "").trim().toUpperCase() ===
-                  String(d.placa || "").trim().toUpperCase() &&
-                (v.composicao || []).some((c) => c.transbordo_codigo === oldCodigo)
-            );
-          if (!candidate) continue;
+        await revertTopUpsDoTransbordo({
+          transbordo: existingForEdit,
+          vasilhamesList: vasilhames,
+          densFallback: dens,
+          produtoFiltrado,
+          filtroExtras,
+        });
 
-          const cleaned = removeComposicaoByTransbordo(
-            candidate.composicao || [],
-            oldCodigo
-          );
-          const removedVol = roundVolume(
-            (candidate.composicao || [])
-              .filter((c) => c.transbordo_codigo === oldCodigo)
-              .reduce((s, c) => s + (c.quantidade_l || 0), 0)
-          );
-          // Fallback: se não havia tag no histórico, subtrai volume do destino antigo
-          const subtractVol =
-            removedVol > 0 ? removedVol : roundVolume(d.volume_total || d.volume || 0);
-          const newVol = Math.max(0, roundVolume(candidate.volume || 0) - subtractVol);
-          const densCand =
-            parseDensidade(candidate.densidade) || dens;
-          const peso = densCand > 0 ? roundMass(newVol * densCand) : 0;
-          const reverted = await entities.vasilhames.update(candidate.id, {
-            volume: newVol,
-            peso_liquido: peso,
-            peso_bruto: roundMass((candidate.tara || 0) + peso),
-            composicao: cleaned,
-            lote: getDominantLote(cleaned) || candidate.lote || "",
-            fracionado: newVol > 0 ? true : candidate.fracionado,
-          });
-          if (produtoFiltrado) {
-            await upsertFiltracaoForVasilhame(
-              entities,
-              reverted || {
-                ...candidate,
-                volume: newVol,
-                composicao: cleaned,
-                lote: getDominantLote(cleaned) || candidate.lote || "",
-              },
-              filtroExtras
-            );
-          }
-        }
-
-        savedTransbordo = await entities.transbordos.update(editingTransbordo.id, payload);
+        savedTransbordo = await entities.transbordos.update(editingId, payload);
         // Remove apenas registros CRIADOS por este transbordo (não os top-ups)
         // Filtrações ligadas caem via ON DELETE CASCADE em vasilhame_id
-        await entities.vasilhames.deleteMany({ transbordo_id: editingTransbordo.id });
-        await entities.filtracoes.deleteMany({ transbordo_id: editingTransbordo.id });
+        await entities.vasilhames.deleteMany({ transbordo_id: editingId });
+        await entities.filtracoes.deleteMany({ transbordo_id: editingId });
       } else {
         codigo = generateCodigo();
         savedTransbordo = await entities.transbordos.create({
@@ -537,7 +628,7 @@ export default function Transbordo() {
         dataSaida: payload.data,
         isotanques,
         transbordos,
-        editingTransbordoId: editingTransbordo?.id || null,
+        editingTransbordoId: editingId || editingTransbordo?.id || null,
         entities,
         vasilhamesList: afterSave,
       });
@@ -547,6 +638,8 @@ export default function Transbordo() {
       await loadData();
       setModalOpen(false);
       setEditingTransbordo(null);
+      setActivePrefill(null);
+      clearPrefillNavigation();
     } catch (err) {
       console.error("[ChemFlow] Erro ao registrar transbordo:", err);
       setSaveError(
@@ -557,17 +650,60 @@ export default function Transbordo() {
   };
 
   const handleDelete = async () => {
-    try {
-      const toDelete = transbordos.find((t) => t.id === deleteId);
-      const affectedIds = (toDelete?.origens || []).map((o) => o.entrada_id);
+    const toDelete = transbordos.find((t) => t.id === deleteId);
+    if (!toDelete) {
+      setDeleteId(null);
+      return;
+    }
 
+    try {
+      const dens = parseDensidade(toDelete.densidade);
+      const produtoFiltrado = !!produtos.find(
+        (p) => p.id === toDelete.produto_id
+      )?.filtrado;
+
+      // IDs de estoque (entrada/embalado) que voltam a ficar disponíveis
+      const affectedEstoqueIds = (toDelete.origens || [])
+        .filter(
+          (o) =>
+            (!o.tipo_origem ||
+              o.tipo_origem === "entrada" ||
+              o.tipo_origem === "embalado") &&
+            o.entrada_id
+        )
+        .map((o) => o.entrada_id);
+
+      // 1) Reverte top-ups em vasilhames fracionados que já existiam
+      await revertTopUpsDoTransbordo({
+        transbordo: toDelete,
+        vasilhamesList: vasilhames,
+        densFallback: dens,
+        produtoFiltrado,
+      });
+
+      // 2) Restaura volume das tankas usadas como origem (se tinham sido zeradas)
+      await restoreTankaVasilhamesAfterExclude({
+        origens: toDelete.origens || [],
+        excludeTransbordoId: toDelete.id,
+        isotanques,
+        transbordos,
+        entities,
+        vasilhamesList: vasilhames,
+      });
+
+      // 3) Remove embalagens e filtrações criadas por este transbordo
       await entities.vasilhames.deleteMany({ transbordo_id: deleteId });
       await entities.filtracoes.deleteMany({ transbordo_id: deleteId });
+
+      // 4) Remove o movimento — libera novamente o disponível nas origens de estoque
       await entities.transbordos.delete(deleteId);
-      await syncEstoqueSaldos(affectedIds);
+
+      // 5) Recalcula saldo_atual dos estoques de origem
+      await syncEstoqueSaldos(affectedEstoqueIds);
+
       await loadData();
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("[ChemFlow] Erro ao excluir transbordo:", err);
     }
     setDeleteId(null);
   };
@@ -725,6 +861,8 @@ export default function Transbordo() {
         onClose={() => {
           setModalOpen(false);
           setEditingTransbordo(null);
+          setActivePrefill(null);
+          clearPrefillNavigation();
           setReadOnly(false);
           setSaveError("");
         }}
@@ -737,7 +875,7 @@ export default function Transbordo() {
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
-        prefillEntrada={prefillEntrada}
+        prefillEntrada={activePrefill}
         externalError={saveError}
       />
 
@@ -757,13 +895,33 @@ export default function Transbordo() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir este transbordo? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir este transbordo? O volume disponível
+              nas origens será restaurado e as embalagens criadas por esta
+              operação serão removidas. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cadeia com múltiplos OPs — não permite editar via entrada */}
+      <AlertDialog
+        open={!!chainBlockMessage}
+        onOpenChange={(v) => !v && setChainBlockMessage("")}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edição de transbordo bloqueada</AlertDialogTitle>
+            <AlertDialogDescription>{chainBlockMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setChainBlockMessage("")}>
+              Entendi
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

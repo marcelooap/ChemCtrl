@@ -205,12 +205,23 @@ export default function Home() {
     0
   );
 
+  const DIAS_SEMANA_LABELS = ["Seg.", "Ter.", "Qua.", "Qui.", "Sex.", "Sab."];
+  const volumePorDia = DIAS_SEMANA_LABELS.map((label, offset) => {
+    const day = new Date(semanaInicio);
+    day.setDate(semanaInicio.getDate() + offset);
+    const key = toDateKey(day);
+    const volume = transbordosSemana
+      .filter((t) => String(t.data || "").slice(0, 10) === key)
+      .reduce((sum, t) => sum + (t.volume_total || 0), 0);
+    return { label, volume };
+  });
+
   const operacoes = transbordosSemana.map((t) => ({
     numero: t.codigo_transbordo || "-",
     produto: t.produto_nome || "-",
     cliente: t.cliente_nome || "-",
     volume: `${formatVolume(t.volume_total)} L`,
-    status: "Transbordo",
+    operadores: t.operadores || [],
     data: t.data
       ? new Date(t.data + "T00:00:00").toLocaleDateString("pt-BR")
       : "-",
@@ -287,8 +298,8 @@ export default function Home() {
 
       {/* Operations Table — semana atual (Seg–Sáb) */}
       <div className="bg-card rounded-xl border border-border shadow-sm">
-        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border">
-          <div>
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border flex-wrap">
+          <div className="min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-base font-semibold text-foreground">
                 Transbordos recentes
@@ -301,6 +312,18 @@ export default function Home() {
               Período: {periodoSemana} (segunda a sábado)
             </p>
           </div>
+          <div className="flex items-start gap-1.5 sm:gap-2 shrink-0 overflow-x-auto">
+            {volumePorDia.map((dia) => (
+              <div key={dia.label} className="flex flex-col items-center gap-1 min-w-[3.25rem]">
+                <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-orange-100 text-orange-800">
+                  {dia.label}
+                </span>
+                <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary tabular-nums">
+                  {loading ? "..." : `${formatVolume(dia.volume)} L`}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="overflow-auto max-h-[calc(100vh-360px)]">
           <table className="w-full text-sm">
@@ -310,7 +333,7 @@ export default function Home() {
                 <th className="px-5 py-3 font-medium">Produto</th>
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Volume</th>
-                <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium">Operadores</th>
                 <th className="px-5 py-3 font-medium">Data</th>
               </tr>
             </thead>
@@ -342,9 +365,25 @@ export default function Home() {
                     <td className="px-5 py-3 text-muted-foreground">{op.cliente}</td>
                     <td className="px-5 py-3 text-foreground">{op.volume}</td>
                     <td className="px-5 py-3">
-                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                        {op.status}
-                      </span>
+                      {op.operadores.length === 0 ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {op.operadores.slice(0, 2).map((nome) => (
+                            <span
+                              key={nome}
+                              className="inline-flex px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                            >
+                              {nome}
+                            </span>
+                          ))}
+                          {op.operadores.length > 2 && (
+                            <span className="text-xs text-muted-foreground">
+                              +{op.operadores.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{op.data}</td>
                   </tr>
@@ -411,8 +450,10 @@ export default function Home() {
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {getDominantLote(v.composicao) || v.lote || "-"}
                       </td>
-                      <td className="px-4 py-3 text-foreground whitespace-nowrap">
-                        {formatVolume(v.volume, { empty: "-" })} L
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {formatVolume(v.volume, { empty: "-" })} L
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-foreground whitespace-nowrap">
                         {formatMass(v.peso_liquido, { empty: "-" })} kg
@@ -477,8 +518,10 @@ export default function Home() {
                       <td className="px-4 py-3 text-foreground">
                         {e.produto_nome || "-"}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {e.nota_fiscal || "-"}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {e.nota_fiscal || "-"}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {e.lote || "-"}

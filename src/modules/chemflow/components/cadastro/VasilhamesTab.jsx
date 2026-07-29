@@ -16,6 +16,34 @@ import {
 import VasilhameCadastroModal from "@chemflow/components/cadastro/VasilhameCadastroModal";
 import { formatVolume, formatMass } from "@chemflow/lib/format";
 
+const TIPOS_EXCLUIDOS = new Set([
+  "Tankagem",
+  "One Way (IBC)",
+  "Bombona 200 L",
+  "Tambor 200 L",
+]);
+
+function isTipoVasilhame(v) {
+  const tipo = v?.tipo || "Vasilhame";
+  return !TIPOS_EXCLUIDOS.has(tipo);
+}
+
+function resolveCapacidade(v, allByPlaca = []) {
+  if (v?.capacidade != null && Number(v.capacidade) > 0) {
+    return Number(v.capacidade);
+  }
+  // Legado / fallback: maior volume positivo da mesma placa (capacidade cadastrada)
+  const candidates = [v, ...allByPlaca]
+    .map((item) => {
+      if (item?.capacidade != null && Number(item.capacidade) > 0) {
+        return Number(item.capacidade);
+      }
+      return Number(item?.volume) || 0;
+    })
+    .filter((n) => n > 0);
+  return candidates.length ? Math.max(...candidates) : null;
+}
+
 export default function VasilhamesTab() {
   const [vasilhames, setVasilhames] = useState([]);
   const [search, setSearch] = useState("");
@@ -24,31 +52,46 @@ export default function VasilhamesTab() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const all = await entities.vasilhames.list("-created_date");
-      setVasilhames(all);
+      setVasilhames(all.filter(isTipoVasilhame));
     } catch {
-      setVasilhames([]);
+      if (!silent) setVasilhames([]);
+    } finally {
+      if (!silent) setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  // Group by placa — vasilhames is sorted by -created_date, so first occurrence is the latest
+  // Group by placa — first occurrence is the latest (-created_date)
   const uniqueVasilhames = (() => {
     const map = new Map();
+    const byPlaca = new Map();
+
     for (const v of vasilhames) {
-      const key = v.placa;
+      const key = String(v.placa || "").trim().toUpperCase();
+      if (!key) continue;
+      if (!byPlaca.has(key)) byPlaca.set(key, []);
+      byPlaca.get(key).push(v);
       if (!map.has(key)) {
         map.set(key, v);
       }
     }
-    return Array.from(map.values());
+
+    return Array.from(map.entries()).map(([key, v]) => {
+      const capacidade = resolveCapacidade(v, byPlaca.get(key) || []);
+      return {
+        ...v,
+        capacidade,
+        // Garante que o modal edite a capacidade correta mesmo se volume estiver 0 (Expedido)
+        _capacidadeDisplay: capacidade,
+      };
+    });
   })();
 
   const filtered = uniqueVasilhames.filter((v) => {
@@ -66,21 +109,32 @@ export default function VasilhamesTab() {
   };
 
   const handleEdit = (v) => {
-    setEditingVasilhame(v);
+    setEditingVasilhame({
+      ...v,
+      capacidade: v._capacidadeDisplay ?? v.capacidade,
+    });
     setModalOpen(true);
   };
 
   const handleSave = async (data) => {
     try {
       if (editingVasilhame) {
+        // Atualiza cadastro sem zerar volume operacional (capacidade ≠ volume)
         await entities.vasilhames.update(editingVasilhame.id, data);
+        setVasilhames((prev) =>
+          prev.map((v) =>
+            v.id === editingVasilhame.id ? { ...v, ...data } : v
+          )
+        );
       } else {
         await entities.vasilhames.create({
           ...data,
+          volume: 0,
           origem: "manual",
+          tipo: "Vasilhame",
         });
+        await loadData({ silent: true });
       }
-      await loadData();
       setModalOpen(false);
       setEditingVasilhame(null);
     } catch {
@@ -90,13 +144,14 @@ export default function VasilhamesTab() {
   };
 
   const handleDelete = async () => {
+    const idToDelete = deleteId;
+    setDeleteId(null);
     try {
-      await entities.vasilhames.delete(deleteId);
-      await loadData();
+      await entities.vasilhames.delete(idToDelete);
+      setVasilhames((prev) => prev.filter((v) => v.id !== idToDelete));
     } catch {
       // ignore
     }
-    setDeleteId(null);
   };
 
   return (
@@ -109,7 +164,7 @@ export default function VasilhamesTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nº placa ou barril..."
-            className="pl-10"
+            className="pl-10 bg-white"
           />
         </div>
         <Button onClick={handleNew} className="gap-2">
@@ -161,7 +216,9 @@ export default function VasilhamesTab() {
                           {v.barril || "-"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-foreground font-medium tabular-nums">{formatVolume(v.volume, { empty: "-" })}</td>
+                      <td className="px-5 py-3.5 text-foreground font-medium tabular-nums">
+                        {formatVolume(v._capacidadeDisplay ?? v.capacidade, { empty: "-" })}
+                      </td>
                       <td className="px-5 py-3.5 text-foreground font-medium tabular-nums">{formatMass(v.tara, { empty: "-" })}</td>
                       <td className="px-5 py-3.5">
                         <span

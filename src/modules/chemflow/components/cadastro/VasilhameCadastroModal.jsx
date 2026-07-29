@@ -10,6 +10,14 @@ import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 
+function resolveCapacidadeInicial(v) {
+  if (!v) return "";
+  if (v.capacidade != null && v.capacidade !== "") return v.capacidade;
+  // Legado: volume era usado como capacidade no cadastro
+  if (v.volume != null && Number(v.volume) > 0) return v.volume;
+  return "";
+}
+
 export default function VasilhameCadastroModal({
   open,
   onClose,
@@ -18,7 +26,7 @@ export default function VasilhameCadastroModal({
 }) {
   const [placa, setPlaca] = useState("");
   const [barril, setBarril] = useState("");
-  const [volume, setVolume] = useState("");
+  const [capacidade, setCapacidade] = useState("");
   const [tara, setTara] = useState("");
   const [status, setStatus] = useState("No Pátio");
   const [error, setError] = useState("");
@@ -28,13 +36,13 @@ export default function VasilhameCadastroModal({
     if (editingVasilhame) {
       setPlaca(editingVasilhame.placa || "");
       setBarril(editingVasilhame.barril || "");
-      setVolume(editingVasilhame.volume ?? "");
+      setCapacidade(resolveCapacidadeInicial(editingVasilhame));
       setTara(editingVasilhame.tara ?? "");
       setStatus(editingVasilhame.status || "No Pátio");
     } else {
       setPlaca("");
       setBarril("");
-      setVolume("");
+      setCapacidade("");
       setTara("");
       setStatus("No Pátio");
     }
@@ -47,12 +55,25 @@ export default function VasilhameCadastroModal({
       setError("Nº da Placa é obrigatório.");
       return;
     }
+
+    const capacidadeNum =
+      capacidade !== "" && capacidade != null ? Number(capacidade) : null;
+
+    // Capacidade do tanque — nunca zerar por status Expedido
+    const capacidadeFinal =
+      capacidadeNum != null && !Number.isNaN(capacidadeNum)
+        ? capacidadeNum
+        : editingVasilhame?.capacidade != null
+          ? Number(editingVasilhame.capacidade)
+          : null;
+
     onSave({
       placa,
       barril,
-      volume: volume ? Number(volume) : 0,
-      tara: tara ? Number(tara) : 0,
+      capacidade: capacidadeFinal,
+      tara: tara !== "" && tara != null ? Number(tara) : 0,
       status,
+      tipo: "Vasilhame",
     });
   };
 
@@ -93,8 +114,8 @@ export default function VasilhameCadastroModal({
                 type="number"
                 step="0.001"
                 min="0"
-                value={volume}
-                onChange={(e) => setVolume(e.target.value)}
+                value={capacidade}
+                onChange={(e) => setCapacidade(e.target.value)}
                 placeholder="0"
               />
             </div>

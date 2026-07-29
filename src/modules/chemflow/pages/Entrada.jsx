@@ -18,6 +18,7 @@ import EntradaModal from "@chemflow/components/entrada/EntradaModal";
 import ComunicacaoRecebimentoDialog from "@chemflow/components/entrada/ComunicacaoRecebimentoDialog";
 import { loteToKg, loteUnidadeEstoque } from "@chemflow/lib/conversao";
 import { formatMass, formatNum } from "@chemflow/lib/format";
+import { syncEntradaEstoqueCascade } from "@chemflow/lib/cascadeEntradaUpdate";
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
@@ -36,11 +37,17 @@ function getEntradaLotes(entrada) {
       produto_id: entrada?.produto_id,
       produto_codigo: entrada?.produto_codigo,
       produto_nome: entrada?.produto_nome,
+      nota_fiscal: entrada?.nota_fiscal,
       lote: entrada?.lote,
       quantidade: entrada?.quantidade,
       unidade_medida: entrada?.unidade_medida,
     },
   ];
+}
+
+function matchesText(value, q) {
+  if (value == null || value === "") return false;
+  return String(value).toLowerCase().includes(q);
 }
 
 function StackedCell({ items, className = "", mono = false }) {
@@ -109,22 +116,45 @@ export default function Entrada() {
     idMap[e.id] = `E${String(i + 1).padStart(3, "0")}`;
   });
 
+  const estoqueByEntradaId = estoque.reduce((acc, item) => {
+    if (!item?.entrada_id) return acc;
+    if (!acc[item.entrada_id]) acc[item.entrada_id] = [];
+    acc[item.entrada_id].push(item);
+    return acc;
+  }, {});
+
   const filtered = entradas.filter((e) => {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     const lotes = getEntradaLotes(e);
+    const estoqueItens = estoqueByEntradaId[e.id] || [];
     const matchSearch =
       !q ||
-      e.produto_codigo?.toLowerCase().includes(q) ||
-      e.produto_nome?.toLowerCase().includes(q) ||
-      e.cliente_nome?.toLowerCase().includes(q) ||
-      e.lote?.toLowerCase().includes(q) ||
-      e.nota_fiscal?.toLowerCase().includes(q) ||
+      matchesText(idMap[e.id], q) ||
+      matchesText(e.produto_codigo, q) ||
+      matchesText(e.produto_nome, q) ||
+      matchesText(e.cliente_nome, q) ||
+      matchesText(e.lote, q) ||
+      matchesText(e.nota_fiscal, q) ||
+      matchesText(e.nota_fiscal_troca, q) ||
       lotes.some(
         (l) =>
-          l.produto_codigo?.toLowerCase().includes(q) ||
-          l.produto_nome?.toLowerCase().includes(q) ||
-          l.lote?.toLowerCase().includes(q) ||
-          l.nota_fiscal?.toLowerCase().includes(q)
+          matchesText(l.produto_codigo, q) ||
+          matchesText(l.produto_nome, q) ||
+          matchesText(l.lote, q) ||
+          matchesText(l.nota_fiscal, q) ||
+          matchesText(l.nota_fiscal_troca, q)
+      ) ||
+      estoqueItens.some(
+        (item) =>
+          matchesText(item.nota_fiscal, q) ||
+          matchesText(item.nota_fiscal_troca, q) ||
+          matchesText(item.lote, q) ||
+          (item.lotes || []).some(
+            (l) =>
+              matchesText(l.nota_fiscal, q) ||
+              matchesText(l.nota_fiscal_troca, q) ||
+              matchesText(l.lote, q)
+          )
       );
 
     const sistema = getSistemaOrigem(e);
@@ -169,22 +199,44 @@ export default function Entrada() {
     };
 
     let savedEntrada;
+    let existingEstoque = [];
     if (editingEntrada) {
-      savedEntrada = await entities.entradas.update(editingEntrada.id, entradaPayload);
-      await entities.estoque.deleteMany({ entrada_id: editingEntrada.id });
+      savedEntrada = await entities.entradas.update(
+        editingEntrada.id,
+        entradaPayload
+      );
+      existingEstoque = await entities.estoque.filter({
+        entrada_id: editingEntrada.id,
+      });
     } else {
       savedEntrada = await entities.entradas.create(entradaPayload);
     }
 
     const grupoId = data.grupo_entrada || `GRP-${Date.now()}`;
     const entradaCodigo =
-      idMap[savedEntrada.id] || `E${String(entradas.length + 1).padStart(3, "0")}`;
-    const estoqueRecords = (entradaPayload.lotes || []).map((lote) => {
+      idMap[savedEntrada.id] ||
+      `E${String(entradas.length + 1).padStart(3, "0")}`;
+
+    const existingByIndex = [...existingEstoque].sort((a, b) => {
+      const da = new Date(a.created_at || a.created_date || 0).getTime();
+      const db = new Date(b.created_at || b.created_date || 0).getTime();
+      return da - db;
+    });
+
+    const estoqueRecords = (entradaPayload.lotes || []).map((lote, index) => {
       const loteQtd = loteToKg(lote);
       const lotePreco = lote.preco_unitario || data.preco_unitario || 0;
-      return {
+      const prev = existingByIndex[index];
+      const prevLoteJson =
+        Array.isArray(prev?.lotes) && prev.lotes[0] ? prev.lotes[0] : null;
+      const notaFiscalTroca =
+        prev?.nota_fiscal_troca ??
+        prevLoteJson?.nota_fiscal_troca ??
+        null;
+
+      const record = {
         entrada_id: savedEntrada.id,
-        entrada_codigo: entradaCodigo,
+        entrada_codigo: prev?.entrada_codigo || entradaCodigo,
         grupo_entrada: grupoId,
         cliente_id: nullIfEmpty(data.cliente_id),
         cliente_nome: data.cliente_nome || "",
@@ -198,7 +250,8 @@ export default function Entrada() {
         data_validade: nullIfEmpty(lote.data_validade),
         quantidade: loteQtd,
         unidade_medida: loteUnidadeEstoque(lote),
-        saldo_atual: loteQtd,
+        // saldo_atual recalculado por syncEstoqueSaldos após persistir
+        saldo_atual: prev?.saldo_atual ?? loteQtd,
         preco_unitario: lotePreco,
         custo_total: loteQtd * lotePreco,
         embalado: lote.embalado || false,
@@ -218,13 +271,37 @@ export default function Entrada() {
         granel_peso_minimo: data.granel_peso_minimo ?? null,
         granel_peso_maximo: data.granel_peso_maximo ?? null,
         granel_margem: data.granel_margem || null,
-        lotes: [lote],
+        lotes: [
+          {
+            ...lote,
+            ...(notaFiscalTroca != null
+              ? { nota_fiscal_troca: notaFiscalTroca }
+              : {}),
+          },
+        ],
       };
+
+      // Preserva coluna só se já existia no registro (evita erro de schema cache)
+      if (prev && Object.prototype.hasOwnProperty.call(prev, "nota_fiscal_troca")) {
+        record.nota_fiscal_troca = notaFiscalTroca;
+      }
+
+      return record;
     });
-    const savedEstoques =
-      estoqueRecords.length > 0
-        ? await entities.estoque.bulkCreate(estoqueRecords)
-        : [];
+
+    let savedEstoques = [];
+    if (editingEntrada) {
+      const result = await syncEntradaEstoqueCascade({
+        entradaId: savedEntrada.id,
+        estoqueRecords,
+      });
+      savedEstoques = result.savedEstoques;
+    } else {
+      savedEstoques =
+        estoqueRecords.length > 0
+          ? await entities.estoque.bulkCreate(estoqueRecords)
+          : [];
+    }
 
     await loadData();
     setModalOpen(false);
@@ -249,8 +326,6 @@ export default function Entrada() {
 
   const handleDialogClose = () => {
     setViewOpen(false);
-    setViewEntrada(null);
-    loadData();
   };
 
   const handleToggleStatus = async (entrada, checked) => {
@@ -354,7 +429,7 @@ export default function Entrada() {
                   return (
                     <tr
                       key={e.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors align-top ${
+                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors align-middle ${
                         i % 2 === 1 ? "bg-muted/40/30" : ""
                       }`}
                     >
@@ -509,6 +584,8 @@ export default function Entrada() {
         readOnly={false}
         clientes={clientes}
         produtos={produtos}
+        transbordos={transbordos}
+        estoque={estoque}
       />
 
       {/* View Dialog */}

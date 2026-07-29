@@ -38,8 +38,8 @@ export default function ProdutosTab() {
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [prods, cliens] = await Promise.all([
         entities.produtos.list(),
@@ -49,25 +49,19 @@ export default function ProdutosTab() {
       setClientes(cliens);
       setUseFallback(false);
     } catch {
-      setProdutos(MOCK_PRODUTOS);
-      setClientes(MOCK_CLIENTES);
-      setUseFallback(true);
+      if (!silent) {
+        setProdutos(MOCK_PRODUTOS);
+        setClientes(MOCK_CLIENTES);
+        setUseFallback(true);
+      }
+    } finally {
+      if (!silent) setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     loadData();
   }, []);
-
-  const filtered = produtos.filter((p) => {
-    const q = search.toLowerCase();
-    return (
-      p.codigo?.toLowerCase().includes(q) ||
-      p.produto?.toLowerCase().includes(q) ||
-      p.cliente_nome?.toLowerCase().includes(q)
-    );
-  });
 
   const sortedAll = [...produtos].sort((a, b) => {
     const da = new Date(a.created_date || a.data_cadastro);
@@ -78,6 +72,17 @@ export default function ProdutosTab() {
   sortedAll.forEach((p, i) => {
     idMap[p.id] = String(i + 1).padStart(2, "0");
   });
+
+  const filtered = produtos
+    .filter((p) => {
+      const q = search.toLowerCase();
+      return (
+        p.codigo?.toLowerCase().includes(q) ||
+        p.produto?.toLowerCase().includes(q) ||
+        p.cliente_nome?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => Number(idMap[b.id] || 0) - Number(idMap[a.id] || 0));
 
   const handleNew = () => {
     setEditingProduto(null);
@@ -105,7 +110,7 @@ export default function ProdutosTab() {
         } else {
           await entities.produtos.create(data);
         }
-        await loadData();
+        await loadData({ silent: true });
         setModalOpen(false);
         setEditingProduto(null);
         return;
@@ -125,18 +130,18 @@ export default function ProdutosTab() {
   };
 
   const handleDelete = async () => {
+    const idToDelete = deleteId;
+    setDeleteId(null);
     if (!useFallback) {
       try {
-        await entities.produtos.delete(deleteId);
-        await loadData();
-        setDeleteId(null);
+        await entities.produtos.delete(idToDelete);
+        setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
         return;
       } catch {
         // fallback local abaixo
       }
     }
-    setProdutos((prev) => prev.filter((p) => p.id !== deleteId));
-    setDeleteId(null);
+    setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
   };
 
   const formatDate = (dateStr) => {
@@ -167,7 +172,7 @@ export default function ProdutosTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por ID, produto ou cliente..."
-            className="pl-10"
+            className="pl-10 bg-white"
           />
         </div>
         <Button onClick={handleNew} className="gap-2">

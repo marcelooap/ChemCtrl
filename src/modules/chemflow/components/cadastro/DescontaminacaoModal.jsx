@@ -9,13 +9,7 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@shared/components/ui/select";
+import SearchableSelect from "@chemflow/components/cadastro/SearchableSelect";
 
 export default function DescontaminacaoModal({
   open,
@@ -28,7 +22,7 @@ export default function DescontaminacaoModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tankas = useMemo(() => {
+  const tankaOptions = useMemo(() => {
     const unique = [
       ...new Set(
         (isotanques || [])
@@ -36,7 +30,9 @@ export default function DescontaminacaoModal({
           .filter(Boolean)
       ),
     ];
-    return unique.sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return unique
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((t) => ({ id: t, nome: t }));
   }, [isotanques]);
 
   useEffect(() => {
@@ -49,8 +45,16 @@ export default function DescontaminacaoModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!tanka) {
-      setError("Selecione o TANKA.");
+    const tankaNorm = tanka?.trim();
+    if (!tankaNorm) {
+      setError("Informe o TANKA.");
+      return;
+    }
+    const match = tankaOptions.find(
+      (o) => o.nome.toLowerCase() === tankaNorm.toLowerCase()
+    );
+    if (!match) {
+      setError("Tanka não encontrado. Digite ou selecione um tanka cadastrado.");
       return;
     }
     if (!dataDescontaminacao) {
@@ -61,7 +65,7 @@ export default function DescontaminacaoModal({
     setError("");
     try {
       await onSave({
-        tanka,
+        tanka: match.nome,
         data_descontaminacao: dataDescontaminacao,
       });
     } catch (err) {
@@ -81,24 +85,14 @@ export default function DescontaminacaoModal({
 
           <div className="space-y-1.5">
             <Label>TANKA *</Label>
-            <Select value={tanka} onValueChange={setTanka} disabled={saving}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o tanka" />
-              </SelectTrigger>
-              <SelectContent>
-                {tankas.length === 0 ? (
-                  <SelectItem value="__none" disabled>
-                    Nenhum tanka cadastrado
-                  </SelectItem>
-                ) : (
-                  tankas.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={tankaOptions}
+              value={tanka}
+              onChange={(label) => setTanka(label || "")}
+              placeholder="Digite ou selecione o tanka"
+              disabled={saving || tankaOptions.length === 0}
+              inputClassName="bg-white"
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -115,7 +109,7 @@ export default function DescontaminacaoModal({
             <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={saving || tankas.length === 0}>
+            <Button type="submit" disabled={saving || tankaOptions.length === 0}>
               {saving ? "Salvando..." : "Registrar"}
             </Button>
           </DialogFooter>

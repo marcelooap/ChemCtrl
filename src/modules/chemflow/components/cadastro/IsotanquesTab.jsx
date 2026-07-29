@@ -51,8 +51,8 @@ export default function IsotanquesTab() {
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [isos, prods, cliens] = await Promise.all([
         entities.isotanques.list(),
@@ -70,13 +70,16 @@ export default function IsotanquesTab() {
         setDescontaminacoes([]);
       }
     } catch {
-      setIsotanques(MOCK_ISOTANQUES);
-      setProdutos(MOCK_PRODUTOS);
-      setClientes(MOCK_CLIENTES);
-      setDescontaminacoes([]);
-      setUseFallback(true);
+      if (!silent) {
+        setIsotanques(MOCK_ISOTANQUES);
+        setProdutos(MOCK_PRODUTOS);
+        setClientes(MOCK_CLIENTES);
+        setDescontaminacoes([]);
+        setUseFallback(true);
+      }
+    } finally {
+      if (!silent) setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -112,15 +115,24 @@ export default function IsotanquesTab() {
 
   const handleSave = async (data) => {
     if (!useFallback) {
-      if (editingIsotanque) {
-        await entities.isotanques.update(editingIsotanque.id, data);
-      } else {
-        await entities.isotanques.create(data);
+      try {
+        if (editingIsotanque) {
+          await entities.isotanques.update(editingIsotanque.id, data);
+          setIsotanques((prev) =>
+            prev.map((it) =>
+              it.id === editingIsotanque.id ? { ...it, ...data } : it
+            )
+          );
+        } else {
+          await entities.isotanques.create(data);
+          await loadData({ silent: true });
+        }
+        setModalOpen(false);
+        setEditingIsotanque(null);
+        return;
+      } catch {
+        // fallback local abaixo
       }
-      await loadData();
-      setModalOpen(false);
-      setEditingIsotanque(null);
-      return;
     }
     if (editingIsotanque) {
       setIsotanques((prev) =>
@@ -134,25 +146,25 @@ export default function IsotanquesTab() {
   };
 
   const handleDelete = async () => {
+    const idToDelete = deleteId;
+    setDeleteId(null);
     if (!useFallback) {
       try {
-        await entities.isotanques.delete(deleteId);
-        await loadData();
-        setDeleteId(null);
+        await entities.isotanques.delete(idToDelete);
+        setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
         return;
       } catch {
         // fallback local abaixo
       }
     }
-    setIsotanques((prev) => prev.filter((it) => it.id !== deleteId));
-    setDeleteId(null);
+    setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
   };
 
   const handleDescontaminacao = async (data) => {
     if (!useFallback) {
       try {
         await entities.descontaminacoes.create(data);
-        await loadData();
+        await loadData({ silent: true });
         setDescontamOpen(false);
         return;
       } catch {
@@ -199,7 +211,7 @@ export default function IsotanquesTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código ITKU, tanka, produto ou cliente..."
-            className="pl-10"
+            className="pl-10 bg-white"
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">

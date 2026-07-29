@@ -11,7 +11,10 @@ import { formatMass, formatVolume, formatCurrency, formatDensidade, roundMass } 
 import { generateRelatorioEstoquePDF } from "@chemflow/lib/pdfEstoque";
 import {
   listSaidasHistoricoForEstoque,
+  listHistoricoTransbordosEncadeados,
   getEstoqueQuantidade,
+  getEstoqueNotaFiscal,
+  getEstoqueNotaFiscalTroca,
 } from "@chemflow/lib/estoqueSaldo";
 
 const formatDate = (d) => {
@@ -140,11 +143,28 @@ export default function EstoqueViewDialog({
     }));
   });
 
+  const historicoTransbordos = listHistoricoTransbordosEncadeados(
+    item,
+    transbordos,
+    vasilhames
+  ).map((row) => ({
+    ...row,
+    status: resolveVasilhameStatus(row.rawDestino, row.codigo),
+  }));
+
   const totalVolumeDestinos = destinosList.reduce(
     (sum, d) => sum + (Number(d.volume) || 0),
     0
   );
   const totalMassaDestinos = destinosList.reduce(
+    (sum, d) => sum + (Number(d.pesoLiq) || 0),
+    0
+  );
+  const totalVolumeHistorico = historicoTransbordos.reduce(
+    (sum, d) => sum + (Number(d.volume) || 0),
+    0
+  );
+  const totalMassaHistorico = historicoTransbordos.reduce(
     (sum, d) => sum + (Number(d.pesoLiq) || 0),
     0
   );
@@ -232,12 +252,14 @@ export default function EstoqueViewDialog({
           </Section>
 
           <Section title="RECEBIMENTO / FISCAL">
-            <InfoItem label="Nota Fiscal" value={item.nota_fiscal} />
+            <InfoItem label="Nota Fiscal" value={getEstoqueNotaFiscal(item) || "—"} />
             <InfoItem
               label="Troca Fiscal"
-              value={item.nota_fiscal_troca || "—"}
+              value={getEstoqueNotaFiscalTroca(item) || "—"}
               highlight={
-                item.nota_fiscal_troca ? "text-amber-700 font-semibold" : undefined
+                getEstoqueNotaFiscalTroca(item)
+                  ? "text-amber-700 font-semibold"
+                  : undefined
               }
             />
             <InfoItem
@@ -403,6 +425,93 @@ export default function EstoqueViewDialog({
 
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
+              HISTÓRICO DE EMBALAGENS
+            </h3>
+            <p className="pl-2 text-xs text-muted-foreground">
+              Transbordos posteriores — todas as embalagens pelas quais o produto
+              passou após o destino inicial.
+            </p>
+            <div className="pl-2">
+              <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-muted/40 text-xs text-muted-foreground uppercase">
+                    <th className="px-3 py-2 text-left font-medium">Transbordo</th>
+                    <th className="px-3 py-2 text-left font-medium">Data</th>
+                    <th className="px-3 py-2 text-left font-medium">Origem</th>
+                    <th className="px-3 py-2 text-left font-medium">Destino</th>
+                    <th className="px-3 py-2 text-left font-medium">Tipo</th>
+                    <th className="px-3 py-2 text-left font-medium">Status</th>
+                    <th className="px-3 py-2 text-right font-medium">Volume (L)</th>
+                    <th className="px-3 py-2 text-right font-medium">Peso Líq.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historicoTransbordos.length === 0 ? (
+                    <EmptyRow
+                      colSpan={8}
+                      message="Nenhum re-transbordo registrado após o destino inicial."
+                    />
+                  ) : (
+                    <>
+                      {historicoTransbordos.map((d) => (
+                        <tr key={d.key} className="border-t border-border">
+                          <td className="px-3 py-2 font-medium text-foreground">
+                            {d.codigo}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {formatDate(d.data)}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {d.origem}
+                          </td>
+                          <td className="px-3 py-2 text-foreground/80">{d.destino}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{d.tipo}</td>
+                          <td className="px-3 py-2">
+                            {d.status ? (
+                              <span
+                                className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  d.status === "Expedido"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-green-100 text-green-700"
+                                }`}
+                              >
+                                {d.status}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-foreground/80">
+                            {formatVolume(d.volume, { empty: "—" })}
+                          </td>
+                          <td className="px-3 py-2 text-right text-foreground/80">
+                            {formatMass(d.pesoLiq, { empty: "—" })}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-border bg-muted/40">
+                        <td
+                          colSpan={6}
+                          className="px-3 py-2 font-bold text-foreground"
+                        >
+                          Total
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold text-primary">
+                          {formatVolume(totalVolumeHistorico, { empty: "—" })}
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold text-green-600">
+                          {formatMass(totalMassaHistorico, { empty: "—" })}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
               HISTÓRICO DE SAÍDAS
             </h3>
             <div className="pl-2">
@@ -522,6 +631,7 @@ export default function EstoqueViewDialog({
                 item,
                 displayId,
                 destinosList,
+                historicoTransbordos,
                 saidasHistorico,
               })
             }
