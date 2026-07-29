@@ -20,6 +20,8 @@ import i18n from '@/i18n';
 // Plataforma
 import Login from '@/pages/Login';
 import SystemSelector from '@/pages/SystemSelector';
+import PlaceholderPage from '@/pages/PlaceholderPage';
+import PlatformLayout from '@/layouts/PlatformLayout';
 
 // Módulo ChemBlend (síncrono — comportamento idêntico ao app anterior)
 import ChemBlendRoutes from '@chemblend/routes';
@@ -33,13 +35,14 @@ const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));
  * Após a reestruturação, NÃO entram direto no módulo: vão para a seleção de
  * módulos, para o usuário escolher ChemBlend ou ChemFlow explicitamente.
  * Deep links sob `/chemblend/*` continuam válidos (F5 dentro do módulo).
+ * Nota: /dashboard, /estoque e /usuarios passaram a ser rotas da plataforma ChemCtrl.
  */
 const LEGACY_CHEMBLEND_PATHS = [
-  '/dashboard', '/estoque-cliente', '/tela-clientes', '/estoque', '/pedidos',
+  '/estoque-cliente', '/tela-clientes', '/pedidos',
   '/receitas', '/nova-producao', '/ordens', '/producao/:id/checklist', '/producoes',
   '/qualidade/ensaios', '/qualidade/equipamentos', '/qualidade/producoes', '/qualidade/coa',
   '/vasilhames', '/tankagem', '/transbordo', '/inventario', '/inventario/:id',
-  '/usuarios', '/perfis', '/acesso-negado',
+  '/perfis', '/acesso-negado',
 ];
 
 function ModuleLoadingFallback() {
@@ -78,8 +81,19 @@ const AuthenticatedApp = () => {
 
       {/* Protegido: exige sessão válida da plataforma */}
       <Route element={<ProtectedRoute />}>
-        {/* Hub pós-login — seleção de módulos (nunca ChemBlend/ChemFlow automático) */}
-        <Route path="/" element={<SystemSelector />} />
+        {/* ChemCtrl — shell com sidebar da plataforma */}
+        <Route element={<PlatformLayout />}>
+          <Route index element={<SystemSelector />} />
+          <Route path="dashboard" element={<PlaceholderPage title="Dashboard" />} />
+          <Route path="estoque" element={<PlaceholderPage title="Estoque" />} />
+          <Route path="comercial/fichado" element={<PlaceholderPage title="Fichado" />} />
+          <Route path="comercial/solicitar-saida" element={<PlaceholderPage title="Solicitar saída" />} />
+          <Route path="comercial/composicao-carga" element={<PlaceholderPage title="Composição de carga" />} />
+          <Route path="faturamento" element={<PlaceholderPage title="Faturamento" />} />
+          <Route path="usuarios" element={<PlaceholderPage title="Usuários" />} />
+          <Route path="usuarios/permissoes" element={<PlaceholderPage title="Controle de permissão" />} />
+        </Route>
+
         <Route path="/apps" element={<Navigate to="/" replace />} />
         <Route path="/selecionar-modulo" element={<Navigate to="/" replace />} />
 
