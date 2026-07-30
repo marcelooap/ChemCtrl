@@ -410,8 +410,11 @@ export default function Transbordo() {
 
       const volume_total = origens.reduce((s, o) => s + o.volume_retirado, 0);
       const massa_total = roundMass(volume_total * dens);
+      // `id` fica fora do payload: no insert ele deve ser gerado pelo banco
+      // (id: null violaria a constraint) e no update o alvo já é o editingId.
+      const { id: _formId, ...dataSemId } = data;
       const payload = {
-        ...data,
+        ...dataSemId,
         cliente_id: nullIfEmpty(data.cliente_id),
         produto_id: nullIfEmpty(data.produto_id),
         volume_total,
