@@ -642,7 +642,7 @@ export default function Producoes() {
         title={t('production.fractional.complementConfirmTitle')}
         message={t('production.fractional.complementConfirmMessage')}
         onConfirm={() => {
-          if (complementTarget) navigate(`/nova-producao?complement=${complementTarget.id}`);
+          if (complementTarget) navigate(`/chemblend/nova-producao?complement=${complementTarget.id}`);
         }}
       />
     </div>

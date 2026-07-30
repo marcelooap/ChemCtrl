@@ -82,7 +82,7 @@ export default function OrdensProducao() {
         start_time: new Date().toISOString(),
         operator: operatorName,
       });
-      navigate(`/producao/${prod.id}/checklist`);
+      navigate(`/chemblend/producao/${prod.id}/checklist`);
     });
   };
 
@@ -104,7 +104,7 @@ export default function OrdensProducao() {
           updates.pause_start_time = null;
         }
         await base44.entities.Production.update(prod.id, updates);
-        navigate(`/producao/${prod.id}/checklist`);
+        navigate(`/chemblend/producao/${prod.id}/checklist`);
       },
     });
   };
@@ -135,7 +135,7 @@ export default function OrdensProducao() {
     }
     if (prod.status === 'Qualidade') {
       if (canAnalyze) {
-        return <Button onClick={() => navigate(`/qualidade/producoes?prod=${prod.id}`)} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> {t('production.orders.analyze')}</Button>;
+        return <Button onClick={() => navigate(`/chemblend/qualidade/producoes?prod=${prod.id}`)} className="w-full text-white" style={{ background: '#6d28d9' }}><FileCheck className="w-3.5 h-3.5 mr-1.5" /> {t('production.orders.analyze')}</Button>;
       }
       return <Button disabled className="w-full text-white" style={{ background: '#94a3b8' }}>{t('production.orders.waitingQc')}</Button>;
     }

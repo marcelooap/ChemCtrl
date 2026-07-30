@@ -56,7 +56,7 @@ export default function Inventario() {
         start_date: new Date().toISOString(),
         started_by: userName,
       });
-      navigate(`/inventario/${inv.id}`);
+      navigate(`/chemblend/inventario/${inv.id}`);
     } catch (e) {
       toast({ title: t('inventory.page.startError'), description: e?.message || String(e), variant: 'destructive' });
     }
@@ -139,7 +139,7 @@ export default function Inventario() {
                       <td className="px-4 py-3 text-center">{statusBadge(inv.status)}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-accent" title={t('inventory.page.view')}>
+                          <button onClick={() => navigate(`/chemblend/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-accent" title={t('inventory.page.view')}>
                             <Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                           </button>
                           {canStart && (
