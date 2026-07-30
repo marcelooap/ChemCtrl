@@ -566,6 +566,8 @@
       "avgProductionTime": "Average Production Time",
       "completedOps": "{{count}} PO(s) completed",
       "productionsInProgress": "Productions in progress",
+      "producedThisWeek": "Volume produced this week",
+      "weekPeriod": "Period: {{start}} – {{end}} (Monday to Saturday)",
       "revenueMonth": "Monthly Revenue",
       "topProduct": "Top Volume Product",
       "topProductShare": "{{percent}}% of monthly production",

@@ -6,7 +6,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@shared/components/ui/use-toast';
 import moment from 'moment';
-import { fmtDate, fmtVolume, fmtCurrency, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtVolume, fmtCurrency, fmtNumber, getIntlLocale } from '@/i18n/formatters';
 import { calcPriceWithoutTax } from '@chemblend/lib/recipePricing';
 import ProductionTrackingTable from '@chemblend/components/production/ProductionTrackingTable';
 
@@ -88,6 +88,25 @@ export default function Home() {
     && moment(o.expected_date, 'YYYY-MM-DD').isBefore(now, 'day')
   );
 
+  // Semana operacional: segunda a sábado (domingo pertence à semana que termina no sábado anterior)
+  const weekStart = now.clone().startOf('isoWeek');
+  const weekEnd = weekStart.clone().add(5, 'days').endOf('day');
+  const getFinishDate = (p) => p.end_time || p.updated_date;
+  const finishedThisWeek = productions.filter(p => {
+    if (p.status !== 'Finalizado') return false;
+    const finishDate = getFinishDate(p);
+    return finishDate && moment(finishDate).isBetween(weekStart, weekEnd, undefined, '[]');
+  });
+  const weekVolume = finishedThisWeek.reduce((s, p) => s + (p.volume || 0), 0);
+  const weekVolumeByDay = Array.from({ length: 6 }, (_, offset) => {
+    const day = weekStart.clone().add(offset, 'days');
+    const label = day.toDate().toLocaleDateString(getIntlLocale(), { weekday: 'short' });
+    const volume = finishedThisWeek
+      .filter(p => moment(getFinishDate(p)).isSame(day, 'day'))
+      .reduce((s, p) => s + (p.volume || 0), 0);
+    return { label: label.charAt(0).toUpperCase() + label.slice(1), volume };
+  });
+
   const handleBypass = async (p) => {
     setBypassing(p.id);
     try {
@@ -145,10 +164,33 @@ export default function Home() {
       </div>
 
       <div className="bg-card rounded-xl border border-border">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">{t('dashboard.stats.productionsInProgress')}</h3>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{inProgressProds.length}</span>
+        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-semibold">{t('dashboard.stats.productionsInProgress')}</h3>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{inProgressProds.length}</span>
+              <span
+                className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                title={t('dashboard.stats.producedThisWeek')}
+              >
+                {fmtVolume(weekVolume)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {t('dashboard.stats.weekPeriod', { start: fmtDate(weekStart.toDate()), end: fmtDate(weekEnd.toDate()) })}
+            </p>
+          </div>
+          <div className="flex items-start gap-1.5 sm:gap-2 shrink-0 overflow-x-auto">
+            {weekVolumeByDay.map((day) => (
+              <div key={day.label} className="flex flex-col items-center gap-1 min-w-[3.25rem]">
+                <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-orange-100 text-orange-800">
+                  {day.label}
+                </span>
+                <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary tabular-nums">
+                  {fmtVolume(day.volume)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
         <ProductionTrackingTable
