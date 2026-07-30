@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  supabaseUrl as chemblendSupabaseUrl,
+  supabaseAnonKey as chemblendSupabaseAnonKey,
+} from '@chemblend/api/supabaseClient';
 
 /**
  * Normaliza a URL do projeto Supabase.
@@ -9,23 +13,20 @@ function normalizeSupabaseUrl(raw) {
   return raw.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
 }
 
-// Credenciais padrão do Supabase Projeto B (ChemFlow).
-// A anon key é pública por design (protegida por RLS) — mesmo padrão do
-// cliente do ChemBlend (Projeto A). As variáveis de ambiente VITE_CHEMFLOW_*
-// têm prioridade e permitem apontar para outro projeto (ex.: staging).
-const DEFAULT_CHEMFLOW_SUPABASE_URL = 'https://putkyadaefivnqyinbnz.supabase.co';
-const DEFAULT_CHEMFLOW_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1dGt5YWRhZWZpdm5xeWluYm56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDkzNjksImV4cCI6MjEwMDQ4NTM2OX0.yGWib87SJjZoAzQWjeEsoXN_hT2bVecDtPMU9TEhMVY';
-
+// BANCO UNIFICADO: desde a migração (migration_chemflow_unification.sql), as
+// tabelas do ChemFlow vivem no mesmo projeto Supabase do ChemBlend (Projeto A).
+// Por padrão este cliente reutiliza as credenciais do ChemBlend como fonte
+// única de verdade. As variáveis VITE_CHEMFLOW_* seguem tendo prioridade e
+// permitem apontar para outro projeto (ex.: staging).
 const chemflowSupabaseUrl = normalizeSupabaseUrl(
-  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || DEFAULT_CHEMFLOW_SUPABASE_URL
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || chemblendSupabaseUrl
 );
 const chemflowSupabaseAnonKey = (
-  import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || DEFAULT_CHEMFLOW_SUPABASE_ANON_KEY
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || chemblendSupabaseAnonKey
 ).trim();
 
 /**
- * True quando as credenciais do Supabase Projeto B estão definidas.
+ * True quando as credenciais do Supabase do ChemFlow estão definidas.
  * Não lançamos erro no import: isso derrubava o lazy load de /chemflow
  * e deixava a tela em branco.
  */
@@ -34,13 +35,15 @@ export const isChemFlowConfigured = Boolean(
 );
 
 export const CHEMFLOW_CONFIG_ERROR =
-  'ChemFlow: configure VITE_CHEMFLOW_SUPABASE_URL e VITE_CHEMFLOW_SUPABASE_ANON_KEY ' +
-  'no arquivo .env (veja .env.example) com as credenciais do Supabase Projeto B.';
+  'ChemFlow: credenciais do Supabase indisponíveis. O padrão usa o banco unificado ' +
+  'do ChemBlend; para apontar para outro projeto, defina VITE_CHEMFLOW_SUPABASE_URL ' +
+  'e VITE_CHEMFLOW_SUPABASE_ANON_KEY no arquivo .env (veja .env.example).';
 
-// Cliente Supabase exclusivo do ChemFlow (Projeto B).
-// Isolado do cliente do ChemBlend (Projeto A) — nenhuma tabela é compartilhada
-// entre módulos. A autenticação de usuário continua centralizada na plataforma
-// (Projeto A); este cliente usa a anon key do Projeto B protegida por RLS.
+// Cliente Supabase do ChemFlow. Desde a unificação dos bancos aponta para o
+// mesmo projeto do ChemBlend (Projeto A), mas permanece uma instância separada
+// para preservar o isolamento da camada de dados do módulo. A autenticação de
+// usuário continua centralizada na plataforma; este cliente usa a anon key
+// protegida por RLS (políticas chemflow_anon_all_* nas tabelas do domínio).
 export const chemflowSupabase = isChemFlowConfigured
   ? createClient(chemflowSupabaseUrl, chemflowSupabaseAnonKey)
   : null;
