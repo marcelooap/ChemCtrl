@@ -32,7 +32,7 @@ import {
 } from '@shared/lib/userDisplay';
 
 interface UserMenuProps {
-  /** Optional module-specific menu blocks (e.g. ChemBlend system manual). */
+  /** Optional module-specific menu blocks (e.g. system manual). */
   menuExtras?: ReactNode;
   /** Override role label; defaults to shared auth-based label. */
   getRoleLabel?: (user: Record<string, unknown> | null) => string;

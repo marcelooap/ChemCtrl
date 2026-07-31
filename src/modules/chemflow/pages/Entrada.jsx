@@ -24,11 +24,11 @@ import { syncEntradaEstoqueCascade } from "@chemflow/lib/cascadeEntradaUpdate";
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
   { value: "convencional", label: "ChemFlow" },
-  { value: "industrializacao", label: "ChemBlend" },
+  { value: "industrializacao", label: "ChemCtrl" },
 ];
 
 function getSistemaOrigem(entrada) {
-  return entrada?.origem === "industrializacao" ? "ChemBlend" : "ChemFlow";
+  return entrada?.origem === "industrializacao" ? "ChemCtrl" : "ChemFlow";
 }
 
 function getEntradaLotes(entrada) {
@@ -419,7 +419,7 @@ export default function Entrada() {
                 filtered.map((e, i) => {
                   const lotes = getEntradaLotes(e);
                   const sistema = getSistemaOrigem(e);
-                  const isChemBlend = sistema === "ChemBlend";
+                  const isChemCtrl = sistema === "ChemCtrl";
                   const unidades = lotes.map((l) => l.unidade_medida || "-");
                   const unidadesDistintas = [...new Set(unidades.filter((u) => u && u !== "-"))];
                   const showUnidadesStacked = unidadesDistintas.length > 1;
@@ -437,7 +437,7 @@ export default function Entrada() {
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                            isChemBlend
+                            isChemCtrl
                               ? "bg-orange-100 text-orange-800"
                               : "bg-primary/10 text-primary"
                           }`}

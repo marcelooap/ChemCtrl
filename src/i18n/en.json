@@ -268,11 +268,14 @@
     "lockedTooltip": "No access for your role",
     "moduleName": "ChemCtrl",
     "appSubtitle": "Production Control",
+    "chemflowSubtitle": "ChemFlow",
     "footer": {
       "expand": "Expand sidebar",
       "collapse": "Collapse sidebar",
       "logout": "Log out",
-      "backToModules": "Back to modules"
+      "backToModules": "Back",
+      "backToChemCtrl": "Back",
+      "openChemFlow": "ChemFlow"
     }
   },
   "accessDenied": {
@@ -419,12 +422,12 @@
     "headerSubtitle": "Applications Portal",
     "title": "System Selection",
     "subtitle": "Choose which system you want to access",
-    "backToChemBlend": "Back to ChemBlend",
+    "backToChemBlend": "Back to ChemCtrl",
     "logout": "Sign out",
     "comingSoon": "Coming soon",
     "apps": {
       "chemblend": {
-        "name": "ChemBlend",
+        "name": "ChemCtrl",
         "description": "Industrial management system for production, inventory, recipes, quality, and operations.",
         "cta": "Access system",
         "features": {
@@ -437,9 +440,9 @@
       },
       "chemflow": {
         "name": "ChemFlow",
-        "description": "System for transfer operations, filtration, and logistics management.",
-        "cta": "Access system",
-        "ctaDisabled": "System under development",
+        "description": "Module for transfer operations, filtration, and logistics management.",
+        "cta": "Access module",
+        "ctaDisabled": "Module under development",
         "badge": "Under development",
         "features": {
           "truck": "Trucking",
@@ -453,7 +456,7 @@
   },
   "welcome": {
     "title": "Welcome, {{name}}!",
-    "subtitle": "Welcome back to ChemBlend.",
+    "subtitle": "Welcome back to ChemCtrl.",
     "continue": "Continue",
     "toast": {
       "title": "Welcome back!",

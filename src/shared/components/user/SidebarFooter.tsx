@@ -1,14 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, LogOut, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { ArrowLeft, LogOut, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 
 interface SidebarFooterProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  /** When true, shows a link back to the ChemCtrl module hub (`/`). */
+  /** When true, shows a link back to ChemCtrl (`/`). */
   showModulesLink?: boolean;
 }
 
@@ -25,20 +25,20 @@ export function SidebarFooter({
       {showModulesLink && (
         <Link
           to="/"
-          title={collapsed ? t('sidebar.footer.backToModules') : undefined}
+          title={collapsed ? t('sidebar.footer.backToChemCtrl') : undefined}
           className={cn(
             'flex items-center gap-2 w-full rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors',
             collapsed ? 'justify-center px-0 py-2' : 'px-2 py-1.5'
           )}
         >
-          <LayoutGrid className="w-4 h-4 shrink-0" />
+          <ArrowLeft className="w-4 h-4 shrink-0" />
           <span
             className={cn(
               'text-sm font-medium whitespace-nowrap transition-all duration-200 overflow-hidden',
               collapsed ? 'max-w-0 opacity-0' : 'max-w-[10rem] opacity-100'
             )}
           >
-            {t('sidebar.footer.backToModules')}
+            {t('sidebar.footer.backToChemCtrl')}
           </span>
         </Link>
       )}

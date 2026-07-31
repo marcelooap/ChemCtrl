@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
   BarChart3,
@@ -27,16 +28,17 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({ collapsed, setCollapsed }) {
+  const { t } = useTranslation();
   const items = useMemo(() => NAV_ITEMS, []);
 
   return (
     <ModuleSidebar
       collapsed={collapsed}
       setCollapsed={setCollapsed}
-      logoSrc="/icons/chemflow-logo.png"
-      logoAlt="ChemFlow"
-      moduleName="ChemFlow"
-      moduleSubtitle="Controle Operacional"
+      logoSrc="/icons/chemctrl-logo.svg"
+      logoAlt="ChemCtrl"
+      moduleName={t('sidebar.moduleName')}
+      moduleSubtitle={t('sidebar.chemflowSubtitle')}
       items={items}
       showModulesLink
     />

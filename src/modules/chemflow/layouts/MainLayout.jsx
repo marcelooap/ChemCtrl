@@ -1,5 +1,6 @@
 import AppShell from '@shared/components/layout/AppShell';
 import Sidebar from '@chemflow/components/Sidebar';
+import { BackToChemCtrlButton } from '@chemflow/components/user/BackToChemCtrlButton';
 import {
   isChemFlowConfigured,
   CHEMFLOW_CONFIG_ERROR,
@@ -20,6 +21,9 @@ export default function MainLayout() {
     <AppShell
       sidebar={<Sidebar />}
       banner={banner}
+      topBarProps={{
+        topBarActions: <BackToChemCtrlButton />,
+      }}
     />
   );
 }

@@ -218,7 +218,7 @@ export default function Home() {
           productions={inProgressProds}
           onBypass={handleBypass}
           bypassing={bypassing}
-          onViewAll={() => navigate('/chemblend/ordens')}
+          onViewAll={() => navigate('/ordens')}
         />
       </div>
 
@@ -270,7 +270,7 @@ export default function Home() {
                       <td className="px-4 py-3 text-center">
                         <button
                           type="button"
-                          onClick={() => navigate(`/chemblend/vasilhames?id=${c.id}`)}
+                          onClick={() => navigate(`/vasilhames?id=${c.id}`)}
                           className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                           title={t('dashboard.fractionalYard.openItem')}
                         >
@@ -332,7 +332,7 @@ export default function Home() {
                       <td className="px-4 py-3 text-center">
                         <button
                           type="button"
-                          onClick={() => navigate(`/chemblend/estoque?id=${s.id}`)}
+                          onClick={() => navigate(`/estoque?id=${s.id}`)}
                           className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                           title={t('dashboard.wmsNok.openItem')}
                         >

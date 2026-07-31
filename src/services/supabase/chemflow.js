@@ -13,11 +13,9 @@ function normalizeSupabaseUrl(raw) {
   return raw.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
 }
 
-// BANCO UNIFICADO: desde a migração (migration_chemflow_unification.sql), as
-// tabelas do ChemFlow vivem no mesmo projeto Supabase do ChemBlend (Projeto A).
-// Por padrão este cliente reutiliza as credenciais do ChemBlend como fonte
-// única de verdade. As variáveis VITE_CHEMFLOW_* seguem tendo prioridade e
-// permitem apontar para outro projeto (ex.: staging).
+// BANCO UNIFICADO: tabelas do módulo ChemFlow no mesmo projeto Supabase do ChemCtrl.
+// Por padrão este cliente reutiliza as credenciais principais. As variáveis
+// VITE_CHEMFLOW_* têm prioridade e permitem apontar para outro projeto (ex.: staging).
 const chemflowSupabaseUrl = normalizeSupabaseUrl(
   import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || chemblendSupabaseUrl
 );
@@ -36,14 +34,11 @@ export const isChemFlowConfigured = Boolean(
 
 export const CHEMFLOW_CONFIG_ERROR =
   'ChemFlow: credenciais do Supabase indisponíveis. O padrão usa o banco unificado ' +
-  'do ChemBlend; para apontar para outro projeto, defina VITE_CHEMFLOW_SUPABASE_URL ' +
+  'do ChemCtrl; para apontar para outro projeto, defina VITE_CHEMFLOW_SUPABASE_URL ' +
   'e VITE_CHEMFLOW_SUPABASE_ANON_KEY no arquivo .env (veja .env.example).';
 
-// Cliente Supabase do ChemFlow. Desde a unificação dos bancos aponta para o
-// mesmo projeto do ChemBlend (Projeto A), mas permanece uma instância separada
-// para preservar o isolamento da camada de dados do módulo. A autenticação de
-// usuário continua centralizada na plataforma; este cliente usa a anon key
-// protegida por RLS (políticas chemflow_anon_all_* nas tabelas do domínio).
+// Cliente Supabase do módulo ChemFlow (mesmo projeto do ChemCtrl por padrão).
+// Instância separada para isolamento da camada de dados do módulo.
 export const chemflowSupabase = isChemFlowConfigured
   ? createClient(chemflowSupabaseUrl, chemflowSupabaseAnonKey)
   : null;

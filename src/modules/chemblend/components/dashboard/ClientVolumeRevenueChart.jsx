@@ -40,7 +40,7 @@ function ChartTooltip({ active, payload, fmtVol, fmtMoney, t, kgUnit }) {
 export default function ClientVolumeRevenueChart({ data, user, emptyMessage }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const canNavigate = canAccessRoute(user, '/chemblend/pedidos');
+  const canNavigate = canAccessRoute(user, '/pedidos');
 
   const fmtVol = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtMoney = (n) => fmtCurrency(n || 0, 'BRL', i18n.language);

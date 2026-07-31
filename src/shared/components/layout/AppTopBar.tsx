@@ -6,7 +6,7 @@ import { TerminalWeatherInfo } from '@shared/components/layout/TerminalWeatherIn
 interface AppTopBarProps {
   /** Optional actions rendered before the user menu (e.g. admin modules hub). */
   topBarActions?: ReactNode;
-  /** Optional extras inside the user dropdown (e.g. ChemBlend system manual). */
+  /** Optional extras inside the user dropdown (e.g. system manual). */
   userMenuExtras?: ReactNode;
   getRoleLabel?: (user: Record<string, unknown> | null) => string;
 }

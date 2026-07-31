@@ -28,39 +28,39 @@ import Perfis from '@chemblend/pages/Perfis';
 import AcessoNegado from '@chemblend/pages/AcessoNegado';
 
 /**
- * Rotas internas do módulo ChemBlend (Industrialização), montadas em `/chemblend/*`.
- * Mantém exatamente o comportamento do antigo app raiz: mesmo layout, mesma
- * árvore de permissões e realtime, mesmas páginas — apenas com prefixo de rota novo.
+ * Rotas principais do ChemCtrl, montadas na raiz `/*`.
+ * Paths relativos (sem `/` inicial) — padrão de descendant routes do RR6.
+ * O módulo ChemFlow vive em `/chemflow/*` (admin).
  */
-export default function ChemBlendRoutes() {
+export default function ChemCtrlRoutes() {
   return (
     <PermissionProvider>
       <RealtimeProvider>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/estoque-cliente" element={<EstoqueCliente />} />
-            <Route path="/tela-clientes" element={<TelaClientes />} />
-            <Route path="/estoque" element={<Estoque />} />
-            <Route path="/pedidos" element={<Pedidos />} />
-            <Route path="/receitas" element={<Receitas />} />
-            <Route path="/nova-producao" element={<NovaProducao />} />
-            <Route path="/ordens" element={<OrdensProducao />} />
-            <Route path="/producao/:id/checklist" element={<ChecklistProducao />} />
-            <Route path="/producoes" element={<Producoes />} />
-            <Route path="/qualidade/ensaios" element={<Ensaios />} />
-            <Route path="/qualidade/equipamentos" element={<EquipamentosLab />} />
-            <Route path="/qualidade/producoes" element={<ProducoesCQ />} />
-            <Route path="/qualidade/coa" element={<COA />} />
-            <Route path="/vasilhames" element={<Vasilhames />} />
-            <Route path="/tankagem" element={<Tankagem />} />
-            <Route path="/transbordo" element={<Transbordo />} />
-            <Route path="/inventario" element={<Inventario />} />
-            <Route path="/inventario/:id" element={<InventarioConferencia />} />
-            <Route path="/usuarios" element={<Usuarios />} />
-            <Route path="/perfis" element={<Perfis />} />
-            <Route path="/acesso-negado" element={<AcessoNegado />} />
+            <Route index element={<Home />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="estoque-cliente" element={<EstoqueCliente />} />
+            <Route path="tela-clientes" element={<TelaClientes />} />
+            <Route path="estoque" element={<Estoque />} />
+            <Route path="pedidos" element={<Pedidos />} />
+            <Route path="receitas" element={<Receitas />} />
+            <Route path="nova-producao" element={<NovaProducao />} />
+            <Route path="ordens" element={<OrdensProducao />} />
+            <Route path="producao/:id/checklist" element={<ChecklistProducao />} />
+            <Route path="producoes" element={<Producoes />} />
+            <Route path="qualidade/ensaios" element={<Ensaios />} />
+            <Route path="qualidade/equipamentos" element={<EquipamentosLab />} />
+            <Route path="qualidade/producoes" element={<ProducoesCQ />} />
+            <Route path="qualidade/coa" element={<COA />} />
+            <Route path="vasilhames" element={<Vasilhames />} />
+            <Route path="tankagem" element={<Tankagem />} />
+            <Route path="transbordo" element={<Transbordo />} />
+            <Route path="inventario" element={<Inventario />} />
+            <Route path="inventario/:id" element={<InventarioConferencia />} />
+            <Route path="usuarios" element={<Usuarios />} />
+            <Route path="perfis" element={<Perfis />} />
+            <Route path="acesso-negado" element={<AcessoNegado />} />
           </Route>
         </Routes>
       </RealtimeProvider>

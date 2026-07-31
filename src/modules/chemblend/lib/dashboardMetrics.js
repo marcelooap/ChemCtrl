@@ -312,5 +312,5 @@ export function buildPedidosFilterUrl({ client } = {}) {
   const params = new URLSearchParams();
   if (client && client !== '—') params.set('client', client);
   const qs = params.toString();
-  return qs ? `/chemblend/pedidos?${qs}` : '/chemblend/pedidos';
+  return qs ? `/pedidos?${qs}` : '/pedidos';
 }

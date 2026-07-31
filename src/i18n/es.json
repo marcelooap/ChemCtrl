@@ -268,11 +268,14 @@
     "lockedTooltip": "Sin acceso para su nivel",
     "moduleName": "ChemCtrl",
     "appSubtitle": "Control de Producción",
+    "chemflowSubtitle": "ChemFlow",
     "footer": {
       "expand": "Expandir sidebar",
       "collapse": "Colapsar sidebar",
       "logout": "Salir",
-      "backToModules": "Volver a los módulos"
+      "backToModules": "Volver",
+      "backToChemCtrl": "Volver",
+      "openChemFlow": "ChemFlow"
     }
   },
   "accessDenied": {
@@ -419,12 +422,12 @@
     "headerSubtitle": "Portal de Aplicaciones",
     "title": "Selección de Sistemas",
     "subtitle": "Elija qué sistema desea acceder",
-    "backToChemBlend": "Volver a ChemBlend",
+    "backToChemBlend": "Volver a ChemCtrl",
     "logout": "Salir",
     "comingSoon": "Próximamente",
     "apps": {
       "chemblend": {
-        "name": "ChemBlend",
+        "name": "ChemCtrl",
         "description": "Sistema de gestión industrial para producción, stock, recetas, calidad y operaciones.",
         "cta": "Acceder al sistema",
         "features": {
@@ -437,9 +440,9 @@
       },
       "chemflow": {
         "name": "ChemFlow",
-        "description": "Sistema para gestión de transbordo, filtración y operaciones logísticas.",
-        "cta": "Acceder al sistema",
-        "ctaDisabled": "Sistema en desarrollo",
+        "description": "Módulo para gestión de transbordo, filtración y operaciones logísticas.",
+        "cta": "Acceder al módulo",
+        "ctaDisabled": "Módulo en desarrollo",
         "badge": "En desarrollo",
         "features": {
           "truck": "Camión",
@@ -453,7 +456,7 @@
   },
   "welcome": {
     "title": "¡Bienvenido, {{name}}!",
-    "subtitle": "De vuelta a ChemBlend.",
+    "subtitle": "De vuelta a ChemCtrl.",
     "continue": "Continuar",
     "toast": {
       "title": "Bem-vindo de volta!",

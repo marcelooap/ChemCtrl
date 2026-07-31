@@ -3,7 +3,7 @@ import { ROLE_KEYS } from '@/i18n/domainMaps';
 
 /**
  * Shared display helpers for the platform user menu.
- * Works for ChemBlend and ChemFlow (same auth user shape).
+ * Works for ChemCtrl and the ChemFlow module (same auth user shape).
  */
 
 export function getUserDisplayName(user) {

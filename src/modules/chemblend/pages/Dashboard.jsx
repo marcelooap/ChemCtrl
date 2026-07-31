@@ -78,7 +78,7 @@ export default function Dashboard() {
     return Array.from(years).sort((a, b) => b - a);
   }, [productions, today, selectedYear]);
 
-  const canNavigate = canAccessRoute(user, '/chemblend/producoes');
+  const canNavigate = canAccessRoute(user, '/producoes');
 
   const fmtVol = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
 

@@ -222,7 +222,7 @@ export default function NovaProducao() {
         if (cancelled) return;
         if (!prod?.fractional_supply || prod.complement_status === 'Completa') {
           toast({ title: t('common.error'), description: t('production.fractional.validationExceeds'), variant: 'destructive' });
-          navigate('/chemblend/producoes');
+          navigate('/producoes');
           return;
         }
 
@@ -261,7 +261,7 @@ export default function NovaProducao() {
         });
         setMpList(groupUsedIntoMpList(parseArr(prod.raw_materials_used), recipe));
       } catch {
-        if (!cancelled) navigate('/chemblend/producoes');
+        if (!cancelled) navigate('/producoes');
       } finally {
         if (!cancelled) setComplementLoading(false);
       }
@@ -729,7 +729,7 @@ export default function NovaProducao() {
 
       await deductStock(deficitMpList);
       toast({ title: t('production.fractional.complementSuccess') });
-      navigate('/chemblend/producoes');
+      navigate('/producoes');
     } catch (err) {
       toast({ title: t('common.error'), description: err.message, variant: 'destructive' });
     } finally {
@@ -1036,7 +1036,7 @@ export default function NovaProducao() {
             <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); setFractionalSupply(false); }} disabled={saving}>{t('buttons.clear')}</Button>
           )}
           {isComplementMode && (
-            <Button variant="outline" onClick={() => navigate('/chemblend/producoes')} disabled={saving}>{t('buttons.cancel')}</Button>
+            <Button variant="outline" onClick={() => navigate('/producoes')} disabled={saving}>{t('buttons.cancel')}</Button>
           )}
           <Button onClick={saveHandler} disabled={!canSave || saving} style={{ background: canSave ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">
             {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.newProduction.registering')}</> : saveLabel}

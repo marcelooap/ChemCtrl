@@ -14,7 +14,7 @@ const labelClass = (collapsed) =>
   );
 
 /**
- * Platform sidebar chrome shared by ChemBlend and ChemFlow.
+ * Platform sidebar chrome shared by ChemCtrl and the ChemFlow module.
  *
  * @param {object} props
  * @param {boolean} props.collapsed
@@ -26,7 +26,7 @@ const labelClass = (collapsed) =>
  * @param {Array} props.items - flat or grouped nav items
  * @param {(path: string) => boolean} [props.canAccessPath]
  * @param {(item: object) => string} [props.resolveLabel] - defaults to item.label
- * @param {boolean} [props.showModulesLink]
+ * @param {boolean} [props.showModulesLink] - link de volta ao ChemCtrl
  */
 export default function ModuleSidebar({
   collapsed,

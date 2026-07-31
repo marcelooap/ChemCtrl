@@ -96,7 +96,7 @@ export default function ChecklistProducao() {
         pause_start_time: new Date().toISOString(),
       });
       toast({ title: t('production.checklist.saved') });
-      navigate('/chemblend/ordens');
+      navigate('/ordens');
     } catch (err) {
       toast({ title: t('production.checklistPage.saveError'), description: err.message, variant: 'destructive' });
       throw err;
@@ -145,7 +145,7 @@ export default function ChecklistProducao() {
         }
         await base44.entities.Production.update(production.id, updates);
         toast({ title: t('production.messages.finished') });
-        navigate('/chemblend/ordens');
+        navigate('/ordens');
       },
     });
   };
@@ -162,7 +162,7 @@ export default function ChecklistProducao() {
     <div className="h-full min-h-0 overflow-y-auto pb-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/chemblend/ordens')}><ArrowLeft className="w-4 h-4" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/ordens')}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">OP: {production.op_number}</h1>

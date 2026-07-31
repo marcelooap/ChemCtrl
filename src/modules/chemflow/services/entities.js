@@ -7,7 +7,7 @@ import {
 /**
  * Camada de dados do ChemFlow — substitui 100% o antigo facade Base44
  * (`entities.<nome>`). Fala exclusivamente com o Supabase Projeto B,
- * isolado do Supabase Projeto A usado pelo ChemBlend.
+ * isolado do Supabase Projeto A usado pelo ChemCtrl.
  *
  * Mantém a mesma API usada pelas telas legadas (list/get/filter/create/
  * update/delete/bulkCreate/bulkUpdate/deleteMany) para minimizar o churn

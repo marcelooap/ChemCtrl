@@ -32,7 +32,7 @@ function fmtNum(n, decimals = 0) {
 
 /**
  * Gera boleta de envase em PDF (A4 paisagem, duas vias idênticas).
- * Layout idêntico ao ChemBlend (`generateBoletaPDF`).
+ * Layout idêntico ao relatório de boleta do ChemCtrl (`generateBoletaPDF`).
  */
 export function generateBoletaPDF(vasilhame) {
   if (!vasilhame) return;

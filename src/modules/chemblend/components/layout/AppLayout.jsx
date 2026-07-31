@@ -24,8 +24,8 @@ export default function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  if (location.pathname !== '/chemblend/acesso-negado' && !canAccessRoute(user, location.pathname)) {
-    return <Navigate to="/chemblend/acesso-negado" replace state={{ from: location.pathname }} />;
+  if (location.pathname !== '/acesso-negado' && !canAccessRoute(user, location.pathname)) {
+    return <Navigate to="/acesso-negado" replace state={{ from: location.pathname }} />;
   }
 
   return (

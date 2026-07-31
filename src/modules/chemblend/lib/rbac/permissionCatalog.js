@@ -50,7 +50,7 @@ export const permissionModules = [
         id: 'home',
         labelKey: 'rbac.resources.home',
         icon: 'LayoutDashboard',
-        route: '/chemblend',
+        route: '/',
         nav: { showInSidebar: true, order: 1 },
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
@@ -58,7 +58,7 @@ export const permissionModules = [
         id: 'dashboard',
         labelKey: 'rbac.resources.dashboard',
         icon: 'BarChart3',
-        route: '/chemblend/dashboard',
+        route: '/dashboard',
         nav: { showInSidebar: true, order: 2 },
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
@@ -73,7 +73,7 @@ export const permissionModules = [
         id: 'recipes',
         labelKey: 'rbac.resources.recipes',
         icon: 'BookOpen',
-        route: '/chemblend/receitas',
+        route: '/receitas',
         nav: { showInSidebar: true, order: 3 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -96,7 +96,7 @@ export const permissionModules = [
         id: 'orders',
         labelKey: 'rbac.resources.orders',
         icon: 'ClipboardList',
-        route: '/chemblend/pedidos',
+        route: '/pedidos',
         nav: { showInSidebar: true, order: 4 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -116,7 +116,7 @@ export const permissionModules = [
         id: 'raw_material_stock',
         labelKey: 'rbac.resources.rawMaterialStock',
         icon: 'Package',
-        route: '/chemblend/estoque',
+        route: '/estoque',
         nav: { showInSidebar: true, order: 5 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -129,8 +129,8 @@ export const permissionModules = [
         id: 'inventory',
         labelKey: 'rbac.resources.inventory',
         icon: 'ClipboardCheck',
-        route: '/chemblend/inventario',
-        routePrefixes: ['/chemblend/inventario/'],
+        route: '/inventario',
+        routePrefixes: ['/inventario/'],
         nav: { showInSidebar: true, order: 6 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -143,7 +143,7 @@ export const permissionModules = [
         id: 'containers',
         labelKey: 'rbac.resources.containers',
         icon: 'Box',
-        route: '/chemblend/vasilhames',
+        route: '/vasilhames',
         nav: { showInSidebar: true, order: 12 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -156,7 +156,7 @@ export const permissionModules = [
         id: 'tankage',
         labelKey: 'rbac.resources.tankage',
         icon: 'Cylinder',
-        route: '/chemblend/tankagem',
+        route: '/tankagem',
         nav: { showInSidebar: true, order: 13 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -169,7 +169,7 @@ export const permissionModules = [
         id: 'transfer',
         labelKey: 'rbac.resources.transfer',
         icon: 'ArrowRightLeft',
-        route: '/chemblend/transbordo',
+        route: '/transbordo',
         nav: { showInSidebar: true, order: 14 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -189,7 +189,7 @@ export const permissionModules = [
         id: 'new_production',
         labelKey: 'rbac.resources.newProduction',
         icon: 'Plus',
-        route: '/chemblend/nova-producao',
+        route: '/nova-producao',
         nav: { showInSidebar: true, order: 7 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -200,7 +200,7 @@ export const permissionModules = [
         id: 'productions',
         labelKey: 'rbac.resources.productions',
         icon: 'ListOrdered',
-        route: '/chemblend/producoes',
+        route: '/producoes',
         nav: { showInSidebar: true, order: 8 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -217,8 +217,8 @@ export const permissionModules = [
         id: 'production_orders',
         labelKey: 'rbac.resources.productionOrders',
         icon: 'Factory',
-        route: '/chemblend/ordens',
-        routePrefixes: ['/chemblend/producao/'],
+        route: '/ordens',
+        routePrefixes: ['/producao/'],
         nav: { showInSidebar: true, order: 9 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -238,7 +238,7 @@ export const permissionModules = [
         id: 'quality_tests',
         labelKey: 'rbac.resources.qualityTests',
         icon: 'FlaskConical',
-        route: '/chemblend/qualidade/ensaios',
+        route: '/qualidade/ensaios',
         nav: {
           showInSidebar: true,
           order: 1,
@@ -258,7 +258,7 @@ export const permissionModules = [
         id: 'quality_pending',
         labelKey: 'rbac.resources.qualityPending',
         icon: 'FileCheck',
-        route: '/chemblend/qualidade/producoes',
+        route: '/qualidade/producoes',
         nav: {
           showInSidebar: true,
           order: 2,
@@ -277,7 +277,7 @@ export const permissionModules = [
         id: 'quality_coa',
         labelKey: 'rbac.resources.qualityCoa',
         icon: 'Award',
-        route: '/chemblend/qualidade/coa',
+        route: '/qualidade/coa',
         nav: {
           showInSidebar: true,
           order: 3,
@@ -296,7 +296,7 @@ export const permissionModules = [
         id: 'lab_equipment',
         labelKey: 'rbac.resources.labEquipment',
         icon: 'FlaskConical',
-        route: '/chemblend/qualidade/equipamentos',
+        route: '/qualidade/equipamentos',
         nav: { showInSidebar: false },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -316,7 +316,7 @@ export const permissionModules = [
         id: 'client_portal',
         labelKey: 'rbac.resources.clientPortal',
         icon: 'Building2',
-        route: '/chemblend/tela-clientes',
+        route: '/tela-clientes',
         nav: { showInSidebar: true, order: 17 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -326,7 +326,7 @@ export const permissionModules = [
         id: 'client_stock',
         labelKey: 'rbac.resources.clientStock',
         icon: 'Warehouse',
-        route: '/chemblend/estoque-cliente',
+        route: '/estoque-cliente',
         nav: { showInSidebar: true, order: 18 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -343,7 +343,7 @@ export const permissionModules = [
         id: 'users',
         labelKey: 'rbac.resources.users',
         icon: 'Users',
-        route: '/chemblend/usuarios',
+        route: '/usuarios',
         nav: {
           showInSidebar: true,
           order: 1,
@@ -363,7 +363,7 @@ export const permissionModules = [
         id: 'profiles',
         labelKey: 'rbac.resources.profiles',
         icon: 'Shield',
-        route: '/chemblend/perfis',
+        route: '/perfis',
         nav: {
           showInSidebar: true,
           order: 2,
@@ -546,18 +546,18 @@ export function getLegacyPermissionsForUser(user) {
 }
 
 export function getDefaultRouteFromPermissions(permissions, user) {
-  if (user?.tipo === 'externo') return '/chemblend/tela-clientes';
+  if (user?.tipo === 'externo') return '/tela-clientes';
   const set = new Set(permissions || []);
-  if (set.has('home.view')) return '/chemblend';
-  if (set.has('production_orders.view')) return '/chemblend/ordens';
-  if (set.has('containers.view')) return '/chemblend/vasilhames';
-  if (set.has('client_portal.view')) return '/chemblend/tela-clientes';
-  if (set.has('dashboard.view')) return '/chemblend/dashboard';
+  if (set.has('home.view')) return '/';
+  if (set.has('production_orders.view')) return '/ordens';
+  if (set.has('containers.view')) return '/vasilhames';
+  if (set.has('client_portal.view')) return '/tela-clientes';
+  if (set.has('dashboard.view')) return '/dashboard';
   const firstView = (permissions || []).find((k) => k.endsWith('.view'));
   if (firstView) {
     const resourceId = firstView.replace(/\.view$/, '');
     const res = getResourceById(resourceId);
     if (res?.route) return res.route;
   }
-  return '/chemblend';
+  return '/';
 }

@@ -3,8 +3,8 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { getDefaultRoute, isAdminUser } from '@chemblend/lib/permissions';
 
 /**
- * Gate para rotas restritas a administradores (ex.: ChemFlow em desenvolvimento).
- * Não-admin → redireciona ao ChemBlend.
+ * Gate para rotas restritas a administradores (módulo ChemFlow).
+ * Não-admin → redireciona ao ChemCtrl.
  */
 export default function AdminRoute() {
   const { user, loading } = useInternalAuth();

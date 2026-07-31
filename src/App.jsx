@@ -19,34 +19,22 @@ import i18n from '@/i18n';
 
 // Plataforma
 import Login from '@/pages/Login';
-import SystemSelector from '@/pages/SystemSelector';
 import PlaceholderPage from '@/pages/PlaceholderPage';
 import PlatformLayout from '@/layouts/PlatformLayout';
 
-// Módulo ChemBlend (síncrono — comportamento idêntico ao app anterior)
-import ChemBlendRoutes from '@chemblend/routes';
+// ChemCtrl — app principal (industrialização)
+import ChemCtrlRoutes from '@chemblend/routes';
 import ConsultaPublica from '@chemblend/pages/ConsultaPublica';
 
-// Módulo ChemFlow (lazy: isola o cliente Supabase B do bootstrap da plataforma)
+// Módulo ChemFlow (lazy; apenas administradores)
 const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));
 
-/**
- * Paths antigos do ChemBlend (quando era o app raiz).
- * Redirecionam para o prefixo `/chemblend/*`.
- * Deep links sob `/chemblend/*` continuam válidos (F5 dentro do módulo).
- * Nota: /dashboard, /estoque e /usuarios passaram a ser rotas da plataforma ChemCtrl.
- */
-const LEGACY_CHEMBLEND_PATHS = [
-  '/estoque-cliente', '/tela-clientes', '/pedidos',
-  '/receitas', '/nova-producao', '/ordens', '/producao/:id/checklist', '/producoes',
-  '/qualidade/ensaios', '/qualidade/equipamentos', '/qualidade/producoes', '/qualidade/coa',
-  '/vasilhames', '/tankagem', '/transbordo', '/inventario', '/inventario/:id',
-  '/perfis', '/acesso-negado',
-];
-
-function LegacyChemblendRedirect() {
-  const { pathname } = useLocation();
-  return <Navigate to={`/chemblend${pathname}`} replace />;
+/** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
+function LegacyChemblendPrefixRedirect() {
+  const { pathname, search, hash } = useLocation();
+  const stripped = pathname.replace(/^\/chemblend/, '') || '/';
+  const next = stripped.startsWith('/') ? stripped : `/${stripped}`;
+  return <Navigate to={`${next}${search}${hash}`} replace />;
 }
 
 function ModuleLoadingFallback() {
@@ -75,33 +63,17 @@ function CatchAllRoute() {
 const AuthenticatedApp = () => {
   return (
     <Routes>
-      {/* Público: consulta por token (ChemBlend) */}
+      {/* Público: consulta por token */}
       <Route path="/consulta/:token" element={<ConsultaPublica />} />
 
-      {/* Público: Login — se já autenticado, GuestRoute manda para o ChemBlend */}
+      {/* Público: Login — se já autenticado, vai para a rota padrão do ChemCtrl */}
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<Login />} />
       </Route>
 
-      {/* Protegido: exige sessão válida da plataforma */}
+      {/* Protegido: exige sessão válida */}
       <Route element={<ProtectedRoute />}>
-        {/* ChemCtrl — hub de módulos (admin). Não-admin em `/` é redirecionado no SystemSelector. */}
-        <Route element={<PlatformLayout />}>
-          <Route index element={<SystemSelector />} />
-          <Route path="dashboard" element={<PlaceholderPage title="Dashboard" />} />
-          <Route path="estoque" element={<PlaceholderPage title="Estoque" />} />
-          <Route path="comercial/fichado" element={<PlaceholderPage title="Fichado" />} />
-          <Route path="comercial/solicitar-saida" element={<PlaceholderPage title="Solicitar saída" />} />
-          <Route path="comercial/composicao-carga" element={<PlaceholderPage title="Composição de carga" />} />
-          <Route path="faturamento" element={<PlaceholderPage title="Faturamento" />} />
-          <Route path="usuarios" element={<PlaceholderPage title="Usuários" />} />
-          <Route path="usuarios/permissoes" element={<PlaceholderPage title="Controle de permissão" />} />
-        </Route>
-
-        <Route path="/apps" element={<Navigate to="/" replace />} />
-        <Route path="/selecionar-modulo" element={<Navigate to="/" replace />} />
-
-        <Route path="/chemblend/*" element={<ChemBlendRoutes />} />
+        {/* Módulo ChemFlow — somente admin */}
         <Route element={<AdminRoute />}>
           <Route
             path="/chemflow/*"
@@ -115,10 +87,21 @@ const AuthenticatedApp = () => {
           />
         </Route>
 
-        {/* Bookmarks antigos → ChemBlend */}
-        {LEGACY_CHEMBLEND_PATHS.map((path) => (
-          <Route key={path} path={path} element={<LegacyChemblendRedirect />} />
-        ))}
+        <Route path="/apps" element={<Navigate to="/chemflow" replace />} />
+        <Route path="/selecionar-modulo" element={<Navigate to="/chemflow" replace />} />
+        <Route path="/chemblend/*" element={<LegacyChemblendPrefixRedirect />} />
+
+        {/* Placeholders da plataforma (sem conflito com o app principal) */}
+        <Route element={<PlatformLayout />}>
+          <Route path="comercial/fichado" element={<PlaceholderPage title="Fichado" />} />
+          <Route path="comercial/solicitar-saida" element={<PlaceholderPage title="Solicitar saída" />} />
+          <Route path="comercial/composicao-carga" element={<PlaceholderPage title="Composição de carga" />} />
+          <Route path="faturamento" element={<PlaceholderPage title="Faturamento" />} />
+          <Route path="usuarios/permissoes" element={<PlaceholderPage title="Controle de permissão" />} />
+        </Route>
+
+        {/* ChemCtrl — app principal na raiz */}
+        <Route path="/*" element={<ChemCtrlRoutes />} />
       </Route>
 
       <Route path="*" element={<CatchAllRoute />} />

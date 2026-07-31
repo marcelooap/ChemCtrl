@@ -50,7 +50,7 @@ export default function PlatformSidebar({ collapsed, setCollapsed }) {
       logoSrc="/icons/chemctrl-logo.svg"
       logoAlt="ChemCtrl"
       moduleName="ChemCtrl"
-      moduleSubtitle="Plataforma"
+      moduleSubtitle="Controle Operacional"
       items={items}
       showModulesLink={false}
     />

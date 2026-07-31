@@ -29,7 +29,7 @@ export function hasPermission(user, key) {
 
 export function canAccessRoute(user, path) {
   if (!user) return false;
-  if (path === '/chemblend/acesso-negado' || path.startsWith('/chemblend/acesso-negado')) return true;
+  if (path === '/acesso-negado' || path.startsWith('/acesso-negado')) return true;
   const viewKey = getViewPermissionForPath(path);
   if (!viewKey) {
     return false;

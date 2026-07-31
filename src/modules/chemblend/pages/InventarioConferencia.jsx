@@ -84,7 +84,7 @@ export default function InventarioConferencia() {
         closed_by: userName,
       });
       toast({ title: t('inventory.messages.completed') });
-      navigate('/chemblend/inventario');
+      navigate('/inventario');
     } catch (e) {
       toast({ title: t('inventory.conferencePage.finishError'), variant: 'destructive' });
     }
@@ -104,7 +104,7 @@ export default function InventarioConferencia() {
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/chemblend/inventario')}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/inventario')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>

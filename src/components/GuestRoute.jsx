@@ -17,7 +17,7 @@ const DefaultFallback = () => {
 
 /**
  * Gate de rotas públicas (ex.: Login).
- * Se já houver sessão válida, redireciona para o ChemBlend (rota padrão do usuário).
+ * Se já houver sessão válida, redireciona para a rota padrão do ChemCtrl.
  */
 export default function GuestRoute({ fallback = <DefaultFallback /> }) {
   const { user, loading } = useInternalAuth();

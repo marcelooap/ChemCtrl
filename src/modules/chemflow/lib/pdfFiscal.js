@@ -375,7 +375,7 @@ function buildComposicaoRows(vasilhame) {
 
 /**
  * Relatório Fiscal da embalagem (A4).
- * Layout alinhado aos relatórios fiscais do ChemBlend.
+ * Layout alinhado aos relatórios fiscais do ChemCtrl.
  */
 export function generateRelatorioFiscalPDF(vasilhame) {
   if (!vasilhame) return;

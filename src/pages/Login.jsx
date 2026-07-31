@@ -23,7 +23,6 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        // ChemFlow ainda em ajuste: pós-login abre o ChemBlend (como antes).
         window.location.href = getDefaultRoute(result.user);
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));

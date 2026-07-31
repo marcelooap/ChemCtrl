@@ -62,8 +62,8 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
     if (isExterno) {
       return mapped.filter(
         (i) =>
-          i.path === '/chemblend/tela-clientes' ||
-          (i.children && i.children.some((c) => c.path === '/chemblend/tela-clientes'))
+          i.path === '/tela-clientes' ||
+          (i.children && i.children.some((c) => c.path === '/tela-clientes'))
       );
     }
     return mapped;
@@ -71,7 +71,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
 
   const resolveLabel = (item) => {
     let label = t(item.labelKey);
-    if (isExterno && item.path === '/chemblend/tela-clientes') {
+    if (isExterno && item.path === '/tela-clientes') {
       const clientName = getUserClient(user)?.trim();
       if (clientName) label = clientName;
     }
