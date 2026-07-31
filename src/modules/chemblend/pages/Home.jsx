@@ -239,6 +239,7 @@ export default function Home() {
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                   <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.id')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.packaging')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.product')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.client')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.lot')}</th>
@@ -249,7 +250,7 @@ export default function Home() {
               <tbody>
                 {fractionalYard.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                       {t('dashboard.fractionalYard.empty')}
                     </td>
                   </tr>
@@ -259,6 +260,7 @@ export default function Home() {
                       <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
                         {c.registration_id != null ? String(c.registration_id).padStart(2, '0') : '—'}
                       </td>
+                      <td className="px-4 py-3 text-foreground whitespace-nowrap">{c.container_number || '—'}</td>
                       <td className="px-4 py-3 text-foreground">{c.product || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{c.client || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{c.lot || '—'}</td>

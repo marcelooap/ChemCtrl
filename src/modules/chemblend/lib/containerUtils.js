@@ -1,3 +1,5 @@
+import { getContainerPackageQty } from '@chemblend/lib/packagingTypes';
+
 /** Classifica o tipo de vasilhame para KPIs e relatórios. */
 export function getContainerTypeCategory(type) {
   const t = (type || '').trim().toLowerCase();
@@ -13,7 +15,7 @@ export function getContainerTypeCategory(type) {
 /** Resumo de vasilhames no pátio com contagem por categoria (sem sobreposição). */
 export function summarizePatioContainers(containers) {
   const summary = {
-    total: containers.length,
+    total: 0,
     distinctProducts: new Set(containers.map((c) => c.product).filter(Boolean)).size,
     totalVolume: containers.reduce((s, c) => s + (c.volume || 0), 0),
     ibc: 0,
@@ -25,7 +27,9 @@ export function summarizePatioContainers(containers) {
   };
 
   for (const c of containers) {
-    summary[getContainerTypeCategory(c.type)]++;
+    const qty = getContainerPackageQty(c);
+    summary.total += qty;
+    summary[getContainerTypeCategory(c.type)] += qty;
   }
 
   return summary;

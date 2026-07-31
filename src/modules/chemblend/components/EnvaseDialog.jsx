@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
+import { Badge } from '@shared/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/components/ui/collapsible';
 import { createSupabaseEntities } from '@chemblend/api/supabaseClient';
 import { zeroOutTankaStock } from '@chemblend/lib/tankUtils';
 import {
   PACKAGING_TYPES,
   isUnitPackagingType,
-  getUnitPackagingLabel,
   suggestPackageQty,
+  formatAggregatedContainerLabel,
 } from '@chemblend/lib/packagingTypes';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { useToast } from '@shared/components/ui/use-toast';
@@ -54,6 +56,7 @@ const newContainer = (preferredType, opVolume) => {
 };
 
 const isTankagemType = (type) => type === 'Tankagem';
+const isContentorType = (type) => type === 'Contentor';
 
 const parsePackageQty = (value) => {
   const qty = parseInt(value, 10);
@@ -65,6 +68,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   const lang = i18n.language;
   const isComplement = !!(production?.complement_packaging && production?.complement_container_id);
   const [containers, setContainers] = useState([newContainer()]);
+  const [expandedIdx, setExpandedIdx] = useState(0);
   const [complementTarget, setComplementTarget] = useState(null);
   const [complementDisplayVolume, setComplementDisplayVolume] = useState(null);
   const [complementVolume, setComplementVolume] = useState('');
@@ -80,6 +84,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     let cancelled = false;
 
     setContainers([newContainer(production?.packaging_type, production?.volume)]);
+    setExpandedIdx(0);
     setComplementVolume(production?.volume != null ? String(production.volume) : '');
     setComplementTarget(null);
     setComplementDisplayVolume(null);
@@ -161,8 +166,22 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     });
   };
 
-  const addRow = () => setContainers(prev => [...prev, newContainer(production?.packaging_type, production?.volume)]);
-  const removeRow = (idx) => setContainers(prev => prev.filter((_, i) => i !== idx));
+  const addRow = () => {
+    setContainers((prev) => {
+      const next = [...prev, newContainer(production?.packaging_type, production?.volume)];
+      setExpandedIdx(next.length - 1);
+      return next;
+    });
+  };
+
+  const removeRow = (idx) => {
+    setContainers((prev) => prev.filter((_, i) => i !== idx));
+    setExpandedIdx((prev) => {
+      if (prev === idx) return Math.max(0, idx - 1);
+      if (prev > idx) return prev - 1;
+      return prev;
+    });
+  };
 
   const calcNet = (vol) => (parseFloat(vol) || 0) * density;
   const calcGross = (vol, tare) => calcNet(vol) + (parseFloat(tare) || 0);
@@ -203,6 +222,16 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       && totalVolumeEntered > 0
       && !volumeExceeded
     : containers.every(isContainerValid);
+
+  const rowSummaryIdentity = (c) => {
+    if (c.number?.trim()) return c.number.trim();
+    if (isUnitPackagingType(c.type)) return translatePackagingType(c.type);
+    return '—';
+  };
+
+  const rowSummaryQty = (c) => (
+    isUnitPackagingType(c.type) ? (parsePackageQty(c.package_qty) || 1) : 1
+  );
 
   const handleSaveComplement = async (operatorName) => {
     if (!complementTarget) throw new Error(t('production.complementPackaging.targetLoadError'));
@@ -328,26 +357,32 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       const payload = isTankagemType(c.type) ? applyTankagemDefaults(c) : c;
 
       if (isUnitPackagingType(payload.type)) {
-        const { qty, unitVol, unitNet, unitGross } = unitWeights(payload);
-        if (qty < 1 || unitVol <= 0) continue;
+        const { qty } = unitWeights(payload);
+        const totalVol = parseFloat(payload.volume) || 0;
+        if (qty < 1 || totalVol <= 0) continue;
 
-        const label = getUnitPackagingLabel(payload.type);
         const tare = parseFloat(payload.tare) || 0;
+        const totalNet = totalVol * density;
+        const totalGross = totalNet + tare * qty;
 
-        for (let i = 1; i <= qty; i += 1) {
-          await createContainerRecord({
-            payload,
-            volume: unitVol,
-            tare,
-            netWeight: unitNet,
-            grossWeight: unitGross,
-            containerNumber: `${label} ${i}/${qty}`,
-            barrilNumber: null,
-            registrationId: nextRegId,
-            operatorName,
-          });
-          nextRegId += 1;
-        }
+        await createContainerRecord({
+          payload: {
+            ...payload,
+            seals: null,
+            sling: null,
+            gps: null,
+            min_test_date: null,
+          },
+          volume: totalVol,
+          tare,
+          netWeight: totalNet,
+          grossWeight: totalGross,
+          containerNumber: formatAggregatedContainerLabel(qty, payload.type),
+          barrilNumber: null,
+          registrationId: nextRegId,
+          operatorName,
+        });
+        nextRegId += 1;
         continue;
       }
 
@@ -519,111 +554,188 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
                     <Plus className="w-3.5 h-3.5 mr-1" /> {t('production.envase.addPackaging')}
                   </Button>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {containers.map((c, idx) => {
                     const unitMode = isUnitPackagingType(c.type);
+                    const tankagemMode = isTankagemType(c.type);
+                    const contentorMode = isContentorType(c.type);
+                    const showPlate = !unitMode;
+                    const showBarril = contentorMode;
+                    const showLogistics = contentorMode;
                     const weights = unitMode ? unitWeights(c) : null;
-                    const tareRequired = !isTankagemType(c.type);
-                    const sealsRequired = !isTankagemType(c.type) && !unitMode;
+                    const tareRequired = !tankagemMode;
+                    const sealsRequired = contentorMode;
+                    const isOpen = expandedIdx === idx;
+                    const qty = rowSummaryQty(c);
 
                     return (
-                      <div key={idx} className="border border-border rounded-lg p-4 bg-card relative">
-                        {containers.length > 1 && (
-                          <button onClick={() => removeRow(idx)} className="absolute top-3 right-3 p-1.5 rounded hover:bg-destructive/10 z-10">
-                            <Trash2 className="w-4 h-4 text-red-400" />
-                          </button>
-                        )}
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-                          {!unitMode && (
-                            <>
-                              <div>
-                                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.plateNumber')} *</label>
-                                <Input value={c.number} onChange={e => updateContainer(idx, 'number', e.target.value)} className="h-10 text-sm" placeholder="151340690 (806547-8)" />
-                              </div>
-                              <div>
-                                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.barrelNumber')}</label>
-                                <Input value={c.barril} onChange={e => updateContainer(idx, 'barril', e.target.value)} className="h-10 text-sm" placeholder={c.type === 'Tankagem' ? '-' : t('containers.addTank.barrelPlaceholder')} />
-                              </div>
-                            </>
-                          )}
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.type')} *</label>
-                            <Select value={c.type} onValueChange={v => updateContainer(idx, 'type', v)}>
-                              <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {PACKAGING_TYPES.map(pt => <SelectItem key={pt} value={pt}>{translatePackagingType(pt)}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {unitMode && (
-                            <div>
-                              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.packageQty')} *</label>
-                              <Input
-                                type="number"
-                                min={1}
-                                step={1}
-                                value={c.package_qty}
-                                onChange={e => updateContainer(idx, 'package_qty', e.target.value)}
-                                className="h-10 text-sm text-right"
-                              />
-                            </div>
-                          )}
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.packaging.volume')} *</label>
-                            <Input type="number" value={c.volume} onChange={e => updateContainer(idx, 'volume', e.target.value)} className="h-10 text-sm text-right" placeholder="25.000" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                              {unitMode ? t('production.envase.tarePerPackage') : t('containers.vasilhames.tare')}
-                              {tareRequired ? ' *' : ''}
-                            </label>
-                            <Input type="number" value={c.tare} onChange={e => updateContainer(idx, 'tare', e.target.value)} className="h-10 text-sm text-right" placeholder={unitMode ? '60' : '2023'} />
-                          </div>
-                          {unitMode && (
-                            <>
-                              <div>
-                                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.netWeightPerPackage')}</label>
-                                <Input
-                                  readOnly
-                                  value={weights.qty > 0 ? fmtMass(weights.unitNet, 'kg', lang) : '—'}
-                                  className="h-10 text-sm text-right bg-muted/40"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.grossWeightPerPackage')}</label>
-                                <Input
-                                  readOnly
-                                  value={weights.qty > 0 ? fmtMass(weights.unitGross, 'kg', lang) : '—'}
-                                  className="h-10 text-sm text-right bg-muted/40"
-                                />
-                              </div>
-                              {weights.qty > 0 && (
-                                <div className="col-span-2 lg:col-span-3">
-                                  <p className="text-xs text-muted-foreground">
-                                    {t('production.envase.willCreatePackages', { count: weights.qty })}
-                                  </p>
+                      <Collapsible
+                        key={idx}
+                        open={isOpen}
+                        onOpenChange={(openState) => {
+                          if (openState) setExpandedIdx(idx);
+                          else if (expandedIdx === idx) setExpandedIdx(-1);
+                        }}
+                      >
+                        <div className="border border-border rounded-lg bg-card overflow-hidden">
+                          <div className="flex items-start gap-2 px-4 py-3">
+                            <CollapsibleTrigger asChild>
+                              <button
+                                type="button"
+                                className="flex flex-1 items-start gap-3 min-w-0 text-left hover:opacity-90"
+                              >
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <Badge
+                                    className="border-transparent text-white shadow-none"
+                                    style={{ background: '#7C3AED' }}
+                                  >
+                                    {t('production.envase.packagingBadge', { n: String(idx + 1).padStart(2, '0') })}
+                                  </Badge>
+                                  {!isOpen && (
+                                    <p className="text-sm text-muted-foreground truncate">
+                                      <span className="font-medium text-foreground">{rowSummaryIdentity(c)}</span>
+                                      {' · '}
+                                      {tankagemMode
+                                        ? t('production.envase.summaryVolume', {
+                                            volume: fmtVolume(parseFloat(c.volume) || 0, 'L', lang),
+                                          })
+                                        : t('production.envase.summaryQty', { count: qty })}
+                                    </p>
+                                  )}
                                 </div>
-                              )}
-                            </>
-                          )}
-                          <div className="lg:col-span-2">
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.seals')}{sealsRequired ? ' *' : ''}</label>
-                            <Input value={c.seals} onChange={e => updateContainer(idx, 'seals', e.target.value)} className="h-10 text-sm" placeholder={c.type === 'Tankagem' ? '-' : '12345 12345 12345 12345 12345'} />
+                                <ChevronDown
+                                  className={`w-4 h-4 text-muted-foreground shrink-0 mt-0.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                />
+                              </button>
+                            </CollapsibleTrigger>
+                            {containers.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeRow(idx)}
+                                className="p-1.5 rounded hover:bg-destructive/10 shrink-0 mt-0.5"
+                                aria-label={t('buttons.delete')}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                              </button>
+                            )}
                           </div>
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.sling')}</label>
-                            <Input value={c.sling} onChange={e => updateContainer(idx, 'sling', e.target.value)} className="h-10 text-sm" placeholder="7005289-2" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.gps')}</label>
-                            <Input value={c.gps} onChange={e => updateContainer(idx, 'gps', e.target.value)} className="h-10 text-sm" placeholder="2-35115154" />
-                          </div>
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.minTestDate')}</label>
-                            <Input type="date" value={c.min_test_date} onChange={e => updateContainer(idx, 'min_test_date', e.target.value)} className="h-10 text-sm" />
-                          </div>
+
+                          <CollapsibleContent>
+                            <div className="px-4 pb-4 pt-1 border-t border-border">
+                              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+                                {showPlate && (
+                                  <div>
+                                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                                      {tankagemMode ? t('production.envase.tanka') : t('production.envase.plateNumber')} *
+                                    </label>
+                                    <Input
+                                      value={c.number}
+                                      onChange={(e) => updateContainer(idx, 'number', e.target.value)}
+                                      className="h-10 text-sm"
+                                      placeholder={tankagemMode ? 'TKA-014' : '151340690 (806547-8)'}
+                                    />
+                                  </div>
+                                )}
+                                {showBarril && (
+                                  <div>
+                                    <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.barrelNumber')}</label>
+                                    <Input
+                                      value={c.barril}
+                                      onChange={(e) => updateContainer(idx, 'barril', e.target.value)}
+                                      className="h-10 text-sm"
+                                      placeholder={t('containers.addTank.barrelPlaceholder')}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.type')} *</label>
+                                  <Select value={c.type} onValueChange={(v) => updateContainer(idx, 'type', v)}>
+                                    <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {PACKAGING_TYPES.map((pt) => (
+                                        <SelectItem key={pt} value={pt}>{translatePackagingType(pt)}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {unitMode && (
+                                  <div>
+                                    <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.packageQty')} *</label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      value={c.package_qty}
+                                      onChange={(e) => updateContainer(idx, 'package_qty', e.target.value)}
+                                      className="h-10 text-sm text-right"
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.packaging.volume')} *</label>
+                                  <Input type="number" value={c.volume} onChange={(e) => updateContainer(idx, 'volume', e.target.value)} className="h-10 text-sm text-right" placeholder="25.000" />
+                                </div>
+                                {!tankagemMode && (
+                                  <div>
+                                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                                      {unitMode ? t('production.envase.tarePerPackage') : t('containers.vasilhames.tare')}
+                                      {tareRequired ? ' *' : ''}
+                                    </label>
+                                    <Input type="number" value={c.tare} onChange={(e) => updateContainer(idx, 'tare', e.target.value)} className="h-10 text-sm text-right" placeholder={unitMode ? '60' : '2023'} />
+                                  </div>
+                                )}
+                                {unitMode && (
+                                  <>
+                                    <div>
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.netWeightPerPackage')}</label>
+                                      <Input
+                                        readOnly
+                                        value={weights.qty > 0 ? fmtMass(weights.unitNet, 'kg', lang) : '—'}
+                                        className="h-10 text-sm text-right bg-muted/40"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.grossWeightPerPackage')}</label>
+                                      <Input
+                                        readOnly
+                                        value={weights.qty > 0 ? fmtMass(weights.unitGross, 'kg', lang) : '—'}
+                                        className="h-10 text-sm text-right bg-muted/40"
+                                      />
+                                    </div>
+                                    {weights.qty > 0 && (
+                                      <div className="col-span-2 lg:col-span-3">
+                                        <p className="text-xs text-muted-foreground">
+                                          {t('production.envase.willCreatePackages', { count: weights.qty })}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {showLogistics && (
+                                  <>
+                                    <div className="lg:col-span-2">
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('packaging.fields.seals')}{sealsRequired ? ' *' : ''}</label>
+                                      <Input value={c.seals} onChange={(e) => updateContainer(idx, 'seals', e.target.value)} className="h-10 text-sm" placeholder="12345 12345 12345 12345 12345" />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.sling')}</label>
+                                      <Input value={c.sling} onChange={(e) => updateContainer(idx, 'sling', e.target.value)} className="h-10 text-sm" placeholder="7005289-2" />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.vasilhames.gps')}</label>
+                                      <Input value={c.gps} onChange={(e) => updateContainer(idx, 'gps', e.target.value)} className="h-10 text-sm" placeholder="2-35115154" />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('production.envase.minTestDate')}</label>
+                                      <Input type="date" value={c.min_test_date} onChange={(e) => updateContainer(idx, 'min_test_date', e.target.value)} className="h-10 text-sm" />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </CollapsibleContent>
                         </div>
-                      </div>
+                      </Collapsible>
                     );
                   })}
                 </div>

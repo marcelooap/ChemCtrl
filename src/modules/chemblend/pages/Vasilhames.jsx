@@ -16,7 +16,12 @@ import { printContainerLabel } from '@chemblend/lib/labelprint';
 import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
 import { ensureProductionPublicToken } from '@chemblend/lib/ensurePublicToken';
 import { zeroOutTankaStock } from '@chemblend/lib/tankUtils';
-import { PACKAGING_TYPES } from '@chemblend/lib/packagingTypes';
+import {
+  PACKAGING_TYPES,
+  isAggregatedUnitContainer,
+  getContainerPackageQty,
+  formatAggregatedContainerLabel,
+} from '@chemblend/lib/packagingTypes';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import AddTankDialog from '@chemblend/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@chemblend/components/vasilhames/HistoryDialog';
@@ -29,7 +34,7 @@ import {
   isContainerFractional,
 } from '@chemblend/lib/fractionalSupply';
 import { resolveRecipeForContainer as resolveRecipeFromList, resolveProductCode } from '@chemblend/lib/recipeRevisions';
-import { effectiveOriginsOfContainer } from '@chemblend/lib/containerOrigins';
+import { effectiveOriginsOfContainer, applyProportionalOriginReduction } from '@chemblend/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -108,6 +113,7 @@ export default function Vasilhames() {
   const [editing, setEditing] = useState(null);
   const [departDate, setDepartDate] = useState(new Date().toISOString().split('T')[0]);
   const [departItem, setDepartItem] = useState(null);
+  const [departQty, setDepartQty] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [savingDepart, setSavingDepart] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -248,16 +254,77 @@ export default function Vasilhames() {
   };
 
   const confirmDepart = async () => {
+    if (!departItem) return;
+
+    const aggregated = isAggregatedUnitContainer(departItem);
+    const stockQty = getContainerPackageQty(departItem);
+
+    if (aggregated) {
+      const removeQty = parseInt(departQty, 10);
+      if (!Number.isFinite(removeQty) || removeQty < 1) {
+        toast({
+          title: t('containers.vasilhames.validationTitle'),
+          description: t('containers.vasilhames.departQtyRequired'),
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (removeQty > stockQty) {
+        toast({
+          title: t('containers.vasilhames.validationTitle'),
+          description: t('containers.vasilhames.departQtyExceeded', { stock: stockQty }),
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setSavingDepart(true);
     try {
-      // Manual saída ships the container as-is: keep volume and origins for history.
-      // Volume is only reduced when product is withdrawn via transbordo.
-      await base44.entities.Container.update(departItem.id, {
-        status: 'Expedido',
-        departure_date: departDate,
-        is_fractional: false,
-      });
-      setShowDepart(false); load();
+      if (aggregated) {
+        const removeQty = parseInt(departQty, 10);
+        if (removeQty >= stockQty) {
+          // Saída total do lote agregado: mesmo comportamento histórico.
+          await base44.entities.Container.update(departItem.id, {
+            status: 'Expedido',
+            departure_date: departDate,
+            is_fractional: false,
+          });
+        } else {
+          const newQty = stockQty - removeQty;
+          const ratio = newQty / stockQty;
+          const oldVolume = parseFloat(departItem.volume) || 0;
+          const withdrawnVolume = oldVolume * (removeQty / stockQty);
+          const newVolume = oldVolume - withdrawnVolume;
+          const newNet = (parseFloat(departItem.net_weight) || 0) * ratio;
+          const tare = parseFloat(departItem.tare) || 0;
+          const newGross = newNet + tare * newQty;
+
+          await base44.entities.Container.update(departItem.id, {
+            container_number: formatAggregatedContainerLabel(newQty, departItem.type),
+            volume: newVolume,
+            net_weight: newNet,
+            gross_weight: newGross,
+          });
+
+          await applyProportionalOriginReduction(
+            base44.entities,
+            containerOrigins,
+            departItem.id,
+            withdrawnVolume,
+          );
+        }
+      } else {
+        // Manual saída ships the container as-is: keep volume and origins for history.
+        // Volume is only reduced when product is withdrawn via transbordo.
+        await base44.entities.Container.update(departItem.id, {
+          status: 'Expedido',
+          departure_date: departDate,
+          is_fractional: false,
+        });
+      }
+      setShowDepart(false);
+      load();
       toast({ title: t('containers.messages.departRegistered') });
     } catch (err) {
       toast({ title: t('containers.messages.departError'), description: err.message, variant: 'destructive' });
@@ -284,7 +351,7 @@ export default function Vasilhames() {
   };
 
   const filteredYard = filtered.filter(c => c.status === 'No Pátio');
-  const noPatioCount = filteredYard.length;
+  const noPatioCount = filteredYard.reduce((s, c) => s + getContainerPackageQty(c), 0);
   const noPatioVolume = filteredYard.reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
 
   useEffect(() => {
@@ -427,7 +494,19 @@ export default function Vasilhames() {
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canEdit && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
                         {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title={t('containers.vasilhames.delete')}><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
-                        {canEdit && c.status === 'No Pátio' && <button onClick={() => { setDepartItem(c); setDepartDate(new Date().toISOString().split('T')[0]); setShowDepart(true); }} className="p-1 rounded hover:bg-muted"><Truck className="w-3.5 h-3.5 text-green-600" /></button>}
+                        {canEdit && c.status === 'No Pátio' && (
+                          <button
+                            onClick={() => {
+                              setDepartItem(c);
+                              setDepartDate(new Date().toISOString().split('T')[0]);
+                              setDepartQty(isAggregatedUnitContainer(c) ? '1' : '');
+                              setShowDepart(true);
+                            }}
+                            className="p-1 rounded hover:bg-muted"
+                          >
+                            <Truck className="w-3.5 h-3.5 text-green-600" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -673,9 +752,36 @@ export default function Vasilhames() {
 
       {/* Depart */}
       <Dialog open={showDepart} onOpenChange={setShowDepart}>
-        <DialogContent className="max-w-xs">
+        <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{t('containers.vasilhames.departTitle')}</DialogTitle></DialogHeader>
-          <div><label className="text-xs font-medium text-muted-foreground">{t('containers.vasilhames.departureDateField')}</label><Input type="date" value={departDate} onChange={e => setDepartDate(e.target.value)} /></div>
+          <div className="space-y-3">
+            {departItem && isAggregatedUnitContainer(departItem) && (
+              <>
+                <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                  <p className="text-xs text-muted-foreground mb-0.5">{t('containers.fields.plateNumber')}</p>
+                  <p className="font-semibold">{departItem.container_number}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('containers.vasilhames.departStockQty', { count: getContainerPackageQty(departItem) })}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{t('containers.vasilhames.departQty')} *</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={getContainerPackageQty(departItem)}
+                    step={1}
+                    value={departQty}
+                    onChange={(e) => setDepartQty(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">{t('containers.vasilhames.departureDateField')}</label>
+              <Input type="date" value={departDate} onChange={(e) => setDepartDate(e.target.value)} />
+            </div>
+          </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowDepart(false)} disabled={savingDepart}>{t('buttons.cancel')}</Button>
             <Button onClick={confirmDepart} disabled={savingDepart} style={{ background: '#2575D1', color: 'white' }}>
