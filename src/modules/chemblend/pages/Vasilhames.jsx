@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@chemblend/api/base44Client';
 import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Search, Eye, Pencil, Truck, FileText, Printer, Loader2, Plus, ArrowUpRight, History, Trash2 } from 'lucide-react';
 import { Input } from '@shared/components/ui/input';
 import { Button } from '@shared/components/ui/button';
@@ -28,7 +28,7 @@ import {
   containerDisplayGrossWeight,
   isContainerFractional,
 } from '@chemblend/lib/fractionalSupply';
-import { getRevisionsForProduct } from '@chemblend/lib/recipeRevisions';
+import { resolveRecipeForContainer as resolveRecipeFromList, resolveProductCode } from '@chemblend/lib/recipeRevisions';
 import { effectiveOriginsOfContainer } from '@chemblend/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
@@ -87,6 +87,7 @@ export default function Vasilhames() {
   const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
   const { hasPermission } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canCreate = !isReadOnly && hasPermission('containers.create');
   const canEdit = !isReadOnly && hasPermission('containers.edit');
   const canDeleteContainer = !isReadOnly && hasPermission('containers.delete');
@@ -112,6 +113,8 @@ export default function Vasilhames() {
   const [selected, setSelected] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
   const { toast } = useToast();
 
   const na = t('common.notAvailable');
@@ -149,35 +152,15 @@ export default function Vasilhames() {
     return matchSearch && matchStatus && matchClient;
   });
 
-  const resolveRecipeForContainer = (container, production) => {
-    if (production?.recipe_id) {
-      const byId = (recipes || []).find((r) => r.id === production.recipe_id);
-      if (byId) return byId;
-    }
-    const productName = container?.product || production?.product;
-    if (!productName) return null;
-    const client = container?.client || production?.client;
-    const revisions = getRevisionsForProduct(recipes, productName);
-    if (!revisions.length) return null;
-    const byClient = client ? revisions.filter((r) => r.client === client) : [];
-    const pool = byClient.length ? byClient : revisions;
-    return pool[pool.length - 1];
-  };
-
-  const recipeOfContainer = (c) => {
-    const production = productionOfContainer(c, productions || []);
-    return resolveRecipeForContainer(c, production);
-  };
-
   const productCodeOf = (c) => {
-    const r = recipeOfContainer(c);
-    return (r && r.code) || c.product;
+    const production = productionOfContainer(c, productions || []);
+    return resolveProductCode(recipes || [], c, production) || c.product;
   };
 
   const handlePrintLabel = async (container) => {
     try {
       const production = productionOfContainer(container, productions || []);
-      const recipe = resolveRecipeForContainer(container, production);
+      const recipe = resolveRecipeFromList(recipes || [], container, production);
       const publicToken = await ensureProductionPublicToken(production);
       await printContainerLabel(container, recipe?.validity_days, publicToken);
     } catch (err) {
@@ -224,8 +207,10 @@ export default function Vasilhames() {
     }
     setSending(true);
     try {
-      const recipe = recipeOfContainer(selectedContainers[0]);
-      generateVasilhamesReportPDF(selectedContainers, recipe);
+      const first = selectedContainers[0];
+      const production = productionOfContainer(first, productions || []);
+      const recipe = resolveRecipeFromList(recipes || [], first, production);
+      generateVasilhamesReportPDF(selectedContainers, recipe, recipes || []);
       toast({ title: t('containers.messages.reportGenerated'), description: t('containers.messages.reportExported', { count: selectedContainers.length }) });
     } catch (err) {
       toast({ title: t('containers.vasilhames.reportError'), description: err.message, variant: 'destructive' });
@@ -302,6 +287,27 @@ export default function Vasilhames() {
   const noPatioCount = filteredYard.length;
   const noPatioVolume = filteredYard.reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
 
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id || loading) return;
+    const match = containers.find((c) => c.id === id);
+    if (!match) return;
+    setHighlightId(id);
+    setSearch('');
+    setStatusFilter('all');
+    setClientFilter('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('id');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, loading, containers, setSearchParams]);
+
+  useEffect(() => {
+    if (!highlightId || !highlightRef.current) return;
+    highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [highlightId, filtered]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 flex items-center justify-between mb-4">
@@ -364,8 +370,13 @@ export default function Vasilhames() {
               <tbody>
                 {filtered.map(c => {
                   const prod = prodOf(c);
+                  const isHighlighted = highlightId === c.id;
                   return (
-                  <tr key={c.id} className={`border-b border-border hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''}`}>
+                  <tr
+                    key={c.id}
+                    ref={isHighlighted ? highlightRef : undefined}
+                    className={`border-b border-border hover:bg-accent/30 ${selected.has(c.id) ? 'bg-blue-50/40' : ''} ${isHighlighted ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''}`}
+                  >
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={t('containers.vasilhames.selectItem', { label: c.container_number || c.id })} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>

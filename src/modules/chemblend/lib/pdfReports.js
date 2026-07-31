@@ -12,7 +12,7 @@ import {
   resolveProductDensity,
   stockUnitPriceOf,
 } from '@chemblend/lib/productionViewUtils';
-import { getLatestRecipeForProduct } from '@chemblend/lib/recipeRevisions';
+import { getLatestRecipeForProduct, resolveProductCode } from '@chemblend/lib/recipeRevisions';
 import {
   allocateMpQuantitiesByNetWeight,
   aggregateAllocatedMaterials,
@@ -1743,13 +1743,17 @@ export function generateInventoryPDF(inventory) {
   doc.save('inventario-' + (inventory.inventory_number || t('pdf.common.report')) + '.pdf');
 }
 
-export function generateVasilhamesReportPDF(containers, recipe) {
+export function generateVasilhamesReportPDF(containers, recipe, recipes = []) {
   const { lang, t } = getPdfLabels();
   const { fmtDateTime, fmtNum } = makePdfFormatters(lang);
   const doc = new jsPDF({ format: 'a4' });
-  const product = (containers[0] && containers[0].product) || '-';
-  const client = (containers[0] && containers[0].client) || '-';
-  const productCode = (recipe && String(recipe.code || '').trim()) || '-';
+  const first = containers[0] || {};
+  const product = first.product || '-';
+  const client = first.client || '-';
+  // Tanques manuais (sem OP) dependem do match produto/cliente na receita.
+  // resolveProductCode faz fallback case-insensitive e prioriza código preenchido.
+  const resolvedCode = resolveProductCode(recipes, first, null, recipe);
+  const productCode = resolvedCode || (recipe && String(recipe.code || '').trim()) || '-';
   const totalVolume = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
   const totalMass = containers.reduce(function(s, c) { return s + (c.net_weight || 0); }, 0);
   const emissionDate = fmtDateTime(new Date());

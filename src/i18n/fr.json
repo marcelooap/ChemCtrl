@@ -577,6 +577,33 @@
       "vsPreviousMonth": "vs mois précédent",
       "noComparison": "-"
     },
+    "fractionalYard": {
+      "title": "Cuves fractionnées en cour",
+      "subtitle": "Emballages fractionnés en stock",
+      "empty": "Aucune cuve fractionnée en cour.",
+      "openItem": "Ouvrir dans l'écran des conteneurs",
+      "columns": {
+        "id": "ID",
+        "product": "Produit",
+        "client": "Client",
+        "lot": "Lot",
+        "volume": "Volume"
+      }
+    },
+    "wmsNok": {
+      "title": "MP avec statut WMS NOK",
+      "subtitle": "Entrées de matière première en attente WMS",
+      "empty": "Aucune MP avec statut WMS NOK.",
+      "openItem": "Ouvrir dans l'écran des entrées",
+      "columns": {
+        "id": "ID",
+        "code": "Code",
+        "mp": "MP",
+        "qty": "Quantité",
+        "unit": "Unité",
+        "lot": "Lot"
+      }
+    },
     "cards": {
       "production": "Production",
       "orders": "Commandes",
@@ -1848,6 +1875,12 @@
       "expired": "Expiré",
       "valid": "Valide"
     },
+    "wms": {
+      "ok": "OK",
+      "nok": "NOK",
+      "okHint": "OK — cliquer pour NOK",
+      "nokHint": "NOK — cliquer pour OK"
+    },
     "table": {
       "reg": "Rég.",
       "code": "Code",
@@ -1858,6 +1891,7 @@
       "unitPrice": "Prix Unit. (R$)",
       "totalCost": "Coût Total (R$)",
       "status": "Statut",
+      "statusWms": "Statut WMS",
       "actions": "Actions"
     },
     "footer": {

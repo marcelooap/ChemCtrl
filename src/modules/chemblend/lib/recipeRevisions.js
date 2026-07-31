@@ -17,6 +17,7 @@ export const getRevisionNumber = (recipe) => {
 };
 
 const normalizedProductName = (name) => (name || '').trim();
+const normalizeMatchKey = (name) => normalizedProductName(name).toLowerCase();
 
 /** Todas as revisões de um produto, ordenadas da mais antiga para a mais recente. */
 export const getRevisionsForProduct = (recipes, productName) => {
@@ -25,6 +26,44 @@ export const getRevisionsForProduct = (recipes, productName) => {
   return (recipes || [])
     .filter((r) => normalizedProductName(r.product_name) === name)
     .sort((a, b) => getRevisionNumber(a) - getRevisionNumber(b));
+};
+
+/**
+ * Resolve a receita de um vasilhame/produção.
+ * Usado em tanques manuais (sem OP) e no PDF "Enviar Dados".
+ * Match de produto/cliente é case-insensitive; prioriza receita com código preenchido.
+ */
+export const resolveRecipeForContainer = (recipes, container, production = null) => {
+  if (production?.recipe_id) {
+    const byId = (recipes || []).find((r) => r.id === production.recipe_id);
+    if (byId) return byId;
+  }
+
+  const productName = container?.product || production?.product;
+  if (!productName) return null;
+
+  const productKey = normalizeMatchKey(productName);
+  const clientKey = normalizeMatchKey(container?.client || production?.client);
+  const revisions = (recipes || [])
+    .filter((r) => normalizeMatchKey(r.product_name) === productKey)
+    .sort((a, b) => getRevisionNumber(a) - getRevisionNumber(b));
+  if (!revisions.length) return null;
+
+  const byClient = clientKey
+    ? revisions.filter((r) => normalizeMatchKey(r.client) === clientKey)
+    : [];
+  const pool = byClient.length ? byClient : revisions;
+
+  const withCode = [...pool].reverse().find((r) => String(r.code || '').trim());
+  return withCode || pool[pool.length - 1];
+};
+
+/** Código do produto cadastrado na receita (string vazia se não houver). */
+export const resolveProductCode = (recipes, container, production = null, recipe = null) => {
+  const resolved = recipe?.code != null && String(recipe.code).trim()
+    ? recipe
+    : resolveRecipeForContainer(recipes, container, production);
+  return String(resolved?.code || '').trim();
 };
 
 /** Revisão ativa (mais recente) de um produto, ou null se o produto não existir. */

@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@chemblend/api/base44Client';
 import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2 } from 'lucide-react';
 import MovimentacaoEstoqueDialog from '@chemblend/components/estoque/MovimentacaoEstoqueDialog';
 import { exportEstoqueMPToExcel } from '@chemblend/lib/exportEstoqueMP';
@@ -22,7 +22,7 @@ import { calcPackagingQty } from '@chemblend/lib/stockUtils';
 import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@chemblend/hooks/useDebouncedValue';
 
-const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0 };
+const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0, status_wms: true };
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
@@ -61,12 +61,13 @@ export default function Estoque() {
   const { t } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
   const { hasPermission } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canCreate = !isReadOnly && hasPermission('raw_material_stock.create');
   const canEdit = !isReadOnly && hasPermission('raw_material_stock.edit');
   const canDelete = !isReadOnly && hasPermission('raw_material_stock.delete');
   const parseTankEntries = (i) => ({ ...i, tank_entries: parseArr(i.tank_entries) });
   const parseRawMaterials = (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) });
-  const { data: items, loading, reload: load } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
+  const { data: items, loading, reload: load, setData: setItems } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -83,6 +84,8 @@ export default function Estoque() {
   const [showMovimentacao, setShowMovimentacao] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);
+  const highlightRef = useRef(null);
   const { toast } = useToast();
 
   const mpOptions = useMemo(() => {
@@ -185,7 +188,7 @@ export default function Estoque() {
   const save = async () => {
     const initialStock = parseFloat(form.initial_stock) || 0;
     const packagingCapacity = parseFloat(form.packaging_capacity) || 0;
-    const data = { ...form, unit_price: parseFloat(form.unit_price) || 0, initial_stock: initialStock, current_stock: editing ? (parseFloat(form.current_stock) || 0) : initialStock, density: parseFloat(form.density) || 0, entry_date: form.entry_date || null, packaging_capacity: packagingCapacity, packaging_quantity: calcPackagingQty(stockForPackaging(), packagingCapacity), tank_entries: form.tank_storage ? (form.tank_entries || []).filter(te => te.tank_name).map(te => ({ tank_name: te.tank_name, volume: parseFloat(te.volume) || 0, mass: te.mass || 0 })) : [] };
+    const data = { ...form, unit_price: parseFloat(form.unit_price) || 0, initial_stock: initialStock, current_stock: editing ? (parseFloat(form.current_stock) || 0) : initialStock, density: parseFloat(form.density) || 0, entry_date: form.entry_date || null, packaging_capacity: packagingCapacity, packaging_quantity: calcPackagingQty(stockForPackaging(), packagingCapacity), status_wms: !!form.status_wms, tank_entries: form.tank_storage ? (form.tank_entries || []).filter(te => te.tank_name).map(te => ({ tank_name: te.tank_name, volume: parseFloat(te.volume) || 0, mass: te.mass || 0 })) : [] };
     if (!data.mp_name) { toast({ title: t('rawMaterialStock.messages.mpRequired'), variant: 'destructive' }); return; }
     if (form.tank_storage) {
       const allocated = (data.tank_entries || []).reduce((sum, entry) => {
@@ -273,6 +276,42 @@ export default function Estoque() {
     return 'valid';
   };
 
+  const handleToggleWms = async (item, newValue) => {
+    if (!canEdit) return;
+    setItems((prev) =>
+      prev.map((e) => (e.id === item.id ? { ...e, status_wms: newValue } : e))
+    );
+    try {
+      await base44.entities.RawMaterialStock.update(item.id, { status_wms: newValue });
+    } catch (err) {
+      setItems((prev) =>
+        prev.map((e) => (e.id === item.id ? { ...e, status_wms: item.status_wms } : e))
+      );
+      toast({ title: t('errors.saveFailed'), description: err?.message, variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id || loading) return;
+    const match = items.find((i) => i.id === id);
+    if (!match) return;
+    setHighlightId(id);
+    setSearch('');
+    setStockFilter('todas');
+    setClientFilter('todos');
+    const next = new URLSearchParams(searchParams);
+    next.delete('id');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, loading, items, setSearchParams]);
+
+  useEffect(() => {
+    if (!highlightId || !highlightRef.current) return;
+    highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [highlightId, filtered]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Fixed Header */}
@@ -339,6 +378,7 @@ export default function Estoque() {
                   <th className="px-4 py-2 text-right text-xs font-semibold">{t('rawMaterialStock.table.unitPrice')}</th>
                   <th className="px-4 py-2 text-right text-xs font-semibold">{t('rawMaterialStock.table.totalCost')}</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.status')}</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.statusWms')}</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.actions')}</th>
                 </tr>
               </thead>
@@ -346,8 +386,14 @@ export default function Estoque() {
                 {filtered.map((item, idx) => {
                   const zeroStock = (item.current_stock || 0) === 0;
                   const status = getStatus(item);
+                  const isHighlighted = highlightId === item.id;
                   return (
-                    <tr key={item.id} className="border-b border-border hover:bg-accent/30" style={{ opacity: zeroStock ? 0.45 : 1 }}>
+                    <tr
+                      key={item.id}
+                      ref={isHighlighted ? highlightRef : undefined}
+                      className={`border-b border-border hover:bg-accent/30 ${isHighlighted ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''}`}
+                      style={{ opacity: zeroStock ? 0.45 : 1 }}
+                    >
                        <td className="px-4 py-2.5 text-sm font-medium text-primary">{item.entry_id || `#${idx + 1}`}</td>
                        <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.mp_code}</td>
                        <td className="px-4 py-2.5 font-medium text-sm text-foreground">{item.mp_name}</td>
@@ -367,6 +413,30 @@ export default function Estoque() {
                          ) : (
                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-600 text-white dark:bg-green-700">{t('rawMaterialStock.status.valid')}</span>
                          )}
+                       </td>
+                       <td className="px-4 py-2.5 text-center">
+                         <div className="inline-flex items-center justify-center gap-2">
+                           <Switch
+                             checked={!!item.status_wms}
+                             onCheckedChange={(checked) => handleToggleWms(item, checked)}
+                             disabled={!canEdit}
+                             className={
+                               item.status_wms
+                                 ? 'data-[state=checked]:bg-green-400'
+                                 : 'data-[state=unchecked]:bg-orange-300'
+                             }
+                             title={item.status_wms ? t('rawMaterialStock.wms.okHint') : t('rawMaterialStock.wms.nokHint')}
+                           />
+                           <span
+                             className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                               item.status_wms
+                                 ? 'bg-green-100 text-green-700'
+                                 : 'bg-orange-100 text-orange-700'
+                             }`}
+                           >
+                             {item.status_wms ? t('rawMaterialStock.wms.ok') : t('rawMaterialStock.wms.nok')}
+                           </span>
+                         </div>
                        </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">

@@ -577,6 +577,33 @@
       "vsPreviousMonth": "vs previous month",
       "noComparison": "-"
     },
+    "fractionalYard": {
+      "title": "Fractional tanks in yard",
+      "subtitle": "Fractional packaging in stock",
+      "empty": "No fractional tanks in the yard.",
+      "openItem": "Open on containers screen",
+      "columns": {
+        "id": "ID",
+        "product": "Product",
+        "client": "Client",
+        "lot": "Lot",
+        "volume": "Volume"
+      }
+    },
+    "wmsNok": {
+      "title": "RMs with WMS Status NOK",
+      "subtitle": "Raw material entries pending in WMS",
+      "empty": "No RMs with WMS status NOK.",
+      "openItem": "Open on entries screen",
+      "columns": {
+        "id": "ID",
+        "code": "Code",
+        "mp": "RM",
+        "qty": "Quantity",
+        "unit": "Unit",
+        "lot": "Lot"
+      }
+    },
     "cards": {
       "production": "Production",
       "orders": "Orders",
@@ -1867,6 +1894,12 @@
       "expired": "Expired",
       "valid": "Valid"
     },
+    "wms": {
+      "ok": "OK",
+      "nok": "NOK",
+      "okHint": "OK — click for NOK",
+      "nokHint": "NOK — click for OK"
+    },
     "table": {
       "reg": "Reg.",
       "code": "Code",
@@ -1877,6 +1910,7 @@
       "unitPrice": "Unit Price (R$)",
       "totalCost": "Total Cost (R$)",
       "status": "Status",
+      "statusWms": "WMS Status",
       "actions": "Actions"
     },
     "footer": {

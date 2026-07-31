@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@chemblend/api/base44Client';
 import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { BarChart3, DollarSign, ClipboardList, Eye, EyeOff, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useToast } from '@shared/components/ui/use-toast';
 import moment from 'moment';
 import { fmtDate, fmtVolume, fmtCurrency, fmtNumber, getIntlLocale } from '@/i18n/formatters';
 import { calcPriceWithoutTax } from '@chemblend/lib/recipePricing';
 import ProductionTrackingTable from '@chemblend/components/production/ProductionTrackingTable';
+import {
+  isContainerFractional,
+  productionOfContainer,
+  containerDisplayVolume,
+} from '@chemblend/lib/fractionalSupply';
 
 const StatCard = ({ title, value, valueColor, subtitle, subtitleColor, icon: Icon, iconBg, footer, accentBorder, showEye, hidden, onToggleEye, alert, showLabel, hideLabel }) => (
   <div className="bg-card rounded-xl border border-border overflow-hidden flex flex-col" style={{ borderBottom: accentBorder ? `3px solid ${accentBorder}` : undefined }}>
@@ -60,9 +65,25 @@ export default function Home() {
   const navigate = useNavigate();
   const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
   const { data: orders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 200));
+  const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
+  const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
+  const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const [bypassing, setBypassing] = useState(null);
   const [hideRevenue, setHideRevenue] = useState(true);
   const [hideVolume, setHideVolume] = useState(false);
+
+  const fractionalYard = useMemo(() => {
+    return (containers || []).filter((c) => {
+      if ((c.status || 'No Pátio') !== 'No Pátio') return false;
+      const prod = productionOfContainer(c, productions || []);
+      return isContainerFractional(c, prod, transfers || []);
+    });
+  }, [containers, productions, transfers]);
+
+  const stocksWmsNok = useMemo(
+    () => (stocks || []).filter((s) => !s.status_wms),
+    [stocks]
+  );
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
 
@@ -199,6 +220,132 @@ export default function Home() {
           bypassing={bypassing}
           onViewAll={() => navigate('/chemblend/ordens')}
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        {/* Tanques fracionados no pátio */}
+        <div className="bg-card rounded-xl border border-border flex flex-col min-h-0">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+            <div>
+              <h3 className="text-sm font-semibold">{t('dashboard.fractionalYard.title')}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.fractionalYard.subtitle')}</p>
+            </div>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800">
+              {fractionalYard.length}
+            </span>
+          </div>
+          <div className="overflow-auto max-h-[320px]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.id')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.product')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.client')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.lot')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.fractionalYard.columns.volume')}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fractionalYard.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      {t('dashboard.fractionalYard.empty')}
+                    </td>
+                  </tr>
+                ) : (
+                  fractionalYard.map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
+                        {c.registration_id != null ? String(c.registration_id).padStart(2, '0') : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{c.product || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{c.client || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{c.lot || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {`${fmtNumber(Math.round(containerDisplayVolume(c, productions) || 0), { minimumFractionDigits: 0, maximumFractionDigits: 0 })} L`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/chemblend/vasilhames?id=${c.id}`)}
+                          className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title={t('dashboard.fractionalYard.openItem')}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* MPs com Status WMS NOK */}
+        <div className="bg-card rounded-xl border border-border flex flex-col min-h-0">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
+            <div>
+              <h3 className="text-sm font-semibold">{t('dashboard.wmsNok.title')}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.wmsNok.subtitle')}</p>
+            </div>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-orange-100 text-orange-700">
+              {stocksWmsNok.length}
+            </span>
+          </div>
+          <div className="overflow-auto max-h-[320px]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.id')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.code')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.mp')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.qty')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.unit')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.lot')}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stocksWmsNok.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      {t('dashboard.wmsNok.empty')}
+                    </td>
+                  </tr>
+                ) : (
+                  stocksWmsNok.map((s) => (
+                    <tr key={s.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">{s.entry_id || '—'}</td>
+                      <td className="px-4 py-3 font-mono text-muted-foreground whitespace-nowrap">{s.mp_code || '—'}</td>
+                      <td className="px-4 py-3 text-foreground">{s.mp_name || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                          {fmtNumber(Math.round(Number(s.current_stock) || 0), { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{s.unit || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{s.lot || '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/chemblend/estoque?id=${s.id}`)}
+                          className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title={t('dashboard.wmsNok.openItem')}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

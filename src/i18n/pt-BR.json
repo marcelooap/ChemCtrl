@@ -577,6 +577,33 @@
       "vsPreviousMonth": "vs mês anterior",
       "noComparison": "-"
     },
+    "fractionalYard": {
+      "title": "Tanques fracionados no pátio",
+      "subtitle": "Embalagens fracionadas em estoque",
+      "empty": "Nenhum tanque fracionado no pátio.",
+      "openItem": "Abrir na tela de vasilhames",
+      "columns": {
+        "id": "ID",
+        "product": "Produto",
+        "client": "Cliente",
+        "lot": "Lote",
+        "volume": "Volume"
+      }
+    },
+    "wmsNok": {
+      "title": "MPs com Status WMS NOK",
+      "subtitle": "Entradas de matéria-prima pendentes no WMS",
+      "empty": "Nenhuma MP com status WMS NOK.",
+      "openItem": "Abrir na tela de entradas",
+      "columns": {
+        "id": "ID",
+        "code": "Cód",
+        "mp": "MP",
+        "qty": "Quantidade",
+        "unit": "Unidade",
+        "lot": "Lote"
+      }
+    },
     "cards": {
       "production": "Produção",
       "orders": "Pedidos",
@@ -1768,6 +1795,12 @@
       "expired": "Vencido",
       "valid": "Válido"
     },
+    "wms": {
+      "ok": "OK",
+      "nok": "NOK",
+      "okHint": "OK — clique para NOK",
+      "nokHint": "NOK — clique para OK"
+    },
     "table": {
       "reg": "Reg.",
       "code": "Código",
@@ -1778,6 +1811,7 @@
       "unitPrice": "Preço Unit. (R$)",
       "totalCost": "Custo Total (R$)",
       "status": "Status",
+      "statusWms": "Status WMS",
       "actions": "Ações"
     },
     "footer": {
