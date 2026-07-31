@@ -16,7 +16,19 @@ import { formatMass, parseDensidade } from "@chemflow/lib/format";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
+const INPUT_EDITABLE = "bg-white";
+
 const TIPOS = ["Contentor", "Vasilhame", "Tambor", "Bombona", "IBC", "One Way"];
+
+function produtoTemDensidade(produto) {
+  if (!produto) return false;
+  if (produto.densidade_tabelada) {
+    const d = parseDensidade(produto.densidade);
+    return d > 0;
+  }
+  const d = parseDensidade(produto.densidade);
+  return d > 0 && String(produto.densidade || "").trim() !== "-";
+}
 
 export default function VasilhameModal({
   open,
@@ -38,6 +50,7 @@ export default function VasilhameModal({
   const [produtoCodigo, setProdutoCodigo] = useState("");
   const [produtoDisplay, setProdutoDisplay] = useState("");
   const [densidade, setDensidade] = useState("");
+  const [densidadeDoCadastro, setDensidadeDoCadastro] = useState(false);
   const [lote, setLote] = useState("");
   const [volume, setVolume] = useState("");
   const [tara, setTara] = useState("");
@@ -54,6 +67,12 @@ export default function VasilhameModal({
   useEffect(() => {
     if (!open) return;
     if (editingVasilhame) {
+      const prod = (produtos || []).find(
+        (p) =>
+          p.id === editingVasilhame.produto_id ||
+          (p.codigo && p.codigo === editingVasilhame.produto_codigo)
+      );
+      const fromCadastro = produtoTemDensidade(prod);
       setNumeroOp(editingVasilhame.numero_op || "Manual");
       setPlaca(editingVasilhame.placa || "");
       setBarril(editingVasilhame.barril || "");
@@ -68,7 +87,12 @@ export default function VasilhameModal({
           ? `${editingVasilhame.produto_codigo} - ${editingVasilhame.produto_nome}`
           : editingVasilhame.produto_nome || ""
       );
-      setDensidade(editingVasilhame.densidade || "");
+      setDensidadeDoCadastro(fromCadastro);
+      setDensidade(
+        fromCadastro
+          ? prod.densidade || editingVasilhame.densidade || ""
+          : editingVasilhame.densidade || ""
+      );
       setLote(editingVasilhame.lote || "");
       setVolume(editingVasilhame.volume ?? "");
       setTara(editingVasilhame.tara ?? "");
@@ -91,6 +115,7 @@ export default function VasilhameModal({
       setProdutoCodigo("");
       setProdutoDisplay("");
       setDensidade("");
+      setDensidadeDoCadastro(false);
       setLote("");
       setVolume("");
       setTara("");
@@ -104,7 +129,7 @@ export default function VasilhameModal({
     }
     setError("");
     setSaving(false);
-  }, [editingVasilhame, open]);
+  }, [editingVasilhame, open, produtos]);
 
   const clientesComProdutos = produtos
     .filter((p) => p.cliente_nome)
@@ -141,6 +166,10 @@ export default function VasilhameModal({
     }
     if (!vol || vol <= 0) {
       setError("Volume deve ser maior que zero.");
+      return;
+    }
+    if (!densidadeDoCadastro && dens <= 0) {
+      setError("Informe a densidade do produto (não há densidade cadastrada).");
       return;
     }
 
@@ -213,12 +242,14 @@ export default function VasilhameModal({
                   setProdutoCodigo("");
                   setProdutoDisplay("");
                   setDensidade("");
+                  setDensidadeDoCadastro(false);
                 }}
                 options={clientesComProdutos}
                 getOptionLabel={(c) => c.nome}
                 getOptionValue={(c) => c.id}
                 placeholder="Selecione um cliente"
                 disabled={readOnly}
+                inputClassName={INPUT_EDITABLE}
               />
             </div>
             <div className="space-y-1.5">
@@ -231,12 +262,15 @@ export default function VasilhameModal({
                     setProdutoId(item.id);
                     setProdutoNome(item.produto);
                     setProdutoCodigo(item.codigo || "");
-                    setDensidade(item.densidade || "");
+                    const fromCadastro = produtoTemDensidade(item);
+                    setDensidadeDoCadastro(fromCadastro);
+                    setDensidade(fromCadastro ? item.densidade || "" : "");
                   } else {
                     setProdutoId("");
                     setProdutoNome("");
                     setProdutoCodigo("");
                     setDensidade("");
+                    setDensidadeDoCadastro(false);
                   }
                 }}
                 options={filteredProdutos}
@@ -244,6 +278,7 @@ export default function VasilhameModal({
                 getOptionValue={(p) => p.id}
                 placeholder={clienteNome ? "Selecione um produto" : "Selecione um cliente primeiro"}
                 disabled={readOnly || !clienteNome}
+                inputClassName={INPUT_EDITABLE}
               />
             </div>
           </div>
@@ -252,11 +287,23 @@ export default function VasilhameModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Nº Placa *</Label>
-              <Input value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="Ex: 25435-2" disabled={readOnly} />
+              <Input
+                value={placa}
+                onChange={(e) => setPlaca(e.target.value)}
+                placeholder="Ex: 25435-2"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Nº Barril</Label>
-              <Input value={barril} onChange={(e) => setBarril(e.target.value)} placeholder="Nº barril" disabled={readOnly} />
+              <Input
+                value={barril}
+                onChange={(e) => setBarril(e.target.value)}
+                placeholder="Nº barril"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </div>
 
@@ -272,11 +319,18 @@ export default function VasilhameModal({
                 getOptionValue={(o) => o.value}
                 placeholder="Selecione..."
                 disabled={readOnly}
+                inputClassName={INPUT_EDITABLE}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Lote</Label>
-              <Input value={lote} onChange={(e) => setLote(e.target.value)} placeholder="Ex: 16090930-25" disabled={readOnly} />
+              <Input
+                value={lote}
+                onChange={(e) => setLote(e.target.value)}
+                placeholder="Ex: 16090930-25"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </div>
 
@@ -284,7 +338,16 @@ export default function VasilhameModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Volume (L) *</Label>
-              <Input type="number" step="0.001" min="0" value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="0" disabled={readOnly} />
+              <Input
+                type="number"
+                step="0.001"
+                min="0"
+                value={volume}
+                onChange={(e) => setVolume(e.target.value)}
+                placeholder="0"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
               <div className="flex items-center gap-2 pt-1">
                 <Switch
                   checked={fracionado}
@@ -302,7 +365,13 @@ export default function VasilhameModal({
             </div>
             <div className="space-y-1.5">
               <Label>Lacres</Label>
-              <Input value={lacres} onChange={(e) => setLacres(e.target.value)} placeholder="Nº lacres" disabled={readOnly} />
+              <Input
+                value={lacres}
+                onChange={(e) => setLacres(e.target.value)}
+                placeholder="Nº lacres"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </div>
 
@@ -310,23 +379,61 @@ export default function VasilhameModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Tara (kg)</Label>
-              <Input type="number" step="0.001" min="0" value={tara} onChange={(e) => setTara(e.target.value)} placeholder="0" disabled={readOnly} />
+              <Input
+                type="number"
+                step="0.001"
+                min="0"
+                value={tara}
+                onChange={(e) => setTara(e.target.value)}
+                placeholder="0"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Eslinga</Label>
-              <Input value={eslinga} onChange={(e) => setEslinga(e.target.value)} placeholder="Eslinga" disabled={readOnly} />
+              <Input
+                value={eslinga}
+                onChange={(e) => setEslinga(e.target.value)}
+                placeholder="Eslinga"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </div>
 
           {/* Densidade + Responsável */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Densidade</Label>
-              <Input value={densidade} onChange={(e) => setDensidade(e.target.value)} placeholder="Ex: 1,025" disabled={readOnly} />
+              <Label>
+                Densidade {densidadeDoCadastro ? "(Tabelada)" : "*"}
+              </Label>
+              <Input
+                value={densidade}
+                onChange={(e) => setDensidade(e.target.value)}
+                placeholder={
+                  densidadeDoCadastro ? "Automático" : "Ex: 1,025"
+                }
+                disabled={readOnly || densidadeDoCadastro}
+                className={
+                  densidadeDoCadastro ? "bg-muted/40 font-medium" : INPUT_EDITABLE
+                }
+              />
+              {!densidadeDoCadastro && produtoNome && (
+                <p className="text-xs text-muted-foreground">
+                  Produto sem densidade cadastrada — informe manualmente.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Responsável</Label>
-              <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Responsável" disabled={readOnly} />
+              <Input
+                value={responsavel}
+                onChange={(e) => setResponsavel(e.target.value)}
+                placeholder="Responsável"
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </div>
 
@@ -345,18 +452,36 @@ export default function VasilhameModal({
           {/* GPS */}
           <div className="space-y-1.5">
             <Label>GPS</Label>
-            <Input value={gps} onChange={(e) => setGps(e.target.value)} placeholder="GPS" disabled={readOnly} />
+            <Input
+              value={gps}
+              onChange={(e) => setGps(e.target.value)}
+              placeholder="GPS"
+              disabled={readOnly}
+              className={INPUT_EDITABLE}
+            />
           </div>
 
           {/* Menor Teste + Data Saída */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Data Menor Teste</Label>
-              <Input type="date" value={menorTeste} onChange={(e) => setMenorTeste(e.target.value)} disabled={readOnly} />
+              <Input
+                type="date"
+                value={menorTeste}
+                onChange={(e) => setMenorTeste(e.target.value)}
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Data de Saída</Label>
-              <Input type="date" value={dataSaida} onChange={(e) => setDataSaida(e.target.value)} disabled={readOnly} />
+              <Input
+                type="date"
+                value={dataSaida}
+                onChange={(e) => setDataSaida(e.target.value)}
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
               <p className="text-xs text-muted-foreground">
                 Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'.
               </p>

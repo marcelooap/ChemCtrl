@@ -12,6 +12,7 @@ import { useToast } from '@shared/components/ui/use-toast';
 import FieldLabel from '@chemblend/components/transbordo/FieldLabel';
 import DestinationBlock from '@chemblend/components/transbordo/DestinationBlock';
 import TransferViewDialog from '@chemblend/components/transbordo/TransferViewDialog';
+import ConfirmDialog from '@chemblend/components/ConfirmDialog';
 import ProductCombobox from '@shared/components/ui/ProductCombobox';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import {
@@ -22,6 +23,7 @@ import {
   sliceOriginsForWithdrawal,
 } from '@chemblend/lib/containerOrigins';
 import { getLatestRecipeForProduct } from '@chemblend/lib/recipeRevisions';
+import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
 
 const emptyDest = () => ({
   type: 'Transbordo', placa: '', barril: '', volume: 0, mass: 0,
@@ -69,7 +71,9 @@ const TRANSFER_TYPE_KEYS = {
 
 export default function Transbordo() {
   const { t, i18n } = useTranslation();
-  const { user } = useOutletContext();
+  const { user, isReadOnly } = useOutletContext();
+  const { hasPermission } = usePermissions();
+  const canDelete = !isReadOnly && hasPermission('transfer.delete');
   const { data: transfers, loading, reload: load } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const { data: allContainers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
@@ -79,6 +83,8 @@ export default function Transbordo() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [viewTransfer, setViewTransfer] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0], product: '', client: '',
     observations: '',
@@ -98,6 +104,25 @@ export default function Transbordo() {
     const key = TRANSFER_TYPE_KEYS[type];
     return key ? t(key) : type;
   }, [t, na]);
+
+  const TypeBadge = ({ type }) => {
+    if (!type || type === '—') {
+      return <span className="text-sm text-muted-foreground">{na}</span>;
+    }
+    const styles = {
+      Expedição: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+      Transbordo: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+    };
+    return (
+      <span
+        className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+          styles[type] || 'bg-muted text-foreground'
+        }`}
+      >
+        {translateTransferType(type)}
+      </span>
+    );
+  };
 
   const containers = useMemo(() => allContainers.filter(c => c.status === 'No Pátio'), [allContainers]);
 
@@ -421,6 +446,116 @@ export default function Transbordo() {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const origins = parseArr(deleteTarget.origins);
+      const dests = parseArr(deleteTarget.destinations);
+      const transferNumber = deleteTarget.transfer_number || '';
+      const dens = parseFloat(getLatestRecipeForProduct(recipes, deleteTarget.product)?.density) || 0;
+      const operatorName = user?.nome || user?.full_name || user?.email || '';
+      const originIds = origins.map((o) => o.container_id).filter(Boolean);
+
+      const createdDests = transferNumber
+        ? allContainers.filter((c) => c.op_number === transferNumber)
+        : [];
+      const createdDestIds = new Set(createdDests.map((c) => c.id));
+
+      // Restaura volume nas origens
+      for (const o of origins) {
+        if (!o.container_id) continue;
+        const withdrawn = parseFloat(o.volume_used) || 0;
+        if (withdrawn <= 0) continue;
+        const c = allContainers.find((ct) => ct.id === o.container_id);
+        if (!c) continue;
+        const newVolume = (parseFloat(c.volume) || 0) + withdrawn;
+        const tare = parseFloat(c.tare) || 0;
+        const updates = {
+          volume: newVolume,
+          status: 'No Pátio',
+          departure_date: '',
+          is_fractional: false,
+        };
+        if (dens > 0) {
+          updates.net_weight = Math.round(newVolume * dens);
+          updates.gross_weight = Math.round(newVolume * dens + tare);
+        }
+        if (o.lot) updates.lot = o.lot;
+        await base44.entities.Container.update(o.container_id, updates);
+        await createOriginsFromSlices(
+          base44.entities,
+          o.container_id,
+          [{
+            production_id: null,
+            op_number: null,
+            lot: o.lot || null,
+            volume: withdrawn,
+            initial_volume: withdrawn,
+          }],
+          operatorName,
+        );
+      }
+
+      // Remove embalagens criadas por este registro
+      for (const c of createdDests) {
+        await base44.entities.ContainerOrigin.deleteMany({ container_id: c.id });
+        await base44.entities.Container.delete(c.id);
+      }
+
+      // Reverte top-up em tanques que já estavam no pátio
+      for (const d of dests) {
+        if (d.type !== 'Transbordo') continue;
+        const destVol = parseFloat(d.volume) || 0;
+        if (destVol <= 0) continue;
+        const wasCreatedHere = createdDests.some(
+          (c) =>
+            normKey(c.container_number) === normKey(d.placa)
+            && normKey(c.barril_number) === normKey(d.barril),
+        );
+        if (wasCreatedHere) continue;
+
+        const patio = findExistingPatioContainer(allContainers, {
+          placa: d.placa,
+          barril: d.barril,
+          product: deleteTarget.product,
+          excludeIds: [...createdDestIds, ...originIds],
+        });
+        if (!patio?.id) continue;
+
+        const newVolume = Math.max(0, (parseFloat(patio.volume) || 0) - destVol);
+        const tare = parseFloat(patio.tare) || 0;
+        const patioOrigins = await base44.entities.ContainerOrigin.filter({ container_id: patio.id });
+        const remainingOrigins = await applyProportionalOriginReduction(
+          base44.entities,
+          patioOrigins,
+          patio.id,
+          destVol,
+        );
+        const updates = {
+          volume: newVolume,
+          status: newVolume > 0 ? 'No Pátio' : patio.status,
+        };
+        if (dens > 0) {
+          updates.net_weight = Math.round(newVolume * dens);
+          updates.gross_weight = Math.round(newVolume * dens + tare);
+        }
+        const dominantLot = dominantLotFromOrigins(remainingOrigins);
+        if (dominantLot) updates.lot = dominantLot;
+        await base44.entities.Container.update(patio.id, updates);
+      }
+
+      await base44.entities.Transfer.delete(deleteTarget.id);
+      toast({ title: t('containers.transferPage.messages.deleted') });
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      throw new Error(err?.message || t('containers.transferPage.messages.deleteError'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex-1 flex flex-col bg-card rounded-xl shadow-sm border border-border overflow-hidden min-h-0">
@@ -501,7 +636,7 @@ export default function Transbordo() {
                   return (
                     <tr key={item.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{item.transfer_number || na}</td>
-                      <td className="px-4 py-2.5 text-sm">{translateTransferType(tipo)}</td>
+                      <td className="px-4 py-2.5"><TypeBadge type={tipo} /></td>
                       <td className="px-4 py-2.5 text-sm">{fmtDate(item.date, undefined, i18n.language)}</td>
                       <td className="px-4 py-2.5 font-medium text-sm">{item.product}</td>
                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>
@@ -510,7 +645,27 @@ export default function Transbordo() {
                       <td className="px-4 py-2.5 text-sm font-medium">{destinoLabel}</td>
                       <td className="px-4 py-2.5 text-sm">{motorista}</td>
                       <td className="px-4 py-2.5 text-center">
-                        <button onClick={() => setViewTransfer(item)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setViewTransfer(item)}
+                            className="p-1 rounded hover:bg-muted"
+                            title={t('buttons.view')}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(item)}
+                              className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/40"
+                              title={t('buttons.delete')}
+                              disabled={deleting}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -653,6 +808,18 @@ export default function Transbordo() {
           onClose={() => setViewTransfer(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+        title={t('containers.transferPage.deleteConfirm.title')}
+        message={t('containers.transferPage.deleteConfirm.message', {
+          number: deleteTarget?.transfer_number || '',
+        })}
+        confirmLabel={t('buttons.delete')}
+        confirmColor="#DC2626"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Toaster } from '@shared/components/ui/toaster';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import GuestRoute from '@/components/GuestRoute';
@@ -32,8 +32,7 @@ const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));
 
 /**
  * Paths antigos do ChemBlend (quando era o app raiz).
- * Após a reestruturação, NÃO entram direto no módulo: vão para a seleção de
- * módulos, para o usuário escolher ChemBlend ou ChemFlow explicitamente.
+ * Redirecionam para o prefixo `/chemblend/*`.
  * Deep links sob `/chemblend/*` continuam válidos (F5 dentro do módulo).
  * Nota: /dashboard, /estoque e /usuarios passaram a ser rotas da plataforma ChemCtrl.
  */
@@ -44,6 +43,11 @@ const LEGACY_CHEMBLEND_PATHS = [
   '/vasilhames', '/tankagem', '/transbordo', '/inventario', '/inventario/:id',
   '/perfis', '/acesso-negado',
 ];
+
+function LegacyChemblendRedirect() {
+  const { pathname } = useLocation();
+  return <Navigate to={`/chemblend${pathname}`} replace />;
+}
 
 function ModuleLoadingFallback() {
   return (
@@ -74,14 +78,14 @@ const AuthenticatedApp = () => {
       {/* Público: consulta por token (ChemBlend) */}
       <Route path="/consulta/:token" element={<ConsultaPublica />} />
 
-      {/* Público: Login — se já autenticado, GuestRoute manda para a seleção de módulos */}
+      {/* Público: Login — se já autenticado, GuestRoute manda para o ChemBlend */}
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<Login />} />
       </Route>
 
       {/* Protegido: exige sessão válida da plataforma */}
       <Route element={<ProtectedRoute />}>
-        {/* ChemCtrl — shell com sidebar da plataforma */}
+        {/* ChemCtrl — hub de módulos (admin). Não-admin em `/` é redirecionado no SystemSelector. */}
         <Route element={<PlatformLayout />}>
           <Route index element={<SystemSelector />} />
           <Route path="dashboard" element={<PlaceholderPage title="Dashboard" />} />
@@ -111,9 +115,9 @@ const AuthenticatedApp = () => {
           />
         </Route>
 
-        {/* Bookmarks antigos → seleção de módulos (não abrir módulo direto) */}
+        {/* Bookmarks antigos → ChemBlend */}
         {LEGACY_CHEMBLEND_PATHS.map((path) => (
-          <Route key={path} path={path} element={<Navigate to="/" replace />} />
+          <Route key={path} path={path} element={<LegacyChemblendRedirect />} />
         ))}
       </Route>
 

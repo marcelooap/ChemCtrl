@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { getDefaultRoute } from '@chemblend/lib/permissions';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
@@ -22,8 +23,8 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        // Sempre a seleção de módulos — nunca ChemBlend/ChemFlow direto.
-        window.location.href = '/';
+        // ChemFlow ainda em ajuste: pós-login abre o ChemBlend (como antes).
+        window.location.href = getDefaultRoute(result.user);
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));
       }

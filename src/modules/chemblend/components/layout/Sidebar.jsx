@@ -82,14 +82,14 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
     <ModuleSidebar
       collapsed={collapsed}
       setCollapsed={setCollapsed}
-      logoSrc="/icons/chemblend-logo.png"
-      logoAlt="ChemBlend"
+      logoSrc="/icons/chemctrl-logo.svg"
+      logoAlt="ChemCtrl"
       moduleName={t('sidebar.moduleName')}
       moduleSubtitle={t('sidebar.appSubtitle')}
       items={items}
       canAccessPath={(path) => canAccessRoute(user, path)}
       resolveLabel={resolveLabel}
-      showModulesLink
+      showModulesLink={false}
     />
   );
 }

@@ -31,12 +31,21 @@ import {
   roundMass,
   kgLotesToLitrosInteiros,
 } from "@chemflow/lib/format";
-import { loteToKg } from "@chemflow/lib/conversao";
+import { loteToKg, loteToLitros, saldoKgToLitros } from "@chemflow/lib/conversao";
 import { computeDisponivelTransbordo } from "@chemflow/lib/estoqueSaldo";
 import {
   findAllLinkedTransbordos,
   multipleTransbordosMessage,
 } from "@chemflow/lib/findLinkedTransbordo";
+import { buildEstoqueDisplayCodigoMap } from "@chemflow/lib/entradaCodigo";
+import {
+  computeTankaSaldo,
+  computeTankaLotesDisponiveis,
+} from "@chemflow/lib/tankaVolume";
+import {
+  aggregateComposicaoByLote,
+  seedComposicaoFromVasilhame,
+} from "@chemflow/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -242,13 +251,8 @@ export default function TransbordoModal({
       resolvedEditIdRef.current = null;
       const dens = parseDensidade(prefillEntrada.densidade);
 
-      const sorted = [...entradas].sort(
-        (a, b) => new Date(createdAt(a)) - new Date(createdAt(b))
-      );
-      const idMap = {};
-      sorted.forEach((e, i) => {
-        idMap[e.id] = `E${String(i + 1).padStart(3, "0")}`;
-      });
+      // Código E00N pela entrada-pai (não pelo índice da linha de estoque)
+      const idMap = buildEstoqueDisplayCodigoMap(entradas);
 
       const savedEstoques = prefillEntrada.savedEstoques || prefillEntrada.savedEntradas || [];
       const entradaKey =
@@ -259,6 +263,7 @@ export default function TransbordoModal({
         prefillEntrada.entrada_codigo ||
         savedEstoques[0]?.entrada_codigo ||
         idMap[entradaKey] ||
+        idMap[savedEstoques[0]?.id] ||
         "E000";
       const entradaCodigo = `${codigoEntrada} - ${prefillEntrada.produto_nome || ""}`;
 
@@ -288,7 +293,8 @@ export default function TransbordoModal({
               },
             ];
 
-      // kg por lote → litros inteiros com soma = volume total da entrada
+      // Prefer volume declarado em L/gal (evita perda de 1 L no round-trip L→kg→L).
+      // Fallback: kg por lote → litros inteiros com soma = total.
       const lotesKg = entradaLotes.map((lt, i) => {
         const estoqueRow = savedEstoques[i];
         const lDens = parseDensidade(lt.densidade || estoqueRow?.densidade || dens);
@@ -309,7 +315,21 @@ export default function TransbordoModal({
         };
       });
 
-      const litrosPorLote = kgLotesToLitrosInteiros(lotesKg);
+      const fromKg = kgLotesToLitrosInteiros(lotesKg);
+      const litrosPorLote = lotesKg.map((item, i) => {
+        const declared =
+          item.lt?.unidade_medida === "L" || item.lt?.unidade_medida === "gal"
+            ? item.lt
+            : item.estoqueRow?.lotes?.[0]?.unidade_medida === "L" ||
+                item.estoqueRow?.lotes?.[0]?.unidade_medida === "gal"
+              ? item.estoqueRow.lotes[0]
+              : null;
+        if (declared) {
+          const vol = loteToLitros(declared);
+          if (vol > 0) return vol;
+        }
+        return fromKg[i] || 0;
+      });
 
       nextOrigens = lotesKg.map((item, i) => {
         const volumeL = litrosPorLote[i] || 0;
@@ -391,10 +411,7 @@ export default function TransbordoModal({
   const sortedEntradas = [...entradas].sort(
     (a, b) => new Date(createdAt(a)) - new Date(createdAt(b))
   );
-  const entradaIdMap = {};
-  sortedEntradas.forEach((e, i) => {
-    entradaIdMap[e.id] = e.entrada_codigo || `E${String(i + 1).padStart(3, "0")}`;
-  });
+  const entradaIdMap = buildEstoqueDisplayCodigoMap(sortedEntradas);
 
   // Estoque por lote (granel) — disponível = quantidade − já transbordado
   const filteredEntradas = entradas
@@ -419,44 +436,42 @@ export default function TransbordoModal({
   );
 
   // Tankas com saldo > 0 (entrada Tankagem − saída como origem tanka)
-  const tankaVolumes = {};
-  const tankaLotes = {};
-  transbordos.forEach((t) => {
-    (t.destinos || []).forEach((d) => {
-      if (d.tipo_embalagem === "Tankagem" && d.tanka_id) {
-        tankaVolumes[d.tanka_id] =
-          (tankaVolumes[d.tanka_id] || 0) + roundVolume(d.volume_total || d.volume || 0);
-        const lote = (t.origens || [])[0]?.lote || "";
-        if (lote) tankaLotes[d.tanka_id] = lote;
-      }
-    });
-    (t.origens || []).forEach((o) => {
-      if (o.tipo_origem === "tanka" && o.entrada_id) {
-        tankaVolumes[o.entrada_id] =
-          (tankaVolumes[o.entrada_id] || 0) - roundVolume(o.volume_retirado || 0);
-      }
-    });
-  });
-  Object.keys(tankaVolumes).forEach((id) => {
-    tankaVolumes[id] = roundVolume(tankaVolumes[id]);
-  });
+  // Em edição, o OP atual é excluído do histórico para não subtrair em dobro.
+  const editingIdForSaldo =
+    resolvedEditIdRef.current || editingTransbordo?.id || null;
 
   const tankasComSaldo = isotanques
     .filter(
       (i) =>
-        (i.produto_id === produtoId ||
-          i.produto_nome?.toLowerCase() === produtoNome?.toLowerCase()) &&
-        (tankaVolumes[i.id] || 0) > 0
+        i.produto_id === produtoId ||
+        i.produto_nome?.toLowerCase() === produtoNome?.toLowerCase()
     )
-    .map((i) => ({
-      ...i,
-      saldo_atual: tankaVolumes[i.id] || 0,
-      unidade_medida: "L",
-      lote: tankaLotes[i.id] || "",
-      display_label: `${i.tanka || i.codigo_itku || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(tankaVolumes[i.id] || 0)} L)`,
-    }));
+    .map((i) => {
+      const tankaCodigo = i.tanka || i.codigo_itku || "";
+      const saldo = computeTankaSaldo({
+        isotanqueId: i.id,
+        tankaCodigo,
+        transbordos,
+        excludeTransbordoId: editingIdForSaldo,
+      });
+      const lotesDisponiveis = computeTankaLotesDisponiveis({
+        isotanqueId: i.id,
+        tankaCodigo,
+        transbordos,
+        excludeTransbordoId: editingIdForSaldo,
+      });
+      return {
+        ...i,
+        saldo_atual: saldo,
+        unidade_medida: "L",
+        lote: lotesDisponiveis[0]?.lote || "",
+        lotes_disponiveis: lotesDisponiveis,
+        display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(saldo)} L)`,
+      };
+    })
+    .filter((i) => (i.saldo_atual || 0) > 0);
 
-  // Vasilhames No Pátio
+  // Vasilhames No Pátio (com composição por lote quando houver)
   const vasilhamesNoPatio = vasilhames
     .filter(
       (v) =>
@@ -464,12 +479,24 @@ export default function TransbordoModal({
         (v.produto_id === produtoId ||
           v.produto_nome?.toLowerCase() === produtoNome?.toLowerCase())
     )
-    .map((v) => ({
-      ...v,
-      saldo_atual: v.volume || 0,
-      unidade_medida: "L",
-      display_label: `${v.placa || v.barril || v.codigo || "Vasilhame"} - ${v.produto_nome || ""} (${formatVolume(v.volume || 0)} L)`,
-    }));
+    .map((v) => {
+      const lotesDisponiveis = aggregateComposicaoByLote(
+        seedComposicaoFromVasilhame(v)
+      )
+        .filter((l) => roundVolume(l.quantidade_l || 0) > 0)
+        .map((l) => ({
+          lote: l.lote || "",
+          quantidade_l: roundVolume(l.quantidade_l || 0),
+        }));
+      return {
+        ...v,
+        saldo_atual: v.volume || 0,
+        unidade_medida: "L",
+        lote: lotesDisponiveis[0]?.lote || v.lote || "",
+        lotes_disponiveis: lotesDisponiveis,
+        display_label: `${v.placa || v.barril || v.codigo || "Vasilhame"} - ${v.produto_nome || ""} (${formatVolume(v.volume || 0)} L)`,
+      };
+    });
 
   // Entradas embaladas com saldo > 0 (saídas fiscais já descontadas no saldo_atual)
   const entradasEmbaladas = entradas
@@ -486,24 +513,121 @@ export default function TransbordoModal({
 
   // Saldo consumido por fonte (para excluir fontes esgotadas em origens subsequentes)
   const consumedBySource = {};
+  const consumedLotesBySource = {};
   origens.forEach((o) => {
-    if (o.entrada_id) {
-      consumedBySource[o.entrada_id] = (consumedBySource[o.entrada_id] || 0) + (o.volume_retirado || 0);
+    if (!o.entrada_id) return;
+    consumedBySource[o.entrada_id] =
+      (consumedBySource[o.entrada_id] || 0) + (o.volume_retirado || 0);
+    const lotes = (o.lotes_retirados || []).filter(
+      (l) => roundVolume(l.volume_retirado || 0) > 0
+    );
+    if (lotes.length > 0) {
+      if (!consumedLotesBySource[o.entrada_id]) {
+        consumedLotesBySource[o.entrada_id] = {};
+      }
+      for (const l of lotes) {
+        const key = (l.lote || "").trim();
+        consumedLotesBySource[o.entrada_id][key] =
+          (consumedLotesBySource[o.entrada_id][key] || 0) +
+          roundVolume(l.volume_retirado || 0);
+      }
+    } else if ((o.lote || "").trim()) {
+      if (!consumedLotesBySource[o.entrada_id]) {
+        consumedLotesBySource[o.entrada_id] = {};
+      }
+      const key = (o.lote || "").trim();
+      consumedLotesBySource[o.entrada_id][key] =
+        (consumedLotesBySource[o.entrada_id][key] || 0) +
+        roundVolume(o.volume_retirado || 0);
     }
   });
 
-  const filterOptionsForOrigem = (options, currentOrigem) =>
-    options.filter((opt) => {
-      if (opt.id === currentOrigem.entrada_id) return true;
-      const consumedL = roundVolume(consumedBySource[opt.id] || 0);
-      const saldo = opt.saldo_atual || 0;
-      const unid = opt.unidade_medida || "L";
-      const saldoL =
-        unid === "kg" && densidade > 0
-          ? roundVolume(saldo / densidade)
-          : roundVolume(saldo);
-      return saldoL - consumedL > 0;
-    });
+  const adjustOptionsForOrigem = (options, currentOrigem) => {
+    // Volumes/lotes desta origem não entram no consumo (já estão no card)
+    const selfVol = roundVolume(currentOrigem.volume_retirado || 0);
+    const selfLotes = {};
+    for (const l of currentOrigem.lotes_retirados || []) {
+      const key = (l.lote || "").trim();
+      selfLotes[key] =
+        (selfLotes[key] || 0) + roundVolume(l.volume_retirado || 0);
+    }
+    if (
+      Object.keys(selfLotes).length === 0 &&
+      (currentOrigem.lote || "").trim()
+    ) {
+      selfLotes[(currentOrigem.lote || "").trim()] = selfVol;
+    }
+
+    return options
+      .map((opt) => {
+        const isSelf = opt.id === currentOrigem.entrada_id;
+        const consumedL = roundVolume(
+          (consumedBySource[opt.id] || 0) - (isSelf ? selfVol : 0)
+        );
+        const saldo = opt.saldo_atual || 0;
+        const unid = opt.unidade_medida || "L";
+        const saldoL =
+          unid === "kg" && densidade > 0
+            ? saldoKgToLitros(saldo, densidade, opt)
+            : roundVolume(saldo);
+        const available = roundVolume(saldoL - consumedL);
+        if (!isSelf && available <= 0) return null;
+
+        const baseLotes = opt.lotes_disponiveis || [];
+        if (baseLotes.length === 0) {
+          // saldo_atual já normalizado em litros — marca unidade para evitar
+          // segunda conversão kg→L em OrigemCard / saldoExcedido
+          return {
+            ...opt,
+            saldo_atual: isSelf ? saldoL : available,
+            unidade_medida: "L",
+          };
+        }
+
+        const consumedLotes = { ...(consumedLotesBySource[opt.id] || {}) };
+        if (isSelf) {
+          for (const [k, v] of Object.entries(selfLotes)) {
+            consumedLotes[k] = Math.max(0, (consumedLotes[k] || 0) - v);
+          }
+        }
+
+        // Card atual: desconta só o que outras origens já consumiram desta fonte
+        const lotesParaCard = baseLotes
+          .map((l) => {
+            const key = (l.lote || "").trim();
+            const otherConsumed = isSelf
+              ? Math.max(
+                  0,
+                  roundVolume(
+                    (consumedLotesBySource[opt.id]?.[key] || 0) -
+                      (selfLotes[key] || 0)
+                  )
+                )
+              : roundVolume(consumedLotes[key] || 0);
+            return {
+              lote: l.lote || "",
+              quantidade_l: Math.max(
+                0,
+                roundVolume((l.quantidade_l || 0) - otherConsumed)
+              ),
+            };
+          })
+          .filter((l) => l.quantidade_l > 0);
+
+        const saldoAjustado = roundVolume(
+          lotesParaCard.reduce((s, l) => s + l.quantidade_l, 0)
+        );
+
+        return {
+          ...opt,
+          saldo_atual: saldoAjustado > 0 ? saldoAjustado : available,
+          unidade_medida: "L",
+          lotes_disponiveis: lotesParaCard,
+          display_label: opt.display_label,
+        };
+      })
+      .filter(Boolean);
+  };
 
   const volumeOrigens = roundVolume(
     origens.reduce((sum, o) => sum + (o.volume_retirado || 0), 0)
@@ -529,20 +653,23 @@ export default function TransbordoModal({
   ];
 
   const saldoExcedido = origens.some((o) => {
-    const src = allOrigemOptions.find((opt) => opt.id === o.entrada_id);
+    const lotes = o.lotes_retirados || [];
+    if (lotes.length > 1) {
+      return lotes.some(
+        (l) =>
+          roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel)
+      );
+    }
+    const adjusted = adjustOptionsForOrigem(allOrigemOptions, o);
+    const src = adjusted.find((opt) => opt.id === o.entrada_id);
     if (!src) {
       if (o.tipo_origem === "entrada" && o.saldo_disponivel != null) {
         return roundVolume(o.volume_retirado) > roundVolume(o.saldo_disponivel);
       }
       return false;
     }
-    const saldo = src.saldo_atual || 0;
-    const unid = src.unidade_medida || "L";
-    const saldoL =
-      unid === "kg" && densidade > 0
-        ? roundVolume(saldo / densidade)
-        : roundVolume(saldo);
-    return roundVolume(o.volume_retirado) > saldoL;
+    // adjustOptionsForOrigem já devolve saldo_atual em litros
+    return roundVolume(o.volume_retirado) > roundVolume(src.saldo_atual || 0);
   });
 
   const handleClienteChange = (label, item) => {
@@ -653,13 +780,45 @@ export default function TransbordoModal({
   };
 
   const buildPayload = () => {
-    const origensNorm = origens.map((o) => ({
-      ...o,
-      volume_retirado: roundVolume(o.volume_retirado),
-      massa_retirada: roundMass(roundVolume(o.volume_retirado) * densidade),
-      saldo_disponivel: roundVolume(o.saldo_disponivel),
-      saldo_restante: roundVolume(o.saldo_restante),
-    }));
+    const origensNorm = origens.map((o) => {
+      const isMulti = (o.lotes_retirados || []).length > 1;
+      const lotesRet = (o.lotes_retirados || []).map((l) => ({
+        lote: l.lote || "",
+        saldo_disponivel: roundVolume(l.saldo_disponivel || 0),
+        volume_retirado: roundVolume(l.volume_retirado || 0),
+      }));
+      const lotesComVolume = lotesRet.filter((l) => l.volume_retirado > 0);
+
+      const volumeFromLotes =
+        lotesComVolume.length > 0
+          ? roundVolume(
+              lotesComVolume.reduce((s, l) => s + (l.volume_retirado || 0), 0)
+            )
+          : roundVolume(o.volume_retirado);
+
+      const firstLote =
+        lotesComVolume[0]?.lote || o.lote || "";
+
+      return {
+        ...o,
+        lote: firstLote,
+        volume_retirado: volumeFromLotes,
+        massa_retirada: roundMass(volumeFromLotes * densidade),
+        saldo_disponivel: roundVolume(o.saldo_disponivel),
+        saldo_restante: roundVolume(
+          Math.max(0, roundVolume(o.saldo_disponivel) - volumeFromLotes)
+        ),
+        ...(isMulti && lotesComVolume.length > 0
+          ? {
+              lotes_retirados: lotesComVolume,
+              lotes_disponiveis: (o.lotes_disponiveis || []).map((l) => ({
+                lote: l.lote || "",
+                quantidade_l: roundVolume(l.quantidade_l || 0),
+              })),
+            }
+          : { lotes_retirados: undefined, lotes_disponiveis: undefined }),
+      };
+    });
     const destinosNorm = destinos.map((d) => {
       const volume_total = roundVolume(d.volume_total || d.volume || 0);
       return {
@@ -751,8 +910,22 @@ export default function TransbordoModal({
       setError("Todas as origens devem ter um volume retirado maior que zero.");
       return;
     }
+    if (
+      origens.some((o) => {
+        const lotes = o.lotes_retirados || [];
+        return (
+          lotes.length > 1 &&
+          lotes.every((l) => roundVolume(l.volume_retirado || 0) <= 0)
+        );
+      })
+    ) {
+      setError("Informe o volume retirado em ao menos um lote da origem.");
+      return;
+    }
     if (saldoExcedido) {
-      setError("Uma ou mais origens têm volume superior ao saldo disponível.");
+      setError(
+        "Uma ou mais origens têm volume superior ao saldo disponível (total ou por lote)."
+      );
       return;
     }
     if (destinos.length === 0) {
@@ -959,10 +1132,10 @@ export default function TransbordoModal({
                     key={idx}
                     index={idx}
                     origem={origem}
-                    entradaOptions={filterOptionsForOrigem(filteredEntradas, origem)}
-                    tankaOptions={filterOptionsForOrigem(tankasComSaldo, origem)}
-                    vasilhameOptions={filterOptionsForOrigem(vasilhamesNoPatio, origem)}
-                    embaladoOptions={filterOptionsForOrigem(entradasEmbaladas, origem)}
+                    entradaOptions={adjustOptionsForOrigem(filteredEntradas, origem)}
+                    tankaOptions={adjustOptionsForOrigem(tankasComSaldo, origem)}
+                    vasilhameOptions={adjustOptionsForOrigem(vasilhamesNoPatio, origem)}
+                    embaladoOptions={adjustOptionsForOrigem(entradasEmbaladas, origem)}
                     densidade={densidade}
                     onChange={(data) => handleUpdateOrigem(idx, data)}
                     onRemove={() => handleRemoveOrigem(idx)}

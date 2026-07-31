@@ -123,7 +123,11 @@ export default function ModuleSidebar({
         onClick={() => setCollapsed(!collapsed)}
         className="flex items-center gap-3 px-4 h-16 border-b border-white/10 shrink-0 hover:bg-white/5 transition-colors w-full"
       >
-        <img src={logoSrc} alt={logoAlt} className="w-8 h-8 object-contain shrink-0" />
+        <img
+          src={logoSrc}
+          alt={logoAlt}
+          className="w-8 h-8 object-cover shrink-0 rounded-full"
+        />
         <div
           className={cn(
             'overflow-hidden text-left transition-all duration-300',

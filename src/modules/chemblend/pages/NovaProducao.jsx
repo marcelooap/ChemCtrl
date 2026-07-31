@@ -610,23 +610,58 @@ export default function NovaProducao() {
 
       await deductStock(mpList);
 
-      // Mantém o usuário na tela — limpa só apontamento de MPs e embalagem de destino
-      const mass = form.mass || (volNum * densityNum);
-      const recipe = recipes.find(r => r.id === form.recipe_id);
-      const resetMps = recipe
-        ? parseArr(recipe.raw_materials).map(m => recalculateMp({
+      // Mantém na tela: limpa lançamentos e reseleciona o mesmo produto acabado
+      const lastProduct = form.product;
+      const recipe = getLatestRecipeForProduct(recipes, lastProduct);
+      const linkedOrder = orders.find((o) => o.product === lastProduct);
+      const emptyForm = {
+        date: new Date().toISOString().split('T')[0],
+        product: '',
+        client: '',
+        recipe_id: '',
+        recipe_revision: '',
+        order_id: '',
+        client_order: '',
+        volume_pending: 0,
+        volume: '',
+        priority: 'Média',
+        packaging_type: '',
+        observations: '',
+        density: '',
+        mass: 0,
+      };
+
+      setFractionalSupply(false);
+      setComplementPackaging(false);
+      setComplementContainerId('');
+
+      if (recipe) {
+        setForm({
+          ...emptyForm,
+          product: lastProduct,
+          client: recipe.client || '',
+          recipe_id: recipe.id,
+          recipe_revision: recipe.revision || '',
+          density: recipe.density || 0,
+          order_id: linkedOrder?.id || '',
+          client_order: linkedOrder?.client_order || '',
+          volume_pending: linkedOrder?.volume_pending || 0,
+        });
+        setMpList(
+          parseArr(recipe.raw_materials).map((m) => ({
             mp_code: m.mp_code,
             mp_name: m.mp_name,
             percentage: m.percentage,
             mp_density: m.mp_density,
             quantity_kg: m.quantity_kg,
             lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
-          }, mass, densityNum || 1))
-        : [];
-      setMpList(resetMps);
-      setForm(prev => ({ ...prev, packaging_type: '' }));
-      setComplementPackaging(false);
-      setComplementContainerId('');
+          }))
+        );
+      } else {
+        setForm(emptyForm);
+        setMpList([]);
+      }
+
       toast({ title: t('production.messages.created') });
     } catch (err) {
       toast({ title: t('common.error'), description: err?.message, variant: 'destructive' });

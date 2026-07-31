@@ -266,7 +266,7 @@
     "clientScreen": "Portal de Clientes",
     "clientStock": "Stock de Cliente",
     "lockedTooltip": "Sin acceso para su nivel",
-    "moduleName": "ChemBlend",
+    "moduleName": "ChemCtrl",
     "appSubtitle": "Control de Producción",
     "footer": {
       "expand": "Expandir sidebar",
@@ -419,6 +419,7 @@
     "headerSubtitle": "Portal de Aplicaciones",
     "title": "Selección de Sistemas",
     "subtitle": "Elija qué sistema desea acceder",
+    "backToChemBlend": "Volver a ChemBlend",
     "logout": "Salir",
     "comingSoon": "Próximamente",
     "apps": {
@@ -2747,7 +2748,13 @@
         "addOrigin": "Agregue al menos un origen",
         "addDestination": "Agregue al menos un destino",
         "registered": "Transbordo registrado",
-        "registerError": "Error al registrar transbordo"
+        "registerError": "Error al registrar transbordo",
+        "deleted": "Transbordo eliminado",
+        "deleteError": "Error al eliminar transbordo"
+      },
+      "deleteConfirm": {
+        "title": "Eliminar transbordo",
+        "message": "¿Seguro que desea eliminar el registro {{number}}? Los volúmenes en los orígenes se restaurarán y los envases creados por esta operación se eliminarán."
       },
       "types": {
         "transfer": "Transbordo",

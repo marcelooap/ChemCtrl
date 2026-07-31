@@ -257,6 +257,26 @@ export function aggregateComposicaoByLote(composicao = []) {
     .sort((a, b) => b.quantidade_l - a.quantidade_l);
 }
 
+/**
+ * Data em que o lote foi envasado na embalagem (mais recente do histórico).
+ * Aceita item agregado (`historico[]`) ou entrada simples da composição.
+ */
+export function getLoteEnvaseDate(item) {
+  if (!item) return null;
+  const rawDates = Array.isArray(item.historico)
+    ? item.historico.map((h) => h?.data).filter(Boolean)
+    : item.data
+      ? [item.data]
+      : [];
+  const dates = rawDates
+    .map((d) =>
+      new Date(String(d).includes("T") ? d : `${String(d).slice(0, 10)}T00:00:00`)
+    )
+    .filter((d) => !Number.isNaN(d.getTime()))
+    .sort((a, b) => b - a);
+  return dates.length > 0 ? dates[0] : null;
+}
+
 /** Lote de maior volume na composição (para coluna da listagem). */
 export function getDominantLote(composicao = []) {
   const agg = aggregateComposicaoByLote(composicao).filter((r) =>

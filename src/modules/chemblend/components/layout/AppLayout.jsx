@@ -6,6 +6,7 @@ import WelcomeModal from '@chemblend/components/WelcomeModal';
 import { canAccessRoute, isReadOnly, getRoleLabel } from '@chemblend/lib/permissions';
 import AppShell from '@shared/components/layout/AppShell';
 import { SystemManualMenu } from '@chemblend/components/user/SystemManualMenu';
+import { ModulesHubButton } from '@chemblend/components/user/ModulesHubButton';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -32,12 +33,13 @@ export default function AppLayout() {
       <AppShell
         sidebar={<Sidebar />}
         topBarProps={{
+          topBarActions: <ModulesHubButton />,
           userMenuExtras: <SystemManualMenu />,
           getRoleLabel,
         }}
         outletContext={{ user, isReadOnly: isReadOnly(user, location.pathname) }}
         requireAuth={false}
-        contentClassName="overflow-hidden"
+        contentClassName="overflow-y-auto"
       />
       {showWelcome && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
     </>

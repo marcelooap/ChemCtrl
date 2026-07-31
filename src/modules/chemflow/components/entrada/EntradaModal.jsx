@@ -25,6 +25,20 @@ import {
 
 const INPUT_EDITABLE = "bg-white";
 
+const todayISO = () => {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
+function resolveEntradaData(entrada) {
+  if (!entrada) return todayISO();
+  if (entrada.data) return String(entrada.data).slice(0, 10);
+  const raw = entrada.created_at || entrada.created_date;
+  if (!raw) return todayISO();
+  return String(raw).slice(0, 10);
+}
+
 export default function EntradaModal({
   open,
   onClose,
@@ -36,6 +50,7 @@ export default function EntradaModal({
   transbordos: transbordosProp = [],
   estoque: estoqueProp = [],
 }) {
+  const [dataEntrada, setDataEntrada] = useState(todayISO);
   const [clienteId, setClienteId] = useState("");
   const [clienteNome, setClienteNome] = useState("");
   const [lotes, setLotes] = useState([emptyLote()]);
@@ -107,6 +122,7 @@ export default function EntradaModal({
   useEffect(() => {
     if (!open) return;
     if (editingEntrada) {
+      setDataEntrada(resolveEntradaData(editingEntrada));
       setClienteId(editingEntrada.cliente_id || "");
       setClienteNome(editingEntrada.cliente_nome || "");
       const lotesCarregados =
@@ -166,6 +182,7 @@ export default function EntradaModal({
           : ""
       );
     } else {
+      setDataEntrada(todayISO());
       setClienteId("");
       setClienteNome("");
       setLotes([emptyLote()]);
@@ -275,6 +292,10 @@ export default function EntradaModal({
   };
 
   const validateAndBuildData = () => {
+    if (!dataEntrada) {
+      setError("Data da entrada é obrigatória.");
+      return null;
+    }
     if (!clienteNome) {
       setError("Cliente é obrigatório.");
       return null;
@@ -348,6 +369,7 @@ export default function EntradaModal({
     const firstLote = parsedLotes[0];
 
     return {
+      data: dataEntrada || todayISO(),
       cliente_id: clienteId,
       cliente_nome: clienteNome,
       produto_id: firstLote.produto_id,
@@ -492,31 +514,43 @@ export default function EntradaModal({
             </div>
           )}
 
-          {/* Cliente */}
-          <div className="space-y-1.5">
-            <Label>Cliente *</Label>
-            <SearchableSelect
-              value={clienteNome}
-              onChange={(label, item) => {
-                setClienteNome(label);
-                setClienteId(item?.id || "");
-                setLotes((prev) =>
-                  prev.map((l) => ({
-                    ...l,
-                    produto_id: "",
-                    produto_nome: "",
-                    produto_codigo: "",
-                    densidade: "",
-                  }))
-                );
-              }}
-              options={clientesComProdutos}
-              getOptionLabel={(c) => c.nome}
-              getOptionValue={(c) => c.id}
-              placeholder="Selecione um cliente"
-              disabled={readOnly}
-              inputClassName={INPUT_EDITABLE}
-            />
+          {/* Data + Cliente */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Data *</Label>
+              <Input
+                type="date"
+                value={dataEntrada}
+                onChange={(e) => setDataEntrada(e.target.value)}
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cliente *</Label>
+              <SearchableSelect
+                value={clienteNome}
+                onChange={(label, item) => {
+                  setClienteNome(label);
+                  setClienteId(item?.id || "");
+                  setLotes((prev) =>
+                    prev.map((l) => ({
+                      ...l,
+                      produto_id: "",
+                      produto_nome: "",
+                      produto_codigo: "",
+                      densidade: "",
+                    }))
+                  );
+                }}
+                options={clientesComProdutos}
+                getOptionLabel={(c) => c.nome}
+                getOptionValue={(c) => c.id}
+                placeholder="Selecione um cliente"
+                disabled={readOnly}
+                inputClassName={INPUT_EDITABLE}
+              />
+            </div>
           </div>
 
           {/* Blocos de Lotes */}

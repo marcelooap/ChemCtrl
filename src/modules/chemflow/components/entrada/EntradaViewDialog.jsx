@@ -8,13 +8,17 @@ import {
   import { Button } from "@shared/components/ui/button";
   import { Package, FileText, CheckCircle, AlertCircle } from "lucide-react";
   import { formatMass, formatVolume, formatDensidade } from "@chemflow/lib/format";
+  import { origemPertenceAEntrada } from "@chemflow/lib/entradaCodigo";
   
-  export default function EntradaViewDialog({ open, onClose, entrada, entradaId, transbordos = [] }) {
+  export default function EntradaViewDialog({ open, onClose, entrada, entradaId, transbordos = [], estoque = [] }) {
     if (!entrada) return null;
   
     const formatDate = (dateStr) => {
       if (!dateStr) return "-";
-      const d = new Date(dateStr);
+      const raw = String(dateStr);
+      const d = raw.includes("T")
+        ? new Date(raw)
+        : new Date(`${raw.slice(0, 10)}T00:00:00`);
       if (isNaN(d)) return dateStr;
       return d.toLocaleDateString("pt-BR");
     };
@@ -31,13 +35,22 @@ import {
           data_validade: entrada.data_validade,
           densidade: entrada.densidade,
         }];
+
+    const origemIds = new Set([entrada.id]);
+    (estoque || []).forEach((row) => {
+      if (String(row.grupo_entrada || "").startsWith("TB")) return;
+      if (row.entrada_id === entrada.id) origemIds.add(row.id);
+    });
   
     const transbordosUsados = transbordos.filter((t) =>
-      (t.origens || []).some((o) => o.entrada_id === entrada.id)
+      (t.origens || []).some((o) =>
+        origemPertenceAEntrada(o, origemIds, entradaId)
+      )
     );
   
     const destinosList = transbordosUsados.flatMap((t) =>
       (t.destinos || []).map((d) => ({
+        codigo: t.codigo_transbordo || "—",
         vasilhame: [d.placa, d.barril].filter(Boolean).join(" / ") || d.tanka_codigo || "-",
         volume: d.volume_total || d.volume || 0,
         pesoLiq: d.peso_liquido || 0,
@@ -63,7 +76,7 @@ import {
       doc.setFontSize(9);
       doc.setTextColor(94, 108, 132);
       doc.text(`Cliente: ${entrada.cliente_nome || "-"}`, 14, y); y += 5;
-      doc.text(`Data: ${formatDate(entrada.created_date)}`, 14, y); y += 5;
+      doc.text(`Data: ${formatDate(entrada.data || entrada.created_date || entrada.created_at)}`, 14, y); y += 5;
       doc.text(`Nota Fiscal: ${entrada.nota_fiscal || "-"}`, 14, y); y += 10;
   
       doc.setFontSize(11);
@@ -98,7 +111,7 @@ import {
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground uppercase">Data</p>
-              <p className="text-xs font-semibold text-foreground">{formatDate(entrada.created_date)}</p>
+              <p className="text-xs font-semibold text-foreground">{formatDate(entrada.data || entrada.created_date || entrada.created_at)}</p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground uppercase">Cliente</p>
@@ -202,6 +215,7 @@ import {
               <table className="w-full border border-border rounded overflow-hidden">
                 <thead>
                   <tr>
+                    <th className={thClass}>OP</th>
                     <th className={thClass}>Vasilhame</th>
                     <th className={thClass}>Volume (L)</th>
                     <th className={thClass}>Peso Líquido (kg)</th>
@@ -211,11 +225,12 @@ import {
                 <tbody>
                   {destinosList.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className={`${tdClass} text-center text-muted-foreground`}>Nenhum destino registrado.</td>
+                      <td colSpan={5} className={`${tdClass} text-center text-muted-foreground`}>Nenhum destino registrado.</td>
                     </tr>
                   ) : (
                     destinosList.map((d, i) => (
                       <tr key={i}>
+                        <td className={tdClass}>{d.codigo}</td>
                         <td className={tdClass}>{d.vasilhame}</td>
                         <td className={tdClass}>{formatVolume(d.volume, { empty: "-" })}</td>
                         <td className={tdClass}>{formatMass(d.pesoLiq, { empty: "-" })}</td>

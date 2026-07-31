@@ -266,7 +266,7 @@
     "clientScreen": "Client Portal",
     "clientStock": "Client Stock",
     "lockedTooltip": "No access for your role",
-    "moduleName": "ChemBlend",
+    "moduleName": "ChemCtrl",
     "appSubtitle": "Production Control",
     "footer": {
       "expand": "Expand sidebar",
@@ -419,6 +419,7 @@
     "headerSubtitle": "Applications Portal",
     "title": "System Selection",
     "subtitle": "Choose which system you want to access",
+    "backToChemBlend": "Back to ChemBlend",
     "logout": "Sign out",
     "comingSoon": "Coming soon",
     "apps": {
@@ -2774,7 +2775,13 @@
         "addOrigin": "Add at least one origin",
         "addDestination": "Add at least one destination",
         "registered": "Transfer registered",
-        "registerError": "Failed to register transfer"
+        "registerError": "Failed to register transfer",
+        "deleted": "Transfer deleted",
+        "deleteError": "Failed to delete transfer"
+      },
+      "deleteConfirm": {
+        "title": "Delete transfer",
+        "message": "Are you sure you want to delete record {{number}}? Volumes at the origins will be restored and containers created by this operation will be removed."
       },
       "types": {
         "transfer": "Transfer",

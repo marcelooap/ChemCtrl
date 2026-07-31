@@ -103,6 +103,30 @@ export function fmtDate(
   });
 }
 
+/**
+ * Value for `<input type="date" />` (YYYY-MM-DD), using calendar-day semantics
+ * so UTC-midnight timestamptz values do not shift to the previous local day.
+ */
+export function toDateInputValue(
+  value: Date | string | number | null | undefined
+): string {
+  const d = toCalendarDate(value);
+  if (!d) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Today's calendar date in local timezone as YYYY-MM-DD. */
+export function todayDateInputValue(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function fmtDateTime(
   value: Date | string | number | null | undefined,
   options?: Intl.DateTimeFormatOptions,

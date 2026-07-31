@@ -83,9 +83,19 @@ export const isFractionalFromTransfer = (container, transfers = []) => {
   });
 };
 
-/** Badge "Fracionado" no vasilhame: complemento pendente ou residual de transbordo. */
-export const isContainerFractional = (container, production, transfers = []) =>
-  isComplementPending(production) || isFractionalFromTransfer(container, transfers);
+/**
+ * Badge "Fracionado" no vasilhame: residual de transbordo (origem/is_fractional)
+ * ou envase original de OP com complemento pendente.
+ * Destinos de TB que só herdaram production_id da OP fracionada NÃO entram aqui.
+ */
+export const isContainerFractional = (container, production, transfers = []) => {
+  if (isFractionalFromTransfer(container, transfers)) return true;
+  if (!isComplementPending(production)) return false;
+  // Só o envase da própria OP — não destinos TB* que apontam para a mesma production.
+  const op = (production?.op_number || '').trim();
+  const containerOp = (container?.op_number || '').trim();
+  return !!op && containerOp === op;
+};
 
 export const buildSupplyHistoryEntry = (type, user, lots) => ({
   type,

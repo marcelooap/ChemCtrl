@@ -15,10 +15,42 @@ export const isOrderFullyProduced = (volumeOrdered, volumeProduced, volumePendin
   return pending <= VOLUME_EPS || produced >= ordered - VOLUME_EPS;
 };
 
+/** Extrai YYYY-MM-DD de date-only / ISO UTC midnight / Date. */
+const toCalendarYmd = (value) => {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string') {
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) return dateOnly[0];
+    const utcMidnight = value.match(
+      /^(\d{4})-(\d{2})-(\d{2})[T ]00:00:00(?:\.\d+)?(?:Z|[+-]00:00)?$/i
+    );
+    if (utcMidnight) return `${utcMidnight[1]}-${utcMidnight[2]}-${utcMidnight[3]}`;
+    const beforeT = value.split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(beforeT)) return beforeT;
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  if (
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0
+  ) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 /** Data prevista já passou (ignora status — útil para destaque visual da data). */
 export const isPastExpectedDate = (order, now = new Date()) => {
   if (!order?.expected_date) return false;
-  const expected = String(order.expected_date).split('T')[0];
+  const expected = toCalendarYmd(order.expected_date);
   const [y, m, d] = expected.split('-').map(Number);
   if (!y || !m || !d) return false;
   const endOfExpected = new Date(y, m - 1, d, 23, 59, 59, 999);

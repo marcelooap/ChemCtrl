@@ -3,6 +3,7 @@ import { formatNum, roundVolume, roundMass } from "@chemflow/lib/format";
 import {
   aggregateComposicaoByLote,
   getDominantLote,
+  getLoteEnvaseDate,
   seedComposicaoFromVasilhame,
 } from "@chemflow/lib/vasilhameComposicao";
 
@@ -30,6 +31,10 @@ function setDraw(doc, rgb) {
 
 function fmtDate(d) {
   if (!d) return "-";
+  if (d instanceof Date) {
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("pt-BR");
+  }
   const raw = String(d);
   const date = raw.includes("T") ? new Date(raw) : new Date(raw + "T00:00:00");
   if (Number.isNaN(date.getTime())) return "-";
@@ -347,16 +352,6 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, opts = {}) {
   return y + 4;
 }
 
-function loteEnvaseDate(aggItem) {
-  const dates = (aggItem.historico || [])
-    .map((h) => h.data)
-    .filter(Boolean)
-    .map((d) => new Date(String(d).includes("T") ? d : d + "T00:00:00"))
-    .filter((d) => !Number.isNaN(d.getTime()))
-    .sort((a, b) => b - a);
-  return dates.length > 0 ? dates[0] : null;
-}
-
 function buildComposicaoRows(vasilhame) {
   const seeded = seedComposicaoFromVasilhame(vasilhame);
   const agg = aggregateComposicaoByLote(seeded);
@@ -365,7 +360,7 @@ function buildComposicaoRows(vasilhame) {
       lote: c.lote || "-",
       volume: roundVolume(c.quantidade_l || 0),
       massa: roundMass(c.quantidade_kg || 0),
-      data: loteEnvaseDate(c),
+      data: getLoteEnvaseDate(c),
     }));
   }
   return [

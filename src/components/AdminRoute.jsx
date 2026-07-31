@@ -1,10 +1,10 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { isAdminUser } from '@chemblend/lib/permissions';
+import { getDefaultRoute, isAdminUser } from '@chemblend/lib/permissions';
 
 /**
  * Gate para rotas restritas a administradores (ex.: ChemFlow em desenvolvimento).
- * Não-admin → redireciona ao hub de módulos.
+ * Não-admin → redireciona ao ChemBlend.
  */
 export default function AdminRoute() {
   const { user, loading } = useInternalAuth();
@@ -18,7 +18,7 @@ export default function AdminRoute() {
   }
 
   if (!isAdminUser(user)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultRoute(user)} replace />;
   }
 
   return <Outlet />;

@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { getDefaultRoute } from '@chemblend/lib/permissions';
 
 const DefaultFallback = () => {
   const { t } = useTranslation();
@@ -16,8 +17,7 @@ const DefaultFallback = () => {
 
 /**
  * Gate de rotas públicas (ex.: Login).
- * Se já houver sessão válida, redireciona para a seleção de módulos — nunca
- * abre ChemBlend/ChemFlow automaticamente.
+ * Se já houver sessão válida, redireciona para o ChemBlend (rota padrão do usuário).
  */
 export default function GuestRoute({ fallback = <DefaultFallback /> }) {
   const { user, loading } = useInternalAuth();
@@ -27,7 +27,7 @@ export default function GuestRoute({ fallback = <DefaultFallback /> }) {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultRoute(user)} replace />;
   }
 
   return <Outlet />;

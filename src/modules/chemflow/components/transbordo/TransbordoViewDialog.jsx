@@ -68,15 +68,66 @@ export default function TransbordoViewDialog({ open, onClose, transbordo }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(transbordo.origens || []).map((o, i) => (
-                    <tr key={i} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 text-foreground">{o.entrada_codigo || "-"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{o.lote || "-"}</td>
-                      <td className="px-3 py-2 text-foreground font-medium">{formatVolume(o.volume_retirado, { empty: "-" })}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{formatMass(o.massa_retirada, { empty: "-" })}</td>
-                      <td className="px-3 py-2 text-green-700 font-medium">{formatVolume(o.saldo_restante, { empty: "-" })}</td>
-                    </tr>
-                  ))}
+                  {(transbordo.origens || []).flatMap((o, i) => {
+                    const lotes = (o.lotes_retirados || []).filter(
+                      (l) => (l.volume_retirado || 0) > 0
+                    );
+                    if (lotes.length > 1) {
+                      return lotes.map((l, li) => (
+                        <tr
+                          key={`${i}-${li}`}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="px-3 py-2 text-foreground">
+                            {o.entrada_codigo || "-"}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {l.lote || "-"}
+                          </td>
+                          <td className="px-3 py-2 text-foreground font-medium">
+                            {formatVolume(l.volume_retirado, { empty: "-" })}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {formatMass(
+                              (l.volume_retirado || 0) *
+                                (parseFloat(
+                                  String(transbordo.densidade || "0").replace(",", ".")
+                                ) || 0),
+                              { empty: "-" }
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-green-700 font-medium">
+                            {formatVolume(
+                              Math.max(
+                                0,
+                                (l.saldo_disponivel || 0) - (l.volume_retirado || 0)
+                              ),
+                              { empty: "-" }
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                    }
+                    return [
+                      <tr key={i} className="border-b border-border last:border-0">
+                        <td className="px-3 py-2 text-foreground">
+                          {o.entrada_codigo || "-"}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {o.lote || "-"}
+                        </td>
+                        <td className="px-3 py-2 text-foreground font-medium">
+                          {formatVolume(o.volume_retirado, { empty: "-" })}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {formatMass(o.massa_retirada, { empty: "-" })}
+                        </td>
+                        <td className="px-3 py-2 text-green-700 font-medium">
+                          {formatVolume(o.saldo_restante, { empty: "-" })}
+                        </td>
+                      </tr>,
+                    ];
+                  })}
                 </tbody>
               </table>
             </div>

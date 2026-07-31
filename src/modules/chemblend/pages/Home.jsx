@@ -132,7 +132,7 @@ export default function Home() {
   const subtitleDate = fmtDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div>
+    <div className="pb-4">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t('dashboard.homeTitle')}</h1>
         <p className="text-sm text-muted-foreground">{t('dashboard.subtitle', { date: subtitleDate })}</p>

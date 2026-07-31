@@ -32,6 +32,7 @@ import {
   repairVasilhameComposicao,
   LOTE_APORTE_ANTERIOR,
 } from "@chemflow/lib/vasilhameComposicao";
+import { migrateVasilhamesEmbaladosParaEstoque } from "@chemflow/lib/transbordoEmbalado";
 
 export default function Vasilhames() {
   const [vasilhames, setVasilhames] = useState([]);
@@ -53,6 +54,12 @@ export default function Vasilhames() {
   const loadData = async () => {
     setLoading(true);
     try {
+      try {
+        await migrateVasilhamesEmbaladosParaEstoque();
+      } catch (migErr) {
+        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+      }
+
       const [vas, prods, cliens, trans] = await Promise.all([
         entities.vasilhames.list("-created_date"),
         entities.produtos.list(),

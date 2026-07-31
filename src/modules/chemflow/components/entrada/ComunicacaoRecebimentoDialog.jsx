@@ -9,10 +9,14 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Package, CheckCircle, AlertCircle } from "lucide-react";
 import { formatMass, formatVolume, formatDensidade } from "@chemflow/lib/format";
+import { origemPertenceAEntrada } from "@chemflow/lib/entradaCodigo";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "-";
-  const d = new Date(dateStr);
+  const raw = String(dateStr);
+  const d = raw.includes("T")
+    ? new Date(raw)
+    : new Date(`${raw.slice(0, 10)}T00:00:00`);
   if (isNaN(d)) return dateStr;
   return d.toLocaleDateString("pt-BR");
 };
@@ -108,6 +112,8 @@ export default function ComunicacaoRecebimentoDialog({
     if (!entrada) return new Set();
     const ids = new Set([entrada.id]);
     estoque.forEach((row) => {
+      // Estoque gerado por transbordo (IBC/Tambor) não conta como origem da entrada
+      if (String(row.grupo_entrada || "").startsWith("TB")) return;
       if (row.entrada_id === entrada.id) ids.add(row.id);
     });
     return ids;
@@ -117,19 +123,12 @@ export default function ComunicacaoRecebimentoDialog({
     if (!entrada) return [];
     const codigoRef = String(entradaId || "").trim().toUpperCase();
 
+    // Vínculo por UUID do estoque/entrada — nunca só pelo texto "E00N"
+    // (códigos gravados no OP podem estar desalinhados do índice atual).
     const relacionados = transbordos.filter((t) =>
-      (t.origens || []).some((o) => {
-        if (o.entrada_id && origemIds.has(o.entrada_id)) return true;
-        if (!codigoRef || codigoRef === "-") return false;
-        const cod = String(o.entrada_codigo || "").toUpperCase().trim();
-        if (!cod) return false;
-        return (
-          cod === codigoRef ||
-          cod.startsWith(`${codigoRef} `) ||
-          cod.startsWith(`${codigoRef}—`) ||
-          cod.startsWith(`${codigoRef}-`)
-        );
-      })
+      (t.origens || []).some((o) =>
+        origemPertenceAEntrada(o, origemIds, codigoRef)
+      )
     );
 
     return relacionados.flatMap((t) =>
@@ -137,6 +136,7 @@ export default function ComunicacaoRecebimentoDialog({
         const volume = destinoVolume(d);
         const massa = destinoMassa(d, t.densidade);
         return {
+          codigo: t.codigo_transbordo || "—",
           destino: formatDestino(d),
           volume,
           massa,
@@ -201,7 +201,7 @@ export default function ComunicacaoRecebimentoDialog({
                 Data de Entrada
               </p>
               <p className="text-sm font-semibold text-foreground">
-                {formatDate(entrada.created_date || entrada.created_at)}
+                {formatDate(entrada.data || entrada.created_date || entrada.created_at)}
               </p>
             </div>
           </div>
@@ -315,6 +315,7 @@ export default function ComunicacaoRecebimentoDialog({
               <table className="w-full border border-border rounded overflow-hidden">
                 <thead>
                   <tr>
+                    <th className={thClass}>OP</th>
                     <th className={thClass}>Destino</th>
                     <th className={`${thClass} text-right`}>Volume (L)</th>
                     <th className={`${thClass} text-right`}>Massa (kg)</th>
@@ -323,6 +324,7 @@ export default function ComunicacaoRecebimentoDialog({
                 <tbody>
                   {destinosList.map((d, i) => (
                     <tr key={i}>
+                      <td className={tdClass}>{d.codigo}</td>
                       <td className={tdClass}>{d.destino}</td>
                       <td className={`${tdClass} text-right tabular-nums`}>
                         {formatVolume(d.volume, { empty: "-" })}
@@ -333,7 +335,12 @@ export default function ComunicacaoRecebimentoDialog({
                     </tr>
                   ))}
                   <tr className="bg-muted/40">
-                    <td className={`${tdClass} font-semibold border-b-0`}>Total</td>
+                    <td
+                      colSpan={2}
+                      className={`${tdClass} font-semibold border-b-0`}
+                    >
+                      Total
+                    </td>
                     <td className={`${tdClass} text-right tabular-nums font-semibold border-b-0`}>
                       {formatVolume(transbordoTotais.volume, { empty: "-" })}
                     </td>

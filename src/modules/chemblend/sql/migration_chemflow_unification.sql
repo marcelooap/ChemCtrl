@@ -150,6 +150,7 @@ create table if not exists entradas (
   origem text not null default 'convencional' check (origem in ('convencional', 'industrializacao')),
   fornecedor text,
   comunicacao_enviada boolean not null default false,
+  data date not null default current_date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

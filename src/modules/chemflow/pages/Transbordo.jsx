@@ -25,12 +25,8 @@ import {
   roundVolume,
   roundMass,
   parseDensidade,
-  distributeInteger,
 } from "@chemflow/lib/format";
-import {
-  calculateFIFOAllocation,
-  splitEmbalagensUnitarias,
-} from "@chemflow/lib/fifo";
+import { calculateFIFOAllocation, expandOrigensForFifo } from "@chemflow/lib/fifo";
 import {
   findFracionadoNoPatio,
   mergeComposicao,
@@ -38,31 +34,131 @@ import {
   removeComposicaoByTransbordo,
   unifyDuplicateVasilhames,
   seedComposicaoFromVasilhame,
+  aggregateComposicaoByLote,
 } from "@chemflow/lib/vasilhameComposicao";
-import { syncEmptyTankaVasilhames, restoreTankaVasilhamesAfterExclude } from "@chemflow/lib/tankaVolume";
+import {
+  syncTankaVasilhamesAfterOrigem,
+  restoreTankaVasilhamesAfterExclude,
+} from "@chemflow/lib/tankaVolume";
 import {
   buildFiltracaoFromVasilhame,
   getFiltroEmUso,
   isFiltracaoElegivel,
   upsertFiltracaoForVasilhame,
 } from "@chemflow/lib/filtracao";
+import {
+  TIPOS_EMBALAGEM_ESTOQUE,
+  buildEstoqueEmbaladoFromDestino,
+  deleteEstoqueDoTransbordo,
+  migrateVasilhamesEmbaladosParaEstoque,
+} from "@chemflow/lib/transbordoEmbalado";
 
-const TIPOS_VASILHAME = new Set([
-  "Vasilhame",
-  "Tankagem",
-  "One Way (IBC)",
-  "Bombona 200 L",
-  "Tambor 200 L",
-]);
-
-const TIPOS_EMBALAGEM_UNITARIA = new Set([
-  "One Way (IBC)",
-  "Bombona 200 L",
-  "Tambor 200 L",
-]);
+/** Apenas estes destinos geram registro na tela de Vasilhames / Tankagem. */
+const TIPOS_VASILHAME = new Set(["Vasilhame", "Tankagem"]);
 
 /** Converte string vazia em null (evita erro de UUID/date no Postgres). */
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+
+/**
+ * Baixa volume/composição de vasilhames usados como origem do transbordo.
+ */
+async function syncOrigemVasilhameSaldos({
+  origens = [],
+  dens = 0,
+  entities: entitiesApi,
+  vasilhamesList = [],
+  dataSaida = null,
+}) {
+  if (!entitiesApi?.vasilhames) return;
+  const list = vasilhamesList || [];
+
+  for (const o of origens) {
+    if (o.tipo_origem !== "vasilhame" || !o.entrada_id) continue;
+    const v = list.find((row) => row.id === o.entrada_id);
+    if (!v) continue;
+
+    const volOut = roundVolume(o.volume_retirado || 0);
+    if (volOut <= 0) continue;
+
+    const newVol = Math.max(0, roundVolume((v.volume || 0) - volOut));
+    let composicao = seedComposicaoFromVasilhame(v).map((c) => ({ ...c }));
+
+    const lotesRet = (o.lotes_retirados || []).filter(
+      (l) => roundVolume(l.volume_retirado || 0) > 0
+    );
+    if (lotesRet.length > 0) {
+      for (const l of lotesRet) {
+        let remaining = roundVolume(l.volume_retirado);
+        const loteKey = (l.lote || "").trim();
+        for (const c of composicao) {
+          if (remaining <= 0) break;
+          if ((c.lote || "").trim() !== loteKey) continue;
+          const take = Math.min(roundVolume(c.quantidade_l || 0), remaining);
+          c.quantidade_l = roundVolume((c.quantidade_l || 0) - take);
+          if (dens > 0) c.quantidade_kg = roundMass(c.quantidade_l * dens);
+          remaining -= take;
+        }
+      }
+    } else {
+      let remaining = volOut;
+      const loteKey = (o.lote || "").trim();
+      // Preferência pelo lote informado; depois FIFO
+      const ordered = [
+        ...composicao.filter((c) => loteKey && (c.lote || "").trim() === loteKey),
+        ...composicao.filter((c) => !loteKey || (c.lote || "").trim() !== loteKey),
+      ];
+      for (const c of ordered) {
+        if (remaining <= 0) break;
+        const take = Math.min(roundVolume(c.quantidade_l || 0), remaining);
+        c.quantidade_l = roundVolume((c.quantidade_l || 0) - take);
+        if (dens > 0) c.quantidade_kg = roundMass(c.quantidade_l * dens);
+        remaining -= take;
+      }
+    }
+
+    composicao = composicao.filter((c) => roundVolume(c.quantidade_l || 0) > 0);
+    // Alinha soma da composição ao volume restante
+    const compSum = roundVolume(
+      composicao.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+    );
+    if (composicao.length > 0 && compSum !== newVol) {
+      const diff = newVol - compSum;
+      composicao[composicao.length - 1].quantidade_l = Math.max(
+        0,
+        roundVolume(composicao[composicao.length - 1].quantidade_l + diff)
+      );
+      if (dens > 0) {
+        composicao[composicao.length - 1].quantidade_kg = roundMass(
+          composicao[composicao.length - 1].quantidade_l * dens
+        );
+      }
+    }
+
+    const peso =
+      dens > 0
+        ? roundMass(newVol * dens)
+        : roundMass(
+            aggregateComposicaoByLote(composicao).reduce(
+              (s, c) => s + (c.quantidade_kg || 0),
+              0
+            )
+          );
+    const patch = {
+      volume: newVol,
+      peso_liquido: newVol > 0 ? peso : 0,
+      peso_bruto: roundMass((v.tara || 0) + (newVol > 0 ? peso : 0)),
+      composicao: newVol > 0 ? composicao : [],
+      lote: getDominantLote(composicao) || v.lote || "",
+    };
+    if (newVol <= 0) {
+      patch.status = "Expedido";
+      patch.data_saida = dataSaida || null;
+    }
+
+    await entitiesApi.vasilhames.update(v.id, patch);
+    Object.assign(v, patch);
+  }
+}
 
 /**
  * Reverte top-ups de fracionados feitos por um transbordo (antes de excluir/reeditar).
@@ -147,13 +243,8 @@ async function revertTopUpsDoTransbordo({
 
 function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp) {
   const isTankagem = d.tipo_embalagem === "Tankagem";
-  const isUnitaria = TIPOS_EMBALAGEM_UNITARIA.has(d.tipo_embalagem);
   const dens = parseDensidade(data.densidade);
-  const volume = roundVolume(
-    isUnitaria
-      ? d.volume_por_embalagem || d.volume || 0
-      : d.volume || d.volume_total || 0
-  );
+  const volume = roundVolume(d.volume || d.volume_total || 0);
   const pesoLiquido =
     d.peso_liquido != null && d.peso_liquido !== ""
       ? roundMass(d.peso_liquido)
@@ -172,7 +263,7 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
     origem: "transbordo",
     numero_op: codigo,
     placa: isTankagem ? (d.tanka_codigo || "") : (d.placa || ""),
-    barril: isTankagem || isUnitaria ? "" : (d.barril || ""),
+    barril: isTankagem ? "" : (d.barril || ""),
     tipo: d.tipo_embalagem,
     produto_id: nullIfEmpty(data.produto_id),
     produto_nome: data.produto_nome || "",
@@ -232,6 +323,18 @@ export default function Transbordo() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // Migra Tambor/IBC/Bombona legados da tela de Vasilhames → Estoque Embalado
+      try {
+        const mig = await migrateVasilhamesEmbaladosParaEstoque();
+        if (mig.deletedVasilhames > 0) {
+          console.info(
+            `[ChemFlow] Migrados ${mig.migratedGroups} grupo(s) embalado(s); removidos ${mig.deletedVasilhames} vasilhame(s).`
+          );
+        }
+      } catch (migErr) {
+        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+      }
+
       const [trans, prods, cliens, ents, isos, vascs] = await Promise.all([
         entities.transbordos.list("-created_date"),
         entities.produtos.list(),
@@ -371,13 +474,29 @@ export default function Transbordo() {
 
       // Normaliza volumes para litros inteiros (soma destino = soma origem)
       const dens = parseDensidade(data.densidade);
-      const origens = (data.origens || []).map((o) => ({
-        ...o,
-        volume_retirado: roundVolume(o.volume_retirado),
-        massa_retirada: roundMass(
-          o.massa_retirada ?? roundVolume(o.volume_retirado) * dens
-        ),
-      }));
+      const origens = (data.origens || []).map((o) => {
+        const lotesRet = (o.lotes_retirados || [])
+          .map((l) => ({
+            lote: l.lote || "",
+            saldo_disponivel: roundVolume(l.saldo_disponivel || 0),
+            volume_retirado: roundVolume(l.volume_retirado || 0),
+          }))
+          .filter((l) => l.volume_retirado > 0);
+        const volume_retirado =
+          lotesRet.length > 0
+            ? roundVolume(lotesRet.reduce((s, l) => s + l.volume_retirado, 0))
+            : roundVolume(o.volume_retirado);
+        return {
+          ...o,
+          lote:
+            lotesRet.find((l) => l.volume_retirado > 0)?.lote || o.lote || "",
+          volume_retirado,
+          massa_retirada: roundMass(
+            o.massa_retirada ?? volume_retirado * dens
+          ),
+          ...(lotesRet.length > 0 ? { lotes_retirados: lotesRet } : {}),
+        };
+      });
       const destinos = (data.destinos || []).map((d) => {
         const volume_total = roundVolume(d.volume_total || d.volume || 0);
         return {
@@ -423,6 +542,9 @@ export default function Transbordo() {
         destinos,
       };
 
+      // FIFO opera sobre uma origem por lote (ordem informada na UI)
+      const origensFifo = expandOrigensForFifo(origens, dens);
+
       const produtoFiltrado = !!produtos.find(
         (p) => p.id === payload.produto_id
       )?.filtrado;
@@ -455,6 +577,7 @@ export default function Transbordo() {
         // Filtrações ligadas caem via ON DELETE CASCADE em vasilhame_id
         await entities.vasilhames.deleteMany({ transbordo_id: editingId });
         await entities.filtracoes.deleteMany({ transbordo_id: editingId });
+        await deleteEstoqueDoTransbordo(editingId);
       } else {
         codigo = generateCodigo();
         savedTransbordo = await entities.transbordos.create({
@@ -463,22 +586,41 @@ export default function Transbordo() {
         });
       }
 
-      // FIFO: composição por destino → cria ou atualiza vasilhames
+      // FIFO: composição por destino → cria ou atualiza vasilhames / estoque embalado
+      // Com multi-lote na origem, o 1º lote informado vai ao 1º destino, e assim por diante.
       const { destinoCompositions } = calculateFIFOAllocation(
-        origens,
+        origensFifo,
         destinos,
         dens
       );
 
       // Recarrega vasilhames atuais (após possível revert)
       const vasilhamesAtuais = await entities.vasilhames.list();
+      const estoqueById = new Map((entradas || []).map((e) => [e.id, e]));
 
       const vasilhameRecords = [];
+      const estoqueEmbaladoRecords = [];
       for (let destinoIndex = 0; destinoIndex < destinos.length; destinoIndex++) {
         const d = destinos[destinoIndex];
-        if (!TIPOS_VASILHAME.has(d.tipo_embalagem)) continue;
-
         const comp = destinoCompositions[destinoIndex] || [];
+
+        // IBC / Tambor / Bombona → uma linha em Estoque (Embalado)
+        if (TIPOS_EMBALAGEM_ESTOQUE.has(d.tipo_embalagem)) {
+          estoqueEmbaladoRecords.push(
+            buildEstoqueEmbaladoFromDestino({
+              payload,
+              savedTransbordo,
+              destino: d,
+              destinoIndex,
+              comp,
+              origens: origensFifo,
+              estoqueById,
+            })
+          );
+          continue;
+        }
+
+        if (!TIPOS_VASILHAME.has(d.tipo_embalagem)) continue;
 
         // Top-up: vasilhame fracionado já no pátio → atualiza (não cria)
         if (d.tipo_embalagem === "Vasilhame" && d.placa) {
@@ -556,50 +698,16 @@ export default function Transbordo() {
           }
         }
 
-        const base = buildVasilhameBase(
-          payload,
-          codigo,
-          savedTransbordo,
-          d,
-          destinoIndex,
-          comp
+        vasilhameRecords.push(
+          buildVasilhameBase(
+            payload,
+            codigo,
+            savedTransbordo,
+            d,
+            destinoIndex,
+            comp
+          )
         );
-
-        if (TIPOS_EMBALAGEM_UNITARIA.has(d.tipo_embalagem)) {
-          const qtd = Math.max(1, Math.round(d.quantidade_embalagens || 1));
-          const volParts = splitEmbalagensUnitarias(d.volume_total, qtd);
-          const compPartsByLine = comp.map((c) =>
-            distributeInteger(c.quantidade_l, qtd)
-          );
-
-          for (let u = 0; u < qtd; u++) {
-            const volUnit = volParts[u];
-            const unitComp = mergeComposicao(
-              [],
-              comp.map((c, ci) => {
-                const qL = compPartsByLine[ci][u];
-                return {
-                  ...c,
-                  quantidade_l: qL,
-                  quantidade_kg: dens > 0 ? roundMass(qL * dens) : 0,
-                };
-              }),
-              { transbordo_codigo: codigo, data: payload.data || null }
-            );
-            const pesoUnit = dens > 0 ? roundMass(volUnit * dens) : 0;
-            vasilhameRecords.push({
-              ...base,
-              volume: volUnit,
-              peso_liquido: pesoUnit,
-              peso_bruto: roundMass((d.tara || 0) + pesoUnit),
-              composicao: unitComp,
-              lote: getDominantLote(unitComp),
-              barril: qtd > 1 ? `${u + 1}/${qtd}` : "",
-            });
-          }
-        } else {
-          vasilhameRecords.push(base);
-        }
       }
 
       if (vasilhameRecords.length > 0) {
@@ -620,12 +728,18 @@ export default function Transbordo() {
         }
       }
 
+      let createdEstoqueIds = [];
+      if (estoqueEmbaladoRecords.length > 0) {
+        const created = await entities.estoque.bulkCreate(estoqueEmbaladoRecords);
+        createdEstoqueIds = (created || []).map((e) => e.id).filter(Boolean);
+      }
+
       // Unifica tanques duplicados no pátio (mesma placa)
       const afterSave = await entities.vasilhames.list();
       await unifyDuplicateVasilhames(afterSave, entities);
 
-      // Origem tankagem esvaziada → volume 0 + data_saida no vasilhame
-      await syncEmptyTankaVasilhames({
+      // Origem tankagem: baixa volume + composição no vasilhame (parcial ou total)
+      await syncTankaVasilhamesAfterOrigem({
         origens,
         destinos,
         dataSaida: payload.data,
@@ -636,7 +750,19 @@ export default function Transbordo() {
         vasilhamesList: afterSave,
       });
 
-      await syncEstoqueSaldos(affectedEstoqueIds);
+      // Origem vasilhame: baixa volume e composição por lote
+      await syncOrigemVasilhameSaldos({
+        origens,
+        dens,
+        entities,
+        vasilhamesList: afterSave,
+        dataSaida: payload.data,
+      });
+
+      await syncEstoqueSaldos([
+        ...affectedEstoqueIds,
+        ...createdEstoqueIds,
+      ]);
 
       await loadData();
       setModalOpen(false);
@@ -694,9 +820,10 @@ export default function Transbordo() {
         vasilhamesList: vasilhames,
       });
 
-      // 3) Remove embalagens e filtrações criadas por este transbordo
+      // 3) Remove embalagens, estoque embalado e filtrações criadas por este transbordo
       await entities.vasilhames.deleteMany({ transbordo_id: deleteId });
       await entities.filtracoes.deleteMany({ transbordo_id: deleteId });
+      await deleteEstoqueDoTransbordo(deleteId);
 
       // 4) Remove o movimento — libera novamente o disponível nas origens de estoque
       await entities.transbordos.delete(deleteId);

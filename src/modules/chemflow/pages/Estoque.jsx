@@ -18,9 +18,11 @@ import SearchableSelect from "@chemflow/components/cadastro/SearchableSelect";
 import EntradaModal from "@chemflow/components/entrada/EntradaModal";
 import EstoqueEditModal from "@chemflow/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@chemflow/components/estoque/EstoqueViewDialog";
+import { buildEntradaCodigoById } from "@chemflow/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@chemflow/lib/conversao";
 import { formatMass, formatCurrency } from "@chemflow/lib/format";
 import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, hydrateEstoqueFiscal } from "@chemflow/lib/estoqueSaldo";
+import { migrateVasilhamesEmbaladosParaEstoque } from "@chemflow/lib/transbordoEmbalado";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -52,6 +54,12 @@ export default function Estoque() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
+      try {
+        await migrateVasilhamesEmbaladosParaEstoque();
+      } catch (migErr) {
+        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+      }
+
       const [ests, prods, cliens, trans, saics, ents, vascs] = await Promise.all([
         entities.estoque.list(),
         entities.produtos.list(),
@@ -123,16 +131,7 @@ export default function Estoque() {
   }, []);
 
   /** Mesmo ID da tela de Entradas (E001…), para rastrear a origem. */
-  const entradaIdMap = {};
-  [...entradas]
-    .sort((a, b) => {
-      const da = new Date(a.created_at || a.created_date || 0);
-      const db = new Date(b.created_at || b.created_date || 0);
-      return da - db;
-    })
-    .forEach((e, i) => {
-      entradaIdMap[e.id] = `E${String(i + 1).padStart(3, "0")}`;
-    });
+  const entradaIdMap = buildEntradaCodigoById(entradas);
 
   const getEstoqueDisplayId = (e) => {
     if (e?.entrada_id && entradaIdMap[e.entrada_id]) {

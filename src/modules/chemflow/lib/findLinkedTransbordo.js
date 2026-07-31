@@ -24,6 +24,8 @@ function collectCandidateIds(prefillEntrada, estoqueList = []) {
   if (entradaId) {
     ids.add(entradaId);
     for (const e of estoqueList || []) {
+      // Ignora estoque gerado por transbordo (Embalado IBC/Tambor/Bombona)
+      if (String(e?.grupo_entrada || "").startsWith("TB")) continue;
       if (e?.entrada_id === entradaId && e?.id) ids.add(e.id);
     }
   }
@@ -50,24 +52,6 @@ function getOrigens(t) {
 
 function getDestinos(t) {
   return parseJsonArray(t?.destinos);
-}
-
-function collectLotes(prefillEntrada, estoqueList = []) {
-  const lotes = new Set();
-  for (const lt of prefillEntrada?.lotes || []) {
-    if (lt?.lote) lotes.add(norm(lt.lote));
-  }
-  for (const e of prefillEntrada?.savedEstoques || prefillEntrada?.savedEntradas || []) {
-    if (e?.lote) lotes.add(norm(e.lote));
-  }
-  const entradaId = prefillEntrada?.id;
-  if (entradaId) {
-    for (const e of estoqueList || []) {
-      if (e?.entrada_id === entradaId && e?.lote) lotes.add(norm(e.lote));
-    }
-  }
-  if (prefillEntrada?.lote) lotes.add(norm(prefillEntrada.lote));
-  return lotes;
 }
 
 function sortNewestFirst(list) {
@@ -182,26 +166,8 @@ export function findAllLinkedTransbordos(
     }
   }
 
-  // 3) Se ainda não achou diretos, fallback por produto+lote (só para seed)
-  if (linked.size === 0) {
-    const lotes = collectLotes(prefillEntrada, estoqueList);
-    const produtoId = prefillEntrada.produto_id;
-    const produtoNome = norm(prefillEntrada.produto_nome);
-    if (lotes.size > 0 || produtoId || produtoNome) {
-      for (const t of transbordos) {
-        const sameProduto =
-          (produtoId && t.produto_id === produtoId) ||
-          (produtoNome && norm(t.produto_nome) === produtoNome);
-        if (!sameProduto) continue;
-        const origens = getOrigens(t);
-        const matchLote =
-          lotes.size === 0
-            ? origens.length > 0
-            : origens.some((o) => o?.lote && lotes.has(norm(o.lote)));
-        if (matchLote) linked.set(t.id, normalizeTransbordo(t));
-      }
-    }
-  }
+  // Não faz fallback por produto/lote: uma nova entrada do mesmo lote
+  // deve abrir OP novo (só origem), sem herdar destinos de OPs anteriores.
 
   return sortOldestFirst([...linked.values()]);
 }

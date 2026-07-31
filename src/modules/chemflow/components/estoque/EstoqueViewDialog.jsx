@@ -133,7 +133,11 @@ export default function EstoqueViewDialog({
       destino:
         [d.placa, d.barril].filter(Boolean).join(" / ") ||
         d.tanka_codigo ||
-        "—",
+        (d.tipo_embalagem
+          ? Number(d.quantidade_embalagens) > 0
+            ? `${d.tipo_embalagem} (${d.quantidade_embalagens})`
+            : d.tipo_embalagem
+          : "—"),
       tipo: d.tipo_embalagem || (d.tanka_codigo ? "Tanka" : "—"),
       volume: d.volume_total || d.volume || 0,
       pesoLiq: d.peso_liquido || 0,

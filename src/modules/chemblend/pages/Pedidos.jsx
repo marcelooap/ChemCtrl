@@ -18,10 +18,11 @@ import {
   DropdownMenuTrigger,
 } from '@shared/components/ui/dropdown-menu';
 import ProductCombobox from '@shared/components/ui/ProductCombobox';
+import DateInputBr from '@shared/components/ui/DateInputBr';
 import { useToast } from '@shared/components/ui/use-toast';
 import OrderDetailsDialog from '@chemblend/components/pedidos/OrderDetailsDialog';
 import ConfirmDialog from '@chemblend/components/ConfirmDialog';
-import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, fmtCurrency, toDateInputValue, todayDateInputValue } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { getLatestRecipeForProduct, getLatestRecipes, getRevisionNumber } from '@chemblend/lib/recipeRevisions';
 import { matchesClient } from '@chemblend/lib/permissions';
@@ -35,7 +36,19 @@ import {
   deriveOrderFromProductions,
 } from '@chemblend/lib/orderProductionStatus';
 
-const emptyOrder = { date: new Date().toISOString().split('T')[0], product: '', client: '', requester: '', client_order: '', volume_ordered: '', volume_produced: '', volume_pending: '', expected_date: '', status: 'Pendente', observations: '' };
+const emptyOrder = () => ({
+  date: todayDateInputValue(),
+  product: '',
+  client: '',
+  requester: '',
+  client_order: '',
+  volume_ordered: '',
+  volume_produced: '',
+  volume_pending: '',
+  expected_date: '',
+  status: 'Pendente',
+  observations: '',
+});
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'Pendente', labelKey: 'orders.status.pending' },
@@ -73,7 +86,7 @@ export default function Pedidos() {
   const [showDetails, setShowDetails] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detailOrder, setDetailOrder] = useState(null);
-  const [form, setForm] = useState(emptyOrder);
+  const [form, setForm] = useState(() => emptyOrder());
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -194,16 +207,22 @@ export default function Pedidos() {
     return { count: filtered.length, volume, revenue };
   }, [filtered, recipes, statusFilters]);
 
-  const openNew = () => { setEditing(null); setForm({ ...emptyOrder }); setShowForm(true); };
+  const openNew = () => { setEditing(null); setForm(emptyOrder()); setShowForm(true); };
   const openEdit = (o) => {
     setEditing(o);
     setForm({
-      ...o,
-      date: o.date ? o.date.split('T')[0] : '',
-      expected_date: o.expected_date ? String(o.expected_date).split('T')[0] : '',
+      date: toDateInputValue(o.date) || todayDateInputValue(),
+      product: o.product || '',
+      client: o.client || '',
+      requester: o.requester || '',
+      client_order: o.client_order || '',
       volume_ordered: o.volume_ordered || '',
       volume_produced: o.volume_produced || '',
       volume_pending: o.volume_pending || '',
+      // Sempre YYYY-MM-DD (evita split frágil em Date/ISO com timezone)
+      expected_date: toDateInputValue(o.expected_date),
+      status: o.status || 'Pendente',
+      observations: o.observations || '',
     });
     setShowForm(true);
   };
@@ -216,20 +235,25 @@ export default function Pedidos() {
 
   const save = async () => {
     const volOrdered = parseFloat(form.volume_ordered) || 0;
+    // Persistir como data de calendário (YYYY-MM-DD), sem toISOString/UTC
+    const orderDate = toDateInputValue(form.date) || todayDateInputValue();
+    const expectedDate = toDateInputValue(form.expected_date) || null;
     const baseData = {
-      ...form,
-      date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
-      expected_date: form.expected_date || null,
+      date: orderDate,
+      product: form.product,
+      client: form.client,
+      requester: form.requester,
+      client_order: form.client_order,
+      observations: form.observations || null,
+      expected_date: expectedDate,
       volume_ordered: volOrdered,
     };
     if (!baseData.product || !baseData.volume_ordered) { toast({ title: t('orders.messages.fillRequired'), variant: 'destructive' }); return; }
+    if (!expectedDate) { toast({ title: t('orders.messages.fillRequired'), variant: 'destructive' }); return; }
     setSaving(true);
     try {
       if (editing) {
         const data = { ...baseData };
-        delete data.volume_produced;
-        delete data.volume_pending;
-        delete data.status;
         await base44.entities.Order.update(editing.id, data);
 
         // Mantém client_order sincronizado nas OPs vinculadas (campo denormalizado)
@@ -440,7 +464,10 @@ export default function Pedidos() {
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.date')} *</label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('orders.form.date')} *</label>
+                <DateInputBr value={form.date} onChange={(date) => setForm({ ...form, date })} />
+              </div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.requester')} *</label><Input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -460,7 +487,13 @@ export default function Pedidos() {
               <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.volume')} *</label><Input type="number" value={form.volume_ordered} onChange={e => setForm({ ...form, volume_ordered: e.target.value })} /></div>
             </div>
 
-            <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.expectedDate')} *</label><Input type="date" value={form.expected_date} onChange={e => setForm({ ...form, expected_date: e.target.value })} /></div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">{t('orders.form.expectedDate')} *</label>
+              <DateInputBr
+                value={form.expected_date}
+                onChange={(expected_date) => setForm({ ...form, expected_date })}
+              />
+            </div>
             <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.observations')}</label><textarea className="w-full border rounded-md px-3 py-2 text-sm" rows={2} value={form.observations || ''} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-4">

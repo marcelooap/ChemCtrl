@@ -8,6 +8,7 @@ import {
   roundVolume,
   roundMass,
 } from "@chemflow/lib/format";
+import { saldoKgToLitros } from "@chemflow/lib/conversao";
 
 const TIPOS_ORIGEM = [
   { value: "entrada", label: "Entrada (Estoque)" },
@@ -15,6 +16,38 @@ const TIPOS_ORIGEM = [
   { value: "vasilhame", label: "Vasilhame" },
   { value: "embalado", label: "Embalado" },
 ];
+
+function buildLotesRetirados(
+  lotesDisponiveis = [],
+  previous = [],
+  { fallbackVolume = 0, fallbackLote = "" } = {}
+) {
+  const prevByLote = new Map(
+    (previous || []).map((l) => [(l.lote || "").trim(), l])
+  );
+  const hasPrev = (previous || []).some(
+    (l) => roundVolume(l.volume_retirado || 0) > 0
+  );
+  const fallbackKey = (fallbackLote || "").trim();
+  const fbVol = roundVolume(fallbackVolume);
+
+  return (lotesDisponiveis || []).map((l, i) => {
+    const key = (l.lote || "").trim();
+    const prev = prevByLote.get(key);
+    const saldo = roundVolume(l.quantidade_l || l.saldo_disponivel || 0);
+    let volume = roundVolume(prev?.volume_retirado || 0);
+    if (!hasPrev && fbVol > 0) {
+      if (fallbackKey ? key === fallbackKey : i === 0) {
+        volume = fbVol;
+      }
+    }
+    return {
+      lote: l.lote || "",
+      saldo_disponivel: saldo,
+      volume_retirado: volume,
+    };
+  });
+}
 
 export default function OrigemCard({
   index,
@@ -48,17 +81,34 @@ export default function OrigemCard({
     !!origem.entrada_id &&
     !selectedSource;
 
+  const lotesDisponiveis =
+    selectedSource?.lotes_disponiveis ||
+    origem.lotes_disponiveis ||
+    [];
+  const isMultiLote = lotesDisponiveis.length > 1;
+
+  const lotesRetirados = isMultiLote
+    ? buildLotesRetirados(lotesDisponiveis, origem.lotes_retirados, {
+        fallbackVolume: origem.volume_retirado || 0,
+        fallbackLote: origem.lote || "",
+      })
+    : [];
+
   const saldoDisponivel =
     selectedSource?.saldo_atual ?? origem.saldo_disponivel ?? 0;
-  const unidadeMedida =
-    selectedSource?.unidade_medida ||
-    (tipoOrigem === "entrada" ? "kg" : "L");
-  const volumeRetirado = roundVolume(origem.volume_retirado || 0);
+  // Opções já vêm de adjustOptionsForOrigem com saldo em litros (unidade_medida "L").
+  // Prefill / saldo_disponivel da origem também já estão em L — não reconverter.
+  const unidadeMedida = selectedSource?.unidade_medida || "L";
+  const volumeRetirado = roundVolume(
+    isMultiLote
+      ? lotesRetirados.reduce((s, l) => s + (l.volume_retirado || 0), 0)
+      : origem.volume_retirado || 0
+  );
   const massaRetirada = roundMass(volumeRetirado * densidade);
 
   const saldoEmLitros =
     unidadeMedida === "kg" && densidade > 0
-      ? roundVolume(saldoDisponivel / densidade)
+      ? saldoKgToLitros(saldoDisponivel, densidade, selectedSource)
       : roundVolume(saldoDisponivel);
 
   const saldoRestanteL = Math.max(0, saldoEmLitros - volumeRetirado);
@@ -75,6 +125,8 @@ export default function OrigemCard({
       massa_retirada: 0,
       saldo_restante: 0,
       saldo_disponivel: 0,
+      lotes_disponiveis: undefined,
+      lotes_retirados: undefined,
     });
   };
 
@@ -84,14 +136,22 @@ export default function OrigemCard({
       const saldo = item.saldo_atual || 0;
       const saldoL =
         unid === "kg" && densidade > 0
-          ? roundVolume(saldo / densidade)
+          ? saldoKgToLitros(saldo, densidade, item)
           : roundVolume(saldo);
+      const lotes = item.lotes_disponiveis || [];
+      const multi = lotes.length > 1;
+      const lotesRet = multi ? buildLotesRetirados(lotes) : undefined;
       onChange({
         ...origem,
         entrada_id: item.id,
         entrada_codigo: label,
-        lote: item.lote || "",
+        lote: multi ? lotes[0]?.lote || "" : item.lote || "",
         saldo_disponivel: saldoL,
+        lotes_disponiveis: multi ? lotes : undefined,
+        lotes_retirados: lotesRet,
+        volume_retirado: 0,
+        massa_retirada: 0,
+        saldo_restante: saldoL,
       });
     }
   };
@@ -102,10 +162,33 @@ export default function OrigemCard({
       ...origem,
       volume_retirado: v,
       saldo_restante: Math.max(0, saldoEmLitros - v),
+      lotes_retirados: undefined,
+    });
+  };
+
+  const handleLoteVolumeChange = (loteIdx, val) => {
+    const v = roundVolume(val);
+    const next = lotesRetirados.map((l, i) =>
+      i === loteIdx ? { ...l, volume_retirado: v } : l
+    );
+    const total = roundVolume(
+      next.reduce((s, l) => s + (l.volume_retirado || 0), 0)
+    );
+    const firstWithVol = next.find((l) => (l.volume_retirado || 0) > 0);
+    onChange({
+      ...origem,
+      lotes_disponiveis: lotesDisponiveis,
+      lotes_retirados: next,
+      volume_retirado: total,
+      lote: firstWithVol?.lote || next[0]?.lote || origem.lote || "",
+      saldo_restante: Math.max(0, saldoEmLitros - total),
     });
   };
 
   const excedeuSaldo = volumeRetirado > saldoEmLitros;
+  const excedeuLote = lotesRetirados.some(
+    (l) => roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel)
+  );
   const tipoValue = TIPOS_ORIGEM.find((t) => t.value === tipoOrigem)?.label || "";
 
   const collapseControls = (
@@ -137,7 +220,75 @@ export default function OrigemCard({
     </div>
   );
 
+  const multiLoteFields = isMultiLote && (
+    <div className="col-span-2 space-y-2">
+      <Label>Lotes disponíveis</Label>
+      <div className="rounded-md border border-border bg-card divide-y divide-border">
+        {lotesRetirados.map((l, i) => {
+          const excedeu = roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel);
+          return (
+            <div
+              key={`${l.lote || "lote"}-${i}`}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3"
+            >
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Lote — Volume</Label>
+                <Input
+                  value={`${l.lote || "—"} — ${formatVolume(l.saldo_disponivel)} L`}
+                  disabled
+                  className="bg-muted/40 font-medium"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">
+                  Volume Retirado (L) *
+                </Label>
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max={l.saldo_disponivel || 0}
+                  value={l.volume_retirado || ""}
+                  onChange={(e) => handleLoteVolumeChange(i, e.target.value)}
+                  placeholder="0"
+                  disabled={readOnly}
+                  className="bg-white"
+                />
+                {excedeu && (
+                  <p className="text-xs text-red-600">
+                    ⚠ Superior ao saldo do lote ({formatVolume(l.saldo_disponivel)} L)
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-4 text-xs">
+        <span className="text-muted-foreground">
+          Total retirado:{" "}
+          <span className="font-medium text-primary">
+            {formatVolume(volumeRetirado)} L
+          </span>
+        </span>
+        <span className="text-muted-foreground">
+          Saldo restante:{" "}
+          <span className="font-medium text-green-700">
+            {formatVolume(saldoRestanteL)} L
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+
   if (collapsed) {
+    const loteSummary = isMultiLote
+      ? lotesRetirados
+          .filter((l) => (l.volume_retirado || 0) > 0)
+          .map((l) => `${l.lote || "—"} (${formatVolume(l.volume_retirado)} L)`)
+          .join(", ") || "—"
+      : null;
+
     return (
       <div className="rounded-lg border border-border bg-muted/40/50 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -149,10 +300,16 @@ export default function OrigemCard({
               <span className="text-muted-foreground">Origem:</span>{" "}
               {origem.entrada_codigo || "—"}
             </span>
-            <span className="text-sm text-foreground/80 shrink-0">
-              <span className="text-muted-foreground">Volume:</span>{" "}
-              {formatVolume(volumeRetirado)} L
-            </span>
+            {loteSummary ? (
+              <span className="text-sm text-foreground/80 truncate">
+                <span className="text-muted-foreground">Lotes:</span> {loteSummary}
+              </span>
+            ) : (
+              <span className="text-sm text-foreground/80 shrink-0">
+                <span className="text-muted-foreground">Volume:</span>{" "}
+                {formatVolume(volumeRetirado)} L
+              </span>
+            )}
           </div>
           {collapseControls}
         </div>
@@ -256,28 +413,36 @@ export default function OrigemCard({
             inputClassName="bg-white"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label>Lote (auto)</Label>
-          <Input value={origem.lote || ""} disabled className="bg-card" />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Volume Retirado (L) *</Label>
-          <Input
-            type="number"
-            step="1"
-            min="0"
-            value={origem.volume_retirado || ""}
-            onChange={(e) => handleVolumeChange(e.target.value)}
-            placeholder="0"
-            disabled={readOnly}
-            className="bg-white"
-          />
-          {excedeuSaldo && (
-            <p className="text-xs text-red-600">
-              ⚠ Volume superior ao saldo disponível ({formatVolume(saldoEmLitros)} L)
-            </p>
-          )}
-        </div>
+
+        {isMultiLote ? (
+          multiLoteFields
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <Label>Lote (auto)</Label>
+              <Input value={origem.lote || ""} disabled className="bg-card" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Volume Retirado (L) *</Label>
+              <Input
+                type="number"
+                step="1"
+                min="0"
+                value={origem.volume_retirado || ""}
+                onChange={(e) => handleVolumeChange(e.target.value)}
+                placeholder="0"
+                disabled={readOnly}
+                className="bg-white"
+              />
+              {(excedeuSaldo || excedeuLote) && (
+                <p className="text-xs text-red-600">
+                  ⚠ Volume superior ao saldo disponível ({formatVolume(saldoEmLitros)} L)
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
         <div className="space-y-1.5">
           <Label>Massa Correspondente (kg)</Label>
           <Input
@@ -287,22 +452,24 @@ export default function OrigemCard({
           />
         </div>
       </div>
-      <div className="flex items-center gap-4 text-xs">
-        <span className="text-muted-foreground">
-          Saldo restante:{" "}
-          <span className="font-medium text-green-700">
-            {formatVolume(saldoRestanteL)} L
-          </span>
-        </span>
-        {unidadeMedida !== "L" && (
+      {!isMultiLote && (
+        <div className="flex items-center gap-4 text-xs">
           <span className="text-muted-foreground">
-            /{" "}
+            Saldo restante:{" "}
             <span className="font-medium text-green-700">
-              {formatMass(saldoRestanteKg)} {unidadeMedida}
+              {formatVolume(saldoRestanteL)} L
             </span>
           </span>
-        )}
-      </div>
+          {unidadeMedida !== "L" && (
+            <span className="text-muted-foreground">
+              /{" "}
+              <span className="font-medium text-green-700">
+                {formatMass(saldoRestanteKg)} {unidadeMedida}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

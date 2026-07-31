@@ -266,7 +266,7 @@
     "clientScreen": "Portail Client",
     "clientStock": "Stock Client",
     "lockedTooltip": "Accès non autorisé pour votre niveau",
-    "moduleName": "ChemBlend",
+    "moduleName": "ChemCtrl",
     "appSubtitle": "Contrôle de Production",
     "footer": {
       "expand": "Développer la sidebar",
@@ -419,6 +419,7 @@
     "headerSubtitle": "Portail des Applications",
     "title": "Sélection de Systèmes",
     "subtitle": "Choisissez le système auquel vous souhaitez accéder",
+    "backToChemBlend": "Retour à ChemBlend",
     "logout": "Déconnexion",
     "comingSoon": "Bientôt",
     "apps": {
@@ -2741,7 +2742,13 @@
         "addOrigin": "Ajoutez au moins une origine",
         "addDestination": "Ajoutez au moins une destination",
         "registered": "Transfert enregistré",
-        "registerError": "Erreur lors de l'enregistrement du transfert"
+        "registerError": "Erreur lors de l'enregistrement du transfert",
+        "deleted": "Transfert supprimé",
+        "deleteError": "Erreur lors de la suppression du transfert"
+      },
+      "deleteConfirm": {
+        "title": "Supprimer le transfert",
+        "message": "Voulez-vous vraiment supprimer l'enregistrement {{number}} ? Les volumes aux origines seront restaurés et les contenants créés par cette opération seront supprimés."
       },
       "types": {
         "transfer": "Transfert",

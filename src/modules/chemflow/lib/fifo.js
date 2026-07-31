@@ -67,6 +67,41 @@ export function calculateFIFOAllocation(origens = [], destinos = [], densidade =
 }
 
 /**
+ * Expande origens com `lotes_retirados[]` em uma origem por lote (ordem da UI),
+ * para que o FIFO destine o 1º lote ao 1º destino, e assim por diante.
+ */
+export function expandOrigensForFifo(origens = [], densidade = 0) {
+  const dens = parseDensidade(densidade);
+  const result = [];
+
+  for (const o of origens || []) {
+    const lotes = (o.lotes_retirados || []).filter(
+      (l) => roundVolume(l.volume_retirado || 0) > 0
+    );
+    if (lotes.length === 0) {
+      result.push(o);
+      continue;
+    }
+    for (const l of lotes) {
+      const vol = roundVolume(l.volume_retirado);
+      result.push({
+        ...o,
+        lote: l.lote || "",
+        volume_retirado: vol,
+        massa_retirada: dens > 0 ? roundVolume(vol * dens) : roundVolume(o.massa_retirada || 0),
+        saldo_disponivel: roundVolume(l.saldo_disponivel ?? o.saldo_disponivel ?? 0),
+        saldo_restante: Math.max(
+          0,
+          roundVolume((l.saldo_disponivel ?? 0) - vol)
+        ),
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Divide um volume total em N embalagens unitárias (IBC/Bombona/Tambor)
  * com volumes inteiros cuja soma === total.
  */

@@ -16,6 +16,7 @@ import {
 import SearchableSelect from "@chemflow/components/cadastro/SearchableSelect";
 import EntradaModal from "@chemflow/components/entrada/EntradaModal";
 import ComunicacaoRecebimentoDialog from "@chemflow/components/entrada/ComunicacaoRecebimentoDialog";
+import { buildEntradaCodigoById } from "@chemflow/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@chemflow/lib/conversao";
 import { formatMass, formatNum } from "@chemflow/lib/format";
 import { syncEntradaEstoqueCascade } from "@chemflow/lib/cascadeEntradaUpdate";
@@ -106,15 +107,7 @@ export default function Entrada() {
     loadData();
   }, []);
 
-  const sortedAll = [...entradas].sort((a, b) => {
-    const da = new Date(a.created_at || a.created_date || 0);
-    const db = new Date(b.created_at || b.created_date || 0);
-    return da - db;
-  });
-  const idMap = {};
-  sortedAll.forEach((e, i) => {
-    idMap[e.id] = `E${String(i + 1).padStart(3, "0")}`;
-  });
+  const idMap = buildEntradaCodigoById(entradas);
 
   const estoqueByEntradaId = estoque.reduce((acc, item) => {
     if (!item?.entrada_id) return acc;
@@ -186,6 +179,11 @@ export default function Entrada() {
 
     const entradaPayload = {
       ...data,
+      data: data.data || (() => {
+        const d = new Date();
+        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+      })(),
       cliente_id: nullIfEmpty(data.cliente_id),
       produto_id: nullIfEmpty(data.produto_id),
       data_fabricacao: nullIfEmpty(data.data_fabricacao),

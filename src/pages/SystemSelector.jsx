@@ -1,7 +1,7 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { getDefaultRoute, isAdminUser } from '@chemblend/lib/permissions';
 import { applications } from '@/config/applications';
@@ -109,11 +109,17 @@ function ApplicationCard({ app, accessible, onAccess }) {
   );
 }
 
-/** Home da plataforma — seleção de módulos ChemBlend / ChemFlow. */
+/** Hub de módulos — apenas administradores (ChemFlow ainda em ajuste). */
 export default function SystemSelector() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useInternalAuth();
+
+  if (!isAdminUser(user)) {
+    return <Navigate to={getDefaultRoute(user)} replace />;
+  }
+
+  const chemblendRoute = getDefaultRoute(user);
 
   const handleAccess = (app) => {
     if (!isApplicationAccessible(app, user)) return;
@@ -126,6 +132,16 @@ export default function SystemSelector() {
     <div className="flex flex-col min-h-full px-2 pt-1 pb-6 sm:px-4">
       <div className="w-full max-w-3xl">
         <div className="mb-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-ml-2 mb-2 h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => navigate(chemblendRoute)}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {t('systemSelector.backToChemBlend')}
+          </Button>
           <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
             {t('systemSelector.title')}
           </h1>

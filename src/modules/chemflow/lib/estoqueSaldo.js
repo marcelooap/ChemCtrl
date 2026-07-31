@@ -1,5 +1,6 @@
 import { roundMass } from "@chemflow/lib/format";
 import { loteToKg, loteUnidadeEstoque } from "@chemflow/lib/conversao";
+import { calcTransbordadoParaEmbalado } from "@chemflow/lib/transbordoEmbalado";
 import { entities } from "@chemflow/services/entities";
 
 /**
@@ -239,11 +240,16 @@ function labelOrigemTransbordo(origem, vasilhames = []) {
 
 function labelDestinoTransbordo(destino) {
   if (!destino) return "—";
-  return (
-    [destino.placa, destino.barril].filter(Boolean).join(" / ") ||
-    destino.tanka_codigo ||
-    "—"
-  );
+  const placaBarril = [destino.placa, destino.barril].filter(Boolean).join(" / ");
+  if (placaBarril) return placaBarril;
+  if (destino.tanka_codigo) return destino.tanka_codigo;
+  if (destino.tipo_embalagem) {
+    const qtd = Number(destino.quantidade_embalagens) || 0;
+    return qtd > 0
+      ? `${destino.tipo_embalagem} (${qtd})`
+      : destino.tipo_embalagem;
+  }
+  return "—";
 }
 
 /**
@@ -550,7 +556,13 @@ export function computeEstoqueSaldo(
     vasilhames,
     transbordos
   );
-  return Math.max(0, roundMass(quantidade - saidoEmb - saidoConv));
+  // Produto convertido em Estoque Embalado (IBC/Tambor/Bombona) deixa a origem
+  // para não duplicar inventário na tela de Estoque.
+  const saidoTransbEmb = calcTransbordadoParaEmbalado(estoqueItem, transbordos);
+  return Math.max(
+    0,
+    roundMass(quantidade - saidoEmb - saidoConv - saidoTransbEmb)
+  );
 }
 
 /**

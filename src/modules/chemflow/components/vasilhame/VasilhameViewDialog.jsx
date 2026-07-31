@@ -13,12 +13,21 @@ import { generateRelatorioFiscalPDF } from "@chemflow/lib/pdfFiscal";
 import {
   aggregateComposicaoByLote,
   getDominantLote,
+  getLoteEnvaseDate,
   LOTE_APORTE_ANTERIOR,
 } from "@chemflow/lib/vasilhameComposicao";
 
 const formatDate = (d) => {
   if (!d) return "—";
-  const date = new Date(d + "T00:00:00");
+  if (d instanceof Date) {
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("pt-BR");
+  }
+  const raw = String(d);
+  const date = raw.includes("T")
+    ? new Date(raw)
+    : new Date(`${raw.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return raw;
   return date.toLocaleDateString("pt-BR");
 };
 
@@ -127,6 +136,7 @@ const formatDate = (d) => {
                         <th className="px-4 py-2 text-left font-medium">Lote</th>
                         <th className="px-4 py-2 text-right font-medium">Volume (L)</th>
                         <th className="px-4 py-2 text-right font-medium">Massa (kg)</th>
+                        <th className="px-4 py-2 text-left font-medium">Data de Envase</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -146,6 +156,9 @@ const formatDate = (d) => {
                           <td className="px-4 py-2 text-right text-foreground/80">
                             {formatMass(c.quantidade_kg, { empty: "—" })}
                           </td>
+                          <td className="px-4 py-2 text-muted-foreground">
+                            {formatDate(getLoteEnvaseDate(c))}
+                          </td>
                         </tr>
                       ))}
                       <tr className="border-t-2 border-border bg-muted/40">
@@ -162,6 +175,7 @@ const formatDate = (d) => {
                             { empty: "—" }
                           )}
                         </td>
+                        <td className="px-4 py-2" />
                       </tr>
                     </tbody>
                   </table>

@@ -382,11 +382,16 @@ export async function syncEntradaEstoqueCascade({
   entradaId,
   estoqueRecords = [],
 }) {
-  const [existingEstoque, allTransbordos, allSaidas] = await Promise.all([
+  const [existingEstoqueRaw, allTransbordos, allSaidas] = await Promise.all([
     entities.estoque.filter({ entrada_id: entradaId }),
     entities.transbordos.list(),
     entities.saidas.list(),
   ]);
+
+  // Estoque gerado por transbordo (IBC/Tambor/Bombona) não participa do sync da entrada
+  const existingEstoque = (existingEstoqueRaw || []).filter(
+    (e) => !String(e?.grupo_entrada || "").startsWith("TB")
+  );
 
   const plan = planEstoqueSync(existingEstoque, estoqueRecords);
 

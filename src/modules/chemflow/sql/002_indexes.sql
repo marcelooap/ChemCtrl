@@ -13,6 +13,7 @@ create index if not exists idx_isotanques_codigo_itku on isotanques (codigo_itku
 
 -- entradas
 create index if not exists idx_entradas_created_at on entradas (created_at desc);
+create index if not exists idx_entradas_data on entradas (data desc);
 create index if not exists idx_entradas_cliente_id on entradas (cliente_id);
 create index if not exists idx_entradas_produto_id on entradas (produto_id);
 create index if not exists idx_entradas_origem on entradas (origem);
