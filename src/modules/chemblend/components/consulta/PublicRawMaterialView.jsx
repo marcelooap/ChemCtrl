@@ -1,12 +1,21 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Package, Box } from 'lucide-react';
+import publicI18n from '@/i18n/publicI18n';
 import { fmtDate, fmtDateTime, fmtNumber } from '@/i18n/formatters';
 
-const DEST_LABELS = {
-  'Perda em Processo': 'Process Loss',
-  'Retorno de MP Não Aplicada': 'Unused MP Return',
-};
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 function Field({ label, value, mono }) {
   return (
@@ -18,20 +27,50 @@ function Field({ label, value, mono }) {
 }
 
 /**
- * Public view for raw-material stock QR labels.
- * Mirrors the authenticated RawMaterialViewDialog content (identity, packaging, OPs, movements).
+ * Public view for raw-material stock QR labels (sempre em português).
+ * Espelha o conteúdo do RawMaterialViewDialog.
  */
 export default function PublicRawMaterialView({ data }) {
-  const { t } = useTranslation();
-  const lang = 'en';
+  const { t, i18n } = useTranslation();
+  const [langReady, setLangReady] = useState(i18n.language === 'pt-BR');
+  const lang = 'pt-BR';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!publicI18n.hasResourceBundle('pt-BR', 'translation')) {
+          const mod = await import('@/i18n/pt-BR.json');
+          publicI18n.addResourceBundle('pt-BR', 'translation', mod.default, true, true);
+        }
+        await publicI18n.changeLanguage('pt-BR');
+      } finally {
+        if (!cancelled) setLangReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      // Mantém consulta de lote de produção em inglês se o usuário navegar de volta
+      publicI18n.changeLanguage('en');
+    };
+  }, []);
+
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, lang);
-  const productions = Array.isArray(data?.productions) ? data.productions : [];
-  const movements = Array.isArray(data?.movements) ? data.movements : [];
+  const productions = asArray(data?.productions);
+  const movements = asArray(data?.movements);
   const unit = data?.unit || '';
 
   const totalFiscal = productions.reduce((s, c) => s + (Number(c.qty_fiscal) || 0), 0);
   const totalOp = productions.reduce((s, c) => s + (Number(c.qty_operational) || 0), 0);
   const totalMoved = movements.reduce((s, m) => s + (Number(m.quantity) || 0), 0);
+
+  if (!langReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100" style={{ colorScheme: 'light' }}>
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-4 px-4 sm:py-8" style={{ colorScheme: 'light' }}>
@@ -148,7 +187,7 @@ export default function PublicRawMaterialView({ data }) {
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{fmtDateTime(m.movement_date, undefined, lang)}</td>
                       <td className="px-3 py-2">
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                          {DEST_LABELS[m.destination] || m.destination || '—'}
+                          {m.destination || '—'}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-red-600 whitespace-nowrap">-{fmt(m.quantity)} {m.unit || unit}</td>
