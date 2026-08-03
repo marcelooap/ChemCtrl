@@ -5,15 +5,16 @@ import {
   getViewPermissionForPath,
   permissionKey,
 } from '@chemblend/lib/rbac/permissionCatalog';
+import { augmentQualityAnalysesPermissions } from '@chemblend/lib/permissions';
 
 const PermissionsContext = createContext(null);
 
 function resolvePermissions(user) {
   if (!user) return [];
-  if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-    return user.permissions;
-  }
-  return getLegacyPermissionsForUser(user);
+  const base = Array.isArray(user.permissions) && user.permissions.length > 0
+    ? user.permissions
+    : getLegacyPermissionsForUser(user);
+  return augmentQualityAnalysesPermissions(base);
 }
 
 export function PermissionProvider({ children }) {

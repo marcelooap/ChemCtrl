@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@chemblend/api/base44Client';
@@ -31,6 +31,9 @@ import {
 } from '@chemblend/lib/recipeRevisions';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
+const DEFAULT_CREATED_BY = 'Marcelo Amaral';
+const normalizeCreatedBy = (value) => (value || '').trim();
+const resolveCreatedBy = (item) => item?.created_by || DEFAULT_CREATED_BY;
 
 const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
 
@@ -57,6 +60,10 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
               <Flame className="w-3.5 h-3.5 text-red-500" aria-hidden />
             )}
           </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">{t('recipes.table.createdBy')}</p>
+          <p className="font-medium">{resolveCreatedBy(viewing)}</p>
         </div>
       </div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -129,6 +136,7 @@ const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density:
 export default function Receitas() {
   const { t } = useTranslation();
   const { user } = useOutletContext();
+  const currentUserName = user?.nome_completo || user?.nome || user?.full_name || '';
   const canCreate = hasPermission(user, 'recipes.create');
   const canEdit = hasPermission(user, 'recipes.edit');
   const canDelete = hasPermission(user, 'recipes.delete');
@@ -139,6 +147,33 @@ export default function Receitas() {
   const { data: recipes, loading, reload: load } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), []);
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500), []);
+  const backfillCreatedByRef = useRef(false);
+
+  /** One-time backfill: Resp. Cadastro = Marcelo Amaral for existing recipes */
+  useEffect(() => {
+    if (loading || backfillCreatedByRef.current || recipes.length === 0) return;
+
+    const toUpdate = recipes.filter(
+      (row) => row.id && normalizeCreatedBy(row.created_by) !== DEFAULT_CREATED_BY,
+    );
+    backfillCreatedByRef.current = true;
+    if (toUpdate.length === 0) return;
+
+    (async () => {
+      try {
+        for (const row of toUpdate) {
+          try {
+            await base44.entities.Recipe.update(row.id, { created_by: DEFAULT_CREATED_BY });
+          } catch {
+            // ignore row-level failures (e.g. column not migrated yet)
+          }
+        }
+        load();
+      } catch {
+        backfillCreatedByRef.current = false;
+      }
+    })();
+  }, [loading, recipes, load]);
 
   const convertToKg = (value, unit, density) => {
     const d = density || 1;
@@ -296,7 +331,7 @@ export default function Receitas() {
 
   const filtered = latestRecipes.filter(r => {
     const q = debouncedSearch.toLowerCase();
-    return !q || [r.product_name, r.client, r.code].some(v => (v || '').toLowerCase().includes(q));
+    return !q || [r.product_name, r.client, r.code, r.created_by].some(v => (v || '').toLowerCase().includes(q));
   });
 
   const parseRawMaterialsField = (raw) =>
@@ -417,7 +452,20 @@ export default function Receitas() {
       };
     }
 
-    const data = { ...recipeData, ...revisionMeta, necessita_n2: Boolean(form.necessita_n2), raw_materials: mps };
+    const data = {
+      ...recipeData,
+      ...revisionMeta,
+      necessita_n2: Boolean(form.necessita_n2),
+      raw_materials: mps,
+    };
+
+    if (editing && !isNewRevision) {
+      data.created_by = editing.created_by || DEFAULT_CREATED_BY;
+    } else {
+      data.created_by = currentUserName || DEFAULT_CREATED_BY;
+      data.created_by_id = user?.id || null;
+    }
+
     setSaving(true);
     try {
       if (editing && !isNewRevision) {
@@ -565,6 +613,7 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revisionDate')}</th>
                   <th className="px-4 py-3 text-right">{t('recipes.table.mpCount')}</th>
+                  <th className="px-4 py-3 text-left">{t('recipes.table.createdBy')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.actions')}</th>
                 </tr>
               </thead>
@@ -605,6 +654,7 @@ export default function Receitas() {
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>
                     <td className="px-4 py-2.5 text-sm">{r.revision_date || t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(r)}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>

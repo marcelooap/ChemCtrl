@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@chemblend/api/base44Client';
 import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
+import { useQualityAnalysisCatalog } from '@chemblend/hooks/useQualityAnalysisCatalog';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, X, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -15,6 +17,7 @@ import { useSubmitGuard } from '@chemblend/hooks/useSubmitGuard';
 import { getLatestRecipes } from '@chemblend/lib/recipeRevisions';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
+const DEFAULT_CREATED_BY = 'Marcelo Amaral';
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
 
@@ -23,13 +26,19 @@ const isTextSpec = (name) => {
   return n === 'COR' || n === 'ASPECTO';
 };
 
+const normalizeCreatedBy = (value) => (value || '').trim();
+
 export default function Ensaios() {
   const { t, i18n } = useTranslation();
+  const { user } = useInternalAuth();
+  const currentUserName = user?.nome_completo || user?.nome || user?.full_name || '';
   const parseAnalyses = (item) => ({ ...item, analyses: parseArr(item.analyses) });
   const { data: tests, loading, reload: load } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500), [], parseAnalyses);
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { options: analysisNameOptions, entries: catalogEntries, findByName } = useQualityAnalysisCatalog(tests);
   const [search, setSearch] = useState('');
   const pdfGuard = useSubmitGuard();
+  const backfillCreatedByRef = useRef(false);
 
   const fmtSpec = useCallback((a) => {
     if (isTextSpec(a.analysis_name)) return a.specification || t('common.notAvailable');
@@ -56,31 +65,43 @@ export default function Ensaios() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  const analysisNameOptions = useMemo(() => {
-    const set = new Set();
-    tests.forEach(item => (item.analyses || []).forEach(a => { if (a.analysis_name) set.add(a.analysis_name); }));
-    return Array.from(set).map(v => ({ value: v, label: v, item: { name: v } }));
-  }, [tests]);
+  /** One-time backfill: Resp. Cadastro = Marcelo Amaral for existing tests */
+  useEffect(() => {
+    if (loading || backfillCreatedByRef.current || tests.length === 0) return;
 
-  const { methodologyOptions, methodologyMap } = useMemo(() => {
-    const set = new Set();
-    const map = new Map();
-    tests.forEach(item => (item.analyses || []).forEach(a => {
-      if (a.methodology) set.add(a.methodology);
-      if (a.analysis_name && a.methodology) map.set(a.analysis_name, a.methodology);
-    }));
-    return { methodologyOptions: Array.from(set).map(v => ({ value: v, label: v, item: { methodology: v } })), methodologyMap: map };
-  }, [tests]);
+    const toUpdate = tests.filter(
+      (row) => row.id && normalizeCreatedBy(row.created_by) !== DEFAULT_CREATED_BY,
+    );
+    backfillCreatedByRef.current = true;
+    if (toUpdate.length === 0) return;
 
-  const { unitOptions, unitMap } = useMemo(() => {
+    (async () => {
+      try {
+        for (const row of toUpdate) {
+          try {
+            await base44.entities.QualityTest.update(row.id, { created_by: DEFAULT_CREATED_BY });
+          } catch {
+            // ignore row-level failures (e.g. column not migrated yet)
+          }
+        }
+        load();
+      } catch {
+        backfillCreatedByRef.current = false;
+      }
+    })();
+  }, [loading, tests, load]);
+
+  const methodologyOptions = useMemo(() => {
     const set = new Set();
-    const map = new Map();
-    tests.forEach(item => (item.analyses || []).forEach(a => {
-      if (a.unit) set.add(a.unit);
-      if (a.analysis_name && a.unit) map.set(a.analysis_name, a.unit);
-    }));
-    return { unitOptions: Array.from(set).map(v => ({ value: v, label: v, item: { unit: v } })), unitMap: map };
-  }, [tests]);
+    catalogEntries.forEach((entry) => { if (entry.methodology) set.add(entry.methodology); });
+    return Array.from(set).map((v) => ({ value: v, label: v, item: { methodology: v } }));
+  }, [catalogEntries]);
+
+  const unitOptions = useMemo(() => {
+    const set = new Set();
+    catalogEntries.forEach((entry) => { if (entry.unit) set.add(entry.unit); });
+    return Array.from(set).map((v) => ({ value: v, label: v, item: { unit: v } }));
+  }, [catalogEntries]);
 
   const productOptions = useMemo(() => {
     return getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name, item: r }));
@@ -92,7 +113,10 @@ export default function Ensaios() {
     }
   };
 
-  const filtered = tests.filter(item => { const q = search.toLowerCase(); return !q || [item.product, item.client].some(v => (v || '').toLowerCase().includes(q)); });
+  const filtered = tests.filter((item) => {
+    const q = search.toLowerCase();
+    return !q || [item.product, item.client, item.created_by].some((v) => (v || '').toLowerCase().includes(q));
+  });
 
   const openNew = () => { setEditing(null); setForm({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], analyses: [{ ...emptyAnalysis }] }); setShowForm(true); };
   const openEdit = (item) => { setEditing(item); const a = parseArr(item.analyses); setForm({ ...item, analyses: a.length ? a : [{ ...emptyAnalysis }] }); setShowForm(true); };
@@ -104,22 +128,70 @@ export default function Ensaios() {
     const a = [...form.analyses]; a[idx] = { ...a[idx], [field]: val }; setForm({ ...form, analyses: a });
   };
 
+  const applyCatalogToAnalysis = useCallback((current, nameOrEntry) => {
+    const entry = typeof nameOrEntry === 'object' && nameOrEntry
+      ? nameOrEntry
+      : findByName(nameOrEntry);
+    const analysisName = entry?.analysis_name
+      || (typeof nameOrEntry === 'string' ? nameOrEntry : current.analysis_name)
+      || '';
+
+    if (!analysisName.trim()) {
+      return { ...current, analysis_name: '', methodology: '', unit: '' };
+    }
+
+    const next = {
+      ...current,
+      analysis_name: analysisName,
+    };
+
+    if (entry) {
+      next.methodology = entry.methodology || '';
+      next.unit = entry.unit || '';
+    }
+
+    if (isTextSpec(analysisName)) {
+      next.min_limit = null;
+      next.max_limit = null;
+    } else {
+      next.specification = '';
+    }
+
+    return next;
+  }, [findByName]);
+
+  const handleAnalysisNameChange = (idx, value) => {
+    setForm((prev) => {
+      const analyses = [...prev.analyses];
+      analyses[idx] = applyCatalogToAnalysis(analyses[idx], value);
+      return { ...prev, analyses };
+    });
+  };
+
   const handleAnalysisNameSelect = (idx, item) => {
-    const a = [...form.analyses];
-    a[idx] = { ...a[idx], analysis_name: item.name };
-    if (methodologyMap.has(item.name)) a[idx].methodology = methodologyMap.get(item.name);
-    if (unitMap.has(item.name)) a[idx].unit = unitMap.get(item.name);
-    if (isTextSpec(item.name)) { a[idx].min_limit = null; a[idx].max_limit = null; }
-    else { a[idx].specification = ''; }
-    setForm({ ...form, analyses: a });
+    setForm((prev) => {
+      const analyses = [...prev.analyses];
+      analyses[idx] = applyCatalogToAnalysis(analyses[idx], item);
+      return { ...prev, analyses };
+    });
   };
 
   const save = async () => {
     if (!form.product) { toast({ title: t('quality.ensaios.messages.productRequired'), variant: 'destructive' }); return; }
     setSaving(true);
     try {
-      if (editing) await base44.entities.QualityTest.update(editing.id, form);
-      else await base44.entities.QualityTest.create(form);
+      if (editing) {
+        await base44.entities.QualityTest.update(editing.id, {
+          ...form,
+          created_by: editing.created_by || DEFAULT_CREATED_BY,
+        });
+      } else {
+        await base44.entities.QualityTest.create({
+          ...form,
+          created_by: currentUserName || DEFAULT_CREATED_BY,
+          created_by_id: user?.id || null,
+        });
+      }
       setShowForm(false); load();
       toast({ title: editing ? t('quality.ensaios.messages.updated') : t('quality.ensaios.messages.created') });
     } catch (err) {
@@ -140,6 +212,8 @@ export default function Ensaios() {
     }
   };
 
+  const resolveCreatedBy = (item) => item?.created_by || DEFAULT_CREATED_BY;
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 flex items-center justify-between mb-4">
@@ -159,7 +233,8 @@ export default function Ensaios() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
-                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
+                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th>
+                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.createdBy')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
                 {filtered.map((item) => (
@@ -170,6 +245,7 @@ export default function Ensaios() {
                     <td className="px-4 py-2.5 text-sm">{item.revision}</td>
                     <td className="px-4 py-2.5 text-sm">{item.revision_date ? fmtDate(item.revision_date, undefined, i18n.language) : t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(item.analyses || []).length}</td>
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(item)}</td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => { setViewing({ ...item, analyses: parseArr(item.analyses) }); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
@@ -215,7 +291,14 @@ export default function Ensaios() {
                   {form.analyses.map((a, idx) => (
                     <tr key={idx} className="border-t">
                       <td className="px-2 py-1 align-top">
-                        <Combobox value={a.analysis_name} onValueChange={v => { const an = [...form.analyses]; an[idx] = { ...an[idx], analysis_name: v }; setForm({ ...form, analyses: an }); }} options={analysisNameOptions} onSelect={(selected) => handleAnalysisNameSelect(idx, selected)} placeholder={t('quality.ensaios.form.analysisPlaceholder')} inputClassName="h-8 text-xs" />
+                        <Combobox
+                          value={a.analysis_name}
+                          onValueChange={(v) => handleAnalysisNameChange(idx, v)}
+                          options={analysisNameOptions}
+                          onSelect={(selected) => handleAnalysisNameSelect(idx, selected)}
+                          placeholder={t('quality.ensaios.form.analysisPlaceholder')}
+                          inputClassName="h-8 text-xs"
+                        />
                       </td>
                       <td className="px-2 py-1 align-top">
                         <Combobox value={a.methodology} onValueChange={v => updateAnalysis(idx, 'methodology', v)} options={methodologyOptions} onSelect={(selected) => updateAnalysis(idx, 'methodology', selected.methodology)} placeholder={t('quality.ensaios.form.methodologyPlaceholder')} inputClassName="h-8 text-xs" />
@@ -254,10 +337,11 @@ export default function Ensaios() {
           <DialogHeader><DialogTitle>{viewing?.product}</DialogTitle></DialogHeader>
           {viewing && (
             <div>
-              <div className="grid grid-cols-3 gap-3 text-sm mb-4">
+              <div className="grid grid-cols-4 gap-3 text-sm mb-4">
                 <div><p className="text-xs text-muted-foreground">{t('quality.fields.client')}</p><p className="font-medium">{viewing.client}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('quality.ensaios.table.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('common.date')}</p><p className="font-medium">{viewing.revision_date ? fmtDate(viewing.revision_date, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('quality.ensaios.table.createdBy')}</p><p className="font-medium">{resolveCreatedBy(viewing)}</p></div>
               </div>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
                 <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">

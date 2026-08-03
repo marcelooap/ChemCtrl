@@ -43,6 +43,7 @@ const entityTableMap = {
   Recipe: 'recipes',
   QualityResult: 'quality_results',
   QualityTest: 'quality_tests',
+  QualityAnalysis: 'quality_analyses',
   Inventory: 'inventories',
   StockMovement: 'stock_movements',
   LabEquipment: 'lab_equipments',

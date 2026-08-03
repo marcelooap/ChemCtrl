@@ -291,6 +291,7 @@ create table if not exists recipes (
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
   created_by_id text,
+  created_by text,
   code text,
   product_name text not null,
   client text,
@@ -383,6 +384,7 @@ create table if not exists quality_tests (
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
   created_by_id text,
+  created_by text,
   product text not null,
   client text,
   revision text,
@@ -394,6 +396,27 @@ drop policy if exists "allow_all_quality_tests" on quality_tests;
 create policy "allow_all_quality_tests" on quality_tests for all using (true) with check (true);
 drop trigger if exists update_updated_date_quality_tests on quality_tests;
 create trigger update_updated_date_quality_tests before update on quality_tests for each row execute function update_updated_date();
+
+-- ============================================================================
+-- 10b. quality_analyses (catálogo Lista de Ensaios)
+-- ============================================================================
+create table if not exists quality_analyses (
+  id text primary key default gen_random_uuid()::text,
+  created_date timestamptz default now(),
+  updated_date timestamptz default now(),
+  created_by_id text,
+  analysis_name text not null,
+  methodology text,
+  unit text,
+  is_active boolean not null default true,
+  created_by text,
+  constraint quality_analyses_name_unique unique (analysis_name)
+);
+alter table quality_analyses enable row level security;
+drop policy if exists "allow_all_quality_analyses" on quality_analyses;
+create policy "allow_all_quality_analyses" on quality_analyses for all using (true) with check (true);
+drop trigger if exists update_updated_date_quality_analyses on quality_analyses;
+create trigger update_updated_date_quality_analyses before update on quality_analyses for each row execute function update_updated_date();
 
 -- ============================================================================
 -- 11. inventories
@@ -455,4 +478,5 @@ create publication supabase_realtime for table
   production_checklists,
   quality_results,
   quality_tests,
+  quality_analyses,
   inventories;

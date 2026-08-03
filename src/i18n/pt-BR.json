@@ -254,7 +254,8 @@
     "productions": "Produções",
     "productionOrders": "Ordens de Produção",
     "qualityControl": "Controle de Qualidade",
-    "tests": "Ensaios",
+    "tests": "Cadastro CQ",
+    "analysesList": "Lista de Ensaios",
     "pendingAnalysis": "Pendente de Análise",
     "coa": "Cert. de Análise (COA)",
     "containers": "Vasilhames",
@@ -357,6 +358,7 @@
       "productions": "Produções",
       "productionOrders": "Ordens de Produção",
       "qualityTests": "Ensaios",
+      "qualityAnalyses": "Lista de Ensaios",
       "qualityPending": "Pendente de Análise",
       "qualityCoa": "COA",
       "labEquipment": "Equipamentos de Lab",
@@ -1332,7 +1334,8 @@
         "revisionDate": "Dt. Revisão",
         "analyses": "Análises",
         "analysis": "Análise",
-        "methodology": "Metodologia"
+        "methodology": "Metodologia",
+        "createdBy": "Resp. Cadastro"
       },
       "footer": {
         "registered": "Ensaios cadastrados",
@@ -1361,6 +1364,56 @@
         "deleteConfirm": "Excluir?",
         "deleted": "Ensaio excluído",
         "deleteError": "Erro ao excluir ensaio"
+      }
+    },
+    "listaEnsaios": {
+      "title": "Lista de Ensaios",
+      "subtitle": "{{count}} análise(s) cadastrada(s)",
+      "newAnalysis": "Nova Análise",
+      "searchPlaceholder": "Buscar análise, metodologia ou unidade...",
+      "empty": "Nenhuma análise cadastrada. Cadastre ensaios em Cadastro CQ ou adicione uma nova análise.",
+      "table": {
+        "id": "ID",
+        "analysis": "Análise",
+        "methodology": "Metodologia",
+        "unit": "Unidade de Medida",
+        "productCount": "Qtd de Produtos",
+        "status": "Status",
+        "createdBy": "Resp. Cadastro"
+      },
+      "status": {
+        "inUse": "Em uso",
+        "outOfUse": "Fora de uso"
+      },
+      "footer": {
+        "registered": "Análises cadastradas",
+        "displayed": "Exibidas"
+      },
+      "form": {
+        "editTitle": "Editar Análise",
+        "analysisPlaceholder": "Nome da análise",
+        "methodologyPlaceholder": "Metodologia",
+        "unitPlaceholder": "Unidade de medida",
+        "propagateHint": "A alteração será aplicada em {{count}} produto(s) do Cadastro CQ."
+      },
+      "view": {
+        "productsTitle": "Produtos que utilizam esta análise ({{count}})",
+        "noProducts": "Nenhum produto utiliza esta análise ainda."
+      },
+      "messages": {
+        "nameRequired": "Informe o nome da análise",
+        "duplicate": "Já existe uma análise com este nome",
+        "updated": "Análise atualizada",
+        "created": "Análise cadastrada",
+        "saveError": "Erro ao salvar análise",
+        "deleteConfirm": "Excluir esta análise?",
+        "deleteConfirmWithProducts": "Esta análise está em {{count}} produto(s). Excluir também dos ensaios do Cadastro CQ?",
+        "deleted": "Análise excluída",
+        "deleteError": "Erro ao excluir análise",
+        "catalogUnavailable": "Catálogo indisponível. Execute a migration quality_analyses no Supabase.",
+        "statusInUse": "Análise marcada como Em uso",
+        "statusOutOfUse": "Análise marcada como Fora de uso",
+        "statusError": "Erro ao atualizar status"
       }
     },
     "producoesCq": {
@@ -1637,6 +1690,7 @@
       "revision": "Revisão",
       "revisionDate": "Dt. Revisão",
       "mpCount": "Qtd. MP",
+      "createdBy": "Resp. Cadastro",
       "actions": "Ações",
       "fdsAttached": "FDS anexada",
       "needsN2": "Necessita inertização com N2"

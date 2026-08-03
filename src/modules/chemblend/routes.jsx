@@ -15,6 +15,7 @@ import OrdensProducao from '@chemblend/pages/OrdensProducao';
 import ChecklistProducao from '@chemblend/pages/ChecklistProducao';
 import Producoes from '@chemblend/pages/Producoes';
 import Ensaios from '@chemblend/pages/qualidade/Ensaios';
+import ListaEnsaios from '@chemblend/pages/qualidade/ListaEnsaios';
 import ProducoesCQ from '@chemblend/pages/qualidade/ProducoesCQ';
 import COA from '@chemblend/pages/qualidade/COA';
 import EquipamentosLab from '@chemblend/pages/qualidade/EquipamentosLab';
@@ -50,6 +51,7 @@ export default function ChemCtrlRoutes() {
             <Route path="producao/:id/checklist" element={<ChecklistProducao />} />
             <Route path="producoes" element={<Producoes />} />
             <Route path="qualidade/ensaios" element={<Ensaios />} />
+            <Route path="qualidade/lista-ensaios" element={<ListaEnsaios />} />
             <Route path="qualidade/equipamentos" element={<EquipamentosLab />} />
             <Route path="qualidade/producoes" element={<ProducoesCQ />} />
             <Route path="qualidade/coa" element={<COA />} />

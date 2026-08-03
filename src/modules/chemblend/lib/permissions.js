@@ -17,10 +17,22 @@ function normalizeNivel(user) {
 
 function resolvePermissions(user) {
   if (!user) return [];
-  if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-    return user.permissions;
+  const base = Array.isArray(user.permissions) && user.permissions.length > 0
+    ? user.permissions
+    : getLegacyPermissionsForUser(user);
+  return augmentQualityAnalysesPermissions(base);
+}
+
+/** Bridge: Lista de Ensaios inherits Cadastro CQ access until profiles are re-seeded. */
+export function augmentQualityAnalysesPermissions(permissions) {
+  const set = new Set(permissions || []);
+  if (set.has('quality_tests.view')) set.add('quality_analyses.view');
+  if (set.has('quality_tests.register_test') || set.has('quality_tests.edit')) {
+    set.add('quality_analyses.create');
+    set.add('quality_analyses.edit');
   }
-  return getLegacyPermissionsForUser(user);
+  if (set.has('quality_tests.delete')) set.add('quality_analyses.delete');
+  return Array.from(set);
 }
 
 export function hasPermission(user, key) {

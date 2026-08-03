@@ -255,6 +255,7 @@
     "productionOrders": "Production Orders",
     "qualityControl": "Quality Control",
     "tests": "Tests",
+    "analysesList": "Analysis List",
     "pendingAnalysis": "Pending Analysis",
     "coa": "Certificate of Analysis (COA)",
     "containers": "Containers",
@@ -357,6 +358,7 @@
       "productions": "Productions",
       "productionOrders": "Production Orders",
       "qualityTests": "Tests",
+      "qualityAnalyses": "Analysis List",
       "qualityPending": "Pending Analysis",
       "qualityCoa": "COA",
       "labEquipment": "Lab Equipment",
@@ -1431,7 +1433,8 @@
         "revisionDate": "Rev. Date",
         "analyses": "Analyses",
         "analysis": "Analysis",
-        "methodology": "Methodology"
+        "methodology": "Methodology",
+        "createdBy": "Reg. By"
       },
       "footer": {
         "registered": "Registered tests",
@@ -1460,6 +1463,56 @@
         "deleteConfirm": "Delete?",
         "deleted": "Test deleted",
         "deleteError": "Failed to delete test"
+      }
+    },
+    "listaEnsaios": {
+      "title": "Analysis List",
+      "subtitle": "{{count}} analysis(es) registered",
+      "newAnalysis": "New Analysis",
+      "searchPlaceholder": "Search analysis, methodology or unit...",
+      "empty": "No analyses registered. Register tests in QC Registration or add a new analysis.",
+      "table": {
+        "id": "ID",
+        "analysis": "Analysis",
+        "methodology": "Methodology",
+        "unit": "Unit of Measure",
+        "productCount": "Product Qty",
+        "status": "Status",
+        "createdBy": "Reg. By"
+      },
+      "status": {
+        "inUse": "In use",
+        "outOfUse": "Out of use"
+      },
+      "footer": {
+        "registered": "Registered analyses",
+        "displayed": "Displayed"
+      },
+      "form": {
+        "editTitle": "Edit Analysis",
+        "analysisPlaceholder": "Analysis name",
+        "methodologyPlaceholder": "Methodology",
+        "unitPlaceholder": "Unit of measure",
+        "propagateHint": "Changes will be applied to {{count}} product(s) in QC Registration."
+      },
+      "view": {
+        "productsTitle": "Products using this analysis ({{count}})",
+        "noProducts": "No products use this analysis yet."
+      },
+      "messages": {
+        "nameRequired": "Enter the analysis name",
+        "duplicate": "An analysis with this name already exists",
+        "updated": "Analysis updated",
+        "created": "Analysis registered",
+        "saveError": "Failed to save analysis",
+        "deleteConfirm": "Delete this analysis?",
+        "deleteConfirmWithProducts": "This analysis is used in {{count}} product(s). Also remove it from QC Registration tests?",
+        "deleted": "Analysis deleted",
+        "deleteError": "Failed to delete analysis",
+        "catalogUnavailable": "Catalog unavailable. Run the quality_analyses migration in Supabase.",
+        "statusInUse": "Analysis marked as In use",
+        "statusOutOfUse": "Analysis marked as Out of use",
+        "statusError": "Failed to update status"
       }
     },
     "producoesCq": {
@@ -1736,6 +1789,7 @@
       "revision": "Revision",
       "revisionDate": "Rev. Date",
       "mpCount": "RM Qty",
+      "createdBy": "Reg. By",
       "actions": "Actions",
       "fdsAttached": "SDS attached",
       "needsN2": "Requires N2 inertization"

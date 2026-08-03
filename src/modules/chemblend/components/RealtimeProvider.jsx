@@ -12,6 +12,7 @@ const IS_DEV = import.meta.env.DEV;
 const SKIP_REALTIME = new Set([
   'Perfil',
   'PerfilPermissao',
+  'QualityAnalysis',
 ]);
 const REALTIME_ENTITIES = Object.keys(entityTableMap).filter((k) => !SKIP_REALTIME.has(k));
 

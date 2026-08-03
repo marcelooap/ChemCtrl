@@ -96,6 +96,7 @@ DECLARE
     'productions.view','productions.create_op','productions.edit_op','productions.complement','productions.cancel','productions.finish','productions.print_label','productions.export',
     'production_orders.view','production_orders.create','production_orders.edit','production_orders.delete',
     'quality_tests.view','quality_tests.register_test','quality_tests.edit','quality_tests.delete',
+    'quality_analyses.view','quality_analyses.create','quality_analyses.edit','quality_analyses.delete',
     'quality_pending.view','quality_pending.release_production','quality_pending.edit',
     'quality_coa.view','quality_coa.issue_coa','quality_coa.export',
     'lab_equipment.view','lab_equipment.create','lab_equipment.edit','lab_equipment.delete',
