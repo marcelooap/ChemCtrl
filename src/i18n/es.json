@@ -1914,6 +1914,7 @@
   "rawMaterialStock": {
     "title": "Control de Stock",
     "subtitle": "Materias primas · {{count}} ítem(s)",
+    "printLabel": "Imprimir Etiqueta",
     "exportExcel": "Exportar Excel",
     "export": {
       "sheetName": "Inventario MP",
@@ -2611,12 +2612,15 @@
     },
     "label": {
       "title": "Etiqueta {{op}}",
+      "titleMp": "Etiqueta {{ref}}",
       "loading": "Generando etiqueta...",
       "popupBlocked": "Permita ventanas emergentes para imprimir la etiqueta.",
       "ref": "Ref",
       "qrHint": "ESCANEE PARA DETALLES DEL LOTE",
+      "qrHintMp": "ESCANEE PARA DETALLES DE LA MP",
       "qrError": "ERROR QR",
       "tokenUnavailable": "TOKEN NO DISPONIBLE",
+      "client": "CLIENTE",
       "lot": "LOTE",
       "manufacture": "FABRICACIÓN",
       "expiry": "VENCIMIENTO",

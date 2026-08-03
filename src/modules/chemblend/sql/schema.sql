@@ -116,9 +116,11 @@ create table if not exists raw_material_stocks (
   tank_entries jsonb,
   packaging_type text,
   packaging_capacity numeric,
-  packaging_quantity numeric
+  packaging_quantity numeric,
+  public_token text
 );
 create index if not exists idx_raw_material_stocks_status_wms on raw_material_stocks (status_wms);
+create unique index if not exists idx_raw_material_stocks_public_token on raw_material_stocks (public_token) where public_token is not null;
 alter table raw_material_stocks enable row level security;
 drop policy if exists "allow_all_raw_material_stocks" on raw_material_stocks;
 create policy "allow_all_raw_material_stocks" on raw_material_stocks for all using (true) with check (true);

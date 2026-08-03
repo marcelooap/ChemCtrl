@@ -1829,6 +1829,7 @@
   "rawMaterialStock": {
     "title": "Controle de Estoque",
     "subtitle": "Matérias primas · {{count}} item(s)",
+    "printLabel": "Imprimir Etiqueta",
     "exportExcel": "Exportar Excel",
     "export": {
       "sheetName": "Estoque MP",
@@ -2063,6 +2064,43 @@
       "downloadButton": "Baixar",
       "close": "Fechar",
       "generateError": "Erro ao gerar Certificado de Análise. Tente novamente."
+    },
+    "rawMaterial": {
+      "subtitle": "Estoque de MP",
+      "verified": "Matéria-Prima Verificada",
+      "footerSub": "Consulta pública de rastreabilidade de matéria-prima",
+      "sections": {
+        "info": "Informações do Item",
+        "ops": "Ordens de Produção que utilizaram este lote",
+        "movements": "Histórico de Movimentações"
+      },
+      "fields": {
+        "regId": "ID Registro",
+        "entryDate": "Data de Entrada",
+        "code": "Código",
+        "name": "Nome",
+        "supplier": "Fornecedor",
+        "unit": "Unidade",
+        "initialStock": "Estoque Inicial",
+        "currentBalance": "Saldo Atual",
+        "unitPrice": "Preço Unitário",
+        "packagingType": "Tipo de Embalagem",
+        "packagingCapacity": "Capacidade Embalagem",
+        "packagingQuantity": "Qtd. de Embalagens",
+        "observations": "Observações",
+        "op": "OP",
+        "date": "Data",
+        "fiscalQty": "Qtd. Fiscal",
+        "operationalQty": "Qtd. Op. (kg)",
+        "destination": "Destino",
+        "quantity": "Quantidade",
+        "balanceBefore": "Saldo Anterior",
+        "balanceAfter": "Saldo Posterior"
+      },
+      "noOps": "Nenhuma OP utilizou este lote ainda.",
+      "noMovements": "Nenhuma movimentação registrada.",
+      "totalConsumed": "TOTAL CONSUMIDO",
+      "totalMoved": "TOTAL MOVIMENTADO"
     },
     "footer": "ChemCtrl · Sistema de Controle de Produção Química",
     "footerSub": "Consulta pública de rastreabilidade de lote"
@@ -2526,12 +2564,15 @@
     },
     "label": {
       "title": "Etiqueta {{op}}",
+      "titleMp": "Etiqueta {{ref}}",
       "loading": "Gerando etiqueta...",
       "popupBlocked": "Permita pop-ups para imprimir a etiqueta.",
       "ref": "Ref",
       "qrHint": "LEIA PARA DETALHES DO LOTE",
+      "qrHintMp": "LEIA PARA DETALHES DA MP",
       "qrError": "ERRO QR",
       "tokenUnavailable": "TOKEN INDISPONÍVEL",
+      "client": "CLIENTE",
       "lot": "LOTE",
       "manufacture": "FABRICAÇÃO",
       "expiry": "VALIDADE",

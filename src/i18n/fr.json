@@ -1909,6 +1909,7 @@
   "rawMaterialStock": {
     "title": "Contrôle de Stock",
     "subtitle": "Matières premières · {{count}} article(s)",
+    "printLabel": "Imprimer l'étiquette",
     "exportExcel": "Exporter Excel",
     "export": {
       "sheetName": "Stock MP",
@@ -2605,12 +2606,15 @@
     },
     "label": {
       "title": "Étiquette {{op}}",
+      "titleMp": "Étiquette {{ref}}",
       "loading": "Génération de l'étiquette...",
       "popupBlocked": "Autorisez les fenêtres pop-up pour imprimer l'étiquette.",
       "ref": "Réf",
       "qrHint": "SCANNEZ POUR DÉTAILS DU LOT",
+      "qrHintMp": "SCANNEZ POUR DÉTAILS DE LA MP",
       "qrError": "ERREUR QR",
       "tokenUnavailable": "JETON INDISPONIBLE",
+      "client": "CLIENT",
       "lot": "LOT",
       "manufacture": "FABRICATION",
       "expiry": "PÉREMPTION",

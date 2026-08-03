@@ -1928,6 +1928,7 @@
   "rawMaterialStock": {
     "title": "Stock Control",
     "subtitle": "Raw materials · {{count}} item(s)",
+    "printLabel": "Print Label",
     "exportExcel": "Export Excel",
     "export": {
       "sheetName": "Raw Material Stock",
@@ -2175,6 +2176,43 @@
       "downloadButton": "Download",
       "close": "Close",
       "fetchError": "Failed to load Safety Data Sheet. Please try again."
+    },
+    "rawMaterial": {
+      "subtitle": "Raw Material Stock",
+      "verified": "Verified Raw Material",
+      "footerSub": "Public raw material traceability lookup",
+      "sections": {
+        "info": "Item Information",
+        "ops": "Production orders that used this lot",
+        "movements": "Stock Movement History"
+      },
+      "fields": {
+        "regId": "Entry ID",
+        "entryDate": "Entry Date",
+        "code": "Code",
+        "name": "Name",
+        "supplier": "Supplier",
+        "unit": "Unit",
+        "initialStock": "Initial Stock",
+        "currentBalance": "Current Balance",
+        "unitPrice": "Unit Price",
+        "packagingType": "Packaging Type",
+        "packagingCapacity": "Packaging Capacity",
+        "packagingQuantity": "Packaging Qty",
+        "observations": "Observations",
+        "op": "PO",
+        "date": "Date",
+        "fiscalQty": "Fiscal Qty",
+        "operationalQty": "Op. Qty (kg)",
+        "destination": "Destination",
+        "quantity": "Quantity",
+        "balanceBefore": "Balance Before",
+        "balanceAfter": "Balance After"
+      },
+      "noOps": "No production order has used this lot yet.",
+      "noMovements": "No movements registered.",
+      "totalConsumed": "TOTAL CONSUMED",
+      "totalMoved": "TOTAL MOVED"
     },
     "footer": "ChemCtrl · Chemical Production Control System",
     "footerSub": "Public batch traceability lookup"
@@ -2638,12 +2676,15 @@
     },
     "label": {
       "title": "Label {{op}}",
+      "titleMp": "Label {{ref}}",
       "loading": "Generating label...",
       "popupBlocked": "Allow pop-ups to print the label.",
       "ref": "Ref",
       "qrHint": "SCAN FOR LOT DETAILS",
+      "qrHintMp": "SCAN FOR MP DETAILS",
       "qrError": "QR ERROR",
       "tokenUnavailable": "TOKEN UNAVAILABLE",
+      "client": "CLIENT",
       "lot": "LOT",
       "manufacture": "MFG. DATE",
       "expiry": "EXPIRY",

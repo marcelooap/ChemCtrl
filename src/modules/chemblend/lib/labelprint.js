@@ -126,59 +126,46 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
 <style>
   @page { size: 105mm 50mm; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0;
-    width: 105mm; height: 50mm;
-    overflow: hidden;
-    font-family: 'Inter', Arial, sans-serif;
-  }
+  body { font-family: 'Inter', Arial, sans-serif; }
+  html, body { margin: 0; padding: 0; width: 105mm; height: 50mm; }
   .label {
     width: 105mm; height: 50mm;
     background: #FFFFFF; color: #000000;
-    /* Margens verticais equilibradas — evita topo vazio e rodapé rente */
-    padding: 2.8mm 4mm;
+    padding: 1mm 4.5mm;
     display: flex; flex-direction: column;
     justify-content: center;
-    gap: 1.4mm;
     border: 1px solid #000;
-    /*
-      Compensa deslocamento típico Zebra/Chrome: a página “desce” na mídia,
-      gerando sobra em cima e conteúdo colado embaixo.
-    */
-    transform: translateY(-3.5mm);
   }
-  .top-section { display: flex; flex: 0 0 auto; align-items: stretch; }
-  .left-col { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-right: 2.5mm; }
+  .top-section { display: flex; flex: 1; }
+  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2.5mm; }
   .product { font-size: 16pt; font-weight: 800; line-height: 1.05; }
-  .data-block { display: flex; gap: 2mm; margin-top: 1.2mm; }
+  .data-block { display: flex; gap: 2mm; margin-top: 1.5mm; flex: 1; }
   .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
   .icon-col svg { width: 7mm; height: 7mm; }
-  .fields { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0.6mm; }
-  .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.2; }
+  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.8mm; }
+  .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.25; }
   .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 24mm; }
   .field-row .sep { margin: 0 0.8mm; }
   .field-row .val { font-weight: 700; }
   .qr-col {
     width: 28mm;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center;
     border-left: 0.5px solid #000;
-    padding: 0 0 0 2.5mm;
-    gap: 0.8mm;
+    padding: 0.5mm 0 0.5mm 2.5mm;
   }
   .ref { font-size: 9pt; font-weight: 700; align-self: flex-start; }
-  .qr-code { display: flex; align-items: center; justify-content: center; }
-  .qr-code svg { width: 18mm; height: 18mm; }
+  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .qr-code svg { width: 20mm; height: 20mm; }
   .qr-hint { font-size: 5.5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
-  .weight-table { width: 100%; border-collapse: collapse; flex: 0 0 auto; }
-  .weight-table td { border: 0.5px solid #000; padding: 0.8mm 1.5mm; font-size: 7.5pt; }
+  .weight-table { width: 100%; border-collapse: collapse; }
+  .weight-table td { border: 0.5px solid #000; padding: 1mm 1.5mm; font-size: 7.5pt; }
   .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
   .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
   .wt-value { font-weight: 800; text-align: right; width: 35%; }
-  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; flex: 0 0 auto; }
+  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; }
   .footer .sep { margin: 0 0.8mm; }
   .footer .emb { font-size: 10pt; font-weight: 800; }
   @media print {
-    html, body { width: 105mm; height: 50mm; overflow: hidden; }
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
@@ -213,6 +200,144 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
     <tr>
       <td class="wt-label">${t('pdf.label.grossWeight')}</td>
       <td class="wt-value">${grossWeight} kg</td>
+    </tr>
+  </table>
+  <div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>
+</div>
+</body>
+</html>`;
+
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
+};
+
+/** Etiqueta de estoque de MP (105mm × 50mm) — Cliente / Lote / Fab / Val + peso líquido da embalagem */
+export const printRawMaterialLabel = async (stockItem, publicToken, options) => {
+  if (!stockItem) return;
+
+  const { lang, t } = getLabelLabels(options?.locale);
+  const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
+
+  const win = window.open('', '_blank', 'width=420,height=300');
+  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
+
+  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
+  win.document.close();
+
+  const qrSvgMarkup = await buildQrSvgMarkup(publicToken);
+
+  const refId = escapeHtml(stockItem.entry_id || '—');
+  const product = escapeHtml(stockItem.mp_name || '—');
+  const client = escapeHtml(stockItem.client || '—');
+  const lot = escapeHtml(stockItem.lot || '—');
+  const embalagem = escapeHtml(stockItem.packaging_type || '—');
+  const fabDate = stockItem.manufacture_date
+    ? fmtDate(stockItem.manufacture_date, { timeZone: 'America/Sao_Paulo' }, lang)
+    : '—';
+  const valDate = stockItem.expiry_date
+    ? fmtDate(stockItem.expiry_date, { timeZone: 'America/Sao_Paulo' }, lang)
+    : '—';
+  const netWeight = numFmt(stockItem.packaging_capacity || 0);
+
+  const qrColumnHtml = publicToken ? (qrSvgMarkup ? `
+    <div class="qr-col">
+      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
+      <div class="qr-code">${qrSvgMarkup}</div>
+      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
+    </div>` : `
+    <div class="qr-col">
+      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
+      <div class="qr-code"><span style="font-size:5pt;color:#999;">${t('pdf.label.qrError')}</span></div>
+      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
+    </div>`) : `
+    <div class="qr-col">
+      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
+      <div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div>
+      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
+    </div>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="UTF-8">
+<title>${t('pdf.label.titleMp', { ref: refId })}</title>
+<style>
+  @page { size: 105mm 50mm; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', Arial, sans-serif; }
+  html, body { margin: 0; padding: 0; width: 105mm; height: 50mm; }
+  .label {
+    width: 105mm; height: 50mm;
+    background: #FFFFFF; color: #000000;
+    padding: 1mm 4.5mm;
+    display: flex; flex-direction: column;
+    justify-content: center;
+    border: 1px solid #000;
+  }
+  .top-section { display: flex; flex: 1; }
+  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2.5mm; }
+  .product { font-size: 15pt; font-weight: 800; line-height: 1.05; }
+  .data-block { display: flex; gap: 2mm; margin-top: 1.2mm; flex: 1; }
+  .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
+  .icon-col svg { width: 6.5mm; height: 6.5mm; }
+  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.5mm; }
+  .field-row { display: flex; align-items: baseline; font-size: 7.5pt; line-height: 1.2; }
+  .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 22mm; }
+  .field-row .sep { margin: 0 0.8mm; }
+  .field-row .val { font-weight: 700; }
+  .qr-col {
+    width: 28mm;
+    display: flex; flex-direction: column; align-items: center;
+    border-left: 0.5px solid #000;
+    padding: 0.5mm 0 0.5mm 2.5mm;
+  }
+  .ref { font-size: 8pt; font-weight: 700; align-self: flex-start; }
+  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .qr-code svg { width: 19mm; height: 19mm; }
+  .qr-hint { font-size: 5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
+  .weight-table { width: 100%; border-collapse: collapse; }
+  .weight-table td { border: 0.5px solid #000; padding: 1mm 1.5mm; font-size: 7.5pt; }
+  .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
+  .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
+  .wt-value { font-weight: 800; text-align: right; width: 35%; }
+  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; }
+  .footer .sep { margin: 0 0.8mm; }
+  .footer .emb { font-size: 10pt; font-weight: 800; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="label">
+  <div class="top-section">
+    <div class="left-col">
+      <div class="product">${product}</div>
+      <div class="data-block">
+        <div class="icon-col">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2">
+            <path d="M9 2c-1 3-4 5-4 9a7 7 0 0 0 14 0c0-4-3-6-4-9"/>
+            <path d="M9 11a3 3 0 0 0 6 0"/>
+          </svg>
+        </div>
+        <div class="fields">
+          <div class="field-row"><span class="lbl">${t('pdf.label.client')}</span><span class="sep">•</span><span class="val">${client}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.lot')}</span><span class="sep">•</span><span class="val">${lot}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.manufacture')}</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
+          <div class="field-row"><span class="lbl">${t('pdf.label.expiry')}</span><span class="sep">•</span><span class="val">${valDate}</span></div>
+        </div>
+      </div>
+    </div>
+    ${qrColumnHtml}
+  </div>
+  <table class="weight-table">
+    <tr>
+      <td class="wt-title">${t('pdf.label.mass')}</td>
+      <td class="wt-label">${t('pdf.label.netWeight')}</td>
+      <td class="wt-value">${netWeight} kg</td>
     </tr>
   </table>
   <div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>

@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import { ThemeProvider } from '@/lib/theme/ThemeProvider';
-import { fetchPublicLotInfo, fetchPublicCoaData, fetchPublicSdsSignedUrl } from '@chemblend/api/publicApi';
+import { fetchPublicLotInfo, fetchPublicCoaData, fetchPublicSdsSignedUrl, fetchPublicRawMaterialInfo } from '@chemblend/api/publicApi';
 import { generateCOAPDF } from '@chemblend/lib/pdfReports';
 import { openProtectedPdf, revokeBlobUrl } from '@chemblend/lib/protectedDocument';
 import publicI18n, { initPublicI18n } from '@/i18n/publicI18n';
 import { fmtDate } from '@/i18n/formatters';
 import { FileText, Download, Loader2, ShieldCheck, Package, Calendar, Building2, Hash, AlertCircle, Eye } from 'lucide-react';
+import PublicRawMaterialView from '@chemblend/components/consulta/PublicRawMaterialView';
 
 const LOGO_URL = 'https://media.base44.com/images/public/6a3bc68b6dcf809125758419/afb4730f3_image.png';
 
@@ -38,6 +39,7 @@ function ConsultaPublicaPage() {
   const { t } = useTranslation();
   const { token } = useParams();
   const [lotInfo, setLotInfo] = useState(null);
+  const [rawMaterialInfo, setRawMaterialInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [coaLoading, setCoaLoading] = useState(false);
@@ -52,10 +54,32 @@ function ConsultaPublicaPage() {
       try {
         const data = await fetchPublicLotInfo(token);
         if (cancelled) return;
-        if (!data || !data.product) { setNotFound(true); }
-        else { setLotInfo(data); }
+        if (data?.product) {
+          setLotInfo(data);
+          return;
+        }
+
+        const mpData = await fetchPublicRawMaterialInfo(token).catch(() => null);
+        if (cancelled) return;
+        if (mpData?.mp_name || mpData?.type === 'raw_material') {
+          setRawMaterialInfo(mpData);
+          return;
+        }
+
+        setNotFound(true);
       } catch (e) {
-        if (!cancelled) setNotFound(true);
+        if (cancelled) return;
+        try {
+          const mpData = await fetchPublicRawMaterialInfo(token);
+          if (cancelled) return;
+          if (mpData?.mp_name || mpData?.type === 'raw_material') {
+            setRawMaterialInfo(mpData);
+            return;
+          }
+        } catch (_mpErr) {
+          /* fall through */
+        }
+        setNotFound(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -177,6 +201,10 @@ function ConsultaPublicaPage() {
         </div>
       </div>
     );
+  }
+
+  if (rawMaterialInfo) {
+    return <PublicRawMaterialView data={rawMaterialInfo} />;
   }
 
   return (

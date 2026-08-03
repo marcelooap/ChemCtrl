@@ -13,3 +13,16 @@ export async function ensureProductionPublicToken(production) {
   await base44.entities.Production.update(production.id, { public_token: token });
   return token;
 }
+
+/**
+ * Ensures a raw material stock item has a public_token for QR labels.
+ * Generates and persists one on demand for legacy stock entries.
+ */
+export async function ensureRawMaterialStockPublicToken(stockItem) {
+  if (!stockItem) return null;
+  if (stockItem.public_token) return stockItem.public_token;
+
+  const token = generatePublicToken();
+  await base44.entities.RawMaterialStock.update(stockItem.id, { public_token: token });
+  return token;
+}

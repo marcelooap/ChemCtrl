@@ -21,6 +21,10 @@ export const fetchPublicLotInfo = (publicToken) =>
 export const fetchPublicCoaData = (publicToken) =>
   callRPC('get_public_coa_data', { p_token: publicToken });
 
+/** Consulta pública de item de estoque de MP (etiqueta QR). */
+export const fetchPublicRawMaterialInfo = (publicToken) =>
+  callRPC('get_public_raw_material_info', { p_token: publicToken });
+
 const signPublicStoragePath = async (storagePath, expiresIn = 3600) => {
   if (!storagePath) return null;
   const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${storagePath}`, {

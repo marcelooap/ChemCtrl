@@ -3,10 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@chemblend/api/base44Client';
 import { useRealtimeEntity } from '@chemblend/hooks/useRealtimeEntity';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2 } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2, Printer, Download } from 'lucide-react';
 import MovimentacaoEstoqueDialog from '@chemblend/components/estoque/MovimentacaoEstoqueDialog';
 import { exportEstoqueMPToExcel } from '@chemblend/lib/exportEstoqueMP';
-import { Download } from 'lucide-react';
 import RawMaterialViewDialog from '@chemblend/components/estoque/RawMaterialViewDialog';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -21,6 +20,8 @@ import { fmtNumber, fmtCurrency, fmtMass } from '@/i18n/formatters';
 import { calcPackagingQty } from '@chemblend/lib/stockUtils';
 import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@chemblend/hooks/useDebouncedValue';
+import { ensureRawMaterialStockPublicToken } from '@chemblend/lib/ensurePublicToken';
+import { printRawMaterialLabel } from '@chemblend/lib/labelprint';
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0, status_wms: true };
 
@@ -152,6 +153,20 @@ export default function Estoque() {
   const openNew = () => { setEditing(null); setForm({ ...emptyItem }); setShowForm(true); };
   const openEdit = (item) => { setEditing(item); setForm({ ...item, tank_entries: item.tank_entries || (item.tank_name ? [{ tank_name: item.tank_name, volume: item.tank_volume, mass: item.tank_mass }] : []) }); setShowForm(true); };
   const openView = (item) => { setViewing(item); setShowView(true); };
+
+  const handlePrintLabel = async (item) => {
+    try {
+      const publicToken = await ensureRawMaterialStockPublicToken(item);
+      if (publicToken && !item.public_token) {
+        setItems((prev) =>
+          (prev || []).map((e) => (e.id === item.id ? { ...e, public_token: publicToken } : e))
+        );
+      }
+      await printRawMaterialLabel({ ...item, public_token: publicToken }, publicToken);
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    }
+  };
 
   const addTankEntry = () => setForm(prev => ({ ...prev, tank_entries: [...(prev.tank_entries || []), { tank_name: '', volume: '', mass: 0 }] }));
   const updateTankEntry = (idx, patch) => setForm(prev => ({ ...prev, tank_entries: (prev.tank_entries || []).map((e, i) => i === idx ? { ...e, ...patch } : e) }));
@@ -440,6 +455,7 @@ export default function Estoque() {
                        </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">
+                           <button onClick={() => handlePrintLabel(item)} className="p-1.5 rounded hover:bg-accent" title={t('rawMaterialStock.printLabel')}><Printer className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>
                            <button onClick={() => openView(item)} className="p-1.5 rounded hover:bg-accent"><Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>
                            {canEdit && <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-accent"><Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" /></button>}
                            {canDelete && <button onClick={() => remove(item)} className="p-1.5 rounded hover:bg-accent"><Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-400" /></button>}
