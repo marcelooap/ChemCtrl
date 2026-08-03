@@ -372,13 +372,13 @@ export default function Estoque() {
                   <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.reg')}</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.code')}</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.name')}</th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.statusWms')}</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.client')}</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.lot')}</th>
                   <th className="px-4 py-2 text-right text-xs font-semibold">{t('rawMaterialStock.table.currentBalance')}</th>
                   <th className="px-4 py-2 text-right text-xs font-semibold">{t('rawMaterialStock.table.unitPrice')}</th>
                   <th className="px-4 py-2 text-right text-xs font-semibold">{t('rawMaterialStock.table.totalCost')}</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.status')}</th>
-                  <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.statusWms')}</th>
                   <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.actions')}</th>
                 </tr>
               </thead>
@@ -397,23 +397,6 @@ export default function Estoque() {
                        <td className="px-4 py-2.5 text-sm font-medium text-primary">{item.entry_id || `#${idx + 1}`}</td>
                        <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.mp_code}</td>
                        <td className="px-4 py-2.5 font-medium text-sm text-foreground">{item.mp_name}</td>
-                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client || t('common.notAvailable')}</td>
-                       <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.lot || t('common.notAvailable')}</td>
-                       <td className="px-4 py-2.5 text-right text-sm text-foreground">
-                         <span className="font-medium">{fmtNumber(item.current_stock)}</span>{' '}
-                         <span className="font-medium">{item.unit}</span>
-                       </td>
-                       <td className="px-4 py-2.5 text-right text-sm text-foreground">{(item.unit_price || 0).toFixed(4)}</td>
-                       <td className="px-4 py-2.5 text-right text-sm font-semibold text-green-600 dark:text-green-400">{fmtCurrency((item.current_stock || 0) * (item.unit_price || 0))}</td>
-                       <td className="px-4 py-2.5 text-center">
-                         {status === null ? (
-                           <span className="text-sm text-muted-foreground">{t('common.notAvailable')}</span>
-                         ) : status === 'expired' ? (
-                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700">{t('rawMaterialStock.status.expired')}</span>
-                         ) : (
-                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-600 text-white dark:bg-green-700">{t('rawMaterialStock.status.valid')}</span>
-                         )}
-                       </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="inline-flex items-center justify-center gap-2">
                            <Switch
@@ -437,6 +420,23 @@ export default function Estoque() {
                              {item.status_wms ? t('rawMaterialStock.wms.ok') : t('rawMaterialStock.wms.nok')}
                            </span>
                          </div>
+                       </td>
+                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client || t('common.notAvailable')}</td>
+                       <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.lot || t('common.notAvailable')}</td>
+                       <td className="px-4 py-2.5 text-right text-sm text-foreground">
+                         <span className="font-medium">{fmtNumber(item.current_stock)}</span>{' '}
+                         <span className="font-medium">{item.unit}</span>
+                       </td>
+                       <td className="px-4 py-2.5 text-right text-sm text-foreground">{(item.unit_price || 0).toFixed(4)}</td>
+                       <td className="px-4 py-2.5 text-right text-sm font-semibold text-green-600 dark:text-green-400">{fmtCurrency((item.current_stock || 0) * (item.unit_price || 0))}</td>
+                       <td className="px-4 py-2.5 text-center">
+                         {status === null ? (
+                           <span className="text-sm text-muted-foreground">{t('common.notAvailable')}</span>
+                         ) : status === 'expired' ? (
+                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700">{t('rawMaterialStock.status.expired')}</span>
+                         ) : (
+                           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-600 text-white dark:bg-green-700">{t('rawMaterialStock.status.valid')}</span>
+                         )}
                        </td>
                        <td className="px-4 py-2.5 text-center">
                          <div className="flex items-center justify-center gap-1">

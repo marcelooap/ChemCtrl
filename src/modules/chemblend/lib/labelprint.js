@@ -126,46 +126,59 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
 <style>
   @page { size: 105mm 50mm; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Inter', Arial, sans-serif; }
-  html, body { margin: 0; padding: 0; width: 105mm; height: 50mm; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 105mm; height: 50mm;
+    overflow: hidden;
+    font-family: 'Inter', Arial, sans-serif;
+  }
   .label {
     width: 105mm; height: 50mm;
     background: #FFFFFF; color: #000000;
-    padding: 1mm 4.5mm;
+    /* Margens verticais equilibradas — evita topo vazio e rodapé rente */
+    padding: 2.8mm 4mm;
     display: flex; flex-direction: column;
     justify-content: center;
+    gap: 1.4mm;
     border: 1px solid #000;
+    /*
+      Compensa deslocamento típico Zebra/Chrome: a página “desce” na mídia,
+      gerando sobra em cima e conteúdo colado embaixo.
+    */
+    transform: translateY(-3.5mm);
   }
-  .top-section { display: flex; flex: 1; }
-  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2.5mm; }
+  .top-section { display: flex; flex: 0 0 auto; align-items: stretch; }
+  .left-col { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-right: 2.5mm; }
   .product { font-size: 16pt; font-weight: 800; line-height: 1.05; }
-  .data-block { display: flex; gap: 2mm; margin-top: 1.5mm; flex: 1; }
+  .data-block { display: flex; gap: 2mm; margin-top: 1.2mm; }
   .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
   .icon-col svg { width: 7mm; height: 7mm; }
-  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.8mm; }
-  .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.25; }
+  .fields { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0.6mm; }
+  .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.2; }
   .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 24mm; }
   .field-row .sep { margin: 0 0.8mm; }
   .field-row .val { font-weight: 700; }
   .qr-col {
     width: 28mm;
-    display: flex; flex-direction: column; align-items: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
     border-left: 0.5px solid #000;
-    padding: 0.5mm 0 0.5mm 2.5mm;
+    padding: 0 0 0 2.5mm;
+    gap: 0.8mm;
   }
   .ref { font-size: 9pt; font-weight: 700; align-self: flex-start; }
-  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
-  .qr-code svg { width: 20mm; height: 20mm; }
+  .qr-code { display: flex; align-items: center; justify-content: center; }
+  .qr-code svg { width: 18mm; height: 18mm; }
   .qr-hint { font-size: 5.5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
-  .weight-table { width: 100%; border-collapse: collapse; }
-  .weight-table td { border: 0.5px solid #000; padding: 1mm 1.5mm; font-size: 7.5pt; }
+  .weight-table { width: 100%; border-collapse: collapse; flex: 0 0 auto; }
+  .weight-table td { border: 0.5px solid #000; padding: 0.8mm 1.5mm; font-size: 7.5pt; }
   .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
   .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
   .wt-value { font-weight: 800; text-align: right; width: 35%; }
-  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; }
+  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; flex: 0 0 auto; }
   .footer .sep { margin: 0 0.8mm; }
   .footer .emb { font-size: 10pt; font-weight: 800; }
   @media print {
+    html, body { width: 105mm; height: 50mm; overflow: hidden; }
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
