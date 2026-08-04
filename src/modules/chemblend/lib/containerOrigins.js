@@ -138,7 +138,7 @@ export function sliceOriginsForWithdrawal(origins, withdrawnVolume, decimals = 3
   return slices;
 }
 
-/** Synthetic origin from legacy container when no container_origins rows exist. */
+/** Synthetic origin from legacy container when no ind_composicao_vasilhame rows exist. */
 export const legacyOriginFromContainer = (container) => {
   if (!container?.id) return null;
   if (!container.production_id && !container.op_number) return null;

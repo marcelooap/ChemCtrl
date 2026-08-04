@@ -30,24 +30,24 @@ const getHeaders = (extra = {}) => {
 const noCacheFetch = { cache: 'no-store' };
 
 const entityTableMap = {
-  Usuario: 'usuarios',
+  Usuario: 'ind_lista_usuarios',
   Perfil: 'perfis',
   PerfilPermissao: 'perfil_permissoes',
-  Production: 'productions',
-  RawMaterialStock: 'raw_material_stocks',
-  Tank: 'tanks',
-  Transfer: 'transfers',
-  Container: 'containers',
-  ContainerOrigin: 'container_origins',
-  Order: 'orders',
-  Recipe: 'recipes',
-  QualityResult: 'quality_results',
-  QualityTest: 'quality_tests',
-  QualityAnalysis: 'quality_analyses',
-  Inventory: 'inventories',
-  StockMovement: 'stock_movements',
-  LabEquipment: 'lab_equipments',
-  ProductionChecklist: 'production_checklists',
+  Production: 'ind_lista_producoes',
+  RawMaterialStock: 'ind_estoque_mp',
+  Tank: 'ind_cadastro_tanka',
+  Transfer: 'ind_transbordo_ind',
+  Container: 'ind_lista_vasilhames',
+  ContainerOrigin: 'ind_composicao_vasilhame',
+  Order: 'ind_lista_pedidos',
+  Recipe: 'ind_lista_receitas',
+  QualityResult: 'ind_cq_resultados',
+  QualityTest: 'ind_cq_esp_tec',
+  QualityAnalysis: 'ind_lista_ensaios',
+  Inventory: 'ind_lista_inventario',
+  StockMovement: 'ind_retornos_perdas',
+  LabEquipment: 'ind_lista_equipamentoslab',
+  ProductionChecklist: 'ind_checklist_op',
 };
 export { entityTableMap };
 
@@ -111,7 +111,7 @@ const cleanData = (data) => {
 };
 
 /** Tables introduced by later migrations — list/filter must not break core flows if absent. */
-const OPTIONAL_TABLES = new Set(['container_origins']);
+const OPTIONAL_TABLES = new Set(['ind_composicao_vasilhame']);
 
 const isMissingTableError = (code, msg) => {
   const m = String(msg || '');
