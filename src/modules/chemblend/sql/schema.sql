@@ -110,7 +110,7 @@ create table if not exists ind_estoque_mp (
   unit_price numeric,
   density numeric,
   status text,
-  status_wms boolean not null default true,
+  status_wms boolean not null default false,
   observations text,
   tank_storage boolean,
   tank_entries jsonb,

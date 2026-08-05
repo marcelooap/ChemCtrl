@@ -1,120 +1,27 @@
 -- ============================================================
--- Hotfix: permissão para registrar checklist operacional
+-- Hotfix: checklist operacional após rename ind_*
 --
 -- Problema:
---   Operadores conseguiam abrir o checklist (UI com fallback legacy
---   por nivel_acesso), mas submit_operational_checklist falhava com
---   P0001 "sem permissão para registrar checklist operacional"
---   porque can_write() não reconhecia "Operador" e não era
---   case-insensitive — e perfis sem grants na sessão ficavam
---   bloqueados no backend (enquanto o frontend liberava).
+--   submit_operational_checklist (hotfix de sessão) ainda lia
+--   productions / recipes / production_checklists, tabelas
+--   renomeadas por migration_rename_tables_ind.sql.
+--   Erro: relation "productions" does not exist
 --
--- Nota: tabelas ind_* (após migration_rename_tables_ind).
---       A RPC canônica com p_session_id está em
---       migration_checklist_ind_tables_hotfix.sql /
---       migration_checklist_session_hotfix.sql — não reexecute
---       a seção 4 deste arquivo após esses hotfixes.
+-- Correção:
+--   Recria a RPC com ind_lista_producoes, ind_lista_receitas
+--   e ind_checklist_op, mantendo p_session_id.
 --
 -- Execute no: Supabase Dashboard → SQL Editor
 -- ============================================================
 
--- ---------------------------------------------------------------------------
--- 1. can_write(): inclui Operador + comparação case-insensitive
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION can_write()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT COALESCE(
-    has_any_permission(ARRAY[
-      'productions.edit_op', 'productions.create_op', 'production_orders.edit',
-      'orders.edit', 'recipes.edit', 'inventory.edit', 'raw_material_stock.edit',
-      'containers.edit', 'tankage.edit', 'transfer.edit', 'quality_tests.register_test'
-    ])
-    OR lower(
-      translate(
-        coalesce(get_current_session() ->> 'nivel_acesso', ''),
-        'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
-        'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
-      )
-    ) IN ('administrador', 'supervisor', 'operacional', 'operador'),
-    false
-  );
-$$;
+DROP FUNCTION IF EXISTS submit_operational_checklist(text, text, jsonb);
+DROP FUNCTION IF EXISTS submit_operational_checklist(text, text, jsonb, text);
 
-GRANT EXECUTE ON FUNCTION can_write() TO anon;
-GRANT EXECUTE ON FUNCTION can_write() TO authenticated;
-
--- ---------------------------------------------------------------------------
--- 2. Helper específico: pode registrar checklist de chão de fábrica
---    (alinhado ao quem opera OP / Ordens de Produção)
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION can_register_operational_checklist()
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT COALESCE(
-    can_write()
-    OR has_any_permission(ARRAY[
-      'production_orders.edit',
-      'production_orders.create',
-      'productions.edit_op',
-      'productions.create_op',
-      'productions.finish',
-      'productions.complement'
-    ])
-    OR (
-      (get_current_session() ->> 'tipo') = 'interno'
-      AND lower(
-        translate(
-          coalesce(get_current_session() ->> 'nivel_acesso', ''),
-          'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
-          'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
-        )
-      ) IN ('administrador', 'supervisor', 'operacional', 'operador')
-    ),
-    false
-  );
-$$;
-
-GRANT EXECUTE ON FUNCTION can_register_operational_checklist() TO anon;
-GRANT EXECUTE ON FUNCTION can_register_operational_checklist() TO authenticated;
-
--- ---------------------------------------------------------------------------
--- 3. RLS de ind_checklist_op: insert/update via helper
--- (tabela antiga: production_checklists — ver migration_rename_tables_ind)
--- ---------------------------------------------------------------------------
-DROP POLICY IF EXISTS "production_checklists_select" ON ind_checklist_op;
-DROP POLICY IF EXISTS "production_checklists_insert" ON ind_checklist_op;
-DROP POLICY IF EXISTS "production_checklists_update" ON ind_checklist_op;
-DROP POLICY IF EXISTS "production_checklists_delete" ON ind_checklist_op;
-
-CREATE POLICY "production_checklists_select" ON ind_checklist_op
-  FOR SELECT USING (is_internal_user() OR can_register_operational_checklist());
-
-CREATE POLICY "production_checklists_insert" ON ind_checklist_op
-  FOR INSERT WITH CHECK (can_register_operational_checklist());
-
-CREATE POLICY "production_checklists_update" ON ind_checklist_op
-  FOR UPDATE USING (can_register_operational_checklist())
-  WITH CHECK (can_register_operational_checklist());
-
-CREATE POLICY "production_checklists_delete" ON ind_checklist_op
-  FOR DELETE USING (is_admin());
-
--- ---------------------------------------------------------------------------
--- 4. RPC: usa o helper (e valida sessão antes, para erro mais claro)
--- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION submit_operational_checklist(
   p_production_id text,
   p_etapa text,
-  p_answers jsonb
+  p_answers jsonb,
+  p_session_id text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -135,6 +42,7 @@ DECLARE
   v_keys text[] := ARRAY[]::text[];
   v_required text[];
   v_inserted int := 0;
+  v_sid text;
 BEGIN
   IF p_production_id IS NULL OR btrim(p_production_id) = '' THEN
     RAISE EXCEPTION 'production_id é obrigatório';
@@ -148,12 +56,60 @@ BEGIN
     RAISE EXCEPTION 'respostas do checklist são obrigatórias';
   END IF;
 
-  v_session := get_current_session();
+  -- Sessão: prioriza p_session_id (body), depois header via get_current_session()
+  -- NÃO usar set_config em request.header.* — Postgres rejeita esse nome de GUC.
+  v_sid := NULLIF(btrim(COALESCE(p_session_id, '')), '');
+  IF v_sid IS NOT NULL THEN
+    SELECT to_jsonb(s.*) INTO v_session
+    FROM sessions s
+    WHERE s.session_id = v_sid
+      AND s.expires_at > now()
+    LIMIT 1;
+  END IF;
+
+  IF v_session IS NULL THEN
+    v_session := get_current_session();
+  END IF;
+
   IF v_session IS NULL THEN
     RAISE EXCEPTION 'sessão inválida';
   END IF;
 
-  IF NOT can_register_operational_checklist() THEN
+  -- Permissões a partir da sessão já resolvida (não depende de GUC)
+  IF NOT (
+    lower(
+      translate(
+        coalesce(v_session ->> 'nivel_acesso', ''),
+        'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
+        'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
+      )
+    ) IN ('administrador', 'supervisor', 'operacional', 'operador')
+    OR (
+      jsonb_typeof(v_session -> 'permissions') = 'array'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(COALESCE(v_session -> 'permissions', '[]'::jsonb)) k
+        WHERE k = ANY (ARRAY[
+          'production_orders.edit',
+          'production_orders.create',
+          'productions.edit_op',
+          'productions.create_op',
+          'productions.finish',
+          'productions.complement',
+          'inventory.edit'
+        ])
+      )
+    )
+    OR (v_session -> 'permissions') ?| ARRAY[
+      'production_orders.edit',
+      'production_orders.create',
+      'productions.edit_op',
+      'productions.create_op',
+      'productions.finish',
+      'productions.complement',
+      'inventory.edit'
+    ]
+  ) THEN
     RAISE EXCEPTION 'sem permissão para registrar checklist operacional';
   END IF;
 
@@ -331,5 +287,29 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb) TO anon;
-GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb, text) TO anon;
+GRANT EXECUTE ON FUNCTION submit_operational_checklist(text, text, jsonb, text) TO authenticated;
+
+-- Garante helper de checklist apontando para a tabela renomeada
+CREATE OR REPLACE FUNCTION has_operational_checklist(
+  p_production_id text,
+  p_etapa text,
+  p_since timestamptz DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM ind_checklist_op pc
+    WHERE pc.production_id = p_production_id
+      AND pc.etapa = p_etapa
+      AND (p_since IS NULL OR pc.answered_at >= p_since)
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION has_operational_checklist(text, text, timestamptz) TO anon;
+GRANT EXECUTE ON FUNCTION has_operational_checklist(text, text, timestamptz) TO authenticated;

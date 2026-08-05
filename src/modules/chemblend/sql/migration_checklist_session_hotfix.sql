@@ -10,6 +10,8 @@
 --   1) get_current_session() lê header legado E request.headers JSON
 --   2) submit_operational_checklist aceita p_session_id e resolve
 --      a sessão DIRETO na tabela sessions (sem set_config)
+--   3) Usa tabelas ind_* (ind_lista_producoes, ind_lista_receitas,
+--      ind_checklist_op) após migration_rename_tables_ind.sql
 --
 -- Execute no: Supabase Dashboard → SQL Editor
 -- ============================================================
@@ -169,7 +171,7 @@ BEGIN
     'desconhecido'
   );
 
-  SELECT * INTO v_prod FROM productions WHERE id = p_production_id;
+  SELECT * INTO v_prod FROM ind_lista_producoes WHERE id = p_production_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'produção não encontrada';
   END IF;
@@ -177,7 +179,7 @@ BEGIN
   IF v_prod.recipe_id IS NOT NULL AND btrim(v_prod.recipe_id) <> '' THEN
     SELECT COALESCE(r.necessita_n2, false)
       INTO v_necessita_n2
-    FROM recipes r
+    FROM ind_lista_receitas r
     WHERE r.id = v_prod.recipe_id;
     IF NOT FOUND THEN
       v_necessita_n2 := false;
@@ -271,7 +273,7 @@ BEGIN
       END IF;
     END IF;
 
-    INSERT INTO production_checklists (
+    INSERT INTO ind_checklist_op (
       production_id,
       op_number,
       product,

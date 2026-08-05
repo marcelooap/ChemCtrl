@@ -610,11 +610,8 @@ export default function NovaProducao() {
 
       await deductStock(mpList);
 
-      // Mantém na tela: limpa lançamentos e reseleciona o mesmo produto acabado
-      const lastProduct = form.product;
-      const recipe = getLatestRecipeForProduct(recipes, lastProduct);
-      const linkedOrder = orders.find((o) => o.product === lastProduct);
-      const emptyForm = {
+      // Zera a tela como se tivesse saído e voltado — pronto para uma nova OP
+      setForm({
         date: new Date().toISOString().split('T')[0],
         product: '',
         client: '',
@@ -629,38 +626,12 @@ export default function NovaProducao() {
         observations: '',
         density: '',
         mass: 0,
-      };
-
+      });
+      setMpList([]);
+      setDeficitMpList([]);
       setFractionalSupply(false);
       setComplementPackaging(false);
       setComplementContainerId('');
-
-      if (recipe) {
-        setForm({
-          ...emptyForm,
-          product: lastProduct,
-          client: recipe.client || '',
-          recipe_id: recipe.id,
-          recipe_revision: recipe.revision || '',
-          density: recipe.density || 0,
-          order_id: linkedOrder?.id || '',
-          client_order: linkedOrder?.client_order || '',
-          volume_pending: linkedOrder?.volume_pending || 0,
-        });
-        setMpList(
-          parseArr(recipe.raw_materials).map((m) => ({
-            mp_code: m.mp_code,
-            mp_name: m.mp_name,
-            percentage: m.percentage,
-            mp_density: m.mp_density,
-            quantity_kg: m.quantity_kg,
-            lots: [{ stock_id: '', lot: '', qty_fiscal: 0, qty_operational: 0 }],
-          }))
-        );
-      } else {
-        setForm(emptyForm);
-        setMpList([]);
-      }
 
       toast({ title: t('production.messages.created') });
     } catch (err) {
