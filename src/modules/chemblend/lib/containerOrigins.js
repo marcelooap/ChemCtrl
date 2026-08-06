@@ -158,11 +158,81 @@ export const legacyOriginFromContainer = (container) => {
 };
 
 /**
+ * Identity key for merging composition rows of the same OP/lote on one packaging.
+ * Prefer production_id; fall back to op_number + lot.
+ */
+export function originMergeKey(origin) {
+  if (!origin) return '';
+  const productionId = (origin.production_id == null ? '' : String(origin.production_id)).trim();
+  if (productionId) return `p:${productionId}`;
+  const op = (origin.op_number == null ? '' : String(origin.op_number)).trim();
+  const lot = (origin.lot == null ? '' : String(origin.lot)).trim();
+  if (op || lot) return `ol:${op}|${lot}`;
+  return '';
+}
+
+export function findMatchingOrigin(origins, slice) {
+  const key = originMergeKey(slice);
+  if (!key) return null;
+  return (origins || []).find((o) => !o._legacy && originMergeKey(o) === key) || null;
+}
+
+/**
+ * Collapse duplicate composition rows for the same OP/lote on one packaging.
+ * - Distinct volumes for the same OP are merged (complement / top-up).
+ * - Near-identical copies that inflate past the physical container volume are dropped.
+ * - Near-identical copies without a reliable container cap are also collapsed to one row.
+ */
+export function collapseDuplicateOrigins(origins, containerVolume = null) {
+  const list = origins || [];
+  if (list.length <= 1) return list.map((o) => ({ ...o }));
+
+  const cap = containerVolume != null && Number.isFinite(parseFloat(containerVolume))
+    ? parseFloat(containerVolume)
+    : null;
+  const map = new Map();
+  const order = [];
+
+  for (const o of list) {
+    const key = originMergeKey(o) || (o.id ? `id:${o.id}` : `row:${order.length}`);
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...o });
+      order.push(key);
+      continue;
+    }
+
+    const v1 = parseFloat(prev.volume) || 0;
+    const v2 = parseFloat(o.volume) || 0;
+    const merged = round3(v1 + v2);
+    const nearEqual = Math.abs(v1 - v2) <= Math.max(0.001, Math.max(v1, v2) * 0.001);
+    const inflatesPastCap = Number.isFinite(cap) && cap > 0 && merged > round3(cap * 1.01);
+
+    // False duplicate of the same volume (classic double-write of full tank volume)
+    if (nearEqual && (inflatesPastCap || !Number.isFinite(cap) || cap <= 0)) {
+      continue;
+    }
+
+    prev.volume = merged;
+    prev.initial_volume = round3(
+      (parseFloat(prev.initial_volume) || 0) + (parseFloat(o.initial_volume) || 0)
+    );
+    if (!prev.production_id && o.production_id) prev.production_id = o.production_id;
+    if (!prev.op_number && o.op_number) prev.op_number = o.op_number;
+    if (!prev.lot && o.lot) prev.lot = o.lot;
+  }
+
+  return order.map((k) => map.get(k));
+}
+
+/**
  * Effective origins for a container (DB rows or single legacy synthetic).
  */
 export const effectiveOriginsOfContainer = (origins, container) => {
   const fromDb = originsOfContainer(origins, container?.id);
-  if (fromDb.length > 0) return fromDb;
+  if (fromDb.length > 0) {
+    return collapseDuplicateOrigins(fromDb, container?.volume);
+  }
   const legacy = legacyOriginFromContainer(container);
   return legacy ? [legacy] : [];
 };
@@ -345,22 +415,61 @@ export async function applyProportionalOriginReduction(entities, origins, contai
 }
 
 /**
+ * Create or merge an origin slice into an existing row with the same OP/lote.
+ * Prevents duplicate composition lines for the same production on one container.
+ */
+export async function upsertOriginFromSlice(entities, containerId, slice, operator, existingOrigins = null) {
+  const ContainerOrigin = entities.ContainerOrigin;
+  const vol = parseFloat(slice?.volume) || 0;
+  if (!containerId || vol <= 0) return null;
+
+  const current = existingOrigins
+    ?? (await ContainerOrigin.filter({ container_id: containerId }))
+    ?? [];
+  const match = findMatchingOrigin(current, slice);
+
+  if (match?.id) {
+    const nextVol = round3((parseFloat(match.volume) || 0) + vol);
+    const nextInitial = round3(
+      (parseFloat(match.initial_volume) || 0) + (parseFloat(slice.initial_volume ?? slice.volume) || 0)
+    );
+    const saved = await ContainerOrigin.update(match.id, {
+      volume: nextVol,
+      initial_volume: nextInitial,
+      op_number: match.op_number || slice.op_number || null,
+      lot: match.lot || slice.lot || null,
+      production_id: match.production_id || slice.production_id || null,
+      operator: operator || match.operator || null,
+    });
+    const result = saved || { ...match, volume: nextVol, initial_volume: nextInitial };
+    const idx = current.findIndex((o) => o.id === match.id);
+    if (idx >= 0) current[idx] = result;
+    return result;
+  }
+
+  const row = await ContainerOrigin.create({
+    container_id: containerId,
+    production_id: slice.production_id || null,
+    op_number: slice.op_number || null,
+    lot: slice.lot || null,
+    volume: vol,
+    initial_volume: slice.initial_volume ?? vol,
+    operator: operator || null,
+  });
+  if (row) current.push(row);
+  return row;
+}
+
+/**
  * Create origin rows on a destination container from proportional slices.
+ * Same OP/lote on the same packaging is merged into a single composition row.
  */
 export async function createOriginsFromSlices(entities, containerId, slices, operator) {
-  const ContainerOrigin = entities.ContainerOrigin;
+  const existing = (await entities.ContainerOrigin.filter({ container_id: containerId })) || [];
   const created = [];
   for (const slice of slices || []) {
     if ((parseFloat(slice.volume) || 0) <= 0) continue;
-    const row = await ContainerOrigin.create({
-      container_id: containerId,
-      production_id: slice.production_id || null,
-      op_number: slice.op_number || null,
-      lot: slice.lot || null,
-      volume: slice.volume,
-      initial_volume: slice.initial_volume ?? slice.volume,
-      operator: operator || null,
-    });
+    const row = await upsertOriginFromSlice(entities, containerId, slice, operator, existing);
     if (row) created.push(row);
   }
   return created;

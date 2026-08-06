@@ -1,4 +1,5 @@
 import { getLatestRecipeForProduct } from '@chemblend/lib/recipeRevisions';
+import { effectiveOriginsOfContainer } from '@chemblend/lib/containerOrigins';
 
 const parseArr = (v) => {
   if (Array.isArray(v)) return v;
@@ -53,13 +54,7 @@ function buildCycle(container, transfers, productions, recipes, containerOrigins
     ? (transfers || []).find(t => t.transfer_number === container.op_number)
     : null;
 
-  const origins = (containerOrigins || [])
-    .filter((o) => o.container_id === container.id)
-    .sort((a, b) => {
-      const ta = a.created_date ? new Date(a.created_date).getTime() : 0;
-      const tb = b.created_date ? new Date(b.created_date).getTime() : 0;
-      return ta - tb;
-    });
+  const origins = effectiveOriginsOfContainer(containerOrigins, container);
 
   // 1. First event: Produção / multi-origin / Registro / Transbordo de Entrada
   if (origins.length > 0) {

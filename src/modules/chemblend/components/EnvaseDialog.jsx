@@ -19,7 +19,11 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { useToast } from '@shared/components/ui/use-toast';
 import { fmtVolume, fmtMass } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
-import { ensureContainerHasOrigin, dominantLotFromOrigins } from '@chemblend/lib/containerOrigins';
+import {
+  ensureContainerHasOrigin,
+  dominantLotFromOrigins,
+  upsertOriginFromSlice,
+} from '@chemblend/lib/containerOrigins';
 import { containerDisplayVolume } from '@chemblend/lib/fractionalSupply';
 import OperationalChecklistModal from '@chemblend/components/checklists/OperationalChecklistModal';
 import { CHECKLIST_ETAPAS } from '@chemblend/lib/checklists/operationalChecklistConfig';
@@ -271,13 +275,17 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     const net = calcNet(newVolume);
     const gross = calcGross(newVolume, tare);
 
+    const complementSlice = {
+      production_id: production.id,
+      op_number: production.op_number,
+      lot: production.lot,
+      volume: addVol,
+      initial_volume: addVol,
+      created_date: new Date().toISOString(),
+    };
     const compositionAfter = [
       ...existingOrigins,
-      {
-        lot: production.lot,
-        volume: addVol,
-        created_date: new Date().toISOString(),
-      },
+      complementSlice,
     ];
     const dominantLot = dominantLotFromOrigins(compositionAfter)
       || production.lot
@@ -293,15 +301,14 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       lot: dominantLot,
     });
 
-    await supabase.ContainerOrigin.create({
-      container_id: complementTarget.id,
-      production_id: production.id,
-      op_number: production.op_number,
-      lot: production.lot,
-      volume: addVol,
-      initial_volume: addVol,
-      operator: operatorName,
-    });
+    // Same OP/lote on the same packaging must stay as one composition row
+    await upsertOriginFromSlice(
+      supabase,
+      complementTarget.id,
+      complementSlice,
+      operatorName,
+      existingOrigins,
+    );
 
     await supabase.Production.update(production.id, {
       status: 'Finalizado',
@@ -335,15 +342,13 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     });
 
     if (created?.id) {
-      await supabase.ContainerOrigin.create({
-        container_id: created.id,
+      await upsertOriginFromSlice(supabase, created.id, {
         production_id: production.id,
         op_number: production.op_number,
         lot: production.lot,
         volume,
         initial_volume: volume,
-        operator: operatorName,
-      });
+      }, operatorName, []);
     }
   };
 
