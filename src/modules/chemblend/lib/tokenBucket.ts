@@ -37,6 +37,27 @@ export class TokenBucket {
     return false;
   }
 
+  /**
+   * Aguarda o refill contínuo até conseguir `cost` tokens (fluxos sequenciais legítimos,
+   * ex.: registrar transbordo com vários destinos). Retorna false se estourar `maxWaitMs`.
+   */
+  async removeAsync(cost = 1, maxWaitMs = 30_000): Promise<boolean> {
+    const deadline = Date.now() + Math.max(0, maxWaitMs);
+    for (;;) {
+      if (this.tryRemove(cost)) return true;
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) return false;
+      const retryAfterSec = this.getRetryAfterSec(cost);
+      const waitMs = Math.min(
+        Math.max(50, Math.ceil((retryAfterSec * 1000) / 4)),
+        500,
+        remainingMs,
+      );
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+
   /** Estimativa de segundos até `cost` tokens estarem disponíveis (mínimo 1s). */
   getRetryAfterSec(cost = 1): number {
     this.refill();

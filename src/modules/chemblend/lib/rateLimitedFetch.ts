@@ -4,7 +4,9 @@
 // Pipeline por requisição:
 //   1) Dedup      — reaproveita chamadas idênticas já em andamento
 //   2) Circuit breaker — falha rápido se o backend está degradado (5xx em sequência)
-//   3) Token bucket    — aplica o limite do tipo de chamada (login/read/write/upload/…)
+//   3) Token bucket    — aplica o limite do tipo de chamada (login/read/write/upload/…).
+//                        Se o bucket estiver vazio, aguarda o refill até TOKEN_WAIT_MAX_MS
+//                        (evita 429 artificial em fluxos sequenciais legítimos).
 //   4) Fila de concorrência — no máx. N requisições simultâneas, o resto espera
 //   5) fetch real
 //   6) Backoff exponencial — só para chamadas idempotentes (read/public/download)
@@ -33,6 +35,7 @@ import {
   DOWNLOAD_BURST,
   PUBLIC_LIMIT,
   PUBLIC_BURST,
+  TOKEN_WAIT_MAX_MS,
   RATE_LIMIT_MESSAGES,
   BACKOFF_BASE_MS,
   BACKOFF_MAX_MS,
@@ -132,10 +135,16 @@ export async function rateLimitedFetch(
       }
 
       const bucket = getBucket(kind);
-      if (bucket && !bucket.tryRemove(cost)) {
-        const retryAfterSec = bucket.getRetryAfterSec(cost);
-        if (!silent429) notifyTooManyRequests();
-        throw new HttpError(429, RATE_LIMIT_MESSAGES.api, { retryAfterSec, endpoint: url });
+      if (bucket) {
+        // Aguarda refill em vez de falhar imediatamente — fluxos de negócio fazem
+        // dezenas de writes sequenciais (transbordo multi-destino, etc.).
+        // eslint-disable-next-line no-await-in-loop
+        const acquired = await bucket.removeAsync(cost, TOKEN_WAIT_MAX_MS);
+        if (!acquired) {
+          const retryAfterSec = bucket.getRetryAfterSec(cost);
+          if (!silent429) notifyTooManyRequests();
+          throw new HttpError(429, RATE_LIMIT_MESSAGES.api, { retryAfterSec, endpoint: url });
+        }
       }
 
       // eslint-disable-next-line no-await-in-loop

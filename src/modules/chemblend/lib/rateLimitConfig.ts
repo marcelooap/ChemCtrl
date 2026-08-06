@@ -28,10 +28,16 @@ export const DEFAULT_ROLE: UserRole = 'operacional';
 
 // ---------------------------------------------------------------------------
 // Token Bucket — escrita (INSERT/UPDATE/DELETE e RPCs que alteram dados)
+// Burst precisa caber fluxos sequenciais legítimos (ex.: transbordo tanque → N
+// contentores: Transfer + origens + N×Container/Origin). Abaixo disso o cliente
+// bloqueava no meio e um retry gerava registro duplicado.
 // ---------------------------------------------------------------------------
 export const WRITE_LIMIT = 30;
 export const WRITE_WINDOW_MS = 60_000;
-export const WRITE_BURST = 8;
+export const WRITE_BURST = 40;
+
+/** Tempo máximo aguardando refill do bucket antes de falhar com 429 (ms). */
+export const TOKEN_WAIT_MAX_MS = 45_000;
 
 // Upload — bucket próprio (mais restritivo, upload é pesado)
 export const UPLOAD_LIMIT = 5;

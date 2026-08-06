@@ -190,12 +190,6 @@ export default function Home() {
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-semibold">{t('dashboard.stats.productionsInProgress')}</h3>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{inProgressProds.length}</span>
-              <span
-                className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary"
-                title={t('dashboard.stats.producedThisWeek')}
-              >
-                {fmtVolume(weekVolume)}
-              </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {t('dashboard.stats.weekPeriod', { start: fmtDate(weekStart.toDate()), end: fmtDate(weekEnd.toDate()) })}
@@ -208,10 +202,18 @@ export default function Home() {
                   {day.label}
                 </span>
                 <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary tabular-nums">
-                  {fmtVolume(day.volume)}
+                  {fmtVolume(Math.round(day.volume))}
                 </span>
               </div>
             ))}
+            <div className="flex flex-col items-center gap-1 min-w-[3.25rem]">
+              <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-green-100 text-green-800">
+                {t('common.total')}
+              </span>
+              <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-green-100 text-green-800 tabular-nums">
+                {fmtVolume(Math.round(weekVolume))}
+              </span>
+            </div>
           </div>
         </div>
         <ProductionTrackingTable

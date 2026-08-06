@@ -24,6 +24,7 @@ import {
 } from '@chemblend/lib/containerOrigins';
 import { getLatestRecipeForProduct } from '@chemblend/lib/recipeRevisions';
 import { usePermissions } from '@chemblend/lib/rbac/PermissionProvider';
+import { useSubmitGuard } from '@chemblend/hooks/useSubmitGuard';
 
 const emptyDest = () => ({
   type: 'Transbordo', placa: '', barril: '', volume: 0, mass: 0,
@@ -91,7 +92,7 @@ export default function Transbordo() {
     origins: [emptyOrigin()],
     destinations: [emptyDest()]
   });
-  const [saving, setSaving] = useState(false);
+  const { busy: saving, run: runSave } = useSubmitGuard();
   const { toast } = useToast();
 
   const na = t('common.notAvailable');
@@ -233,217 +234,216 @@ export default function Transbordo() {
     if (form.origins.length === 0 || !form.origins[0].container_id) { toast({ title: t('containers.transferPage.messages.addOrigin'), variant: 'destructive' }); return; }
     if (form.destinations.length === 0) { toast({ title: t('containers.transferPage.messages.addDestination'), variant: 'destructive' }); return; }
 
-    setSaving(true);
-    try {
-      const isSingle = form.destinations.length === 1;
-      const dests = form.destinations.map(d => {
-        const vol = Math.round(isSingle ? originsVolume : (parseFloat(d.volume) || 0));
-        const mass = Math.round(vol * productDensity);
-        const tare = parseFloat(d.tare) || 0;
-        return {
-          ...d,
-          volume: vol,
-          mass,
-          net_weight: mass,
-          gross_weight: mass + tare,
-        };
-      });
-
-      const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
-
-      const data = {
-        ...form,
-        transfer_number: transferNumber,
-        operator: user?.nome || user?.full_name || user?.email || '',
-        date: form.date,
-        origins: form.origins,
-        destinations: dests,
-      };
-      await base44.entities.Transfer.create(data);
-
-      const originSlicesByContainer = {};
-      const operatorName = user?.nome || user?.full_name || user?.email || '';
-
-      for (const o of form.origins) {
-        if (!o.container_id) continue;
-        const c = containers.find(ct => ct.id === o.container_id);
-        if (!c) continue;
-        const withdrawn = parseFloat(o.volume_used) || 0;
-        const newVolume = Math.max(0, (c.volume || 0) - withdrawn);
-        const updates = { volume: newVolume };
-        if (newVolume === 0) {
-          updates.status = 'Expedido';
-          updates.departure_date = new Date().toISOString().split('T')[0];
-          updates.is_fractional = false;
-        } else if (withdrawn > 0) {
-          updates.is_fractional = true;
-        }
-
-        await ensureContainerHasOrigin(base44.entities, c, operatorName);
-        const ensured = await base44.entities.ContainerOrigin.filter({ container_id: o.container_id });
-        originSlicesByContainer[o.container_id] = sliceOriginsForWithdrawal(ensured, withdrawn);
-
-        let remainingOrigins = ensured;
-        if (withdrawn > 0) {
-          remainingOrigins = await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
-        }
-
-        const recipe = getLatestRecipeForProduct(recipes, form.product);
-        const dens = parseFloat(recipe?.density) || 0;
-        if (dens > 0) {
-          const tare = parseFloat(c.tare) || 0;
-          updates.net_weight = Math.round(newVolume * dens);
-          updates.gross_weight = Math.round(newVolume * dens + tare);
-        }
-
-        const dominantLot = dominantLotFromOrigins(remainingOrigins);
-        if (dominantLot) updates.lot = dominantLot;
-
-        await base44.entities.Container.update(o.container_id, updates);
-      }
-
-      const allContainersList = await base44.entities.Container.list('-created_date', 500);
-      let maxRegId = 0;
-      allContainersList.forEach(c => { if (c.registration_id != null && c.registration_id > maxRegId) maxRegId = c.registration_id; });
-      const firstOriginContainer = form.origins[0]?.container_id
-        ? containers.find(ct => ct.id === form.origins[0].container_id)
-        : null;
-      const originProductionId = firstOriginContainer?.production_id || '';
-
-      const mergedDestSlices = [];
-      for (const o of form.origins) {
-        const slices = originSlicesByContainer[o.container_id] || [];
-        for (const s of slices) mergedDestSlices.push({ ...s });
-      }
-      const mergedByKey = new Map();
-      for (const s of mergedDestSlices) {
-        const key = `${s.production_id || ''}|${s.op_number || ''}|${s.lot || ''}`;
-        const prev = mergedByKey.get(key);
-        if (!prev) mergedByKey.set(key, { ...s });
-        else {
-          prev.volume = (parseFloat(prev.volume) || 0) + (parseFloat(s.volume) || 0);
-          prev.initial_volume = prev.volume;
-        }
-      }
-      const destOriginSlices = Array.from(mergedByKey.values());
-
-      const originIds = form.origins.map((o) => o.container_id).filter(Boolean);
-
-      for (const d of dests) {
-        if (d.type !== 'Transbordo') continue;
-
-        const destVol = parseFloat(d.volume) || 0;
-        const scaledSlices = destOriginSlices.length > 0
-          ? scaleSlicesForVolume(destOriginSlices, destVol)
-          : [{
-            production_id: originProductionId || null,
-            op_number: firstOriginContainer?.op_number || null,
-            lot: form.origins[0]?.lot || null,
-            volume: destVol,
-            initial_volume: destVol,
-          }];
-
-        // Same physical tank already on patio → add volume + append origin history
-        // (keeps envase/OP registration; does not create a duplicate patio line).
-        const existingPatio = findExistingPatioContainer(allContainersList, {
-          placa: d.placa,
-          barril: d.barril,
-          product: form.product,
-          excludeIds: originIds,
+    await runSave(async () => {
+      try {
+        const isSingle = form.destinations.length === 1;
+        const dests = form.destinations.map(d => {
+          const vol = Math.round(isSingle ? originsVolume : (parseFloat(d.volume) || 0));
+          const mass = Math.round(vol * productDensity);
+          const tare = parseFloat(d.tare) || 0;
+          return {
+            ...d,
+            volume: vol,
+            mass,
+            net_weight: mass,
+            gross_weight: mass + tare,
+          };
         });
 
-        if (existingPatio?.id) {
-          await ensureContainerHasOrigin(base44.entities, existingPatio, operatorName);
-          const existingOrigins = await base44.entities.ContainerOrigin.filter({ container_id: existingPatio.id });
+        const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
 
-          const newVolume = (parseFloat(existingPatio.volume) || 0) + destVol;
-          const tare = parseFloat(d.tare) > 0
-            ? parseFloat(d.tare)
-            : (parseFloat(existingPatio.tare) || 0);
-          const dens = productDensity > 0
-            ? productDensity
-            : (parseFloat(getLatestRecipeForProduct(recipes, form.product)?.density) || 0);
-          const net_weight = dens > 0
-            ? Math.round(newVolume * dens)
-            : Math.round((parseFloat(existingPatio.net_weight) || 0) + (d.net_weight || 0));
-          const gross_weight = net_weight + tare;
+        const data = {
+          ...form,
+          transfer_number: transferNumber,
+          operator: user?.nome || user?.full_name || user?.email || '',
+          date: form.date,
+          origins: form.origins,
+          destinations: dests,
+        };
+        await base44.entities.Transfer.create(data);
 
-          const compositionAfter = [
-            ...(existingOrigins || []),
-            ...scaledSlices,
-          ];
-          const dominantLot = dominantLotFromOrigins(compositionAfter)
-            || existingPatio.lot
+        const originSlicesByContainer = {};
+        const operatorName = user?.nome || user?.full_name || user?.email || '';
+
+        for (const o of form.origins) {
+          if (!o.container_id) continue;
+          const c = containers.find(ct => ct.id === o.container_id);
+          if (!c) continue;
+          const withdrawn = parseFloat(o.volume_used) || 0;
+          const newVolume = Math.max(0, (c.volume || 0) - withdrawn);
+          const updates = { volume: newVolume };
+          if (newVolume === 0) {
+            updates.status = 'Expedido';
+            updates.departure_date = new Date().toISOString().split('T')[0];
+            updates.is_fractional = false;
+          } else if (withdrawn > 0) {
+            updates.is_fractional = true;
+          }
+
+          await ensureContainerHasOrigin(base44.entities, c, operatorName);
+          const ensured = await base44.entities.ContainerOrigin.filter({ container_id: o.container_id });
+          originSlicesByContainer[o.container_id] = sliceOriginsForWithdrawal(ensured, withdrawn);
+
+          let remainingOrigins = ensured;
+          if (withdrawn > 0) {
+            remainingOrigins = await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
+          }
+
+          const recipe = getLatestRecipeForProduct(recipes, form.product);
+          const dens = parseFloat(recipe?.density) || 0;
+          if (dens > 0) {
+            const tare = parseFloat(c.tare) || 0;
+            updates.net_weight = Math.round(newVolume * dens);
+            updates.gross_weight = Math.round(newVolume * dens + tare);
+          }
+
+          const dominantLot = dominantLotFromOrigins(remainingOrigins);
+          if (dominantLot) updates.lot = dominantLot;
+
+          await base44.entities.Container.update(o.container_id, updates);
+        }
+
+        const allContainersList = await base44.entities.Container.list('-created_date', 500);
+        let maxRegId = 0;
+        allContainersList.forEach(c => { if (c.registration_id != null && c.registration_id > maxRegId) maxRegId = c.registration_id; });
+        const firstOriginContainer = form.origins[0]?.container_id
+          ? containers.find(ct => ct.id === form.origins[0].container_id)
+          : null;
+        const originProductionId = firstOriginContainer?.production_id || '';
+
+        const mergedDestSlices = [];
+        for (const o of form.origins) {
+          const slices = originSlicesByContainer[o.container_id] || [];
+          for (const s of slices) mergedDestSlices.push({ ...s });
+        }
+        const mergedByKey = new Map();
+        for (const s of mergedDestSlices) {
+          const key = `${s.production_id || ''}|${s.op_number || ''}|${s.lot || ''}`;
+          const prev = mergedByKey.get(key);
+          if (!prev) mergedByKey.set(key, { ...s });
+          else {
+            prev.volume = (parseFloat(prev.volume) || 0) + (parseFloat(s.volume) || 0);
+            prev.initial_volume = prev.volume;
+          }
+        }
+        const destOriginSlices = Array.from(mergedByKey.values());
+
+        const originIds = form.origins.map((o) => o.container_id).filter(Boolean);
+
+        for (const d of dests) {
+          if (d.type !== 'Transbordo') continue;
+
+          const destVol = parseFloat(d.volume) || 0;
+          const scaledSlices = destOriginSlices.length > 0
+            ? scaleSlicesForVolume(destOriginSlices, destVol)
+            : [{
+              production_id: originProductionId || null,
+              op_number: firstOriginContainer?.op_number || null,
+              lot: form.origins[0]?.lot || null,
+              volume: destVol,
+              initial_volume: destVol,
+            }];
+
+          // Same physical tank already on patio → add volume + append origin history
+          // (keeps envase/OP registration; does not create a duplicate patio line).
+          const existingPatio = findExistingPatioContainer(allContainersList, {
+            placa: d.placa,
+            barril: d.barril,
+            product: form.product,
+            excludeIds: originIds,
+          });
+
+          if (existingPatio?.id) {
+            await ensureContainerHasOrigin(base44.entities, existingPatio, operatorName);
+            const existingOrigins = await base44.entities.ContainerOrigin.filter({ container_id: existingPatio.id });
+
+            const newVolume = (parseFloat(existingPatio.volume) || 0) + destVol;
+            const tare = parseFloat(d.tare) > 0
+              ? parseFloat(d.tare)
+              : (parseFloat(existingPatio.tare) || 0);
+            const dens = productDensity > 0
+              ? productDensity
+              : (parseFloat(getLatestRecipeForProduct(recipes, form.product)?.density) || 0);
+            const net_weight = dens > 0
+              ? Math.round(newVolume * dens)
+              : Math.round((parseFloat(existingPatio.net_weight) || 0) + (d.net_weight || 0));
+            const gross_weight = net_weight + tare;
+
+            const compositionAfter = [
+              ...(existingOrigins || []),
+              ...scaledSlices,
+            ];
+            const dominantLot = dominantLotFromOrigins(compositionAfter)
+              || existingPatio.lot
+              || form.origins[0]?.lot
+              || '';
+
+            const updates = {
+              volume: newVolume,
+              tare,
+              net_weight,
+              gross_weight,
+              status: 'No Pátio',
+              lot: dominantLot,
+            };
+            if (d.seals) updates.seals = d.seals;
+            if (d.sling) updates.sling = d.sling;
+            if (d.gps) updates.gps = d.gps;
+            if (d.min_test_date) updates.min_test_date = d.min_test_date;
+            if (d.packaging_type) updates.type = d.packaging_type;
+
+            await base44.entities.Container.update(existingPatio.id, updates);
+            await createOriginsFromSlices(base44.entities, existingPatio.id, scaledSlices, operatorName);
+
+            Object.assign(existingPatio, updates);
+            continue;
+          }
+
+          maxRegId += 1;
+          const destLot = dominantLotFromOrigins(scaledSlices)
             || form.origins[0]?.lot
             || '';
-
-          const updates = {
-            volume: newVolume,
-            tare,
-            net_weight,
-            gross_weight,
+          const created = await base44.entities.Container.create({
+            production_id: originProductionId,
+            op_number: transferNumber,
+            container_number: d.placa || '',
+            barril_number: d.barril || '',
+            registration_id: maxRegId,
+            product: form.product,
+            client: form.client || '',
+            lot: destLot,
+            type: d.packaging_type || '',
+            volume: destVol,
+            tare: parseFloat(d.tare) || 0,
+            net_weight: d.net_weight || 0,
+            gross_weight: d.gross_weight || 0,
+            seals: d.seals || '',
+            sling: d.sling || '',
+            gps: d.gps || '',
+            min_test_date: d.min_test_date || '',
+            operator: operatorName,
             status: 'No Pátio',
-            lot: dominantLot,
-          };
-          if (d.seals) updates.seals = d.seals;
-          if (d.sling) updates.sling = d.sling;
-          if (d.gps) updates.gps = d.gps;
-          if (d.min_test_date) updates.min_test_date = d.min_test_date;
-          if (d.packaging_type) updates.type = d.packaging_type;
+            is_fractional: false,
+          });
 
-          await base44.entities.Container.update(existingPatio.id, updates);
-          await createOriginsFromSlices(base44.entities, existingPatio.id, scaledSlices, operatorName);
-
-          Object.assign(existingPatio, updates);
-          continue;
+          if (created?.id) {
+            await createOriginsFromSlices(base44.entities, created.id, scaledSlices, operatorName);
+            allContainersList.push({ ...created, status: 'No Pátio' });
+          }
         }
 
-        maxRegId += 1;
-        const destLot = dominantLotFromOrigins(scaledSlices)
-          || form.origins[0]?.lot
-          || '';
-        const created = await base44.entities.Container.create({
-          production_id: originProductionId,
-          op_number: transferNumber,
-          container_number: d.placa || '',
-          barril_number: d.barril || '',
-          registration_id: maxRegId,
-          product: form.product,
-          client: form.client || '',
-          lot: destLot,
-          type: d.packaging_type || '',
-          volume: destVol,
-          tare: parseFloat(d.tare) || 0,
-          net_weight: d.net_weight || 0,
-          gross_weight: d.gross_weight || 0,
-          seals: d.seals || '',
-          sling: d.sling || '',
-          gps: d.gps || '',
-          min_test_date: d.min_test_date || '',
-          operator: operatorName,
-          status: 'No Pátio',
-          is_fractional: false,
+        setShowForm(false); load();
+        toast({ title: t('containers.transferPage.messages.registered') });
+        setForm({
+          date: new Date().toISOString().split('T')[0], product: '', client: '',
+          observations: '',
+          origins: [emptyOrigin()],
+          destinations: [emptyDest()]
         });
-
-        if (created?.id) {
-          await createOriginsFromSlices(base44.entities, created.id, scaledSlices, operatorName);
-          allContainersList.push({ ...created, status: 'No Pátio' });
-        }
+      } catch (err) {
+        toast({ title: t('containers.transferPage.messages.registerError'), description: err.message, variant: 'destructive' });
       }
-
-      setShowForm(false); load();
-      toast({ title: t('containers.transferPage.messages.registered') });
-      setForm({
-        date: new Date().toISOString().split('T')[0], product: '', client: '',
-        observations: '',
-        origins: [emptyOrigin()],
-        destinations: [emptyDest()]
-      });
-    } catch (err) {
-      toast({ title: t('containers.transferPage.messages.registerError'), description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const confirmDelete = async () => {
@@ -689,7 +689,7 @@ export default function Transbordo() {
         </div>
       </div>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={(open) => { if (!saving) setShowForm(open); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="text-base font-semibold">{t('containers.transferPage.formTitle')}</DialogTitle></DialogHeader>
           <div className="grid gap-5">
