@@ -253,7 +253,16 @@ export default function Pedidos() {
     setSaving(true);
     try {
       if (editing) {
-        const data = { ...baseData };
+        const derived = deriveOrderFromProductions(
+          { ...editing, volume_ordered: volOrdered },
+          productions,
+        );
+        const data = {
+          ...baseData,
+          volume_produced: derived.volume_produced,
+          volume_pending: derived.volume_pending,
+          status: derived.status,
+        };
         await base44.entities.Order.update(editing.id, data);
 
         // Mantém client_order sincronizado nas OPs vinculadas (campo denormalizado)

@@ -110,16 +110,12 @@ export function deriveOrderFromProductions(order, productions) {
     // Com OPs visíveis, confiar na soma de Finalizado — evita volume_produced
     // obsoleto no DB após cancelamento forçar Finalizado indevidamente.
     totalProduced = opProduced;
-    volumePending = Math.max(0, volumeOrdered - totalProduced);
   } else {
     totalProduced = toNum(order.volume_produced);
-    const dbPending = order.volume_pending == null || order.volume_pending === ''
-      ? null
-      : toNum(order.volume_pending);
-    volumePending = dbPending != null
-      ? Math.max(0, dbPending)
-      : Math.max(0, volumeOrdered - totalProduced);
   }
+  // Sempre recalcular a partir do volume pedido — volume_pending no DB pode
+  // ficar obsoleto quando volume_ordered é editado sem OPs vinculadas.
+  volumePending = Math.max(0, volumeOrdered - totalProduced);
 
   const fullyProduced = isOrderFullyProduced(volumeOrdered, totalProduced, volumePending);
 
