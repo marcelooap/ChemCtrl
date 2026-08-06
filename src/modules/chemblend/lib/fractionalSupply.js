@@ -204,9 +204,17 @@ export const getFractionalDisplayVolume = (container, production) => {
  * Em atendimento fracionado, o envase muitas vezes grava o volume nominal da OP
  * enquanto o volume realmente apontado (massa) fica em volume_apontado (ex.: 4.993 L).
  * Nesse caso exibimos o apontado. Após transbordo/redução, containers.volume é a fonte da verdade.
+ * Volume 0 / Expedido nunca deve ser mascarado pelo apontado da OP.
  */
 export const containerDisplayVolume = (container, productions) => {
   const containerVol = parseFloat(container?.volume) || 0;
+  const status = (container?.status || '').trim();
+
+  // Embalagem vazia ou expedida: confiar no volume persistido
+  if (containerVol <= 0.001 || status === 'Expedido') {
+    return Math.max(0, round3(containerVol));
+  }
+
   const production = productionOfContainer(container, productions);
 
   if (production?.fractional_supply) {
@@ -216,7 +224,7 @@ export const containerDisplayVolume = (container, productions) => {
       // Volume ainda parece o nominal da OP (não reduzido por TB/expedição)
       const storedAsOpVolume =
         opVol > 0 && Math.abs(containerVol - opVol) <= 0.51;
-      if (storedAsOpVolume || containerVol <= 0) {
+      if (storedAsOpVolume) {
         return round3(apontado);
       }
     }

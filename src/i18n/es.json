@@ -2851,6 +2851,8 @@
         "selectProduct": "Seleccione un producto",
         "addOrigin": "Agregue al menos un origen",
         "addDestination": "Agregue al menos un destino",
+        "invalidDestinationVolume": "Informe el volumen de los destinos",
+        "volumeMismatch": "La suma de los volúmenes de origen debe ser igual a la de los destinos",
         "registered": "Transbordo registrado",
         "registerError": "Error al registrar transbordo",
         "deleted": "Transbordo eliminado",

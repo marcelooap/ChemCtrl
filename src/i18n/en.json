@@ -2915,6 +2915,8 @@
         "selectProduct": "Select a product",
         "addOrigin": "Add at least one origin",
         "addDestination": "Add at least one destination",
+        "invalidDestinationVolume": "Enter destination volumes",
+        "volumeMismatch": "Origin volumes must equal destination volumes",
         "registered": "Transfer registered",
         "registerError": "Failed to register transfer",
         "deleted": "Transfer deleted",

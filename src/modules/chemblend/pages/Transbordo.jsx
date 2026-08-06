@@ -216,9 +216,22 @@ export default function Transbordo() {
   };
 
   const updateDest = (idx, field, value) => {
-    const destinations = [...form.destinations];
-    destinations[idx] = { ...destinations[idx], [field]: value };
-    setForm(prev => ({ ...prev, destinations }));
+    setForm((prev) => {
+      const destinations = [...prev.destinations];
+      destinations[idx] = { ...destinations[idx], [field]: value };
+      let origins = prev.origins;
+      // Multi-dest + single origin: keep withdrawn volume aligned with destinations
+      if (field === 'volume' && destinations.length > 1 && origins.length === 1 && origins[0].container_id) {
+        const destTotal = destinations.reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+        const c = containers.find((ct) => ct.id === origins[0].container_id);
+        origins = [{
+          ...origins[0],
+          volume_used: destTotal,
+          remaining_stock: Math.max(0, (parseFloat(c?.volume) || 0) - destTotal),
+        }];
+      }
+      return { ...prev, destinations, origins };
+    });
   };
 
   const addDestination = () => {
@@ -250,6 +263,28 @@ export default function Transbordo() {
           };
         });
 
+        const destTotal = dests.reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+        if (destTotal <= 0.001) {
+          toast({ title: t('containers.transferPage.messages.invalidDestinationVolume'), variant: 'destructive' });
+          return;
+        }
+
+        // Single origin: withdrawal must match what actually left to destinations.
+        // Multi origin: declared withdrawals must match destination total.
+        const workingOrigins = form.origins.map((o) => ({ ...o }));
+        if (workingOrigins.length === 1 && workingOrigins[0].container_id) {
+          const originContainer = containers.find((ct) => ct.id === workingOrigins[0].container_id);
+          const physical = parseFloat(originContainer?.volume) || 0;
+          workingOrigins[0].volume_used = destTotal;
+          workingOrigins[0].remaining_stock = Math.max(0, physical - destTotal);
+        } else {
+          const originTotal = workingOrigins.reduce((s, o) => s + (parseFloat(o.volume_used) || 0), 0);
+          if (Math.abs(originTotal - destTotal) > 0.51) {
+            toast({ title: t('containers.transferPage.messages.volumeMismatch'), variant: 'destructive' });
+            return;
+          }
+        }
+
         const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
 
         const data = {
@@ -257,7 +292,7 @@ export default function Transbordo() {
           transfer_number: transferNumber,
           operator: user?.nome || user?.full_name || user?.email || '',
           date: form.date,
-          origins: form.origins,
+          origins: workingOrigins,
           destinations: dests,
         };
         await base44.entities.Transfer.create(data);
@@ -265,17 +300,30 @@ export default function Transbordo() {
         const originSlicesByContainer = {};
         const operatorName = user?.nome || user?.full_name || user?.email || '';
 
-        for (const o of form.origins) {
+        for (const o of workingOrigins) {
           if (!o.container_id) continue;
-          const c = containers.find(ct => ct.id === o.container_id);
+          let c = containers.find(ct => ct.id === o.container_id);
           if (!c) continue;
+          try {
+            const fresh = await base44.entities.Container.get(o.container_id);
+            if (fresh) c = fresh;
+          } catch (_e) { /* use list snapshot */ }
+
+          const physical = parseFloat(c.volume) || 0;
           const withdrawn = parseFloat(o.volume_used) || 0;
-          const newVolume = Math.max(0, (c.volume || 0) - withdrawn);
+          let newVolume = Math.max(0, physical - withdrawn);
+          // Near-empty after full transfer → treat as empty
+          if (newVolume <= 0.51 || withdrawn >= physical - 0.51) {
+            newVolume = 0;
+          }
+
           const updates = { volume: newVolume };
-          if (newVolume === 0) {
+          if (newVolume <= 0.001) {
             updates.status = 'Expedido';
             updates.departure_date = new Date().toISOString().split('T')[0];
             updates.is_fractional = false;
+            updates.net_weight = 0;
+            updates.gross_weight = Math.round(parseFloat(c.tare) || 0);
           } else if (withdrawn > 0) {
             updates.is_fractional = true;
           }
@@ -289,16 +337,24 @@ export default function Transbordo() {
             remainingOrigins = await applyProportionalOriginReduction(base44.entities, ensured, o.container_id, withdrawn);
           }
 
-          const recipe = getLatestRecipeForProduct(recipes, form.product);
-          const dens = parseFloat(recipe?.density) || 0;
-          if (dens > 0) {
-            const tare = parseFloat(c.tare) || 0;
-            updates.net_weight = Math.round(newVolume * dens);
-            updates.gross_weight = Math.round(newVolume * dens + tare);
+          if (newVolume > 0.001) {
+            const recipe = getLatestRecipeForProduct(recipes, form.product);
+            const dens = parseFloat(recipe?.density) || 0;
+            if (dens > 0) {
+              const tare = parseFloat(c.tare) || 0;
+              updates.net_weight = Math.round(newVolume * dens);
+              updates.gross_weight = Math.round(newVolume * dens + tare);
+            }
+            const dominantLot = dominantLotFromOrigins(remainingOrigins);
+            if (dominantLot) updates.lot = dominantLot;
+          } else {
+            // Clear composition leftovers on fully emptied packaging
+            const leftover = (remainingOrigins || []).filter((x) => !x._legacy && (parseFloat(x.volume) || 0) > 0.0005);
+            for (const row of leftover) {
+              await base44.entities.ContainerOrigin.delete(row.id);
+            }
+            remainingOrigins = [];
           }
-
-          const dominantLot = dominantLotFromOrigins(remainingOrigins);
-          if (dominantLot) updates.lot = dominantLot;
 
           await base44.entities.Container.update(o.container_id, updates);
         }
@@ -306,13 +362,13 @@ export default function Transbordo() {
         const allContainersList = await base44.entities.Container.list('-created_date', 500);
         let maxRegId = 0;
         allContainersList.forEach(c => { if (c.registration_id != null && c.registration_id > maxRegId) maxRegId = c.registration_id; });
-        const firstOriginContainer = form.origins[0]?.container_id
-          ? containers.find(ct => ct.id === form.origins[0].container_id)
+        const firstOriginContainer = workingOrigins[0]?.container_id
+          ? containers.find(ct => ct.id === workingOrigins[0].container_id)
           : null;
         const originProductionId = firstOriginContainer?.production_id || '';
 
         const mergedDestSlices = [];
-        for (const o of form.origins) {
+        for (const o of workingOrigins) {
           const slices = originSlicesByContainer[o.container_id] || [];
           for (const s of slices) mergedDestSlices.push({ ...s });
         }
@@ -328,7 +384,7 @@ export default function Transbordo() {
         }
         const destOriginSlices = Array.from(mergedByKey.values());
 
-        const originIds = form.origins.map((o) => o.container_id).filter(Boolean);
+        const originIds = workingOrigins.map((o) => o.container_id).filter(Boolean);
 
         for (const d of dests) {
           if (d.type !== 'Transbordo') continue;
