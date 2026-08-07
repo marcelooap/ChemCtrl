@@ -32,6 +32,7 @@ import {
   VOLUME_EPS,
   isOrderFullyProduced,
   isPastExpectedDate,
+  getDaysUntilExpected,
   getOrderDisplayStatus,
   deriveOrderFromProductions,
 } from '@chemblend/lib/orderProductionStatus';
@@ -392,9 +393,10 @@ export default function Pedidos() {
                   <th className="px-4 py-3 text-left">{t('orders.table.client')}</th>
                   <th className="px-4 py-3 text-left">{t('orders.table.clientOrder')}</th>
                   <th className="px-4 py-3 text-right">{t('orders.table.volume')}</th>
-                  <th className="px-4 py-3 text-right">{t('orders.table.volumeProduced')}</th>
-                  <th className="px-4 py-3 text-right">{t('orders.table.volumePending')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.volumeProduced')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.volumePending')}</th>
                   <th className="px-4 py-3 text-left">{t('orders.table.expectedDate')}</th>
+                  <th className="px-4 py-3 text-center">{t('orders.table.days')}</th>
                   <th className="px-4 py-3 text-center">{t('orders.table.status')}</th>
                   <th className="px-4 py-3 text-center">{t('orders.table.actions')}</th>
                 </tr>
@@ -405,6 +407,14 @@ export default function Pedidos() {
                     && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
                     && o.status !== 'Finalizado';
                   const displayStatus = getDisplayStatus(o);
+                  const daysUntil = o.status === 'Finalizado' ? null : getDaysUntilExpected(o);
+                  const daysColor = daysUntil == null
+                    ? 'text-muted-foreground'
+                    : daysUntil > 0
+                      ? 'text-green-600'
+                      : daysUntil === 0
+                        ? 'text-blue-600'
+                        : 'text-red-600';
                   return (
                     <tr key={o.id} className="border-b border-border hover:bg-accent/30">
                       <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
@@ -414,9 +424,9 @@ export default function Pedidos() {
                       <td className="px-4 py-2.5 text-sm text-muted-foreground">{o.client}</td>
                       <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
                       <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
-                      <td className="px-4 py-2.5 text-right text-sm">
-                        <div className="inline-flex items-center justify-end gap-2">
+                      <td className="px-4 py-2.5 text-center font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
+                      <td className="px-4 py-2.5 text-center text-sm">
+                        <div className="inline-flex items-center justify-center gap-2">
                           {toNum(o.volume_in_production) > VOLUME_EPS && (
                             <span
                               className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
@@ -434,6 +444,9 @@ export default function Pedidos() {
                           {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
                           {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
                         </span>
+                      </td>
+                      <td className={`px-4 py-2.5 text-center text-sm font-semibold ${daysColor}`}>
+                        {o.status === 'Finalizado' || daysUntil == null ? '-' : daysUntil}
                       </td>
                       <td className="px-4 py-2.5 text-center"><StatusBadge status={displayStatus} /></td>
                       <td className="px-4 py-2.5 text-center">

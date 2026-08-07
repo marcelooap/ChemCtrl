@@ -61,7 +61,8 @@ export default function TelaClientes() {
   const [viewingMP, setViewingMP] = useState(null);
   const [viewingContainer, setViewingContainer] = useState(null);
 
-  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
+  const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language);
+  const fmtInt = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
 
   const externoClient = getUserClient(user);
   const showClientFilter = canUseClientFilter(user);
@@ -225,7 +226,7 @@ export default function TelaClientes() {
             <div className="grid grid-cols-2 gap-3">
               <MiniKpi label={t('clients.screen.kpiDistinctMps')} value={stockKpis.distinctMps} icon={Package} iconClass="text-blue-600" bgClass="bg-blue-100" />
               <MiniKpi label={t('clients.screen.kpiTotalLots')} value={stockKpis.totalLots} icon={Layers} iconClass="text-purple-600" bgClass="bg-purple-100" />
-              <MiniKpi label={t('clients.screen.kpiTotalStored')} value={fmt(stockKpis.totalStored)} icon={Scale} iconClass="text-green-600" bgClass="bg-green-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalStored')} value={fmtInt(stockKpis.totalStored)} icon={Scale} iconClass="text-green-600" bgClass="bg-green-100" />
               <MiniKpi label={t('clients.screen.kpiTotalPackaging')} value={fmt(stockKpis.totalPackaging)} icon={Boxes} iconClass="text-amber-600" bgClass="bg-amber-100" />
             </div>
           </div>
@@ -247,7 +248,7 @@ export default function TelaClientes() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <MiniKpi label={t('clients.screen.kpiTotalContainers')} value={containerKpis.total} icon={BoxIcon} iconClass="text-blue-600" bgClass="bg-blue-100" />
               <MiniKpi label={t('clients.screen.kpiDistinctProducts')} value={containerKpis.distinctProducts} icon={Package} iconClass="text-purple-600" bgClass="bg-purple-100" />
-              <MiniKpi label={t('clients.screen.kpiTotalVolume')} value={fmtVolume(containerKpis.totalVolume, 'L', i18n.language)} icon={Cylinder} iconClass="text-green-600" bgClass="bg-green-100" />
+              <MiniKpi label={t('clients.screen.kpiTotalVolume')} value={`${fmtInt(containerKpis.totalVolume)} L`} icon={Cylinder} iconClass="text-green-600" bgClass="bg-green-100" />
               <MiniKpi label={t('clients.screen.kpiIbcCount')} value={containerKpis.ibc} icon={Container} iconClass="text-amber-600" bgClass="bg-amber-100" />
               <MiniKpi label={t('clients.screen.kpiContentorCount')} value={containerKpis.contentor} icon={BoxIcon} iconClass="text-purple-600" bgClass="bg-purple-100" />
               <MiniKpi label={t('clients.screen.kpiDrumCount')} value={containerKpis.drum} icon={Drum} iconClass="text-cyan-600" bgClass="bg-cyan-100" />

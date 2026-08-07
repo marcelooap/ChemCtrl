@@ -34,7 +34,7 @@ export default function AppLayout() {
         sidebar={<Sidebar />}
         topBarProps={{
           topBarActions: <ModulesHubButton />,
-          userMenuExtras: <SystemManualMenu />,
+          userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
           getRoleLabel,
         }}
         outletContext={{ user, isReadOnly: isReadOnly(user, location.pathname) }}

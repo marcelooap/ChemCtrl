@@ -1624,6 +1624,7 @@
       "volumePending": "Vol. Pendente",
       "volumeInProduction": "Volume em produção (será baixado do pendente)",
       "expectedDate": "Prev. Atend.",
+      "days": "Dias",
       "status": "Status",
       "actions": "Ações"
     },

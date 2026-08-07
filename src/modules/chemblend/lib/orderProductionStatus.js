@@ -58,6 +58,21 @@ export const isPastExpectedDate = (order, now = new Date()) => {
 };
 
 /**
+ * Dias até a data prevista de atendimento (calendário local).
+ * Positivo = falta X dias; 0 = hoje; negativo = atraso em dias.
+ * Retorna null se não houver data válida.
+ */
+export const getDaysUntilExpected = (order, now = new Date()) => {
+  if (!order?.expected_date) return null;
+  const expected = toCalendarYmd(order.expected_date);
+  const [y, m, d] = expected.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const expectedDay = new Date(y, m - 1, d);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((expectedDay.getTime() - today.getTime()) / 86_400_000);
+};
+
+/**
  * Pedido atrasado para exibição de status.
  * Com OP aberta (Em produção) nunca é Atrasado — status operacional prevalece.
  */

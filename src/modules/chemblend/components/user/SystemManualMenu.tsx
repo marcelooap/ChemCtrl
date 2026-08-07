@@ -19,7 +19,10 @@ export function SystemManualMenu() {
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const isExternal = user?.tipo === 'externo';
   const canUpdate = isAdminUser(user);
+
+  if (isExternal) return null;
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();

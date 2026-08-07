@@ -160,7 +160,7 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title={t('dashboard.stats.volumeProducedMonth')} value={fmtVolume(totalVolumeMonth)}
+        <StatCard title={t('dashboard.stats.volumeProducedMonth')} value={fmtVolume(Math.round(totalVolumeMonth))}
           subtitle={t('dashboard.stats.finishedOps', { count: finishedThisMonth.length })} icon={BarChart3} iconBg="#1e56a0"
           showEye hidden={hideVolume} onToggleEye={() => setHideVolume(h => !h)}
           showLabel={t('common.show')} hideLabel={t('common.hide')}
