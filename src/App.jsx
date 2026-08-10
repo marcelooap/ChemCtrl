@@ -27,7 +27,7 @@ import ChemCtrlRoutes from '@industrializacao/routes';
 import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
 
 // Módulo ChemFlow (lazy; apenas administradores)
-const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));
+const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
 
 /** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
 function LegacyChemblendPrefixRedirect() {
@@ -78,7 +78,7 @@ const AuthenticatedApp = () => {
           <Route
             path="/chemflow/*"
             element={
-              <ModuleErrorBoundary title="Não foi possível abrir o ChemFlow">
+              <ModuleErrorBoundary title="Não foi possível abrir o Transbordo">
                 <Suspense fallback={<ModuleLoadingFallback />}>
                   <ChemFlowRoutes />
                 </Suspense>

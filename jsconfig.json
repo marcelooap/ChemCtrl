@@ -3,7 +3,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@industrializacao/*": ["./src/modules/industrializacao/*"],
-      "@chemflow/*": ["./src/modules/chemflow/*"],
+      "@transbordo/*": ["./src/modules/transbordo/*"],
       "@shared/*": ["./src/shared/*"]
     },
     "jsx": "react-jsx",

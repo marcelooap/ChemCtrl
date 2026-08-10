@@ -269,14 +269,14 @@
     "lockedTooltip": "Accès non autorisé pour votre niveau",
     "moduleName": "ChemCtrl",
     "appSubtitle": "Contrôle de Production",
-    "chemflowSubtitle": "ChemFlow",
+    "chemflowSubtitle": "Transbordement",
     "footer": {
       "expand": "Développer la sidebar",
       "collapse": "Réduire la sidebar",
       "logout": "Quitter",
       "backToModules": "Retour",
       "backToChemCtrl": "Retour",
-      "openChemFlow": "ChemFlow"
+      "openChemFlow": "Transbordement"
     }
   },
   "accessDenied": {
@@ -429,7 +429,7 @@
     "comingSoon": "Bientôt",
     "apps": {
       "chemblend": {
-        "name": "ChemCtrl",
+        "name": "Industrialisation",
         "description": "Système de gestion industrielle pour la production, les stocks, les recettes, la qualité et les opérations.",
         "cta": "Accéder au système",
         "features": {
@@ -441,7 +441,7 @@
         }
       },
       "chemflow": {
-        "name": "ChemFlow",
+        "name": "Transbordement",
         "description": "Module de gestion du transbordement, de la filtration et des opérations logistiques.",
         "cta": "Accéder au module",
         "ctaDisabled": "Module en développement",

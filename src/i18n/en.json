@@ -269,14 +269,14 @@
     "lockedTooltip": "No access for your role",
     "moduleName": "ChemCtrl",
     "appSubtitle": "Production Control",
-    "chemflowSubtitle": "ChemFlow",
+    "chemflowSubtitle": "Transshipment",
     "footer": {
       "expand": "Expand sidebar",
       "collapse": "Collapse sidebar",
       "logout": "Log out",
       "backToModules": "Back",
       "backToChemCtrl": "Back",
-      "openChemFlow": "ChemFlow"
+      "openChemFlow": "Transshipment"
     }
   },
   "accessDenied": {
@@ -429,7 +429,7 @@
     "comingSoon": "Coming soon",
     "apps": {
       "chemblend": {
-        "name": "ChemCtrl",
+        "name": "Industrialization",
         "description": "Industrial management system for production, inventory, recipes, quality, and operations.",
         "cta": "Access system",
         "features": {
@@ -441,7 +441,7 @@
         }
       },
       "chemflow": {
-        "name": "ChemFlow",
+        "name": "Transshipment",
         "description": "Module for transfer operations, filtration, and logistics management.",
         "cta": "Access module",
         "ctaDisabled": "Module under development",

@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@industrializacao': path.resolve(__dirname, './src/modules/industrializacao'),
-      '@chemflow': path.resolve(__dirname, './src/modules/chemflow'),
+      '@transbordo': path.resolve(__dirname, './src/modules/transbordo'),
       '@shared': path.resolve(__dirname, './src/shared'),
     },
   },
