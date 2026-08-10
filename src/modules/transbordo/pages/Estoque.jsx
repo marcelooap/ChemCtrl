@@ -20,8 +20,8 @@ import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
-import { formatMass, formatCurrency } from "@transbordo/lib/format";
-import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, hydrateEstoqueFiscal } from "@transbordo/lib/estoqueSaldo";
+import { formatMass, formatVolume, formatCurrency } from "@transbordo/lib/format";
+import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, getEstoqueUnidadeEntrada, getEstoqueSaldoEntrada, hydrateEstoqueFiscal } from "@transbordo/lib/estoqueSaldo";
 import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
 
 const STATUS_OPTIONS = [
@@ -31,6 +31,16 @@ const STATUS_OPTIONS = [
 ];
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+
+function formatSaldoEntrada(estoqueItem) {
+  const saldo = getEstoqueSaldoEntrada(estoqueItem);
+  const unidade = getEstoqueUnidadeEntrada(estoqueItem);
+  const u = String(unidade || "kg").toLowerCase();
+  if (u === "l" || u === "lt" || u === "litro" || u === "litros" || u === "gal") {
+    return formatVolume(saldo, { empty: "-" });
+  }
+  return formatMass(saldo, { empty: "-" });
+}
 
 export default function Estoque() {
   const [estoque, setEstoque] = useState([]);
@@ -520,10 +530,10 @@ export default function Estoque() {
                     <td className="px-5 py-3 text-muted-foreground">{e.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
                     <td className="px-5 py-3 text-foreground">
-                      {formatMass(e.saldo_atual, { empty: "-" })}
+                      {formatSaldoEntrada(e)}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {e.unidade_medida || "-"}
+                      {getEstoqueUnidadeEntrada(e)}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">

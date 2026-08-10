@@ -1,5 +1,9 @@
 import { roundMass } from "@transbordo/lib/format";
-import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
+import {
+  loteToKg,
+  loteUnidadeEstoque,
+  saldoKgToLitros,
+} from "@transbordo/lib/conversao";
 import { calcTransbordadoParaEmbalado } from "@transbordo/lib/transbordoEmbalado";
 import { entities } from "@transbordo/services/entities";
 
@@ -63,6 +67,57 @@ export function getEstoqueUnidade(estoqueItem) {
     });
   }
   return estoqueItem?.unidade_medida || "kg";
+}
+
+/**
+ * Unidade de medida informada na entrada do produto (lote).
+ * Diferente da unidade operacional do saldo (geralmente kg no convencional).
+ */
+export function getEstoqueUnidadeEntrada(estoqueItem) {
+  const fromLote = estoqueItem?.lotes?.[0]?.unidade_medida;
+  if (fromLote != null && String(fromLote).trim() !== "") {
+    return String(fromLote).trim();
+  }
+  return estoqueItem?.unidade_medida || "kg";
+}
+
+/**
+ * Saldo atual convertido para a unidade de medida da entrada.
+ * O saldo persistido permanece operacional (kg no convencional);
+ * esta função é só para exibição na listagem.
+ */
+export function getEstoqueSaldoEntrada(estoqueItem) {
+  const saldo = Number(estoqueItem?.saldo_atual) || 0;
+  if (saldo <= 0) return 0;
+
+  // Embalado: quantidade/saldo já estão na unidade lançada na entrada
+  if (estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) {
+    return Math.round(saldo);
+  }
+
+  const um = getEstoqueUnidadeEntrada(estoqueItem);
+  const dens =
+    parseFloat(
+      String(
+        estoqueItem?.densidade ||
+          estoqueItem?.lotes?.[0]?.densidade ||
+          "0"
+      ).replace(",", ".")
+    ) || 0;
+
+  switch (um) {
+    case "L":
+      return saldoKgToLitros(saldo, dens, estoqueItem);
+    case "gal": {
+      const litros = saldoKgToLitros(saldo, dens, estoqueItem);
+      return Math.round(litros / 3.78541);
+    }
+    case "lb":
+      return Math.round(saldo / 0.453592);
+    case "kg":
+    default:
+      return Math.round(saldo);
+  }
 }
 
 /**

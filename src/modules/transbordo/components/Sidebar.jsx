@@ -10,6 +10,7 @@ import {
   Container,
   Filter,
   Boxes,
+  PackageSearch,
   Cylinder,
 } from 'lucide-react';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { path: '/chemflow/vasilhames', label: 'Vasilhames', icon: Container },
   { path: '/chemflow/filtracao', label: 'Filtração', icon: Filter },
   { path: '/chemflow/estoque', label: 'Estoque', icon: Boxes },
+  { path: '/chemflow/estoque-envio', label: 'Estoque Envio', icon: PackageSearch },
   { path: '/chemflow/tankagem', label: 'Tankagem', icon: Cylinder },
 ];
 

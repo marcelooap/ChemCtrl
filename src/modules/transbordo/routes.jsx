@@ -11,6 +11,7 @@ import Saida from '@transbordo/pages/Saida';
 import SaidaForm from '@transbordo/pages/SaidaForm';
 import SaidaView from '@transbordo/pages/SaidaView';
 import Estoque from '@transbordo/pages/Estoque';
+import EstoqueEnvio from '@transbordo/pages/EstoqueEnvio';
 import Filtracao from '@transbordo/pages/Filtracao';
 
 /**
@@ -34,6 +35,7 @@ export default function ChemFlowRoutes() {
         <Route path="vasilhames" element={<Vasilhames />} />
         <Route path="filtracao" element={<Filtracao />} />
         <Route path="estoque" element={<Estoque />} />
+        <Route path="estoque-envio" element={<EstoqueEnvio />} />
         <Route path="tankagem" element={<Tankagem />} />
       </Route>
       <Route path="*" element={<Navigate to="/chemflow" replace />} />

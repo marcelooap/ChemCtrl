@@ -183,13 +183,23 @@ function ensureSpace(doc, y, needed) {
   return y;
 }
 
-function addTable(doc, y, headers, rows, colWidths, totalsRow) {
+function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = []) {
   const dataFs = 8.5;
   const hdrFs = 7.5;
+  const lineH = 5.2;
+  const rowPad = 1.5;
   const widths = colWidths || headers.map(() => CW / headers.length);
   const charW = dataFs * 0.182;
+  const badgeSet = new Set(badgeCols);
 
   const cellCenterX = (x, w) => x + w / 2;
+
+  const toLines = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((v) => String(v != null && v !== "" ? v : "-"));
+    }
+    return [String(value != null ? value : "-")];
+  };
 
   const drawHeader = (yy) => {
     const h = 8;
@@ -219,6 +229,18 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow) {
     }
   };
 
+  const drawBadgeAt = (label, cx, cy) => {
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    const tw = doc.getTextWidth(label) + 4;
+    const bw = Math.max(tw, 14);
+    const bh = 4.6;
+    setFill(doc, [220, 252, 231]); // green-100
+    doc.roundedRect(cx - bw / 2, cy - bh / 2, bw, bh, 1.2, 1.2, "F");
+    setColor(doc, [21, 128, 61]); // green-700
+    doc.text(label, cx, cy, { align: "center", baseline: "middle" });
+  };
+
   y = drawHeader(y);
   doc.setFontSize(dataFs);
   doc.setFont("helvetica", "normal");
@@ -243,7 +265,10 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow) {
   }
 
   rows.forEach((r, ri) => {
-    const rowH = 7.5;
+    const cellLines = r.map((c) => toLines(c));
+    const maxLines = Math.max(1, ...cellLines.map((lines) => lines.length));
+    const rowH = Math.max(7.5, maxLines * lineH + rowPad * 2);
+
     if (y + rowH > PH - 28) {
       doc.addPage();
       y = 20;
@@ -260,19 +285,30 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow) {
     setDraw(doc, GRAY_BORDER);
     doc.setLineWidth(0.15);
     doc.line(M, y + rowH, M + CW, y + rowH);
+
     let x = M;
-    r.forEach((c, i) => {
-      const text = String(c != null ? c : "-");
-      doc.setFontSize(dataFs);
-      setColor(doc, BLACK);
-      doc.setFont("helvetica", "normal");
-      const availW = widths[i] - 4;
-      const maxChars = Math.max(1, Math.floor(availW / charW));
-      const display =
-        text.length > maxChars ? `${text.substring(0, maxChars)}...` : text;
-      doc.text(display, cellCenterX(x, widths[i]), y + rowH / 2, {
-        align: "center",
-        baseline: "middle",
+    cellLines.forEach((lines, i) => {
+      const blockH = lines.length * lineH;
+      const startY = y + (rowH - blockH) / 2 + lineH / 2;
+
+      lines.forEach((raw, li) => {
+        const availW = widths[i] - 4;
+        const maxChars = Math.max(1, Math.floor(availW / charW));
+        const display =
+          raw.length > maxChars ? `${raw.substring(0, maxChars)}...` : raw;
+        const cy = startY + li * lineH;
+
+        if (badgeSet.has(i) && display && display !== "-") {
+          drawBadgeAt(display, cellCenterX(x, widths[i]), cy);
+        } else {
+          doc.setFontSize(dataFs);
+          setColor(doc, BLACK);
+          doc.setFont("helvetica", "normal");
+          doc.text(display, cellCenterX(x, widths[i]), cy, {
+            align: "center",
+            baseline: "middle",
+          });
+        }
       });
       x += widths[i];
     });
@@ -537,4 +573,158 @@ export function generateRelatorioEstoquePDF({
     safePdfFilenamePart(idEntrada) ||
     "estoque";
   doc.save(`${fileBase} - Relatório de Estoque.pdf`);
+}
+
+/**
+ * Relatório consolidado de Estoque Envio (produtos + vasilhames + tankas).
+ * Layout alinhado ao PDF de Estoque Cliente (industrialização).
+ */
+export function generateEstoqueEnvioPDF({
+  client,
+  products = [],
+  containers = [],
+  tanks = [],
+}) {
+  const clientLabel = client || "Todos os clientes";
+  const doc = new jsPDF({ format: "a4" });
+
+  let y = addPageTitle(
+    doc,
+    `Estoque Envio — ${clientLabel}`,
+    "Relatório consolidado de estoque para envio"
+  );
+
+  const totalProdutoSaldo = products.reduce(
+    (s, p) => s + (Number(p.saldo) || 0),
+    0
+  );
+  const totalContainerVolume = containers.reduce(
+    (s, c) => s + (Number(c.volume) || 0),
+    0
+  );
+  const totalContainerMass = containers.reduce(
+    (s, c) => s + (Number(c.peso_liquido) || 0),
+    0
+  );
+  const totalContainerGross = containers.reduce(
+    (s, c) => s + (Number(c.peso_bruto) || 0),
+    0
+  );
+
+  y = ensureSpace(doc, y, 30);
+  y = addSectionTitle(doc, y, "Estoque de produtos");
+  if (products.length === 0) {
+    doc.setFontSize(9);
+    setColor(doc, GRAY_LABEL);
+    doc.text("Nenhum produto com saldo no filtro.", M, y);
+    y += 8;
+  } else {
+    y = addTable(
+      doc,
+      y,
+      ["CÓDIGO", "PRODUTO", "SALDO", "UNIDADE"],
+      products.map((p) => [
+        (p.codigo || "-").substring(0, 14),
+        (p.produto || "-").substring(0, 40),
+        fmtNum(p.saldo, 0),
+        p.unidade || "-",
+      ]),
+      [32, 90, 32, 28],
+      ["TOTAL", "", fmtNum(totalProdutoSaldo, 0), ""]
+    );
+  }
+
+  y = ensureSpace(doc, y, 30);
+  y = addSectionTitle(doc, y, "Vasilhames");
+  if (containers.length === 0) {
+    doc.setFontSize(9);
+    setColor(doc, GRAY_LABEL);
+    doc.text("Nenhum vasilhame no filtro.", M, y);
+    y += 8;
+  } else {
+    y = addTable(
+      doc,
+      y,
+      ["PLACA", "BARRIL", "PRODUTO", "LOTE", "VOLUME", "P. LÍQ.", "P. BRUTO"],
+      containers.map((c) => [
+        (c.placa || "-").substring(0, 16),
+        (c.barril || "-").substring(0, 12),
+        (c.produto_nome || "-").substring(0, 24),
+        (c.lote || "-").substring(0, 14),
+        fmtNum(c.volume, 0),
+        fmtNum(c.peso_liquido, 0),
+        fmtNum(c.peso_bruto, 0),
+      ]),
+      [26, 20, 40, 26, 22, 24, 24],
+      [
+        "TOTAL",
+        "",
+        "",
+        "",
+        `${fmtNum(totalContainerVolume, 0)} L`,
+        `${fmtNum(totalContainerMass, 0)} kg`,
+        `${fmtNum(totalContainerGross, 0)} kg`,
+      ]
+    );
+  }
+
+  y = ensureSpace(doc, y, 30);
+  y = addSectionTitle(doc, y, "Tankas");
+  const tankRows = [];
+  let totalTankVolume = 0;
+  for (const tk of tanks) {
+    const tankaNome = (
+      tk.tankaCodigo ||
+      tk.tanka ||
+      tk.codigo_itku ||
+      "-"
+    ).substring(0, 18);
+    const produto = (tk.produto || "-").substring(0, 28);
+    const cap = Number(tk.capacidade) || 26000;
+    const lotes =
+      Array.isArray(tk.lotes) && tk.lotes.length > 0
+        ? tk.lotes
+        : [
+            {
+              lote: tk.lote || "",
+              quantidade_l: Number(tk.volumeAtual) || 0,
+            },
+          ];
+
+    const loteLines = [];
+    const volumeLines = [];
+    const ocupacaoLines = [];
+
+    for (const l of lotes) {
+      const vol = Number(l.quantidade_l) || 0;
+      totalTankVolume += vol;
+      const pct = cap > 0 ? Math.min(100, (vol / cap) * 100) : 0;
+      loteLines.push((l.lote || "-").substring(0, 18));
+      volumeLines.push(fmtNum(vol, 0));
+      ocupacaoLines.push(`${pct.toFixed(1)}%`);
+    }
+
+    tankRows.push([tankaNome, produto, loteLines, volumeLines, ocupacaoLines]);
+  }
+
+  if (tankRows.length === 0) {
+    doc.setFontSize(9);
+    setColor(doc, GRAY_LABEL);
+    doc.text("Nenhuma tanka no filtro.", M, y);
+    y += 8;
+  } else {
+    y = addTable(
+      doc,
+      y,
+      ["TANKA", "PRODUTO", "LOTE", "VOLUME ATUAL", "OCUPAÇÃO"],
+      tankRows,
+      [32, 52, 34, 34, 30],
+      ["TOTAL", "", "", `${fmtNum(totalTankVolume, 0)} L`, ""],
+      [4] // coluna ocupação com badge verde (apenas PDF)
+    );
+  }
+
+  addFooter(doc);
+  const fileBase = safePdfFilenamePart(clientLabel) || "estoque-envio";
+  doc.save(`estoque-envio-${fileBase.toLowerCase().replace(/\s+/g, "-")}.pdf`);
 }
