@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import {
@@ -106,13 +106,6 @@ export default function ProdutosTab() {
   const handleEdit = (produto) => {
     setEditingProduto(produto);
     setReadOnly(false);
-    setSaveError("");
-    setModalOpen(true);
-  };
-
-  const handleView = (produto) => {
-    setEditingProduto(produto);
-    setReadOnly(true);
     setSaveError("");
     setModalOpen(true);
   };
@@ -271,13 +264,6 @@ export default function ProdutosTab() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleView(p)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Visualizar"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                         <button
                           onClick={() => handleEdit(p)}
                           className="text-muted-foreground hover:text-foreground transition-colors"

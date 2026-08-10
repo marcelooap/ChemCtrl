@@ -6,7 +6,7 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { QRCodeSVG } from 'qrcode.react';
 import i18n from '@/i18n';
-import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, toDateInputValue } from '@/i18n/formatters';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -19,14 +19,23 @@ function getLabelLabels(locale) {
   return { lang, t };
 }
 
+/** Soma dias em calendário (Y-M-D), evitando deslocamento por timezone/UTC midnight. */
+function addCalendarDays(dateValue, days) {
+  const ymd = toDateInputValue(dateValue);
+  if (!ymd) return null;
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  const local = new Date(y, m - 1, d);
+  local.setDate(local.getDate() + n);
+  return local;
+}
+
 function calcValidity(fabDateStr, validityDays, lang) {
   if (!fabDateStr) return '—';
-  const d = new Date(fabDateStr);
-  if (isNaN(d.getTime())) return '—';
-  if (validityDays && validityDays > 0) {
-    d.setDate(d.getDate() + Number(validityDays));
-  }
-  return fmtDate(d, { timeZone: 'America/Sao_Paulo' }, lang);
+  const expiry = addCalendarDays(fabDateStr, validityDays);
+  if (!expiry) return '—';
+  return fmtDate(expiry, undefined, lang);
 }
 
 function makeQrElement(publicUrl) {
@@ -93,10 +102,8 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
   const placa = container.container_number || '';
   const barril = container.barril_number || '';
   const embalagem = escapeHtml(barril ? `${placa} (${barril})` : placa || '—');
-  const fabDateStr = container.created_date;
-  const fabDate = fabDateStr
-    ? fmtDate(fabDateStr, { timeZone: 'America/Sao_Paulo' }, lang)
-    : '—';
+  const fabDateStr = options?.manufactureDate || container.created_date;
+  const fabDate = fabDateStr ? fmtDate(fabDateStr, undefined, lang) : '—';
   const valDate = calcValidity(fabDateStr, validityDays, lang);
   const netWeight = numFmt(container.net_weight || 0);
   const grossWeight = numFmt(container.gross_weight || 0);

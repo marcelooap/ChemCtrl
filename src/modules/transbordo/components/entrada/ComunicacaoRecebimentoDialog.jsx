@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,16 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { Package, CheckCircle, AlertCircle } from "lucide-react";
+import { Package, CheckCircle, AlertCircle, Copy, Check } from "lucide-react";
 import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
+import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
+import { copyHtmlToClipboard } from "@transbordo/lib/clipboard";
+import {
+  buildReceivingCommunicationHtml,
+  formatReceivingLoteRow,
+  formatReceivingDestinoRow,
+} from "@transbordo/lib/buildReceivingCommunicationHtml";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "-";
@@ -51,7 +58,7 @@ function formatDestino(d) {
     return parts.join(" · ");
   }
 
-  if (d.tipo_embalagem === "One Way (IBC)" || d.tipo_embalagem === "Bombona 200 L" || d.tipo_embalagem === "Tambor 200 L") {
+  if (isDestinoEstoqueEmbalado(d.tipo_embalagem)) {
     return d.tipo_embalagem;
   }
 
@@ -79,6 +86,8 @@ export default function ComunicacaoRecebimentoDialog({
   transbordos = [],
   estoque = [],
 }) {
+  const [copied, setCopied] = useState(false);
+
   const produtosById = useMemo(() => {
     const map = new Map();
     produtos.forEach((p) => map.set(p.id, p));
@@ -104,15 +113,10 @@ export default function ComunicacaoRecebimentoDialog({
     ];
   }, [entrada]);
 
-  /** IDs que o transbordo pode gravar em origens.entrada_id:
-   *  - id da própria entrada
-   *  - ids dos registros de estoque gerados por essa entrada
-   */
   const origemIds = useMemo(() => {
     if (!entrada) return new Set();
     const ids = new Set([entrada.id]);
     estoque.forEach((row) => {
-      // Estoque gerado por transbordo (IBC/Tambor) não conta como origem da entrada
       if (String(row.grupo_entrada || "").startsWith("TB")) return;
       if (row.entrada_id === entrada.id) ids.add(row.id);
     });
@@ -123,8 +127,6 @@ export default function ComunicacaoRecebimentoDialog({
     if (!entrada) return [];
     const codigoRef = String(entradaId || "").trim().toUpperCase();
 
-    // Vínculo por UUID do estoque/entrada — nunca só pelo texto "E00N"
-    // (códigos gravados no OP podem estar desalinhados do índice atual).
     const relacionados = transbordos.filter((t) =>
       (t.origens || []).some((o) =>
         origemPertenceAEntrada(o, origemIds, codigoRef)
@@ -178,8 +180,58 @@ export default function ComunicacaoRecebimentoDialog({
   const tdClass =
     "px-2.5 py-1 text-xs text-foreground/90 border-b border-border whitespace-nowrap";
 
+  const handleCopy = async () => {
+    try {
+      const lotesPayload = lotes.map((l) =>
+        formatReceivingLoteRow(l, {
+          notaFiscal: entrada.nota_fiscal,
+          densidade: resolveDensidade(l, produtosById),
+          formatDate,
+        })
+      );
+
+      const { html, text } = buildReceivingCommunicationHtml({
+        entradaId,
+        dataEntrada: formatDate(
+          entrada.data || entrada.created_date || entrada.created_at
+        ),
+        lotes: lotesPayload,
+        hasPesagem,
+        pesoBruto: formatMass(entrada.granel_peso_bruto, { empty: "-" }),
+        pesoLiquido: formatMass(entrada.granel_peso_liquido, { empty: "-" }),
+        tara: diferenca == null ? "-" : formatMass(diferenca, { empty: "-" }),
+        margemLabel: entrada.granel_margem
+          ? dentroMargem
+            ? "Dentro da margem"
+            : "Fora da margem"
+          : null,
+        dentroMargem,
+        destinos: destinosList.map(formatReceivingDestinoRow),
+        totais: {
+          volumeFmt: formatVolume(transbordoTotais.volume, { empty: "-" }),
+          massaFmt: formatMass(transbordoTotais.massa, { empty: "-" }),
+        },
+      });
+
+      const ok = await copyHtmlToClipboard(html, text);
+      if (ok) {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      }
+    } catch (err) {
+      console.error("[Transbordo] Falha ao copiar recebimento:", err);
+    }
+  };
+
+  const handleOpenChange = (v) => {
+    if (!v) {
+      setCopied(false);
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] max-h-[95vh] overflow-hidden flex flex-col gap-0 p-0">
         <DialogHeader className="px-5 pt-4 pb-2 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -354,7 +406,26 @@ export default function ComunicacaoRecebimentoDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 px-5 py-3 border-t border-border">
+        <DialogFooter className="flex-shrink-0 px-5 py-3 border-t border-border gap-2 sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopy}
+            className="gap-2"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-green-600" />
+                Copiado!
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                Copiar
+              </>
+            )}
+          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Fechar
           </Button>

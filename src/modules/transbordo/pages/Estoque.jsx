@@ -22,7 +22,7 @@ import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatMass, formatCurrency } from "@transbordo/lib/format";
 import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, hydrateEstoqueFiscal } from "@transbordo/lib/estoqueSaldo";
-import { migrateVasilhamesEmbaladosParaEstoque } from "@transbordo/lib/transbordoEmbalado";
+import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -55,9 +55,15 @@ export default function Estoque() {
     if (!silent) setLoading(true);
     try {
       try {
-        await migrateVasilhamesEmbaladosParaEstoque();
+        const mig = await migrateEstoqueEmbaladoParaVasilhames();
+        if (mig.deletedEstoque > 0) {
+          console.info(
+            `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) unitária(s) do Estoque → Vasilhames; removidos ${mig.deletedEstoque} do estoque.`
+          );
+        }
+        await normalizeBarrilEmbalagensUnitarias();
       } catch (migErr) {
-        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+        console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
 
       const [ests, prods, cliens, trans, saics, ents, vascs] = await Promise.all([
@@ -71,7 +77,10 @@ export default function Estoque() {
       ]);
 
       // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
-      const estoqueWithSaldo = ests.map((e) => {
+      // Bombonas/tambores/IBC de OP ficam só em Vasilhames
+      const estoqueWithSaldo = ests
+        .filter((e) => !isEstoqueEmbalagemUnitaria(e))
+        .map((e) => {
         const hydrated = hydrateEstoqueFiscal(e);
         const quantidade = getEstoqueQuantidade(hydrated);
         const unidade_medida = getEstoqueUnidade(hydrated);

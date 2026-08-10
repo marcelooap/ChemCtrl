@@ -10,14 +10,12 @@ import {
   roundVolume,
   roundMass,
 } from "@transbordo/lib/format";
-
-const TIPOS_EMBALAGEM = [
-  "Vasilhame",
-  "Tankagem",
-  "One Way (IBC)",
-  "Bombona 200 L",
-  "Tambor 200 L",
-];
+import {
+  TIPOS_EMBALAGEM_DESTINO,
+  VOLUME_PADRAO_EMBALAGEM,
+  isDestinoEstoqueEmbalado,
+  labelTipoEmbalagem,
+} from "@transbordo/lib/tiposEmbalagem";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -99,13 +97,15 @@ export default function DestinoCard({
     onChange(updated);
   };
 
-  const handleTipoChange = (label) => {
+  const handleTipoChange = (label, item) => {
+    const tipoValue = item?.value || label;
+    const volumePadrao = VOLUME_PADRAO_EMBALAGEM[tipoValue];
     const updated = {
       ...destino,
-      tipo_embalagem: label,
+      tipo_embalagem: tipoValue,
       volume: 0,
       quantidade_embalagens: 0,
-      volume_por_embalagem: 0,
+      volume_por_embalagem: volumePadrao ?? 0,
       peso_liquido: 0,
       peso_bruto: 0,
       tara: 0,
@@ -144,7 +144,7 @@ export default function DestinoCard({
             </span>
             <span className="text-sm text-foreground/80">
               <span className="text-muted-foreground">Tipo:</span>{" "}
-              {tipo || "—"}
+              {labelTipoEmbalagem(tipo) || tipo || "—"}
             </span>
             <span className="text-sm text-foreground/80">
               <span className="text-muted-foreground">Volume:</span>{" "}
@@ -215,9 +215,9 @@ export default function DestinoCard({
       <div className="space-y-1.5">
         <Label>Tipo de Embalagem *</Label>
         <SearchableSelect
-          value={tipo}
-          onChange={(label) => handleTipoChange(label)}
-          options={TIPOS_EMBALAGEM.map((t) => ({ value: t, label: t }))}
+          value={labelTipoEmbalagem(tipo) || tipo}
+          onChange={handleTipoChange}
+          options={TIPOS_EMBALAGEM_DESTINO}
           getOptionLabel={(o) => o.label}
           getOptionValue={(o) => o.value}
           placeholder="Selecione..."
@@ -403,9 +403,7 @@ export default function DestinoCard({
         </div>
       )}
 
-      {(tipo === "One Way (IBC)" ||
-        tipo === "Bombona 200 L" ||
-        tipo === "Tambor 200 L") && (
+      {isDestinoEstoqueEmbalado(tipo) && (
         <div className="grid grid-cols-3 gap-3">
           <IntegerField
             label="Qtd. Embalagens"

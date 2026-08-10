@@ -15,17 +15,11 @@ import {
 } from "@shared/components/ui/alert-dialog";
 import VasilhameCadastroModal from "@transbordo/components/cadastro/VasilhameCadastroModal";
 import { formatVolume, formatMass } from "@transbordo/lib/format";
-
-const TIPOS_EXCLUIDOS = new Set([
-  "Tankagem",
-  "One Way (IBC)",
-  "Bombona 200 L",
-  "Tambor 200 L",
-]);
+import { TIPOS_NAO_VASILHAME } from "@transbordo/lib/tiposEmbalagem";
 
 function isTipoVasilhame(v) {
   const tipo = v?.tipo || "Vasilhame";
-  return !TIPOS_EXCLUIDOS.has(tipo);
+  return !TIPOS_NAO_VASILHAME.has(tipo);
 }
 
 function resolveCapacidade(v, allByPlaca = []) {
@@ -56,7 +50,10 @@ export default function VasilhamesTab() {
     if (!silent) setLoading(true);
     try {
       const all = await entities.vasilhames.list("-created_date");
-      setVasilhames(all.filter(isTipoVasilhame));
+      // Fracionados ficam só na tela operacional de Vasilhames (pátio), não no cadastro
+      setVasilhames(
+        all.filter(isTipoVasilhame).filter((v) => !v.fracionado)
+      );
     } catch {
       if (!silent) setVasilhames([]);
     } finally {

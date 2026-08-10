@@ -335,8 +335,11 @@ export function listHistoricoTransbordosEncadeados(
 /**
  * Frações do conteúdo do vasilhame atribuídas a cada estoque de origem.
  * Retorna Map<estoqueId, weight> com soma ≈ 1.
+ *
+ * Inclui vínculo de entrada direta (tipo_recebimento = vasilhame), quando o
+ * tanque foi criado na entrada sem passar por transbordo.
  */
-export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = []) {
+export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = [], estoqueItem = null) {
   const weights = new Map();
   const related = findTransbordosForVasilhame(vasilhame, transbordos);
 
@@ -362,7 +365,13 @@ export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = []) {
         if (o.entrada_id) ids.add(o.entrada_id);
       })
     );
-    if (ids.size === 0) return weights;
+    if (ids.size === 0) {
+      // Entrada direta como vasilhame (sem OP): 100% deste estoque
+      if (estoqueItem && isVasilhameFromEntradaDireta(vasilhame, estoqueItem)) {
+        weights.set(estoqueItem.id, 1);
+      }
+      return weights;
+    }
     const w = 1 / ids.size;
     ids.forEach((id) => weights.set(id, w));
     return weights;
@@ -372,6 +381,36 @@ export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = []) {
     weights.set(id, m / total);
   }
   return weights;
+}
+
+/** Tanque criado na própria entrada (sem transbordo intermediário). */
+export function isVasilhameFromEntradaDireta(vasilhame, estoqueItem) {
+  if (!vasilhame?.id || !estoqueItem?.id) return false;
+
+  const lote = estoqueItem.lotes?.[0];
+  if (lote?.vasilhame_id && lote.vasilhame_id === vasilhame.id) return true;
+
+  const tipo =
+    lote?.tipo_recebimento || estoqueItem.tipo_recebimento || "";
+  if (tipo !== "vasilhame") return false;
+
+  const entradaId = estoqueItem.entrada_id;
+  if (
+    entradaId &&
+    (vasilhame.composicao || []).some(
+      (c) => c.entrada_id === entradaId || c.estoque_id === estoqueItem.id
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    (vasilhame.composicao || []).some((c) => c.estoque_id === estoqueItem.id)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -396,7 +435,7 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
 
 /**
  * Massa (kg) já baixada por saídas convencionais fiscais
- * cujos vasilhames se originaram deste estoque (via transbordo).
+ * cujos vasilhames se originaram deste estoque (via transbordo ou entrada direta).
  */
 export function calcSaidasConvencional(
   estoqueItem,
@@ -417,7 +456,7 @@ export function calcSaidasConvencional(
         if (item.tipo !== "convencional" || !item.vasilhame_id) return s;
         const v = vasilhameById.get(item.vasilhame_id);
         if (!v) return s;
-        const weights = getEstoqueWeightsForVasilhame(v, transbordos);
+        const weights = getEstoqueWeightsForVasilhame(v, transbordos, estoqueItem);
         const w = weights.get(id) || 0;
         if (w <= 0) return s;
         const massa =
@@ -459,7 +498,11 @@ export function listSaidasHistoricoForEstoque(
       } else if (item.tipo === "convencional" && item.vasilhame_id) {
         const v = vasilhameById.get(item.vasilhame_id);
         if (v) {
-          const weights = getEstoqueWeightsForVasilhame(v, transbordos);
+          const weights = getEstoqueWeightsForVasilhame(
+            v,
+            transbordos,
+            estoqueItem
+          );
           const w = weights.get(id) || 0;
           if (w > 0) {
             linked = true;
@@ -517,7 +560,8 @@ export function listSaidasHistoricoForEstoque(
 export function resolveEstoqueIdsFromSaidaConvencional(
   itens = [],
   vasilhames = [],
-  transbordos = []
+  transbordos = [],
+  estoqueList = []
 ) {
   const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
   const ids = new Set();
@@ -525,9 +569,16 @@ export function resolveEstoqueIdsFromSaidaConvencional(
     if (item.tipo !== "convencional" || !item.vasilhame_id) return;
     const v = vasilhameById.get(item.vasilhame_id);
     if (!v) return;
+
+    // Origens via OP
     const weights = getEstoqueWeightsForVasilhame(v, transbordos);
     weights.forEach((w, estoqueId) => {
       if (w > 0) ids.add(estoqueId);
+    });
+
+    // Entrada direta: vincula pelo vasilhame_id / composição
+    (estoqueList || []).forEach((e) => {
+      if (isVasilhameFromEntradaDireta(v, e)) ids.add(e.id);
     });
   });
   return [...ids];
@@ -540,7 +591,7 @@ export function resolveEstoqueIdsFromSaidaConvencional(
  * - Na entrada: saldo = quantidade recebida
  * - Transbordo NÃO reduz o saldo (é movimento interno granel → vasilhame)
  * - Embalado: reduz quando há saída enviada ao fiscal
- * - Convencional: reduz quando o vasilhame originado deste estoque é enviado ao fiscal
+ * - Convencional / entrada vasilhame: reduz quando o tanque é enviado ao fiscal
  */
 export function computeEstoqueSaldo(
   estoqueItem,
@@ -570,6 +621,13 @@ export function computeEstoqueSaldo(
  * Independente do saldo da tela de Estoque.
  */
 export function computeDisponivelTransbordo(estoqueItem, transbordos) {
+  const tipoRecebimento =
+    estoqueItem?.lotes?.[0]?.tipo_recebimento ||
+    estoqueItem?.tipo_recebimento;
+  // Entrada já em tanque não é origem granel de OP
+  if (tipoRecebimento === "vasilhame") return 0;
+  if (estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) return 0;
+
   const quantidade = getEstoqueQuantidade(estoqueItem);
   const transbordado = calcTransbordado(estoqueItem, transbordos);
   return Math.max(0, quantidade - transbordado);

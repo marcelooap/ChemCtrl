@@ -24,7 +24,7 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import VasilhameModal from "@transbordo/components/vasilhame/VasilhameModal";
 import VasilhameViewDialog from "@transbordo/components/vasilhame/VasilhameViewDialog";
-import { formatVolume, formatMass } from "@transbordo/lib/format";
+import { formatVolume, formatMass, roundVolume, roundMass } from "@transbordo/lib/format";
 import {
   unifyDuplicateVasilhames,
   normalizeVasilhameLote,
@@ -32,7 +32,14 @@ import {
   repairVasilhameComposicao,
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
-import { migrateVasilhamesEmbaladosParaEstoque } from "@transbordo/lib/transbordoEmbalado";
+import { migrateEstoqueEmbaladoParaVasilhames, normalizeBarrilEmbalagensUnitarias, normalizeCodigoVasilhamesEntrada } from "@transbordo/lib/transbordoEmbalado";
+import {
+  isDestinoEmbalagemUnitaria,
+  getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
+  buildPlacaEmbalagens,
+} from "@transbordo/lib/tiposEmbalagem";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 export default function Vasilhames() {
   const [vasilhames, setVasilhames] = useState([]);
@@ -49,15 +56,24 @@ export default function Vasilhames() {
   const [deleteId, setDeleteId] = useState(null);
   const [saidaVasilhame, setSaidaVasilhame] = useState(null);
   const [saidaData, setSaidaData] = useState("");
+  const [saidaQtdEmbalagens, setSaidaQtdEmbalagens] = useState("");
+  const [saidaError, setSaidaError] = useState("");
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
     try {
       try {
-        await migrateVasilhamesEmbaladosParaEstoque();
+        const mig = await migrateEstoqueEmbaladoParaVasilhames();
+        if (mig.deletedEstoque > 0) {
+          console.info(
+            `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) do Estoque → Vasilhames.`
+          );
+        }
+        await normalizeBarrilEmbalagensUnitarias();
+        await normalizeCodigoVasilhamesEntrada();
       } catch (migErr) {
-        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+        console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
 
       const [vas, prods, cliens, trans] = await Promise.all([
@@ -115,6 +131,9 @@ export default function Vasilhames() {
   }, []);
 
   const filtered = vasilhames.filter((v) => {
+    // Tankagem fica só na tela de Tankagem
+    if ((v.tipo || "") === "Tankagem") return false;
+
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
@@ -189,21 +208,101 @@ export default function Vasilhames() {
   const handleSaida = (v) => {
     setSaidaVasilhame(v);
     setSaidaData(v.data_saida || new Date().toISOString().split("T")[0]);
+    const qtd = getQuantidadeEmbalagensFromVasilhame(v);
+    setSaidaQtdEmbalagens(qtd > 0 ? String(qtd) : "");
+    setSaidaError("");
   };
 
   const handleSaidaSave = async () => {
+    if (!saidaVasilhame) return;
     try {
-      const status = saidaData ? "Expedido" : "No Pátio";
-      await entities.vasilhames.update(saidaVasilhame.id, {
-        data_saida: saidaData || null,
-        status,
-      });
+      const isUnitario = isDestinoEmbalagemUnitaria(saidaVasilhame.tipo);
+      const qtdAtual = getQuantidadeEmbalagensFromVasilhame(saidaVasilhame);
+      const qtdSaida = Math.round(Number(saidaQtdEmbalagens) || 0);
+
+      if (isUnitario) {
+        if (qtdSaida <= 0) {
+          setSaidaError("Informe a quantidade de embalagens da saída.");
+          return;
+        }
+        if (qtdAtual > 0 && qtdSaida > qtdAtual) {
+          setSaidaError(
+            `Quantidade máxima disponível: ${qtdAtual} embalagem(ns).`
+          );
+          return;
+        }
+
+        const volPorEmb =
+          getVolumePorEmbalagemFromVasilhame(saidaVasilhame) ||
+          (qtdAtual > 0
+            ? roundVolume((saidaVasilhame.volume || 0) / qtdAtual)
+            : 0);
+        const dens =
+          parseFloat(
+            String(saidaVasilhame.densidade || "0").replace(",", ".")
+          ) || 0;
+        const restante = Math.max(0, (qtdAtual || qtdSaida) - qtdSaida);
+
+        if (restante <= 0) {
+          await entities.vasilhames.update(saidaVasilhame.id, {
+            data_saida: saidaData || null,
+            status: saidaData ? "Expedido" : "No Pátio",
+            volume: 0,
+            peso_liquido: 0,
+            peso_bruto: roundMass(saidaVasilhame.tara || 0),
+            placa: buildPlacaEmbalagens(0, saidaVasilhame.tipo),
+            composicao: (saidaVasilhame.composicao || []).map((c, i) =>
+              i === 0
+                ? { ...c, quantidade_embalagens: 0, quantidade_l: 0, quantidade_kg: 0 }
+                : c
+            ),
+          });
+        } else {
+          const newVol = roundVolume(restante * volPorEmb);
+          const newPeso =
+            dens > 0
+              ? roundMass(newVol * dens)
+              : roundMass(
+                  ((saidaVasilhame.peso_liquido || 0) * restante) /
+                    (qtdAtual || restante)
+                );
+          const tara = roundMass(saidaVasilhame.tara || 0);
+          await entities.vasilhames.update(saidaVasilhame.id, {
+            data_saida: null,
+            status: "No Pátio",
+            volume: newVol,
+            peso_liquido: newPeso,
+            peso_bruto: roundMass(tara + newPeso),
+            placa: buildPlacaEmbalagens(restante, saidaVasilhame.tipo),
+            composicao: (saidaVasilhame.composicao || []).map((c, i) =>
+              i === 0
+                ? {
+                    ...c,
+                    quantidade_embalagens: restante,
+                    quantidade_l: newVol,
+                    quantidade_kg: newPeso,
+                    volume_por_embalagem: volPorEmb,
+                  }
+                : c
+            ),
+          });
+        }
+      } else {
+        const status = saidaData ? "Expedido" : "No Pátio";
+        await entities.vasilhames.update(saidaVasilhame.id, {
+          data_saida: saidaData || null,
+          status,
+        });
+      }
+
       await loadData();
+      setSaidaVasilhame(null);
+      setSaidaData("");
+      setSaidaQtdEmbalagens("");
+      setSaidaError("");
     } catch {
-      // ignore
+      setSaidaError("Não foi possível registrar a saída. Tente novamente.");
     }
-    setSaidaVasilhame(null);
-    setSaidaData("");
   };
 
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
@@ -213,7 +312,11 @@ export default function Vasilhames() {
     { value: "Expedido", label: "Expedido" },
   ];
 
-  const noPatio = vasilhames.filter((v) => (v.status || "No Pátio") === "No Pátio");
+  const noPatio = vasilhames.filter(
+    (v) =>
+      (v.tipo || "") !== "Tankagem" &&
+      (v.status || "No Pátio") === "No Pátio"
+  );
   const volumePatio = noPatio.reduce((sum, v) => sum + (v.volume || 0), 0);
 
   return (
@@ -445,12 +548,50 @@ export default function Vasilhames() {
       </AlertDialog>
 
       {/* Saída Dialog */}
-      <Dialog open={!!saidaVasilhame} onOpenChange={(v) => !v && setSaidaVasilhame(null)}>
+      <Dialog
+        open={!!saidaVasilhame}
+        onOpenChange={(v) => {
+          if (!v) {
+            setSaidaVasilhame(null);
+            setSaidaError("");
+            setSaidaQtdEmbalagens("");
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Lançar Saída</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {saidaError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                {saidaError}
+              </p>
+            )}
+            {saidaVasilhame && isDestinoEmbalagemUnitaria(saidaVasilhame.tipo) && (
+              <div className="space-y-1.5">
+                <Label>Quantidade de embalagens *</Label>
+                <NumberInputBr
+                  decimals={0}
+                  min={1}
+                  max={
+                    getQuantidadeEmbalagensFromVasilhame(saidaVasilhame) ||
+                    undefined
+                  }
+                  value={saidaQtdEmbalagens}
+                  onChange={(v) =>
+                    setSaidaQtdEmbalagens(v === "" ? "" : String(v))
+                  }
+                  placeholder="0"
+                  className="bg-white"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Disponível:{" "}
+                  {getQuantidadeEmbalagensFromVasilhame(saidaVasilhame) || "—"}{" "}
+                  · {saidaVasilhame.placa || saidaVasilhame.tipo}
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Data de Saída</Label>
               <Input
@@ -459,15 +600,30 @@ export default function Vasilhames() {
                 onChange={(e) => setSaidaData(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'.
+                {saidaVasilhame &&
+                isDestinoEmbalagemUnitaria(saidaVasilhame.tipo)
+                  ? "Informe quantas embalagens sairão. Se for a quantidade total, o status muda para Expedido."
+                  : "Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'."}
               </p>
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setSaidaVasilhame(null)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setSaidaVasilhame(null);
+                setSaidaError("");
+                setSaidaQtdEmbalagens("");
+              }}
+            >
               Cancelar
             </Button>
-            <Button type="button" className="bg-primary hover:bg-primary/90" onClick={handleSaidaSave}>
+            <Button
+              type="button"
+              className="bg-primary hover:bg-primary/90"
+              onClick={handleSaidaSave}
+            >
               Confirmar
             </Button>
           </DialogFooter>

@@ -28,14 +28,21 @@ export const getRevisionsForProduct = (recipes, productName) => {
     .sort((a, b) => getRevisionNumber(a) - getRevisionNumber(b));
 };
 
+const pickValidityDays = (recipe) => {
+  if (recipe == null || recipe.validity_days == null || recipe.validity_days === '') return null;
+  const n = Number(recipe.validity_days);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 /**
  * Resolve a receita de um vasilhame/produção.
  * Usado em tanques manuais (sem OP) e no PDF "Enviar Dados".
  * Match de produto/cliente é case-insensitive; prioriza receita com código preenchido.
  */
 export const resolveRecipeForContainer = (recipes, container, production = null) => {
-  if (production?.recipe_id) {
-    const byId = (recipes || []).find((r) => r.id === production.recipe_id);
+  if (production?.recipe_id != null && production.recipe_id !== '') {
+    const recipeId = String(production.recipe_id);
+    const byId = (recipes || []).find((r) => String(r.id) === recipeId);
     if (byId) return byId;
   }
 
@@ -56,6 +63,40 @@ export const resolveRecipeForContainer = (recipes, container, production = null)
 
   const withCode = [...pool].reverse().find((r) => String(r.code || '').trim());
   return withCode || pool[pool.length - 1];
+};
+
+/**
+ * Dias de validade do produto para etiqueta/COA/PDF.
+ * Usa a receita da OP quando tiver validity_days; senão varre revisões do produto
+ * (mesma lógica de cliente da resolução principal) para não imprimir Fab = Val.
+ */
+export const resolveValidityDays = (recipes, container, production = null) => {
+  const primary = resolveRecipeForContainer(recipes, container, production);
+  const fromPrimary = pickValidityDays(primary);
+  if (fromPrimary != null) return fromPrimary;
+
+  const productName = container?.product || production?.product || primary?.product_name;
+  const productKey = normalizeMatchKey(productName);
+  if (!productKey) return null;
+
+  const clientKey = normalizeMatchKey(container?.client || production?.client || primary?.client);
+  const revisions = (recipes || [])
+    .filter((r) => normalizeMatchKey(r.product_name) === productKey)
+    .sort((a, b) => getRevisionNumber(b) - getRevisionNumber(a));
+
+  const byClient = clientKey
+    ? revisions.filter((r) => normalizeMatchKey(r.client) === clientKey)
+    : [];
+  const pools = [byClient, revisions];
+
+  for (const pool of pools) {
+    for (const recipe of pool) {
+      const days = pickValidityDays(recipe);
+      if (days != null) return days;
+    }
+  }
+
+  return null;
 };
 
 /** Código do produto cadastrado na receita (string vazia se não houver). */

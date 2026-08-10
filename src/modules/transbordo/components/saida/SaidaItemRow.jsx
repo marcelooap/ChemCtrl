@@ -3,7 +3,12 @@ import { Label } from "@shared/components/ui/label";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { formatVolume, formatMass, formatNum } from "@transbordo/lib/format";
+import { formatVolume, formatMass, formatNum, roundVolume, roundMass } from "@transbordo/lib/format";
+import {
+  isDestinoEmbalagemUnitaria,
+  getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
+} from "@transbordo/lib/tiposEmbalagem";
 
 const TIPO_OPTIONS = [
   { value: "embalado", label: "Embalado" },
@@ -11,6 +16,9 @@ const TIPO_OPTIONS = [
 ];
 
 function vasilhameLabel(v) {
+  if (isDestinoEmbalagemUnitaria(v?.tipo)) {
+    return v.placa || v.tipo || "—";
+  }
   return `${v.placa || "—"} - ${v.barril || "—"}`;
 }
 
@@ -180,9 +188,20 @@ export default function SaidaItemRow({
   };
 
   // ── Handlers Convencional ──
+  const selectedVasilhame =
+    vasilhames.find((v) => v.id === item.vasilhame_id) || null;
+  const isUnitarioSelecionado = isDestinoEmbalagemUnitaria(
+    selectedVasilhame?.tipo || item.tipo_embalagem
+  );
+  const qtdEmbDisponivel = selectedVasilhame
+    ? getQuantidadeEmbalagensFromVasilhame(selectedVasilhame)
+    : 0;
+
   const handleVasilhameChange = (label, option) => {
     if (!option) return;
     const volumeAtual = option.volume || 0;
+    const unitario = isDestinoEmbalagemUnitaria(option.tipo);
+    const qtdEmb = getQuantidadeEmbalagensFromVasilhame(option);
     onChange({
       ...item,
       vasilhame_id: option.id,
@@ -195,6 +214,42 @@ export default function SaidaItemRow({
       peso_liquido: option.peso_liquido || 0,
       peso_bruto: option.peso_bruto || 0,
       volume_solicitado: volumeAtual,
+      tipo_embalagem: option.tipo || "",
+      quantidade_embalagens: unitario ? qtdEmb : 0,
+      volume_por_embalagem: unitario
+        ? getVolumePorEmbalagemFromVasilhame(option)
+        : 0,
+    });
+  };
+
+  const handleQtdEmbalagensSaida = (qtd) => {
+    if (!selectedVasilhame) return;
+    const qtdN = Math.max(0, Math.round(Number(qtd) || 0));
+    const volPorEmb =
+      getVolumePorEmbalagemFromVasilhame(selectedVasilhame) ||
+      (qtdEmbDisponivel > 0
+        ? roundVolume((selectedVasilhame.volume || 0) / qtdEmbDisponivel)
+        : 0);
+    const dens =
+      parseFloat(String(selectedVasilhame.densidade || "0").replace(",", ".")) ||
+      0;
+    const volSolicitado = roundVolume(qtdN * volPorEmb);
+    const pesoLiq =
+      dens > 0
+        ? roundMass(volSolicitado * dens)
+        : qtdEmbDisponivel > 0
+          ? roundMass(
+              ((selectedVasilhame.peso_liquido || 0) * qtdN) / qtdEmbDisponivel
+            )
+          : 0;
+    const tara = roundMass(selectedVasilhame.tara || 0);
+    onChange({
+      ...item,
+      quantidade_embalagens: qtdN,
+      volume_por_embalagem: volPorEmb,
+      volume_solicitado: volSolicitado,
+      peso_liquido: pesoLiq,
+      peso_bruto: roundMass(tara + pesoLiq),
     });
   };
 
@@ -396,6 +451,23 @@ export default function SaidaItemRow({
             <Label>Produto</Label>
             <Input value={item.produto_nome || ""} disabled className="bg-card font-medium" />
           </div>
+          {isUnitarioSelecionado && (
+            <div className="space-y-1.5">
+              <Label>Qtd. Embalagens *</Label>
+              <NumberInputBr
+                decimals={0}
+                min={1}
+                max={qtdEmbDisponivel || undefined}
+                value={item.quantidade_embalagens || ""}
+                onChange={(v) => handleQtdEmbalagensSaida(v === "" ? 0 : v)}
+                placeholder="0"
+                disabled={!item.vasilhame_id}
+              />
+              <p className="text-xs text-muted-foreground">
+                Disponível: {qtdEmbDisponivel || "—"}
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Volume Disponível (L)</Label>
             <Input value={formatVolume(displayVolumeDisponivel)} disabled className="bg-card font-medium" />

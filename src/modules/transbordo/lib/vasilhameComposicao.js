@@ -3,13 +3,10 @@
  */
 
 import { roundVolume, roundMass } from "@transbordo/lib/format";
-
-const TIPOS_NAO_VASILHAME = new Set([
-  "Tankagem",
-  "One Way (IBC)",
-  "Bombona 200 L",
-  "Tambor 200 L",
-]);
+import {
+  TIPOS_NAO_VASILHAME,
+  isDestinoEmbalagemUnitaria,
+} from "@transbordo/lib/tiposEmbalagem";
 
 /** Rótulo sintético — só quando há residual sem lote real atribuível. */
 export const LOTE_APORTE_ANTERIOR = "Aporte anterior";
@@ -356,7 +353,9 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     (v.origem === "transbordo" || v.origem === "manual" || v.fracionado === true) &&
     (v.status || "No Pátio") === "No Pátio" &&
     v.placa &&
-    !TIPOS_NAO_VASILHAME.has(v.tipo);
+    !TIPOS_NAO_VASILHAME.has(v.tipo) &&
+    // Embalagens unitárias (bombona/tambor/IBC) não unificam por placa sintética
+    !isDestinoEmbalagemUnitaria(v.tipo);
 
   const noPatio = (vasilhames || []).filter(isOperacional);
 

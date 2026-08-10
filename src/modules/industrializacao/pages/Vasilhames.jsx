@@ -33,7 +33,11 @@ import {
   containerDisplayGrossWeight,
   isContainerFractional,
 } from '@industrializacao/lib/fractionalSupply';
-import { resolveRecipeForContainer as resolveRecipeFromList, resolveProductCode } from '@industrializacao/lib/recipeRevisions';
+import {
+  resolveRecipeForContainer as resolveRecipeFromList,
+  resolveProductCode,
+  resolveValidityDays,
+} from '@industrializacao/lib/recipeRevisions';
 import { effectiveOriginsOfContainer, applyProportionalOriginReduction } from '@industrializacao/lib/containerOrigins';
 
 const CONTAINER_STATUS_KEYS = {
@@ -166,9 +170,35 @@ export default function Vasilhames() {
   const handlePrintLabel = async (container) => {
     try {
       const production = productionOfContainer(container, productions || []);
-      const recipe = resolveRecipeFromList(recipes || [], container, production);
+      let validityDays = resolveValidityDays(recipes || [], container, production);
+
+      // Receita fora do cache local (lista limitada) — busca pontual na OP / produto
+      if (validityDays == null && production?.recipe_id) {
+        try {
+          const remote = await base44.entities.Recipe.get(production.recipe_id);
+          const n = Number(remote?.validity_days);
+          if (Number.isFinite(n) && n > 0) validityDays = n;
+        } catch { /* ignore */ }
+      }
+      if (validityDays == null) {
+        const productName = container.product || production?.product;
+        if (productName) {
+          try {
+            const remoteList = await base44.entities.Recipe.filter(
+              { product_name: productName },
+              '-revision_number',
+              20,
+            );
+            validityDays = resolveValidityDays(remoteList || [], container, production);
+          } catch { /* ignore */ }
+        }
+      }
+
       const publicToken = await ensureProductionPublicToken(production);
-      await printContainerLabel(container, recipe?.validity_days, publicToken);
+      await printContainerLabel(container, validityDays, publicToken, {
+        manufactureDate: production?.end_time || container.created_date,
+        locale: i18n.language,
+      });
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     }

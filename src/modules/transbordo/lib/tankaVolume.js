@@ -242,6 +242,163 @@ export function computeTankaLotesDisponiveis({
     .filter((r) => r.quantidade_l > 0);
 }
 
+/**
+ * Metadados de envase por lote (primeira data + operadores do OP de entrada).
+ */
+function collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo) {
+  const meta = new Map();
+  const sorted = [...(transbordos || [])].sort(
+    (a, b) =>
+      new Date(a.data || a.created_at || a.created_date || 0) -
+      new Date(b.data || b.created_at || b.created_date || 0)
+  );
+
+  for (const t of sorted) {
+    const destinos = t.destinos || [];
+    const indices = [];
+    destinos.forEach((d, i) => {
+      if (
+        d.tipo_embalagem === "Tankagem" &&
+        matchesTanka(d, isotanqueId, tankaCodigo)
+      ) {
+        indices.push(i);
+      }
+    });
+    if (indices.length === 0) continue;
+
+    const dens = parseDensidade(t.densidade);
+    const { destinoCompositions } = calculateFIFOAllocation(
+      t.origens || [],
+      destinos,
+      dens
+    );
+    const operadores = (t.operadores || []).filter(Boolean);
+    const dataEnvase = t.data || null;
+
+    for (const i of indices) {
+      const comp = destinoCompositions[i] || [];
+      const lotes =
+        comp.length > 0
+          ? comp.map((c) => (c.lote || "").trim() || "—")
+          : (t.origens || [])
+              .map((o) => (o.lote || "").trim() || "—")
+              .filter(Boolean);
+      const keys = lotes.length > 0 ? lotes : ["—"];
+      for (const key of keys) {
+        if (meta.has(key)) continue;
+        meta.set(key, {
+          data_envase: dataEnvase,
+          operadores,
+          transbordo_codigo: t.codigo_transbordo || "",
+        });
+      }
+    }
+  }
+  return meta;
+}
+
+/**
+ * Detalhe completo da tanka para visualização (lotes, massa, envase, OP).
+ */
+export function buildTankaDetalhe({ isotanque, transbordos = [] }) {
+  if (!isotanque) return null;
+
+  const isotanqueId = isotanque.id;
+  const tankaCodigo = isotanque.tanka || isotanque.codigo_itku || "";
+
+  const fillings = [...(transbordos || [])]
+    .filter((t) =>
+      (t.destinos || []).some(
+        (d) =>
+          d.tipo_embalagem === "Tankagem" &&
+          matchesTanka(d, isotanqueId, tankaCodigo)
+      )
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.data || b.created_at || b.created_date || 0) -
+        new Date(a.data || a.created_at || a.created_date || 0)
+    );
+
+  const latest = fillings[0];
+  const dens =
+    parseDensidade(latest?.densidade) ||
+    parseDensidade(isotanque.densidade) ||
+    0;
+
+  const volumeAtual = computeTankaSaldo({
+    isotanqueId,
+    tankaCodigo,
+    transbordos,
+  });
+
+  const lotesSaldo = computeTankaLotesDisponiveis({
+    isotanqueId,
+    tankaCodigo,
+    transbordos,
+  });
+
+  const loteMeta = collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo);
+
+  const lotes = lotesSaldo
+    .map((l) => {
+      const key = (l.lote || "").trim() || "—";
+      const meta = loteMeta.get(key) || loteMeta.get("—") || {};
+      const volume = roundVolume(l.quantidade_l || 0);
+      return {
+        lote: l.lote || "—",
+        volume,
+        massa: dens > 0 ? roundMass(volume * dens) : 0,
+        data_envase: meta.data_envase || null,
+        operadores: meta.operadores || [],
+        transbordo_codigo: meta.transbordo_codigo || "",
+      };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const historico = fillings.map((t) => {
+    const destinosMatch = (t.destinos || []).filter(
+      (d) =>
+        d.tipo_embalagem === "Tankagem" &&
+        matchesTanka(d, isotanqueId, tankaCodigo)
+    );
+    const volume = destinosMatch.reduce(
+      (s, d) => s + roundVolume(d.volume_total || d.volume || 0),
+      0
+    );
+    return {
+      codigo: t.codigo_transbordo || "",
+      data: t.data || null,
+      produto_nome: t.produto_nome || "",
+      cliente_nome: t.cliente_nome || "",
+      volume,
+      massa: dens > 0 ? roundMass(volume * dens) : roundMass(t.massa_total || 0),
+      operadores: t.operadores || [],
+      lotes: (t.origens || [])
+        .map((o) => o.lote)
+        .filter(Boolean)
+        .join(", "),
+    };
+  });
+
+  return {
+    id: isotanqueId,
+    tanka: tankaCodigo,
+    codigo_itku: isotanque.codigo_itku || "",
+    produto_nome:
+      isotanque.produto_nome || latest?.produto_nome || "",
+    produto_codigo:
+      isotanque.produto_codigo || latest?.produto_codigo || "",
+    cliente_nome: isotanque.cliente_nome || latest?.cliente_nome || "",
+    densidade: dens || latest?.densidade || isotanque.densidade || "",
+    capacidade: roundVolume(isotanque.capacidade || 0),
+    volume_atual: volumeAtual,
+    massa_atual: dens > 0 ? roundMass(volumeAtual * dens) : 0,
+    lotes,
+    historico,
+  };
+}
+
 function findTankaVasilhameMatches(list, placas) {
   return (list || []).filter((v) => {
     if (v.tipo !== "Tankagem") return false;

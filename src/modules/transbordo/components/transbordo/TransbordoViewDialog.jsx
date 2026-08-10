@@ -13,8 +13,24 @@ const formatDate = (d) => {
   return date.toLocaleDateString("pt-BR");
 };
 
+/** Extrai só o nome do produto de rótulos como "TANKA 46 - PRODUTO (1.234 L)". */
+function origemProdutoNome(origem, fallbackProduto) {
+  const codigo = origem?.entrada_codigo || "";
+  if (codigo) {
+    const withoutVol = codigo.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const sep = withoutVol.indexOf(" - ");
+    if (sep >= 0) {
+      const nome = withoutVol.slice(sep + 3).trim();
+      if (nome) return nome;
+    }
+  }
+  return fallbackProduto || "-";
+}
+
 export default function TransbordoViewDialog({ open, onClose, transbordo }) {
   if (!transbordo) return null;
+
+  const produtoNome = transbordo.produto_nome || "";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -60,7 +76,7 @@ export default function TransbordoViewDialog({ open, onClose, transbordo }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40/50 uppercase">
-                    <th className="px-3 py-2 font-medium">Entrada</th>
+                    <th className="px-3 py-2 font-medium">Produto</th>
                     <th className="px-3 py-2 font-medium">Lote</th>
                     <th className="px-3 py-2 font-medium">Vol. Retirado (L)</th>
                     <th className="px-3 py-2 font-medium">Massa (kg)</th>
@@ -72,6 +88,7 @@ export default function TransbordoViewDialog({ open, onClose, transbordo }) {
                     const lotes = (o.lotes_retirados || []).filter(
                       (l) => (l.volume_retirado || 0) > 0
                     );
+                    const produtoOrigem = origemProdutoNome(o, produtoNome);
                     if (lotes.length > 1) {
                       return lotes.map((l, li) => (
                         <tr
@@ -79,7 +96,7 @@ export default function TransbordoViewDialog({ open, onClose, transbordo }) {
                           className="border-b border-border last:border-0"
                         >
                           <td className="px-3 py-2 text-foreground">
-                            {o.entrada_codigo || "-"}
+                            {produtoOrigem}
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
                             {l.lote || "-"}
@@ -111,7 +128,7 @@ export default function TransbordoViewDialog({ open, onClose, transbordo }) {
                     return [
                       <tr key={i} className="border-b border-border last:border-0">
                         <td className="px-3 py-2 text-foreground">
-                          {o.entrada_codigo || "-"}
+                          {produtoOrigem}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {o.lote || "-"}

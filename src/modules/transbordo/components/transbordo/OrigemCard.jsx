@@ -18,6 +18,11 @@ const TIPOS_ORIGEM = [
   { value: "embalado", label: "Embalado" },
 ];
 
+/** Tipos disponíveis na lista suspensa (entrada só via fluxo travado da entrada). */
+const TIPOS_ORIGEM_SELECIONAVEIS = TIPOS_ORIGEM.filter(
+  (t) => t.value !== "entrada"
+);
+
 function buildLotesRetirados(
   lotesDisponiveis = [],
   previous = [],
@@ -389,7 +394,7 @@ export default function OrigemCard({
           <SearchableSelect
             value={tipoValue}
             onChange={handleTipoChange}
-            options={TIPOS_ORIGEM}
+            options={TIPOS_ORIGEM_SELECIONAVEIS}
             getOptionLabel={(t) => t.label}
             getOptionValue={(t) => t.value}
             placeholder="Selecionar tipo"

@@ -48,13 +48,17 @@ import {
 } from "@transbordo/lib/filtracao";
 import {
   TIPOS_EMBALAGEM_ESTOQUE,
-  buildEstoqueEmbaladoFromDestino,
   deleteEstoqueDoTransbordo,
-  migrateVasilhamesEmbaladosParaEstoque,
+  migrateEstoqueEmbaladoParaVasilhames,
+  normalizeBarrilEmbalagensUnitarias,
 } from "@transbordo/lib/transbordoEmbalado";
+import {
+  isDestinoEstoqueEmbalado,
+  buildPlacaEmbalagens,
+} from "@transbordo/lib/tiposEmbalagem";
 
-/** Apenas estes destinos geram registro na tela de Vasilhames / Tankagem. */
-const TIPOS_VASILHAME = new Set(["Vasilhame", "Tankagem"]);
+/** Vasilhame + embalagens unitárias (bombona/tambor/IBC) na tela de Vasilhames. */
+const TIPOS_VASILHAME = new Set(["Vasilhame", ...TIPOS_EMBALAGEM_ESTOQUE]);
 
 /** Converte string vazia em null (evita erro de UUID/date no Postgres). */
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
@@ -243,27 +247,62 @@ async function revertTopUpsDoTransbordo({
 
 function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp) {
   const isTankagem = d.tipo_embalagem === "Tankagem";
+  const isUnitario = isDestinoEstoqueEmbalado(d.tipo_embalagem);
   const dens = parseDensidade(data.densidade);
-  const volume = roundVolume(d.volume || d.volume_total || 0);
+  const volume = roundVolume(d.volume_total || d.volume || 0);
+  const qtdEmb = Math.max(0, Math.round(d.quantidade_embalagens || 0));
+  const volPorEmb = roundVolume(
+    d.volume_por_embalagem || (qtdEmb > 0 ? volume / qtdEmb : 0)
+  );
   const pesoLiquido =
     d.peso_liquido != null && d.peso_liquido !== ""
       ? roundMass(d.peso_liquido)
       : dens > 0
       ? roundMass(volume * dens)
       : 0;
-  const composicao = mergeComposicao([], comp, {
+  const composicaoBase = mergeComposicao([], comp, {
     transbordo_codigo: codigo,
     data: data.data || null,
   });
+  const composicao =
+    isUnitario && composicaoBase.length > 0
+      ? composicaoBase.map((c, i) =>
+          i === 0
+            ? {
+                ...c,
+                quantidade_embalagens: qtdEmb,
+                volume_por_embalagem: volPorEmb,
+              }
+            : c
+        )
+      : isUnitario
+        ? [
+            {
+              lote: data.lote || getDominantLote(composicaoBase) || "",
+              quantidade_l: volume,
+              quantidade_kg: pesoLiquido,
+              quantidade_embalagens: qtdEmb,
+              volume_por_embalagem: volPorEmb,
+              transbordo_codigo: codigo,
+              data: data.data || null,
+            },
+          ]
+        : composicaoBase;
   const lote = getDominantLote(composicao);
+
+  const placa = isTankagem
+    ? d.tanka_codigo || ""
+    : isUnitario
+      ? buildPlacaEmbalagens(qtdEmb || 1, d.tipo_embalagem)
+      : d.placa || "";
 
   return {
     codigo,
     transbordo_id: savedTransbordo.id,
     origem: "transbordo",
     numero_op: codigo,
-    placa: isTankagem ? (d.tanka_codigo || "") : (d.placa || ""),
-    barril: isTankagem ? "" : (d.barril || ""),
+    placa,
+    barril: isTankagem || isUnitario ? "" : d.barril || "",
     tipo: d.tipo_embalagem,
     produto_id: nullIfEmpty(data.produto_id),
     produto_nome: data.produto_nome || "",
@@ -282,7 +321,7 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
     menor_teste: nullIfEmpty(d.menor_teste),
     status: "No Pátio",
     responsavel: (data.operadores || []).join(", "),
-    fracionado: d.fracionado || false,
+    fracionado: isUnitario ? false : d.fracionado || false,
     composicao,
     destino_index: destinoIndex,
   };
@@ -323,16 +362,17 @@ export default function Transbordo() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Migra Tambor/IBC/Bombona legados da tela de Vasilhames → Estoque Embalado
+      // Migra Bombona/IBC/Tambor legados do Estoque → Vasilhames
       try {
-        const mig = await migrateVasilhamesEmbaladosParaEstoque();
-        if (mig.deletedVasilhames > 0) {
+        const mig = await migrateEstoqueEmbaladoParaVasilhames();
+        if (mig.deletedEstoque > 0) {
           console.info(
-            `[ChemFlow] Migrados ${mig.migratedGroups} grupo(s) embalado(s); removidos ${mig.deletedVasilhames} vasilhame(s).`
+            `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) do Estoque → Vasilhames; removidos ${mig.deletedEstoque} do estoque.`
           );
         }
+        await normalizeBarrilEmbalagensUnitarias();
       } catch (migErr) {
-        console.warn("[ChemFlow] Migração embalado (vasilhame→estoque):", migErr);
+        console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
 
       const [trans, prods, cliens, ents, isos, vascs] = await Promise.all([
@@ -409,13 +449,25 @@ export default function Transbordo() {
   ]);
 
   const filtered = transbordos.filter((t) => {
-    const q = search.toLowerCase();
+    const q = search.toLowerCase().trim();
     const matchSearch =
       !q ||
       t.codigo_transbordo?.toLowerCase().includes(q) ||
       t.produto_nome?.toLowerCase().includes(q) ||
+      t.produto_codigo?.toLowerCase().includes(q) ||
       t.cliente_nome?.toLowerCase().includes(q) ||
-      (t.operadores || []).some((op) => op.toLowerCase().includes(q));
+      (t.operadores || []).some((op) => op.toLowerCase().includes(q)) ||
+      (t.destinos || []).some(
+        (d) =>
+          d.tanka_codigo?.toLowerCase().includes(q) ||
+          d.placa?.toLowerCase().includes(q)
+      ) ||
+      (t.origens || []).some(
+        (o) =>
+          (o.tipo_origem === "tanka" &&
+            o.entrada_codigo?.toLowerCase().includes(q)) ||
+          o.lote?.toLowerCase().includes(q)
+      );
 
     const matchCliente =
       !clienteFilter ||
@@ -501,7 +553,7 @@ export default function Transbordo() {
         const volume_total = roundVolume(d.volume_total || d.volume || 0);
         return {
           ...d,
-          volume: d.tipo_embalagem === "Vasilhame" || d.tipo_embalagem === "Tankagem"
+          volume: d.tipo_embalagem === "Vasilhame" || d.tipo_embalagem === "Tankagem" || isDestinoEstoqueEmbalado(d.tipo_embalagem)
             ? volume_total
             : roundVolume(d.volume || 0),
           volume_total,
@@ -520,7 +572,11 @@ export default function Transbordo() {
         const diff = sumOrig - sumDest;
         const last = destinos[destinos.length - 1];
         last.volume_total = Math.max(0, last.volume_total + diff);
-        if (last.tipo_embalagem === "Vasilhame" || last.tipo_embalagem === "Tankagem") {
+        if (
+          last.tipo_embalagem === "Vasilhame" ||
+          last.tipo_embalagem === "Tankagem" ||
+          isDestinoEstoqueEmbalado(last.tipo_embalagem)
+        ) {
           last.volume = last.volume_total;
         }
         last.peso_liquido =
@@ -596,26 +652,23 @@ export default function Transbordo() {
 
       // Recarrega vasilhames atuais (após possível revert)
       const vasilhamesAtuais = await entities.vasilhames.list();
-      const estoqueById = new Map((entradas || []).map((e) => [e.id, e]));
 
       const vasilhameRecords = [];
-      const estoqueEmbaladoRecords = [];
       for (let destinoIndex = 0; destinoIndex < destinos.length; destinoIndex++) {
         const d = destinos[destinoIndex];
         const comp = destinoCompositions[destinoIndex] || [];
 
-        // IBC / Tambor / Bombona → uma linha em Estoque (Embalado)
-        if (TIPOS_EMBALAGEM_ESTOQUE.has(d.tipo_embalagem)) {
-          estoqueEmbaladoRecords.push(
-            buildEstoqueEmbaladoFromDestino({
+        // IBC / Tambor / Bombona → Vasilhames (placa sintética), sem Estoque
+        if (isDestinoEstoqueEmbalado(d.tipo_embalagem)) {
+          vasilhameRecords.push(
+            buildVasilhameBase(
               payload,
+              codigo,
               savedTransbordo,
-              destino: d,
+              d,
               destinoIndex,
-              comp,
-              origens: origensFifo,
-              estoqueById,
-            })
+              comp
+            )
           );
           continue;
         }
@@ -728,12 +781,6 @@ export default function Transbordo() {
         }
       }
 
-      let createdEstoqueIds = [];
-      if (estoqueEmbaladoRecords.length > 0) {
-        const created = await entities.estoque.bulkCreate(estoqueEmbaladoRecords);
-        createdEstoqueIds = (created || []).map((e) => e.id).filter(Boolean);
-      }
-
       // Unifica tanques duplicados no pátio (mesma placa)
       const afterSave = await entities.vasilhames.list();
       await unifyDuplicateVasilhames(afterSave, entities);
@@ -759,10 +806,7 @@ export default function Transbordo() {
         dataSaida: payload.data,
       });
 
-      await syncEstoqueSaldos([
-        ...affectedEstoqueIds,
-        ...createdEstoqueIds,
-      ]);
+      await syncEstoqueSaldos(affectedEstoqueIds);
 
       await loadData();
       setModalOpen(false);
@@ -869,7 +913,7 @@ export default function Transbordo() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por código, produto, cliente ou operador..."
+            placeholder="Buscar por tanka, produto ou cliente..."
             className="pl-10"
           />
         </div>

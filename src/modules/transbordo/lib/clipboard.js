@@ -1,30 +1,62 @@
-export function copyHtmlToClipboard(html) {
+/**
+ * Copia HTML formatado + texto plano para a área de transferência.
+ * Preferência: ClipboardItem (text/html + text/plain).
+ * Fallback: seleção em área contenteditable (preserva HTML no Outlook/Word).
+ */
+export async function copyHtmlToClipboard(html, plainText = "") {
+  const text =
+    plainText ||
+    html
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/\s+/g, " ")
+      .trim();
+
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     try {
-      const blob = new Blob([html], { type: "text/html" });
-      const text = html
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      const textBlob = new Blob([text], { type: "text/plain" });
-      navigator.clipboard.write([
-        new ClipboardItem({ "text/html": blob, "text/plain": textBlob }),
+      const blobHtml = new Blob([html], { type: "text/html" });
+      const blobText = new Blob([text], { type: "text/plain" });
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": blobHtml,
+          "text/plain": blobText,
+        }),
       ]);
       return true;
     } catch {
-      const temp = document.createElement("div");
-      temp.innerHTML = html;
-      temp.style.position = "fixed";
-      temp.style.left = "-9999px";
-      temp.style.top = "0";
-      document.body.appendChild(temp);
-      const range = document.createRange();
-      range.selectNode(temp);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      document.execCommand("copy");
-      document.body.removeChild(temp);
-      return true;
+      // segue para fallback
     }
   }
+
+  return copyHtmlViaContentEditable(html);
+}
+
+function copyHtmlViaContentEditable(html) {
+  const host = document.createElement("div");
+  host.setAttribute("contenteditable", "true");
+  host.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;overflow:hidden;";
+  host.innerHTML = html;
+  document.body.appendChild(host);
+
+  try {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    host.focus();
+    const ok = document.execCommand("copy");
+    selection.removeAllRanges();
+    return !!ok;
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(host);
+  }
+}

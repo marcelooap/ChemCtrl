@@ -15,14 +15,71 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
-import { formatMass, formatCurrency, formatNum } from "@transbordo/lib/format";
+import { formatMass, formatNum } from "@transbordo/lib/format";
 import { loteToKg } from "@transbordo/lib/conversao";
+import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { entities } from "@transbordo/services/entities";
 import {
   findLinkedTransbordo,
   findAllLinkedTransbordos,
   multipleTransbordosMessage,
 } from "@transbordo/lib/findLinkedTransbordo";
+
+function mapLoteFromEntrada(l, entrada = {}) {
+  const embalado =
+    l.embalado != null ? l.embalado : entrada.embalado || false;
+  const tipo = resolveTipoRecebimento({
+    ...l,
+    embalado,
+    tipo_recebimento: l.tipo_recebimento || entrada.tipo_recebimento,
+  });
+
+  return {
+    produto_id: l.produto_id || entrada.produto_id || "",
+    produto_nome: l.produto_nome || entrada.produto_nome || "",
+    produto_codigo: l.produto_codigo || entrada.produto_codigo || "",
+    nota_fiscal: l.nota_fiscal || "",
+    lote: l.lote || "",
+    densidade: l.densidade || "",
+    quantidade: l.quantidade != null ? String(l.quantidade) : "",
+    unidade_medida: l.unidade_medida || "",
+    data_fabricacao: l.data_fabricacao || "",
+    data_validade: l.data_validade || "",
+    preco_unitario:
+      l.preco_unitario != null
+        ? String(l.preco_unitario)
+        : entrada.preco_unitario != null
+          ? String(entrada.preco_unitario)
+          : "",
+    tipo_recebimento: tipo,
+    embalado: tipo === "embalado",
+    peso_liquido:
+      l.peso_liquido != null
+        ? String(l.peso_liquido)
+        : entrada.peso_liquido != null
+          ? String(entrada.peso_liquido)
+          : "",
+    quantidade_embalagens:
+      l.quantidade_embalagens != null
+        ? String(l.quantidade_embalagens)
+        : entrada.quantidade_embalagens != null
+          ? String(entrada.quantidade_embalagens)
+          : "",
+    placa: l.placa || "",
+    barril: l.barril || "",
+    volume: l.volume != null && l.volume !== "" ? String(l.volume) : "",
+    tara: l.tara != null && l.tara !== "" ? String(l.tara) : "",
+    lacres: l.lacres || "",
+    eslinga: l.eslinga || "",
+    gps: l.gps || "",
+    menor_teste: l.menor_teste || "",
+    fracionado: l.fracionado || false,
+    vasilhame_existente_id: l.vasilhame_existente_id || null,
+    vasilhame_id: l.vasilhame_id || null,
+    peso_bruto:
+      l.peso_bruto != null && l.peso_bruto !== "" ? String(l.peso_bruto) : "",
+  };
+}
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -64,7 +121,24 @@ export default function EntradaModal({
   const [collapsedLotes, setCollapsedLotes] = useState({});
   const [transbordoBlockMessage, setTransbordoBlockMessage] = useState("");
   const [checkingTransbordos, setCheckingTransbordos] = useState(false);
+  const [vasilhames, setVasilhames] = useState([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    entities.vasilhames
+      .list()
+      .then((list) => {
+        if (!cancelled) setVasilhames(list || []);
+      })
+      .catch(() => {
+        if (!cancelled) setVasilhames([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Bloqueia "Ir para Transbordo" quando há cadeia com 2+ OPs
   useEffect(() => {
@@ -128,42 +202,39 @@ export default function EntradaModal({
       setClienteNome(editingEntrada.cliente_nome || "");
       const lotesCarregados =
         editingEntrada.lotes && editingEntrada.lotes.length > 0
-          ? editingEntrada.lotes.map((l) => ({
-              produto_id: l.produto_id || editingEntrada.produto_id || "",
-              produto_nome: l.produto_nome || editingEntrada.produto_nome || "",
-              produto_codigo: l.produto_codigo || editingEntrada.produto_codigo || "",
-              nota_fiscal: l.nota_fiscal || "",
-              lote: l.lote || "",
-              densidade: l.densidade || "",
-              quantidade: l.quantidade != null ? String(l.quantidade) : "",
-              unidade_medida: l.unidade_medida || "",
-              data_fabricacao: l.data_fabricacao || "",
-              data_validade: l.data_validade || "",
-              preco_unitario: l.preco_unitario != null ? String(l.preco_unitario) : (editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : ""),
-              embalado: l.embalado != null ? l.embalado : (editingEntrada.embalado || false),
-              peso_liquido: l.peso_liquido != null ? String(l.peso_liquido) : (editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : ""),
-              quantidade_embalagens: l.quantidade_embalagens != null ? String(l.quantidade_embalagens) : (editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : ""),
-            }))
+          ? editingEntrada.lotes.map((l) => mapLoteFromEntrada(l, editingEntrada))
           : [
-              {
-                produto_id: editingEntrada.produto_id || "",
-                produto_nome: editingEntrada.produto_nome || "",
-                produto_codigo: editingEntrada.produto_codigo || "",
-                nota_fiscal: editingEntrada.nota_fiscal || "",
-                lote: editingEntrada.lote || "",
-                densidade: editingEntrada.densidade || "",
-                quantidade:
-                  editingEntrada.quantidade != null
-                    ? String(editingEntrada.quantidade)
-                    : "",
-                unidade_medida: editingEntrada.unidade_medida || "",
-                data_fabricacao: editingEntrada.data_fabricacao || "",
-                data_validade: editingEntrada.data_validade || "",
-                preco_unitario: editingEntrada.preco_unitario != null ? String(editingEntrada.preco_unitario) : "",
-                embalado: editingEntrada.embalado || false,
-                peso_liquido: editingEntrada.peso_liquido != null ? String(editingEntrada.peso_liquido) : "",
-                quantidade_embalagens: editingEntrada.quantidade_embalagens != null ? String(editingEntrada.quantidade_embalagens) : "",
-              },
+              mapLoteFromEntrada(
+                {
+                  produto_id: editingEntrada.produto_id || "",
+                  produto_nome: editingEntrada.produto_nome || "",
+                  produto_codigo: editingEntrada.produto_codigo || "",
+                  nota_fiscal: editingEntrada.nota_fiscal || "",
+                  lote: editingEntrada.lote || "",
+                  densidade: editingEntrada.densidade || "",
+                  quantidade: editingEntrada.quantidade,
+                  unidade_medida: editingEntrada.unidade_medida || "",
+                  data_fabricacao: editingEntrada.data_fabricacao || "",
+                  data_validade: editingEntrada.data_validade || "",
+                  preco_unitario: editingEntrada.preco_unitario,
+                  embalado: editingEntrada.embalado || false,
+                  tipo_recebimento: editingEntrada.tipo_recebimento,
+                  peso_liquido: editingEntrada.peso_liquido,
+                  quantidade_embalagens: editingEntrada.quantidade_embalagens,
+                  placa: editingEntrada.placa,
+                  barril: editingEntrada.barril,
+                  volume: editingEntrada.volume,
+                  tara: editingEntrada.tara,
+                  lacres: editingEntrada.lacres,
+                  eslinga: editingEntrada.eslinga,
+                  gps: editingEntrada.gps,
+                  menor_teste: editingEntrada.menor_teste,
+                  fracionado: editingEntrada.fracionado,
+                  vasilhame_existente_id: editingEntrada.vasilhame_existente_id,
+                  peso_bruto: editingEntrada.peso_bruto,
+                },
+                editingEntrada
+              ),
             ];
       setLotes(lotesCarregados);
       setCollapsedLotes(
@@ -226,24 +297,22 @@ export default function EntradaModal({
     );
   })();
 
-  const filteredProdutos = produtos.filter(
-    (p) =>
-      !clienteNome ||
-      p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
-  );
+  const filteredProdutos = !clienteNome
+    ? []
+    : produtos.filter((p) => {
+        if (clienteId && p.cliente_id) {
+          return p.cliente_id === clienteId;
+        }
+        return (
+          p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
+        );
+      });
 
   // ── Totais derivados dos lotes ──
   const qtd = lotes.reduce(
     (sum, l) => sum + (parseFloat(l.quantidade) || 0),
     0
   );
-
-  // ── Custo total somando todos os lotes ──
-  const custoTotal = lotes.reduce((sum, l) => {
-    const lQtd = parseFloat(l.quantidade) || 0;
-    const lPreco = parseFloat(l.preco_unitario) || 0;
-    return sum + lQtd * lPreco;
-  }, 0);
 
   // ── Quantidade operacional somando todos os lotes ──
   const qtdKg = lotes.reduce((sum, l) => sum + loteToKg(l), 0);
@@ -253,21 +322,33 @@ export default function EntradaModal({
     lotes.length > 0 &&
     lotes.every((l) => l.produto_id && l.produto_id === lotes[0].produto_id);
 
-  const anyEmbalado = lotes.some((l) => l.embalado);
+  const hasGranel = lotes.some(
+    (l) => resolveTipoRecebimento(l) === "granel"
+  );
+  const blockIrParaTransbordo = lotes.some(
+    (l) => resolveTipoRecebimento(l) !== "granel"
+  );
+  const showPesagemGranel = hasGranel;
+  const granelPesagemAtiva = showPesagemGranel && granelPesagem;
+
+  // ── Custo total somando todos os lotes ──
+  const custoTotal = lotes.reduce((sum, l) => {
+    const lQtd = parseFloat(l.quantidade) || 0;
+    const lPreco = parseFloat(l.preco_unitario) || 0;
+    return sum + lQtd * lPreco;
+  }, 0);
 
   // ── Pesagem Granel ──
   const gPb = parseFloat(granelPesoBruto) || 0;
   const gPl = parseFloat(granelPesoLiquido) || 0;
   const valBruto = gPb >= 10000 && gPb <= 40000 ? 60 : 80;
   const valLiquido = gPl >= 10000 && gPl <= 40000 ? 60 : 80;
-  const erroAdmissivel = granelPesagem ? valBruto + valLiquido : 0;
+  const erroAdmissivel = granelPesagemAtiva ? valBruto + valLiquido : 0;
   const pesoMinimo = qtdKg - erroAdmissivel;
   const pesoMaximo = qtdKg + erroAdmissivel;
   const dentroMargem =
-    granelPesagem && gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
-  const foraMargem = granelPesagem && gPl > 0 && !dentroMargem;
-
-  const formatMoeda = (v) => formatCurrency(v);
+    granelPesagemAtiva && gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
+  const foraMargem = granelPesagemAtiva && gPl > 0 && !dentroMargem;
 
   // ── Handlers dos lotes ──
   const addLote = () => {
@@ -322,6 +403,7 @@ export default function EntradaModal({
 
     for (let i = 0; i < lotes.length; i++) {
       const l = lotes[i];
+      const tipo = resolveTipoRecebimento(l);
       if (!l.produto_id) {
         setError(`Produto é obrigatório no bloco ${i + 1}.`);
         return null;
@@ -334,6 +416,26 @@ export default function EntradaModal({
         setError(`Lote é obrigatório no bloco ${i + 1}.`);
         return null;
       }
+
+      if (tipo === "vasilhame") {
+        const lProduto = produtos.find((p) => p.id === l.produto_id);
+        const lDensidadeTabelada = lProduto?.densidade_tabelada || false;
+        if (!lDensidadeTabelada && !l.densidade) {
+          setError(`Densidade é obrigatória no bloco ${i + 1}.`);
+          return null;
+        }
+        if (!l.placa?.trim()) {
+          setError(`Nº da Placa é obrigatório no bloco ${i + 1}.`);
+          return null;
+        }
+        const vol = parseFloat(l.volume) || 0;
+        if (!l.volume || vol <= 0) {
+          setError(`Volume deve ser positivo no bloco ${i + 1}.`);
+          return null;
+        }
+        continue;
+      }
+
       const lQtd = parseFloat(l.quantidade) || 0;
       if (!l.quantidade || lQtd <= 0) {
         setError(`Quantidade deve ser positiva no bloco ${i + 1}.`);
@@ -343,7 +445,7 @@ export default function EntradaModal({
         setError(`Unidade de Medida é obrigatória no bloco ${i + 1}.`);
         return null;
       }
-      if (!l.embalado) {
+      if (tipo !== "embalado") {
         const lProduto = produtos.find((p) => p.id === l.produto_id);
         const lDensidadeTabelada = lProduto?.densidade_tabelada || false;
         if (!lDensidadeTabelada && !l.densidade) {
@@ -351,7 +453,7 @@ export default function EntradaModal({
           return null;
         }
       }
-      if (l.embalado) {
+      if (tipo === "embalado") {
         const lPeso = parseFloat(l.peso_liquido) || 0;
         const lQtdEmb = parseFloat(l.quantidade_embalagens) || 0;
         const lTotalCalc = lPeso * lQtdEmb;
@@ -364,22 +466,55 @@ export default function EntradaModal({
       }
     }
 
-    const parsedLotes = lotes.map((l) => ({
-      produto_id: l.produto_id,
-      produto_nome: l.produto_nome,
-      produto_codigo: l.produto_codigo,
-      nota_fiscal: l.nota_fiscal,
-      lote: l.lote,
-      densidade: l.embalado ? null : l.densidade,
-      quantidade: parseFloat(l.quantidade) || 0,
-      unidade_medida: l.unidade_medida,
-      data_fabricacao: l.data_fabricacao,
-      data_validade: l.data_validade,
-      preco_unitario: parseFloat(l.preco_unitario) || 0,
-      embalado: l.embalado || false,
-      peso_liquido: l.embalado ? (parseFloat(l.peso_liquido) || 0) : null,
-      quantidade_embalagens: l.embalado ? (parseFloat(l.quantidade_embalagens) || 0) : null,
-    }));
+    const parsedLotes = lotes.map((l) => {
+      const tipo = resolveTipoRecebimento(l);
+      const isEmbalado = tipo === "embalado";
+      const isVasilhame = tipo === "vasilhame";
+      const volume = isVasilhame ? parseFloat(l.volume) || 0 : null;
+      const tara = isVasilhame ? parseFloat(l.tara) || 0 : null;
+      const pesoLiquido = isEmbalado || isVasilhame
+        ? parseFloat(l.peso_liquido) || 0
+        : null;
+      const pesoBruto = isVasilhame ? parseFloat(l.peso_bruto) || 0 : null;
+
+      return {
+        produto_id: l.produto_id,
+        produto_nome: l.produto_nome,
+        produto_codigo: l.produto_codigo,
+        nota_fiscal: l.nota_fiscal,
+        lote: l.lote,
+        densidade: isEmbalado ? null : l.densidade,
+        quantidade: isVasilhame
+          ? volume
+          : parseFloat(l.quantidade) || 0,
+        unidade_medida: isVasilhame ? "L" : l.unidade_medida,
+        data_fabricacao: l.data_fabricacao,
+        data_validade: l.data_validade,
+        preco_unitario: parseFloat(l.preco_unitario) || 0,
+        tipo_recebimento: tipo,
+        embalado: isEmbalado,
+        peso_liquido: pesoLiquido,
+        quantidade_embalagens: isEmbalado
+          ? parseFloat(l.quantidade_embalagens) || 0
+          : null,
+        ...(isVasilhame
+          ? {
+              placa: l.placa || "",
+              barril: l.barril || "",
+              volume,
+              tara,
+              lacres: l.lacres || "",
+              eslinga: l.eslinga || "",
+              gps: l.gps || "",
+              menor_teste: l.menor_teste || "",
+              fracionado: l.fracionado || false,
+              vasilhame_existente_id: l.vasilhame_existente_id || null,
+              vasilhame_id: l.vasilhame_id || null,
+              peso_bruto: pesoBruto,
+            }
+          : {}),
+      };
+    });
 
     const firstLote = parsedLotes[0];
 
@@ -401,20 +536,25 @@ export default function EntradaModal({
       custo_total: custoTotal,
       saldo_atual: editingEntrada?.saldo_atual ?? qtdKg,
       embalado: firstLote.embalado,
-      peso_liquido: firstLote.embalado ? firstLote.peso_liquido : null,
-      quantidade_embalagens: firstLote.embalado ? firstLote.quantidade_embalagens : null,
+      peso_liquido:
+        firstLote.embalado || firstLote.tipo_recebimento === "vasilhame"
+          ? firstLote.peso_liquido
+          : null,
+      quantidade_embalagens: firstLote.embalado
+        ? firstLote.quantidade_embalagens
+        : null,
       status_wms: statusWms,
-      granel_pesagem: granelPesagem,
-      granel_ticket: granelPesagem ? granelTicket : null,
-      granel_peso_bruto: granelPesagem ? gPb : null,
-      granel_validacao_bruto: granelPesagem ? valBruto : null,
-      granel_peso_liquido: granelPesagem ? gPl : null,
-      granel_validacao_liquido: granelPesagem ? valLiquido : null,
-      granel_erro_admissivel: granelPesagem ? erroAdmissivel : null,
-      granel_peso_minimo: granelPesagem ? pesoMinimo : null,
-      granel_peso_maximo: granelPesagem ? pesoMaximo : null,
+      granel_pesagem: granelPesagemAtiva,
+      granel_ticket: granelPesagemAtiva ? granelTicket : null,
+      granel_peso_bruto: granelPesagemAtiva ? gPb : null,
+      granel_validacao_bruto: granelPesagemAtiva ? valBruto : null,
+      granel_peso_liquido: granelPesagemAtiva ? gPl : null,
+      granel_validacao_liquido: granelPesagemAtiva ? valLiquido : null,
+      granel_erro_admissivel: granelPesagemAtiva ? erroAdmissivel : null,
+      granel_peso_minimo: granelPesagemAtiva ? pesoMinimo : null,
+      granel_peso_maximo: granelPesagemAtiva ? pesoMaximo : null,
       granel_margem:
-        granelPesagem && gPl > 0 ? (dentroMargem ? "dentro" : "fora") : null,
+        granelPesagemAtiva && gPl > 0 ? (dentroMargem ? "dentro" : "fora") : null,
       grupo_entrada: editingEntrada?.grupo_entrada || `GRP-${Date.now()}`,
       origem: editingEntrada?.origem || "convencional",
       lotes: parsedLotes,
@@ -579,6 +719,8 @@ export default function EntradaModal({
                 onRemove={() => removeLote(i)}
                 readOnly={readOnly}
                 produtos={filteredProdutos}
+                vasilhames={vasilhames}
+                clienteSelected={!!clienteNome}
                 canRemove={lotes.length > 1}
                 collapsed={!!collapsedLotes[i]}
                 onToggleCollapse={() => toggleLoteCollapse(i)}
@@ -608,112 +750,106 @@ export default function EntradaModal({
             </span>
           </div>
 
-          {/* Custo Total Geral */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border">
-            <span className="text-sm text-muted-foreground">
-              Custo Total Geral:
-            </span>
-            <span className="text-lg font-bold text-foreground">
-              {formatMoeda(custoTotal)}
-            </span>
-          </div>
-
-          {/* Dados de Pesagem Granel */}
-          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
-            <div>
-              <Label>Dados de Pesagem Granel</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Ativa os campos de pesagem para produtos a granel
-              </p>
-            </div>
-            <Switch
-              checked={granelPesagem}
-              onCheckedChange={setGranelPesagem}
-              disabled={readOnly}
-            />
-          </div>
-
-          {granelPesagem && (
-            <div className="space-y-4 p-4 rounded-lg border border-border">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Ticket</Label>
-                  <Input
-                    value={granelTicket}
-                    onChange={(e) => setGranelTicket(e.target.value)}
-                    placeholder="Nº do ticket"
-                    disabled={readOnly}
-                    className={INPUT_EDITABLE}
-                  />
+          {/* Dados de Pesagem Granel — só para tipo Granel */}
+          {showPesagemGranel && (
+            <>
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
+                <div>
+                  <Label>Dados de Pesagem Granel</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Ativa os campos de pesagem para produtos a granel
+                  </p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Peso Bruto (kg)</Label>
-                  <NumberInputBr
-                    decimals={0}
-                    min={0}
-                    value={granelPesoBruto}
-                    onChange={(v) => setGranelPesoBruto(v === "" ? "" : v)}
-                    placeholder="0"
-                    disabled={readOnly}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Peso Líquido (kg)</Label>
-                  <NumberInputBr
-                    decimals={0}
-                    min={0}
-                    value={granelPesoLiquido}
-                    onChange={(v) => setGranelPesoLiquido(v === "" ? "" : v)}
-                    placeholder="0"
-                    disabled={readOnly}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
+                <Switch
+                  checked={granelPesagem}
+                  onCheckedChange={setGranelPesagem}
+                  disabled={readOnly}
+                />
               </div>
 
-              {qtdKg > 0 && (
-                <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-blue-200">
-                  <span className="text-sm text-muted-foreground">
-                    Peso Esperado (kg)
-                    {lotes[0]?.unidade_medida &&
-                      lotes[0]?.unidade_medida !== "kg" &&
-                      ` — convertido de ${formatNum(qtd, 0)} ${lotes[0]?.unidade_medida}`}
-                    :
-                  </span>
-                  <span className="text-lg font-bold text-primary">
-                    {formatMass(qtdKg)} kg
-                  </span>
-                </div>
-              )}
-
-              {gPl > 0 && (
-                <>
-                  <div
-                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium ${
-                      dentroMargem
-                        ? "bg-green-50 text-green-700 border border-green-200"
-                        : "bg-red-50 text-red-700 border border-red-200"
-                    }`}
-                  >
-                    {dentroMargem ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5" />
-                    )}
-                    {dentroMargem ? "Dentro da margem" : "Fora da margem"}
+              {granelPesagem && (
+                <div className="space-y-4 p-4 rounded-lg border border-border">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Ticket</Label>
+                      <Input
+                        value={granelTicket}
+                        onChange={(e) => setGranelTicket(e.target.value)}
+                        placeholder="Nº do ticket"
+                        disabled={readOnly}
+                        className={INPUT_EDITABLE}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Peso Bruto (kg)</Label>
+                      <NumberInputBr
+                        decimals={0}
+                        min={0}
+                        value={granelPesoBruto}
+                        onChange={(v) => setGranelPesoBruto(v === "" ? "" : v)}
+                        placeholder="0"
+                        disabled={readOnly}
+                        className={INPUT_EDITABLE}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Peso Líquido (kg)</Label>
+                      <NumberInputBr
+                        decimals={0}
+                        min={0}
+                        value={granelPesoLiquido}
+                        onChange={(v) => setGranelPesoLiquido(v === "" ? "" : v)}
+                        placeholder="0"
+                        disabled={readOnly}
+                        className={INPUT_EDITABLE}
+                      />
+                    </div>
                   </div>
-                  {foraMargem && (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-amber-50 border-2 border-amber-400 text-amber-800">
-                      <span className="text-sm font-semibold">
-                        Valor a considerar: Peso Líquido ={" "}
-                        {formatMass(gPl)} kg
+
+                  {qtdKg > 0 && (
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-blue-200">
+                      <span className="text-sm text-muted-foreground">
+                        Peso Esperado (kg)
+                        {lotes[0]?.unidade_medida &&
+                          lotes[0]?.unidade_medida !== "kg" &&
+                          ` — convertido de ${formatNum(qtd, 0)} ${lotes[0]?.unidade_medida}`}
+                        :
+                      </span>
+                      <span className="text-lg font-bold text-primary">
+                        {formatMass(qtdKg)} kg
                       </span>
                     </div>
                   )}
-                </>
+
+                  {gPl > 0 && (
+                    <>
+                      <div
+                        className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium ${
+                          dentroMargem
+                            ? "bg-green-50 text-green-700 border border-green-200"
+                            : "bg-red-50 text-red-700 border border-red-200"
+                        }`}
+                      >
+                        {dentroMargem ? (
+                          <CheckCircle className="w-5 h-5" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5" />
+                        )}
+                        {dentroMargem ? "Dentro da margem" : "Fora da margem"}
+                      </div>
+                      {foraMargem && (
+                        <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-amber-50 border-2 border-amber-400 text-amber-800">
+                          <span className="text-sm font-semibold">
+                            Valor a considerar: Peso Líquido ={" "}
+                            {formatMass(gPl)} kg
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
 
           {/* Status WMS Switch */}
@@ -733,7 +869,7 @@ export default function EntradaModal({
 
           {!readOnly && (
             <DialogFooter className="sm:justify-between flex-col sm:flex-row gap-3">
-              {!anyEmbalado ? (
+              {!blockIrParaTransbordo ? (
                 <div className="flex flex-col gap-2 max-w-md">
                   <Button
                     type="button"

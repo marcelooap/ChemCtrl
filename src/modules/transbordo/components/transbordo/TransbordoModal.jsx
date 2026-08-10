@@ -46,6 +46,7 @@ import {
   aggregateComposicaoByLote,
   seedComposicaoFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
+import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -75,12 +76,12 @@ function destinoMassaKg(d, dens) {
 }
 
 const OPERADORES = [
-  "Adriano Queiroz",
-  "Leonardo Souza",
-  "Rafael Novais",
-  "Francisco Mariano",
-  "Ezequiel",
-  "Wandre Costa",
+  "Adriano Q.",
+  "Leonardo S.",
+  "Rafael N.",
+  "Mariano",
+  "Ezequiel F.",
+  "Wandre C.",
 ];
 
 const createdAt = (row) => row?.created_at || row?.created_date || 0;
@@ -417,6 +418,8 @@ export default function TransbordoModal({
   const filteredEntradas = entradas
     .filter((e) => {
       if (e.embalado) return false;
+      if (e.lotes?.[0]?.tipo_recebimento === "vasilhame") return false;
+      if (e.lotes?.[0]?.embalado) return false;
       if (!(e.produto_id === produtoId || e.produto_nome === produtoNome)) {
         return false;
       }
@@ -939,9 +942,7 @@ export default function TransbordoModal({
     if (
       destinos.some(
         (d) =>
-          (d.tipo_embalagem === "One Way (IBC)" ||
-            d.tipo_embalagem === "Bombona 200 L" ||
-            d.tipo_embalagem === "Tambor 200 L") &&
+          isDestinoEstoqueEmbalado(d.tipo_embalagem) &&
           (!(d.quantidade_embalagens > 0) || !(d.volume_por_embalagem > 0))
       )
     ) {

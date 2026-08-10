@@ -214,7 +214,8 @@ export function generateBoletaPDF(vasilhame) {
     });
 
     y += s4H + 4;
-    const s5H = 20;
+    const isFracionado = !!vasilhame.fracionado;
+    const s5H = isFracionado ? 28 : 20;
     setFill(doc, [240, 245, 255]);
     setDraw(doc, BLUE_MID);
     doc.setLineWidth(0.4);
@@ -222,13 +223,19 @@ export function generateBoletaPDF(vasilhame) {
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     setColor(doc, BLUE_DARK);
-    doc.text("QUANTIDADE ENVASADA", bM + 4, y + 8);
+    doc.text("QUANTIDADE ENVASADA", bM + 4, y + (isFracionado ? 9 : 8));
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
     setColor(doc, BLACK);
-    doc.text(fmtNum(volume, 0) + " L", bM + bW - 4, y + 13, {
+    doc.text(fmtNum(volume, 0) + " L", bM + bW - 4, y + (isFracionado ? 11 : 13), {
       align: "right",
     });
+    if (isFracionado) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      setColor(doc, [220, 38, 38]);
+      doc.text("FRACIONADO", bM + bW - 4, y + 22, { align: "right" });
+    }
   }
 
   drawSide(0);

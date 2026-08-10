@@ -3,6 +3,13 @@ import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromSaidaConvencional,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  isDestinoEmbalagemUnitaria,
+  getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
+  buildPlacaEmbalagens,
+} from "@transbordo/lib/tiposEmbalagem";
+import { roundMass, roundVolume } from "@transbordo/lib/format";
 
 function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
@@ -94,7 +101,8 @@ export async function applySaidaFiscalToggle(
   const convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
     itens,
     vasilhames,
-    allTransbordos
+    allTransbordos,
+    estoque
   );
   const estoqueIds = [...new Set([...embaladoIds, ...convencionalIds])];
   if (estoqueIds.length > 0) {
@@ -121,26 +129,61 @@ export async function applySaidaFiscalToggle(
       const item = itemByVasilhame[vid];
       const volAdj = (volByVasilhame[vid] || 0) * (checked ? -1 : 1);
       const currentVol = Number(v?.volume) || 0;
-      const newVol = Math.max(0, currentVol + volAdj);
+      const newVol = Math.max(0, roundVolume(currentVol + volAdj));
       const dens = resolveDensidade(v, item);
       const newPesoLiq =
         dens > 0
-          ? newVol * dens
+          ? roundMass(newVol * dens)
           : Math.max(
               0,
-              (Number(v?.peso_liquido) || 0) +
-                (checked
-                  ? -(item?.peso_liquido || 0)
-                  : item?.peso_liquido || 0)
+              roundMass(
+                (Number(v?.peso_liquido) || 0) +
+                  (checked
+                    ? -(item?.peso_liquido || 0)
+                    : item?.peso_liquido || 0)
+              )
             );
-      return {
+
+      const patch = {
         id: vid,
         volume: newVol,
         peso_liquido: newPesoLiq,
-        peso_bruto: (Number(v?.tara) || 0) + newPesoLiq,
-        status: checked ? "Expedido" : "No Pátio",
-        data_saida: checked ? dataSaida || null : null,
+        peso_bruto: roundMass((Number(v?.tara) || 0) + newPesoLiq),
+        status: checked && newVol <= 0 ? "Expedido" : "No Pátio",
+        data_saida: checked && newVol <= 0 ? dataSaida || null : null,
       };
+
+      if (isDestinoEmbalagemUnitaria(v?.tipo)) {
+        const qtdAtual = getQuantidadeEmbalagensFromVasilhame(v);
+        const volPorEmb =
+          getVolumePorEmbalagemFromVasilhame(v) ||
+          Number(item?.volume_por_embalagem) ||
+          0;
+        const qtdSaida =
+          Number(item?.quantidade_embalagens) > 0
+            ? Math.round(Number(item.quantidade_embalagens))
+            : volPorEmb > 0
+              ? Math.round(Math.abs(volAdj) / volPorEmb)
+              : 0;
+        const qtdNova = Math.max(
+          0,
+          qtdAtual + (checked ? -qtdSaida : qtdSaida)
+        );
+        patch.placa = buildPlacaEmbalagens(qtdNova, v.tipo);
+        patch.composicao = (v.composicao || []).map((c, i) =>
+          i === 0
+            ? {
+                ...c,
+                quantidade_embalagens: qtdNova,
+                quantidade_l: newVol,
+                quantidade_kg: newPesoLiq,
+                volume_por_embalagem: volPorEmb || c.volume_por_embalagem,
+              }
+            : c
+        );
+      }
+
+      return patch;
     });
     await entities.vasilhames.bulkUpdate(vasilhameUpdates);
   }
