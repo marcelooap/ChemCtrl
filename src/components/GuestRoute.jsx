@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute } from '@chemblend/lib/permissions';
+import { getDefaultRoute } from '@industrializacao/lib/permissions';
 
 const DefaultFallback = () => {
   const { t } = useTranslation();

@@ -2,7 +2,7 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./src/*"],
-      "@chemblend/*": ["./src/modules/chemblend/*"],
+      "@industrializacao/*": ["./src/modules/industrializacao/*"],
       "@chemflow/*": ["./src/modules/chemflow/*"],
       "@shared/*": ["./src/shared/*"]
     },

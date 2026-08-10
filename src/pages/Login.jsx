@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute } from '@chemblend/lib/permissions';
+import { getDefaultRoute } from '@industrializacao/lib/permissions';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';

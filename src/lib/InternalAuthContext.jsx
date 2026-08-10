@@ -1,10 +1,10 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { callRPC, setSessionId, clearSessionId, getSessionId } from '@chemblend/api/rpcClient';
-import { resetRealtimeClient } from '@chemblend/lib/realtime';
+import { callRPC, setSessionId, clearSessionId, getSessionId } from '@industrializacao/api/rpcClient';
+import { resetRealtimeClient } from '@industrializacao/lib/realtime';
 import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
 import i18n from '@/i18n';
-import { isHttpError } from '@chemblend/lib/HttpError';
-import { clearAllCache } from '@chemblend/lib/queryCache';
+import { isHttpError } from '@industrializacao/lib/HttpError';
+import { clearAllCache } from '@industrializacao/lib/queryCache';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';

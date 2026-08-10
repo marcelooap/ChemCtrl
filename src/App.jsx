@@ -23,8 +23,8 @@ import PlaceholderPage from '@/pages/PlaceholderPage';
 import PlatformLayout from '@/layouts/PlatformLayout';
 
 // ChemCtrl — app principal (industrialização)
-import ChemCtrlRoutes from '@chemblend/routes';
-import ConsultaPublica from '@chemblend/pages/ConsultaPublica';
+import ChemCtrlRoutes from '@industrializacao/routes';
+import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
 
 // Módulo ChemFlow (lazy; apenas administradores)
 const ChemFlowRoutes = lazy(() => import('@chemflow/routes'));

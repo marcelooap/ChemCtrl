@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   supabaseUrl as chemblendSupabaseUrl,
   supabaseAnonKey as chemblendSupabaseAnonKey,
-} from '@chemblend/api/supabaseClient';
+} from '@industrializacao/api/supabaseClient';
 
 /**
  * Normaliza a URL do projeto Supabase.

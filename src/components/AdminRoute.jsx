@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute, isAdminUser } from '@chemblend/lib/permissions';
+import { getDefaultRoute, isAdminUser } from '@industrializacao/lib/permissions';
 
 /**
  * Gate para rotas restritas a administradores (módulo ChemFlow).
