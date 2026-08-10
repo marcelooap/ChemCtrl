@@ -453,6 +453,103 @@
           "tanks": "Réservoirs",
           "operations": "Opérations"
         }
+      },
+      "painel": {
+        "name": "Panneau",
+        "description": "Vue consolidée des opérations : industrialisation, transbordement, commercial et logistique.",
+        "cta": "Accéder au panneau"
+      }
+    }
+  },
+  "painel": {
+    "subtitle": "Panneau",
+    "nav": {
+      "home": "Accueil",
+      "dashboard": "Tableau de bord",
+      "comercial": "Commercial",
+      "logistica": "Logistique"
+    },
+    "modules": {
+      "switch": "Changer de module",
+      "industrializacao": "Industrialisation",
+      "transbordo": "Transbordement",
+      "painel": "Panneau"
+    },
+    "home": {
+      "title": "Panneau",
+      "subtitle": "Vue d'ensemble des opérations",
+      "preparedForData": "Zone préparée pour les données consolidées"
+    },
+    "areas": {
+      "industrializacao": {
+        "title": "Industrialisation",
+        "description": "Production, stocks, recettes et qualité"
+      },
+      "transbordo": {
+        "title": "Transbordement",
+        "description": "Entrées, sorties, filtration et réservoirs"
+      },
+      "comercial": {
+        "title": "Commercial",
+        "description": "Clients, commandes et statuts commerciaux"
+      },
+      "logistica": {
+        "title": "Logistique",
+        "description": "Chargements, véhicules et livraisons"
+      }
+    },
+    "dashboard": {
+      "title": "Tableau de bord",
+      "subtitle": "Indicateurs et graphiques opérationnels",
+      "awaitingData": "En attente de connexion aux données réelles",
+      "chartsTitle": "Graphiques",
+      "chartPlaceholder": "Structure préparée pour la visualisation",
+      "kpis": {
+        "volumeProduced": "Volume produit",
+        "volumeTransferred": "Volume transbordé",
+        "orders": "Commandes",
+        "productionOrders": "OF",
+        "loadings": "Chargements",
+        "stock": "Stock"
+      },
+      "charts": {
+        "production": "Production",
+        "transbordo": "Transbordement",
+        "sales": "Ventes",
+        "logistics": "Logistique",
+        "stock": "Stock"
+      }
+    },
+    "comercial": {
+      "title": "Commercial",
+      "subtitle": "Gestion commerciale de l'opération",
+      "emptyTitle": "Espace Commercial",
+      "emptyDescription": "Structure initiale préparée pour les futures fonctionnalités commerciales.",
+      "topics": {
+        "clients": "Clients",
+        "orders": "Commandes",
+        "fichado": "Réservé",
+        "reservations": "Réservations",
+        "requests": "Demandes",
+        "sales": "Ventes",
+        "products": "Produits",
+        "status": "Statuts commerciaux"
+      }
+    },
+    "logistica": {
+      "title": "Logistique",
+      "subtitle": "Gestion logistique de l'opération",
+      "emptyTitle": "Espace Logistique",
+      "emptyDescription": "Structure initiale préparée pour les futures fonctionnalités logistiques.",
+      "topics": {
+        "loads": "Chargements",
+        "pickups": "Collectes",
+        "scheduling": "Programmation",
+        "vehicles": "Véhicules",
+        "drivers": "Chauffeurs",
+        "loadComposition": "Composition de charge",
+        "loadings": "Chargements",
+        "deliveries": "Livraisons"
       }
     }
   },

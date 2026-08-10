@@ -4,6 +4,7 @@
       "@/*": ["./src/*"],
       "@industrializacao/*": ["./src/modules/industrializacao/*"],
       "@transbordo/*": ["./src/modules/transbordo/*"],
+      "@painel/*": ["./src/modules/painel/*"],
       "@shared/*": ["./src/shared/*"]
     },
     "jsx": "react-jsx",

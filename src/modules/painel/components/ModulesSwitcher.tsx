@@ -1,9 +1,7 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowRightLeft, LayoutDashboard, LayoutGrid } from 'lucide-react';
-import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { isAdminUser } from '@industrializacao/lib/permissions';
+import { ArrowLeft, ArrowRightLeft, LayoutGrid } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,12 +15,13 @@ import {
 } from '@shared/components/ui/tooltip';
 import { cn } from '@shared/lib/utils';
 
-/** Atalho admin para Transbordo e Painel a partir da Industrialização. */
-export function ModulesHubButton() {
+/**
+ * Troca entre módulos a partir do Painel (Industrialização / Transbordo).
+ * Reutiliza o padrão visual do ModulesHubButton da Industrialização.
+ */
+export function ModulesSwitcher() {
   const { t } = useTranslation();
-  const { user } = useInternalAuth();
-
-  if (!isAdminUser(user)) return null;
+  const { pathname } = useLocation();
 
   return (
     <DropdownMenu>
@@ -48,15 +47,29 @@ export function ModulesHubButton() {
       </Tooltip>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem asChild>
-          <Link to="/chemflow" className="flex items-center gap-2 cursor-pointer">
-            <ArrowRightLeft className="h-4 w-4 shrink-0" />
-            {t('painel.modules.transbordo')}
+          <Link
+            to="/"
+            className={cn(
+              'flex items-center gap-2 cursor-pointer',
+              pathname === '/' || (!pathname.startsWith('/chemflow') && !pathname.startsWith('/painel'))
+                ? 'bg-accent'
+                : ''
+            )}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            {t('painel.modules.industrializacao')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/painel/home" className="flex items-center gap-2 cursor-pointer">
-            <LayoutDashboard className="h-4 w-4 shrink-0" />
-            {t('painel.modules.painel')}
+          <Link
+            to="/chemflow"
+            className={cn(
+              'flex items-center gap-2 cursor-pointer',
+              pathname.startsWith('/chemflow') ? 'bg-accent' : ''
+            )}
+          >
+            <ArrowRightLeft className="h-4 w-4 shrink-0" />
+            {t('painel.modules.transbordo')}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

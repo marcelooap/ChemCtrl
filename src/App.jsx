@@ -26,8 +26,9 @@ import PlatformLayout from '@/layouts/PlatformLayout';
 import ChemCtrlRoutes from '@industrializacao/routes';
 import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
 
-// Módulo ChemFlow (lazy; apenas administradores)
+// Módulos admin (lazy)
 const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
+const PainelRoutes = lazy(() => import('@painel/routes'));
 
 /** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
 function LegacyChemblendPrefixRedirect() {
@@ -73,7 +74,7 @@ const AuthenticatedApp = () => {
 
       {/* Protegido: exige sessão válida */}
       <Route element={<ProtectedRoute />}>
-        {/* Módulo ChemFlow — somente admin */}
+        {/* Módulos admin: Transbordo + Painel */}
         <Route element={<AdminRoute />}>
           <Route
             path="/chemflow/*"
@@ -81,6 +82,16 @@ const AuthenticatedApp = () => {
               <ModuleErrorBoundary title="Não foi possível abrir o Transbordo">
                 <Suspense fallback={<ModuleLoadingFallback />}>
                   <ChemFlowRoutes />
+                </Suspense>
+              </ModuleErrorBoundary>
+            }
+          />
+          <Route
+            path="/painel/*"
+            element={
+              <ModuleErrorBoundary title="Não foi possível abrir o Painel">
+                <Suspense fallback={<ModuleLoadingFallback />}>
+                  <PainelRoutes />
                 </Suspense>
               </ModuleErrorBoundary>
             }

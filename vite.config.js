@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => ({
       '@': path.resolve(__dirname, './src'),
       '@industrializacao': path.resolve(__dirname, './src/modules/industrializacao'),
       '@transbordo': path.resolve(__dirname, './src/modules/transbordo'),
+      '@painel': path.resolve(__dirname, './src/modules/painel'),
       '@shared': path.resolve(__dirname, './src/shared'),
     },
   },

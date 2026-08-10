@@ -453,6 +453,103 @@
           "tanks": "Tanques",
           "operations": "Operaciones"
         }
+      },
+      "painel": {
+        "name": "Panel",
+        "description": "Visión consolidada de las operaciones: industrialización, transbordo, comercial y logística.",
+        "cta": "Acceder al panel"
+      }
+    }
+  },
+  "painel": {
+    "subtitle": "Panel",
+    "nav": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "comercial": "Comercial",
+      "logistica": "Logística"
+    },
+    "modules": {
+      "switch": "Cambiar módulo",
+      "industrializacao": "Industrialización",
+      "transbordo": "Transbordo",
+      "painel": "Panel"
+    },
+    "home": {
+      "title": "Panel",
+      "subtitle": "Visión general de las operaciones",
+      "preparedForData": "Área preparada para datos consolidados"
+    },
+    "areas": {
+      "industrializacao": {
+        "title": "Industrialización",
+        "description": "Producción, stock, recetas y calidad"
+      },
+      "transbordo": {
+        "title": "Transbordo",
+        "description": "Entradas, salidas, filtración y tanques"
+      },
+      "comercial": {
+        "title": "Comercial",
+        "description": "Clientes, pedidos y estados comerciales"
+      },
+      "logistica": {
+        "title": "Logística",
+        "description": "Cargas, vehículos y entregas"
+      }
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Indicadores y gráficos operativos",
+      "awaitingData": "Esperando conexión con datos reales",
+      "chartsTitle": "Gráficos",
+      "chartPlaceholder": "Estructura preparada para visualización",
+      "kpis": {
+        "volumeProduced": "Volumen producido",
+        "volumeTransferred": "Volumen transbordado",
+        "orders": "Pedidos",
+        "productionOrders": "OPs",
+        "loadings": "Cargas",
+        "stock": "Stock"
+      },
+      "charts": {
+        "production": "Producción",
+        "transbordo": "Transbordo",
+        "sales": "Ventas",
+        "logistics": "Logística",
+        "stock": "Stock"
+      }
+    },
+    "comercial": {
+      "title": "Comercial",
+      "subtitle": "Gestión comercial de la operación",
+      "emptyTitle": "Área Comercial",
+      "emptyDescription": "Estructura inicial preparada para las futuras funcionalidades comerciales.",
+      "topics": {
+        "clients": "Clientes",
+        "orders": "Pedidos",
+        "fichado": "Fichado",
+        "reservations": "Reservas",
+        "requests": "Solicitudes",
+        "sales": "Ventas",
+        "products": "Productos",
+        "status": "Estados comerciales"
+      }
+    },
+    "logistica": {
+      "title": "Logística",
+      "subtitle": "Gestión logística de la operación",
+      "emptyTitle": "Área de Logística",
+      "emptyDescription": "Estructura inicial preparada para las futuras funcionalidades logísticas.",
+      "topics": {
+        "loads": "Cargas",
+        "pickups": "Recolecciones",
+        "scheduling": "Programación",
+        "vehicles": "Vehículos",
+        "drivers": "Conductores",
+        "loadComposition": "Composición de carga",
+        "loadings": "Cargamentos",
+        "deliveries": "Entregas"
       }
     }
   },
