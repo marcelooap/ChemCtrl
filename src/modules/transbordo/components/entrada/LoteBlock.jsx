@@ -3,6 +3,7 @@ import { Label } from "@shared/components/ui/label";
 import { Button } from "@shared/components/ui/button";
 import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { formatCurrency, formatNum } from "@transbordo/lib/format";
 
@@ -243,10 +244,10 @@ export default function LoteBlock({
             <Label>
               Densidade {densidadeTabelada ? "(Tabelada)" : "*"}
             </Label>
-            <Input
-              type="text"
+            <NumberInputBr
+              decimals={3}
               value={lote.densidade || ""}
-              onChange={(e) => update("densidade", e.target.value)}
+              onChange={(v) => update("densidade", v === "" ? "" : v)}
               placeholder={densidadeTabelada ? "Automático" : "Ex: 1,025"}
               disabled={readOnly || densidadeTabelada}
               className={densidadeTabelada ? "bg-muted/40" : INPUT_EDITABLE}
@@ -255,12 +256,11 @@ export default function LoteBlock({
         )}
         <div className="space-y-1.5">
           <Label>Quantidade *</Label>
-          <Input
-            type="number"
-            step="0.001"
-            min="0"
+          <NumberInputBr
+            decimals={3}
+            min={0}
             value={lote.quantidade || ""}
-            onChange={(e) => update("quantidade", e.target.value)}
+            onChange={(v) => update("quantidade", v === "" ? "" : v)}
             placeholder="0"
             disabled={readOnly}
             className={INPUT_EDITABLE}
@@ -308,12 +308,11 @@ export default function LoteBlock({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Preço Unitário (R$)</Label>
-          <Input
-            type="number"
-            step="0.0001"
-            min="0"
+          <NumberInputBr
+            decimals={4}
+            min={0}
             value={lote.preco_unitario || ""}
-            onChange={(e) => update("preco_unitario", e.target.value)}
+            onChange={(v) => update("preco_unitario", v === "" ? "" : v)}
             placeholder="0,0000"
             disabled={readOnly}
             className={INPUT_EDITABLE}
@@ -334,12 +333,11 @@ export default function LoteBlock({
         <div className="grid grid-cols-3 gap-3 p-3 rounded-lg border border-border">
           <div className="space-y-1.5">
             <Label>Peso Líquido</Label>
-            <Input
-              type="number"
-              step="0.001"
-              min="0"
+            <NumberInputBr
+              decimals={3}
+              min={0}
               value={lote.peso_liquido || ""}
-              onChange={(e) => update("peso_liquido", e.target.value)}
+              onChange={(v) => update("peso_liquido", v === "" ? "" : v)}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}
@@ -347,12 +345,11 @@ export default function LoteBlock({
           </div>
           <div className="space-y-1.5">
             <Label>Qtd. Embalagens</Label>
-            <Input
-              type="number"
-              step="1"
-              min="0"
+            <NumberInputBr
+              decimals={0}
+              min={0}
               value={lote.quantidade_embalagens || ""}
-              onChange={(e) => update("quantidade_embalagens", e.target.value)}
+              onChange={(v) => update("quantidade_embalagens", v === "" ? "" : v)}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}

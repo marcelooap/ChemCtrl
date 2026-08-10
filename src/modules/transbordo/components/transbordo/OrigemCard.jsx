@@ -2,6 +2,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
   formatVolume,
   formatMass,
@@ -243,13 +244,12 @@ export default function OrigemCard({
                 <Label className="text-xs text-muted-foreground">
                   Volume Retirado (L) *
                 </Label>
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
+                <NumberInputBr
+                  decimals={0}
+                  min={0}
                   max={l.saldo_disponivel || 0}
                   value={l.volume_retirado || ""}
-                  onChange={(e) => handleLoteVolumeChange(i, e.target.value)}
+                  onChange={(v) => handleLoteVolumeChange(i, v)}
                   placeholder="0"
                   disabled={readOnly}
                   className="bg-white"
@@ -349,12 +349,11 @@ export default function OrigemCard({
           </div>
           <div className="space-y-1.5">
             <Label>Volume Retirado (L)</Label>
-            <Input
-              type="number"
-              step="1"
-              min="0"
+            <NumberInputBr
+              decimals={0}
+              min={0}
               value={origem.volume_retirado ?? ""}
-              onChange={(e) => handleVolumeChange(e.target.value)}
+              onChange={(v) => handleVolumeChange(v)}
               disabled={readOnly}
               className="bg-white font-medium text-primary"
             />
@@ -424,12 +423,11 @@ export default function OrigemCard({
             </div>
             <div className="space-y-1.5">
               <Label>Volume Retirado (L) *</Label>
-              <Input
-                type="number"
-                step="1"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={origem.volume_retirado || ""}
-                onChange={(e) => handleVolumeChange(e.target.value)}
+                onChange={(v) => handleVolumeChange(v)}
                 placeholder="0"
                 disabled={readOnly}
                 className="bg-white"

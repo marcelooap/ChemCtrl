@@ -7,9 +7,9 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { PARTICULA_TAMANHOS } from "@transbordo/lib/filtracao";
 
 function toInputValue(v) {
@@ -147,13 +147,12 @@ export default function FiltracaoEditModal({
 
           <div className="space-y-1.5">
             <Label htmlFor="filtracao-sae">SAE</Label>
-            <Input
+            <NumberInputBr
               id="filtracao-sae"
-              type="number"
+              decimals={0}
               min={0}
-              step={1}
               value={sae}
-              onChange={(e) => setSae(e.target.value)}
+              onChange={(v) => setSae(v === "" ? "" : v)}
               placeholder="Ex.: 1, 2, 3..."
             />
           </div>
@@ -166,14 +165,13 @@ export default function FiltracaoEditModal({
                   <Label htmlFor={`filtracao-${key}`} className="text-xs text-muted-foreground">
                     {label}
                   </Label>
-                  <Input
+                  <NumberInputBr
                     id={`filtracao-${key}`}
-                    type="number"
+                    decimals={0}
                     min={0}
-                    step="any"
                     value={particulas[key]}
-                    onChange={(e) =>
-                      setParticulas((prev) => ({ ...prev, [key]: e.target.value }))
+                    onChange={(v) =>
+                      setParticulas((prev) => ({ ...prev, [key]: v === "" ? "" : v }))
                     }
                     placeholder="0"
                   />

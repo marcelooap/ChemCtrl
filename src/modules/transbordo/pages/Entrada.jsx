@@ -20,6 +20,7 @@ import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatMass, formatNum } from "@transbordo/lib/format";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
+import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
@@ -92,13 +93,39 @@ export default function Entrada() {
         entities.transbordos.list(),
         entities.estoque.list(),
       ]);
+
+      // Garante que clientes referenciados em produtos existam em t_clientes
+      const nomesExistentes = new Set(
+        cliens.map((c) => c.nome?.trim().toLowerCase()).filter(Boolean)
+      );
+      const nomesFaltando = [
+        ...new Set(
+          prods
+            .map((p) => p.cliente_nome?.trim())
+            .filter((n) => n && !nomesExistentes.has(n.toLowerCase()))
+        ),
+      ];
+      let clientesAtualizados = cliens;
+      if (nomesFaltando.length > 0) {
+        const criados = await Promise.all(
+          nomesFaltando.map((nome) => ensureClienteByNome(nome))
+        );
+        clientesAtualizados = [
+          ...cliens,
+          ...criados.filter((c) => c.id).map((c) => ({ id: c.id, nome: c.nome })),
+        ];
+      }
+
       setEntradas(ents);
       setProdutos(prods);
-      setClientes(cliens);
+      setClientes(clientesAtualizados);
       setTransbordos(transbs);
       setEstoque(ests);
-    } catch {
+    } catch (err) {
+      console.error("[Transbordo] Erro ao carregar Entrada:", err);
       setEntradas([]);
+      setProdutos([]);
+      setClientes([]);
     }
     setLoading(false);
   };

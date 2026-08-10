@@ -9,6 +9,7 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 function resolveCapacidadeInicial(v) {
   if (!v) return "";
@@ -110,23 +111,21 @@ export default function VasilhameCadastroModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Capacidade (L)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={capacidade}
-                onChange={(e) => setCapacidade(e.target.value)}
+                onChange={(v) => setCapacidade(v === "" ? "" : v)}
                 placeholder="0"
               />
             </div>
             <div className="space-y-1.5">
               <Label>Tara (kg)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={tara}
-                onChange={(e) => setTara(e.target.value)}
+                onChange={(v) => setTara(v === "" ? "" : v)}
                 placeholder="0"
               />
             </div>

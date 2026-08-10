@@ -9,6 +9,7 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 export default function EntradaElementosModal({
   open,
@@ -77,13 +78,12 @@ export default function EntradaElementosModal({
 
           <div className="space-y-1.5">
             <Label htmlFor="elem-qtd">Quantidade</Label>
-            <Input
+            <NumberInputBr
               id="elem-qtd"
-              type="number"
+              decimals={0}
               min={1}
-              step={1}
               value={quantidade}
-              onChange={(e) => setQuantidade(e.target.value)}
+              onChange={(v) => setQuantidade(v === "" ? "" : v)}
               placeholder="Ex.: 3"
             />
             <p className="text-xs text-muted-foreground">

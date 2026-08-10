@@ -5,14 +5,13 @@ import {
 } from '@/services/supabase/chemflow';
 
 /**
- * Camada de dados do ChemFlow — substitui 100% o antigo facade Base44
- * (`entities.<nome>`). Fala exclusivamente com o Supabase Projeto B,
- * isolado do Supabase Projeto A usado pelo ChemCtrl.
+ * Camada de dados do módulo Transbordo.
+ * Fala com as tabelas prefixadas `t_*` no Supabase unificado.
  *
- * Mantém a mesma API usada pelas telas legadas (list/get/filter/create/
- * update/delete/bulkCreate/bulkUpdate/deleteMany) para minimizar o churn
- * nos componentes migrados de `entities.X.metodo(...)` para
- * `entities.X.metodo(...)`.
+ * Mantém a mesma API usada pelas telas (list/get/filter/create/
+ * update/delete/bulkCreate/bulkUpdate/deleteMany) — as chaves do
+ * objeto `entities` (clientes, produtos, ...) não mudam; apenas o
+ * nome físico da tabela no Supabase usa o prefixo `t_`.
  */
 
 function normalizeOrder(sort) {
@@ -137,15 +136,15 @@ function createEntity(table) {
 }
 
 export const entities = {
-  clientes: createEntity('clientes'),
-  produtos: createEntity('produtos'),
-  isotanques: createEntity('isotanques'),
-  descontaminacoes: createEntity('descontaminacoes'),
-  entradas: createEntity('entradas'),
-  estoque: createEntity('estoque'),
-  transbordos: createEntity('transbordos'),
-  vasilhames: createEntity('vasilhames'),
-  saidas: createEntity('saidas'),
-  filtracoes: createEntity('filtracoes'),
-  elementos_filtrantes: createEntity('elementos_filtrantes'),
+  clientes: createEntity('t_clientes'),
+  produtos: createEntity('t_produtos'),
+  isotanques: createEntity('t_isotanques'),
+  descontaminacoes: createEntity('t_descontaminacoes'),
+  entradas: createEntity('t_entradas'),
+  estoque: createEntity('t_estoque'),
+  transbordos: createEntity('t_transbordos'),
+  vasilhames: createEntity('t_vasilhames'),
+  saidas: createEntity('t_saidas'),
+  filtracoes: createEntity('t_filtracoes'),
+  elementos_filtrantes: createEntity('t_elementos_filtrantes'),
 };

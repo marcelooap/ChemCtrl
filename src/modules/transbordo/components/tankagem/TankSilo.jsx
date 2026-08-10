@@ -1,4 +1,4 @@
-import { formatVolume } from "@transbordo/lib/format";
+import { formatVolume, formatPercent } from "@transbordo/lib/format";
 
 export default function TankSilo({ tanka, capacidade, volume, produto, lote, fillColor }) {
     const pct = capacidade > 0 ? (volume / capacidade) * 100 : 0;
@@ -22,7 +22,7 @@ export default function TankSilo({ tanka, capacidade, volume, produto, lote, fil
               {formatVolume(volume)} L
             </span>
             <span className="text-xs text-foreground/80">
-              {pct.toFixed(1)}%
+              {formatPercent(pct)}%
             </span>
           </div>
         </div>

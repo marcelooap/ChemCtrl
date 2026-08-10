@@ -116,6 +116,11 @@ export function formatDensidade(v, opts = {}) {
   return formatNum(v, 3, { empty: opts.empty ?? "-" });
 }
 
+/** Percentual PT-BR (ex.: 12,5). */
+export function formatPercent(v, decimals = 1, opts = {}) {
+  return formatNum(v, decimals, { empty: opts.empty ?? "0" });
+}
+
 /** Moeda BRL. */
 export function formatCurrency(v) {
   const n = parseNumero(v);

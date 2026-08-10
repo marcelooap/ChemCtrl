@@ -18,17 +18,25 @@ export default function IsotanqueViewDialog({
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    if (isNaN(d)) return dateStr;
-    return d.toLocaleDateString("pt-BR");
+    const raw = String(dateStr).slice(0, 10);
+    const [y, m, d] = raw.split("-");
+    if (!y || !m || !d) return dateStr;
+    return `${d}/${m}/${y}`;
+  };
+
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null;
+    const raw = String(dateStr).slice(0, 10);
+    const d = new Date(`${raw}T00:00:00`);
+    return isNaN(d) ? null : d;
   };
 
   const calcularDias = (inicio, fim) => {
     if (!inicio) return "-";
-    const dataIni = new Date(inicio);
-    if (isNaN(dataIni)) return "-";
-    const dataFim = fim ? new Date(fim) : new Date();
-    dataIni.setHours(0, 0, 0, 0);
+    const dataIni = parseLocalDate(inicio);
+    if (!dataIni) return "-";
+    const dataFim = fim ? parseLocalDate(fim) : new Date();
+    if (!dataFim) return "-";
     dataFim.setHours(0, 0, 0, 0);
     return Math.round((dataFim - dataIni) / (1000 * 60 * 60 * 24));
   };

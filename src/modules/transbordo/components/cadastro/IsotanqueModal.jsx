@@ -10,6 +10,7 @@ import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
@@ -43,7 +44,11 @@ export default function IsotanqueModal({
       setClienteId(editingIsotanque.cliente_id || "");
       setClienteNome(editingIsotanque.cliente_nome || "");
       setCapacidade(editingIsotanque.capacidade ?? "");
-      setInicioLocacao(editingIsotanque.inicio_locacao || "");
+      setInicioLocacao(
+        editingIsotanque.inicio_locacao
+          ? String(editingIsotanque.inicio_locacao).slice(0, 10)
+          : ""
+      );
     } else {
       setCodigoItku("");
       setTanka("");
@@ -157,10 +162,10 @@ export default function IsotanqueModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Capacidade (Litros)</Label>
-              <Input
-                type="number"
+              <NumberInputBr
+                decimals={0}
                 value={capacidade}
-                onChange={(e) => setCapacidade(e.target.value)}
+                onChange={(v) => setCapacidade(v === "" ? "" : v)}
                 placeholder="0"
                 disabled={readOnly}
               />

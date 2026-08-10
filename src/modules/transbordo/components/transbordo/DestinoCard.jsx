@@ -3,6 +3,7 @@ import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
   formatVolume,
   formatMass,
@@ -385,13 +386,10 @@ export default function DestinoCard({
           </div>
           <div className="space-y-1.5">
             <Label>Volume (L) *</Label>
-            <Input
-              type="number"
-              step="1"
+            <NumberInputBr
+              decimals={0}
               value={destino.volume || ""}
-              onChange={(e) =>
-                updateField("volume", roundVolume(e.target.value))
-              }
+              onChange={(v) => updateField("volume", v === "" ? "" : roundVolume(v))}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}
@@ -465,11 +463,10 @@ function IntegerField({ label, value, onChange, readOnly }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <Input
-        type="number"
-        step="1"
+      <NumberInputBr
+        decimals={0}
         value={value ?? ""}
-        onChange={(e) => onChange(roundVolume(e.target.value))}
+        onChange={(v) => onChange(v === "" ? "" : roundVolume(v))}
         placeholder="0"
         disabled={readOnly}
         className={INPUT_EDITABLE}

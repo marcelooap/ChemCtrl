@@ -12,6 +12,7 @@ import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { formatMass, parseDensidade } from "@transbordo/lib/format";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
@@ -338,12 +339,11 @@ export default function VasilhameModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Volume (L) *</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={volume}
-                onChange={(e) => setVolume(e.target.value)}
+                onChange={(v) => setVolume(v === "" ? "" : v)}
                 placeholder="0"
                 disabled={readOnly}
                 className={INPUT_EDITABLE}
@@ -379,12 +379,11 @@ export default function VasilhameModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Tara (kg)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={tara}
-                onChange={(e) => setTara(e.target.value)}
+                onChange={(v) => setTara(v === "" ? "" : v)}
                 placeholder="0"
                 disabled={readOnly}
                 className={INPUT_EDITABLE}
@@ -408,9 +407,10 @@ export default function VasilhameModal({
               <Label>
                 Densidade {densidadeDoCadastro ? "(Tabelada)" : "*"}
               </Label>
-              <Input
+              <NumberInputBr
+                decimals={3}
                 value={densidade}
-                onChange={(e) => setDensidade(e.target.value)}
+                onChange={(v) => setDensidade(v === "" ? "" : v)}
                 placeholder={
                   densidadeDoCadastro ? "Automático" : "Ex: 1,025"
                 }

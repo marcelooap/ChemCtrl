@@ -17,23 +17,7 @@ import IsotanqueModal from "@transbordo/components/cadastro/IsotanqueModal";
 import IsotanqueViewDialog from "@transbordo/components/cadastro/IsotanqueViewDialog";
 import DescontaminacaoModal from "@transbordo/components/cadastro/DescontaminacaoModal";
 import { formatVolume } from "@transbordo/lib/format";
-
-const MOCK_ISOTANQUES = [
-  { id: "i1", codigo_itku: "ITKU-001", tanka: "T-01", produto_nome: "INIPOL AD 1700 BW", cliente_nome: "ARKEMA COATEX", capacidade: 24000, inicio_locacao: "2026-07-01" },
-  { id: "i2", codigo_itku: "ITKU-002", tanka: "T-02", produto_nome: "MULTITREAT DF 15918", cliente_nome: "CLARIANT", capacidade: 20000, inicio_locacao: "2026-07-10" },
-];
-
-const MOCK_PRODUTOS = [
-  { id: "m1", produto: "INIPOL AD 1700 BW" },
-  { id: "m2", produto: "PROCHINOR TL 83" },
-  { id: "m3", produto: "MULTITREAT DF 15918" },
-];
-
-const MOCK_CLIENTES = [
-  { id: "c1", nome: "ARKEMA COATEX" },
-  { id: "c2", nome: "CLARIANT" },
-  { id: "c3", nome: "BASF" },
-];
+import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 
 export default function IsotanquesTab() {
   const [isotanques, setIsotanques] = useState([]);
@@ -49,7 +33,6 @@ export default function IsotanquesTab() {
   const [descontamOpen, setDescontamOpen] = useState(false);
   const [descontaminacoes, setDescontaminacoes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [useFallback, setUseFallback] = useState(false);
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -62,20 +45,19 @@ export default function IsotanquesTab() {
       setIsotanques(isos);
       setProdutos(prods);
       setClientes(cliens);
-      setUseFallback(false);
       try {
         const desconts = await entities.descontaminacoes.list("-data_descontaminacao");
         setDescontaminacoes(desconts);
       } catch {
         setDescontaminacoes([]);
       }
-    } catch {
+    } catch (err) {
+      console.error("[Transbordo] Erro ao carregar isotanques:", err);
       if (!silent) {
-        setIsotanques(MOCK_ISOTANQUES);
-        setProdutos(MOCK_PRODUTOS);
-        setClientes(MOCK_CLIENTES);
+        setIsotanques([]);
+        setProdutos([]);
+        setClientes([]);
         setDescontaminacoes([]);
-        setUseFallback(true);
       }
     } finally {
       if (!silent) setLoading(false);
@@ -114,84 +96,64 @@ export default function IsotanquesTab() {
   };
 
   const handleSave = async (data) => {
-    if (!useFallback) {
-      try {
-        if (editingIsotanque) {
-          await entities.isotanques.update(editingIsotanque.id, data);
-          setIsotanques((prev) =>
-            prev.map((it) =>
-              it.id === editingIsotanque.id ? { ...it, ...data } : it
-            )
-          );
-        } else {
-          await entities.isotanques.create(data);
-          await loadData({ silent: true });
-        }
-        setModalOpen(false);
-        setEditingIsotanque(null);
-        return;
-      } catch {
-        // fallback local abaixo
+    try {
+      const cliente = await ensureClienteByNome(data.cliente_nome);
+      const payload = {
+        ...data,
+        cliente_id: emptyToNull(cliente.id || data.cliente_id),
+        cliente_nome: emptyToNull(cliente.nome || data.cliente_nome),
+        produto_id: emptyToNull(data.produto_id),
+      };
+
+      if (editingIsotanque) {
+        await entities.isotanques.update(editingIsotanque.id, payload);
+      } else {
+        await entities.isotanques.create(payload);
       }
+      await loadData({ silent: true });
+      setModalOpen(false);
+      setEditingIsotanque(null);
+    } catch (err) {
+      console.error("[Transbordo] Erro ao salvar isotanque:", err);
     }
-    if (editingIsotanque) {
-      setIsotanques((prev) =>
-        prev.map((it) => (it.id === editingIsotanque.id ? { ...it, ...data } : it))
-      );
-    } else {
-      setIsotanques((prev) => [...prev, { id: `local-${Date.now()}`, ...data }]);
-    }
-    setModalOpen(false);
-    setEditingIsotanque(null);
   };
 
   const handleDelete = async () => {
     const idToDelete = deleteId;
     setDeleteId(null);
-    if (!useFallback) {
-      try {
-        await entities.isotanques.delete(idToDelete);
-        setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
-        return;
-      } catch {
-        // fallback local abaixo
-      }
+    try {
+      await entities.isotanques.delete(idToDelete);
+      setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
+    } catch (err) {
+      console.error("[Transbordo] Erro ao excluir isotanque:", err);
     }
-    setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
   };
 
   const handleDescontaminacao = async (data) => {
-    if (!useFallback) {
-      try {
-        await entities.descontaminacoes.create(data);
-        await loadData({ silent: true });
-        setDescontamOpen(false);
-        return;
-      } catch {
-        // fallback local abaixo
-      }
+    try {
+      await entities.descontaminacoes.create(data);
+      await loadData({ silent: true });
+      setDescontamOpen(false);
+    } catch (err) {
+      console.error("[Transbordo] Erro ao registrar descontaminação:", err);
     }
-    setDescontaminacoes((prev) => [
-      { id: `local-descontam-${Date.now()}`, ...data },
-      ...prev,
-    ]);
-    setDescontamOpen(false);
   };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
-    const d = new Date(dateStr);
-    if (isNaN(d)) return dateStr;
-    return d.toLocaleDateString("pt-BR");
+    const raw = String(dateStr).slice(0, 10);
+    const [y, m, d] = raw.split("-");
+    if (!y || !m || !d) return dateStr;
+    return `${d}/${m}/${y}`;
   };
 
   const calcularDiasLocados = (inicio) => {
     if (!inicio) return "-";
-    const data = new Date(inicio);
+    const raw = String(inicio).slice(0, 10);
+    const data = new Date(`${raw}T00:00:00`);
     if (isNaN(data)) return "-";
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    data.setHours(0, 0, 0, 0);
     const diff = Math.round((hoje - data) / (1000 * 60 * 60 * 24));
     return diff;
   };

@@ -14,18 +14,8 @@ import {
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
 import ProdutoModal from "@transbordo/components/cadastro/ProdutoModal";
-
-const MOCK_PRODUTOS = [
-  { id: "m1", codigo: "AD1700", produto: "INIPOL AD 1700 BW", cliente_nome: "ARKEMA COATEX", densidade: "1.05", densidade_tabelada: true, filtrado: true, data_cadastro: "2026-07-20" },
-  { id: "m2", codigo: "TL83", produto: "PROCHINOR TL 83", cliente_nome: "ARKEMA COATEX", densidade: "-", densidade_tabelada: false, filtrado: false, data_cadastro: "2026-07-21" },
-  { id: "m3", codigo: "DF15918", produto: "MULTITREAT DF 15918", cliente_nome: "CLARIANT", densidade: "0.98", densidade_tabelada: true, filtrado: true, data_cadastro: "2026-07-22" },
-];
-
-const MOCK_CLIENTES = [
-  { id: "c1", nome: "ARKEMA COATEX" },
-  { id: "c2", nome: "CLARIANT" },
-  { id: "c3", nome: "BASF" },
-];
+import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
+import { formatDensidade } from "@transbordo/lib/format";
 
 export default function ProdutosTab() {
   const [produtos, setProdutos] = useState([]);
@@ -36,7 +26,7 @@ export default function ProdutosTab() {
   const [readOnly, setReadOnly] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [useFallback, setUseFallback] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -45,14 +35,36 @@ export default function ProdutosTab() {
         entities.produtos.list(),
         entities.clientes.list(),
       ]);
+
+      // Sincroniza clientes referidos em produtos mas ainda ausentes em t_clientes
+      const nomesExistentes = new Set(
+        cliens.map((c) => c.nome?.trim().toLowerCase()).filter(Boolean)
+      );
+      const nomesFaltando = [
+        ...new Set(
+          prods
+            .map((p) => p.cliente_nome?.trim())
+            .filter((n) => n && !nomesExistentes.has(n.toLowerCase()))
+        ),
+      ];
+      let clientesAtualizados = cliens;
+      if (nomesFaltando.length > 0) {
+        const criados = await Promise.all(
+          nomesFaltando.map((nome) => ensureClienteByNome(nome))
+        );
+        clientesAtualizados = [
+          ...cliens,
+          ...criados.filter((c) => c.id).map((c) => ({ id: c.id, nome: c.nome })),
+        ];
+      }
+
       setProdutos(prods);
-      setClientes(cliens);
-      setUseFallback(false);
-    } catch {
+      setClientes(clientesAtualizados);
+    } catch (err) {
+      console.error("[Transbordo] Erro ao carregar produtos/clientes:", err);
       if (!silent) {
-        setProdutos(MOCK_PRODUTOS);
-        setClientes(MOCK_CLIENTES);
-        setUseFallback(true);
+        setProdutos([]);
+        setClientes([]);
       }
     } finally {
       if (!silent) setLoading(false);
@@ -87,61 +99,60 @@ export default function ProdutosTab() {
   const handleNew = () => {
     setEditingProduto(null);
     setReadOnly(false);
+    setSaveError("");
     setModalOpen(true);
   };
 
   const handleEdit = (produto) => {
     setEditingProduto(produto);
     setReadOnly(false);
+    setSaveError("");
     setModalOpen(true);
   };
 
   const handleView = (produto) => {
     setEditingProduto(produto);
     setReadOnly(true);
+    setSaveError("");
     setModalOpen(true);
   };
 
   const handleSave = async (data) => {
-    if (!useFallback) {
-      try {
-        if (editingProduto) {
-          await entities.produtos.update(editingProduto.id, data);
-        } else {
-          await entities.produtos.create(data);
-        }
-        await loadData({ silent: true });
-        setModalOpen(false);
-        setEditingProduto(null);
-        return;
-      } catch {
-        // fallback local abaixo
+    setSaveError("");
+    try {
+      const cliente = await ensureClienteByNome(data.cliente_nome);
+      const payload = {
+        ...data,
+        cliente_id: emptyToNull(cliente.id || data.cliente_id),
+        cliente_nome: emptyToNull(cliente.nome || data.cliente_nome),
+      };
+
+      if (editingProduto) {
+        await entities.produtos.update(editingProduto.id, payload);
+      } else {
+        await entities.produtos.create(payload);
       }
-    }
-    if (editingProduto) {
-      setProdutos((prev) =>
-        prev.map((p) => (p.id === editingProduto.id ? { ...p, ...data } : p))
+      await loadData({ silent: true });
+      setModalOpen(false);
+      setEditingProduto(null);
+    } catch (err) {
+      console.error("[Transbordo] Erro ao salvar produto:", err);
+      setSaveError(
+        err?.message?.replace(/^\[ChemFlow:[^\]]+\]\s*/, "") ||
+          "Não foi possível salvar o produto. Verifique a conexão com o banco."
       );
-    } else {
-      setProdutos((prev) => [...prev, { id: `local-${Date.now()}`, ...data }]);
     }
-    setModalOpen(false);
-    setEditingProduto(null);
   };
 
   const handleDelete = async () => {
     const idToDelete = deleteId;
     setDeleteId(null);
-    if (!useFallback) {
-      try {
-        await entities.produtos.delete(idToDelete);
-        setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
-        return;
-      } catch {
-        // fallback local abaixo
-      }
+    try {
+      await entities.produtos.delete(idToDelete);
+      setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
+    } catch (err) {
+      console.error("[Transbordo] Erro ao excluir produto:", err);
     }
-    setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
   };
 
   const formatDate = (dateStr) => {
@@ -158,7 +169,12 @@ export default function ProdutosTab() {
   const mergedClientes = [
     ...clientes,
     ...uniqueClienteNomes
-      .filter((nome) => !clientes.some((c) => c.nome === nome))
+      .filter(
+        (nome) =>
+          !clientes.some(
+            (c) => c.nome?.toLowerCase() === nome.toLowerCase()
+          )
+      )
       .map((nome) => ({ id: nome, nome })),
   ];
 
@@ -237,7 +253,9 @@ export default function ProdutosTab() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-orange-50 text-amber-800">
-                        {p.densidade || "-"}
+                        {!p.densidade || p.densidade === "-"
+                          ? "-"
+                          : formatDensidade(p.densidade)}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
@@ -303,11 +321,13 @@ export default function ProdutosTab() {
           setModalOpen(false);
           setEditingProduto(null);
           setReadOnly(false);
+          setSaveError("");
         }}
         onSave={handleSave}
         editingProduto={editingProduto}
         readOnly={readOnly}
         clientes={mergedClientes}
+        externalError={saveError}
       />
 
       {/* Delete Confirmation */}

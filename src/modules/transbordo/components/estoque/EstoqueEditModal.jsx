@@ -11,6 +11,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { AlertCircle } from "lucide-react";
 import { UNIDADES } from "@transbordo/components/entrada/LoteBlock";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { formatCurrency } from "@transbordo/lib/format";
 import {
   getEstoqueNotaFiscal,
@@ -227,12 +228,11 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Quantidade *</Label>
-              <Input
-                type="number"
-                step="0.001"
-                min="0"
+              <NumberInputBr
+                decimals={0}
+                min={0}
                 value={quantidade}
-                onChange={(e) => setQuantidade(e.target.value)}
+                onChange={(v) => setQuantidade(v === "" ? "" : v)}
                 placeholder="0"
                 disabled={saving}
                 className="bg-card"
@@ -281,12 +281,11 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Preço Unitário (R$)</Label>
-              <Input
-                type="number"
-                step="0.0001"
-                min="0"
+              <NumberInputBr
+                decimals={4}
+                min={0}
                 value={precoUnitario}
-                onChange={(e) => setPrecoUnitario(e.target.value)}
+                onChange={(v) => setPrecoUnitario(v === "" ? "" : v)}
                 placeholder="0,0000"
                 disabled={saving}
                 className="bg-card"
@@ -310,12 +309,11 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Peso Líq.</Label>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0"
+                  <NumberInputBr
+                    decimals={0}
+                    min={0}
                     value={pesoLiquido}
-                    onChange={(e) => setPesoLiquido(e.target.value)}
+                    onChange={(v) => setPesoLiquido(v === "" ? "" : v)}
                     placeholder="0"
                     disabled={saving}
                     className="bg-card"
@@ -323,12 +321,11 @@ export default function EstoqueEditModal({ open, onClose, onSave, item }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Qtd. Embalagens</Label>
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
+                  <NumberInputBr
+                    decimals={0}
+                    min={0}
                     value={qtdEmbalagens}
-                    onChange={(e) => setQtdEmbalagens(e.target.value)}
+                    onChange={(v) => setQtdEmbalagens(v === "" ? "" : v)}
                     placeholder="0"
                     disabled={saving}
                     className="bg-card"

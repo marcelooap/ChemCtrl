@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@shared/components/ui/select";
 import { entities } from "@transbordo/services/entities";
-import { formatVolume } from "@transbordo/lib/format";
+import { formatVolume, formatPercent } from "@transbordo/lib/format";
 import {
   computeDashboardKpis,
   buildMonthlyVolumeSeries,
@@ -257,7 +257,7 @@ export default function Dashboard() {
           value={kpis.hasCurrentData ? `${formatVolume(kpis.volumeCurrent)} L` : "-"}
           subtitle={
             kpis.hasCurrentData
-              ? `Filtrado: ${formatVolume(kpis.volumeFiltered)} L (${kpis.filteredPercent.toFixed(1)}%)`
+              ? `Filtrado: ${formatVolume(kpis.volumeFiltered)} L (${formatPercent(kpis.filteredPercent)}%)`
               : undefined
           }
           comparison={kpis.hasCurrentData ? kpis.volumeChange : undefined}
@@ -272,7 +272,7 @@ export default function Dashboard() {
           value={kpis.topProduct ? kpis.topProduct.name : "-"}
           subtitle={
             kpis.topProduct
-              ? `${formatVolume(kpis.topProduct.volume)} L · ${kpis.topProduct.percent.toFixed(1)}% do mês`
+              ? `${formatVolume(kpis.topProduct.volume)} L · ${formatPercent(kpis.topProduct.percent)}% do mês`
               : undefined
           }
           icon={Trophy}
@@ -283,7 +283,7 @@ export default function Dashboard() {
           value={kpis.topOperator ? kpis.topOperator.name : "-"}
           subtitle={
             kpis.topOperator
-              ? `${formatVolume(kpis.topOperator.volume)} L · ${kpis.topOperator.percent.toFixed(1)}% do mês`
+              ? `${formatVolume(kpis.topOperator.volume)} L · ${formatPercent(kpis.topOperator.percent)}% do mês`
               : undefined
           }
           icon={User}
@@ -302,7 +302,11 @@ export default function Dashboard() {
               <ComposedChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="#9ca3af"
+                  tickFormatter={(v) => formatVolume(v)}
+                />
                 <Tooltip
                   formatter={(value, name) => [
                     `${formatVolume(value)} L`,
@@ -379,7 +383,7 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip
                       formatter={(value, _name, props) => [
-                        `${formatVolume(value)} L (${props.payload.percent.toFixed(1)}%)`,
+                        `${formatVolume(value)} L (${formatPercent(props.payload.percent)}%)`,
                         props.payload.name,
                       ]}
                     />
@@ -415,7 +419,7 @@ export default function Dashboard() {
                           {formatVolume(item.volume)} L
                         </td>
                         <td className="py-2 text-right font-medium whitespace-nowrap">
-                          {item.percent.toFixed(1)}%
+                          {formatPercent(item.percent)}%
                         </td>
                       </tr>
                     ))}
@@ -435,7 +439,12 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={operatorChartData} layout="vertical" margin={{ left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11 }}
+                  stroke="#9ca3af"
+                  tickFormatter={(v) => formatVolume(v)}
+                />
                 <YAxis
                   type="category"
                   dataKey="label"

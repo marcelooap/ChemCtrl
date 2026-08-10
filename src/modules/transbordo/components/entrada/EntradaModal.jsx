@@ -13,6 +13,7 @@ import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
 import { formatMass, formatCurrency, formatNum } from "@transbordo/lib/format";
 import { loteToKg } from "@transbordo/lib/conversao";
@@ -196,20 +197,34 @@ export default function EntradaModal({
     setError("");
   }, [editingEntrada, open]);
 
-  const clientesComProdutos = produtos
-    .filter((p) => p.cliente_nome)
-    .reduce((acc, p) => {
-      if (!acc.find((c) => c.nome === p.cliente_nome)) {
-        const matched = clientes.find(
-          (c) => c.nome.toLowerCase() === p.cliente_nome.toLowerCase()
-        );
-        acc.push({
-          id: matched?.id || p.cliente_id || "",
-          nome: p.cliente_nome,
+  const clientesComProdutos = (() => {
+    const byNome = new Map();
+
+    for (const c of clientes) {
+      const nome = c.nome?.trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (!byNome.has(key)) {
+        byNome.set(key, { id: c.id || "", nome });
+      }
+    }
+
+    for (const p of produtos) {
+      const nome = p.cliente_nome?.trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (!byNome.has(key)) {
+        byNome.set(key, {
+          id: p.cliente_id || "",
+          nome,
         });
       }
-      return acc;
-    }, []);
+    }
+
+    return [...byNome.values()].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR")
+    );
+  })();
 
   const filteredProdutos = produtos.filter(
     (p) =>
@@ -633,12 +648,11 @@ export default function EntradaModal({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Peso Bruto (kg)</Label>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0"
+                  <NumberInputBr
+                    decimals={0}
+                    min={0}
                     value={granelPesoBruto}
-                    onChange={(e) => setGranelPesoBruto(e.target.value)}
+                    onChange={(v) => setGranelPesoBruto(v === "" ? "" : v)}
                     placeholder="0"
                     disabled={readOnly}
                     className={INPUT_EDITABLE}
@@ -646,12 +660,11 @@ export default function EntradaModal({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Peso Líquido (kg)</Label>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0"
+                  <NumberInputBr
+                    decimals={0}
+                    min={0}
                     value={granelPesoLiquido}
-                    onChange={(e) => setGranelPesoLiquido(e.target.value)}
+                    onChange={(v) => setGranelPesoLiquido(v === "" ? "" : v)}
                     placeholder="0"
                     disabled={readOnly}
                     className={INPUT_EDITABLE}

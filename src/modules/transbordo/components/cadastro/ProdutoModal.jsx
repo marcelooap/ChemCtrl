@@ -11,6 +11,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 
 export default function ProdutoModal({
@@ -20,6 +21,7 @@ export default function ProdutoModal({
   editingProduto,
   readOnly,
   clientes,
+  externalError = "",
 }) {
   const [codigo, setCodigo] = useState("");
   const [produto, setProduto] = useState("");
@@ -82,6 +84,8 @@ export default function ProdutoModal({
     ? "Editar Produto"
     : "Novo Produto";
 
+  const displayError = error || externalError;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
@@ -89,7 +93,7 @@ export default function ProdutoModal({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {displayError && <p className="text-sm text-red-600">{displayError}</p>}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -145,12 +149,11 @@ export default function ProdutoModal({
           {densidadeTabelada && (
             <div className="space-y-1.5">
               <Label>Densidade (g/cm³)</Label>
-              <Input
-                type="number"
-                step="0.001"
+              <NumberInputBr
+                decimals={3}
                 value={densidade}
-                onChange={(e) => setDensidade(e.target.value)}
-                placeholder="0.000"
+                onChange={(v) => setDensidade(v === "" ? "" : v)}
+                placeholder="0,000"
                 disabled={readOnly}
               />
             </div>

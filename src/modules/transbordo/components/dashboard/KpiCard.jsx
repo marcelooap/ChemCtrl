@@ -1,4 +1,5 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { formatPercent } from "@transbordo/lib/format";
 
 export default function KpiCard({
   title,
@@ -40,7 +41,7 @@ export default function KpiCard({
             <TrendingDown className="w-3.5 h-3.5" />
           )}
           <span>
-            {Math.abs(comparison).toFixed(1)}%
+            {formatPercent(Math.abs(comparison))}%
             {comparisonLabel ? ` ${comparisonLabel}` : ""}
           </span>
         </p>

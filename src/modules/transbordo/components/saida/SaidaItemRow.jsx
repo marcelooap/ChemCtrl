@@ -2,6 +2,7 @@ import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { formatVolume, formatMass, formatNum } from "@transbordo/lib/format";
 
 const TIPO_OPTIONS = [
@@ -336,11 +337,10 @@ export default function SaidaItemRow({
           </div>
           <div className="space-y-1.5">
             <Label>Quantidade Solicitada (kg) *</Label>
-            <Input
-              type="number"
-              step="0.001"
+            <NumberInputBr
+              decimals={0}
               value={item.quantidade_solicitada || ""}
-              onChange={(e) => handleQuantidadeChange(parseFloat(e.target.value) || 0)}
+              onChange={(v) => handleQuantidadeChange(v === "" ? 0 : v)}
               placeholder="0"
               disabled={!item.entrada_id}
             />
