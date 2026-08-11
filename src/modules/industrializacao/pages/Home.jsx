@@ -305,6 +305,7 @@ export default function Home() {
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                   <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.id')}</th>
+                  <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.client')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.code')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.mp')}</th>
                   <th className="px-4 py-3 font-medium">{t('dashboard.wmsNok.columns.qty')}</th>
@@ -316,7 +317,7 @@ export default function Home() {
               <tbody>
                 {stocksWmsNok.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                       {t('dashboard.wmsNok.empty')}
                     </td>
                   </tr>
@@ -324,6 +325,7 @@ export default function Home() {
                   stocksWmsNok.map((s) => (
                     <tr key={s.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">{s.entry_id || '—'}</td>
+                      <td className="px-4 py-3 text-foreground whitespace-nowrap">{s.client || '—'}</td>
                       <td className="px-4 py-3 font-mono text-muted-foreground whitespace-nowrap">{s.mp_code || '—'}</td>
                       <td className="px-4 py-3 text-foreground">{s.mp_name || '—'}</td>
                       <td className="px-4 py-3 whitespace-nowrap">

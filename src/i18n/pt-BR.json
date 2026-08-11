@@ -700,6 +700,7 @@
       "openItem": "Abrir na tela de entradas",
       "columns": {
         "id": "ID",
+        "client": "Cliente",
         "code": "Cód",
         "mp": "MP",
         "qty": "Quantidade",
@@ -1144,7 +1145,11 @@
       "volumeExceeded": "Volume excedido!",
       "registerPackaging": "Registrar Envase",
       "saving": "Salvando...",
-      "saveSuccess": "Envase registrado com sucesso"
+      "saveSuccess": "Envase registrado com sucesso",
+      "alreadyRegisteredTitle": "Envase já registrado",
+      "alreadyRegisteredHint": "Esta OP já possui vasilhame no pátio. Confirme para finalizar a ordem de produção.",
+      "alreadyRegisteredId": "ID {{id}}",
+      "finalizeExisting": "Finalizar OP"
     }
   },
   "inventory": {

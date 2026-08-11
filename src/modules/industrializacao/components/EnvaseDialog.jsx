@@ -28,6 +28,11 @@ import { containerDisplayVolume } from '@industrializacao/lib/fractionalSupply';
 import OperationalChecklistModal from '@industrializacao/components/checklists/OperationalChecklistModal';
 import { CHECKLIST_ETAPAS } from '@industrializacao/lib/checklists/operationalChecklistConfig';
 import { loadRecipeForProduction } from '@industrializacao/lib/checklists/loadRecipeForProduction';
+import {
+  loadEnvaseEvidence,
+  productionHasRegisteredEnvase,
+  finalizeProductionAfterEnvase,
+} from '@industrializacao/lib/envaseCompletion';
 
 const supabase = createSupabaseEntities();
 
@@ -80,6 +85,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   const [saving, setSaving] = useState(false);
   const [recipe, setRecipe] = useState(recipeProp || null);
   const [finishChecklistOpen, setFinishChecklistOpen] = useState(false);
+  const [existingEvidence, setExistingEvidence] = useState({ containers: [], origins: [] });
+  const [loadingExisting, setLoadingExisting] = useState(false);
   const { user: internalUser } = useInternalAuth();
   const { toast } = useToast();
 
@@ -93,12 +100,25 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     setComplementTarget(null);
     setComplementDisplayVolume(null);
     setFinishChecklistOpen(false);
+    setExistingEvidence({ containers: [], origins: [] });
 
     if (recipeProp) {
       setRecipe(recipeProp);
     } else {
       loadRecipeForProduction(production).then((r) => { if (!cancelled) setRecipe(r); });
     }
+
+    setLoadingExisting(true);
+    loadEnvaseEvidence(supabase, production)
+      .then((evidence) => {
+        if (!cancelled) setExistingEvidence(evidence);
+      })
+      .catch(() => {
+        if (!cancelled) setExistingEvidence({ containers: [], origins: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingExisting(false);
+      });
 
     if (isComplement && production?.complement_container_id) {
       setLoadingTarget(true);
@@ -136,6 +156,12 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   }, [open, production?.id, isComplement, recipeProp, t, toast]);
 
   const density = production?.density || 1;
+  const alreadyRegistered = productionHasRegisteredEnvase(
+    production,
+    existingEvidence.containers,
+    existingEvidence.origins,
+  );
+  const fmtRegId = (n) => (n != null ? String(n).padStart(2, '0') : '—');
 
   const updateContainer = (idx, field, value) => {
     setContainers((prev) => {
@@ -202,11 +228,19 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     return { qty, unitVol, unitNet, unitGross: unitNet + tare };
   };
 
-  const totalVolumeEntered = isComplement
-    ? (parseFloat(complementVolume) || 0)
-    : containers.reduce((s, c) => s + (parseFloat(c.volume) || 0), 0);
+  const existingVolume = alreadyRegistered
+    ? (
+      existingEvidence.containers.reduce((s, c) => s + (parseFloat(c.volume) || 0), 0)
+      || existingEvidence.origins.reduce((s, o) => s + (parseFloat(o.volume) || 0), 0)
+    )
+    : 0;
+  const totalVolumeEntered = alreadyRegistered
+    ? existingVolume
+    : (isComplement
+      ? (parseFloat(complementVolume) || 0)
+      : containers.reduce((s, c) => s + (parseFloat(c.volume) || 0), 0));
   const opVolume = production?.volume || 0;
-  const volumeExceeded = totalVolumeEntered > opVolume;
+  const volumeExceeded = !alreadyRegistered && totalVolumeEntered > opVolume;
 
   const isContainerValid = (c) => {
     const hasVolume = (parseFloat(c.volume) || 0) > 0;
@@ -219,13 +253,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     return c.number.trim() !== '' && c.type && hasVolume && c.tare !== '' && c.seals.trim() !== '';
   };
 
-  const allContainersValid = isComplement
-    ? !!complementTarget
-      && complementTarget.status === 'No Pátio'
-      && (complementTarget.product || '') === (production?.product || '')
-      && totalVolumeEntered > 0
-      && !volumeExceeded
-    : containers.every(isContainerValid);
+  const allContainersValid = alreadyRegistered
+    ? true
+    : (isComplement
+      ? !!complementTarget
+        && complementTarget.status === 'No Pátio'
+        && (complementTarget.product || '') === (production?.product || '')
+        && totalVolumeEntered > 0
+        && !volumeExceeded
+      : containers.every(isContainerValid));
 
   const rowSummaryIdentity = (c) => {
     if (c.number?.trim()) return c.number.trim();
@@ -238,6 +274,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   );
 
   const handleSaveComplement = async (operatorName) => {
+    const evidence = await loadEnvaseEvidence(supabase, production);
+    if (productionHasRegisteredEnvase(production, evidence.containers, evidence.origins)) {
+      await finalizeProductionAfterEnvase(supabase, production, {
+        operatorName,
+        packagingType: complementTarget?.type || production.packaging_type,
+      });
+      return;
+    }
+
     if (!complementTarget) throw new Error(t('production.complementPackaging.targetLoadError'));
     if (complementTarget.status !== 'No Pátio') {
       throw new Error(t('production.complementPackaging.targetUnavailable'));
@@ -310,11 +355,9 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       existingOrigins,
     );
 
-    await supabase.Production.update(production.id, {
-      status: 'Finalizado',
-      end_time: new Date().toISOString(),
-      packaging_type: complementTarget.type || production.packaging_type,
-      operator: operatorName,
+    await finalizeProductionAfterEnvase(supabase, production, {
+      operatorName,
+      packagingType: complementTarget.type || production.packaging_type,
     });
   };
 
@@ -353,6 +396,15 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   };
 
   const handleSaveStandard = async (operatorName) => {
+    const evidence = await loadEnvaseEvidence(supabase, production);
+    if (productionHasRegisteredEnvase(production, evidence.containers, evidence.origins)) {
+      await finalizeProductionAfterEnvase(supabase, production, {
+        operatorName,
+        packagingType: evidence.containers[0]?.type || containers[0]?.type,
+      });
+      return;
+    }
+
     const existing = await supabase.Container.list('-created_date', 500);
     const maxRegId = existing.reduce((max, c) => Math.max(max, c.registration_id || 0), 0);
     let nextRegId = maxRegId + 1;
@@ -407,11 +459,9 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       nextRegId += 1;
     }
 
-    await supabase.Production.update(production.id, {
-      status: 'Finalizado',
-      end_time: new Date().toISOString(),
-      packaging_type: containers[0]?.type,
-      operator: operatorName,
+    await finalizeProductionAfterEnvase(supabase, production, {
+      operatorName,
+      packagingType: containers[0]?.type,
     });
 
     for (const c of containers) {
@@ -427,6 +477,10 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   };
 
   const handleSave = async () => {
+    if (alreadyRegistered) {
+      setFinishChecklistOpen(true);
+      return;
+    }
     if (volumeExceeded || !allContainersValid || totalVolumeEntered === 0) return;
     setFinishChecklistOpen(true);
   };
@@ -508,7 +562,41 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
               </div>
             </div>
 
-            {isComplement ? (
+            {loadingExisting ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : alreadyRegistered ? (
+              <div className="border border-border rounded-lg p-4 bg-card space-y-3">
+                <h4 className="text-sm font-semibold">{t('production.envase.alreadyRegisteredTitle')}</h4>
+                <p className="text-sm text-muted-foreground">{t('production.envase.alreadyRegisteredHint')}</p>
+                <div className="space-y-2">
+                  {(existingEvidence.containers.length > 0
+                    ? existingEvidence.containers
+                    : existingEvidence.origins
+                  ).map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex items-center justify-between gap-3 text-sm border border-border rounded-md px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">
+                          {row.container_number || row.op_number || production?.op_number}
+                        </p>
+                        {row.registration_id != null && (
+                          <p className="text-xs text-muted-foreground">
+                            {t('production.envase.alreadyRegisteredId', {
+                              id: fmtRegId(row.registration_id),
+                            })}
+                          </p>
+                        )}
+                      </div>
+                      <p className="font-semibold shrink-0">{fmtVolume(row.volume, 'L', lang)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : isComplement ? (
               loadingTarget ? (
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -757,8 +845,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
           </div>
           <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('buttons.cancel')}</Button>
-            <Button onClick={handleSave} disabled={saving || loadingTarget || !allContainersValid || volumeExceeded || totalVolumeEntered === 0} className="text-white" style={{ background: '#1E40AF' }}>
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : t('production.envase.registerPackaging')}
+            <Button onClick={handleSave} disabled={saving || loadingTarget || loadingExisting || !allContainersValid || volumeExceeded || (!alreadyRegistered && totalVolumeEntered === 0)} className="text-white" style={{ background: '#1E40AF' }}>
+              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : alreadyRegistered ? t('production.envase.finalizeExisting') : t('production.envase.registerPackaging')}
             </Button>
           </div>
           </>

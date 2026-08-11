@@ -700,6 +700,7 @@
       "openItem": "Abrir en la pantalla de entradas",
       "columns": {
         "id": "ID",
+        "client": "Cliente",
         "code": "Cód",
         "mp": "MP",
         "qty": "Cantidad",
@@ -1142,7 +1143,11 @@
       "volumeExceeded": "¡Volumen excedido!",
       "registerPackaging": "Registrar Envase",
       "saving": "Guardando...",
-      "saveSuccess": "Envase registrado con éxito"
+      "saveSuccess": "Envase registrado con éxito",
+      "alreadyRegisteredTitle": "Envase ya registrado",
+      "alreadyRegisteredHint": "Esta OP ya tiene un envase en el patio. Confirme para finalizar la orden de producción.",
+      "alreadyRegisteredId": "ID {{id}}",
+      "finalizeExisting": "Finalizar OP"
     }
   },
   "inventory": {

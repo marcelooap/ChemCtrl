@@ -119,6 +119,7 @@ export const RPC_WRITE = new Set<string>([
   'delete_profile',
   'update_user_language',
   'submit_operational_checklist',
+  'reconcile_stuck_envase_productions',
 ]);
 
 export function classifyRpc(functionName: string): RateLimitKind {

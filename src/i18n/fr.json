@@ -700,6 +700,7 @@
       "openItem": "Ouvrir dans l'écran des entrées",
       "columns": {
         "id": "ID",
+        "client": "Client",
         "code": "Code",
         "mp": "MP",
         "qty": "Quantité",
@@ -1142,7 +1143,11 @@
       "volumeExceeded": "Volume dépassé !",
       "registerPackaging": "Enregistrer Conditionnement",
       "saving": "Enregistrement...",
-      "saveSuccess": "Conditionnement enregistré avec succès"
+      "saveSuccess": "Conditionnement enregistré avec succès",
+      "alreadyRegisteredTitle": "Conditionnement déjà enregistré",
+      "alreadyRegisteredHint": "Cet OF possède déjà un contenant dans le parc. Confirmez pour le marquer comme terminé.",
+      "alreadyRegisteredId": "ID {{id}}",
+      "finalizeExisting": "Terminer l'OF"
     }
   },
   "inventory": {

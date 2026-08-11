@@ -7,6 +7,7 @@ import { canAccessRoute, isReadOnly, getRoleLabel } from '@industrializacao/lib/
 import AppShell from '@shared/components/layout/AppShell';
 import { SystemManualMenu } from '@industrializacao/components/user/SystemManualMenu';
 import { ModulesHubButton } from '@industrializacao/components/user/ModulesHubButton';
+import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -18,6 +19,11 @@ export default function AppLayout() {
       sessionStorage.removeItem('chemctrl_welcome');
       setShowWelcome(true);
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    reconcileStuckEnvaseProductions();
   }, [user]);
 
   if (!user) {

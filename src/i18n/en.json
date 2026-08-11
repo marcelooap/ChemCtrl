@@ -700,6 +700,7 @@
       "openItem": "Open on entries screen",
       "columns": {
         "id": "ID",
+        "client": "Client",
         "code": "Code",
         "mp": "RM",
         "qty": "Quantity",
@@ -1144,7 +1145,11 @@
       "volumeExceeded": "Volume exceeded!",
       "registerPackaging": "Register Packaging",
       "saving": "Saving...",
-      "saveSuccess": "Packaging registered successfully"
+      "saveSuccess": "Packaging registered successfully",
+      "alreadyRegisteredTitle": "Packaging already registered",
+      "alreadyRegisteredHint": "This production order already has a yard container. Confirm to mark the order as finished.",
+      "alreadyRegisteredId": "ID {{id}}",
+      "finalizeExisting": "Finish order"
     }
   },
   "inventory": {
