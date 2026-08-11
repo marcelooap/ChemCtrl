@@ -3,9 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
-import { Box, FileText, FileDown } from 'lucide-react';
+import { Box, FileText } from 'lucide-react';
 import { generateStockPDF } from '@industrializacao/lib/pdfReports.js';
-import { generateMovimentacaoPDF } from '@industrializacao/lib/pdfMovimentacao.js';
 import { fmtDate, fmtDateTime, fmtNumber } from '@/i18n/formatters';
 import { translateStockDestination } from '@/i18n/domainMaps';
 
@@ -129,7 +128,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
               </table>
             )}
 
-            <h4 className="text-sm font-bold mb-2 text-foreground">{t('rawMaterialStock.viewDialog.movementsSection')}</h4>
+                            <h4 className="text-sm font-bold mb-2 text-foreground">{t('rawMaterialStock.viewDialog.movementsSection')}</h4>
             {loadingMovements ? (
               <div className="flex items-center justify-center h-12"><div className="w-5 h-5 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
             ) : movements.length === 0 ? (
@@ -142,7 +141,6 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
                   <th className="px-3 py-2 text-right">{t('common.quantity')}</th>
                   <th className="px-3 py-2 text-right">{t('rawMaterialStock.movementDialog.balanceLabel')}</th>
                   <th className="px-3 py-2 text-right">{t('common.total')}</th>
-                  <th className="px-3 py-2 text-center">{t('rawMaterialStock.viewDialog.report')}</th>
                 </tr></thead>
                 <tbody>
                   {movements.map((m, i) => (
@@ -156,22 +154,12 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
                       <td className="px-3 py-2 text-right font-semibold text-red-600 whitespace-nowrap">-{fmt(m.quantity)} {m.unit}</td>
                       <td className="px-3 py-2 text-right text-xs">{fmt(m.balance_before)} {m.unit}</td>
                       <td className="px-3 py-2 text-right font-semibold text-blue-700 text-xs">{fmt(m.balance_after)} {m.unit}</td>
-                      <td className="px-3 py-2 text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs gap-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                          onClick={() => generateMovimentacaoPDF(item, m)}
-                        >
-                          <FileDown className="w-3 h-3" /> PDF
-                        </Button>
-                      </td>
                     </tr>
                   ))}
                   <tr className="border-t-2 bg-muted/50 font-bold">
                     <td colSpan={2} className="px-3 py-2 text-red-600">{t('rawMaterialStock.viewDialog.totalMoved')}</td>
                     <td className="px-3 py-2 text-right text-red-600">-{fmt(movements.reduce((s, m) => s + (m.quantity || 0), 0))} {item.unit}</td>
-                    <td colSpan={4} />
+                    <td colSpan={2} />
                   </tr>
                 </tbody>
               </table>

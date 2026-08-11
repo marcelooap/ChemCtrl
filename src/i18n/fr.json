@@ -299,6 +299,14 @@
     "empty": "Aucun profil trouvé. Appliquez la migration RBAC dans Supabase.",
     "systemBadge": "Système",
     "permSummary": "{{granted}} sur {{total}} permissions ({{percent}}%)",
+    "accessModules": {
+      "title": "Modules d'accès",
+      "subtitle": "Définissez quels modules applicatifs ce profil peut ouvrir",
+      "hints": {
+        "industrializacao": "Production, stocks, recettes et qualité",
+        "transbordo": "Réception, filtration et transfert en vrac"
+      }
+    },
     "columns": {
       "name": "Profil",
       "users": "Utilisateurs",
@@ -419,6 +427,26 @@
       "rpcSchema": "Erreur de schéma au login. Exécutez migration_rbac_login_fix.sql dans Supabase."
     }
   },
+  "moduleSelection": {
+    "title": "Sélectionnez un module",
+    "subtitle": "Choisissez l'environnement que vous souhaitez ouvrir.",
+    "logout": "Déconnexion",
+    "openModule": "Accéder",
+    "accessGranted": "Accès autorisé",
+    "navSelect": "Sélectionner un module",
+    "emptyTitle": "Aucun module disponible",
+    "emptyDescription": "Votre profil n'a accès à aucun module. Contactez l'administrateur.",
+    "modules": {
+      "industrializacao": {
+        "title": "Industrialisation",
+        "description": "Transformez les matières premières en produits finis avec contrôle des recettes, production, conditionnement et stocks."
+      },
+      "transbordo": {
+        "title": "Transbordement",
+        "description": "Contrôlez tout le mouvement des produits en vrac, de la réception au transfert entre réservoirs et destinations."
+      }
+    }
+  },
   "systemSelector": {
     "brand": "ChemCtrl",
     "headerSubtitle": "Portail des Applications",
@@ -467,7 +495,14 @@
       "home": "Accueil",
       "dashboard": "Tableau de bord",
       "comercial": "Commercial",
-      "logistica": "Logistique"
+      "reservarMaterial": "Réserver du Matériel",
+      "solicitacoesSaida": "Demandes de Sortie",
+      "composicaoCarga": "Composition de Charge",
+      "agendamentos": "Planifications",
+      "logistica": "Logistique",
+      "usersAndPermissions": "Utilisateurs et Permissions",
+      "users": "Utilisateurs",
+      "profiles": "Profils et Permissions"
     },
     "modules": {
       "switch": "Changer de module",
@@ -477,17 +512,18 @@
     },
     "home": {
       "title": "Panneau",
-      "subtitle": "Vue d'ensemble des opérations",
-      "preparedForData": "Zone préparée pour les données consolidées"
+      "subtitle": "Accédez aux modules ChemCtrl",
+      "preparedForData": "Zone préparée pour les données consolidées",
+      "openModule": "Accéder au module"
     },
     "areas": {
       "industrializacao": {
         "title": "Industrialisation",
-        "description": "Production, stocks, recettes et qualité"
+        "description": "Gestion complète des processus d'industrialisation chimique, de la planification et de la production au contrôle des matières premières, recettes, conditionnement et suivi des ordres de production."
       },
       "transbordo": {
         "title": "Transbordement",
-        "description": "Entrées, sorties, filtration et réservoirs"
+        "description": "Gestion des opérations de réception, stockage et transfert de produits chimiques en vrac, contrôle de la filtration et des emballages conditionnés."
       },
       "comercial": {
         "title": "Commercial",
@@ -534,6 +570,80 @@
         "sales": "Ventes",
         "products": "Produits",
         "status": "Statuts commerciaux"
+      },
+      "sections": {
+        "reservarMaterial": {
+          "title": "Réserver du Matériel",
+          "subtitle": "Réservation de matériaux pour l'opération commerciale",
+          "emptyTitle": "Réserver du Matériel",
+          "emptyDescription": "Structure initiale préparée pour la réservation de matériaux."
+        },
+        "solicitacoesSaida": {
+          "title": "Demandes de Sortie",
+          "subtitle": "Gestion des demandes de sortie de matériel",
+          "emptyTitle": "Demandes de Sortie",
+          "emptyDescription": "Structure initiale préparée pour les demandes de sortie."
+        },
+        "composicaoCarga": {
+          "title": "Composition de Charge",
+          "subtitle": "Assemblage et composition des charges",
+          "emptyTitle": "Composition de Charge",
+          "emptyDescription": "Structure initiale préparée pour la composition de charge."
+        },
+        "agendamentos": {
+          "title": "Planifications",
+          "subtitle": "Programmation et planifications commerciales",
+          "emptyTitle": "Planifications",
+          "emptyDescription": "Structure initiale préparée pour les planifications commerciales."
+        }
+      },
+      "reservarMaterial": {
+        "subtitle": "Stock Transbordement agrégé par lot, avec contrôle des réservations commerciales",
+        "tableTitle": "Stock par lot",
+        "searchPlaceholder": "Rechercher client, code, produit ou lot...",
+        "filterClient": "Tous les clients",
+        "allClients": "Tous les clients",
+        "empty": "Aucun stock trouvé pour le filtre sélectionné.",
+        "editTitle": "Modifier le solde réservé",
+        "viewTitle": "Détails du solde et des réservations",
+        "productSummary": "Résumé du produit",
+        "reservationsList": "Historique des réservations",
+        "noReservations": "Aucune réservation enregistrée pour ce solde.",
+        "reservedQty": "Quantité réservée",
+        "finalPreview": "Solde final prévu : {{value}} {{unidade}}",
+        "observation": "Observation",
+        "observationPlaceholder": "Motif de la réservation ou de l'ajustement (optionnel)",
+        "saving": "Enregistrement...",
+        "saveSuccess": "Solde réservé mis à jour",
+        "loadErrorTitle": "Erreur de chargement du stock",
+        "loadErrorDescription": "Vérifiez la connexion ChemFlow et si la table t_material_reservas a été créée.",
+        "columns": {
+          "cliente": "Client",
+          "cod": "Code",
+          "produto": "Produit",
+          "lote": "Lot",
+          "saldoAtual": "Solde actuel",
+          "saldoReservado": "Solde réservé",
+          "saldoFinal": "Solde final",
+          "unidade": "Unité"
+        },
+        "history": {
+          "date": "Date",
+          "user": "Réservé par",
+          "qty": "Quantité",
+          "status": "Statut",
+          "removedBy": "Retiré par",
+          "notes": "Observation"
+        },
+        "status": {
+          "active": "Active",
+          "removed": "Retirée"
+        },
+        "errors": {
+          "negative": "La quantité ne peut pas être négative.",
+          "exceedsBalance": "Impossible de réserver plus de {{max}} {{unidade}}.",
+          "saveFailed": "Impossible d'enregistrer la réservation."
+        }
       }
     },
     "logistica": {
@@ -2012,6 +2122,7 @@
   "rawMaterialStock": {
     "title": "Contrôle de Stock",
     "subtitle": "Matières premières · {{count}} article(s)",
+    "fiscalSubtitle": "Mouvements fiscaux · {{count}} enregistrement(s)",
     "printLabel": "Imprimer l'étiquette",
     "exportExcel": "Exporter Excel",
     "export": {
@@ -2026,16 +2137,27 @@
         "expiry": "EXPIRATION"
       }
     },
-    "movement": "Mouvement de Stock",
+    "movement": "Nouveau Mouvement",
     "newItem": "Nouvel Article",
     "editItem": "Modifier Article · {{id}}",
     "newItemReg": "Nouvel Article · Rég. {{reg}}",
     "searchPlaceholder": "Rechercher par code, nom, client ou lot...",
+    "fiscalSearchPlaceholder": "Rechercher par rég., code, produit, client ou lot...",
+    "views": {
+      "stock": "Stock",
+      "fiscalMovement": "Mouvement Fiscal"
+    },
+    "fiscalTable": {
+      "product": "Produit",
+      "unit": "Unité",
+      "type": "Type"
+    },
     "filters": {
       "all": "Toutes",
       "withBalance": "Avec solde",
       "withoutBalance": "Sans solde",
-      "allClients": "Tous les clients"
+      "allClients": "Tous les clients",
+      "allTypes": "Tous les types"
     },
     "status": {
       "expired": "Expiré",
@@ -2065,7 +2187,9 @@
       "totalStock": "Qté totale en stock",
       "mixedUnits": "(unités mixtes)",
       "packagingQty": "Qté d'Emballages",
-      "totalCost": "Coût total MP"
+      "totalCost": "Coût total MP",
+      "movementsShown": "Mouvements affichés",
+      "totalMoved": "Qté totale mouvementée"
     },
     "form": {
       "entryDate": "Date d'Entrée",
@@ -2131,9 +2255,10 @@
       "tankConferenceExceededDetail": "Alloué {{allocated}} {{unit}} — stock initial {{initialStock}} {{unit}}. Réduisez le volume/masse des cuves."
     },
     "movementDialog": {
-      "title": "Mouvement de Stock MP",
+      "title": "Nouveau Mouvement",
       "rawMaterial": "Matière Première",
       "selectMp": "Sélectionnez la MP...",
+      "searchMp": "Saisissez le nom ou le code de la MP...",
       "selectLot": "Sélectionnez le lot...",
       "selectEntry": "Sélectionnez l'enregistrement...",
       "entryRecord": "Enregistrement d'Entrée",
@@ -2180,6 +2305,18 @@
     "destinations": {
       "processLoss": "Perte en Processus",
       "unusedReturn": "Retour MP Non Appliquée"
+    },
+    "fiscalView": {
+      "title": "Mouvement Fiscal",
+      "before": "avant",
+      "after": "après",
+      "downloadPdf": "Télécharger PDF"
+    },
+    "fiscalDelete": {
+      "title": "Supprimer le Mouvement Fiscal",
+      "message": "Voulez-vous vraiment supprimer le mouvement \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}}) ?\n\nLa quantité sera automatiquement réintégrée au solde du stock.",
+      "confirm": "Oui, supprimer et réintégrer",
+      "restored": "{{qty}} {{unit}} réintégrés à {{entryId}}"
     }
   },
   "pwa": {

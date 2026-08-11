@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2, Printer, Download } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2, Printer, Download, Package, FileText } from 'lucide-react';
 import MovimentacaoEstoqueDialog from '@industrializacao/components/estoque/MovimentacaoEstoqueDialog';
+import MovimentacaoFiscalViewDialog from '@industrializacao/components/estoque/MovimentacaoFiscalViewDialog';
 import { exportEstoqueMPToExcel } from '@industrializacao/lib/exportEstoqueMP';
 import RawMaterialViewDialog from '@industrializacao/components/estoque/RawMaterialViewDialog';
 import { Button } from '@shared/components/ui/button';
@@ -13,15 +14,25 @@ import Combobox from '@shared/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { Switch } from '@shared/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import moment from 'moment';
-import { fmtNumber, fmtCurrency, fmtMass } from '@/i18n/formatters';
+import { fmtNumber, fmtCurrency, fmtMass, fmtDateTime } from '@/i18n/formatters';
+import { translateStockDestination } from '@/i18n/domainMaps';
 import { calcPackagingQty } from '@industrializacao/lib/stockUtils';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
 import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
+
+const VIEW_TAB_CLASS =
+  'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
+
+const DEST_COLORS = {
+  'Perda em Processo': 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  'Retorno de MP Não Aplicada': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
+};
 
 const emptyItem = { mp_name: '', mp_code: '', client: '', lot: '', supplier: '', unit: 'kg', unit_price: '', entry_date: new Date().toISOString().split('T')[0], manufacture_date: '', expiry_date: '', initial_stock: '', current_stock: '', density: '', observations: '', tank_storage: false, tank_entries: [], packaging_type: '', packaging_capacity: '', packaging_quantity: 0, status_wms: false };
 
@@ -59,7 +70,7 @@ function computeTankCurrentVolume(tankName, stockEntries, containers, excludeSto
 const CONFERENCE_TOLERANCE = 0.01;
 
 export default function Estoque() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, isReadOnly } = useOutletContext();
   const { hasPermission } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -69,12 +80,18 @@ export default function Estoque() {
   const parseTankEntries = (i) => ({ ...i, tank_entries: parseArr(i.tank_entries) });
   const parseRawMaterials = (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) });
   const { data: items, loading, reload: load, setData: setItems } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
+  const { data: movements, loading: loadingMovements, reload: loadMovements } = useRealtimeEntity(
+    'StockMovement',
+    () => base44.entities.StockMovement.list('-movement_date', 1000),
+  );
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
+  const [viewMode, setViewMode] = useState('estoque');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
   const [stockFilter, setStockFilter] = useState('todas');
+  const [typeFilter, setTypeFilter] = useState('todos');
   const [clientFilter, setClientFilter] = useState('todos');
   const [showForm, setShowForm] = useState(false);
   const [showView, setShowView] = useState(false);
@@ -82,12 +99,20 @@ export default function Estoque() {
   const [viewing, setViewing] = useState(null);
   const [form, setForm] = useState(emptyItem);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteMovementTarget, setDeleteMovementTarget] = useState(null);
+  const [viewingMovement, setViewingMovement] = useState(null);
   const [showMovimentacao, setShowMovimentacao] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
   const { toast } = useToast();
+  const isFiscalView = viewMode === 'fiscal';
+
+  const reloadAfterMovement = () => {
+    load();
+    loadMovements();
+  };
 
   const mpOptions = useMemo(() => {
     const map = new Map();
@@ -134,8 +159,9 @@ export default function Estoque() {
   const clientOptions = useMemo(() => {
     const set = new Set();
     items.forEach(i => { if (i.client && i.client.trim()) set.add(i.client.trim()); });
+    movements.forEach(m => { if (m.client && m.client.trim()) set.add(m.client.trim()); });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [items]);
+  }, [items, movements]);
 
   const filtered = items.filter(i => {
     const q = debouncedSearch.toLowerCase();
@@ -146,9 +172,21 @@ export default function Estoque() {
     return matchesSearch && matchesFilter && matchesClient;
   });
 
+  const filteredMovements = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return (movements || []).filter((m) => {
+      const matchesSearch = !q || [m.mp_name, m.mp_code, m.client, m.lot, m.entry_id, m.destination]
+        .some((v) => (v || '').toLowerCase().includes(q));
+      const matchesClient = clientFilter === 'todos' || (m.client || '') === clientFilter;
+      const matchesType = typeFilter === 'todos' || m.destination === typeFilter;
+      return matchesSearch && matchesClient && matchesType;
+    });
+  }, [movements, debouncedSearch, clientFilter, typeFilter]);
+
   const totalQty = filtered.reduce((s, i) => s + (i.current_stock || 0), 0);
   const totalCost = filtered.reduce((s, i) => s + (i.current_stock || 0) * (i.unit_price || 0), 0);
   const totalPackages = filtered.reduce((s, i) => s + calcPackagingQty(i.current_stock, i.packaging_capacity), 0);
+  const totalMovedQty = filteredMovements.reduce((s, m) => s + (m.quantity || 0), 0);
 
   const openNew = () => { setEditing(null); setForm({ ...emptyItem }); setShowForm(true); };
   const openEdit = (item) => { setEditing(item); setForm({ ...item, tank_entries: item.tank_entries || (item.tank_name ? [{ tank_name: item.tank_name, volume: item.tank_volume, mass: item.tank_mass }] : []) }); setShowForm(true); };
@@ -272,6 +310,40 @@ export default function Estoque() {
     toast({ title: t('success.deleted') });
   };
 
+  const openMovementView = (movement) => setViewingMovement(movement);
+
+  const removeMovement = (movement) => setDeleteMovementTarget(movement);
+
+  const confirmDeleteMovement = async () => {
+    if (!deleteMovementTarget) return;
+    const movement = deleteMovementTarget;
+    const qty = parseFloat(movement.quantity) || 0;
+    const stock = items.find((s) => s.id === movement.stock_id);
+
+    if (stock && qty > 0) {
+      const restoredBalance = (parseFloat(stock.current_stock) || 0) + qty;
+      const patch = { current_stock: restoredBalance };
+      if (stock.packaging_capacity) {
+        patch.packaging_quantity = calcPackagingQty(restoredBalance, stock.packaging_capacity);
+      }
+      await base44.entities.RawMaterialStock.update(stock.id, patch);
+    }
+
+    await base44.entities.StockMovement.delete(movement.id);
+    setDeleteMovementTarget(null);
+    reloadAfterMovement();
+    toast({
+      title: t('success.deleted'),
+      description: stock && qty > 0
+        ? t('rawMaterialStock.fiscalDelete.restored', {
+            qty: fmtNumber(qty),
+            unit: movement.unit || stock.unit || '',
+            entryId: stock.entry_id || movement.entry_id || '',
+          })
+        : undefined,
+    });
+  };
+
   const handleExportExcel = async () => {
     if (!filtered.length) { toast({ title: t('rawMaterialStock.messages.noItemsExport'), variant: 'destructive' }); return; }
     setExporting(true);
@@ -311,6 +383,7 @@ export default function Estoque() {
     if (!id || loading) return;
     const match = items.find((i) => i.id === id);
     if (!match) return;
+    setViewMode('estoque');
     setHighlightId(id);
     setSearch('');
     setStockFilter('todas');
@@ -333,18 +406,24 @@ export default function Estoque() {
       <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">⚗ {t('rawMaterialStock.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('rawMaterialStock.subtitle', { count: items.length })}</p>
+          <p className="text-sm text-muted-foreground">
+            {isFiscalView
+              ? t('rawMaterialStock.fiscalSubtitle', { count: movements.length })
+              : t('rawMaterialStock.subtitle', { count: items.length })}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleExportExcel} disabled={exporting} className="bg-green-600 text-white hover:bg-green-700">
-            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} {t('rawMaterialStock.exportExcel')}
-          </Button>
-          {canEdit && (
-            <Button onClick={() => setShowMovimentacao(true)} variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50">
+          {!isFiscalView && (
+            <Button onClick={handleExportExcel} disabled={exporting} className="bg-green-600 text-white hover:bg-green-700">
+              {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} {t('rawMaterialStock.exportExcel')}
+            </Button>
+          )}
+          {isFiscalView && canEdit && (
+            <Button onClick={() => setShowMovimentacao(true)} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
               <ArrowLeftRight className="w-4 h-4 mr-2" /> {t('rawMaterialStock.movement')}
             </Button>
           )}
-          {canCreate && (
+          {!isFiscalView && canCreate && (
             <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white hover:opacity-90">
               <Plus className="w-4 h-4 mr-2" /> {t('rawMaterialStock.newItem')}
             </Button>
@@ -352,21 +431,52 @@ export default function Estoque() {
         </div>
       </div>
 
+      <div className="shrink-0 mb-3">
+        <Tabs value={viewMode} onValueChange={setViewMode}>
+          <TabsList className="h-auto p-1.5 gap-1 bg-muted/80 border border-border shadow-sm">
+            <TabsTrigger value="estoque" className={VIEW_TAB_CLASS}>
+              <Package className="w-4 h-4" />
+              {t('rawMaterialStock.views.stock')}
+            </TabsTrigger>
+            <TabsTrigger value="fiscal" className={VIEW_TAB_CLASS}>
+              <FileText className="w-4 h-4" />
+              {t('rawMaterialStock.views.fiscalMovement')}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       {/* Card: fixed search, scrollable table, fixed footer */}
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3">
-          <div className="relative flex-1 max-w-md">
+        <div className="shrink-0 p-4 border-b border-border flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder={t('rawMaterialStock.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+            <Input
+              placeholder={isFiscalView ? t('rawMaterialStock.fiscalSearchPlaceholder') : t('rawMaterialStock.searchPlaceholder')}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <Select value={stockFilter} onValueChange={setStockFilter}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">{t('rawMaterialStock.filters.all')}</SelectItem>
-              <SelectItem value="com_saldo">{t('rawMaterialStock.filters.withBalance')}</SelectItem>
-              <SelectItem value="sem_saldo">{t('rawMaterialStock.filters.withoutBalance')}</SelectItem>
-            </SelectContent>
-          </Select>
+          {!isFiscalView ? (
+            <Select value={stockFilter} onValueChange={setStockFilter}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">{t('rawMaterialStock.filters.all')}</SelectItem>
+                <SelectItem value="com_saldo">{t('rawMaterialStock.filters.withBalance')}</SelectItem>
+                <SelectItem value="sem_saldo">{t('rawMaterialStock.filters.withoutBalance')}</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">{t('rawMaterialStock.filters.allTypes')}</SelectItem>
+                <SelectItem value="Perda em Processo">{t('rawMaterialStock.destinations.processLoss')}</SelectItem>
+                <SelectItem value="Retorno de MP Não Aplicada">{t('rawMaterialStock.destinations.unusedReturn')}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Select value={clientFilter} onValueChange={setClientFilter}>
             <SelectTrigger className="w-48"><SelectValue placeholder={t('common.client')} /></SelectTrigger>
             <SelectContent>
@@ -378,7 +488,75 @@ export default function Estoque() {
 
         {/* Scrollable Table */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
-          {loading ? (
+          {isFiscalView ? (
+            loadingMovements ? (
+              <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
+            ) : filteredMovements.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">{t('rawMaterialStock.viewDialog.noMovements')}</p>
+            ) : (
+              <table className="w-full chemctrl-table">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.reg')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('common.date')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.code')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.product')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.client')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.table.lot')}</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold">{t('common.quantity')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.unit')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.type')}</th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMovements.map((m) => (
+                    <tr key={m.id} className="border-b border-border hover:bg-accent/30">
+                      <td className="px-4 py-2.5 text-sm font-medium text-primary">{m.entry_id || '—'}</td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {fmtDateTime(m.movement_date, undefined, i18n.language)}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{m.mp_code || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-sm text-foreground">{m.mp_name || '—'}</td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{m.client || t('common.notAvailable')}</td>
+                      <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{m.lot || t('common.notAvailable')}</td>
+                      <td className="px-4 py-2.5 text-right text-sm font-semibold text-red-600 dark:text-red-400">
+                        -{fmtNumber(m.quantity)}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{m.unit || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${DEST_COLORS[m.destination] || 'bg-muted text-foreground'}`}>
+                          {translateStockDestination(m.destination)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openMovementView(m)}
+                            className="p-1.5 rounded hover:bg-accent"
+                            title={t('buttons.view')}
+                          >
+                            <Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => removeMovement(m)}
+                              className="p-1.5 rounded hover:bg-accent"
+                              title={t('buttons.delete')}
+                            >
+                              <Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-400" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          ) : loading ? (
             <div className="flex items-center justify-center h-32"><div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>
           ) : (
             <table className="w-full chemctrl-table">
@@ -471,10 +649,19 @@ export default function Estoque() {
 
         {/* Fixed Footer */}
         <div className="shrink-0 px-4 py-3 border-t border-border flex items-center gap-6 text-xs text-muted-foreground">
-          <span>{t('rawMaterialStock.footer.itemsShown')}: {filtered.length}</span>
-          <span>{t('rawMaterialStock.footer.totalStock')}: <strong>{fmtNumber(totalQty)}</strong> {t('rawMaterialStock.footer.mixedUnits')}</span>
-          <span>{t('rawMaterialStock.footer.packagingQty')}: <strong>{fmtNumber(totalPackages)}</strong></span>
-          <span>{t('rawMaterialStock.footer.totalCost')}: <strong style={{ color: '#16a34a' }}>{fmtCurrency(totalCost)}</strong></span>
+          {isFiscalView ? (
+            <>
+              <span>{t('rawMaterialStock.footer.movementsShown')}: {filteredMovements.length}</span>
+              <span>{t('rawMaterialStock.footer.totalMoved')}: <strong className="text-red-600">-{fmtNumber(totalMovedQty)}</strong> {t('rawMaterialStock.footer.mixedUnits')}</span>
+            </>
+          ) : (
+            <>
+              <span>{t('rawMaterialStock.footer.itemsShown')}: {filtered.length}</span>
+              <span>{t('rawMaterialStock.footer.totalStock')}: <strong>{fmtNumber(totalQty)}</strong> {t('rawMaterialStock.footer.mixedUnits')}</span>
+              <span>{t('rawMaterialStock.footer.packagingQty')}: <strong>{fmtNumber(totalPackages)}</strong></span>
+              <span>{t('rawMaterialStock.footer.totalCost')}: <strong style={{ color: '#16a34a' }}>{fmtCurrency(totalCost)}</strong></span>
+            </>
+          )}
         </div>
       </div>
 
@@ -699,12 +886,18 @@ export default function Estoque() {
 
       {/* View Dialog */}
       <RawMaterialViewDialog item={viewing} open={showView} onOpenChange={setShowView} />
+      <MovimentacaoFiscalViewDialog
+        movement={viewingMovement}
+        stock={viewingMovement ? items.find((s) => s.id === viewingMovement.stock_id) : null}
+        open={!!viewingMovement}
+        onOpenChange={(open) => { if (!open) setViewingMovement(null); }}
+      />
       {/* Movimentação Dialog */}
       <MovimentacaoEstoqueDialog
         open={showMovimentacao}
         onOpenChange={setShowMovimentacao}
         stocks={items}
-        onSuccess={load}
+        onSuccess={reloadAfterMovement}
       />
 
       {/* Delete Confirmation */}
@@ -715,6 +908,21 @@ export default function Estoque() {
         message={t('rawMaterialStock.deleteConfirm.message', { name: deleteTarget?.mp_name, lot: deleteTarget?.lot || t('common.notAvailable') })}
         onConfirm={confirmDelete}
         confirmLabel={t('rawMaterialStock.deleteConfirm.confirm')}
+        confirmColor="#DC2626"
+      />
+      <ConfirmDialog
+        open={!!deleteMovementTarget}
+        onOpenChange={(open) => { if (!open) setDeleteMovementTarget(null); }}
+        title={t('rawMaterialStock.fiscalDelete.title')}
+        message={t('rawMaterialStock.fiscalDelete.message', {
+          type: translateStockDestination(deleteMovementTarget?.destination),
+          qty: fmtNumber(deleteMovementTarget?.quantity),
+          unit: deleteMovementTarget?.unit || '',
+          product: deleteMovementTarget?.mp_name || '',
+          entryId: deleteMovementTarget?.entry_id || '',
+        })}
+        onConfirm={confirmDeleteMovement}
+        confirmLabel={t('rawMaterialStock.fiscalDelete.confirm')}
         confirmColor="#DC2626"
       />
     </div>

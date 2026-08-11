@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvider';
 import RealtimeProvider from '@industrializacao/components/RealtimeProvider';
 import AppLayout from '@industrializacao/components/layout/AppLayout';
@@ -24,20 +24,21 @@ import Tankagem from '@industrializacao/pages/Tankagem';
 import Transbordo from '@industrializacao/pages/Transbordo';
 import Inventario from '@industrializacao/pages/Inventario';
 import InventarioConferencia from '@industrializacao/pages/InventarioConferencia';
-import Usuarios from '@industrializacao/pages/Usuarios';
-import Perfis from '@industrializacao/pages/Perfis';
 import AcessoNegado from '@industrializacao/pages/AcessoNegado';
 
 /**
  * Rotas principais do ChemCtrl, montadas na raiz `/*`.
  * Paths relativos (sem `/` inicial) — padrão de descendant routes do RR6.
  * O módulo ChemFlow vive em `/chemflow/*` (admin).
+ * Usuarios/Perfis migraram para `/painel/*` — redirects preservam bookmarks.
  */
 export default function ChemCtrlRoutes() {
   return (
     <PermissionProvider>
       <RealtimeProvider>
         <Routes>
+          <Route path="usuarios" element={<Navigate to="/painel/usuarios" replace />} />
+          <Route path="perfis" element={<Navigate to="/painel/perfis" replace />} />
           <Route element={<AppLayout />}>
             <Route index element={<Home />} />
             <Route path="dashboard" element={<Dashboard />} />
@@ -60,8 +61,6 @@ export default function ChemCtrlRoutes() {
             <Route path="transbordo" element={<Transbordo />} />
             <Route path="inventario" element={<Inventario />} />
             <Route path="inventario/:id" element={<InventarioConferencia />} />
-            <Route path="usuarios" element={<Usuarios />} />
-            <Route path="perfis" element={<Perfis />} />
             <Route path="acesso-negado" element={<AcessoNegado />} />
           </Route>
         </Routes>

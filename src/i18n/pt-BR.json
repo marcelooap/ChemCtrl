@@ -299,6 +299,14 @@
     "empty": "Nenhum perfil encontrado. Aplique a migration RBAC no Supabase.",
     "systemBadge": "Sistema",
     "permSummary": "{{granted}} de {{total}} permissões ({{percent}}%)",
+    "accessModules": {
+      "title": "Módulos de Acesso",
+      "subtitle": "Defina quais módulos de aplicativo este perfil pode abrir",
+      "hints": {
+        "industrializacao": "Produção, estoque, receitas e qualidade",
+        "transbordo": "Recebimento, filtração e transferência a granel"
+      }
+    },
     "columns": {
       "name": "Perfil",
       "users": "Usuários",
@@ -419,6 +427,26 @@
       "rpcSchema": "Erro de schema no login. Execute novamente o SQL migration_rbac_login_fix.sql no Supabase (versão v2) e tente de novo."
     }
   },
+  "moduleSelection": {
+    "title": "Selecione um módulo",
+    "subtitle": "Escolha o ambiente que deseja acessar.",
+    "logout": "Sair",
+    "openModule": "Acessar",
+    "accessGranted": "Acesso liberado",
+    "navSelect": "Selecionar módulo",
+    "emptyTitle": "Nenhum módulo disponível",
+    "emptyDescription": "Seu perfil não possui módulos de acesso. Contate o administrador.",
+    "modules": {
+      "industrializacao": {
+        "title": "Industrialização",
+        "description": "Transforme matérias-primas em produtos acabados com controle de receitas, produção, envase e estoque."
+      },
+      "transbordo": {
+        "title": "Transbordo",
+        "description": "Controle toda a movimentação de produtos a granel, do recebimento à transferência entre tanques e destinos."
+      }
+    }
+  },
   "systemSelector": {
     "brand": "ChemCtrl",
     "headerSubtitle": "Portal de Aplicações",
@@ -467,7 +495,14 @@
       "home": "Home",
       "dashboard": "Dashboard",
       "comercial": "Comercial",
-      "logistica": "Logística"
+      "reservarMaterial": "Reservar Material",
+      "solicitacoesSaida": "Solicitações de Saída",
+      "composicaoCarga": "Composição de Carga",
+      "agendamentos": "Agendamentos",
+      "logistica": "Logística",
+      "usersAndPermissions": "Usuários e Permissões",
+      "users": "Usuários",
+      "profiles": "Perfis e Permissões"
     },
     "modules": {
       "switch": "Trocar módulo",
@@ -477,17 +512,18 @@
     },
     "home": {
       "title": "Painel",
-      "subtitle": "Visão geral das operações",
-      "preparedForData": "Área preparada para dados consolidados"
+      "subtitle": "Acesse os módulos do ChemCtrl",
+      "preparedForData": "Área preparada para dados consolidados",
+      "openModule": "Acessar módulo"
     },
     "areas": {
       "industrializacao": {
         "title": "Industrialização",
-        "description": "Produção, estoque, receitas e qualidade"
+        "description": "Gestão completa dos processos de industrialização química, desde a programação e produção até o controle de matérias-primas, receitas, envase e acompanhamento das ordens de produção."
       },
       "transbordo": {
         "title": "Transbordo",
-        "description": "Entradas, saídas, filtração e tankagem"
+        "description": "Gestão das operações de recebimento, armazenagem e transferência de produtos químicos a granel, controle de filtração e embalagens envasadas."
       },
       "comercial": {
         "title": "Comercial",
@@ -534,6 +570,80 @@
         "sales": "Vendas",
         "products": "Produtos",
         "status": "Status comerciais"
+      },
+      "sections": {
+        "reservarMaterial": {
+          "title": "Reservar Material",
+          "subtitle": "Reserva de materiais para operação comercial",
+          "emptyTitle": "Reservar Material",
+          "emptyDescription": "Estrutura inicial preparada para a reserva de materiais."
+        },
+        "solicitacoesSaida": {
+          "title": "Solicitações de Saída",
+          "subtitle": "Gestão das solicitações de saída de material",
+          "emptyTitle": "Solicitações de Saída",
+          "emptyDescription": "Estrutura inicial preparada para as solicitações de saída."
+        },
+        "composicaoCarga": {
+          "title": "Composição de Carga",
+          "subtitle": "Montagem e composição de cargas",
+          "emptyTitle": "Composição de Carga",
+          "emptyDescription": "Estrutura inicial preparada para a composição de cargas."
+        },
+        "agendamentos": {
+          "title": "Agendamentos",
+          "subtitle": "Programação e agendamentos comerciais",
+          "emptyTitle": "Agendamentos",
+          "emptyDescription": "Estrutura inicial preparada para os agendamentos comerciais."
+        }
+      },
+      "reservarMaterial": {
+        "subtitle": "Estoque do Transbordo agregado por lote, com controle de reservas comerciais",
+        "tableTitle": "Estoque por lote",
+        "searchPlaceholder": "Buscar cliente, código, produto ou lote...",
+        "filterClient": "Todos os clientes",
+        "allClients": "Todos os clientes",
+        "empty": "Nenhum estoque encontrado para o filtro selecionado.",
+        "editTitle": "Editar saldo reservado",
+        "viewTitle": "Detalhes do saldo e reservas",
+        "productSummary": "Resumo do produto",
+        "reservationsList": "Histórico de reservas",
+        "noReservations": "Nenhuma reserva registrada para este saldo.",
+        "reservedQty": "Quantidade reservada",
+        "finalPreview": "Saldo final previsto: {{value}} {{unidade}}",
+        "observation": "Observação",
+        "observationPlaceholder": "Motivo da reserva ou do ajuste (opcional)",
+        "saving": "Salvando...",
+        "saveSuccess": "Saldo reservado atualizado",
+        "loadErrorTitle": "Erro ao carregar estoque",
+        "loadErrorDescription": "Verifique a conexão com o ChemFlow e se a tabela t_material_reservas foi criada.",
+        "columns": {
+          "cliente": "Cliente",
+          "cod": "Cód.",
+          "produto": "Produto",
+          "lote": "Lote",
+          "saldoAtual": "Saldo atual",
+          "saldoReservado": "Saldo reservado",
+          "saldoFinal": "Saldo final",
+          "unidade": "Unidade"
+        },
+        "history": {
+          "date": "Data",
+          "user": "Reservado por",
+          "qty": "Quantidade",
+          "status": "Status",
+          "removedBy": "Removido por",
+          "notes": "Observação"
+        },
+        "status": {
+          "active": "Ativa",
+          "removed": "Removida"
+        },
+        "errors": {
+          "negative": "A quantidade não pode ser negativa.",
+          "exceedsBalance": "Não é possível reservar mais que {{max}} {{unidade}}.",
+          "saveFailed": "Não foi possível salvar a reserva."
+        }
       }
     },
     "logistica": {
@@ -1932,6 +2042,7 @@
   "rawMaterialStock": {
     "title": "Controle de Estoque",
     "subtitle": "Matérias primas · {{count}} item(s)",
+    "fiscalSubtitle": "Movimentações fiscais · {{count}} registro(s)",
     "printLabel": "Imprimir Etiqueta",
     "exportExcel": "Exportar Excel",
     "export": {
@@ -1946,16 +2057,27 @@
         "expiry": "VALIDADE"
       }
     },
-    "movement": "Movimentação de Estoque",
+    "movement": "Nova Movimentação",
     "newItem": "Novo Item",
     "editItem": "Editar Item · {{id}}",
     "newItemReg": "Novo Item · Reg. {{reg}}",
     "searchPlaceholder": "Buscar por código, nome, cliente ou lote...",
+    "fiscalSearchPlaceholder": "Buscar por reg., código, produto, cliente ou lote...",
+    "views": {
+      "stock": "Estoque",
+      "fiscalMovement": "Movimentação Fiscal"
+    },
+    "fiscalTable": {
+      "product": "Produto",
+      "unit": "Unid.",
+      "type": "Tipo"
+    },
     "filters": {
       "all": "Todas",
       "withBalance": "Com saldo",
       "withoutBalance": "Sem saldo",
-      "allClients": "Todos os clientes"
+      "allClients": "Todos os clientes",
+      "allTypes": "Todos os tipos"
     },
     "status": {
       "expired": "Vencido",
@@ -1985,7 +2107,9 @@
       "totalStock": "Qtd. total em estoque",
       "mixedUnits": "(und. mistas)",
       "packagingQty": "Qtd. de Embalagens",
-      "totalCost": "Custo total MP"
+      "totalCost": "Custo total MP",
+      "movementsShown": "Movimentações exibidas",
+      "totalMoved": "Qtd. total movimentada"
     },
     "form": {
       "entryDate": "Data de Entrada",
@@ -2051,9 +2175,10 @@
       "tankConferenceExceededDetail": "Alocado {{allocated}} {{unit}} — estoque inicial {{initialStock}} {{unit}}. Reduza o volume/massa das tankas."
     },
     "movementDialog": {
-      "title": "Movimentação de Estoque de MP",
+      "title": "Nova Movimentação",
       "rawMaterial": "Matéria Prima",
       "selectMp": "Selecione a MP...",
+      "searchMp": "Digite o nome ou código da MP...",
       "selectLot": "Selecione o lote...",
       "selectEntry": "Selecione o registro...",
       "entryRecord": "Registro de Entrada",
@@ -2100,6 +2225,18 @@
     "destinations": {
       "processLoss": "Perda em Processo",
       "unusedReturn": "Retorno de MP Não Aplicada"
+    },
+    "fiscalView": {
+      "title": "Movimentação Fiscal",
+      "before": "antes",
+      "after": "depois",
+      "downloadPdf": "Baixar PDF"
+    },
+    "fiscalDelete": {
+      "title": "Excluir Movimentação Fiscal",
+      "message": "Tem certeza que deseja excluir a movimentação \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nA quantidade será estornada automaticamente ao saldo do estoque.",
+      "confirm": "Sim, excluir e estornar",
+      "restored": "{{qty}} {{unit}} estornados para {{entryId}}"
     }
   },
   "pwa": {

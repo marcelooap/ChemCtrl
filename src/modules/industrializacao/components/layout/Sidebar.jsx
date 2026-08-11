@@ -89,7 +89,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       items={items}
       canAccessPath={(path) => canAccessRoute(user, path)}
       resolveLabel={resolveLabel}
-      showModulesLink={false}
+      showModulesLink={!isExterno}
     />
   );
 }

@@ -6,7 +6,6 @@ import WelcomeModal from '@industrializacao/components/WelcomeModal';
 import { canAccessRoute, isReadOnly, getRoleLabel } from '@industrializacao/lib/permissions';
 import AppShell from '@shared/components/layout/AppShell';
 import { SystemManualMenu } from '@industrializacao/components/user/SystemManualMenu';
-import { ModulesHubButton } from '@industrializacao/components/user/ModulesHubButton';
 import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
 
 export default function AppLayout() {
@@ -39,7 +38,6 @@ export default function AppLayout() {
       <AppShell
         sidebar={<Sidebar />}
         topBarProps={{
-          topBarActions: <ModulesHubButton />,
           userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
           getRoleLabel,
         }}

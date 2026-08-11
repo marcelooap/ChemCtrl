@@ -8,7 +8,7 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 interface SidebarFooterProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  /** When true, shows a link back to ChemCtrl (`/`). */
+  /** When true, shows a link back to Painel hub (`/painel/home`). */
   showModulesLink?: boolean;
 }
 
@@ -24,8 +24,8 @@ export function SidebarFooter({
     <div className="border-t border-white/10 p-3 shrink-0 space-y-1">
       {showModulesLink && (
         <Link
-          to="/"
-          title={collapsed ? t('sidebar.footer.backToChemCtrl') : undefined}
+          to="/painel/home"
+          title={collapsed ? t('moduleSelection.navSelect') : undefined}
           className={cn(
             'flex items-center gap-2 w-full rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors',
             collapsed ? 'justify-center px-0 py-2' : 'px-2 py-1.5'
@@ -38,7 +38,7 @@ export function SidebarFooter({
               collapsed ? 'max-w-0 opacity-0' : 'max-w-[10rem] opacity-100'
             )}
           >
-            {t('sidebar.footer.backToChemCtrl')}
+            {t('moduleSelection.navSelect')}
           </span>
         </Link>
       )}

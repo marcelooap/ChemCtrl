@@ -34,8 +34,8 @@ const NAV_ITEMS = [
     label: 'Controle de usuários',
     icon: Users,
     children: [
-      { path: '/usuarios', label: 'Usuários', icon: User, end: true },
-      { path: '/usuarios/permissoes', label: 'Controle de permissão', icon: Shield },
+      { path: '/painel/usuarios', label: 'Usuários', icon: User, end: true },
+      { path: '/painel/perfis', label: 'Controle de permissão', icon: Shield },
     ],
   },
 ];

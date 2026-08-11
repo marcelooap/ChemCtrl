@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute } from '@industrializacao/lib/permissions';
+import { resolvePostLoginRoute } from '@/lib/modules/access';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
@@ -23,7 +23,7 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        window.location.href = getDefaultRoute(result.user);
+        window.location.href = resolvePostLoginRoute(result.user);
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));
       }

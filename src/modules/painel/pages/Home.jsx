@@ -1,6 +1,10 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Factory, ArrowRightLeft, Briefcase, Truck } from 'lucide-react';
+import { Factory, ArrowRightLeft, ArrowRight } from 'lucide-react';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { getAccessibleModules, resolveModuleEntryRoute } from '@/lib/modules/access';
+import { MODULE_IDS } from '@/lib/modules/catalog';
 import {
   Card,
   CardContent,
@@ -8,75 +12,85 @@ import {
   CardHeader,
   CardTitle,
 } from '@shared/components/ui/card';
+import { Button } from '@shared/components/ui/button';
 
-const AREA_CARDS = [
-  {
-    key: 'industrializacao',
+const CARD_META = {
+  [MODULE_IDS.INDUSTRIALIZACAO]: {
     icon: Factory,
-    to: '/',
     accent: '#2575D1',
   },
-  {
-    key: 'transbordo',
+  [MODULE_IDS.TRANSBORDO]: {
     icon: ArrowRightLeft,
-    to: '/chemflow',
     accent: '#0D9488',
   },
-  {
-    key: 'comercial',
-    icon: Briefcase,
-    to: '/painel/comercial',
-    accent: '#7C3AED',
-  },
-  {
-    key: 'logistica',
-    icon: Truck,
-    to: '/painel/logistica',
-    accent: '#EA580C',
-  },
-];
+};
 
 export default function Home() {
   const { t } = useTranslation();
+  const { user } = useInternalAuth();
+  const modules = useMemo(() => getAccessibleModules(user), [user]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="w-full space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{t('painel.home.title')}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t('painel.home.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-foreground">{t('moduleSelection.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t('moduleSelection.subtitle')}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {AREA_CARDS.map(({ key, icon: Icon, to, accent }) => (
-          <Link key={key} to={to} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
-            <Card className="h-full transition-colors group-hover:border-[#2575D1]/40 group-hover:bg-accent/30">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base">
-                      {t(`painel.areas.${key}.title`)}
-                    </CardTitle>
-                    <CardDescription className="mt-1.5">
-                      {t(`painel.areas.${key}.description`)}
-                    </CardDescription>
+      {modules.length === 0 ? (
+        <Card className="max-w-lg">
+          <CardHeader>
+            <CardTitle className="text-lg">{t('moduleSelection.emptyTitle')}</CardTitle>
+            <CardDescription>{t('moduleSelection.emptyDescription')}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+          {modules.map((mod) => {
+            const meta = CARD_META[mod.id] || {};
+            const Icon = meta.icon || Factory;
+            const to = resolveModuleEntryRoute(user, mod.id);
+            const accent = meta.accent || mod.accent;
+            return (
+              <Card key={mod.id} className="min-w-0 flex flex-col">
+                <CardHeader className="pb-3 pt-6 px-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <CardTitle className="text-xl">{t(mod.titleKey)}</CardTitle>
+                      <CardDescription className="mt-2 text-sm leading-relaxed">
+                        {t(mod.descriptionKey)}
+                      </CardDescription>
+                    </div>
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: accent }}
+                    >
+                      <Icon className="w-6 h-6 text-white" />
+                    </div>
                   </div>
-                  <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: accent }}
-                  >
-                    <Icon className="w-4 h-4 text-white" />
+                </CardHeader>
+                <CardContent className="px-6 pb-6 mt-auto">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      {t('moduleSelection.accessGranted')}
+                    </span>
+                    <Button
+                      asChild
+                      className="w-full sm:w-auto text-white"
+                      style={{ background: accent }}
+                    >
+                      <Link to={to}>
+                        {t('painel.home.openModule')}
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </Button>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  {t('painel.home.preparedForData')}
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

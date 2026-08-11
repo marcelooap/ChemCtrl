@@ -26,10 +26,25 @@ function normalizePermissions(raw) {
   return [];
 }
 
+function normalizeModules(raw) {
+  if (Array.isArray(raw)) return raw.filter((k) => typeof k === 'string' && k.trim());
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string' && k.trim()) : [];
+    } catch {
+      return [];
+    }
+  }
+  // undefined/null → sinaliza “ainda não veio do backend” (fallback em access.js)
+  return raw == null ? undefined : [];
+}
+
 function mapUser(u) {
   if (!u) return null;
   const nivel = (u.nivel_acesso || '').toLowerCase();
   const permissions = normalizePermissions(u.permissions);
+  const modules = normalizeModules(u.modules);
   const perfil = u.perfil && typeof u.perfil === 'object'
     ? u.perfil
     : (u.perfil_id
@@ -51,6 +66,7 @@ function mapUser(u) {
     perfil_id: u.perfil_id || perfil?.id || null,
     perfil,
     permissions,
+    ...(modules !== undefined ? { modules } : {}),
   };
 }
 
@@ -89,6 +105,9 @@ export const InternalAuthProvider = ({ children }) => {
           userData.permissions = normalizePermissions(
             session.permissions ?? userData.permissions
           );
+          if (session.modules != null) {
+            userData.modules = normalizeModules(session.modules) ?? [];
+          }
           if (session.perfil_id) userData.perfil_id = session.perfil_id;
           if (session.perfil && typeof session.perfil === 'object') userData.perfil = session.perfil;
           if (session.nivel_acesso) userData.nivel_acesso = session.nivel_acesso;
@@ -174,6 +193,9 @@ export const InternalAuthProvider = ({ children }) => {
         ...result.user,
         preferred_language: normalizeLanguage(result.user?.preferred_language),
         permissions: normalizePermissions(result.user?.permissions),
+        ...(result.user?.modules != null
+          ? { modules: normalizeModules(result.user.modules) ?? [] }
+          : {}),
       };
       setSessionId(result.session_id);
       persistUserSession(userData);

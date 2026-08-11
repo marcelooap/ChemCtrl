@@ -37,13 +37,13 @@ export default function Dashboard() {
   const { t } = useTranslation();
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('painel.dashboard.title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t('painel.dashboard.subtitle')}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
         {KPI_KEYS.map(({ key, icon: Icon }) => (
           <Card key={key}>
             <CardHeader className="pb-2">

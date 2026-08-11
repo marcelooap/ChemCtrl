@@ -12,10 +12,20 @@ import { generateRelatorioEstoquePDF } from "@transbordo/lib/pdfEstoque";
 import {
   listSaidasHistoricoForEstoque,
   listHistoricoTransbordosEncadeados,
+  listDestinosFifoForEstoque,
   getEstoqueQuantidade,
   getEstoqueNotaFiscal,
   getEstoqueNotaFiscalTroca,
+  calcSaidasEmbalado,
+  calcSaidasConvencional,
+  calcVasilhamesExpedidosPatio,
+  computeEstoqueSaldo,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  resolveTipoRecebimentoEstoque,
+  getTipoRecebimentoLabel,
+  getTipoRecebimentoBadgeClass,
+} from "@transbordo/lib/tipoRecebimento";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -84,10 +94,6 @@ export default function EstoqueViewDialog({
   const custoTotal =
     (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
 
-  const transbordosUsados = (transbordos || []).filter((t) =>
-    (t.origens || []).some((o) => o.entrada_id === item.id)
-  );
-
   const placaBarrilKey = (placa, barril) =>
     `${String(placa || "").trim().toUpperCase()}||${String(barril || "")
       .trim()
@@ -124,28 +130,13 @@ export default function EstoqueViewDialog({
     return chosen.status || "No Pátio";
   };
 
-  const destinosList = transbordosUsados.flatMap((t) => {
-    const origem = (t.origens || []).find((o) => o.entrada_id === item.id);
-    return (t.destinos || []).map((d, idx) => ({
-      key: `${t.id}-${idx}`,
-      codigo: t.codigo_transbordo || "—",
-      data: t.data,
-      destino:
-        [d.placa, d.barril].filter(Boolean).join(" / ") ||
-        d.tanka_codigo ||
-        (d.tipo_embalagem
-          ? Number(d.quantidade_embalagens) > 0
-            ? `${d.tipo_embalagem} (${d.quantidade_embalagens})`
-            : d.tipo_embalagem
-          : "—"),
-      tipo: d.tipo_embalagem || (d.tanka_codigo ? "Tanka" : "—"),
-      volume: d.volume_total || d.volume || 0,
-      pesoLiq: d.peso_liquido || 0,
-      volumeRetirado: origem?.volume_retirado,
-      massaRetirada: origem?.massa_retirada,
-      status: resolveVasilhameStatus(d, t.codigo_transbordo),
-    }));
-  });
+  // Destinos filtrados pelo FIFO: só embalagens que receberam este lote
+  const destinosList = listDestinosFifoForEstoque(item, transbordos).map(
+    (row) => ({
+      ...row,
+      status: resolveVasilhameStatus(row.rawDestino, row.codigo),
+    })
+  );
 
   const historicoTransbordos = listHistoricoTransbordosEncadeados(
     item,
@@ -181,13 +172,18 @@ export default function EstoqueViewDialog({
   );
 
   const estoqueInicial = getEstoqueQuantidade(item);
-  // Só saídas enviadas ao fiscal abatem o estoque na base
+  // Baixa só com saída de vasilhame (pátio ou fiscal) / embalado fiscal
   const totalSaido = roundMass(
-    saidasHistorico
-      .filter((s) => s.enviado_ao_fiscal)
-      .reduce((sum, s) => sum + (Number(s.quantidade) || 0), 0)
+    calcSaidasEmbalado(item, saidas) +
+      calcSaidasConvencional(item, saidas, vasilhames, transbordos) +
+      calcVasilhamesExpedidosPatio(item, vasilhames, transbordos, saidas)
   );
-  const saldoCalculado = Math.max(0, roundMass(estoqueInicial - totalSaido));
+  const saldoCalculado = computeEstoqueSaldo(
+    item,
+    transbordos,
+    saidas,
+    vasilhames
+  );
   const saldoAtualBase = Number(item.saldo_atual) || 0;
 
   return (
@@ -221,15 +217,18 @@ export default function EstoqueViewDialog({
             <InfoItem label="Cliente" value={item.cliente_nome} />
             <div className="space-y-0.5">
               <p className="text-xs text-muted-foreground">Tipo</p>
-              <span
-                className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                  item.embalado
-                    ? "bg-orange-200 text-orange-800"
-                    : "bg-primary/10 text-primary"
-                }`}
-              >
-                {item.embalado ? "Embalado" : "Convencional"}
-              </span>
+              {(() => {
+                const tipo = resolveTipoRecebimentoEstoque(item);
+                return (
+                  <span
+                    className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getTipoRecebimentoBadgeClass(
+                      tipo
+                    )}`}
+                  >
+                    {getTipoRecebimentoLabel(tipo)}
+                  </span>
+                );
+              })()}
             </div>
             <div className="space-y-0.5">
               <p className="text-xs text-muted-foreground">Status WMS</p>
@@ -352,6 +351,10 @@ export default function EstoqueViewDialog({
             <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
               DESTINOS (TRANSBORDO)
             </h3>
+            <p className="pl-2 text-xs text-muted-foreground">
+              Embalagens que receberam este lote pela alocação FIFO do OP
+              (volume da fração deste estoque).
+            </p>
             <div className="pl-2">
               <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
                 <thead>
@@ -578,10 +581,19 @@ export default function EstoqueViewDialog({
                           colSpan={3}
                           className="px-3 py-2 font-bold text-foreground"
                         >
-                          Total Expedido
+                          Total Expedido (fiscal)
                         </td>
                         <td className="px-3 py-2 text-right font-bold text-primary">
-                          {formatMass(totalSaido, { empty: "—" })} {unidade}
+                          {formatMass(
+                            saidasHistorico
+                              .filter((s) => s.enviado_ao_fiscal)
+                              .reduce(
+                                (sum, s) => sum + (Number(s.quantidade) || 0),
+                                0
+                              ),
+                            { empty: "—" }
+                          )}{" "}
+                          {unidade}
                         </td>
                         <td colSpan={2} />
                       </tr>
@@ -590,7 +602,7 @@ export default function EstoqueViewDialog({
                 </tbody>
               </table>
 
-              {saidasHistorico.length > 0 && (
+              {(saidasHistorico.length > 0 || totalSaido > 0) && (
                 <div className="mt-3 grid grid-cols-3 gap-3 rounded-lg border border-border bg-muted/30 p-3">
                   <div className="space-y-0.5">
                     <p className="text-xs text-muted-foreground">Estoque inicial</p>

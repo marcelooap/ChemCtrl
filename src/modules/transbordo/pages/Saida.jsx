@@ -26,7 +26,16 @@ const STATUS_OPTIONS = [
   { value: "enviado_fiscal", label: "Enviado" },
 ];
 
-export default function Saida() {
+const DEFAULT_BASE_PATH = "/chemflow/saida";
+
+/**
+ * Tela de listagem de saídas.
+ * `basePath` / `title` permitem reutilizar a mesma UI no Painel Comercial.
+ */
+export default function Saida({
+  basePath = DEFAULT_BASE_PATH,
+  title = "Saídas",
+} = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [saidas, setSaidas] = useState([]);
@@ -194,13 +203,13 @@ export default function Saida() {
       {/* Header + Action Bar */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Saídas</h1>
+          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {saidas.length} registro(s) cadastrado(s)
           </p>
         </div>
         <Button
-          onClick={() => navigate("/chemflow/saida/novo")}
+          onClick={() => navigate(`${basePath}/novo`)}
           className="bg-primary hover:bg-primary/90 gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -348,7 +357,7 @@ export default function Saida() {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => navigate(`/chemflow/saida/editar/${s.id}`)}
+                          onClick={() => navigate(`${basePath}/editar/${s.id}`)}
                           className="text-muted-foreground hover:text-muted-foreground transition-colors"
                           title="Editar"
                         >

@@ -42,7 +42,13 @@ const emptyItem = () => ({
   peso_bruto: 0,
 });
 
-export default function SaidaForm() {
+const DEFAULT_BASE_PATH = "/chemflow/saida";
+
+/**
+ * Formulário de criação/edição de saída.
+ * `basePath` permite reutilizar a mesma UI no Painel Comercial.
+ */
+export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -376,7 +382,7 @@ export default function SaidaForm() {
           await entities.vasilhames.bulkUpdate(vasilhameUpdates);
       }
 
-      navigate("/chemflow/saida");
+      navigate(basePath);
     } catch {
       setError("Erro ao salvar saída. Tente novamente.");
     }
@@ -399,7 +405,7 @@ export default function SaidaForm() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/chemflow/saida")}
+            onClick={() => navigate(basePath)}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -415,7 +421,7 @@ export default function SaidaForm() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate("/chemflow/saida")}>
+          <Button variant="outline" onClick={() => navigate(basePath)}>
             Cancelar
           </Button>
           <Button

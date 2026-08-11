@@ -23,7 +23,7 @@ export default function Logistica() {
   const { t } = useTranslation();
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('painel.logistica.title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t('painel.logistica.subtitle')}</p>

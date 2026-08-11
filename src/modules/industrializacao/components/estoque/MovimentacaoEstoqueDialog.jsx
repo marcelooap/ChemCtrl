@@ -4,6 +4,7 @@ import { base44 } from '@industrializacao/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
+import Combobox from '@shared/components/ui/combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -19,6 +20,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
   const { toast } = useToast();
 
   const [selectedMPKey, setSelectedMPKey] = useState('');
+  const [mpSearch, setMpSearch] = useState('');
   const [selectedLot, setSelectedLot] = useState('');
   const [selectedStockId, setSelectedStockId] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -35,11 +37,22 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         const codPart = s.mp_code ? `${s.mp_code} — ` : '';
         const clientPart = s.client ? ` (${s.client})` : '';
         const label = `${codPart}${s.mp_name}${clientPart}`;
-        map.set(key, { key, label, mp_name: s.mp_name, client: s.client || '' });
+        map.set(key, {
+          key,
+          label,
+          mp_name: s.mp_name,
+          mp_code: s.mp_code || '',
+          client: s.client || '',
+        });
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, i18n.language));
   }, [stocks, i18n.language]);
+
+  const comboboxOptions = useMemo(
+    () => mpOptions.map((o) => ({ value: o.label, label: o.label, item: o })),
+    [mpOptions],
+  );
 
   const selectedMPOption = mpOptions.find(o => o.key === selectedMPKey);
 
@@ -63,8 +76,24 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
 
   const selectedStock = stocks.find(s => s.id === selectedStockId);
 
-  const handleMPChange = (val) => {
-    setSelectedMPKey(val);
+  const clearMpSelection = () => {
+    setSelectedMPKey('');
+    setSelectedLot('');
+    setSelectedStockId('');
+  };
+
+  const handleMPSearchChange = (val) => {
+    setMpSearch(val);
+    setError('');
+    if (!selectedMPKey) return;
+    const current = mpOptions.find((o) => o.key === selectedMPKey);
+    if (!current || current.label !== val) clearMpSelection();
+  };
+
+  const handleMPSelect = (item) => {
+    if (!item) return;
+    setSelectedMPKey(item.key);
+    setMpSearch(item.label);
     setSelectedLot('');
     setSelectedStockId('');
     setError('');
@@ -83,6 +112,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
 
   const reset = () => {
     setSelectedMPKey('');
+    setMpSearch('');
     setSelectedLot('');
     setSelectedStockId('');
     setQuantity('');
@@ -161,14 +191,13 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         <div className="grid gap-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.movementDialog.rawMaterial')} *</label>
-            <Select value={selectedMPKey} onValueChange={handleMPChange}>
-              <SelectTrigger><SelectValue placeholder={t('rawMaterialStock.movementDialog.selectMp')} /></SelectTrigger>
-              <SelectContent>
-                {mpOptions.map(o => (
-                  <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              value={mpSearch}
+              onValueChange={handleMPSearchChange}
+              options={comboboxOptions}
+              placeholder={t('rawMaterialStock.movementDialog.searchMp')}
+              onSelect={handleMPSelect}
+            />
           </div>
 
           {selectedMPKey && (

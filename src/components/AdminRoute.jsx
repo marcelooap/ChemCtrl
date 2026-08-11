@@ -1,10 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getDefaultRoute, isAdminUser } from '@industrializacao/lib/permissions';
+import { isAdminUser } from '@industrializacao/lib/permissions';
+import { resolvePostLoginRoute } from '@/lib/modules/access';
 
 /**
- * Gate para rotas restritas a administradores (módulo ChemFlow).
- * Não-admin → redireciona ao ChemCtrl.
+ * Gate para rotas restritas a administradores (Painel).
+ * Não-admin → redireciona para seleção / módulo permitido.
  */
 export default function AdminRoute() {
   const { user, loading } = useInternalAuth();
@@ -18,7 +19,7 @@ export default function AdminRoute() {
   }
 
   if (!isAdminUser(user)) {
-    return <Navigate to={getDefaultRoute(user)} replace />;
+    return <Navigate to={resolvePostLoginRoute(user)} replace />;
   }
 
   return <Outlet />;

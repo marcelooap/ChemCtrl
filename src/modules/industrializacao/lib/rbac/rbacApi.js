@@ -45,6 +45,20 @@ export async function replaceProfilePermissions(perfilId, keys) {
   });
 }
 
+export async function getProfileModules(perfilId) {
+  const result = await callRPC('get_profile_modules', { p_perfil_id: perfilId });
+  if (Array.isArray(result)) return result;
+  if (result?.modules) return result.modules;
+  return [];
+}
+
+export async function replaceProfileModules(perfilId, modules) {
+  return callRPC('replace_profile_modules', {
+    p_perfil_id: perfilId,
+    p_modules: modules,
+  });
+}
+
 export async function duplicateProfile(perfilId, novoNome) {
   return callRPC('duplicate_profile', {
     p_perfil_id: perfilId,

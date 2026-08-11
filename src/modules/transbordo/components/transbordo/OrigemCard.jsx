@@ -1,6 +1,15 @@
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { Button } from "@shared/components/ui/button";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
@@ -68,6 +77,10 @@ export default function OrigemCard({
   readOnly,
   collapsed = false,
   onToggleCollapse,
+  volumeDestinado = 0,
+  destinosCount = 0,
+  onAddDestino,
+  children,
 }) {
   const tipoOrigem = origem.tipo_origem || "";
   const sourceOptions =
@@ -102,8 +115,6 @@ export default function OrigemCard({
 
   const saldoDisponivel =
     selectedSource?.saldo_atual ?? origem.saldo_disponivel ?? 0;
-  // Opções já vêm de adjustOptionsForOrigem com saldo em litros (unidade_medida "L").
-  // Prefill / saldo_disponivel da origem também já estão em L — não reconverter.
   const unidadeMedida = selectedSource?.unidade_medida || "L";
   const volumeRetirado = roundVolume(
     isMultiLote
@@ -197,15 +208,44 @@ export default function OrigemCard({
   );
   const tipoValue = TIPOS_ORIGEM.find((t) => t.value === tipoOrigem)?.label || "";
 
+  const volumeDestinadoL = roundVolume(volumeDestinado);
+  const volumeDiffOrigem = Math.abs(volumeRetirado - volumeDestinadoL);
+  const origemBalanceada =
+    volumeRetirado > 0 && volumeDiffOrigem === 0 && destinosCount > 0;
+  const volumePendenteOrigem = roundVolume(volumeRetirado - volumeDestinadoL);
+
+  // Critérios alinhados à validação de submit em TransbordoModal.
+  const origemPreenchida =
+    !!tipoOrigem &&
+    !!origem.entrada_id &&
+    volumeRetirado > 0 &&
+    !excedeuSaldo &&
+    !excedeuLote;
+
+  const origemNumero = `ORIGEM ${String(index + 1).padStart(2, "0")}`;
+  const origemTitulo =
+    origem.entrada_codigo || origemNumero;
+
+  const loteResumo = isMultiLote
+    ? lotesRetirados
+        .filter((l) => (l.volume_retirado || 0) > 0)
+        .map((l) => l.lote || "—")
+        .join(", ") || "—"
+    : origem.lote || "—";
+
   const collapseControls = (
-    <div className="flex items-center gap-2 shrink-0">
+    <div
+      className="flex items-center gap-2 shrink-0"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       {onToggleCollapse && (
         <button
           type="button"
           onClick={onToggleCollapse}
           className="text-muted-foreground hover:text-foreground transition-colors p-1"
-          title={collapsed ? "Maximizar origem" : "Minimizar origem"}
-          aria-label={collapsed ? "Maximizar origem" : "Minimizar origem"}
+          title={collapsed ? "Expandir origem" : "Recolher origem"}
+          aria-label={collapsed ? "Expandir origem" : "Recolher origem"}
         >
           {collapsed ? (
             <ChevronDown className="w-4 h-4" />
@@ -218,7 +258,9 @@ export default function OrigemCard({
         <button
           type="button"
           onClick={onRemove}
-          className="text-red-400 hover:text-red-600 transition-colors"
+          className="text-red-400 hover:text-red-600 transition-colors p-1"
+          title="Excluir origem"
+          aria-label="Excluir origem"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -226,19 +268,76 @@ export default function OrigemCard({
     </div>
   );
 
+  const origemHeaderCollapsed = (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-1.5">
+          {origemPreenchida && origemBalanceada && (
+            <Check className="w-3.5 h-3.5 text-green-600 shrink-0" aria-hidden />
+          )}
+          <span className="text-sm font-semibold text-primary">{origemNumero}</span>
+        </div>
+        <p className="text-sm text-foreground/90 truncate">
+          {[
+            origem.entrada_codigo || null,
+            loteResumo !== "—" ? loteResumo : null,
+          ]
+            .filter(Boolean)
+            .join(" • ") || "Origem não configurada"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {formatVolume(volumeRetirado)} L retirados •{" "}
+          {formatVolume(volumeDestinadoL)} L destinados
+          {destinosCount > 0
+            ? ` • ${destinosCount} destino${destinosCount === 1 ? "" : "s"}`
+            : ""}
+          {volumePendenteOrigem > 0
+            ? ` • ${formatVolume(volumePendenteOrigem)} L pendentes`
+            : ""}
+        </p>
+      </div>
+      {collapseControls}
+    </div>
+  );
+
+  const origemHeaderExpanded = (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+            {origemPreenchida && origemBalanceada && (
+              <Check className="w-3.5 h-3.5 text-green-600 shrink-0" aria-hidden />
+            )}
+            {origemNumero}
+          </span>
+          {origem.entrada_codigo && (
+            <span className="text-xs text-muted-foreground truncate">
+              {origemTitulo}
+              {tipoValue ? ` · ${tipoValue}` : ""}
+            </span>
+          )}
+        </div>
+      </div>
+      {collapseControls}
+    </div>
+  );
+
   const multiLoteFields = isMultiLote && (
-    <div className="col-span-2 space-y-2">
+    <div className="col-span-full space-y-2">
       <Label>Lotes disponíveis</Label>
       <div className="rounded-md border border-border bg-card divide-y divide-border">
         {lotesRetirados.map((l, i) => {
-          const excedeu = roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel);
+          const excedeu =
+            roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel);
           return (
             <div
               key={`${l.lote || "lote"}-${i}`}
               className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3"
             >
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Lote — Volume</Label>
+                <Label className="text-xs text-muted-foreground">
+                  Lote — Volume
+                </Label>
                 <Input
                   value={`${l.lote || "—"} — ${formatVolume(l.saldo_disponivel)} L`}
                   disabled
@@ -261,7 +360,8 @@ export default function OrigemCard({
                 />
                 {excedeu && (
                   <p className="text-xs text-red-600">
-                    ⚠ Superior ao saldo do lote ({formatVolume(l.saldo_disponivel)} L)
+                    ⚠ Superior ao saldo do lote (
+                    {formatVolume(l.saldo_disponivel)} L)
                   </p>
                 )}
               </div>
@@ -286,109 +386,192 @@ export default function OrigemCard({
     </div>
   );
 
+  const destinosSection = (
+    <div className="space-y-3 pt-3 border-t border-border/70">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Destinos
+        </h4>
+        {!readOnly && onAddDestino && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAddDestino}
+            className="h-8"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Adicionar destino
+          </Button>
+        )}
+      </div>
+
+      <div className="pl-0 sm:pl-3 space-y-2 border-l-0 sm:border-l-2 sm:border-primary/20">
+        {destinosCount === 0 ? (
+          <p className="text-sm text-muted-foreground py-3 px-3 border border-dashed border-border rounded-md">
+            Nenhum destino nesta origem.
+          </p>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+
+  const resumoOrigem = volumeRetirado > 0 || destinosCount > 0 ? (
+    <div
+      className={`rounded-md border px-3 py-3 space-y-2 ${
+        volumeRetirado > 0 && destinosCount > 0
+          ? origemBalanceada
+            ? "border-green-200 bg-green-50/40"
+            : "border-amber-200 bg-amber-50/40"
+          : "border-border/70 bg-muted/20"
+      }`}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Resumo da origem
+      </p>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div>
+          <p className="text-[11px] text-muted-foreground">Retirado</p>
+          <p className="font-semibold tabular-nums">
+            {formatVolume(volumeRetirado)} L
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-muted-foreground">Destinado</p>
+          <p className="font-semibold tabular-nums">
+            {formatVolume(volumeDestinadoL)} L
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] text-muted-foreground">Diferença</p>
+          <p
+            className={`font-semibold tabular-nums ${
+              volumeRetirado > 0 && destinosCount > 0
+                ? origemBalanceada
+                  ? "text-green-700"
+                  : "text-amber-700"
+                : ""
+            }`}
+          >
+            {formatVolume(volumeDiffOrigem)} L
+          </p>
+        </div>
+      </div>
+      {volumeRetirado > 0 && destinosCount > 0 && (
+        <div className="pt-1">
+          {origemBalanceada ? (
+            <div className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Origem balanceada
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                <AlertCircle className="w-3.5 h-3.5" />
+                Divergência
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {volumePendenteOrigem > 0
+                  ? `${formatVolume(volumePendenteOrigem)} L ainda não destinados`
+                  : `${formatVolume(Math.abs(volumePendenteOrigem))} L destinados a mais`}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   if (collapsed) {
-    const loteSummary = isMultiLote
-      ? lotesRetirados
-          .filter((l) => (l.volume_retirado || 0) > 0)
-          .map((l) => `${l.lote || "—"} (${formatVolume(l.volume_retirado)} L)`)
-          .join(", ") || "—"
-      : null;
-
     return (
-      <div className="rounded-lg border border-border bg-muted/40/50 px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0 flex-1">
-            <span className="text-sm font-semibold text-primary shrink-0">
-              Origem {String(index + 1).padStart(2, "0")}
-            </span>
-            <span className="text-sm text-foreground/80 truncate">
-              <span className="text-muted-foreground">Origem:</span>{" "}
-              {origem.entrada_codigo || "—"}
-            </span>
-            {loteSummary ? (
-              <span className="text-sm text-foreground/80 truncate">
-                <span className="text-muted-foreground">Lotes:</span> {loteSummary}
-              </span>
-            ) : (
-              <span className="text-sm text-foreground/80 shrink-0">
-                <span className="text-muted-foreground">Volume:</span>{" "}
-                {formatVolume(volumeRetirado)} L
-              </span>
-            )}
-          </div>
-          {collapseControls}
-        </div>
+      <div
+        className={`rounded-lg border border-border bg-muted/30 px-4 py-3 ${
+          onToggleCollapse ? "cursor-pointer hover:bg-muted/40 transition-colors" : ""
+        }`}
+        onClick={onToggleCollapse}
+        role={onToggleCollapse ? "button" : undefined}
+        tabIndex={onToggleCollapse ? 0 : undefined}
+        onKeyDown={
+          onToggleCollapse
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onToggleCollapse();
+                }
+              }
+            : undefined
+        }
+      >
+        {origemHeaderCollapsed}
       </div>
     );
   }
 
-  if (isEntradaLocked) {
-    return (
-      <div className="rounded-lg border border-border bg-muted/40/50 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-primary">
-            Origem {String(index + 1).padStart(2, "0")}
-          </span>
-          {collapseControls}
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-1.5">
-            <Label>Tipo de Origem</Label>
-            <Input value="Entrada (Estoque)" disabled className="bg-card font-medium text-primary" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Origem</Label>
-            <Input value={origem.entrada_codigo || ""} disabled className="bg-card font-medium" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Lote</Label>
-            <Input value={origem.lote || ""} disabled className="bg-card" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Saldo Disponível (L)</Label>
-            <Input
-              value={formatVolume(origem.saldo_disponivel || 0)}
-              disabled
-              className="bg-muted/40"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Volume Retirado (L)</Label>
-            <NumberInputBr
-              decimals={0}
-              min={0}
-              value={origem.volume_retirado ?? ""}
-              onChange={(v) => handleVolumeChange(v)}
-              disabled={readOnly}
-              className="bg-white font-medium text-primary"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Saldo Restante (L)</Label>
-            <Input
-              value={formatVolume(origem.saldo_restante ?? saldoRestanteL)}
-              disabled
-              className="bg-card font-medium text-green-600"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Massa Correspondente (kg)</Label>
-            <Input value={formatMass(massaRetirada)} disabled className="bg-card font-medium" />
-          </div>
-        </div>
+  const fieldsLocked = isEntradaLocked && (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="space-y-1.5">
+        <Label>Tipo de Origem</Label>
+        <Input
+          value="Entrada (Estoque)"
+          disabled
+          className="bg-card font-medium text-primary"
+        />
       </div>
-    );
-  }
+      <div className="space-y-1.5">
+        <Label>Origem</Label>
+        <Input
+          value={origem.entrada_codigo || ""}
+          disabled
+          className="bg-card font-medium"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Lote</Label>
+        <Input value={origem.lote || ""} disabled className="bg-card" />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Saldo Disponível (L)</Label>
+        <Input
+          value={formatVolume(origem.saldo_disponivel || 0)}
+          disabled
+          className="bg-muted/40"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Volume Retirado (L)</Label>
+        <NumberInputBr
+          decimals={0}
+          min={0}
+          value={origem.volume_retirado ?? ""}
+          onChange={(v) => handleVolumeChange(v)}
+          disabled={readOnly}
+          className="bg-white font-medium text-primary"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Saldo Restante (L)</Label>
+        <Input
+          value={formatVolume(origem.saldo_restante ?? saldoRestanteL)}
+          disabled
+          className="bg-card font-medium text-green-600"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Massa Correspondente (kg)</Label>
+        <Input
+          value={formatMass(massaRetirada)}
+          disabled
+          className="bg-card font-medium"
+        />
+      </div>
+    </div>
+  );
 
-  return (
-    <div className="rounded-lg border border-border bg-muted/40/50 p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-primary">
-          Origem {String(index + 1).padStart(2, "0")}
-        </span>
-        {collapseControls}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+  const fieldsNormal = !isEntradaLocked && (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Tipo de Origem *</Label>
           <SearchableSelect
@@ -439,7 +622,8 @@ export default function OrigemCard({
               />
               {(excedeuSaldo || excedeuLote) && (
                 <p className="text-xs text-red-600">
-                  ⚠ Volume superior ao saldo disponível ({formatVolume(saldoEmLitros)} L)
+                  ⚠ Volume superior ao saldo disponível (
+                  {formatVolume(saldoEmLitros)} L)
                 </p>
               )}
             </div>
@@ -473,6 +657,16 @@ export default function OrigemCard({
           )}
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+      {origemHeaderExpanded}
+      {fieldsLocked}
+      {fieldsNormal}
+      {destinosSection}
+      {resumoOrigem}
     </div>
   );
 }

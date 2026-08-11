@@ -50,6 +50,32 @@ import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 
 const INPUT_EDITABLE = "bg-white";
 
+/** UID estável na sessão do formulário (não confundir com composicao.origem_index do FIFO). */
+function createClientUid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `uid_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureOrigemUids(origens = []) {
+  return (origens || []).map((o) =>
+    o?._uid ? o : { ...o, _uid: createClientUid() }
+  );
+}
+
+/**
+ * Garante origem_uid em cada destino.
+ * Registros legados (sem vínculo) ficam associados à primeira origem.
+ */
+function linkDestinosToOrigens(destinos = [], origens = []) {
+  const firstUid = origens[0]?._uid;
+  return (destinos || []).map((d) => ({
+    ...d,
+    origem_uid: d.origem_uid || firstUid || createClientUid(),
+  }));
+}
+
 function destinoItemLabel(d) {
   if (d.tipo_embalagem === "Vasilhame") {
     const parts = [d.placa, d.barril].filter(Boolean);
@@ -242,10 +268,15 @@ export default function TransbordoModal({
       setDensidade(parseDensidade(source.densidade));
       setOperadores(source.operadores || []);
       setObservacoes(source.observacoes || "");
-      nextOrigens = (source.origens || []).map((o) =>
-        o.entrada_id && !o.tipo_origem ? { ...o, tipo_origem: "entrada" } : o
+      nextOrigens = ensureOrigemUids(
+        (source.origens || []).map((o) =>
+          o.entrada_id && !o.tipo_origem ? { ...o, tipo_origem: "entrada" } : o
+        )
       );
-      nextDestinos = Array.isArray(source.destinos) ? source.destinos : [];
+      nextDestinos = linkDestinosToOrigens(
+        Array.isArray(source.destinos) ? source.destinos : [],
+        nextOrigens
+      );
       setOrigens(nextOrigens);
       setDestinos(nextDestinos);
     } else if (prefillEntrada) {
@@ -332,20 +363,22 @@ export default function TransbordoModal({
         return fromKg[i] || 0;
       });
 
-      nextOrigens = lotesKg.map((item, i) => {
-        const volumeL = litrosPorLote[i] || 0;
-        const lDens = item.densidade || dens;
-        return {
-          tipo_origem: "entrada",
-          entrada_id: item.estoqueRow?.id || prefillEntrada.id,
-          entrada_codigo: `${entradaCodigo} — Lote ${item.lote || i + 1}`,
-          lote: item.lote,
-          volume_retirado: volumeL,
-          massa_retirada: roundMass(volumeL * lDens),
-          saldo_restante: 0,
-          saldo_disponivel: volumeL,
-        };
-      });
+      nextOrigens = ensureOrigemUids(
+        lotesKg.map((item, i) => {
+          const volumeL = litrosPorLote[i] || 0;
+          const lDens = item.densidade || dens;
+          return {
+            tipo_origem: "entrada",
+            entrada_id: item.estoqueRow?.id || prefillEntrada.id,
+            entrada_codigo: `${entradaCodigo} — Lote ${item.lote || i + 1}`,
+            lote: item.lote,
+            volume_retirado: volumeL,
+            massa_retirada: roundMass(volumeL * lDens),
+            saldo_restante: 0,
+            saldo_disponivel: volumeL,
+          };
+        })
+      );
       nextDestinos = [];
       setOrigens(nextOrigens);
       setDestinos(nextDestinos);
@@ -639,8 +672,28 @@ export default function TransbordoModal({
     destinos.reduce((sum, d) => sum + (d.volume_total || 0), 0)
   );
   const volumeDiff = Math.abs(volumeOrigens - volumeDestinos);
+  const volumePendente = roundVolume(volumeOrigens - volumeDestinos);
   const massaTotal = roundMass(volumeOrigens * densidade);
   const volumesMatch = volumeDiff === 0;
+  const conferenciaAtiva = volumeOrigens > 0 || volumeDestinos > 0;
+  const progressoDestinado =
+    volumeOrigens > 0
+      ? Math.min(100, Math.round((volumeDestinos / volumeOrigens) * 100))
+      : 0;
+  const lotesOperacao = [
+    ...new Set(
+      origens
+        .flatMap((o) => {
+          const multi = (o.lotes_retirados || []).filter(
+            (l) => roundVolume(l.volume_retirado || 0) > 0
+          );
+          if (multi.length > 0) return multi.map((l) => l.lote || "");
+          return [o.lote || ""];
+        })
+        .map((l) => String(l).trim())
+        .filter(Boolean)
+    ),
+  ];
 
   const tankaExcedido = destinos.some((d) => {
     if (d.tipo_embalagem !== "Tankagem" || !d.tanka_id) return false;
@@ -684,6 +737,9 @@ export default function TransbordoModal({
     setProdutoDisplay("");
     setDensidade(0);
     setOrigens([]);
+    setDestinos([]);
+    setCollapsedOrigens({});
+    setCollapsedDestinos({});
   };
 
   const handleProdutoChange = (label, item) => {
@@ -700,6 +756,9 @@ export default function TransbordoModal({
       setDensidade(0);
     }
     setOrigens([]);
+    setDestinos([]);
+    setCollapsedOrigens({});
+    setCollapsedDestinos({});
   };
 
   const toggleOperador = (op) => {
@@ -709,12 +768,25 @@ export default function TransbordoModal({
   };
 
   const handleAddOrigem = () => {
+    // Recolhe todas as origens existentes; a nova fica expandida (fora do map).
     setCollapsedOrigens(
       Object.fromEntries(origens.map((_, i) => [i, true]))
     );
+    setCollapsedDestinos(
+      Object.fromEntries(destinos.map((_, i) => [i, true]))
+    );
     setOrigens((prev) => [
       ...prev,
-      { tipo_origem: "", entrada_id: "", entrada_codigo: "", lote: "", volume_retirado: 0, massa_retirada: 0, saldo_restante: 0 },
+      {
+        _uid: createClientUid(),
+        tipo_origem: "",
+        entrada_id: "",
+        entrada_codigo: "",
+        lote: "",
+        volume_retirado: 0,
+        massa_retirada: 0,
+        saldo_restante: 0,
+      },
     ]);
   };
 
@@ -723,13 +795,24 @@ export default function TransbordoModal({
     const massa = roundMass(vol * densidade);
     setOrigens((prev) =>
       prev.map((o, i) =>
-        i === idx ? { ...data, volume_retirado: vol, massa_retirada: massa } : o
+        i === idx
+          ? { ...data, _uid: o._uid || data._uid || createClientUid(), volume_retirado: vol, massa_retirada: massa }
+          : o
       )
     );
   };
 
   const handleRemoveOrigem = (idx) => {
+    const removedUid = origens[idx]?._uid;
+    const remainingDestinos = removedUid
+      ? destinos.filter((d) => d.origem_uid !== removedUid)
+      : destinos;
+
     setOrigens((prev) => prev.filter((_, i) => i !== idx));
+    setDestinos(remainingDestinos);
+    setCollapsedDestinos(
+      Object.fromEntries(remainingDestinos.map((_, i) => [i, true]))
+    );
     setCollapsedOrigens((prev) => {
       const next = {};
       Object.keys(prev).forEach((key) => {
@@ -742,24 +825,45 @@ export default function TransbordoModal({
   };
 
   const toggleOrigemCollapse = (idx) => {
-    setCollapsedOrigens((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
+    setCollapsedOrigens((prev) => {
+      const isCollapsed = !!prev[idx];
+      if (isCollapsed) {
+        // Expande esta e recolhe as demais (apenas uma origem aberta).
+        return Object.fromEntries(origens.map((_, i) => [i, i !== idx]));
+      }
+      return { ...prev, [idx]: true };
+    });
   };
 
-  const handleAddDestino = () => {
-    setCollapsedOrigens(
-      Object.fromEntries(origens.map((_, i) => [i, true]))
-    );
+  const handleAddDestino = (origemUid) => {
+    const origemIdx = origens.findIndex((o) => o._uid === origemUid);
+    if (origemIdx >= 0) {
+      setCollapsedOrigens(
+        Object.fromEntries(origens.map((_, i) => [i, i !== origemIdx]))
+      );
+    }
+    // Recolhe destinos existentes; o novo fica expandido.
     setCollapsedDestinos(
       Object.fromEntries(destinos.map((_, i) => [i, true]))
     );
-    setDestinos((prev) => [...prev, { tipo_embalagem: "", volume_total: 0 }]);
+    setDestinos((prev) => [
+      ...prev,
+      {
+        tipo_embalagem: "",
+        volume_total: 0,
+        origem_uid: origemUid,
+      },
+    ]);
   };
 
   const handleUpdateDestino = (idx, data) => {
-    setDestinos((prev) => prev.map((d, i) => (i === idx ? data : d)));
+    setDestinos((prev) =>
+      prev.map((d, i) =>
+        i === idx
+          ? { ...data, origem_uid: data.origem_uid || d.origem_uid }
+          : d
+      )
+    );
   };
 
   const handleRemoveDestino = (idx) => {
@@ -776,10 +880,21 @@ export default function TransbordoModal({
   };
 
   const toggleDestinoCollapse = (idx) => {
-    setCollapsedDestinos((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
+    const origemUid = destinos[idx]?.origem_uid;
+    setCollapsedDestinos((prev) => {
+      const isCollapsed = !!prev[idx];
+      if (isCollapsed) {
+        // Expande este e recolhe os demais da mesma origem.
+        const next = { ...prev };
+        destinos.forEach((d, i) => {
+          if (!origemUid || d.origem_uid === origemUid) {
+            next[i] = i !== idx;
+          }
+        });
+        return next;
+      }
+      return { ...prev, [idx]: true };
+    });
   };
 
   const buildPayload = () => {
@@ -822,7 +937,16 @@ export default function TransbordoModal({
           : { lotes_retirados: undefined, lotes_disponiveis: undefined }),
       };
     });
-    const destinosNorm = destinos.map((d) => {
+    const destinosOrdered = [
+      ...origens.flatMap((o) =>
+        destinos.filter((d) => d.origem_uid && d.origem_uid === o._uid)
+      ),
+      ...destinos.filter(
+        (d) => !d.origem_uid || !origens.some((o) => o._uid === d.origem_uid)
+      ),
+    ];
+
+    const destinosNorm = destinosOrdered.map((d) => {
       const volume_total = roundVolume(d.volume_total || d.volume || 0);
       return {
         ...d,
@@ -936,7 +1060,7 @@ export default function TransbordoModal({
       return;
     }
     if (destinos.some((d) => !d.tipo_embalagem)) {
-      setError("Todos os destinos devem ter um tipo de embalagem selecionado.");
+      setError("Todos os destinos devem ter um tipo de destino selecionado.");
       return;
     }
     if (
@@ -953,6 +1077,26 @@ export default function TransbordoModal({
     }
     if (tankaExcedido) {
       setError("Um ou mais destinos excedem a capacidade do tanka.");
+      return;
+    }
+    // Cada origem deve ter volume destinado igual ao retirado (necessário para o FIFO
+    // global continuar equivalente à alocação por origem na UI).
+    const origemDesbalanceada = origens.find((o) => {
+      const volO = roundVolume(o.volume_retirado || 0);
+      const volD = roundVolume(
+        destinos
+          .filter((d) => d.origem_uid === o._uid)
+          .reduce((s, d) => s + (d.volume_total || 0), 0)
+      );
+      return volO !== volD;
+    });
+    if (origemDesbalanceada) {
+      const label =
+        origemDesbalanceada.entrada_codigo ||
+        `Origem ${origens.indexOf(origemDesbalanceada) + 1}`;
+      setError(
+        `A origem "${label}" não está balanceada: o volume destinado deve ser igual ao volume retirado.`
+      );
       return;
     }
     if (!volumesMatch) {
@@ -991,11 +1135,11 @@ export default function TransbordoModal({
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {(error || externalError) && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -1003,10 +1147,55 @@ export default function TransbordoModal({
             </div>
           )}
 
-          {/* Dados Gerais */}
-          <div>
-            <h3 className="text-sm font-semibold text-primary mb-3">Dados Gerais</h3>
-            <div className="grid grid-cols-3 gap-4">
+          {/* 01 — Dados da Operação */}
+          <section className="space-y-4">
+            <div className="flex items-baseline gap-2 border-b border-border pb-2">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+                01
+              </span>
+              <h3 className="text-sm font-semibold text-primary">
+                Dados da Operação
+              </h3>
+            </div>
+
+            {(produtoNome || volumeOrigens > 0 || operadores.length > 0) && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 rounded-lg border border-border/80 bg-muted/20 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Produto
+                  </p>
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {produtoNome || "—"}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Lote
+                  </p>
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {lotesOperacao.length > 0 ? lotesOperacao.join(" / ") : "—"}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Volume da operação
+                  </p>
+                  <p className="text-sm font-semibold text-foreground tabular-nums">
+                    {formatVolume(volumeOrigens)} L
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Operadores
+                  </p>
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {operadores.length > 0 ? operadores.join(" / ") : "—"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label>Data *</Label>
                 <Input
@@ -1046,7 +1235,7 @@ export default function TransbordoModal({
             </div>
 
             {/* Operadores Multi-Select */}
-            <div className="mt-4 space-y-1.5">
+            <div className="space-y-1.5">
               <Label>Operadores *</Label>
               <div className="relative" ref={operadoresRef}>
                 <button
@@ -1099,7 +1288,7 @@ export default function TransbordoModal({
               )}
             </div>
 
-            <div className="mt-4 space-y-1.5">
+            <div className="space-y-1.5">
               <Label>Observações</Label>
               <Input
                 value={observacoes}
@@ -1109,14 +1298,27 @@ export default function TransbordoModal({
                 className={INPUT_EDITABLE}
               />
             </div>
-          </div>
+          </section>
 
-          {/* Origens */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-primary">Origens</h3>
+          {/* 02 — Origens (com destinos aninhados) */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+                  02
+                </span>
+                <h3 className="text-sm font-semibold text-primary">
+                  Origens e Destinos
+                </h3>
+              </div>
               {!readOnly && (
-                <Button type="button" variant="outline" size="sm" onClick={handleAddOrigem} disabled={!produtoId && !produtoNome}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddOrigem}
+                  disabled={!produtoId && !produtoNome}
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   Adicionar Origem
                 </Button>
@@ -1128,102 +1330,189 @@ export default function TransbordoModal({
                   Nenhuma origem adicionada.
                 </p>
               ) : (
-                origens.map((origem, idx) => (
-                  <OrigemCard
-                    key={idx}
-                    index={idx}
-                    origem={origem}
-                    entradaOptions={adjustOptionsForOrigem(filteredEntradas, origem)}
-                    tankaOptions={adjustOptionsForOrigem(tankasComSaldo, origem)}
-                    vasilhameOptions={adjustOptionsForOrigem(vasilhamesNoPatio, origem)}
-                    embaladoOptions={adjustOptionsForOrigem(entradasEmbaladas, origem)}
-                    densidade={densidade}
-                    onChange={(data) => handleUpdateOrigem(idx, data)}
-                    onRemove={() => handleRemoveOrigem(idx)}
-                    readOnly={readOnly}
-                    collapsed={!!collapsedOrigens[idx]}
-                    onToggleCollapse={() => toggleOrigemCollapse(idx)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+                origens.map((origem, idx) => {
+                  const destinosDaOrigem = destinos
+                    .map((d, globalIdx) => ({ d, globalIdx }))
+                    .filter(({ d }) => d.origem_uid === origem._uid);
+                  const volumeDestinadoOrigem = roundVolume(
+                    destinosDaOrigem.reduce(
+                      (s, { d }) => s + (d.volume_total || 0),
+                      0
+                    )
+                  );
 
-          {/* Destinos */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-primary">Destinos</h3>
-              {!readOnly && (
-                <Button type="button" variant="outline" size="sm" onClick={handleAddDestino}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Adicionar Destino
-                </Button>
+                  return (
+                    <OrigemCard
+                      key={origem._uid || idx}
+                      index={idx}
+                      origem={origem}
+                      entradaOptions={adjustOptionsForOrigem(
+                        filteredEntradas,
+                        origem
+                      )}
+                      tankaOptions={adjustOptionsForOrigem(
+                        tankasComSaldo,
+                        origem
+                      )}
+                      vasilhameOptions={adjustOptionsForOrigem(
+                        vasilhamesNoPatio,
+                        origem
+                      )}
+                      embaladoOptions={adjustOptionsForOrigem(
+                        entradasEmbaladas,
+                        origem
+                      )}
+                      densidade={densidade}
+                      onChange={(data) => handleUpdateOrigem(idx, data)}
+                      onRemove={() => handleRemoveOrigem(idx)}
+                      readOnly={readOnly}
+                      collapsed={!!collapsedOrigens[idx]}
+                      onToggleCollapse={() => toggleOrigemCollapse(idx)}
+                      volumeDestinado={volumeDestinadoOrigem}
+                      destinosCount={destinosDaOrigem.length}
+                      onAddDestino={() => handleAddDestino(origem._uid)}
+                    >
+                      {destinosDaOrigem.map(({ d, globalIdx }, localIdx) => (
+                        <DestinoCard
+                          key={`${d.origem_uid || "d"}-${globalIdx}`}
+                          index={localIdx}
+                          destino={d}
+                          isotanques={filteredIsotanques}
+                          vasilhames={vasilhames}
+                          produtoId={produtoId}
+                          produtoNome={produtoNome}
+                          densidade={densidade}
+                          onChange={(data) =>
+                            handleUpdateDestino(globalIdx, data)
+                          }
+                          onRemove={() => handleRemoveDestino(globalIdx)}
+                          readOnly={readOnly}
+                          collapsed={!!collapsedDestinos[globalIdx]}
+                          onToggleCollapse={() =>
+                            toggleDestinoCollapse(globalIdx)
+                          }
+                        />
+                      ))}
+                    </OrigemCard>
+                  );
+                })
               )}
             </div>
-            <div className="space-y-3">
-              {destinos.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4 border border-dashed border-border rounded-lg">
-                  Nenhum destino adicionado.
-                </p>
-              ) : (
-                destinos.map((destino, idx) => (
-                  <DestinoCard
-                    key={idx}
-                    index={idx}
-                    destino={destino}
-                    isotanques={filteredIsotanques}
-                    vasilhames={vasilhames}
-                    produtoId={produtoId}
-                    produtoNome={produtoNome}
-                    densidade={densidade}
-                    onChange={(data) => handleUpdateDestino(idx, data)}
-                    onRemove={() => handleRemoveDestino(idx)}
-                    readOnly={readOnly}
-                    collapsed={!!collapsedDestinos[idx]}
-                    onToggleCollapse={() => toggleDestinoCollapse(idx)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+          </section>
 
-          {/* Conferência de Volume */}
-          <div className="rounded-lg border border-border bg-muted/40 p-4">
-            <h3 className="text-sm font-semibold text-primary mb-3">Conferência de Volume</h3>
-            <div className="grid grid-cols-3 gap-4 items-center">
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Volume Total Origens</p>
-                <p className="text-lg font-bold text-foreground">{formatVolume(volumeOrigens)} L</p>
-              </div>
-              <div className="text-center">
-                {volumesMatch && volumeOrigens > 0 ? (
-                  <div className="flex flex-col items-center">
-                    <CheckCircle2 className="w-8 h-8 text-green-600 mb-1" />
-                    <span className="text-xs text-green-600 font-medium">Conferência OK</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center">
-                    <AlertCircle className="w-8 h-8 text-red-500 mb-1" />
-                    <span className="text-xs text-red-500 font-medium">Divergência</span>
-                  </div>
-                )}
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Volume Total Destinos</p>
-                <p className="text-lg font-bold text-foreground">{formatVolume(volumeDestinos)} L</p>
-              </div>
-            </div>
-            <div className="mt-3 pt-3 border-t border-border flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                Massa Total: <span className="font-medium text-foreground">{formatMass(massaTotal)} kg</span>
+          {/* 03 — Conferência */}
+          <section className="space-y-3">
+            <div className="flex items-baseline gap-2 border-b border-border pb-2">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+                03
               </span>
-              <span className="text-muted-foreground">
-                Diferença: <span className={`font-medium ${volumesMatch ? "text-green-600" : "text-red-600"}`}>
-                  {formatVolume(volumeDiff)} L
+              <h3 className="text-sm font-semibold text-primary">
+                Conferência da Movimentação
+              </h3>
+            </div>
+
+            <div
+              className={`rounded-lg border p-5 space-y-5 ${
+                !conferenciaAtiva
+                  ? "border-border bg-muted/20"
+                  : volumesMatch
+                  ? "border-green-200 bg-green-50/40"
+                  : "border-amber-200 bg-amber-50/40"
+              }`}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="text-center space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Volume Retirado
+                  </p>
+                  <p className="text-2xl font-bold tabular-nums text-foreground">
+                    {formatVolume(volumeOrigens)} L
+                  </p>
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Volume Destinado
+                  </p>
+                  <p className="text-2xl font-bold tabular-nums text-foreground">
+                    {formatVolume(volumeDestinos)} L
+                  </p>
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Diferença
+                  </p>
+                  <p
+                    className={`text-2xl font-bold tabular-nums ${
+                      !conferenciaAtiva
+                        ? "text-foreground"
+                        : volumesMatch
+                        ? "text-green-700"
+                        : "text-amber-700"
+                    }`}
+                  >
+                    {formatVolume(volumeDiff)} L
+                  </p>
+                </div>
+              </div>
+
+              {conferenciaAtiva && (
+                <div className="flex flex-col items-center gap-1 text-center">
+                  {volumesMatch ? (
+                    <>
+                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-green-700">
+                        <CheckCircle2 className="w-5 h-5" />
+                        Operação balanceada
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
+                        <AlertCircle className="w-5 h-5" />
+                        Divergência
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {volumePendente > 0
+                          ? `${formatVolume(volumePendente)} L ainda não destinados`
+                          : `${formatVolume(Math.abs(volumePendente))} L destinados a mais`}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {volumeOrigens > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{formatVolume(volumeOrigens)} L retirados</span>
+                    <span className="font-medium text-foreground">{progressoDestinado}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        volumesMatch ? "bg-green-600" : "bg-primary"
+                      }`}
+                      style={{ width: `${progressoDestinado}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{formatVolume(volumeDestinos)} L destinados</span>
+                    {volumePendente > 0 && (
+                      <span>{formatVolume(volumePendente)} L pendentes</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-border/70 flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  Massa total:{" "}
+                  <span className="font-medium text-foreground">
+                    {formatMass(massaTotal)} kg
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
-          </div>
+          </section>
 
           {!readOnly && (
             <DialogFooter>

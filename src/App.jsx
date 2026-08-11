@@ -6,7 +6,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'r
 import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import GuestRoute from '@/components/GuestRoute';
-import AdminRoute from '@/components/AdminRoute';
+import ModuleAccessRoute from '@/components/ModuleAccessRoute';
 import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
 import { InternalAuthProvider, useInternalAuth } from '@/lib/InternalAuthContext';
 import ScrollToTop from './components/ScrollToTop';
@@ -16,6 +16,7 @@ import { ThemeProvider } from '@/lib/theme/ThemeProvider';
 import { TooltipProvider } from '@shared/components/ui/tooltip';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
+import { MODULE_IDS } from '@/lib/modules/catalog';
 
 // Plataforma
 import Login from '@/pages/Login';
@@ -26,7 +27,7 @@ import PlatformLayout from '@/layouts/PlatformLayout';
 import ChemCtrlRoutes from '@industrializacao/routes';
 import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
 
-// Módulos admin (lazy)
+// Módulos (lazy)
 const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
 const PainelRoutes = lazy(() => import('@painel/routes'));
 
@@ -67,15 +68,19 @@ const AuthenticatedApp = () => {
       {/* Público: consulta por token */}
       <Route path="/consulta/:token" element={<ConsultaPublica />} />
 
-      {/* Público: Login — se já autenticado, vai para a rota padrão do ChemCtrl */}
+      {/* Público: Login — se já autenticado, vai para seleção / módulo */}
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<Login />} />
       </Route>
 
       {/* Protegido: exige sessão válida */}
       <Route element={<ProtectedRoute />}>
-        {/* Módulos admin: Transbordo + Painel */}
-        <Route element={<AdminRoute />}>
+        <Route path="/selecionar-modulo" element={<Navigate to="/painel/home" replace />} />
+        <Route path="/apps" element={<Navigate to="/painel/home" replace />} />
+        <Route path="/chemblend/*" element={<LegacyChemblendPrefixRedirect />} />
+
+        {/* Transbordo — acesso por módulo do perfil */}
+        <Route element={<ModuleAccessRoute moduleId={MODULE_IDS.TRANSBORDO} />}>
           <Route
             path="/chemflow/*"
             element={
@@ -86,23 +91,21 @@ const AuthenticatedApp = () => {
               </ModuleErrorBoundary>
             }
           />
-          <Route
-            path="/painel/*"
-            element={
-              <ModuleErrorBoundary title="Não foi possível abrir o Painel">
-                <Suspense fallback={<ModuleLoadingFallback />}>
-                  <PainelRoutes />
-                </Suspense>
-              </ModuleErrorBoundary>
-            }
-          />
         </Route>
 
-        <Route path="/apps" element={<Navigate to="/chemflow" replace />} />
-        <Route path="/selecionar-modulo" element={<Navigate to="/chemflow" replace />} />
-        <Route path="/chemblend/*" element={<LegacyChemblendPrefixRedirect />} />
+        {/* Painel — hub pós-login (home aberta; áreas admin internas) */}
+        <Route
+          path="/painel/*"
+          element={
+            <ModuleErrorBoundary title="Não foi possível abrir o Painel">
+              <Suspense fallback={<ModuleLoadingFallback />}>
+                <PainelRoutes />
+              </Suspense>
+            </ModuleErrorBoundary>
+          }
+        />
 
-        {/* Placeholders da plataforma (sem conflito com o app principal) */}
+        {/* Placeholders da plataforma */}
         <Route element={<PlatformLayout />}>
           <Route path="comercial/fichado" element={<PlaceholderPage title="Fichado" />} />
           <Route path="comercial/solicitar-saida" element={<PlaceholderPage title="Solicitar saída" />} />
@@ -111,8 +114,10 @@ const AuthenticatedApp = () => {
           <Route path="usuarios/permissoes" element={<PlaceholderPage title="Controle de permissão" />} />
         </Route>
 
-        {/* ChemCtrl — app principal na raiz */}
-        <Route path="/*" element={<ChemCtrlRoutes />} />
+        {/* Industrialização — acesso por módulo do perfil */}
+        <Route element={<ModuleAccessRoute moduleId={MODULE_IDS.INDUSTRIALIZACAO} />}>
+          <Route path="/*" element={<ChemCtrlRoutes />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<CatchAllRoute />} />

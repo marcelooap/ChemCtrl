@@ -21,10 +21,13 @@ import {
   deleteProfile,
   duplicateProfile,
   getProfilePermissions,
+  getProfileModules,
   listProfiles,
   replaceProfilePermissions,
+  replaceProfileModules,
   updateProfileMeta,
 } from '@industrializacao/lib/rbac/rbacApi';
+import { APP_MODULES } from '@/lib/modules/catalog';
 import { cn } from '@shared/lib/utils';
 
 const ALL_KEYS = getAllPermissionKeys();
@@ -44,6 +47,8 @@ export default function Perfis() {
   const [selectedId, setSelectedId] = useState(null);
   const [permSet, setPermSet] = useState(() => new Set());
   const [savedPermSet, setSavedPermSet] = useState(() => new Set());
+  const [moduleSet, setModuleSet] = useState(() => new Set());
+  const [savedModuleSet, setSavedModuleSet] = useState(() => new Set());
   const [loadingPerms, setLoadingPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -58,7 +63,9 @@ export default function Perfis() {
   const [discardDialog, setDiscardDialog] = useState({ open: false, nextId: null });
 
   const selected = profiles.find((p) => p.id === selectedId) || null;
-  const dirty = !profilesEqual(permSet, savedPermSet);
+  const dirty =
+    !profilesEqual(permSet, savedPermSet)
+    || !profilesEqual(moduleSet, savedModuleSet);
   const totalKeys = ALL_KEYS.length;
 
   const loadProfiles = useCallback(async (preferId) => {
@@ -86,17 +93,25 @@ export default function Perfis() {
     if (!selectedId) {
       setPermSet(new Set());
       setSavedPermSet(new Set());
+      setModuleSet(new Set());
+      setSavedModuleSet(new Set());
       return;
     }
     let cancelled = false;
     (async () => {
       setLoadingPerms(true);
       try {
-        const keys = await getProfilePermissions(selectedId);
+        const [keys, mods] = await Promise.all([
+          getProfilePermissions(selectedId),
+          getProfileModules(selectedId).catch(() => []),
+        ]);
         if (cancelled) return;
-        const next = new Set(Array.isArray(keys) ? keys : []);
-        setPermSet(next);
-        setSavedPermSet(new Set(next));
+        const nextPerms = new Set(Array.isArray(keys) ? keys : []);
+        setPermSet(nextPerms);
+        setSavedPermSet(new Set(nextPerms));
+        const nextMods = new Set(Array.isArray(mods) ? mods : []);
+        setModuleSet(nextMods);
+        setSavedModuleSet(new Set(nextMods));
       } catch (err) {
         if (!cancelled) {
           toast({ title: err.message || t('profiles.messages.loadPermsError'), variant: 'destructive' });
@@ -126,6 +141,15 @@ export default function Perfis() {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAppModule = (moduleId) => {
+    setModuleSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(moduleId)) next.delete(moduleId);
+      else next.add(moduleId);
       return next;
     });
   };
@@ -195,11 +219,18 @@ export default function Perfis() {
     }
     setSaving(true);
     try {
-      const result = await replaceProfilePermissions(selectedId, Array.from(permSet));
-      if (result?.success === false) {
-        throw new Error(result.error || t('profiles.messages.saveError'));
+      const [permResult, modResult] = await Promise.all([
+        replaceProfilePermissions(selectedId, Array.from(permSet)),
+        replaceProfileModules(selectedId, Array.from(moduleSet)),
+      ]);
+      if (permResult?.success === false) {
+        throw new Error(permResult.error || t('profiles.messages.saveError'));
+      }
+      if (modResult?.success === false) {
+        throw new Error(modResult.error || t('profiles.messages.saveError'));
       }
       setSavedPermSet(new Set(permSet));
+      setSavedModuleSet(new Set(moduleSet));
       await loadProfiles(selectedId);
       toast({ title: t('profiles.messages.saved') });
     } catch (err) {
@@ -465,7 +496,42 @@ export default function Perfis() {
                     <div className="w-6 h-6 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
                   </div>
                 ) : (
-                  filteredModules.map((mod) => {
+                  <>
+                    <div className="border border-border rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 bg-muted/40">
+                        <p className="text-sm font-semibold">{t('profiles.accessModules.title')}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {t('profiles.accessModules.subtitle')}
+                        </p>
+                      </div>
+                      <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {APP_MODULES.map((mod) => {
+                          const checked = moduleSet.has(mod.id);
+                          return (
+                            <label
+                              key={mod.id}
+                              className="flex items-start gap-2.5 rounded-md border border-border px-3 py-2.5 text-sm hover:bg-muted/50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 rounded border-border"
+                                checked={checked}
+                                disabled={loadingPerms}
+                                onChange={() => toggleAppModule(mod.id)}
+                              />
+                              <span>
+                                <span className="font-medium block">{t(mod.titleKey)}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {t(`profiles.accessModules.hints.${mod.id}`)}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {filteredModules.map((mod) => {
                     const moduleKeys = mod.resources.flatMap((res) =>
                       res.actions.map((a) => permissionKey(res.id, a.key))
                     );
@@ -538,7 +604,8 @@ export default function Perfis() {
                         )}
                       </div>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </div>
             </>

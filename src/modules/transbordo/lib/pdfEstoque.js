@@ -10,6 +10,10 @@ import {
   getEstoqueNotaFiscal,
   getEstoqueNotaFiscalTroca,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  resolveTipoRecebimentoEstoque,
+  getTipoRecebimentoLabel,
+} from "@transbordo/lib/tipoRecebimento";
 
 const M = 14;
 const PW = 210;
@@ -401,7 +405,7 @@ export function generateRelatorioEstoquePDF({
     doc,
     y,
     [
-      ["Tipo", item.embalado ? "Embalado" : "Convencional"],
+      ["Tipo", getTipoRecebimentoLabel(resolveTipoRecebimentoEstoque(item))],
       ["Status WMS", item.status_wms ? "OK" : "NOK"],
       [
         "Origem",

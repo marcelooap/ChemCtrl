@@ -19,10 +19,15 @@ import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
-import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
+import { loteToKg, loteUnidadeEstoque, saldoKgToLitros } from "@transbordo/lib/conversao";
 import { formatMass, formatVolume, formatCurrency } from "@transbordo/lib/format";
 import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, getEstoqueUnidadeEntrada, getEstoqueSaldoEntrada, hydrateEstoqueFiscal } from "@transbordo/lib/estoqueSaldo";
 import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
+import {
+  resolveTipoRecebimentoEstoque,
+  getTipoRecebimentoLabel,
+  getTipoRecebimentoBadgeClass,
+} from "@transbordo/lib/tipoRecebimento";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -32,6 +37,53 @@ const STATUS_OPTIONS = [
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
+/** Converte valor operacional (kg no convencional) para a unidade de entrada. */
+function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
+  const valor = Number(valorOperacional) || 0;
+  if (valor <= 0) return 0;
+
+  if (estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) {
+    return Math.round(valor);
+  }
+
+  const um = getEstoqueUnidadeEntrada(estoqueItem);
+  const dens =
+    parseFloat(
+      String(
+        estoqueItem?.densidade ||
+          estoqueItem?.lotes?.[0]?.densidade ||
+          "0"
+      ).replace(",", ".")
+    ) || 0;
+
+  switch (um) {
+    case "L":
+      return saldoKgToLitros(valor, dens, {
+        ...estoqueItem,
+        quantidade: getEstoqueQuantidade(estoqueItem),
+      });
+    case "gal": {
+      const litros = saldoKgToLitros(valor, dens, estoqueItem);
+      return Math.round(litros / 3.78541);
+    }
+    case "lb":
+      return Math.round(valor / 0.453592);
+    case "kg":
+    default:
+      return Math.round(valor);
+  }
+}
+
+function formatValorEntrada(estoqueItem, valorOperacional) {
+  const valor = valorNaUnidadeEntrada(estoqueItem, valorOperacional);
+  const unidade = getEstoqueUnidadeEntrada(estoqueItem);
+  const u = String(unidade || "kg").toLowerCase();
+  if (u === "l" || u === "lt" || u === "litro" || u === "litros" || u === "gal") {
+    return formatVolume(valor, { empty: "-" });
+  }
+  return formatMass(valor, { empty: "-" });
+}
+
 function formatSaldoEntrada(estoqueItem) {
   const saldo = getEstoqueSaldoEntrada(estoqueItem);
   const unidade = getEstoqueUnidadeEntrada(estoqueItem);
@@ -40,6 +92,23 @@ function formatSaldoEntrada(estoqueItem) {
     return formatVolume(saldo, { empty: "-" });
   }
   return formatMass(saldo, { empty: "-" });
+}
+
+function SaldoBadge({ children, tone }) {
+  const tones = {
+    blue: "bg-sky-100 text-sky-800",
+    red: "bg-red-100 text-red-700",
+    green: "bg-green-100 text-green-700",
+  };
+  return (
+    <span
+      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums ${
+        tones[tone] || tones.blue
+      }`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function Estoque() {
@@ -86,7 +155,7 @@ export default function Estoque() {
         entities.vasilhames.list(),
       ]);
 
-      // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
+      // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
       // Bombonas/tambores/IBC de OP ficam só em Vasilhames
       const estoqueWithSaldo = ests
         .filter((e) => !isEstoqueEmbalagemUnitaria(e))
@@ -478,6 +547,8 @@ export default function Estoque() {
                 <th className="px-5 py-3 font-medium">Produto</th>
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Lote</th>
+                <th className="px-5 py-3 font-medium">Saldo Inicial</th>
+                <th className="px-5 py-3 font-medium">Saldo Expedido</th>
                 <th className="px-5 py-3 font-medium">Saldo Atual</th>
                 <th className="px-5 py-3 font-medium">Unidade</th>
                 <th className="px-5 py-3 font-medium">Status WMS</th>
@@ -489,19 +560,22 @@ export default function Estoque() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={14} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando estoque...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={14} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum registro de estoque encontrado.
                   </td>
                 </tr>
               ) : (
                 filtered.map((e, i) => {
                   const saldoZerado = Number(e.saldo_atual) === 0;
+                  const qtdInicialOp = getEstoqueQuantidade(e);
+                  const saldoAtualOp = Number(e.saldo_atual) || 0;
+                  const saldoExpedidoOp = Math.max(0, qtdInicialOp - saldoAtualOp);
                   return (
                   <tr
                     key={e.id}
@@ -516,21 +590,36 @@ export default function Estoque() {
                       {e.produto_codigo || "-"}
                     </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                          e.embalado
-                            ? "bg-orange-200 text-orange-800"
-                            : "bg-primary/10 text-primary"
-                        }`}
-                      >
-                        {e.embalado ? "Embalado" : "Convencional"}
-                      </span>
+                      {(() => {
+                        const tipo = resolveTipoRecebimentoEstoque(e);
+                        return (
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getTipoRecebimentoBadgeClass(
+                              tipo
+                            )}`}
+                          >
+                            {getTipoRecebimentoLabel(tipo)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-5 py-3 text-foreground">{e.produto_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
-                    <td className="px-5 py-3 text-foreground">
-                      {formatSaldoEntrada(e)}
+                    <td className="px-5 py-3">
+                      <SaldoBadge tone="blue">
+                        {formatValorEntrada(e, qtdInicialOp)}
+                      </SaldoBadge>
+                    </td>
+                    <td className="px-5 py-3">
+                      <SaldoBadge tone="red">
+                        {formatValorEntrada(e, saldoExpedidoOp)}
+                      </SaldoBadge>
+                    </td>
+                    <td className="px-5 py-3">
+                      <SaldoBadge tone="green">
+                        {formatSaldoEntrada(e)}
+                      </SaldoBadge>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {getEstoqueUnidadeEntrada(e)}

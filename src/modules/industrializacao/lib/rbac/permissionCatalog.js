@@ -363,9 +363,10 @@ export const permissionModules = [
         id: 'users',
         labelKey: 'rbac.resources.users',
         icon: 'Users',
-        route: '/usuarios',
+        route: '/painel/usuarios',
         nav: {
-          showInSidebar: true,
+          // Nav moved to Painel module sidebar
+          showInSidebar: false,
           order: 1,
           groupId: 'usersPermissions',
           groupLabelKey: 'sidebar.usersAndPermissions',
@@ -383,9 +384,10 @@ export const permissionModules = [
         id: 'profiles',
         labelKey: 'rbac.resources.profiles',
         icon: 'Shield',
-        route: '/perfis',
+        route: '/painel/perfis',
         nav: {
-          showInSidebar: true,
+          // Nav moved to Painel module sidebar
+          showInSidebar: false,
           order: 2,
           groupId: 'usersPermissions',
           groupLabelKey: 'sidebar.usersAndPermissions',

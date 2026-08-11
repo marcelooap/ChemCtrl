@@ -299,6 +299,14 @@
     "empty": "No profiles found. Apply the RBAC migration in Supabase.",
     "systemBadge": "System",
     "permSummary": "{{granted}} of {{total}} permissions ({{percent}}%)",
+    "accessModules": {
+      "title": "Access Modules",
+      "subtitle": "Choose which application modules this profile can open",
+      "hints": {
+        "industrializacao": "Production, inventory, recipes, and quality",
+        "transbordo": "Bulk receiving, filtration, and transfer"
+      }
+    },
     "columns": {
       "name": "Profile",
       "users": "Users",
@@ -419,6 +427,26 @@
       "rpcSchema": "Login schema error. Run migration_rbac_login_fix.sql in Supabase and try again."
     }
   },
+  "moduleSelection": {
+    "title": "Select a module",
+    "subtitle": "Choose the environment you want to access.",
+    "logout": "Sign out",
+    "openModule": "Open",
+    "accessGranted": "Access granted",
+    "navSelect": "Select module",
+    "emptyTitle": "No modules available",
+    "emptyDescription": "Your profile has no module access. Contact the administrator.",
+    "modules": {
+      "industrializacao": {
+        "title": "Industrialization",
+        "description": "Turn raw materials into finished products with recipe, production, filling, and inventory control."
+      },
+      "transbordo": {
+        "title": "Transshipment",
+        "description": "Control all bulk product movement, from receiving to transfers between tanks and destinations."
+      }
+    }
+  },
   "systemSelector": {
     "brand": "ChemCtrl",
     "headerSubtitle": "Applications Portal",
@@ -467,7 +495,14 @@
       "home": "Home",
       "dashboard": "Dashboard",
       "comercial": "Commercial",
-      "logistica": "Logistics"
+      "reservarMaterial": "Reserve Material",
+      "solicitacoesSaida": "Outbound Requests",
+      "composicaoCarga": "Load Composition",
+      "agendamentos": "Schedules",
+      "logistica": "Logistics",
+      "usersAndPermissions": "Users and Permissions",
+      "users": "Users",
+      "profiles": "Profiles and Permissions"
     },
     "modules": {
       "switch": "Switch module",
@@ -477,17 +512,18 @@
     },
     "home": {
       "title": "Panel",
-      "subtitle": "Operations overview",
-      "preparedForData": "Area prepared for consolidated data"
+      "subtitle": "Access ChemCtrl modules",
+      "preparedForData": "Area prepared for consolidated data",
+      "openModule": "Open module"
     },
     "areas": {
       "industrializacao": {
         "title": "Industrialization",
-        "description": "Production, inventory, recipes, and quality"
+        "description": "End-to-end management of chemical industrialization processes, from scheduling and production through raw materials, recipes, filling, and production order tracking."
       },
       "transbordo": {
         "title": "Transshipment",
-        "description": "Inbound, outbound, filtration, and tankage"
+        "description": "Management of bulk chemical receiving, storage, and transfer operations, including filtration control and filled packaging."
       },
       "comercial": {
         "title": "Commercial",
@@ -534,6 +570,80 @@
         "sales": "Sales",
         "products": "Products",
         "status": "Commercial status"
+      },
+      "sections": {
+        "reservarMaterial": {
+          "title": "Reserve Material",
+          "subtitle": "Material reservation for commercial operations",
+          "emptyTitle": "Reserve Material",
+          "emptyDescription": "Initial structure prepared for material reservations."
+        },
+        "solicitacoesSaida": {
+          "title": "Outbound Requests",
+          "subtitle": "Management of outbound material requests",
+          "emptyTitle": "Outbound Requests",
+          "emptyDescription": "Initial structure prepared for outbound requests."
+        },
+        "composicaoCarga": {
+          "title": "Load Composition",
+          "subtitle": "Load assembly and composition",
+          "emptyTitle": "Load Composition",
+          "emptyDescription": "Initial structure prepared for load composition."
+        },
+        "agendamentos": {
+          "title": "Schedules",
+          "subtitle": "Commercial scheduling and appointments",
+          "emptyTitle": "Schedules",
+          "emptyDescription": "Initial structure prepared for commercial schedules."
+        }
+      },
+      "reservarMaterial": {
+        "subtitle": "Transshipment stock aggregated by lot, with commercial reservation control",
+        "tableTitle": "Stock by lot",
+        "searchPlaceholder": "Search client, code, product or lot...",
+        "filterClient": "All clients",
+        "allClients": "All clients",
+        "empty": "No stock found for the selected filter.",
+        "editTitle": "Edit reserved balance",
+        "viewTitle": "Balance and reservation details",
+        "productSummary": "Product summary",
+        "reservationsList": "Reservation history",
+        "noReservations": "No reservations recorded for this balance.",
+        "reservedQty": "Reserved quantity",
+        "finalPreview": "Expected final balance: {{value}} {{unidade}}",
+        "observation": "Note",
+        "observationPlaceholder": "Reason for reservation or adjustment (optional)",
+        "saving": "Saving...",
+        "saveSuccess": "Reserved balance updated",
+        "loadErrorTitle": "Failed to load stock",
+        "loadErrorDescription": "Check ChemFlow connectivity and whether t_material_reservas was created.",
+        "columns": {
+          "cliente": "Client",
+          "cod": "Code",
+          "produto": "Product",
+          "lote": "Lot",
+          "saldoAtual": "Current balance",
+          "saldoReservado": "Reserved balance",
+          "saldoFinal": "Final balance",
+          "unidade": "Unit"
+        },
+        "history": {
+          "date": "Date",
+          "user": "Reserved by",
+          "qty": "Quantity",
+          "status": "Status",
+          "removedBy": "Removed by",
+          "notes": "Note"
+        },
+        "status": {
+          "active": "Active",
+          "removed": "Removed"
+        },
+        "errors": {
+          "negative": "Quantity cannot be negative.",
+          "exceedsBalance": "Cannot reserve more than {{max}} {{unidade}}.",
+          "saveFailed": "Could not save the reservation."
+        }
       }
     },
     "logistica": {
@@ -2031,6 +2141,7 @@
   "rawMaterialStock": {
     "title": "Stock Control",
     "subtitle": "Raw materials · {{count}} item(s)",
+    "fiscalSubtitle": "Fiscal movements · {{count}} record(s)",
     "printLabel": "Print Label",
     "exportExcel": "Export Excel",
     "export": {
@@ -2045,16 +2156,27 @@
         "expiry": "EXPIRY"
       }
     },
-    "movement": "Stock Movement",
+    "movement": "New Movement",
     "newItem": "New Item",
     "editItem": "Edit Item · {{id}}",
     "newItemReg": "New Item · Reg. {{reg}}",
     "searchPlaceholder": "Search by code, name, client or lot...",
+    "fiscalSearchPlaceholder": "Search by reg., code, product, client or lot...",
+    "views": {
+      "stock": "Stock",
+      "fiscalMovement": "Fiscal Movement"
+    },
+    "fiscalTable": {
+      "product": "Product",
+      "unit": "Unit",
+      "type": "Type"
+    },
     "filters": {
       "all": "All",
       "withBalance": "With balance",
       "withoutBalance": "No balance",
-      "allClients": "All clients"
+      "allClients": "All clients",
+      "allTypes": "All types"
     },
     "status": {
       "expired": "Expired",
@@ -2084,7 +2206,9 @@
       "totalStock": "Total stock quantity",
       "mixedUnits": "(mixed units)",
       "packagingQty": "Packaging quantity",
-      "totalCost": "Total RM cost"
+      "totalCost": "Total RM cost",
+      "movementsShown": "Movements shown",
+      "totalMoved": "Total quantity moved"
     },
     "form": {
       "entryDate": "Entry Date",
@@ -2150,9 +2274,10 @@
       "tankConferenceExceededDetail": "Allocated {{allocated}} {{unit}} — initial stock {{initialStock}} {{unit}}. Reduce tank volume/mass."
     },
     "movementDialog": {
-      "title": "Raw Material Stock Movement",
+      "title": "New Movement",
       "rawMaterial": "Raw Material",
       "selectMp": "Select raw material...",
+      "searchMp": "Type the RM name or code...",
       "selectLot": "Select lot...",
       "selectEntry": "Select record...",
       "entryRecord": "Entry Record",
@@ -2199,6 +2324,18 @@
     "destinations": {
       "processLoss": "Process Loss",
       "unusedReturn": "Unused RM Return"
+    },
+    "fiscalView": {
+      "title": "Fiscal Movement",
+      "before": "before",
+      "after": "after",
+      "downloadPdf": "Download PDF"
+    },
+    "fiscalDelete": {
+      "title": "Delete Fiscal Movement",
+      "message": "Are you sure you want to delete the \"{{type}}\" movement of {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nThe quantity will be automatically restored to the stock balance.",
+      "confirm": "Yes, delete and restore",
+      "restored": "{{qty}} {{unit}} restored to {{entryId}}"
     }
   },
   "pwa": {

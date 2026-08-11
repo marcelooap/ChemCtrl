@@ -198,7 +198,9 @@ function InfoItem({ label, value, highlight }) {
   );
 }
 
-export default function SaidaView() {
+const DEFAULT_BASE_PATH = "/chemflow/saida";
+
+export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -367,7 +369,7 @@ export default function SaidaView() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/chemflow/saida")}
+          onClick={() => navigate(basePath)}
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -384,7 +386,7 @@ export default function SaidaView() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/chemflow/saida")}
+            onClick={() => navigate(basePath)}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

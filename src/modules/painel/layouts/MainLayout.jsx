@@ -1,27 +1,85 @@
 import { useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, LayoutDashboard, Briefcase, Truck } from 'lucide-react';
+import {
+  Home,
+  LayoutDashboard,
+  Briefcase,
+  Truck,
+  Users,
+  Shield,
+  PackagePlus,
+  ClipboardList,
+  Layers,
+  Calendar,
+} from 'lucide-react';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { isAdminUser } from '@industrializacao/lib/permissions';
 import AppShell from '@shared/components/layout/AppShell';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
-import { ModulesSwitcher } from '@painel/components/ModulesSwitcher';
 
 /**
- * Layout do Painel — reutiliza AppShell + ModuleSidebar compartilhados.
- * O gate de acesso (AdminRoute) fica em App.jsx, não neste layout,
- * para permitir troca futura por permissões específicas sem reescrever o módulo.
+ * Layout do Painel — hub de módulos para usuários internos.
+ * Itens administrativos (dashboard, usuários, etc.) só para Administrador.
+ * Usuários externos não acessam o Painel.
  */
 export default function MainLayout() {
   const { t } = useTranslation();
+  const { user } = useInternalAuth();
+  const admin = isAdminUser(user);
 
-  const items = useMemo(
-    () => [
+  const items = useMemo(() => {
+    const base = [
       { path: '/painel/home', label: t('painel.nav.home'), icon: Home, end: true },
+    ];
+    if (!admin) return base;
+
+    return [
+      ...base,
       { path: '/painel/dashboard', label: t('painel.nav.dashboard'), icon: LayoutDashboard },
-      { path: '/painel/comercial', label: t('painel.nav.comercial'), icon: Briefcase },
+      {
+        groupId: 'comercial',
+        label: t('painel.nav.comercial'),
+        icon: Briefcase,
+        children: [
+          {
+            path: '/painel/comercial/reservar-material',
+            label: t('painel.nav.reservarMaterial'),
+            icon: PackagePlus,
+          },
+          {
+            path: '/painel/comercial/solicitacoes-saida',
+            label: t('painel.nav.solicitacoesSaida'),
+            icon: ClipboardList,
+          },
+          {
+            path: '/painel/comercial/composicao-carga',
+            label: t('painel.nav.composicaoCarga'),
+            icon: Layers,
+          },
+          {
+            path: '/painel/comercial/agendamentos',
+            label: t('painel.nav.agendamentos'),
+            icon: Calendar,
+          },
+        ],
+      },
       { path: '/painel/logistica', label: t('painel.nav.logistica'), icon: Truck },
-    ],
-    [t]
-  );
+      {
+        groupId: 'usersPermissions',
+        label: t('painel.nav.usersAndPermissions'),
+        icon: Users,
+        children: [
+          { path: '/painel/usuarios', label: t('painel.nav.users'), icon: Users },
+          { path: '/painel/perfis', label: t('painel.nav.profiles'), icon: Shield },
+        ],
+      },
+    ];
+  }, [t, admin]);
+
+  if (user?.tipo === 'externo') {
+    return <Navigate to="/tela-clientes" replace />;
+  }
 
   return (
     <AppShell
@@ -34,12 +92,9 @@ export default function MainLayout() {
           moduleName={t('sidebar.moduleName')}
           moduleSubtitle={t('painel.subtitle')}
           items={items}
-          showModulesLink
+          showModulesLink={false}
         />
       )}
-      topBarProps={{
-        topBarActions: <ModulesSwitcher />,
-      }}
     />
   );
 }
