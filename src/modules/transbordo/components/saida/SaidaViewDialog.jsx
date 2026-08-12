@@ -20,9 +20,8 @@ import {
   TIPO_CONVENCIONAL,
   TIPO_IND_VASILHAME,
   TIPO_IND_RETORNO_MP,
-  resolveItemOrigem,
-  origemLabel,
   tipoItemLabel,
+  formatSaidaItemInformacoes,
 } from "@transbordo/lib/saidaOrigem";
 
 const formatDate = (d) => {
@@ -38,17 +37,6 @@ function InfoItem({ label, value }) {
       <p className="text-sm font-medium text-foreground">{value || "—"}</p>
     </div>
   );
-}
-
-function origemItem(item) {
-  const modulo = origemLabel(resolveItemOrigem(item));
-  if (item.tipo === TIPO_EMBALADO) return `${modulo} · Armazenagem`;
-  if (item.tipo === TIPO_IND_RETORNO_MP) {
-    return `${modulo} · ${item.lote || "MP"}`;
-  }
-  const placa = item.vasilhame_placa || "—";
-  const barril = item.vasilhame_barril || "—";
-  return `${modulo} · ${placa} - ${barril}`;
 }
 
 function formatQtdItem(n, unidade) {
@@ -88,6 +76,7 @@ export default function SaidaViewDialog({
   vasilhames = [],
   entradas = [],
   variant = "default",
+  showRelatorioFiscal = true,
 }) {
   const { t } = useTranslation();
   if (!saida) return null;
@@ -99,10 +88,11 @@ export default function SaidaViewDialog({
     saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
       ? "Validado"
       : "Pendente";
+  const showRelatorio = isAgendamento || showRelatorioFiscal;
 
   const handlePrintRelatorio = () => {
     if (isAgendamento) {
-      printSaidaAgendamento(saida, { t });
+      printSaidaAgendamento(saida, { t, vasilhames });
       return;
     }
     generateRelatorioFiscalSaidaPDF(saida, { vasilhames, entradas });
@@ -146,7 +136,7 @@ export default function SaidaViewDialog({
                 <th className="px-3 py-2.5 font-medium">Código</th>
                 <th className="px-3 py-2.5 font-medium">Produto</th>
                 <th className="px-3 py-2.5 font-medium">Tipo</th>
-                <th className="px-3 py-2.5 font-medium">Origem</th>
+                <th className="px-3 py-2.5 font-medium">Informações</th>
                 <th className="px-3 py-2.5 font-medium">Qtd. Solicitada</th>
                 <th className="px-3 py-2.5 font-medium">
                   {isAgendamento
@@ -167,7 +157,11 @@ export default function SaidaViewDialog({
                   </td>
                 </tr>
               ) : (
-                itens.map((item, i) => (
+                itens.map((item, i) => {
+                  const vasilhame = item.vasilhame_id
+                    ? vasilhames.find((v) => v.id === item.vasilhame_id)
+                    : null;
+                  return (
                   <tr
                     key={i}
                     className={`border-b border-border last:border-0 ${
@@ -188,7 +182,11 @@ export default function SaidaViewDialog({
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                      {origemItem(item)}
+                      {formatSaidaItemInformacoes(item, {
+                        vasilhame,
+                        includeLote: true,
+                        context: isAgendamento ? "agendamento" : "default",
+                      })}
                     </td>
                     <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">
                       {qtdSolicitada(item)}
@@ -212,7 +210,8 @@ export default function SaidaViewDialog({
                       </td>
                     ) : null}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -232,17 +231,19 @@ export default function SaidaViewDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={handlePrintRelatorio}
-          >
-            <FileText className="w-4 h-4" />
-            {isAgendamento
-              ? t("painel.comercial.agendamentos.relatorioSaida")
-              : "Relatório Fiscal"}
-          </Button>
+          {showRelatorio ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={handlePrintRelatorio}
+            >
+              <FileText className="w-4 h-4" />
+              {isAgendamento
+                ? t("painel.comercial.agendamentos.relatorioSaida")
+                : "Relatório Fiscal"}
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={onClose}>
             Fechar
           </Button>

@@ -5,7 +5,8 @@ const BASE_PATH = '/painel/comercial/solicitacoes-saida';
 
 /**
  * Solicitações de Saída no Painel Comercial.
- * Reutiliza a tela completa de Saídas do ChemFlow (listagem, validação, CRUD).
+ * Reutiliza a listagem de Saídas do ChemFlow com Status de expedição
+ * (Expedido / Aguardando) baseado no carregamento concluído.
  */
 export default function SolicitacoesSaida() {
   const { t } = useTranslation();
@@ -14,6 +15,7 @@ export default function SolicitacoesSaida() {
     <Saida
       basePath={BASE_PATH}
       title={t('painel.comercial.sections.solicitacoesSaida.title')}
+      statusMode="expedicao"
     />
   );
 }

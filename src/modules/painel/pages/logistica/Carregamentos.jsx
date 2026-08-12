@@ -140,15 +140,15 @@ export default function LogisticaCarregamentos() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex h-full min-h-0 items-center justify-center">
         <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-5">
-      <div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0">
         <h1 className="text-2xl font-bold text-foreground">
           {t('painel.logistica.sections.carregamentos.title')}
         </h1>
@@ -157,8 +157,8 @@ export default function LogisticaCarregamentos() {
         </p>
       </div>
 
-      <div className="bg-card rounded-xl border border-border shadow-sm">
-        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+      <div className="flex-1 min-h-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
+        <div className="shrink-0 px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">
               {t('painel.logistica.carregamentos.tableTitle')}
@@ -180,10 +180,10 @@ export default function LogisticaCarregamentos() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0 z-10">
                 <th className="px-4 py-3 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.saida')}
                 </th>
@@ -193,25 +193,25 @@ export default function LogisticaCarregamentos() {
                 <th className="px-4 py-3 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.produto')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.transportadora')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.motorista')}
                 </th>
                 <th className="px-4 py-3 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.placa')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.horarioAgendado')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.horarioCarregamento')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.status')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.operador')}
                 </th>
                 <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">
@@ -244,26 +244,26 @@ export default function LogisticaCarregamentos() {
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {row.produtosLabel}
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[160px] truncate">
+                    <td className="px-4 py-3 text-foreground max-w-[160px] truncate text-center">
                       {row.transportadora || '—'}
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate">
+                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate text-center">
                       {row.motorista || '—'}
                     </td>
                     <td className="px-4 py-3 font-mono text-foreground whitespace-nowrap">
                       {row.placa || '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-center">
                       <span className="block tabular-nums">{horarioLabel(row.horario)}</span>
                       <span className="block text-[11px]">{formatDateBR(row.data)}</span>
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-foreground whitespace-nowrap">
+                    <td className="px-4 py-3 tabular-nums text-foreground whitespace-nowrap text-center">
                       {row.hora_carregamento || '—'}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-3 whitespace-nowrap text-center">
                       <PontualidadeBadge status={row.pontualidade} t={t} />
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate">
+                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate text-center">
                       {row.operador_nome || '—'}
                     </td>
                     <td className="px-4 py-3 text-right">

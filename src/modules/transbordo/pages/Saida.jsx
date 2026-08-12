@@ -28,11 +28,25 @@ import {
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
 } from "@transbordo/lib/saidaOrigem";
+import {
+  isSaidaExpedida,
+  listSaidaIdsExpedidas,
+} from "@transbordo/lib/saidaExpedicao";
+import {
+  findAgendamentoDisplayBySaida,
+  formatSlotRef,
+} from "@painel/lib/agendamentosCarregamento";
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
   { value: "aguardando", label: "Pendente" },
   { value: "enviado_fiscal", label: "Validado" },
+];
+
+const STATUS_OPTIONS_EXPEDICAO = [
+  { value: "all", label: "Todos" },
+  { value: "aguardando", label: "Aguardando" },
+  { value: "expedido", label: "Expedido" },
 ];
 
 const DEFAULT_BASE_PATH = "/chemflow/saida";
@@ -41,18 +55,26 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * Tela de listagem de saídas.
  * `basePath` / `title` permitem reutilizar a mesma UI no Painel / Industrialização.
  * `onlyIndustrializacao` limita à saídas com itens do módulo Industrialização.
+ * `statusMode`: "validacao" (ChemFlow) | "expedicao" (Painel Comercial — Expedido/Aguardando).
  */
 export default function Saida({
   basePath = DEFAULT_BASE_PATH,
   title = "Saídas",
   onlyIndustrializacao = false,
+  statusMode = "validacao",
 } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const isExpedicao = statusMode === "expedicao";
+  const statusOptions = isExpedicao
+    ? STATUS_OPTIONS_EXPEDICAO
+    : STATUS_OPTIONS_VALIDACAO;
   const [saidas, setSaidas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [expedidasIds, setExpedidasIds] = useState(() => new Set());
+  const [agendamentos, setAgendamentos] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
@@ -62,15 +84,20 @@ export default function Saida({
   const [fiscalBusyId, setFiscalBusyId] = useState(null);
   const [fiscalError, setFiscalError] = useState("");
   const [loading, setLoading] = useState(true);
+  const tableColSpan = isExpedicao ? 11 : 10;
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [saics, cliens, ents, vascs] = await Promise.all([
+      const [saics, cliens, ents, vascs, expedidas, agends] = await Promise.all([
         entities.saidas.list("-created_date"),
         entities.clientes.list(),
         entities.estoque.list(),
         entities.vasilhames.list(),
+        isExpedicao ? listSaidaIdsExpedidas() : Promise.resolve(new Set()),
+        isExpedicao
+          ? entities.agendamentosCarregamento.list("-created_at").catch(() => [])
+          : Promise.resolve([]),
       ]);
       const list = onlyIndustrializacao
         ? (saics || []).filter(saidaHasIndustrializacaoItems)
@@ -79,15 +106,22 @@ export default function Saida({
       setClientes(cliens);
       setEntradas(ents);
       setVasilhames(vascs);
+      setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
+      setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {
       setSaidas([]);
+      setExpedidasIds(new Set());
+      setAgendamentos([]);
     }
     setLoading(false);
   };
 
   useEffect(() => {
     loadData();
-  }, [onlyIndustrializacao]);
+  }, [onlyIndustrializacao, isExpedicao]);
+
+  const getExpedicaoStatus = (saida) =>
+    isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
 
   const filtered = saidas.filter((s) => {
     const q = search.toLowerCase();
@@ -96,15 +130,23 @@ export default function Saida({
       s.codigo?.toLowerCase().includes(q) ||
       s.cliente_nome?.toLowerCase().includes(q);
 
-    const matchStatus =
-      !statusFilter ||
-      statusFilter === "Todos" ||
-      ((statusFilter === "Pendente" || statusFilter === "Aguardando") &&
-        s.status === "aguardando") ||
-      ((statusFilter === "Validado" ||
-        statusFilter === "Enviado" ||
-        statusFilter === "Enviado ao Fiscal") &&
-        s.status === "enviado_fiscal");
+    let matchStatus = true;
+    if (statusFilter && statusFilter !== "Todos") {
+      if (isExpedicao) {
+        const status = getExpedicaoStatus(s);
+        matchStatus =
+          (statusFilter === "Aguardando" && status === "aguardando") ||
+          (statusFilter === "Expedido" && status === "expedido");
+      } else {
+        matchStatus =
+          ((statusFilter === "Pendente" || statusFilter === "Aguardando") &&
+            s.status === "aguardando") ||
+          ((statusFilter === "Validado" ||
+            statusFilter === "Enviado" ||
+            statusFilter === "Enviado ao Fiscal") &&
+            s.status === "enviado_fiscal");
+      }
+    }
 
     const matchCliente =
       !clienteFilter ||
@@ -251,66 +293,68 @@ export default function Saida({
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
 
   return (
-    <div className="space-y-6">
-      {/* Header + Action Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {saidas.length} registro(s) cadastrado(s)
-          </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-4">
+        {/* Header + Action Bar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {saidas.length} registro(s) cadastrado(s)
+            </p>
+          </div>
+          <Button
+            onClick={() => navigate(`${basePath}/novo`)}
+            className="bg-primary hover:bg-primary/90 gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nova Saída
+          </Button>
         </div>
-        <Button
-          onClick={() => navigate(`${basePath}/novo`)}
-          className="bg-primary hover:bg-primary/90 gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Nova Saída
-        </Button>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por código ou cliente..."
-            className="pl-10 bg-card"
-          />
+        {/* Filters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por código ou cliente..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <div className="w-48">
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(label) => setStatusFilter(label)}
+              options={statusOptions}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder="Status"
+            />
+          </div>
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+            />
+          </div>
         </div>
-        <div className="w-48">
-          <SearchableSelect
-            value={statusFilter}
-            onChange={(label) => setStatusFilter(label)}
-            options={STATUS_OPTIONS}
-            getOptionLabel={(o) => o.label}
-            getOptionValue={(o) => o.value}
-            placeholder="Status"
-          />
-        </div>
-        <div className="w-56">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-          />
-        </div>
-      </div>
 
-      {fiscalError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-          {fiscalError}
-        </div>
-      )}
+        {!isExpedicao && fiscalError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {fiscalError}
+          </div>
+        )}
+      </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-260px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
@@ -322,25 +366,43 @@ export default function Saida({
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Produtos</th>
                 <th className="px-5 py-3 font-medium">Qtd. Total (kg)</th>
-                <th className="px-5 py-3 font-medium">Validação</th>
+                {isExpedicao && (
+                  <th className="px-5 py-3 font-medium">Agendamento</th>
+                )}
+                <th className="px-5 py-3 font-medium">
+                  {isExpedicao ? "Carregamento" : "Validação"}
+                </th>
                 <th className="px-5 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando saídas...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={tableColSpan} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhuma saída encontrada.
                   </td>
                 </tr>
               ) : (
-                filtered.map((s, i) => (
+                filtered.map((s, i) => {
+                  const expedicaoStatus = isExpedicao
+                    ? getExpedicaoStatus(s)
+                    : null;
+                  const agendamento = isExpedicao
+                    ? findAgendamentoDisplayBySaida(agendamentos, s.id)
+                    : null;
+                  const isValidated =
+                    s.enviado_ao_fiscal || s.status === "enviado_fiscal";
+                  const hideDias = isExpedicao
+                    ? expedicaoStatus === "expedido"
+                    : isValidated;
+
+                  return (
                   <tr
                     key={s.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
@@ -360,9 +422,7 @@ export default function Saida({
                       {formatDate(s.data_programada)}
                     </td>
                     <td className="px-5 py-3">
-                      {s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                        ? "-"
-                        : renderDias(s.data_programada)}
+                      {hideDias ? "-" : renderDias(s.data_programada)}
                     </td>
                     <td className="px-5 py-3 text-foreground">{s.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">
@@ -371,33 +431,60 @@ export default function Saida({
                     <td className="px-5 py-3 font-medium text-foreground">
                       {formatMass(s.quantidade_total, { empty: "-" })}
                     </td>
-                    <td className="px-5 py-3">
-                      <button
-                        type="button"
-                        disabled={fiscalBusyId === s.id}
-                        onClick={() => requestFiscalToggle(s)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border cursor-pointer shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-[0.97] ${
-                          s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                            ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100 hover:border-green-400 hover:shadow-md focus-visible:ring-green-400"
-                            : "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 hover:border-amber-400 hover:shadow-md focus-visible:ring-amber-400"
-                        }`}
-                        title={
-                          s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                            ? "Clique para retornar a Pendente"
-                            : "Clique para marcar como Validado"
-                        }
-                      >
-                        {fiscalBusyId === s.id ? (
-                          <RefreshCw className="w-3 h-3 animate-spin" />
+                    {isExpedicao && (
+                      <td className="px-5 py-3">
+                        {agendamento ? (
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap bg-green-50 text-green-700 border-green-300">
+                            {formatSlotRef(agendamento)}
+                          </span>
                         ) : (
-                          <RefreshCw className="w-3 h-3 opacity-70" />
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-300">
+                            Pendente
+                          </span>
                         )}
-                        {fiscalBusyId === s.id
-                          ? "..."
-                          : s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                            ? "Validado"
-                            : "Pendente"}
-                      </button>
+                      </td>
+                    )}
+                    <td className="px-5 py-3">
+                      {isExpedicao ? (
+                        <span
+                          className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                            expedicaoStatus === "expedido"
+                              ? "bg-green-50 text-green-700 border-green-300"
+                              : "bg-amber-50 text-amber-700 border-amber-300"
+                          }`}
+                        >
+                          {expedicaoStatus === "expedido"
+                            ? "Expedido"
+                            : "Aguardando"}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={fiscalBusyId === s.id}
+                          onClick={() => requestFiscalToggle(s)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border cursor-pointer shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-[0.97] ${
+                            isValidated
+                              ? "bg-green-50 text-green-700 border-green-300 hover:bg-green-100 hover:border-green-400 hover:shadow-md focus-visible:ring-green-400"
+                              : "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 hover:border-amber-400 hover:shadow-md focus-visible:ring-amber-400"
+                          }`}
+                          title={
+                            isValidated
+                              ? "Clique para retornar a Pendente"
+                              : "Clique para marcar como Validado"
+                          }
+                        >
+                          {fiscalBusyId === s.id ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3 opacity-70" />
+                          )}
+                          {fiscalBusyId === s.id
+                            ? "..."
+                            : isValidated
+                              ? "Validado"
+                              : "Pendente"}
+                        </button>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
@@ -425,7 +512,8 @@ export default function Saida({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -456,44 +544,47 @@ export default function Saida({
         saida={viewSaida}
         vasilhames={vasilhames}
         entradas={entradas}
+        showRelatorioFiscal={!isExpedicao}
       />
 
-      {/* Validação Confirmation */}
-      <AlertDialog
-        open={!!fiscalConfirm}
-        onOpenChange={(v) => !v && setFiscalConfirm(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {fiscalConfirm?.enviar
-                ? "Confirmar validação"
-                : "Reverter validação"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {fiscalConfirm?.enviar
-                ? "Confirma a validação desta saída?"
-                : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmFiscalToggle();
-              }}
-              className={
-                fiscalConfirm?.enviar
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-amber-600 hover:bg-amber-700"
-              }
-            >
-              Confirmar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Validação Confirmation (ChemFlow / Industrialização) */}
+      {!isExpedicao && (
+        <AlertDialog
+          open={!!fiscalConfirm}
+          onOpenChange={(v) => !v && setFiscalConfirm(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {fiscalConfirm?.enviar
+                  ? "Confirmar validação"
+                  : "Reverter validação"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {fiscalConfirm?.enviar
+                  ? "Confirma a validação desta saída?"
+                  : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  confirmFiscalToggle();
+                }}
+                className={
+                  fiscalConfirm?.enviar
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-amber-600 hover:bg-amber-700"
+                }
+              >
+                Confirmar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>

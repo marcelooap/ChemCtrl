@@ -161,7 +161,13 @@ export default function AgendamentoSlotModal({
         ) : null}
 
         <p className="text-xs text-muted-foreground">
-          {t('painel.comercial.agendamentos.modal.multiHint', { count: selectedIds.size })}
+          {slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO
+            ? t('painel.comercial.agendamentos.modal.encaixeMultiHint', {
+                count: selectedIds.size,
+              })
+            : t('painel.comercial.agendamentos.modal.multiHint', {
+                count: selectedIds.size,
+              })}
         </p>
 
         <div className="relative">
@@ -267,7 +273,12 @@ export default function AgendamentoSlotModal({
                   onClick={handleRelease}
                   disabled={saving}
                 >
-                  {t('painel.comercial.agendamentos.modal.release')}
+                  {t(
+                    occupied &&
+                      (slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO)
+                      ? 'painel.comercial.agendamentos.modal.releaseCarregamento'
+                      : 'painel.comercial.agendamentos.modal.release'
+                  )}
                 </Button>
               </Can>
             ) : null}

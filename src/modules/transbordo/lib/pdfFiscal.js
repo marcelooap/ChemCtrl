@@ -6,6 +6,7 @@ import {
   getLoteEnvaseDate,
   seedComposicaoFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
+import { formatSaidaItemInformacoes } from "@transbordo/lib/saidaOrigem";
 
 const M = 14;
 const PW = 210;
@@ -464,9 +465,6 @@ export function generateRelatorioFiscalPDF(vasilhame) {
 function buildSaidaConvencionalLoteRows(item, vasilhame) {
   const codigo = item.produto_codigo || vasilhame?.produto_codigo || "-";
   const produto = item.produto_nome || vasilhame?.produto_nome || "-";
-  const embalagem = `${item.vasilhame_placa || vasilhame?.placa || "—"} - ${
-    item.vasilhame_barril || vasilhame?.barril || "—"
-  }`;
   const tara = roundMass(vasilhame?.tara ?? item.tara ?? 0);
   const volumeAlvo = roundVolume(item.volume_solicitado || 0);
 
@@ -503,12 +501,16 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
 
   const composicao = buildComposicaoRows(source).filter((c) => (c.volume || 0) > 0);
   if (composicao.length === 0) {
+    const lote = item.lote || vasilhame?.lote || "-";
     return [
       {
         codigo,
         produto,
-        embalagem,
-        lote: item.lote || "-",
+        informacoes: formatSaidaItemInformacoes(
+          { ...item, lote },
+          { vasilhame, includeLote: false, context: "fiscal" }
+        ),
+        lote,
         volume: volumeAlvo,
         massa: roundMass(item.peso_liquido || item.quantidade_solicitada || 0),
         tara,
@@ -522,22 +524,29 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
       ? volumeAlvo / totalVol
       : 1;
 
-  return composicao.map((c) => ({
-    codigo,
-    produto,
-    embalagem,
-    lote: c.lote || "-",
-    volume: roundVolume((c.volume || 0) * scale),
-    massa: roundMass((c.massa || 0) * scale),
-    tara,
-  }));
+  return composicao.map((c) => {
+    const lote = c.lote || item.lote || "-";
+    return {
+      codigo,
+      produto,
+      informacoes: formatSaidaItemInformacoes(
+        { ...item, lote },
+        { vasilhame, includeLote: false, context: "fiscal" }
+      ),
+      lote,
+      volume: roundVolume((c.volume || 0) * scale),
+      massa: roundMass((c.massa || 0) * scale),
+      tara,
+    };
+  });
 }
 
 function buildSaidaEmbaladoRow(item, entrada) {
+  const loteRaw = item.lote || entrada?.lote || "";
   return {
     codigo: item.produto_codigo || entrada?.produto_codigo || "-",
     produto: item.produto_nome || entrada?.produto_nome || "-",
-    lote: item.lote || entrada?.lote || "-",
+    lote: loteRaw ? `Lote: ${loteRaw}` : "—",
     qtdEmbalagens: item.quantidade_embalagens ?? 0,
     total: roundMass(item.quantidade_solicitada || 0),
     unidade: entrada?.unidade_medida || item.unidade_medida || "kg",
@@ -662,7 +671,7 @@ export function generateRelatorioFiscalSaidaPDF(
     const headers = [
       "CÓDIGO",
       "PRODUTO",
-      "EMBALAGEM",
+      "INFORMAÇÕES",
       "LOTE",
       "VOLUME (L)",
       "MASSA (KG)",
@@ -671,7 +680,7 @@ export function generateRelatorioFiscalSaidaPDF(
     const rows = convencionalRows.map((r) => [
       r.codigo || "-",
       r.produto || "-",
-      r.embalagem || "-",
+      r.informacoes || r.embalagem || "-",
       r.lote || "-",
       fmtNum(r.volume, 0),
       fmtNum(r.massa, 0),
@@ -693,7 +702,7 @@ export function generateRelatorioFiscalSaidaPDF(
       headers,
       rows,
       totalsRow,
-      [16, 30, 28, 18, 18, 18, 16]
+      [16, 28, 36, 18, 18, 18, 16]
     );
   }
 

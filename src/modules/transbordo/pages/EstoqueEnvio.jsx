@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Package, Box as BoxIcon, Cylinder, Search, FileText } from "lucide-react";
 import { entities } from "@transbordo/services/entities";
+import { base44 } from "@industrializacao/api/base44Client";
 import { Input } from "@shared/components/ui/input";
 import { Button } from "@shared/components/ui/button";
 import { useToast } from "@shared/components/ui/use-toast";
@@ -17,12 +18,18 @@ import {
 } from "@transbordo/lib/estoqueSaldo";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
-  computeTankaSaldo,
   computeTankaLotesDisponiveis,
   buildTankaDetalhe,
 } from "@transbordo/lib/tankaVolume";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
-import { formatMass, formatVolume, roundVolume } from "@transbordo/lib/format";
+import {
+  mergeTankasUnificadas,
+  buildIndTankaDetalhe,
+} from "@transbordo/lib/tankaUnificada";
+import {
+  sumReservadoForProdutoCliente,
+} from "@painel/lib/materialReservas";
+import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
+import { formatMass, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 
 const PRODUCT_COLORS = [
@@ -32,9 +39,96 @@ const PRODUCT_COLORS = [
   "#BA68C8", "#7986CB", "#4DB6AC", "#F06292", "#81C784",
 ];
 
-function matchesCliente(item, clienteFilter) {
+function matchesCliente(item, clienteFilter, clientes = []) {
   if (!clienteFilter || clienteFilter === "Todos os clientes") return true;
-  return (item?.cliente_nome || "") === clienteFilter;
+
+  const norm = (v) =>
+    String(v || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const filterNome = String(clienteFilter).trim();
+  const filterKey = norm(filterNome);
+  const itemNome = String(item?.cliente_nome || "").trim();
+  if (itemNome && norm(itemNome) === filterKey) return true;
+
+  const selected = (clientes || []).find((c) => norm(c?.nome) === filterKey);
+  if (!selected) return norm(itemNome) === filterKey;
+
+  const selectedId = selected.id != null ? String(selected.id) : "";
+  const itemId = item?.cliente_id != null ? String(item.cliente_id) : "";
+  if (selectedId && itemId && selectedId === itemId) return true;
+
+  return norm(itemNome) === norm(selected.nome);
+}
+
+function normPlacaKey(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function normProdutoKey(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * Capacidade em litros. Trata milhar BR ("5.000", "1.500") que o parseNumero
+ * interpretaria como decimal (5 / 1.5).
+ */
+function parseCapacidadeLitros(value) {
+  if (value == null || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const s = String(value).trim();
+  if (!s || s === "-") return 0;
+  // 5.000 | 1.500 | 12.000 → milhar BR sem casas decimais
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    const n = parseFloat(s.replace(/\./g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return parseNumero(s);
+}
+
+/** Capacidade real do vasilhame: campo próprio → cadastro pela placa → inferência. */
+function resolveVasilhameCapacidade(v, placaStats) {
+  const snapPadrao = (n) => {
+    if (n == null || n <= 0) return null;
+    for (const std of [5000, 1500]) {
+      const tol = Math.max(5, std * 0.02);
+      if (Math.abs(n - std) <= tol) return std;
+    }
+    return null;
+  };
+
+  const own = parseCapacidadeLitros(v?.capacidade);
+  if (own > 0) return snapPadrao(own) || own;
+
+  const placa = normPlacaKey(v?.placa);
+  const stats = placa && placaStats ? placaStats.get(placa) : null;
+  if (stats?.maxCap > 0) return snapPadrao(stats.maxCap) || stats.maxCap;
+
+  const vol = parseCapacidadeLitros(v?.volume);
+  const maxVol = Math.max(vol, stats?.maxVol || 0);
+  const snapped = snapPadrao(maxVol);
+  if (snapped) return snapped;
+
+  // Frota típica: volume atual/histórico acima de ~1.500 L ⇒ tanque 5.000 L
+  // (cobre tanques 5.000 parcialmente cheios sem capacidade cadastrada)
+  if (maxVol > 1600) return 5000;
+
+  return null;
+}
+
+function matchesCapacidadePadrao(cap, target) {
+  if (cap == null) return false;
+  const n = parseCapacidadeLitros(cap);
+  if (n <= 0) return false;
+  const tol = Math.max(5, target * 0.02);
+  return Math.abs(n - target) <= tol;
 }
 
 function formatSaldo(value, unidade) {
@@ -51,6 +145,25 @@ function formatSaldo(value, unidade) {
   return formatMass(value, { empty: "-" });
 }
 
+function SaldoBadge({ children, tone = "green" }) {
+  const tones = {
+    blue: "bg-sky-100 text-sky-700",
+    green: "bg-green-100 text-green-700",
+    amber: "bg-amber-100 text-amber-800",
+    muted: "bg-muted text-muted-foreground",
+    emerald: "bg-emerald-100 text-emerald-700",
+  };
+  return (
+    <span
+      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+        tones[tone] || tones.green
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function EstoqueEnvio() {
   const { toast } = useToast();
   const [estoque, setEstoque] = useState([]);
@@ -58,6 +171,10 @@ export default function EstoqueEnvio() {
   const [isotanques, setIsotanques] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [reservas, setReservas] = useState([]);
+  const [indTanks, setIndTanks] = useState([]);
+  const [indContainers, setIndContainers] = useState([]);
+  const [indStock, setIndStock] = useState([]);
   const [clienteFilter, setClienteFilter] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -69,14 +186,50 @@ export default function EstoqueEnvio() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [ests, vascs, isot, trans, cliens, saics] = await Promise.all([
-          entities.estoque.list(),
-          entities.vasilhames.list(),
-          entities.isotanques.list(),
-          entities.transbordos.list(),
-          entities.clientes.list(),
-          entities.saidas.list(),
-        ]);
+        const [ests, vascs, isot, trans, cliens, saics, reservasList] =
+          await Promise.all([
+            entities.estoque.list(),
+            entities.vasilhames.list(),
+            entities.isotanques.list(),
+            entities.transbordos.list(),
+            entities.clientes.list(),
+            entities.saidas.list(),
+            entities.materialReservas.list().catch(() => []),
+          ]);
+
+        // Corrige volumes inflados (duplicata de OP / unificação) pelo histórico real
+        let vasilhamesOk = Array.isArray(vascs) ? vascs : [];
+        try {
+          const { kept, deletedIds } = await unifyDuplicateVasilhames(
+            vasilhamesOk,
+            entities
+          );
+          vasilhamesOk =
+            deletedIds.length > 0
+              ? kept
+              : vasilhamesOk.map((v) => normalizeVasilhameLote(v));
+
+          const repaired = [];
+          for (const v of vasilhamesOk) {
+            if (
+              (v.status || "No Pátio") === "No Pátio" &&
+              v.placa &&
+              (v.tipo || "") !== "Tankagem" &&
+              (v.origem === "transbordo" ||
+                v.origem === "manual" ||
+                v.fracionado)
+            ) {
+              repaired.push(
+                await repairVasilhameComposicao(v, trans, entities)
+              );
+            } else {
+              repaired.push(normalizeVasilhameLote(v));
+            }
+          }
+          vasilhamesOk = repaired;
+        } catch (vasErr) {
+          console.warn("[EstoqueEnvio] reparo vasilhames:", vasErr);
+        }
 
         const estoqueWithSaldo = ests
           .filter((e) => !isEstoqueEmbalagemUnitaria(e))
@@ -92,22 +245,67 @@ export default function EstoqueEnvio() {
                 { ...hydrated, quantidade },
                 trans,
                 saics,
-                vascs
+                vasilhamesOk
               ),
             };
           });
 
         setEstoque(estoqueWithSaldo);
-        setVasilhames(vascs);
+        setVasilhames(vasilhamesOk);
         setIsotanques(isot);
         setTransbordos(trans);
         setClientes(cliens);
+        setReservas(reservasList || []);
+
+        // Industrialização em etapa separada (evita rate-limit / falha silenciosa
+        // no Promise.all principal — tankas cadastradas devem aparecer mesmo vazias)
+        try {
+          const loadIndList = async (fn) => {
+            try {
+              const rows = await fn();
+              return Array.isArray(rows) ? rows : [];
+            } catch {
+              return [];
+            }
+          };
+
+          const [tanksInd, containersInd, stockInd] = await Promise.all([
+            loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
+            loadIndList(() =>
+              base44.entities.Container.list("-created_date", 2000)
+            ),
+            loadIndList(() =>
+              base44.entities.RawMaterialStock.list("-created_date", 1000)
+            ),
+          ]);
+
+          // Fallback sem ordenação se a lista de tankas veio vazia por erro de coluna
+          let tanksFinal = tanksInd;
+          if (tanksFinal.length === 0) {
+            tanksFinal = await loadIndList(() =>
+              base44.entities.Tank.list(undefined, 500)
+            );
+          }
+
+          setIndTanks(tanksFinal);
+          setIndContainers(containersInd);
+          setIndStock(stockInd);
+        } catch (indErr) {
+          console.warn("[EstoqueEnvio] Industrialização:", indErr);
+          setIndTanks([]);
+          setIndContainers([]);
+          setIndStock([]);
+        }
       } catch {
         setEstoque([]);
         setVasilhames([]);
         setIsotanques([]);
         setTransbordos([]);
         setClientes([]);
+        setReservas([]);
+        setIndTanks([]);
+        setIndContainers([]);
+        setIndStock([]);
       } finally {
         setLoading(false);
       }
@@ -123,7 +321,7 @@ export default function EstoqueEnvio() {
     const map = new Map();
 
     for (const e of estoque) {
-      if (!matchesCliente(e, clienteFilter)) continue;
+      if (!matchesCliente(e, clienteFilter, clientes)) continue;
       if ((Number(e.saldo_atual) || 0) <= 0) continue;
 
       const saldo = getEstoqueSaldoEntrada(e);
@@ -132,7 +330,13 @@ export default function EstoqueEnvio() {
       const codigo = (e.produto_codigo || "").trim() || "—";
       const produto = (e.produto_nome || "").trim() || "—";
       const unidade = getEstoqueUnidadeEntrada(e) || "kg";
-      const key = `${codigo}||${unidade}||${e.cliente_nome || ""}`;
+      // Diferencia pelo nome/descrição (mesmo código pode ser Bombona vs IBC)
+      const key = [
+        codigo,
+        normProdutoKey(produto),
+        unidade,
+        e.cliente_id || normProdutoKey(e.cliente_nome) || "",
+      ].join("||");
 
       if (q) {
         const hay = `${codigo} ${produto} ${e.cliente_nome || ""}`.toLowerCase();
@@ -142,6 +346,7 @@ export default function EstoqueEnvio() {
       const prev = map.get(key);
       if (prev) {
         prev.saldo += saldo;
+        if (!prev.clienteId && e.cliente_id) prev.clienteId = e.cliente_id;
       } else {
         map.set(key, {
           id: key,
@@ -150,20 +355,50 @@ export default function EstoqueEnvio() {
           unidade,
           saldo,
           cliente_nome: e.cliente_nome || "",
+          clienteId: e.cliente_id || null,
         });
       }
     }
 
-    return [...map.values()].sort((a, b) =>
-      a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true })
-    );
-  }, [estoque, clienteFilter, q]);
+    return [...map.values()]
+      .map((row) => {
+        const saldoReservado = Math.round(
+          sumReservadoForProdutoCliente(reservas, {
+            clienteId: row.clienteId,
+            clienteNome: row.cliente_nome,
+            produtoCodigo: row.codigo,
+            produtoNome: row.produto,
+            unidade: row.unidade,
+          })
+        );
+        const saldoAtual = Math.round(row.saldo || 0);
+        const saldoFinal = Math.max(0, saldoAtual - saldoReservado);
+        return {
+          ...row,
+          saldo: saldoAtual,
+          saldoReservado,
+          saldoFinal,
+        };
+      })
+      .sort((a, b) => {
+        // Agrupa visualmente pelo código; dentro do mesmo código, ordena pelo nome
+        const byCod = a.codigo.localeCompare(b.codigo, "pt-BR", {
+          numeric: true,
+        });
+        if (byCod !== 0) return byCod;
+        const byNome = a.produto.localeCompare(b.produto, "pt-BR", {
+          sensitivity: "base",
+        });
+        if (byNome !== 0) return byNome;
+        return String(a.unidade).localeCompare(String(b.unidade), "pt-BR");
+      });
+  }, [estoque, clienteFilter, clientes, q, reservas]);
 
   const filteredVasilhames = useMemo(() => {
     return vasilhames.filter((v) => {
       if ((v.tipo || "") === "Tankagem") return false;
       if ((v.status || "No Pátio") !== "No Pátio") return false;
-      if (!matchesCliente(v, clienteFilter)) return false;
+      if (!matchesCliente(v, clienteFilter, clientes)) return false;
 
       if (!q) return true;
       const hay = [
@@ -180,45 +415,89 @@ export default function EstoqueEnvio() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [vasilhames, clienteFilter, q]);
+  }, [vasilhames, clienteFilter, clientes, q]);
+
+  /** Resumo por produto × capacidade (e fracionados) sobre o conjunto filtrado. */
+  const vasilhamesResumoPorProduto = useMemo(() => {
+    // Estatísticas por placa (capacidade cadastrada + maior volume histórico)
+    const placaStats = new Map();
+    for (const v of vasilhames || []) {
+      const placa = normPlacaKey(v?.placa);
+      if (!placa) continue;
+      const prev = placaStats.get(placa) || { maxCap: 0, maxVol: 0 };
+      prev.maxCap = Math.max(
+        prev.maxCap,
+        parseCapacidadeLitros(v?.capacidade)
+      );
+      prev.maxVol = Math.max(prev.maxVol, parseCapacidadeLitros(v?.volume));
+      placaStats.set(placa, prev);
+    }
+
+    const map = new Map();
+
+    for (const v of filteredVasilhames) {
+      const codigo = String(v.produto_codigo || "").trim() || "—";
+      const produto = String(v.produto_nome || "").trim() || "—";
+      const cliente = String(v.cliente_nome || "").trim();
+      const key = `${codigo}||${produto.toUpperCase()}||${cliente.toUpperCase()}`;
+
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          id: key,
+          codigo,
+          produto,
+          cliente_nome: cliente,
+          cap5000: 0,
+          cap1500: 0,
+          outros: 0,
+          fracionados: 0,
+          total: 0,
+        };
+        map.set(key, row);
+      }
+
+      row.total += 1;
+      if (v.fracionado === true) {
+        row.fracionados += 1;
+        continue;
+      }
+
+      const cap = resolveVasilhameCapacidade(v, placaStats);
+      if (matchesCapacidadePadrao(cap, 5000)) row.cap5000 += 1;
+      else if (matchesCapacidadePadrao(cap, 1500)) row.cap1500 += 1;
+      else row.outros += 1;
+    }
+
+    return [...map.values()].sort((a, b) => {
+      const byCod = a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true });
+      if (byCod !== 0) return byCod;
+      const byNome = a.produto.localeCompare(b.produto, "pt-BR", {
+        sensitivity: "base",
+      });
+      if (byNome !== 0) return byNome;
+      return a.cliente_nome.localeCompare(b.cliente_nome, "pt-BR", {
+        sensitivity: "base",
+      });
+    });
+  }, [filteredVasilhames, vasilhames]);
+
+  const unifiedTankas = useMemo(
+    () =>
+      mergeTankasUnificadas({
+        isotanques,
+        transbordos,
+        indTanks,
+        indContainers,
+        indStock,
+      }),
+    [isotanques, transbordos, indTanks, indContainers, indStock]
+  );
 
   const filteredTankas = useMemo(() => {
-    return isotanques
-      .map((iso) => {
-        const tankaCodigo = iso.tanka || iso.codigo_itku || "";
-        const volume = roundVolume(
-          computeTankaSaldo({
-            isotanqueId: iso.id,
-            tankaCodigo,
-            transbordos,
-          })
-        );
-
-        const fillings = transbordos
-          .filter((t) =>
-            (t.destinos || []).some(
-              (d) =>
-                d.tipo_embalagem === "Tankagem" &&
-                (d.tanka_id === iso.id || d.tanka_codigo === tankaCodigo)
-            )
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.created_at || b.created_date || b.data || 0) -
-              new Date(a.created_at || a.created_date || a.data || 0)
-          );
-
-        return {
-          ...iso,
-          tankaCodigo,
-          volumeAtual: volume,
-          produto: iso.produto_nome || fillings[0]?.produto_nome || "",
-          cliente_nome:
-            iso.cliente_nome || fillings[0]?.cliente_nome || "",
-        };
-      })
+    return unifiedTankas
       .filter((t) => {
-        if (!matchesCliente(t, clienteFilter)) return false;
+        if (!matchesCliente(t, clienteFilter, clientes)) return false;
         if (!q) return true;
         const hay = [t.tankaCodigo, t.produto, t.cliente_nome]
           .join(" ")
@@ -230,7 +509,7 @@ export default function EstoqueEnvio() {
           numeric: true,
         })
       );
-  }, [isotanques, transbordos, clienteFilter, q]);
+  }, [unifiedTankas, clienteFilter, clientes, q]);
 
   const productColorMap = useMemo(() => {
     const map = {};
@@ -246,7 +525,29 @@ export default function EstoqueEnvio() {
   }, [filteredTankas]);
 
   const handleViewTanka = (tank) => {
-    setViewDetalhe(buildTankaDetalhe({ isotanque: tank, transbordos }));
+    // Detalhe alinhado à fonte do volume exibido (evita divergência visual)
+    if (
+      tank.volumeSource === "ind_container" ||
+      tank.volumeSource === "ind_stock" ||
+      tank.volumeSource === "ind_cadastro" ||
+      !tank.hasTransbordo
+    ) {
+      setViewDetalhe(buildIndTankaDetalhe(tank));
+    } else if (tank.hasTransbordo && tank.isotanque) {
+      setViewDetalhe(
+        buildTankaDetalhe({
+          isotanque: {
+            ...tank.isotanque,
+            produto_nome: tank.produto || tank.isotanque.produto_nome,
+            cliente_nome: tank.cliente_nome || tank.isotanque.cliente_nome,
+            capacidade: tank.capacidade || tank.isotanque.capacidade,
+          },
+          transbordos,
+        })
+      );
+    } else {
+      setViewDetalhe(buildIndTankaDetalhe(tank));
+    }
     setViewOpen(true);
   };
 
@@ -272,18 +573,33 @@ export default function EstoqueEnvio() {
       }));
 
       const tanks = filteredTankas.map((tank) => {
-        const lotes = computeTankaLotesDisponiveis({
-          isotanqueId: tank.id,
-          tankaCodigo: tank.tankaCodigo,
-          transbordos,
-        });
-        return { ...tank, lotes };
+        if (tank.hasTransbordo && tank.isotanque && tank.volumeSource === "transbordo") {
+          const lotes = computeTankaLotesDisponiveis({
+            isotanqueId: tank.isotanque.id,
+            tankaCodigo: tank.tankaCodigo,
+            transbordos,
+          });
+          return { ...tank, lotes };
+        }
+        return {
+          ...tank,
+          lotes:
+            (Number(tank.volumeAtual) || 0) > 0
+              ? [
+                  {
+                    lote: tank.lote || "",
+                    quantidade_l: roundVolume(tank.volumeAtual || 0),
+                  },
+                ]
+              : [],
+        };
       });
 
       generateEstoqueEnvioPDF({
         client: hasClientFilter ? clienteFilter : "Todos os clientes",
         products: produtosAgregados,
         containers,
+        containersSummary: vasilhamesResumoPorProduto,
         tanks,
       });
       toast({ title: "PDF gerado com sucesso" });
@@ -298,10 +614,33 @@ export default function EstoqueEnvio() {
     }
   };
 
-  const clienteFilterOptions = [
-    { id: "all", nome: "Todos os clientes" },
-    ...clientes,
-  ];
+  const clienteFilterOptions = useMemo(() => {
+    const map = new Map();
+    for (const c of clientes || []) {
+      const nome = String(c?.nome || "").trim();
+      if (!nome) continue;
+      map.set(nome.toLowerCase(), { id: c.id, nome });
+    }
+    // Inclui clientes cadastrados só na Industrialização (ex.: Vibra Energia em tankas)
+    for (const t of indTanks || []) {
+      const nome = String(t?.client || "").trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (!map.has(key)) map.set(key, { id: `ind-client:${key}`, nome });
+    }
+    for (const t of unifiedTankas || []) {
+      const nome = String(t?.cliente_nome || "").trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (!map.has(key)) map.set(key, { id: `tank-client:${key}`, nome });
+    }
+    return [
+      { id: "all", nome: "Todos os clientes" },
+      ...[...map.values()].sort((a, b) =>
+        a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+      ),
+    ];
+  }, [clientes, indTanks, unifiedTankas]);
 
   const canExportPdf =
     produtosAgregados.length > 0 ||
@@ -384,39 +723,76 @@ export default function EstoqueEnvio() {
                   {!hasClientFilter && (
                     <th className="px-4 py-3 font-medium">Cliente</th>
                   )}
-                  <th className="px-4 py-3 font-medium text-right">Saldo</th>
+                  <th className="px-4 py-3 font-medium text-right">Saldo Atual</th>
+                  <th className="px-4 py-3 font-medium text-right">Reservado</th>
+                  <th className="px-4 py-3 font-medium text-right">Saldo Final</th>
                   <th className="px-4 py-3 font-medium text-center">Unidade</th>
                 </tr>
               </thead>
               <tbody>
-                {produtosAgregados.map((p, i) => (
-                  <tr
-                    key={p.id}
-                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
-                      i % 2 === 1 ? "bg-muted/20" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3 font-mono text-muted-foreground">
-                      {p.codigo}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {p.produto}
-                    </td>
-                    {!hasClientFilter && (
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {p.cliente_nome || "—"}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                        {formatSaldo(p.saldo, p.unidade)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center font-semibold text-primary">
-                      {p.unidade}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  let groupIndex = 0;
+                  return produtosAgregados.map((p, i) => {
+                    const prevCodigo =
+                      i > 0 ? produtosAgregados[i - 1].codigo : null;
+                    const isNewCodigoGroup = p.codigo !== prevCodigo;
+                    if (isNewCodigoGroup && i > 0) groupIndex += 1;
+
+                    return (
+                      <tr
+                        key={p.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
+                          groupIndex % 2 === 1 ? "bg-muted/20" : ""
+                        } ${
+                          isNewCodigoGroup && i > 0
+                            ? "border-t-2 border-t-border"
+                            : ""
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-mono text-muted-foreground">
+                          {isNewCodigoGroup ? (
+                            p.codigo
+                          ) : (
+                            <span
+                              className="text-muted-foreground/40"
+                              title={p.codigo}
+                            >
+                              ↳
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {p.produto}
+                        </td>
+                        {!hasClientFilter && (
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {p.cliente_nome || "—"}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge tone="blue">
+                            {formatSaldo(p.saldo, p.unidade)}
+                          </SaldoBadge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge
+                            tone={p.saldoReservado > 0 ? "amber" : "muted"}
+                          >
+                            {formatSaldo(p.saldoReservado, p.unidade)}
+                          </SaldoBadge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge tone="emerald">
+                            {formatSaldo(p.saldoFinal, p.unidade)}
+                          </SaldoBadge>
+                        </td>
+                        <td className="px-4 py-3 text-center font-semibold text-primary">
+                          {p.unidade}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -432,6 +808,81 @@ export default function EstoqueEnvio() {
             {filteredVasilhames.length}
           </span>
         </div>
+
+        <div className="px-5 py-3 border-b border-border bg-muted/20">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+            Resumo por produto / capacidade
+          </p>
+          {vasilhamesResumoPorProduto.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-1">
+              Nenhum vasilhame para resumir no filtro atual.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] text-muted-foreground border-b border-border bg-muted/40 uppercase">
+                    <th className="px-3 py-2 font-medium">Código</th>
+                    <th className="px-3 py-2 font-medium">Produto</th>
+                    {!hasClientFilter && (
+                      <th className="px-3 py-2 font-medium">Cliente</th>
+                    )}
+                    <th className="px-3 py-2 font-medium text-right">5.000 L</th>
+                    <th className="px-3 py-2 font-medium text-right">1.500 L</th>
+                    <th
+                      className="px-3 py-2 font-medium text-right"
+                      title="Capacidades diferentes de 5.000 L e 1.500 L"
+                    >
+                      Outros
+                    </th>
+                    <th className="px-3 py-2 font-medium text-right">
+                      Fracionados
+                    </th>
+                    <th className="px-3 py-2 font-medium text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vasilhamesResumoPorProduto.map((row, i) => (
+                    <tr
+                      key={row.id}
+                      className={`border-b border-border last:border-0 ${
+                        i % 2 === 1 ? "bg-muted/20" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-2 font-mono text-muted-foreground">
+                        {row.codigo}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-foreground">
+                        {row.produto}
+                      </td>
+                      {!hasClientFilter && (
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {row.cliente_nome || "—"}
+                        </td>
+                      )}
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.cap5000}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.cap1500}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.outros}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {row.fracionados}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-foreground">
+                        {row.total}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {filteredVasilhames.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             Nenhum vasilhame no pátio para o filtro selecionado.
@@ -472,6 +923,11 @@ export default function EstoqueEnvio() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {v.tipo || "—"}
+                        {v.fracionado ? (
+                          <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">
+                            Frac.
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 font-medium text-foreground">
                         {v.produto_nome || "—"}
@@ -503,7 +959,7 @@ export default function EstoqueEnvio() {
         )}
       </div>
 
-      {/* Tankas — silos (mesmo formato da Tankagem) */}
+      {/* Tankas — silos unificados (Transbordo + Industrialização) */}
       <div className="bg-card rounded-xl border border-border shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border flex-wrap">
           <Cylinder className="w-4 h-4 text-primary" />
@@ -527,7 +983,7 @@ export default function EstoqueEnvio() {
             {filteredTankas.map((tank) => (
               <TankSilo
                 key={tank.id}
-                tanka={tank.tanka || tank.codigo_itku}
+                tanka={tank.tanka || tank.tankaCodigo}
                 capacidade={tank.capacidade || 0}
                 volume={tank.volumeAtual}
                 produto={tank.produto}

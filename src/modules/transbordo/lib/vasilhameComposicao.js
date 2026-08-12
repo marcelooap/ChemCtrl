@@ -384,10 +384,27 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     const primary = sorted[0];
     const others = sorted.slice(1);
 
+    const opKeyOf = (v) =>
+      String(v?.transbordo_id || v?.numero_op || v?.codigo || "")
+        .trim()
+        .toUpperCase();
+
     let composicao = seedComposicaoFromVasilhame(primary);
     let volume = roundVolume(primary.volume || 0);
+    const seenOps = new Set();
+    const primaryOp = opKeyOf(primary);
+    if (primaryOp) seenOps.add(primaryOp);
 
     for (const o of others) {
+      const ok = opKeyOf(o);
+      // Mesmo OP gravado 2x (ex.: regravação) — NÃO soma volume
+      if (ok && seenOps.has(ok)) {
+        volume = Math.max(volume, roundVolume(o.volume || 0));
+        const otherComp = seedComposicaoFromVasilhame(o);
+        if (otherComp.length > composicao.length) composicao = otherComp;
+        continue;
+      }
+      if (ok) seenOps.add(ok);
       volume += roundVolume(o.volume || 0);
       composicao = mergeComposicao(composicao, seedComposicaoFromVasilhame(o));
     }
@@ -485,15 +502,41 @@ export async function repairVasilhameComposicao(
   let volume = vol;
   let syncVolume = false;
 
+  // Corrige volume inflado vs histórico real de OPs (ex.: 3000 com um único T010 de 1500).
+  // Sem alignToVolume para não “preencher” o valor errado.
+  if (
+    vol > 0 &&
+    transbordosPlaca.length > 0 &&
+    (vasilhame.origem === "transbordo" ||
+      vasilhame.origem === "manual" ||
+      vasilhame.fracionado)
+  ) {
+    const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
+      alignToVolume: false,
+    }).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
+    const historySum = roundVolume(
+      history.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+    );
+    if (historySum > 0 && historySum < vol) {
+      composicao = history.length > 0 ? history : seeded;
+      volume = historySum;
+      syncVolume = true;
+    }
+  }
+
   // Composição já bate com o volume e sem aporte sintético → não mexe
   // (protege tanques completados de rebuild agressivo por múltiplos transbordos)
   const composicaoCoerente =
-    seeded.length > 0 && compVol === vol && !hasFake;
+    !syncVolume &&
+    seeded.length > 0 &&
+    compVol === vol &&
+    !hasFake;
 
   // Rebuild só para: composição vazia/incompleta, aporte sintético, ou
   // único lote com vários transbordos (histórico faltando).
   // NÃO altera volume salvo ao limpar aporte sintético (e só para baixo).
   const needsRebuild =
+    !syncVolume &&
     vol > 0 &&
     !composicaoCoerente &&
     (seeded.length === 0 ||
@@ -525,8 +568,8 @@ export async function repairVasilhameComposicao(
         rebuiltSum === vol)
     ) {
       composicao = rebuiltClean;
-      // Só sincroniza volume para baixo ao remover aporte sintético
-      if (hasFake && rebuiltSum > 0 && rebuiltSum < vol) {
+      // Sincroniza volume para baixo quando histórico real for menor
+      if (rebuiltSum > 0 && rebuiltSum < volume) {
         volume = rebuiltSum;
         syncVolume = true;
       }

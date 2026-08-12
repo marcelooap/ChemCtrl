@@ -741,6 +741,8 @@
         "lunch": "Déjeuner",
         "lunchRange": "12:00 – 13:00",
         "encaixe": "Créneau extra",
+        "encaixeHint": "Permet plusieurs chargements dans la même fenêtre, y compris pour des clients différents.",
+        "encaixeNew": "Nouveau chargement",
         "available": "Disponible",
         "occupied": "Occupé",
         "saidasCount": "{{count}} sorties",
@@ -789,8 +791,10 @@
           "searchPlaceholder": "Rechercher une sortie par code ou client...",
           "emptySaidas": "Aucune sortie disponible à planifier.",
           "multiHint": "{{count}} sortie(s) sélectionnée(s) pour ce créneau",
+          "encaixeMultiHint": "{{count}} sortie(s) dans ce chargement extra — les autres clients du créneau ne sont pas modifiés",
           "confirm": "Planifier",
-          "release": "Libérer le créneau"
+          "release": "Libérer le créneau",
+          "releaseCarregamento": "Libérer le chargement"
         },
         "errors": {
           "selectSaida": "Sélectionnez au moins une sortie à planifier.",
@@ -812,6 +816,12 @@
         "searchPlaceholder": "Rechercher client, code, produit ou lot...",
         "filterClient": "Tous les clients",
         "allClients": "Tous les clients",
+        "filterStatus": "Statut du solde",
+        "statusFilter": {
+          "all": "Tous",
+          "reservado": "Réservé",
+          "livre": "Libre"
+        },
         "empty": "Aucun stock trouvé pour le filtre sélectionné.",
         "editTitle": "Modifier le solde réservé",
         "viewTitle": "Détails du solde et des réservations",
@@ -894,8 +904,8 @@
           "transportadora": "Transporteur",
           "motorista": "Chauffeur",
           "placa": "Plaque",
-          "horarioAgendado": "Heure planifiée",
-          "horarioCarregamento": "Heure de chargement",
+          "horarioAgendado": "Planning",
+          "horarioCarregamento": "Chargement",
           "status": "Statut",
           "operador": "Opérateur",
           "acoes": "Actions"

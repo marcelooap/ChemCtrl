@@ -741,6 +741,8 @@
         "lunch": "Lunch",
         "lunchRange": "12:00 – 13:00",
         "encaixe": "Fit-in",
+        "encaixeHint": "Allows multiple loadings in the same window, including different customers.",
+        "encaixeNew": "New loading",
         "available": "Available",
         "occupied": "Occupied",
         "saidasCount": "{{count}} outbound",
@@ -789,8 +791,10 @@
           "searchPlaceholder": "Search outbound by code or client...",
           "emptySaidas": "No outbound requests available to schedule.",
           "multiHint": "{{count}} outbound request(s) selected for this slot",
+          "encaixeMultiHint": "{{count}} outbound request(s) in this fit-in loading — other customers in fit-in are not changed",
           "confirm": "Schedule",
-          "release": "Release slot"
+          "release": "Release slot",
+          "releaseCarregamento": "Release loading"
         },
         "errors": {
           "selectSaida": "Select at least one outbound request to schedule.",
@@ -812,6 +816,12 @@
         "searchPlaceholder": "Search client, code, product or lot...",
         "filterClient": "All clients",
         "allClients": "All clients",
+        "filterStatus": "Balance status",
+        "statusFilter": {
+          "all": "All",
+          "reservado": "Reserved",
+          "livre": "Available"
+        },
         "empty": "No stock found for the selected filter.",
         "editTitle": "Edit reserved balance",
         "viewTitle": "Balance and reservation details",
@@ -894,8 +904,8 @@
           "transportadora": "Carrier",
           "motorista": "Driver",
           "placa": "Plate",
-          "horarioAgendado": "Scheduled time",
-          "horarioCarregamento": "Loading time",
+          "horarioAgendado": "Schedule",
+          "horarioCarregamento": "Loading",
           "status": "Status",
           "operador": "Operator",
           "acoes": "Actions"

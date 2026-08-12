@@ -91,14 +91,12 @@ export default function AgendamentoTransporteModal({
             label={t('painel.comercial.agendamentos.transporte.transportadora')}
             value={transportadora}
             onChange={setTransportadora}
-            required
           />
           <Field
             id="ag-motorista"
             label={t('painel.comercial.agendamentos.transporte.motorista')}
             value={motorista}
             onChange={setMotorista}
-            required
           />
           <Field
             id="ag-placa"
@@ -106,7 +104,6 @@ export default function AgendamentoTransporteModal({
             value={placa}
             onChange={(v) => setPlaca(normalizePlaca(v))}
             className="uppercase font-mono"
-            required
           />
 
           {error ? (

@@ -34,6 +34,7 @@ export default function ReservarMaterial() {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState('');
   const [clienteFilter, setClienteFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [editRow, setEditRow] = useState(null);
   const [viewRow, setViewRow] = useState(null);
 
@@ -105,6 +106,10 @@ export default function ReservarMaterial() {
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     const allClientsLabel = t('painel.comercial.reservarMaterial.allClients');
+    const allStatusLabel = t('painel.comercial.reservarMaterial.statusFilter.all');
+    const reservadoLabel = t('painel.comercial.reservarMaterial.statusFilter.reservado');
+    const livreLabel = t('painel.comercial.reservarMaterial.statusFilter.livre');
+
     return rows.filter((row) => {
       const matchCliente =
         !clienteFilter ||
@@ -112,13 +117,22 @@ export default function ReservarMaterial() {
         row.clienteNome === clienteFilter;
 
       if (!matchCliente) return false;
+
+      const reserved = Number(row.saldoReservado) || 0;
+      const matchStatus =
+        !statusFilter ||
+        statusFilter === allStatusLabel ||
+        (statusFilter === reservadoLabel && reserved > 0) ||
+        (statusFilter === livreLabel && reserved <= 0);
+
+      if (!matchStatus) return false;
       if (!q) return true;
 
       const hay = `${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search, clienteFilter, t]);
+  }, [rows, search, clienteFilter, statusFilter, t]);
 
   const clienteOptions = useMemo(
     () => [
@@ -126,6 +140,18 @@ export default function ReservarMaterial() {
       ...clientes,
     ],
     [clientes, t]
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { id: 'all', nome: t('painel.comercial.reservarMaterial.statusFilter.all') },
+      {
+        id: 'reservado',
+        nome: t('painel.comercial.reservarMaterial.statusFilter.reservado'),
+      },
+      { id: 'livre', nome: t('painel.comercial.reservarMaterial.statusFilter.livre') },
+    ],
+    [t]
   );
 
   const handleSaveReserva = async ({ quantidade, observacao }) => {
@@ -146,47 +172,59 @@ export default function ReservarMaterial() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex h-full min-h-0 items-center justify-center">
         <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {t('painel.comercial.sections.reservarMaterial.title')}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {t('painel.comercial.reservarMaterial.subtitle')}
-        </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {t('painel.comercial.sections.reservarMaterial.title')}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t('painel.comercial.reservarMaterial.subtitle')}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('painel.comercial.reservarMaterial.searchPlaceholder')}
+              className="pl-10 bg-card"
+            />
+          </div>
+          <div className="w-full sm:w-64">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder={t('painel.comercial.reservarMaterial.filterClient')}
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(label) => setStatusFilter(label)}
+              options={statusOptions}
+              getOptionLabel={(o) => o.nome}
+              getOptionValue={(o) => o.id}
+              placeholder={t('painel.comercial.reservarMaterial.filterStatus')}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('painel.comercial.reservarMaterial.searchPlaceholder')}
-            className="pl-10 bg-card"
-          />
-        </div>
-        <div className="w-full sm:w-64">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder={t('painel.comercial.reservarMaterial.filterClient')}
-          />
-        </div>
-      </div>
-
-      <div className="bg-card rounded-xl border border-border shadow-sm">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+      <div className="flex-1 min-h-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
+        <div className="shrink-0 px-5 py-4 border-b border-border flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">
             {t('painel.comercial.reservarMaterial.tableTitle')}
           </h3>
@@ -196,11 +234,11 @@ export default function ReservarMaterial() {
         </div>
 
         {filteredRows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
             {t('painel.comercial.reservarMaterial.empty')}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto flex-1 min-h-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">

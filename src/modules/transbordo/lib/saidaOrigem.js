@@ -133,6 +133,65 @@ export function origemLabel(origem) {
   return "Transbordo";
 }
 
+/**
+ * Texto da coluna "Informações" na visualização/relatório de saída.
+ * - Embalado / retorno MP: lote (e embalagem no modo agendamento)
+ * - Convencional / vasilhame: placa (barril) [- lote]
+ *
+ * @param {{ includeLote?: boolean, context?: 'default' | 'agendamento' | 'fiscal' }} [options]
+ */
+export function formatSaidaItemInformacoes(
+  item,
+  { vasilhame, includeLote = true, context = "default" } = {}
+) {
+  const loteFromComp = () => {
+    const comp = Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : [];
+    let best = "";
+    let bestVol = -1;
+    for (const c of comp) {
+      const vol = Number(c?.quantidade_l) || 0;
+      const lote = String(c?.lote || "").trim();
+      if (lote && vol >= bestVol) {
+        bestVol = vol;
+        best = lote;
+      }
+    }
+    return best;
+  };
+
+  const lote = String(
+    item?.lote || vasilhame?.lote || loteFromComp() || ""
+  ).trim();
+
+  const withLote = includeLote && context !== "fiscal";
+
+  if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
+    return lote ? `Lote: ${lote}` : "—";
+  }
+
+  const placa = String(
+    item?.vasilhame_placa || vasilhame?.placa || ""
+  ).trim();
+  const barril = String(
+    item?.vasilhame_barril || vasilhame?.barril || ""
+  ).trim();
+  const hasBarril = Boolean(barril) && barril !== "—" && barril !== "-";
+
+  let base = "";
+  if (!placa) {
+    base = "";
+  } else if (hasBarril) {
+    base = `${placa} (${barril})`;
+  } else {
+    base = placa;
+  }
+
+  if (withLote && lote) {
+    return base ? `${base} - ${lote}` : lote;
+  }
+  return base || "—";
+}
+
 export function tipoItemLabel(item) {
   const tipo = item?.tipo;
   if (tipo === TIPO_EMBALADO) return "Embalado";

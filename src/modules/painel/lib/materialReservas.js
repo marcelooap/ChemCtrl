@@ -180,6 +180,59 @@ export function sumReservasAtivas(reservas = [], chave) {
     .reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
 }
 
+/**
+ * Chave comercial sem lote: cliente + produto + unidade.
+ * Usada para consolidar reservas na visão agregada de Estoque Envio.
+ */
+export function buildReservaChaveSemLote({
+  clienteId,
+  clienteNome,
+  produtoCodigo,
+  unidade,
+}) {
+  const cliente = clienteId || norm(clienteNome) || '';
+  return [cliente, norm(produtoCodigo), String(unidade || 'kg').trim()].join('||');
+}
+
+/**
+ * Soma reservas ativas de um produto/cliente/unidade (todos os lotes).
+ * Diferencia pelo nome/descrição do produto quando informado (ex.: Bombona vs IBC).
+ * Aceita match de cliente por cliente_id ou, na ausência, por nome normalizado.
+ */
+export function sumReservadoForProdutoCliente(
+  reservas = [],
+  { clienteId, clienteNome, produtoCodigo, produtoNome, unidade } = {}
+) {
+  const cod = norm(produtoCodigo);
+  const nome = produtoNome != null ? norm(produtoNome) : '';
+  const uni = String(unidade || 'kg').trim();
+  const cliNome = norm(clienteNome);
+  const cliId = clienteId ? String(clienteId).trim() : '';
+
+  return (reservas || []).reduce((sum, r) => {
+    if (!r || r.status !== 'ativa') return sum;
+    if (norm(r.produto_codigo) !== cod) return sum;
+    if (String(r.unidade_medida || 'kg').trim() !== uni) return sum;
+
+    // Quando o nome é critério de identidade, não mistura descrições distintas
+    if (nome) {
+      const rNome = norm(r.produto_nome);
+      if (rNome !== nome) return sum;
+    }
+
+    const rId = r.cliente_id ? String(r.cliente_id).trim() : '';
+    const rCliNome = norm(r.cliente_nome);
+
+    let sameCliente = false;
+    if (cliId && rId) sameCliente = cliId === rId;
+    else if (cliNome && rCliNome) sameCliente = cliNome === rCliNome;
+    else sameCliente = !cliId && !cliNome && !rId && !rCliNome;
+
+    if (!sameCliente) return sum;
+    return sum + (Number(r.quantidade) || 0);
+  }, 0);
+}
+
 export function listReservasForChave(reservas = [], chave) {
   return (reservas || [])
     .filter((r) => r.chave === chave)

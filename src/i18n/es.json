@@ -741,6 +741,8 @@
         "lunch": "Almuerzo",
         "lunchRange": "12:00 – 13:00",
         "encaixe": "Encaje",
+        "encaixeHint": "Permite varios cargamentos en la misma ventana, incluso de clientes distintos.",
+        "encaixeNew": "Nuevo cargamento",
         "available": "Disponible",
         "occupied": "Ocupado",
         "saidasCount": "{{count}} salidas",
@@ -789,8 +791,10 @@
           "searchPlaceholder": "Buscar salida por código o cliente...",
           "emptySaidas": "No hay salidas disponibles para agendar.",
           "multiHint": "{{count}} salida(s) seleccionada(s) para este horario",
+          "encaixeMultiHint": "{{count}} salida(s) en este cargamento de encaje — otros clientes en el encaje no se modifican",
           "confirm": "Agendar",
-          "release": "Liberar horario"
+          "release": "Liberar horario",
+          "releaseCarregamento": "Liberar cargamento"
         },
         "errors": {
           "selectSaida": "Seleccione al menos una salida para agendar.",
@@ -812,6 +816,12 @@
         "searchPlaceholder": "Buscar cliente, código, producto o lote...",
         "filterClient": "Todos los clientes",
         "allClients": "Todos los clientes",
+        "filterStatus": "Estado del saldo",
+        "statusFilter": {
+          "all": "Todos",
+          "reservado": "Reservado",
+          "livre": "Libre"
+        },
         "empty": "No se encontró stock para el filtro seleccionado.",
         "editTitle": "Editar saldo reservado",
         "viewTitle": "Detalles del saldo y reservas",
@@ -894,8 +904,8 @@
           "transportadora": "Transportista",
           "motorista": "Conductor",
           "placa": "Placa",
-          "horarioAgendado": "Horario agendado",
-          "horarioCarregamento": "Horario de carga",
+          "horarioAgendado": "Agenda",
+          "horarioCarregamento": "Carga",
           "status": "Estado",
           "operador": "Operador",
           "acoes": "Acciones"

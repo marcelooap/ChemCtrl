@@ -205,12 +205,67 @@ export function summarizeSlotBookings(bookings) {
   };
 }
 
+function clienteGroupKey(row) {
+  if (row?.cliente_id) return `id:${row.cliente_id}`;
+  const nome = String(row?.cliente_nome || '')
+    .trim()
+    .toLowerCase();
+  if (nome) return `nome:${nome}`;
+  return `saida:${row?.saida_id || row?.id || '—'}`;
+}
+
+/**
+ * No Encaixe, cada cliente vira um carregamento independente.
+ * Horários regulares permanecem um único grupo por slot.
+ */
+export function groupSlotCarregamentos(bookings = [], { splitByCliente = false } = {}) {
+  const list = normalizeBookings(bookings);
+  if (list.length === 0) return [];
+  if (!splitByCliente) {
+    return [
+      {
+        key: 'all',
+        bookings: list,
+        summary: summarizeSlotBookings(list),
+      },
+    ];
+  }
+
+  const map = new Map();
+  for (const row of list) {
+    const key = clienteGroupKey(row);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(row);
+  }
+  return [...map.entries()].map(([key, groupBookings]) => ({
+    key,
+    bookings: groupBookings,
+    summary: summarizeSlotBookings(groupBookings),
+  }));
+}
+
 export function findAgendamentoBySaida(agendamentos = [], saidaId) {
   if (!saidaId) return null;
   return (
     agendamentos.find(
       (row) => row.status === 'agendado' && String(row.saida_id) === String(saidaId)
     ) || null
+  );
+}
+
+/** Agendamento ativo ou concluído (para exibição em listagens). */
+export function findAgendamentoDisplayBySaida(agendamentos = [], saidaId) {
+  if (!saidaId) return null;
+  const matches = (agendamentos || []).filter(
+    (row) =>
+      String(row.saida_id) === String(saidaId) &&
+      row.status !== 'cancelado'
+  );
+  return (
+    matches.find((row) => row.status === 'agendado') ||
+    matches.find((row) => row.status === 'concluido') ||
+    matches[0] ||
+    null
   );
 }
 
@@ -238,6 +293,11 @@ function isUniqueViolation(err) {
 /**
  * Sincroniza as saídas de um horário (permite várias no mesmo slot).
  * Cada saída permanece exclusiva de um único horário ativo.
+ *
+ * `scopeSaidaIds`:
+ * - `null` (padrão): sincroniza o horário inteiro (horários regulares).
+ * - `Set`: no Encaixe, edita só esse carregamento e preserva os demais clientes.
+ * - `Set` vazio: adiciona um novo carregamento sem alterar os já agendados.
  */
 export async function bookSlotSaidas({
   dateIso,
@@ -247,6 +307,7 @@ export async function bookSlotSaidas({
   user,
   observacao = '',
   t,
+  scopeSaidaIds = null,
 }) {
   if (!dateIso || !horario) throw new Error('Horário inválido.');
   const selected = (saidas || []).filter((s) => s?.id);
@@ -262,8 +323,12 @@ export async function bookSlotSaidas({
     (row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario
   );
   const selectedIds = new Set(selected.map((s) => String(s.id)));
+  const scoped =
+    scopeSaidaIds instanceof Set
+      ? noSlot.filter((row) => scopeSaidaIds.has(String(row.saida_id)))
+      : noSlot;
   const existingBySaida = new Map(
-    noSlot.map((row) => [String(row.saida_id), row])
+    scoped.map((row) => [String(row.saida_id), row])
   );
 
   for (const saida of selected) {
@@ -283,14 +348,16 @@ export async function bookSlotSaidas({
     }
   }
 
+  // Transporte só herda do mesmo carregamento (escopo); no Encaixe novo, começa vazio.
+  const transporteSource = scoped[0] || (scopeSaidaIds instanceof Set ? null : noSlot[0]);
   const transporte = {
-    transportadora: noSlot[0]?.transportadora || null,
-    motorista: noSlot[0]?.motorista || null,
-    placa: noSlot[0]?.placa || null,
+    transportadora: transporteSource?.transportadora || null,
+    motorista: transporteSource?.motorista || null,
+    placa: transporteSource?.placa || null,
   };
 
   try {
-    for (const row of noSlot) {
+    for (const row of scoped) {
       if (!selectedIds.has(String(row.saida_id))) {
         await entities.agendamentosCarregamento.update(row.id, { status: 'cancelado' });
       }
@@ -298,6 +365,11 @@ export async function bookSlotSaidas({
 
     for (const saida of selected) {
       if (existingBySaida.has(String(saida.id))) continue;
+      // Já estava no slot em outro carregamento do Encaixe? Não duplicar.
+      const alreadyInSlot = noSlot.find(
+        (row) => String(row.saida_id) === String(saida.id)
+      );
+      if (alreadyInSlot) continue;
       await entities.agendamentosCarregamento.create({
         ...bookingPayload({ dateIso, horario, tipo, saida, user, observacao }),
         ...transporte,
@@ -357,22 +429,11 @@ export async function updateTransporte({
   const motoristaNorm = String(motorista || '').trim();
   const placaNorm = normalizePlaca(placa);
 
-  if (!transportadoraNorm) {
-    throw new Error(
-      t?.('painel.comercial.agendamentos.errors.transportadora') || 'Informe a transportadora.'
-    );
-  }
-  if (!motoristaNorm) {
-    throw new Error(t?.('painel.comercial.agendamentos.errors.motorista') || 'Informe o motorista.');
-  }
-  if (!placaNorm) {
-    throw new Error(t?.('painel.comercial.agendamentos.errors.placa') || 'Informe a placa.');
-  }
-
+  // Campos opcionais: permite limpar e salvar vazio para corrigir dados.
   const patch = {
-    transportadora: transportadoraNorm,
-    motorista: motoristaNorm,
-    placa: placaNorm,
+    transportadora: transportadoraNorm || null,
+    motorista: motoristaNorm || null,
+    placa: placaNorm || null,
   };
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
@@ -453,6 +514,14 @@ export async function listAgendamentosConcluidos() {
   }
   return data || [];
 }
+
+/**
+ * @deprecated Prefer `@transbordo/lib/saidaExpedicao` — reexport para compatibilidade.
+ */
+export {
+  listSaidaIdsExpedidas,
+  isSaidaExpedida,
+} from '@transbordo/lib/saidaExpedicao';
 
 /**
  * Janela do slot: horário agendado até +29 min (ex.: 08:30 → 08:30–08:59).

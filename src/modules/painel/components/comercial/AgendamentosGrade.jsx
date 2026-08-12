@@ -4,6 +4,10 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, Truck, UtensilsCro
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
 import { entities } from '@transbordo/services/entities';
+import {
+  isSaidaExpedida,
+  listSaidaIdsExpedidas,
+} from '@transbordo/lib/saidaExpedicao';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import AgendamentoSlotModal from '@painel/components/comercial/AgendamentoSlotModal';
 import AgendamentoTransporteModal from '@painel/components/comercial/AgendamentoTransporteModal';
@@ -23,6 +27,7 @@ import {
   getDefaultSelectedDate,
   getSlotsForWeekday,
   getWeekDays,
+  groupSlotCarregamentos,
   hasTransporte,
   indexAgendamentosBySlot,
   isSameISODate,
@@ -60,6 +65,7 @@ export default function AgendamentosGrade({
   const [loading, setLoading] = useState(true);
   const [agendamentos, setAgendamentos] = useState([]);
   const [saidas, setSaidas] = useState([]);
+  const [expedidasIds, setExpedidasIds] = useState(() => new Set());
   const [vasilhames, setVasilhames] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [activeSlot, setActiveSlot] = useState(null);
@@ -74,20 +80,28 @@ export default function AgendamentosGrade({
   const slots = useMemo(() => getSlotsForWeekday(selectedWeekday), [selectedWeekday]);
   const bookingMap = useMemo(() => indexAgendamentosBySlot(agendamentos), [agendamentos]);
 
+  /** Saídas ainda Aguardando (não expedidas) — únicas elegíveis para agendar. */
+  const saidasAguardando = useMemo(
+    () => (saidas || []).filter((s) => !isSaidaExpedida(s?.id, expedidasIds)),
+    [saidas, expedidasIds]
+  );
+
   const loadData = useCallback(
     async ({ silent = false } = {}) => {
       if (!silent) setLoading(true);
       const fromIso = toISODate(weekStart);
       const toIso = toISODate(addDays(weekStart, 4));
       try {
-        const [bookings, saidasList, vascs, ents] = await Promise.all([
+        const [bookings, saidasList, vascs, ents, expedidas] = await Promise.all([
           listAgendamentosByRange(fromIso, toIso),
           entities.saidas.list('-created_date'),
           showViewSaida ? entities.vasilhames.list() : Promise.resolve([]),
           showViewSaida ? entities.estoque.list() : Promise.resolve([]),
+          listSaidaIdsExpedidas(),
         ]);
         setAgendamentos(bookings || []);
         setSaidas(saidasList || []);
+        setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
         setVasilhames(vascs || []);
         setEntradas(ents || []);
       } catch (err) {
@@ -100,6 +114,7 @@ export default function AgendamentosGrade({
         });
         setAgendamentos([]);
         setSaidas([]);
+        setExpedidasIds(new Set());
       } finally {
         if (!silent) setLoading(false);
       }
@@ -149,12 +164,28 @@ export default function AgendamentosGrade({
     return { total: allHorarios.length, occupied, free: allHorarios.length - occupied };
   }, [slots, bookingMap, selectedIso]);
 
-  const openSlot = (horario, tipo = 'regular') => {
+  const encaixeGroups = useMemo(
+    () =>
+      groupSlotCarregamentos(bookingMap.get(`${selectedIso}|${ENCAIXE_HORARIO}`), {
+        splitByCliente: true,
+      }),
+    [bookingMap, selectedIso]
+  );
+
+  const openSlot = (horario, tipo = 'regular', groupBookings = null) => {
+    const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
+    const scoped = normalizeBookings(groupBookings);
     setActiveSlot({
       key: `${selectedIso}|${horario}`,
       dateIso: selectedIso,
       horario,
-      tipo,
+      tipo: isEncaixe ? 'encaixe' : tipo,
+      // Encaixe: null = novo carregamento; array = editar só esse grupo (cliente).
+      // Regular: undefined → sincroniza o horário inteiro.
+      groupBookings: isEncaixe ? scoped : undefined,
+      scopeSaidaIds: isEncaixe
+        ? new Set(scoped.map((b) => String(b.saida_id)).filter(Boolean))
+        : null,
     });
   };
 
@@ -180,7 +211,12 @@ export default function AgendamentosGrade({
     setViewPicker(list);
   };
 
-  const activeBookings = activeSlot ? bookingMap.get(activeSlot.key) || [] : [];
+  const activeBookings =
+    activeSlot?.groupBookings !== undefined
+      ? normalizeBookings(activeSlot.groupBookings)
+      : activeSlot
+        ? bookingMap.get(activeSlot.key) || []
+        : [];
 
   const handleBook = async (selectedSaidas) => {
     if (!activeSlot) return;
@@ -191,6 +227,7 @@ export default function AgendamentosGrade({
       saidas: selectedSaidas,
       user,
       t,
+      scopeSaidaIds: activeSlot.scopeSaidaIds,
     });
     toast({ title: t('painel.comercial.agendamentos.saveSuccess') });
     await loadData({ silent: true });
@@ -411,23 +448,38 @@ export default function AgendamentosGrade({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
               {t('painel.comercial.agendamentos.encaixe')}
             </p>
-            <TimeSlotButton
-              hora={t('painel.comercial.agendamentos.encaixe')}
-              bookings={bookingMap.get(`${selectedIso}|${ENCAIXE_HORARIO}`)}
-              onClick={() => openSlot(ENCAIXE_HORARIO, 'encaixe')}
-              availableLabel={t('painel.comercial.agendamentos.available')}
-              showViewSaida={showViewSaida}
-              onView={openSaidaView}
-              viewLabel={t('painel.comercial.agendamentos.viewSaida')}
-              onEditTransporte={showTransporte ? setTransporteBookings : undefined}
-              transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
-              onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
-              concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
-              saidasCountLabel={(count) =>
-                t('painel.comercial.agendamentos.saidasCount', { count })
-              }
-              encaixe
-            />
+            <p className="text-xs text-muted-foreground mb-2">
+              {t('painel.comercial.agendamentos.encaixeHint')}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+              {encaixeGroups.map((group) => (
+                <TimeSlotButton
+                  key={group.key}
+                  hora={t('painel.comercial.agendamentos.encaixe')}
+                  bookings={group.bookings}
+                  onClick={() => openSlot(ENCAIXE_HORARIO, 'encaixe', group.bookings)}
+                  availableLabel={t('painel.comercial.agendamentos.available')}
+                  showViewSaida={showViewSaida}
+                  onView={openSaidaView}
+                  viewLabel={t('painel.comercial.agendamentos.viewSaida')}
+                  onEditTransporte={showTransporte ? setTransporteBookings : undefined}
+                  transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
+                  onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                  concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                  saidasCountLabel={(count) =>
+                    t('painel.comercial.agendamentos.saidasCount', { count })
+                  }
+                  encaixe
+                />
+              ))}
+              <TimeSlotButton
+                hora={t('painel.comercial.agendamentos.encaixe')}
+                bookings={[]}
+                onClick={() => openSlot(ENCAIXE_HORARIO, 'encaixe', [])}
+                availableLabel={t('painel.comercial.agendamentos.encaixeNew')}
+                encaixe
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -436,7 +488,7 @@ export default function AgendamentosGrade({
         open={!!activeSlot}
         slot={activeSlot}
         bookings={activeBookings}
-        saidas={saidas}
+        saidas={saidasAguardando}
         scheduledSaidaIds={scheduledSaidaIds}
         permissionPrefix={permissionPrefix}
         onClose={() => setActiveSlot(null)}

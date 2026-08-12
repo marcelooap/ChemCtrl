@@ -5,8 +5,7 @@ import {
   TIPO_EMBALADO,
   TIPO_IND_RETORNO_MP,
   TIPO_IND_VASILHAME,
-  origemLabel,
-  resolveItemOrigem,
+  formatSaidaItemInformacoes,
   tipoItemLabel,
 } from '@transbordo/lib/saidaOrigem';
 
@@ -60,17 +59,6 @@ function qtdSolicitada(item) {
   return formatQtdItem(item.quantidade_solicitada, item.unidade);
 }
 
-function origemItem(item) {
-  const modulo = origemLabel(resolveItemOrigem(item));
-  if (item.tipo === TIPO_EMBALADO) return `${modulo} · Armazenagem`;
-  if (item.tipo === TIPO_IND_RETORNO_MP) {
-    return `${modulo} · ${item.lote || 'MP'}`;
-  }
-  const placa = item.vasilhame_placa || '—';
-  const barril = item.vasilhame_barril || '—';
-  return `${modulo} · ${placa} - ${barril}`;
-}
-
 function openPrintWindow(html, title, blockedMessage) {
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) {
@@ -92,7 +80,7 @@ function openPrintWindow(html, title, blockedMessage) {
 /**
  * Abre o diálogo de impressão do navegador com o conteúdo da saída (visão de agendamento).
  */
-export function printSaidaAgendamento(saida, { t } = {}) {
+export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
   if (!saida) return;
 
   const codigo = saida.codigo || '';
@@ -105,22 +93,32 @@ export function printSaidaAgendamento(saida, { t } = {}) {
       : 'Pendente';
   const itens = saida.itens || [];
   const blocked = t?.('painel.comercial.agendamentos.printBlocked');
+  const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
 
   const rows =
     itens.length === 0
       ? `<tr><td colspan="6" class="empty">Nenhum produto nesta saída.</td></tr>`
       : itens
-          .map(
-            (item) => `
+          .map((item) => {
+            const vasilhame = item.vasilhame_id
+              ? vasilhameById.get(item.vasilhame_id)
+              : null;
+            return `
       <tr>
         <td class="code">${escapeHtml(saida.codigo || item.produto_codigo || '—')}</td>
         <td>${escapeHtml(item.produto_nome || '—')}</td>
         <td>${escapeHtml(tipoItemLabel(item))}</td>
-        <td>${escapeHtml(origemItem(item))}</td>
+        <td>${escapeHtml(
+          formatSaidaItemInformacoes(item, {
+            vasilhame,
+            includeLote: true,
+            context: 'agendamento',
+          })
+        )}</td>
         <td class="num">${escapeHtml(qtdSolicitada(item))}</td>
         <td class="num">${escapeHtml(formatQtdEmbalagens(item))}</td>
-      </tr>`
-          )
+      </tr>`;
+          })
           .join('');
 
   const html = `<!DOCTYPE html>
@@ -166,7 +164,7 @@ export function printSaidaAgendamento(saida, { t } = {}) {
         <th>Código</th>
         <th>Produto</th>
         <th>Tipo</th>
-        <th>Origem</th>
+        <th>Informações</th>
         <th>Qtd. Solicitada</th>
         <th>Qtd. de embalagens</th>
       </tr>
