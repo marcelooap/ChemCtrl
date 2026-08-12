@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
-  Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft,
+  Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Truck,
   Users, Building2, Warehouse, ClipboardCheck,
 } from 'lucide-react';
 import { canAccessRoute, getUserClient } from '@industrializacao/lib/permissions';
@@ -25,6 +25,7 @@ const ICONS = {
   Box,
   Cylinder,
   ArrowRightLeft,
+  Truck,
   Users,
   Building2,
   Warehouse,

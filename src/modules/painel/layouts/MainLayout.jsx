@@ -10,17 +10,18 @@ import {
   Shield,
   PackagePlus,
   ClipboardList,
-  Layers,
   Calendar,
+  CalendarClock,
+  PackageCheck,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { isAdminUser } from '@industrializacao/lib/permissions';
+import { canAccessRoute, isAdminUser } from '@industrializacao/lib/permissions';
 import AppShell from '@shared/components/layout/AppShell';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
 
 /**
  * Layout do Painel — hub de módulos para usuários internos.
- * Itens administrativos (dashboard, usuários, etc.) só para Administrador.
+ * Telas de negócio seguem permissões individuais; Usuários/Permissões ficam para admin.
  * Usuários externos não acessam o Painel.
  */
 export default function MainLayout() {
@@ -32,10 +33,8 @@ export default function MainLayout() {
     const base = [
       { path: '/painel/home', label: t('painel.nav.home'), icon: Home, end: true },
     ];
-    if (!admin) return base;
 
-    return [
-      ...base,
+    const business = [
       { path: '/painel/dashboard', label: t('painel.nav.dashboard'), icon: LayoutDashboard },
       {
         groupId: 'comercial',
@@ -53,28 +52,44 @@ export default function MainLayout() {
             icon: ClipboardList,
           },
           {
-            path: '/painel/comercial/composicao-carga',
-            label: t('painel.nav.composicaoCarga'),
-            icon: Layers,
-          },
-          {
             path: '/painel/comercial/agendamentos',
             label: t('painel.nav.agendamentos'),
             icon: Calendar,
           },
         ],
       },
-      { path: '/painel/logistica', label: t('painel.nav.logistica'), icon: Truck },
       {
+        groupId: 'logistica',
+        label: t('painel.nav.logistica'),
+        icon: Truck,
+        children: [
+          {
+            path: '/painel/logistica/agendamentos',
+            label: t('painel.nav.logisticaAgendamentos'),
+            icon: CalendarClock,
+          },
+          {
+            path: '/painel/logistica/carregamentos',
+            label: t('painel.nav.logisticaCarregamentos'),
+            icon: PackageCheck,
+          },
+        ],
+      },
+    ];
+
+    const adminItems = admin
+      ? [{
         groupId: 'usersPermissions',
         label: t('painel.nav.usersAndPermissions'),
         icon: Users,
         children: [
           { path: '/painel/usuarios', label: t('painel.nav.users'), icon: Users },
-          { path: '/painel/perfis', label: t('painel.nav.profiles'), icon: Shield },
+          { path: '/painel/permissoes', label: t('painel.nav.permissions'), icon: Shield },
         ],
-      },
-    ];
+      }]
+      : [];
+
+    return [...base, ...business, ...adminItems];
   }, [t, admin]);
 
   if (user?.tipo === 'externo') {
@@ -92,6 +107,7 @@ export default function MainLayout() {
           moduleName={t('sidebar.moduleName')}
           moduleSubtitle={t('painel.subtitle')}
           items={items}
+          canAccessPath={(path) => path === '/painel/home' || canAccessRoute(user, path)}
           showModulesLink={false}
         />
       )}

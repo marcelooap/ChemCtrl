@@ -20,6 +20,9 @@ import ProducoesCQ from '@industrializacao/pages/qualidade/ProducoesCQ';
 import COA from '@industrializacao/pages/qualidade/COA';
 import EquipamentosLab from '@industrializacao/pages/qualidade/EquipamentosLab';
 import Vasilhames from '@industrializacao/pages/Vasilhames';
+import IndSaida from '@industrializacao/pages/Saida';
+import IndSaidaForm from '@industrializacao/pages/SaidaForm';
+import IndSaidaView from '@industrializacao/pages/SaidaView';
 import Tankagem from '@industrializacao/pages/Tankagem';
 import Transbordo from '@industrializacao/pages/Transbordo';
 import Inventario from '@industrializacao/pages/Inventario';
@@ -38,7 +41,7 @@ export default function ChemCtrlRoutes() {
       <RealtimeProvider>
         <Routes>
           <Route path="usuarios" element={<Navigate to="/painel/usuarios" replace />} />
-          <Route path="perfis" element={<Navigate to="/painel/perfis" replace />} />
+          <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
           <Route element={<AppLayout />}>
             <Route index element={<Home />} />
             <Route path="dashboard" element={<Dashboard />} />
@@ -57,6 +60,10 @@ export default function ChemCtrlRoutes() {
             <Route path="qualidade/producoes" element={<ProducoesCQ />} />
             <Route path="qualidade/coa" element={<COA />} />
             <Route path="vasilhames" element={<Vasilhames />} />
+            <Route path="saida" element={<IndSaida />} />
+            <Route path="saida/novo" element={<IndSaidaForm />} />
+            <Route path="saida/editar/:id" element={<IndSaidaForm />} />
+            <Route path="saida/visualizar/:id" element={<IndSaidaView />} />
             <Route path="tankagem" element={<Tankagem />} />
             <Route path="transbordo" element={<Transbordo />} />
             <Route path="inventario" element={<Inventario />} />

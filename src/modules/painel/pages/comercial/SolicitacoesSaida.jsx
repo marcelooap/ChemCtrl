@@ -5,7 +5,7 @@ const BASE_PATH = '/painel/comercial/solicitacoes-saida';
 
 /**
  * Solicitações de Saída no Painel Comercial.
- * Reutiliza a tela completa de Saídas do ChemFlow (listagem, filtros, fiscal, CRUD).
+ * Reutiliza a tela completa de Saídas do ChemFlow (listagem, validação, CRUD).
  */
 export default function SolicitacoesSaida() {
   const { t } = useTranslation();

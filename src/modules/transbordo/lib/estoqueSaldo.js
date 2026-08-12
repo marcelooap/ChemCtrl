@@ -863,10 +863,10 @@ export function listSaidasHistoricoForEstoque(
         quantidade,
         unidade,
         status: saida.enviado_ao_fiscal
-          ? "Enviado ao fiscal"
+          ? "Validado"
           : saida.status === "enviado_fiscal"
-            ? "Enviado ao fiscal"
-            : "Aguardando",
+            ? "Validado"
+            : "Pendente",
         enviadoEm: saida.enviado_fiscal_data,
         responsavel:
           saida.enviado_fiscal_usuario ||

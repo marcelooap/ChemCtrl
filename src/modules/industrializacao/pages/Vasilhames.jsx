@@ -22,7 +22,12 @@ import {
   getContainerPackageQty,
   formatAggregatedContainerLabel,
 } from '@industrializacao/lib/packagingTypes';
-import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, todayDateInputValue, toDateInputValue } from '@/i18n/formatters';
+import { entities as chemflowEntities } from '@transbordo/services/entities';
+import {
+  buildContainerYardRestorePatch,
+  collectIndVasilhameItemsForContainer,
+} from '@transbordo/lib/saidaIndContainer';
 import AddTankDialog from '@industrializacao/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@industrializacao/components/vasilhames/HistoryDialog';
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
@@ -260,17 +265,55 @@ export default function Vasilhames() {
   const prodOf = (c) => productionOfContainer(c, productions);
   const fmtRegId = (n) => n != null ? String(n).padStart(2, '0') : na;
 
-  const saveEdit = async () => {
-    const updates = { ...editing };
-    if (editing.departure_date) {
-      updates.status = 'Expedido';
-      updates.is_fractional = false;
-    } else {
-      updates.status = 'No Pátio';
+  const restoreContainerToYard = async (container) => {
+    let linked = [];
+    try {
+      const saidas = await chemflowEntities.saidas.list('-created_date');
+      linked = collectIndVasilhameItemsForContainer(saidas, container.id).filter(
+        ({ saida }) => saida?.enviado_ao_fiscal || saida?.status === 'enviado_fiscal'
+      );
+      // Se não houver saída fiscal, ainda tenta qualquer vínculo para recuperar volume
+      if (linked.length === 0) {
+        linked = collectIndVasilhameItemsForContainer(saidas, container.id);
+      }
+    } catch {
+      linked = [];
     }
+
+    const patch =
+      buildContainerYardRestorePatch(container, linked) || {
+        status: 'No Pátio',
+        departure_date: null,
+      };
+
+    await base44.entities.Container.update(container.id, patch);
+    return patch;
+  };
+
+  const saveEdit = async () => {
+    const original = containers.find((c) => c.id === editing.id) || editing;
+    const wantYard =
+      editing.status === 'No Pátio' || !String(editing.departure_date || '').trim();
+    const wasExpedido =
+      original.status === 'Expedido' || Boolean(original.departure_date);
+
     setSavingEdit(true);
     try {
-      await base44.entities.Container.update(editing.id, updates);
+      if (wantYard && wasExpedido) {
+        await restoreContainerToYard(original);
+      } else {
+        const updates = { ...editing };
+        if (wantYard) {
+          updates.status = 'No Pátio';
+          updates.departure_date = null;
+        } else {
+          updates.status = 'Expedido';
+          updates.is_fractional = false;
+          updates.departure_date =
+            editing.departure_date || todayDateInputValue();
+        }
+        await base44.entities.Container.update(editing.id, updates);
+      }
       if ((editing.type || '').toLowerCase().includes('tank') && editing.container_number) {
         await zeroOutTankaStock(editing.container_number);
       }
@@ -285,6 +328,22 @@ export default function Vasilhames() {
 
   const confirmDepart = async () => {
     if (!departItem) return;
+
+    // Sem data = reverter para No Pátio + restaurar volume da embalagem
+    if (!String(departDate || '').trim()) {
+      setSavingDepart(true);
+      try {
+        await restoreContainerToYard(departItem);
+        setShowDepart(false);
+        load();
+        toast({ title: t('containers.messages.statusRevertedToYard') });
+      } catch (err) {
+        toast({ title: t('containers.messages.departError'), description: err.message, variant: 'destructive' });
+      } finally {
+        setSavingDepart(false);
+      }
+      return;
+    }
 
     const aggregated = isAggregatedUnitContainer(departItem);
     const stockQty = getContainerPackageQty(departItem);
@@ -524,15 +583,20 @@ export default function Vasilhames() {
                         <button onClick={() => { setViewing(c); setShowView(true); }} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
                         {canEdit && <button onClick={() => { setEditing({ ...c }); setShowEdit(true); }} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
                         {canDelete && <button onClick={() => setDeleteTarget(c)} className="p-1 rounded hover:bg-red-50" title={t('containers.vasilhames.delete')}><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>}
-                        {canEdit && c.status === 'No Pátio' && (
+                        {canEdit && (
                           <button
                             onClick={() => {
                               setDepartItem(c);
-                              setDepartDate(new Date().toISOString().split('T')[0]);
+                              setDepartDate(
+                                c.departure_date
+                                  ? toDateInputValue(c.departure_date)
+                                  : todayDateInputValue()
+                              );
                               setDepartQty(isAggregatedUnitContainer(c) ? '1' : '');
                               setShowDepart(true);
                             }}
                             className="p-1 rounded hover:bg-muted"
+                            title={t('containers.actions.depart')}
                           >
                             <Truck className="w-3.5 h-3.5 text-green-600" />
                           </button>
@@ -765,8 +829,40 @@ export default function Vasilhames() {
                 <Input type="date" value={editing.min_test_date || ''} onChange={e => setEditing({ ...editing, min_test_date: e.target.value })} />
               </div>
               <div className="col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">{t('containers.fields.status')}</label>
+                <Select
+                  value={editing.status || (editing.departure_date ? 'Expedido' : 'No Pátio')}
+                  onValueChange={(v) =>
+                    setEditing({
+                      ...editing,
+                      status: v,
+                      departure_date:
+                        v === 'No Pátio'
+                          ? ''
+                          : editing.departure_date || todayDateInputValue(),
+                    })
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="No Pátio">{t('containers.status.yard')}</SelectItem>
+                    <SelectItem value="Expedido">{t('containers.status.shipped')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
                 <label className="text-xs font-medium text-muted-foreground">{t('containers.vasilhames.departureDateField')}</label>
-                <Input type="date" value={editing.departure_date || ''} onChange={e => setEditing({ ...editing, departure_date: e.target.value })} />
+                <Input
+                  type="date"
+                  value={toDateInputValue(editing.departure_date) || ''}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      departure_date: e.target.value,
+                      status: e.target.value ? 'Expedido' : 'No Pátio',
+                    })
+                  }
+                />
                 <p className="text-xs text-muted-foreground mt-1">{t('containers.vasilhames.departureHint')}</p>
               </div>
             </div>
@@ -810,12 +906,17 @@ export default function Vasilhames() {
             <div>
               <label className="text-xs font-medium text-muted-foreground">{t('containers.vasilhames.departureDateField')}</label>
               <Input type="date" value={departDate} onChange={(e) => setDepartDate(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{t('containers.vasilhames.departDialogHint')}</p>
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowDepart(false)} disabled={savingDepart}>{t('buttons.cancel')}</Button>
             <Button onClick={confirmDepart} disabled={savingDepart} style={{ background: '#2575D1', color: 'white' }}>
-              {savingDepart ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('containers.vasilhames.confirming')}</> : t('containers.vasilhames.confirmDepart')}
+              {savingDepart
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('containers.vasilhames.confirming')}</>
+                : !String(departDate || '').trim()
+                  ? t('containers.vasilhames.confirmRevertYard')
+                  : t('containers.vasilhames.confirmDepart')}
             </Button>
           </div>
         </DialogContent>

@@ -13,25 +13,54 @@ import {
   PackageSearch,
   Cylinder,
 } from 'lucide-react';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { canAccessRoute } from '@industrializacao/lib/permissions';
+import { APP_MODULE_IDS, getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
 
-const NAV_ITEMS = [
-  { path: '/chemflow', label: 'Home', icon: LayoutDashboard, end: true },
-  { path: '/chemflow/dashboard', label: 'Dashboard', icon: BarChart3 },
-  { path: '/chemflow/cadastro', label: 'Cadastro', icon: ClipboardList },
-  { path: '/chemflow/entrada', label: 'Entrada', icon: PackagePlus },
-  { path: '/chemflow/saida', label: 'Saída', icon: Send },
-  { path: '/chemflow/transbordo', label: 'Transbordo', icon: Truck },
-  { path: '/chemflow/vasilhames', label: 'Vasilhames', icon: Container },
-  { path: '/chemflow/filtracao', label: 'Filtração', icon: Filter },
-  { path: '/chemflow/estoque', label: 'Estoque', icon: Boxes },
-  { path: '/chemflow/estoque-envio', label: 'Estoque Envio', icon: PackageSearch },
-  { path: '/chemflow/tankagem', label: 'Tankagem', icon: Cylinder },
-];
+const ICONS = {
+  LayoutDashboard,
+  BarChart3,
+  ClipboardList,
+  PackagePlus,
+  Send,
+  Truck,
+  Container,
+  Filter,
+  Boxes,
+  PackageSearch,
+  Cylinder,
+};
+
+function resolveIcon(name) {
+  return ICONS[name] || LayoutDashboard;
+}
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const { t } = useTranslation();
-  const items = useMemo(() => NAV_ITEMS, []);
+  const { user } = useInternalAuth();
+  const navSpec = useMemo(() => getSidebarNavSpec(APP_MODULE_IDS.TRANSBORDO), []);
+
+  const items = useMemo(() => navSpec.map((item) => {
+    if (item.children) {
+      return {
+        ...item,
+        label: t(item.labelKey),
+        icon: resolveIcon(item.icon),
+        children: item.children.map((child) => ({
+          ...child,
+          label: t(child.labelKey),
+          icon: resolveIcon(child.icon),
+        })),
+      };
+    }
+    return {
+      ...item,
+      label: t(item.labelKey),
+      icon: resolveIcon(item.icon),
+      end: item.path === '/chemflow',
+    };
+  }), [navSpec, t]);
 
   return (
     <ModuleSidebar
@@ -42,6 +71,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       moduleName={t('sidebar.moduleName')}
       moduleSubtitle={t('sidebar.chemflowSubtitle')}
       items={items}
+      canAccessPath={(path) => canAccessRoute(user, path)}
       showModulesLink
     />
   );

@@ -19,22 +19,33 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import SaidaViewDialog from "@transbordo/components/saida/SaidaViewDialog";
 import { formatMass } from "@transbordo/lib/format";
 import { applySaidaFiscalToggle } from "@transbordo/lib/saidaFiscal";
+import {
+  syncEstoqueSaldos,
+  resolveEstoqueIdsFromSaidaConvencional,
+} from "@transbordo/lib/estoqueSaldo";
+import {
+  saidaHasIndustrializacaoItems,
+  TIPO_EMBALADO,
+  TIPO_CONVENCIONAL,
+} from "@transbordo/lib/saidaOrigem";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
-  { value: "aguardando", label: "Aguardando" },
-  { value: "enviado_fiscal", label: "Enviado" },
+  { value: "aguardando", label: "Pendente" },
+  { value: "enviado_fiscal", label: "Validado" },
 ];
 
 const DEFAULT_BASE_PATH = "/chemflow/saida";
 
 /**
  * Tela de listagem de saídas.
- * `basePath` / `title` permitem reutilizar a mesma UI no Painel Comercial.
+ * `basePath` / `title` permitem reutilizar a mesma UI no Painel / Industrialização.
+ * `onlyIndustrializacao` limita à saídas com itens do módulo Industrialização.
  */
 export default function Saida({
   basePath = DEFAULT_BASE_PATH,
   title = "Saídas",
+  onlyIndustrializacao = false,
 } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -61,7 +72,10 @@ export default function Saida({
         entities.estoque.list(),
         entities.vasilhames.list(),
       ]);
-      setSaidas(saics);
+      const list = onlyIndustrializacao
+        ? (saics || []).filter(saidaHasIndustrializacaoItems)
+        : saics || [];
+      setSaidas(list);
       setClientes(cliens);
       setEntradas(ents);
       setVasilhames(vascs);
@@ -73,7 +87,7 @@ export default function Saida({
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [onlyIndustrializacao]);
 
   const filtered = saidas.filter((s) => {
     const q = search.toLowerCase();
@@ -85,8 +99,11 @@ export default function Saida({
     const matchStatus =
       !statusFilter ||
       statusFilter === "Todos" ||
-      (statusFilter === "Aguardando" && s.status === "aguardando") ||
-      ((statusFilter === "Enviado" || statusFilter === "Enviado ao Fiscal") &&
+      ((statusFilter === "Pendente" || statusFilter === "Aguardando") &&
+        s.status === "aguardando") ||
+      ((statusFilter === "Validado" ||
+        statusFilter === "Enviado" ||
+        statusFilter === "Enviado ao Fiscal") &&
         s.status === "enviado_fiscal");
 
     const matchCliente =
@@ -149,12 +166,47 @@ export default function Saida({
           vasilhames,
         });
       } catch {
-        // segue para exclusão mesmo assim
+        // segue para exclusão; sync Transbordo abaixo tenta recuperar saldo
       }
     }
 
     try {
       await entities.saidas.delete(deleteId);
+
+      // Garante saldo Transbordo (embalado + convencional) após exclusão.
+      // Industrialização não é recalculada aqui.
+      if (saida?.enviado_ao_fiscal) {
+        const itens = saida.itens || [];
+        const embaladoIds = itens
+          .filter(
+            (i) =>
+              (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") &&
+              i.entrada_id
+          )
+          .map((i) => i.entrada_id);
+        let convencionalIds = [];
+        try {
+          const transbordos = await entities.transbordos.list();
+          convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
+            itens.filter(
+              (i) =>
+                i.tipo === TIPO_CONVENCIONAL || i.tipo === "convencional"
+            ),
+            vasilhames,
+            transbordos,
+            entradas
+          );
+        } catch {
+          convencionalIds = [];
+        }
+        const estoqueIds = [
+          ...new Set([...embaladoIds, ...convencionalIds].filter(Boolean)),
+        ];
+        if (estoqueIds.length > 0) {
+          await syncEstoqueSaldos(estoqueIds);
+        }
+      }
+
       await loadData();
     } catch {
       // ignore
@@ -190,7 +242,7 @@ export default function Saida({
     } catch (err) {
       setFiscalError(
         err?.message ||
-          "Não foi possível atualizar o status fiscal. Tente novamente."
+          "Não foi possível atualizar a validação. Tente novamente."
       );
     }
     setFiscalBusyId(null);
@@ -270,7 +322,7 @@ export default function Saida({
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Produtos</th>
                 <th className="px-5 py-3 font-medium">Qtd. Total (kg)</th>
-                <th className="px-5 py-3 font-medium">Envio Fiscal</th>
+                <th className="px-5 py-3 font-medium">Validação</th>
                 <th className="px-5 py-3 font-medium">Ações</th>
               </tr>
             </thead>
@@ -331,8 +383,8 @@ export default function Saida({
                         }`}
                         title={
                           s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                            ? "Clique para retornar a Aguardando"
-                            : "Clique para marcar como Enviado"
+                            ? "Clique para retornar a Pendente"
+                            : "Clique para marcar como Validado"
                         }
                       >
                         {fiscalBusyId === s.id ? (
@@ -343,8 +395,8 @@ export default function Saida({
                         {fiscalBusyId === s.id
                           ? "..."
                           : s.enviado_ao_fiscal || s.status === "enviado_fiscal"
-                            ? "Enviado"
-                            : "Aguardando"}
+                            ? "Validado"
+                            : "Pendente"}
                       </button>
                     </td>
                     <td className="px-5 py-3">
@@ -406,7 +458,7 @@ export default function Saida({
         entradas={entradas}
       />
 
-      {/* Fiscal Confirmation */}
+      {/* Validação Confirmation */}
       <AlertDialog
         open={!!fiscalConfirm}
         onOpenChange={(v) => !v && setFiscalConfirm(null)}
@@ -415,13 +467,13 @@ export default function Saida({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {fiscalConfirm?.enviar
-                ? "Confirmar envio ao fiscal"
-                : "Reverter envio fiscal"}
+                ? "Confirmar validação"
+                : "Reverter validação"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {fiscalConfirm?.enviar
-                ? "Confirma que o relatório já foi enviado ao fiscal para devida devolução?"
-                : "Tem certeza que deseja mudar o status dessa saída? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
+                ? "Confirma a validação desta saída?"
+                : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

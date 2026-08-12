@@ -1,5 +1,7 @@
 import { Route, Routes, Navigate } from 'react-router-dom';
+import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvider';
 import MainLayout from '@transbordo/layouts/MainLayout';
+import AcessoNegado from '@industrializacao/pages/AcessoNegado';
 import Home from '@transbordo/pages/Home';
 import Dashboard from '@transbordo/pages/Dashboard';
 import Entrada from '@transbordo/pages/Entrada';
@@ -21,8 +23,10 @@ import Filtracao from '@transbordo/pages/Filtracao';
  */
 export default function ChemFlowRoutes() {
   return (
+    <PermissionProvider>
     <Routes>
       <Route element={<MainLayout />}>
+        <Route path="acesso-negado" element={<AcessoNegado />} />
         <Route index element={<Home />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="cadastro" element={<Cadastro />} />
@@ -40,5 +44,6 @@ export default function ChemFlowRoutes() {
       </Route>
       <Route path="*" element={<Navigate to="/chemflow" replace />} />
     </Routes>
+    </PermissionProvider>
   );
 }

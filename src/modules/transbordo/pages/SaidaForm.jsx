@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { entities } from '@transbordo/services/entities';
-import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
+import { entities } from "@transbordo/services/entities";
+import { base44 } from "@industrializacao/api/base44Client";
+import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
 import { ArrowLeft, Plus, Save } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Label } from "@shared/components/ui/label";
@@ -10,6 +11,18 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import SaidaItemRow from "@transbordo/components/saida/SaidaItemRow";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
+import { todayDateInputValue } from "@/i18n/formatters";
+import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
+import {
+  ORIGEM_TRANSBORDO,
+  ORIGEM_INDUSTRIALIZACAO,
+  TIPO_EMBALADO,
+  TIPO_CONVENCIONAL,
+  TIPO_IND_VASILHAME,
+  TIPO_IND_RETORNO_MP,
+  emptySaidaItem,
+  resolveItemOrigem,
+} from "@transbordo/lib/saidaOrigem";
 
 /** Data local de hoje em yyyy-mm-dd (evita deslocamento UTC). */
 const todayStr = () => {
@@ -20,45 +33,36 @@ const todayStr = () => {
   return `${y}-${m}-${day}`;
 };
 
-const emptyItem = () => ({
-  tipo: "embalado",
-  produto_id: "",
-  produto_nome: "",
-  produto_codigo: "",
-  quantidade_solicitada: 0,
-  peso_liquido_embalagem: 0,
-  quantidade_embalagens: 0,
-  lote: "",
-  estoque_atual: 0,
-  estoque_final: 0,
-  entrada_id: "",
-  vasilhame_id: "",
-  vasilhame_placa: "",
-  vasilhame_barril: "",
-  volume_disponivel: 0,
-  volume_solicitado: 0,
-  saldo_final: 0,
-  peso_liquido: 0,
-  peso_bruto: 0,
-});
-
 const DEFAULT_BASE_PATH = "/chemflow/saida";
 
 /**
  * Formulário de criação/edição de saída.
- * `basePath` permite reutilizar a mesma UI no Painel Comercial.
+ * `basePath` permite reutilizar a mesma UI no Painel / Industrialização.
+ * `enableMultiOrigem` habilita seleção Industrialização + Transbordo por item.
+ * `lockedOrigem` força um módulo (esconde seletor) e carrega as fontes correspondentes.
  */
-export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
+export default function SaidaForm({
+  basePath = DEFAULT_BASE_PATH,
+  enableMultiOrigem = false,
+  lockedOrigem = null,
+} = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const isEdit = !!id;
+  const defaultOrigem = lockedOrigem || ORIGEM_TRANSBORDO;
+  const loadIndData =
+    enableMultiOrigem || lockedOrigem === ORIGEM_INDUSTRIALIZACAO;
+  const showOrigemSelector = enableMultiOrigem && !lockedOrigem;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [entradas, setEntradas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [containersInd, setContainersInd] = useState([]);
+  const [stocksInd, setStocksInd] = useState([]);
+  const [movementsInd, setMovementsInd] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [editingSaida, setEditingSaida] = useState(null);
@@ -69,37 +73,71 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
     data_solicitacao: todayStr(),
     data_programada: "",
     observacoes: "",
-    itens: [emptyItem()],
+    itens: [emptySaidaItem(defaultOrigem)],
   });
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [ents, vascs, cliens, saics] = await Promise.all([
+        const core = Promise.all([
           entities.estoque.list(),
           entities.vasilhames.list(),
           entities.clientes.list(),
           entities.saidas.list("-created_date"),
         ]);
+
+        const [ents, vascs, cliens, saics] = await core;
+
         setEntradas(ents);
         setVasilhames(vascs);
         setClientes(cliens);
         setSaidas(saics);
 
+        if (loadIndData) {
+          try {
+            const [containers, stocks, movements] = await Promise.all([
+              base44.entities.Container.list("-created_date", 2000),
+              base44.entities.RawMaterialStock.list("-created_date", 1000),
+              base44.entities.StockMovement.list("-movement_date", 1000),
+            ]);
+            setContainersInd(Array.isArray(containers) ? containers : []);
+            setStocksInd(Array.isArray(stocks) ? stocks : []);
+            setMovementsInd(Array.isArray(movements) ? movements : []);
+          } catch {
+            setContainersInd([]);
+            setStocksInd([]);
+            setMovementsInd([]);
+            setError(
+              "Dados da Industrialização não carregaram. Recarregue a página ou verifique a conexão."
+            );
+          }
+        }
+
         if (id) {
           const saida = await entities.saidas.get(id);
           setEditingSaida(saida);
+          const itens =
+            (saida.itens || []).length > 0
+              ? saida.itens.map((it) => ({
+                  ...emptySaidaItem(resolveItemOrigem(it)),
+                  ...it,
+                  origem: resolveItemOrigem(it),
+                }))
+              : [emptySaidaItem(defaultOrigem)];
           setFormData({
             cliente_id: saida.cliente_id || "",
             cliente_nome: saida.cliente_nome || "",
             data_solicitacao: saida.data_solicitacao || todayStr(),
             data_programada: saida.data_programada || "",
             observacoes: saida.observacoes || "",
-            itens:
-              (saida.itens || []).length > 0
-                ? saida.itens.map((it) => ({ ...emptyItem(), ...it }))
-                : [emptyItem()],
+            itens,
           });
+          // Em edição, itens iniciam colapsados (resumo reduzido).
+          const collapsed = {};
+          itens.forEach((_, i) => {
+            collapsed[i] = true;
+          });
+          setCollapsedByIndex(collapsed);
         }
       } catch {
         setError("Erro ao carregar dados.");
@@ -107,22 +145,25 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
       setLoading(false);
     };
     load();
-  }, [id]);
+  }, [id, loadIndData, defaultOrigem]);
 
-  // ── Saldo virtual: restaura estoque da saída original (edição) e desconta outros itens do formulário ──
   const getAvailableSaldo = (entradaId, currentIndex) => {
     const entrada = entradas.find((e) => e.id === entradaId);
     if (!entrada) return 0;
     let saldo = entrada.saldo_atual || 0;
     if (editingSaida?.enviado_ao_fiscal) {
       (editingSaida.itens || []).forEach((item) => {
-        if (item.tipo === "embalado" && item.entrada_id === entradaId) {
+        if (item.tipo === TIPO_EMBALADO && item.entrada_id === entradaId) {
           saldo += item.quantidade_solicitada || 0;
         }
       });
     }
     formData.itens.forEach((item, i) => {
-      if (i !== currentIndex && item.tipo === "embalado" && item.entrada_id === entradaId) {
+      if (
+        i !== currentIndex &&
+        item.tipo === TIPO_EMBALADO &&
+        item.entrada_id === entradaId
+      ) {
         saldo -= item.quantidade_solicitada || 0;
       }
     });
@@ -130,22 +171,77 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
   };
 
   const getAvailableVolume = (vasilhameId, currentIndex) => {
-    const v = vasilhames.find((v) => v.id === vasilhameId);
+    const v = vasilhames.find((x) => x.id === vasilhameId);
     if (!v) return 0;
     let vol = v.volume || 0;
     if (editingSaida?.enviado_ao_fiscal) {
       (editingSaida.itens || []).forEach((item) => {
-        if (item.tipo === "convencional" && item.vasilhame_id === vasilhameId) {
+        if (item.tipo === TIPO_CONVENCIONAL && item.vasilhame_id === vasilhameId) {
           vol += item.volume_solicitado || 0;
         }
       });
     }
     formData.itens.forEach((item, i) => {
-      if (i !== currentIndex && item.tipo === "convencional" && item.vasilhame_id === vasilhameId) {
+      if (
+        i !== currentIndex &&
+        item.tipo === TIPO_CONVENCIONAL &&
+        item.vasilhame_id === vasilhameId
+      ) {
         vol -= item.volume_solicitado || 0;
       }
     });
     return vol;
+  };
+
+  const getAvailableContainerVolume = (containerId, currentIndex) => {
+    const c = containersInd.find((x) => x.id === containerId);
+    if (!c) return 0;
+    let vol = c.volume || 0;
+    if (editingSaida?.enviado_ao_fiscal) {
+      (editingSaida.itens || []).forEach((item) => {
+        if (item.tipo === TIPO_IND_VASILHAME && item.container_id === containerId) {
+          vol += item.volume_solicitado || 0;
+        }
+      });
+    }
+    formData.itens.forEach((item, i) => {
+      if (
+        i !== currentIndex &&
+        item.tipo === TIPO_IND_VASILHAME &&
+        item.container_id === containerId
+      ) {
+        vol -= item.volume_solicitado || 0;
+      }
+    });
+    return vol;
+  };
+
+  const getAvailableStockSaldo = (stockId, currentIndex) => {
+    const s = stocksInd.find((x) => x.id === stockId);
+    if (!s) return 0;
+    let saldo = s.current_stock || 0;
+    if (editingSaida?.enviado_ao_fiscal) {
+      (editingSaida.itens || []).forEach((item) => {
+        if (
+          item.tipo === TIPO_IND_RETORNO_MP &&
+          item.stock_id === stockId &&
+          !item.movement_id
+        ) {
+          saldo += item.quantidade_solicitada || 0;
+        }
+      });
+    }
+    formData.itens.forEach((item, i) => {
+      if (
+        i !== currentIndex &&
+        item.tipo === TIPO_IND_RETORNO_MP &&
+        item.stock_id === stockId &&
+        !item.movement_id
+      ) {
+        saldo -= item.quantidade_solicitada || 0;
+      }
+    });
+    return saldo;
   };
 
   const updateItem = (index, updated) => {
@@ -161,7 +257,10 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
     for (let i = 0; i < prevLen; i++) map[i] = true;
     map[prevLen] = false;
     setCollapsedByIndex(map);
-    setFormData((prev) => ({ ...prev, itens: [...prev.itens, emptyItem()] }));
+    setFormData((prev) => ({
+      ...prev,
+      itens: [...prev.itens, emptySaidaItem(defaultOrigem)],
+    }));
   };
 
   const removeItem = (index) => {
@@ -208,10 +307,16 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
       return;
     }
 
-    // Validar itens
     for (let i = 0; i < formData.itens.length; i++) {
       const item = formData.itens[i];
-      if (item.tipo === "embalado") {
+      const origem = resolveItemOrigem(item);
+
+      if (showOrigemSelector && !origem) {
+        setError(`Produto ${i + 1}: selecione o módulo (Industrialização ou Transbordo).`);
+        return;
+      }
+
+      if (item.tipo === TIPO_EMBALADO) {
         if (!item.entrada_id) {
           setError(`Produto ${i + 1}: selecione um produto e lote.`);
           return;
@@ -222,12 +327,23 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         }
         const available = getAvailableSaldo(item.entrada_id, i);
         if (item.quantidade_solicitada > available) {
+          const um =
+            entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
+            item.unidade ||
+            "kg";
+          const fmt =
+            String(um).toLowerCase() === "l" ||
+            String(um).toLowerCase() === "lt" ||
+            String(um).toLowerCase() === "litro" ||
+            String(um).toLowerCase() === "litros"
+              ? formatVolume
+              : formatMass;
           setError(
-            `Produto ${i + 1}: quantidade solicitada maior que o saldo disponível (${formatMass(available)} kg).`
+            `Produto ${i + 1}: quantidade solicitada maior que o saldo disponível (${fmt(available)} ${um}).`
           );
           return;
         }
-      } else {
+      } else if (item.tipo === TIPO_CONVENCIONAL) {
         if (!item.vasilhame_id) {
           setError(`Produto ${i + 1}: selecione um vasilhame.`);
           return;
@@ -243,13 +359,51 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
           );
           return;
         }
+      } else if (item.tipo === TIPO_IND_VASILHAME) {
+        if (!item.container_id) {
+          setError(`Produto ${i + 1}: selecione um vasilhame da Industrialização.`);
+          return;
+        }
+        if (!item.volume_solicitado || item.volume_solicitado <= 0) {
+          setError(`Produto ${i + 1}: informe o volume solicitado.`);
+          return;
+        }
+        const available = getAvailableContainerVolume(item.container_id, i);
+        if (item.volume_solicitado > available) {
+          setError(
+            `Produto ${i + 1}: volume solicitado maior que o disponível (${formatVolume(available)} L).`
+          );
+          return;
+        }
+      } else if (item.tipo === TIPO_IND_RETORNO_MP) {
+        if (!item.stock_id && !item.movement_id) {
+          setError(
+            `Produto ${i + 1}: selecione um retorno de MP não aplicada.`
+          );
+          return;
+        }
+        if (!item.quantidade_solicitada || item.quantidade_solicitada <= 0) {
+          setError(`Produto ${i + 1}: informe a quantidade solicitada.`);
+          return;
+        }
+        if (item.stock_id && !item.movement_id) {
+          const available = getAvailableStockSaldo(item.stock_id, i);
+          if (item.quantidade_solicitada > available) {
+            setError(
+              `Produto ${i + 1}: quantidade maior que o saldo disponível (${formatMass(available)} ${item.unidade || "kg"}).`
+            );
+            return;
+          }
+        }
+      } else {
+        setError(`Produto ${i + 1}: tipo inválido.`);
+        return;
       }
     }
 
     setSaving(true);
 
     try {
-      // ── Mapas de saldo virtual (restaura + desconta) ──
       const entradaSaldos = {};
       entradas.forEach((e) => {
         entradaSaldos[e.id] = e.saldo_atual || 0;
@@ -260,63 +414,139 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         vasilhameVolumes[v.id] = v.volume || 0;
         vasilhameOriginal[v.id] = v;
       });
+      const containerVolumes = {};
+      const containerOriginal = {};
+      containersInd.forEach((c) => {
+        containerVolumes[c.id] = c.volume || 0;
+        containerOriginal[c.id] = c;
+      });
+      const stockSaldos = {};
+      stocksInd.forEach((s) => {
+        stockSaldos[s.id] = s.current_stock || 0;
+      });
 
-      const affectedEntradas = new Set();
-      const affectedVasilhames = new Set();
+      const affectedContainers = new Set();
+      const affectedStocks = new Set();
 
       const isFiscal = editingSaida?.enviado_ao_fiscal;
 
-      // Restaurar estoque da saída original (edição) — apenas se já era fiscal
       if (isFiscal) {
         (editingSaida.itens || []).forEach((item) => {
-          if (item.tipo === "embalado" && item.entrada_id) {
+          if (item.tipo === TIPO_EMBALADO && item.entrada_id) {
             entradaSaldos[item.entrada_id] =
-              (entradaSaldos[item.entrada_id] || 0) + (item.quantidade_solicitada || 0);
-            affectedEntradas.add(item.entrada_id);
-          } else if (item.tipo === "convencional" && item.vasilhame_id) {
+              (entradaSaldos[item.entrada_id] || 0) +
+              (item.quantidade_solicitada || 0);
+          } else if (item.tipo === TIPO_CONVENCIONAL && item.vasilhame_id) {
             vasilhameVolumes[item.vasilhame_id] =
-              (vasilhameVolumes[item.vasilhame_id] || 0) + (item.volume_solicitado || 0);
-            affectedVasilhames.add(item.vasilhame_id);
+              (vasilhameVolumes[item.vasilhame_id] || 0) +
+              (item.volume_solicitado || 0);
+          } else if (item.tipo === TIPO_IND_VASILHAME && item.container_id) {
+            containerVolumes[item.container_id] =
+              (containerVolumes[item.container_id] || 0) +
+              (item.volume_solicitado || 0);
+            affectedContainers.add(item.container_id);
+          } else if (
+            item.tipo === TIPO_IND_RETORNO_MP &&
+            item.stock_id &&
+            !item.movement_id
+          ) {
+            stockSaldos[item.stock_id] =
+              (stockSaldos[item.stock_id] || 0) +
+              (item.quantidade_solicitada || 0);
+            affectedStocks.add(item.stock_id);
           }
         });
       }
 
-      // Descontar novos itens e snapshot dos valores
       const itensWithStock = formData.itens.map((item) => {
-        if (item.tipo === "embalado") {
+        const origem = resolveItemOrigem(item);
+
+        if (item.tipo === TIPO_EMBALADO) {
           const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;
           if (isFiscal) {
             entradaSaldos[item.entrada_id] = estoqueAntes - qtd;
-            affectedEntradas.add(item.entrada_id);
           }
           return {
             ...item,
+            origem: ORIGEM_TRANSBORDO,
+            unidade:
+              entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
+              item.unidade ||
+              "kg",
             estoque_atual: estoqueAntes,
             estoque_final: estoqueAntes - qtd,
           };
-        } else {
+        }
+
+        if (item.tipo === TIPO_CONVENCIONAL) {
           const volAntes = vasilhameVolumes[item.vasilhame_id] || 0;
           const vol = item.volume_solicitado || 0;
           if (isFiscal) {
             vasilhameVolumes[item.vasilhame_id] = volAntes - vol;
-            affectedVasilhames.add(item.vasilhame_id);
           }
 
           const v = vasilhameOriginal[item.vasilhame_id];
           const originalVol = v?.volume || 0;
           const originalPesoLiq = v?.peso_liquido || 0;
-          const densidade =
-            originalVol > 0 ? originalPesoLiq / originalVol : 0;
+          const densidade = originalVol > 0 ? originalPesoLiq / originalVol : 0;
           const pesoSolicitado = vol * densidade;
 
           return {
             ...item,
+            origem: ORIGEM_TRANSBORDO,
             volume_disponivel: volAntes,
             saldo_final: volAntes - vol,
             quantidade_solicitada: pesoSolicitado,
           };
         }
+
+        if (item.tipo === TIPO_IND_VASILHAME) {
+          const volAntes = containerVolumes[item.container_id] || 0;
+          const vol = item.volume_solicitado || 0;
+          if (isFiscal) {
+            containerVolumes[item.container_id] = volAntes - vol;
+            affectedContainers.add(item.container_id);
+          }
+          const c = containerOriginal[item.container_id];
+          const dens =
+            parseFloat(String(c?.density || "0").replace(",", ".")) || 0;
+          const pesoSolicitado =
+            item.peso_liquido ||
+            (dens > 0 ? vol * dens : item.quantidade_solicitada || 0);
+
+          return {
+            ...item,
+            origem: ORIGEM_INDUSTRIALIZACAO,
+            volume_disponivel: volAntes,
+            saldo_final: volAntes - vol,
+            quantidade_solicitada: pesoSolicitado,
+            peso_liquido: pesoSolicitado,
+          };
+        }
+
+        // ind_retorno_mp
+        if (item.movement_id) {
+          return {
+            ...item,
+            origem: ORIGEM_INDUSTRIALIZACAO,
+            estoque_atual: item.quantidade_solicitada || 0,
+            estoque_final: 0,
+          };
+        }
+
+        const estoqueAntes = stockSaldos[item.stock_id] || 0;
+        const qtd = item.quantidade_solicitada || 0;
+        if (isFiscal) {
+          stockSaldos[item.stock_id] = estoqueAntes - qtd;
+          affectedStocks.add(item.stock_id);
+        }
+        return {
+          ...item,
+          origem: ORIGEM_INDUSTRIALIZACAO,
+          estoque_atual: estoqueAntes,
+          estoque_final: estoqueAntes - qtd,
+        };
       });
 
       const quantidadeTotal = itensWithStock.reduce(
@@ -349,37 +579,40 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         });
       }
 
-      // Atualizar estoque apenas se a saída já era fiscal
       if (isFiscal) {
-        const entradaUpdates = [...affectedEntradas].map((eid) => ({
-          id: eid,
-          saldo_atual: Math.max(0, entradaSaldos[eid]),
-        }));
-        if (entradaUpdates.length > 0)
-          await entities.estoque.bulkUpdate(entradaUpdates);
-
-        const vasilhameUpdates = [...affectedVasilhames].map((vid) => {
-          const v = vasilhameOriginal[vid];
-          const newVol = vasilhameVolumes[vid];
-          const originalVol = v?.volume || 0;
-          const originalPesoLiq = v?.peso_liquido || 0;
-          const densidade = originalVol > 0 ? originalPesoLiq / originalVol : 0;
-          const stillInSaida = formData.itens.some(
-            (i) => i.tipo === "convencional" && i.vasilhame_id === vid
-          );
-          return {
-            id: vid,
-            volume: newVol,
-            peso_liquido: newVol * densidade,
-            peso_bruto: (v?.tara || 0) + newVol * densidade,
-            status: stillInSaida ? "Expedido" : "No Pátio",
-            data_saida: stillInSaida
-              ? editingSaida?.data_programada || null
-              : null,
-          };
+        // Transbordo: devolve/reaplica saldo de itens removidos/alterados e recalcula estoque.
+        // Industrialização permanece no bloco abaixo (sem alteração de comportamento).
+        await resyncTransbordoStockAfterSaidaEdit(editingSaida, itensWithStock, {
+          estoque: entradas,
+          vasilhames,
+          dataSaida:
+            editingSaida?.data_programada || todayDateInputValue() || null,
         });
-        if (vasilhameUpdates.length > 0)
-          await entities.vasilhames.bulkUpdate(vasilhameUpdates);
+
+        for (const cid of affectedContainers) {
+          const c = containerOriginal[cid];
+          const newVol = Math.max(0, containerVolumes[cid] || 0);
+          const dens =
+            parseFloat(String(c?.density || "0").replace(",", ".")) || 0;
+          const newNet = dens > 0 ? newVol * dens : Math.max(0, (c?.net_weight || 0));
+          const stillInSaida = formData.itens.some(
+            (i) => i.tipo === TIPO_IND_VASILHAME && i.container_id === cid
+          );
+          await base44.entities.Container.update(cid, {
+            volume: newVol,
+            net_weight: newNet,
+            gross_weight: (c?.tare || 0) + newNet,
+            status: stillInSaida && newVol <= 0 ? "Expedido" : "No Pátio",
+            departure_date:
+              stillInSaida && newVol <= 0 ? todayDateInputValue() : null,
+          });
+        }
+
+        for (const sid of affectedStocks) {
+          await base44.entities.RawMaterialStock.update(sid, {
+            current_stock: Math.max(0, stockSaldos[sid] || 0),
+          });
+        }
       }
 
       navigate(basePath);
@@ -399,7 +632,6 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button
@@ -416,7 +648,11 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
             <p className="text-sm text-muted-foreground mt-0.5">
               {isEdit
                 ? `Editando ${editingSaida?.codigo || ""}`
-                : "Cadastre uma nova solicitação de saída"}
+                : showOrigemSelector
+                  ? "Selecione Industrialização e/ou Transbordo por produto"
+                  : lockedOrigem === ORIGEM_INDUSTRIALIZACAO
+                    ? "Cadastre uma saída com vasilhames ou retorno de MP"
+                    : "Cadastre uma nova solicitação de saída"}
             </p>
           </div>
         </div>
@@ -446,7 +682,6 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         </div>
       )}
 
-      {/* Cabeçalho */}
       <div className="bg-card rounded-xl border border-border shadow-sm p-6">
         <h2 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2 mb-4">
           Dados da Solicitação
@@ -456,7 +691,7 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
             <Label>Cliente *</Label>
             <SearchableSelect
               value={formData.cliente_nome}
-              onChange={(label, option) => {
+              onChange={(_label, option) => {
                 if (!option) return;
                 setFormData((prev) => {
                   const clienteChanged = prev.cliente_id !== option.id;
@@ -465,12 +700,11 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
                     cliente_id: option.id,
                     cliente_nome: option.nome,
                     itens: clienteChanged
-                      ? prev.itens.map(() => emptyItem())
+                      ? prev.itens.map(() => emptySaidaItem(defaultOrigem))
                       : prev.itens,
                   };
                 });
                 setCollapsedByIndex((prevMap) => {
-                  // limpa colapso se o cliente mudou (itens resetados)
                   if (formData.cliente_id !== option.id) return {};
                   return prevMap;
                 });
@@ -520,7 +754,6 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         </div>
       </div>
 
-      {/* Produtos */}
       <div className="bg-card rounded-xl border border-border shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
@@ -545,11 +778,19 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
               itens={formData.itens}
               entradas={entradas}
               vasilhames={vasilhames}
+              containersInd={containersInd}
+              stocksInd={stocksInd}
+              movementsInd={movementsInd}
               clienteId={formData.cliente_id}
+              clienteNome={formData.cliente_nome}
+              enableMultiOrigem={showOrigemSelector}
+              lockedOrigem={lockedOrigem}
               onChange={(updated) => updateItem(index, updated)}
               onRemove={() => removeItem(index)}
               getAvailableSaldo={getAvailableSaldo}
               getAvailableVolume={getAvailableVolume}
+              getAvailableContainerVolume={getAvailableContainerVolume}
+              getAvailableStockSaldo={getAvailableStockSaldo}
               collapsed={!!collapsedByIndex[index]}
               onToggleCollapse={() =>
                 setCollapsedByIndex((prev) => ({
@@ -562,7 +803,7 @@ export default function SaidaForm({ basePath = DEFAULT_BASE_PATH } = {}) {
         </div>
         {formData.itens.length === 0 && (
           <p className="text-center text-muted-foreground py-8">
-            Nenhum produto adicionado. Clique em "Adicionar Produto".
+            Nenhum produto adicionado. Clique em &quot;Adicionar Produto&quot;.
           </p>
         )}
       </div>

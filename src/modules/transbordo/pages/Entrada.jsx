@@ -20,6 +20,7 @@ import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatMass, formatNum, roundMass, roundVolume } from "@transbordo/lib/format";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
+import { Can } from '@industrializacao/lib/rbac/Can';
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import {
@@ -652,10 +653,12 @@ export default function Entrada() {
             {entradas.length} registro(s) de recebimento
           </p>
         </div>
-        <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-          <Plus className="w-4 h-4" />
-          Nova Entrada
-        </Button>
+        <Can permission="tb_entrada.create">
+          <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
+            <Plus className="w-4 h-4" />
+            Nova Entrada
+          </Button>
+        </Can>
       </div>
 
       {/* Filters */}
@@ -819,20 +822,24 @@ export default function Entrada() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => handleEdit(e)}
-                            className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                            title="Editar"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(e.id)}
-                            className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <Can permission="tb_entrada.edit">
+                            <button
+                              onClick={() => handleEdit(e)}
+                              className="text-muted-foreground hover:text-muted-foreground transition-colors"
+                              title="Editar"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </Can>
+                          <Can permission="tb_entrada.delete">
+                            <button
+                              onClick={() => setDeleteId(e.id)}
+                              className="text-red-400 hover:text-red-600 transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </Can>
                         </div>
                       </td>
                     </tr>

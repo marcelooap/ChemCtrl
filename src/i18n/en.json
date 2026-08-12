@@ -259,10 +259,11 @@
     "pendingAnalysis": "Pending Analysis",
     "coa": "Certificate of Analysis (COA)",
     "containers": "Containers",
+    "saida": "Outbound",
     "tankage": "Tank Storage",
     "transfer": "Transfer",
     "users": "Users",
-    "profiles": "Profiles & Permissions",
+    "profiles": "Permissions",
     "usersAndPermissions": "Users & Permissions",
     "clientScreen": "Client Portal",
     "clientStock": "Client Stock",
@@ -277,6 +278,47 @@
       "backToModules": "Back",
       "backToChemCtrl": "Back",
       "openChemFlow": "Transshipment"
+    }
+  },
+  "userPermissions": {
+    "title": "Permissions",
+    "subtitle": "Assign individual permissions per user",
+    "userLabel": "User",
+    "searchUser": "Search user...",
+    "emptyUsers": "No users found",
+    "selectHint": "Select a user to edit permissions",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "selectModule": "Select module",
+    "clearModule": "Clear module",
+    "save": "Save permissions",
+    "required": "Required",
+    "unsaved": "There are unsaved changes",
+    "messages": {
+      "loadUsersError": "Could not load users",
+      "loadPermsError": "Could not load permissions",
+      "saveError": "Error saving permissions",
+      "saved": "Permissions saved"
+    },
+    "discard": {
+      "title": "Unsaved changes",
+      "message": "There are pending changes. Discard them?",
+      "confirm": "Discard"
+    }
+  },
+  "transbordo": {
+    "nav": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "cadastro": "Registry",
+      "entrada": "Inbound",
+      "saida": "Outbound",
+      "transbordo": "Transshipment",
+      "vasilhames": "Containers",
+      "filtracao": "Filtration",
+      "estoque": "Stock",
+      "estoqueEnvio": "Shipping Stock",
+      "tankagem": "Tank Storage"
     }
   },
   "accessDenied": {
@@ -350,7 +392,14 @@
       "production": "Production",
       "quality": "Quality",
       "clients": "Clients",
-      "administration": "Administration"
+      "administration": "Administration",
+      "painel": "Dashboard",
+      "transbordo": "Transshipment"
+    },
+    "appModules": {
+      "painel": "Hub",
+      "industrializacao": "Manufacturing",
+      "transbordo": "Transshipment"
     },
     "resources": {
       "home": "Home",
@@ -360,6 +409,7 @@
       "rawMaterialStock": "Raw Material Stock",
       "inventory": "Inventory",
       "containers": "Containers",
+      "saida": "Outbound",
       "tankage": "Tank Storage",
       "transfer": "Transfer",
       "newProduction": "New Production",
@@ -373,7 +423,27 @@
       "clientPortal": "Client Portal",
       "clientStock": "Client Stock",
       "users": "Users",
-      "profiles": "Profiles & Permissions"
+      "profiles": "Permissions",
+      "painelHome": "Home",
+      "painelDashboard": "Dashboard",
+      "painelReservarMaterial": "Reserve Material",
+      "painelSolicitacoesSaida": "Outbound Requests",
+      "painelComposicaoCarga": "Load Composition",
+      "painelAgendamentos": "Appointments",
+      "painelLogistica": "Logistics",
+      "painelLogisticaAgendamentos": "Logistics Schedules",
+      "painelLogisticaCarregamentos": "Loadings",
+      "tbHome": "Home",
+      "tbDashboard": "Dashboard",
+      "tbCadastro": "Registry",
+      "tbEntrada": "Inbound",
+      "tbSaida": "Outbound",
+      "tbTransbordo": "Transshipment",
+      "tbVasilhames": "Containers",
+      "tbFiltracao": "Filtration",
+      "tbEstoque": "Stock",
+      "tbEstoqueEnvio": "Shipping Stock",
+      "tbTankagem": "Tank Storage"
     },
     "actions": {
       "view": "View",
@@ -500,9 +570,12 @@
       "composicaoCarga": "Load Composition",
       "agendamentos": "Schedules",
       "logistica": "Logistics",
+      "logisticaAgendamentos": "Schedules",
+      "logisticaCarregamentos": "Loadings",
       "usersAndPermissions": "Users and Permissions",
       "users": "Users",
-      "profiles": "Profiles and Permissions"
+      "permissions": "Permissions",
+      "profiles": "Permissions"
     },
     "modules": {
       "switch": "Switch module",
@@ -586,15 +659,141 @@
         },
         "composicaoCarga": {
           "title": "Load Composition",
-          "subtitle": "Load assembly and composition",
+          "subtitle": "Assign a driver and outbound requests to each load",
           "emptyTitle": "Load Composition",
           "emptyDescription": "Initial structure prepared for load composition."
         },
         "agendamentos": {
-          "title": "Schedules",
-          "subtitle": "Commercial scheduling and appointments",
+          "title": "Loading Schedule",
+          "subtitle": "Loading time slots from Monday to Friday",
           "emptyTitle": "Schedules",
           "emptyDescription": "Initial structure prepared for commercial schedules."
+        }
+      },
+      "composicaoCarga": {
+        "subtitle": "{{count}} composed load(s)",
+        "newButton": "New Load",
+        "newTitle": "New Load",
+        "editTitle": "Edit load {{codigo}}",
+        "viewTitle": "Load {{codigo}}",
+        "formSubtitle": "Enter carrier, driver and plate, then select the outbound requests for this load",
+        "driverSection": "Load details",
+        "selectSaidas": "Outbound requests in this load",
+        "selectedCount": "{{count}} selected",
+        "searchPlaceholder": "Search client, driver, plate or carrier...",
+        "searchSaidas": "Search outbound by code, client or requester...",
+        "tableTitle": "Loads",
+        "empty": "No load compositions registered.",
+        "emptySaidas": "No outbound requests found.",
+        "saidasTitle": "{{count}} outbound request(s) in this load",
+        "observationPlaceholder": "Note (optional)",
+        "saving": "Saving...",
+        "saveSuccess": "Load composed",
+        "updateSuccess": "Load updated",
+        "deleteSuccess": "Load deleted",
+        "deleteTitle": "Delete load composition?",
+        "deleteDescription": "Outbound requests will become available for other loads. This cannot be undone.",
+        "loadErrorTitle": "Failed to load compositions",
+        "loadErrorDescription": "Check ChemFlow connectivity and whether t_composicao_cargas was created.",
+        "produtosOne": "{{count}} product",
+        "produtosMany": "{{count}} products",
+        "clientesMany": "{{count}} clients",
+        "solicitantesMany": "{{count}} requesters",
+        "programmedHint": "Scheduled dates: {{dates}}",
+        "columns": {
+          "codigo": "Code",
+          "cliente": "Client",
+          "solicitante": "Requester",
+          "produtos": "Products",
+          "transportadora": "Carrier",
+          "motorista": "Driver",
+          "placa": "Plate",
+          "dataProgramada": "Scheduled date",
+          "quantidade": "Qty (kg)"
+        },
+        "errors": {
+          "selectSaida": "Select at least one outbound request.",
+          "transportadora": "Enter the carrier.",
+          "motorista": "Enter the driver.",
+          "placa": "Enter the plate.",
+          "saidaAssigned": "Outbound {{codigo}} is already in another composition.",
+          "saveFailed": "Could not save the load.",
+          "deleteFailed": "Could not delete the load.",
+          "notFound": "Load composition not found."
+        }
+      },
+      "agendamentos": {
+        "subtitle": "Select a day and tap a time slot to link an outbound request",
+        "weekRange": "{{start}} – {{end}}",
+        "prevWeek": "Previous week",
+        "nextWeek": "Next week",
+        "weekdays": {
+          "mon": "Mon",
+          "tue": "Tue",
+          "wed": "Wed",
+          "thu": "Thu",
+          "fri": "Fri"
+        },
+        "dayFree": "Free",
+        "dayBooked": "{{count}} booked",
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "lunch": "Lunch",
+        "lunchRange": "12:00 – 13:00",
+        "encaixe": "Fit-in",
+        "available": "Available",
+        "occupied": "Occupied",
+        "saidasCount": "{{count}} outbound",
+        "viewSaidaPickTitle": "Which outbound request do you want to view?",
+        "slotSummary": "{{free}} available · {{occupied}} occupied · {{total}} slots",
+        "saving": "Saving...",
+        "saveSuccess": "Loading scheduled",
+        "releaseSuccess": "Slot released",
+        "loadErrorTitle": "Failed to load schedules",
+        "loadErrorDescription": "Check ChemFlow connectivity and whether t_agendamentos_carregamento was created.",
+        "viewSaida": "View outbound request",
+        "viewSaidaMissingTitle": "Outbound request not found",
+        "viewSaidaMissing": "The outbound request for this slot is no longer available.",
+        "qtdEmbalagens": "Package qty",
+        "relatorioSaida": "Outbound report",
+        "relatorioSaidaTitle": "Outbound report {{codigo}}",
+        "printLabel": "Print label",
+        "printBlocked": "Allow pop-ups to print.",
+        "transporte": {
+          "title": "Transport details",
+          "button": "Enter carrier, driver and plate",
+          "transportadora": "Carrier",
+          "motorista": "Driver",
+          "placa": "Plate",
+          "saveSuccess": "Transport details saved"
+        },
+        "columns": {
+          "codigo": "Code",
+          "cliente": "Client",
+          "dataProgramada": "Scheduled date",
+          "produtos": "Products",
+          "quantidade": "Qty (kg)"
+        },
+        "modal": {
+          "title": "Schedule loading",
+          "editTitle": "Occupied slot",
+          "slotLabel": "{{date}} · {{time}}",
+          "searchPlaceholder": "Search outbound by code or client...",
+          "emptySaidas": "No outbound requests available to schedule.",
+          "multiHint": "{{count}} outbound request(s) selected for this slot",
+          "confirm": "Schedule",
+          "release": "Release slot"
+        },
+        "errors": {
+          "selectSaida": "Select at least one outbound request to schedule.",
+          "saidaAssigned": "Outbound {{codigo}} is already scheduled at {{slot}}.",
+          "conflict": "This slot or outbound request was just taken. Refresh and try again.",
+          "saveFailed": "Could not save the booking.",
+          "releaseFailed": "Could not release the slot.",
+          "transportadora": "Enter the carrier.",
+          "motorista": "Enter the driver.",
+          "placa": "Enter the plate.",
+          "transporteFailed": "Could not save transport details."
         }
       },
       "reservarMaterial": {
@@ -651,6 +850,20 @@
       "subtitle": "Logistics operations management",
       "emptyTitle": "Logistics area",
       "emptyDescription": "Initial structure prepared for upcoming logistics features.",
+      "sections": {
+        "agendamentos": {
+          "title": "Schedules",
+          "subtitle": "Loading time slots — view the outbound request on each occupied slot",
+          "emptyTitle": "Logistics schedules",
+          "emptyDescription": "Initial structure prepared for logistics scheduling."
+        },
+        "carregamentos": {
+          "title": "Loadings",
+          "subtitle": "Operational tracking of loadings",
+          "emptyTitle": "Loadings",
+          "emptyDescription": "Initial structure prepared for loading control."
+        }
+      },
       "topics": {
         "loads": "Loads",
         "pickups": "Pickups",
@@ -1852,7 +2065,8 @@
       "delete": "Delete",
       "activate": "Reactivate",
       "deactivate": "Deactivate",
-      "resetPassword": "Reset Password"
+      "resetPassword": "Reset Password",
+      "managePermissions": "Manage permissions"
     },
     "messages": {
       "created": "User created successfully.",
@@ -2953,6 +3167,9 @@
       "edit": "Edit Packaging"
     }
   },
+  "saida": {
+    "title": "Outbound"
+  },
   "containers": {
     "title": "Containers",
     "singular": "Container",
@@ -3008,6 +3225,7 @@
       "saveError": "Failed to save",
       "deleteError": "Failed to delete container",
       "departError": "Failed to register departure",
+      "statusRevertedToYard": "Status reverted to In Yard",
       "selectSameProduct": "Select containers of the same product"
     },
     "history": {
@@ -3064,6 +3282,7 @@
       "minTestDate": "Minimum Test Date",
       "departureDateField": "Departure Date",
       "departureHint": "Setting a date changes status to \"Shipped\". Remove the date to revert to \"In Yard\".",
+      "departDialogHint": "Use today's date to register the departure. Clear the date and confirm to return the tank to \"In Yard\".",
       "departTitle": "Register Departure",
       "departQty": "Quantity to withdraw",
       "departStockQty": "Current stock: {{count}}",
@@ -3071,6 +3290,7 @@
       "departQtyExceeded": "Cannot withdraw more than available stock ({{stock}}).",
       "confirming": "Confirming...",
       "confirmDepart": "Confirm Departure",
+      "confirmRevertYard": "Return to In Yard",
       "deleteTitle": "Delete Container",
       "deleteMessage": "Are you sure you want to delete container {{plate}}{{barrel}}? This action cannot be undone.",
       "deleteBarrelSuffix": " / Barrel {{barrel}}",

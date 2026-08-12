@@ -14,6 +14,7 @@ import {
 } from '@transbordo/lib/estoqueSaldo';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { Can } from '@industrializacao/lib/rbac/Can';
 import ReservaEditModal from '@painel/components/comercial/ReservaEditModal';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import {
@@ -264,16 +265,18 @@ export default function ReservarMaterial() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title={t('buttons.edit')}
-                          onClick={() => setEditRow(row)}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={t('buttons.edit')}
+                            onClick={() => setEditRow(row)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        </Can>
                         <Button
                           type="button"
                           variant="ghost"

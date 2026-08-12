@@ -259,10 +259,11 @@
     "pendingAnalysis": "Pendiente de Análisis",
     "coa": "Cert. de Análisis (COA)",
     "containers": "Envases",
+    "saida": "Salida",
     "tankage": "Almacenamiento en Tanque",
     "transfer": "Transbordo",
     "users": "Usuarios",
-    "profiles": "Perfiles y Permisos",
+    "profiles": "Permisos",
     "usersAndPermissions": "Usuarios y Permisos",
     "clientScreen": "Portal de Clientes",
     "clientStock": "Stock de Cliente",
@@ -277,6 +278,47 @@
       "backToModules": "Volver",
       "backToChemCtrl": "Volver",
       "openChemFlow": "Transbordo"
+    }
+  },
+  "userPermissions": {
+    "title": "Permisos",
+    "subtitle": "Asigne permisos individuales por usuario",
+    "userLabel": "Usuario",
+    "searchUser": "Buscar usuario...",
+    "emptyUsers": "Ningún usuario encontrado",
+    "selectHint": "Seleccione un usuario para editar los permisos",
+    "selectAll": "Seleccionar todo",
+    "clearAll": "Limpiar todo",
+    "selectModule": "Seleccionar módulo",
+    "clearModule": "Limpiar módulo",
+    "save": "Guardar permisos",
+    "required": "Obligatorio",
+    "unsaved": "Hay cambios sin guardar",
+    "messages": {
+      "loadUsersError": "No se pudieron cargar los usuarios",
+      "loadPermsError": "No se pudieron cargar los permisos",
+      "saveError": "Error al guardar permisos",
+      "saved": "Permisos guardados"
+    },
+    "discard": {
+      "title": "Cambios sin guardar",
+      "message": "Hay cambios pendientes. ¿Desea descartarlos?",
+      "confirm": "Descartar"
+    }
+  },
+  "transbordo": {
+    "nav": {
+      "home": "Inicio",
+      "dashboard": "Dashboard",
+      "cadastro": "Cadastro",
+      "entrada": "Entrada",
+      "saida": "Salida",
+      "transbordo": "Transbordo",
+      "vasilhames": "Envases",
+      "filtracao": "Filtración",
+      "estoque": "Stock",
+      "estoqueEnvio": "Stock Envío",
+      "tankagem": "Tanques"
     }
   },
   "accessDenied": {
@@ -350,7 +392,14 @@
       "production": "Producción",
       "quality": "Calidad",
       "clients": "Clientes",
-      "administration": "Administración"
+      "administration": "Administración",
+      "painel": "Panel",
+      "transbordo": "Transbordo"
+    },
+    "appModules": {
+      "painel": "Panel",
+      "industrializacao": "Industrialización",
+      "transbordo": "Transbordo"
     },
     "resources": {
       "home": "Home",
@@ -360,6 +409,7 @@
       "rawMaterialStock": "Stock MP",
       "inventory": "Inventario",
       "containers": "Envases",
+      "saida": "Salida",
       "tankage": "Tanques",
       "transfer": "Trasiego",
       "newProduction": "Nueva Producción",
@@ -373,7 +423,27 @@
       "clientPortal": "Portal Clientes",
       "clientStock": "Stock Cliente",
       "users": "Usuarios",
-      "profiles": "Perfiles y Permisos"
+      "profiles": "Permisos",
+      "painelHome": "Inicio",
+      "painelDashboard": "Dashboard",
+      "painelReservarMaterial": "Reservar Material",
+      "painelSolicitacoesSaida": "Solicitudes de Salida",
+      "painelComposicaoCarga": "Composición de Carga",
+      "painelAgendamentos": "Agendamientos",
+      "painelLogistica": "Logística",
+      "painelLogisticaAgendamentos": "Agendamientos (Logística)",
+      "painelLogisticaCarregamentos": "Cargamentos",
+      "tbHome": "Inicio",
+      "tbDashboard": "Dashboard",
+      "tbCadastro": "Cadastro",
+      "tbEntrada": "Entrada",
+      "tbSaida": "Salida",
+      "tbTransbordo": "Transbordo",
+      "tbVasilhames": "Envases",
+      "tbFiltracao": "Filtración",
+      "tbEstoque": "Stock",
+      "tbEstoqueEnvio": "Stock Envío",
+      "tbTankagem": "Tanques"
     },
     "actions": {
       "view": "Ver",
@@ -500,9 +570,12 @@
       "composicaoCarga": "Composición de Carga",
       "agendamentos": "Agendamientos",
       "logistica": "Logística",
+      "logisticaAgendamentos": "Agendamientos",
+      "logisticaCarregamentos": "Cargamentos",
       "usersAndPermissions": "Usuarios y Permisos",
       "users": "Usuarios",
-      "profiles": "Perfiles y Permisos"
+      "permissions": "Permisos",
+      "profiles": "Permisos"
     },
     "modules": {
       "switch": "Cambiar módulo",
@@ -586,15 +659,141 @@
         },
         "composicaoCarga": {
           "title": "Composición de Carga",
-          "subtitle": "Montaje y composición de cargas",
+          "subtitle": "Defina el conductor y las salidas de cada carga",
           "emptyTitle": "Composición de Carga",
           "emptyDescription": "Estructura inicial preparada para la composición de cargas."
         },
         "agendamentos": {
-          "title": "Agendamientos",
-          "subtitle": "Programación y agendamientos comerciales",
+          "title": "Agendamiento de Cargas",
+          "subtitle": "Horarios de carga de lunes a viernes",
           "emptyTitle": "Agendamientos",
           "emptyDescription": "Estructura inicial preparada para los agendamientos comerciales."
+        }
+      },
+      "composicaoCarga": {
+        "subtitle": "{{count}} carga(s) compuesta(s)",
+        "newButton": "Nueva Carga",
+        "newTitle": "Nueva Carga",
+        "editTitle": "Editar carga {{codigo}}",
+        "viewTitle": "Carga {{codigo}}",
+        "formSubtitle": "Informe transportista, conductor y placa, y marque las salidas de este cargamento",
+        "driverSection": "Datos del cargamento",
+        "selectSaidas": "Salidas de esta carga",
+        "selectedCount": "{{count}} seleccionada(s)",
+        "searchPlaceholder": "Buscar cliente, conductor, placa o transportista...",
+        "searchSaidas": "Buscar salida por código, cliente o solicitante...",
+        "tableTitle": "Cargas",
+        "empty": "Ninguna composición de carga registrada.",
+        "emptySaidas": "No se encontraron salidas.",
+        "saidasTitle": "{{count}} salida(s) en esta carga",
+        "observationPlaceholder": "Observación (opcional)",
+        "saving": "Guardando...",
+        "saveSuccess": "Carga compuesta",
+        "updateSuccess": "Carga actualizada",
+        "deleteSuccess": "Carga eliminada",
+        "deleteTitle": "¿Eliminar composición de carga?",
+        "deleteDescription": "Las salidas vuelven a estar disponibles para otras cargas. Esta acción no se puede deshacer.",
+        "loadErrorTitle": "Error al cargar las composiciones",
+        "loadErrorDescription": "Verifique la conexión con ChemFlow y si la tabla t_composicao_cargas fue creada.",
+        "produtosOne": "{{count}} producto",
+        "produtosMany": "{{count}} productos",
+        "clientesMany": "{{count}} clientes",
+        "solicitantesMany": "{{count}} solicitantes",
+        "programmedHint": "Fechas programadas: {{dates}}",
+        "columns": {
+          "codigo": "Código",
+          "cliente": "Cliente",
+          "solicitante": "Solicitante",
+          "produtos": "Productos",
+          "transportadora": "Transportista",
+          "motorista": "Conductor",
+          "placa": "Placa",
+          "dataProgramada": "Fecha programada",
+          "quantidade": "Cant. (kg)"
+        },
+        "errors": {
+          "selectSaida": "Seleccione al menos una salida.",
+          "transportadora": "Informe el transportista.",
+          "motorista": "Informe el conductor.",
+          "placa": "Informe la placa.",
+          "saidaAssigned": "La salida {{codigo}} ya está en otra composición.",
+          "saveFailed": "No fue posible guardar la carga.",
+          "deleteFailed": "No fue posible eliminar la carga.",
+          "notFound": "Composición de carga no encontrada."
+        }
+      },
+      "agendamentos": {
+        "subtitle": "Seleccione el día y pulse un horario para vincular una solicitud de salida",
+        "weekRange": "{{start}} – {{end}}",
+        "prevWeek": "Semana anterior",
+        "nextWeek": "Próxima semana",
+        "weekdays": {
+          "mon": "Lun",
+          "tue": "Mar",
+          "wed": "Mié",
+          "thu": "Jue",
+          "fri": "Vie"
+        },
+        "dayFree": "Libre",
+        "dayBooked": "{{count}} ocup.",
+        "morning": "Mañana",
+        "afternoon": "Tarde",
+        "lunch": "Almuerzo",
+        "lunchRange": "12:00 – 13:00",
+        "encaixe": "Encaje",
+        "available": "Disponible",
+        "occupied": "Ocupado",
+        "saidasCount": "{{count}} salidas",
+        "viewSaidaPickTitle": "¿Qué salida desea visualizar?",
+        "slotSummary": "{{free}} disponibles · {{occupied}} ocupados · {{total}} horarios",
+        "saving": "Guardando...",
+        "saveSuccess": "Carga agendada",
+        "releaseSuccess": "Horario liberado",
+        "loadErrorTitle": "Error al cargar agendamientos",
+        "loadErrorDescription": "Verifique la conexión con ChemFlow y si la tabla t_agendamentos_carregamento fue creada.",
+        "viewSaida": "Ver salida",
+        "viewSaidaMissingTitle": "Salida no encontrada",
+        "viewSaidaMissing": "La salida de este horario ya no está disponible.",
+        "qtdEmbalagens": "Cant. de envases",
+        "relatorioSaida": "Informe de salida",
+        "relatorioSaidaTitle": "Informe de salida {{codigo}}",
+        "printLabel": "Imprimir etiqueta",
+        "printBlocked": "Permita ventanas emergentes para imprimir.",
+        "transporte": {
+          "title": "Datos del transporte",
+          "button": "Informar transportista, conductor y placa",
+          "transportadora": "Transportista",
+          "motorista": "Conductor",
+          "placa": "Placa",
+          "saveSuccess": "Datos de transporte guardados"
+        },
+        "columns": {
+          "codigo": "Código",
+          "cliente": "Cliente",
+          "dataProgramada": "Fecha programada",
+          "produtos": "Productos",
+          "quantidade": "Cant. (kg)"
+        },
+        "modal": {
+          "title": "Agendar carga",
+          "editTitle": "Horario ocupado",
+          "slotLabel": "{{date}} · {{time}}",
+          "searchPlaceholder": "Buscar salida por código o cliente...",
+          "emptySaidas": "No hay salidas disponibles para agendar.",
+          "multiHint": "{{count}} salida(s) seleccionada(s) para este horario",
+          "confirm": "Agendar",
+          "release": "Liberar horario"
+        },
+        "errors": {
+          "selectSaida": "Seleccione al menos una salida para agendar.",
+          "saidaAssigned": "La salida {{codigo}} ya está agendada en {{slot}}.",
+          "conflict": "Este horario o salida acaba de ser ocupado. Actualice la grilla e intente de nuevo.",
+          "saveFailed": "No fue posible guardar el agendamiento.",
+          "releaseFailed": "No fue posible liberar el horario.",
+          "transportadora": "Informe el transportista.",
+          "motorista": "Informe el conductor.",
+          "placa": "Informe la placa.",
+          "transporteFailed": "No fue posible guardar los datos de transporte."
         }
       },
       "reservarMaterial": {
@@ -651,6 +850,20 @@
       "subtitle": "Gestión logística de la operación",
       "emptyTitle": "Área de Logística",
       "emptyDescription": "Estructura inicial preparada para las futuras funcionalidades logísticas.",
+      "sections": {
+        "agendamentos": {
+          "title": "Agendamientos",
+          "subtitle": "Horarios de carga — visualice la salida de cada horario ocupado",
+          "emptyTitle": "Agendamientos de Logística",
+          "emptyDescription": "Estructura inicial preparada para los agendamientos logísticos."
+        },
+        "carregamentos": {
+          "title": "Cargamentos",
+          "subtitle": "Seguimiento operacional de los cargamentos",
+          "emptyTitle": "Cargamentos",
+          "emptyDescription": "Estructura inicial preparada para el control de cargamentos."
+        }
+      },
       "topics": {
         "loads": "Cargas",
         "pickups": "Recolecciones",
@@ -1850,7 +2063,8 @@
       "delete": "Excluir",
       "activate": "Reativar",
       "deactivate": "Inativar",
-      "resetPassword": "Redefinir Senha"
+      "resetPassword": "Redefinir Senha",
+      "managePermissions": "Gestionar permisos"
     },
     "messages": {
       "created": "Usuario registrado con éxito.",
@@ -2889,6 +3103,9 @@
       "edit": "Editar Embalagem"
     }
   },
+  "saida": {
+    "title": "Salidas"
+  },
   "containers": {
     "title": "Envases",
     "singular": "Envase",
@@ -2944,6 +3161,7 @@
       "saveError": "Erro ao salvar",
       "deleteError": "Erro ao excluir vasilhame",
       "departError": "Erro ao registrar saída",
+      "statusRevertedToYard": "Estado revertido a En Patio",
       "selectSameProduct": "Selecione vasilhames do mesmo produto"
     },
     "history": {
@@ -3000,6 +3218,7 @@
       "minTestDate": "Fecha Prueba Mínima",
       "departureDateField": "Fecha de Salida",
       "departureHint": "Al definir una fecha, el estado cambia a \"Expedido\". Elimine la fecha para volver a \"En Patio\".",
+      "departDialogHint": "Use la fecha de hoy para registrar la salida. Borre la fecha y confirme para devolver el tanque a \"En Patio\".",
       "departTitle": "Registrar Salida",
       "departQty": "Cantidad a retirar",
       "departStockQty": "Stock actual: {{count}}",
@@ -3007,6 +3226,7 @@
       "departQtyExceeded": "No se puede retirar más que el stock disponible ({{stock}}).",
       "confirming": "Confirmando...",
       "confirmDepart": "Confirmar Salida",
+      "confirmRevertYard": "Volver a En Patio",
       "deleteTitle": "Eliminar Envase",
       "deleteMessage": "¿Está seguro de que desea eliminar el envase {{plate}}{{barrel}}? Esta acción no se puede deshacer.",
       "deleteBarrelSuffix": " / Barril {{barrel}}",

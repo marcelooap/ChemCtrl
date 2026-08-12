@@ -115,6 +115,8 @@ export const RPC_WRITE = new Set<string>([
   'create_profile',
   'update_profile_meta',
   'replace_profile_permissions',
+  'replace_user_permissions',
+  'grant_default_user_permissions',
   'duplicate_profile',
   'delete_profile',
   'update_user_language',

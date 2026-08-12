@@ -20,7 +20,7 @@ function resolvePermissions(user) {
   const base = Array.isArray(user.permissions) && user.permissions.length > 0
     ? user.permissions
     : getLegacyPermissionsForUser(user);
-  return augmentQualityAnalysesPermissions(base);
+  return augmentLogisticaPermissions(augmentQualityAnalysesPermissions(base));
 }
 
 /** Bridge: Lista de Ensaios inherits Cadastro CQ access until profiles are re-seeded. */
@@ -35,13 +35,36 @@ export function augmentQualityAnalysesPermissions(permissions) {
   return Array.from(set);
 }
 
+/** Bridge: subitens de Logística herdam o acesso antigo da tela única. */
+export function augmentLogisticaPermissions(permissions) {
+  const set = new Set(permissions || []);
+  if (set.has('painel_logistica.view')) {
+    set.add('painel_logistica_agendamentos.view');
+    set.add('painel_logistica_carregamentos.view');
+  }
+  return Array.from(set);
+}
+
 export function hasPermission(user, key) {
   return resolvePermissions(user).includes(key);
 }
 
 export function canAccessRoute(user, path) {
   if (!user) return false;
-  if (path === '/acesso-negado' || path.startsWith('/acesso-negado')) return true;
+  if (
+    path === '/acesso-negado'
+    || path.startsWith('/acesso-negado')
+    || path === '/chemflow/acesso-negado'
+    || path.endsWith('/acesso-negado')
+  ) {
+    return true;
+  }
+  if (
+    (path === '/painel/home' || path === '/painel' || path === '/painel/')
+    && user.tipo !== 'externo'
+  ) {
+    return true;
+  }
   const viewKey = getViewPermissionForPath(path);
   if (!viewKey) {
     return false;

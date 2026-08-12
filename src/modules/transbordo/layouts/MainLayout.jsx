@@ -1,12 +1,22 @@
+import { Navigate, useLocation } from 'react-router-dom';
 import AppShell from '@shared/components/layout/AppShell';
 import Sidebar from '@transbordo/components/Sidebar';
 import { BackToChemCtrlButton } from '@transbordo/components/user/BackToChemCtrlButton';
+import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { canAccessRoute } from '@industrializacao/lib/permissions';
 import {
   isChemFlowConfigured,
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
 
 export default function MainLayout() {
+  const { user } = useInternalAuth();
+  const location = useLocation();
+
+  if (user && !canAccessRoute(user, location.pathname)) {
+    return <Navigate to="/chemflow/acesso-negado" replace state={{ from: location.pathname }} />;
+  }
+
   const banner = !isChemFlowConfigured ? (
     <div
       role="alert"

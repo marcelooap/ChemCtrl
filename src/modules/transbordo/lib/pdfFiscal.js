@@ -569,8 +569,10 @@ export function generateRelatorioFiscalSaidaPDF(
       ["Data Solicitação", fmtDate(saida.data_solicitacao)],
       ["Data Programada", fmtDate(saida.data_programada)],
       [
-        "Status",
-        saida.status === "enviado_fiscal" ? "Enviado ao Fiscal" : "Aguardando",
+        "Validação",
+        saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
+          ? "Validado"
+          : "Pendente",
       ],
       ["Qtd. Total", fmtNum(saida.quantidade_total, 0) + " kg"],
       ["Responsável", saida.usuario_responsavel || "-"],

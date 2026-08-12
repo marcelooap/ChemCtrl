@@ -7,8 +7,30 @@ import { Button } from "@shared/components/ui/button";
 import { Switch } from "@shared/components/ui/switch";
 import { Label } from "@shared/components/ui/label";
 import { formatVolume, formatMass, formatNum } from "@transbordo/lib/format";
+import {
+  TIPO_EMBALADO,
+  TIPO_CONVENCIONAL,
+  TIPO_IND_VASILHAME,
+  TIPO_IND_RETORNO_MP,
+  tipoItemLabel,
+  resolveItemOrigem,
+  origemLabel,
+} from "@transbordo/lib/saidaOrigem";
 
 const EMPTY = "—";
+
+function isUnidadeVolume(unidade) {
+  const u = String(unidade || "").toLowerCase().trim();
+  return u === "l" || u === "lt" || u === "litro" || u === "litros";
+}
+
+function formatQtdComUnidade(n, unidade, opts) {
+  const um = unidade || "kg";
+  const qtd = isUnidadeVolume(um)
+    ? formatVolume(n, opts)
+    : formatMass(n, opts);
+  return `${qtd} ${um}`;
+}
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -102,18 +124,27 @@ function gerarSaidaPDF(saida) {
         doc.rect(x, y - 3.5, tableW, 5, "F");
       }
       const row = [
-        item.tipo === "embalado" ? "Embalado" : "Convenc.",
+        tipoItemLabel(item).substring(0, 18),
         (item.produto_nome || "—").substring(0, 28),
         (item.lote || "—").substring(0, 16),
         formatMass(item.quantidade_solicitada, { empty: EMPTY }),
-        formatMass(item.tipo === "embalado" ? item.peso_liquido_embalagem : item.peso_liquido, { empty: EMPTY }),
-        item.tipo === "embalado" ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY }) : "—",
-        item.tipo === "convencional" ? (item.vasilhame_placa || "—") : "—",
-        item.tipo === "convencional" ? formatVolume(item.volume_solicitado, { empty: EMPTY }) : "—",
-        item.tipo === "embalado"
+        formatMass(
+          item.tipo === TIPO_EMBALADO ? item.peso_liquido_embalagem : item.peso_liquido,
+          { empty: EMPTY }
+        ),
+        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
+          ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY })
+          : "—",
+        item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+          ? item.vasilhame_placa || "—"
+          : "—",
+        item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+          ? formatVolume(item.volume_solicitado, { empty: EMPTY })
+          : "—",
+        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
           ? formatMass(item.estoque_atual, { empty: EMPTY })
           : formatVolume(item.volume_disponivel, { empty: EMPTY }),
-        item.tipo === "embalado"
+        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
           ? formatMass(item.estoque_final, { empty: EMPTY })
           : formatVolume(item.saldo_final, { empty: EMPTY }),
       ];
@@ -415,13 +446,13 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
               disabled={updatingFiscal}
             />
             <Label className="text-sm font-medium cursor-pointer">
-              Enviado ao Fiscal:{" "}
+              Validação:{" "}
               <span
                 className={
                   saida.enviado_ao_fiscal ? "text-primary" : "text-muted-foreground"
                 }
               >
-                {saida.enviado_ao_fiscal ? "Sim" : "Não"}
+                {saida.enviado_ao_fiscal ? "Validado" : "Pendente"}
               </span>
             </Label>
           </div>
@@ -439,7 +470,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           <InfoItem label="Data da Solicitação" value={formatDate(saida.data_solicitacao)} />
           <InfoItem label="Data Programada" value={formatDate(saida.data_programada)} />
           <InfoItem
-            label="Status"
+            label="Validação"
             value={
               <span
                 className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -449,8 +480,8 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                 }`}
               >
                 {saida.status === "enviado_fiscal"
-                  ? "Enviado ao Fiscal"
-                  : "Aguardando"}
+                  ? "Validado"
+                  : "Pendente"}
               </span>
             }
           />
@@ -459,8 +490,8 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           <InfoItem label="Usuário Responsável" value={saida.usuario_responsavel} />
           {saida.enviado_ao_fiscal && (
             <>
-              <InfoItem label="Envio Fiscal — Usuário" value={saida.enviado_fiscal_usuario} />
-              <InfoItem label="Envio Fiscal — Data" value={formatDateTime(saida.enviado_fiscal_data)} />
+              <InfoItem label="Validação — Usuário" value={saida.enviado_fiscal_usuario} />
+              <InfoItem label="Validação — Data" value={formatDateTime(saida.enviado_fiscal_data)} />
             </>
           )}
         </div>
@@ -487,7 +518,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
                 <th className="px-4 py-3 font-medium">Tipo</th>
                 <th className="px-4 py-3 font-medium">Produto</th>
-                <th className="px-4 py-3 font-medium">Quantidade (kg)</th>
+                <th className="px-4 py-3 font-medium">Quantidade</th>
                 <th className="px-4 py-3 font-medium">Peso Líquido</th>
                 <th className="px-4 py-3 font-medium">Qtd. Embalagens</th>
                 <th className="px-4 py-3 font-medium">Tanque</th>
@@ -514,54 +545,71 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                     }`}
                   >
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                          item.tipo === "embalado"
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-primary/10 text-primary"
-                        }`}
-                      >
-                        {item.tipo === "embalado" ? "Embalado" : "Convencional"}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-flex w-fit px-2.5 py-1 rounded-full text-xs font-medium ${
+                            item.tipo === TIPO_EMBALADO
+                              ? "bg-orange-100 text-orange-800"
+                              : item.tipo === TIPO_IND_VASILHAME
+                                ? "bg-violet-100 text-violet-800"
+                                : item.tipo === TIPO_IND_RETORNO_MP
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-primary/10 text-primary"
+                          }`}
+                        >
+                          {tipoItemLabel(item)}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {origemLabel(resolveItemOrigem(item))}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-foreground">{item.produto_nome || "—"}</td>
                     <td className="px-4 py-3 font-medium text-foreground">
-                      {formatMass(item.quantidade_solicitada, { empty: EMPTY })}
+                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+                        ? `${formatVolume(item.volume_solicitado, { empty: EMPTY })} L`
+                        : formatQtdComUnidade(item.quantidade_solicitada, item.unidade, {
+                            empty: EMPTY,
+                          })}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "embalado"
+                      {item.tipo === TIPO_EMBALADO
                         ? formatMass(item.peso_liquido_embalagem, { empty: EMPTY })
                         : formatMass(item.peso_liquido, { empty: EMPTY })}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "embalado"
+                      {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
                         ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY })
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "convencional"
+                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
                         ? item.vasilhame_placa || "—"
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "convencional"
+                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
                         ? formatVolume(item.volume_solicitado, { empty: EMPTY })
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "convencional"
+                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
                         ? formatMass(item.peso_bruto, { empty: EMPTY })
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{item.lote || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === "embalado"
-                        ? `${formatMass(item.estoque_atual, { empty: EMPTY })} kg`
+                      {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+                        ? formatQtdComUnidade(item.estoque_atual, item.unidade, {
+                            empty: EMPTY,
+                          })
                         : `${formatVolume(item.volume_disponivel, { empty: EMPTY })} L`}
                     </td>
                     <td className="px-4 py-3 font-medium text-green-600">
-                      {item.tipo === "embalado"
-                        ? `${formatMass(item.estoque_final, { empty: EMPTY })} kg`
+                      {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+                        ? formatQtdComUnidade(item.estoque_final, item.unidade, {
+                            empty: EMPTY,
+                          })
                         : `${formatVolume(item.saldo_final, { empty: EMPTY })} L`}
                     </td>
                   </tr>

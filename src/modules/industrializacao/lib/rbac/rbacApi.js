@@ -71,3 +71,25 @@ export async function deleteProfile(perfilId) {
     p_perfil_id: perfilId,
   });
 }
+
+export async function getUserPermissions(userId) {
+  const result = await callRPC('get_user_permissions', { p_user_id: userId });
+  if (Array.isArray(result)) return result;
+  if (result?.permissions) return result.permissions;
+  if (result?.keys) return result.keys;
+  if (result?.success === false) throw new Error(result.error || 'get_user_permissions failed');
+  return [];
+}
+
+export async function saveUserPermissions(userId, codes) {
+  return callRPC('replace_user_permissions', {
+    p_user_id: userId,
+    p_codes: codes,
+  });
+}
+
+export async function grantDefaultUserPermissions(userId) {
+  return callRPC('grant_default_user_permissions', {
+    p_user_id: userId,
+  });
+}

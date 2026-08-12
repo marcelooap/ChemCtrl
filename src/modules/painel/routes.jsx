@@ -5,15 +5,16 @@ import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
 import Home from '@painel/pages/Home';
 import Dashboard from '@painel/pages/Dashboard';
-import Logistica from '@painel/pages/Logistica';
+import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
+import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
 import ReservarMaterial from '@painel/pages/comercial/ReservarMaterial';
 import SolicitacoesSaida from '@painel/pages/comercial/SolicitacoesSaida';
 import SolicitacaoSaidaForm from '@painel/pages/comercial/SolicitacaoSaidaForm';
 import SolicitacaoSaidaView from '@painel/pages/comercial/SolicitacaoSaidaView';
-import ComposicaoCarga from '@painel/pages/comercial/ComposicaoCarga';
 import Agendamentos from '@painel/pages/comercial/Agendamentos';
 import Usuarios from '@industrializacao/pages/Usuarios';
-import Perfis from '@industrializacao/pages/Perfis';
+import Permissoes from '@painel/pages/Permissoes';
+import ScreenAccessRoute from '@/components/ScreenAccessRoute';
 
 /**
  * Rotas internas do Painel, montadas em `/painel/*`.
@@ -29,12 +30,25 @@ export default function PainelRoutes() {
             <Route index element={<Navigate to="home" replace />} />
             <Route path="home" element={<Home />} />
 
-            <Route element={<AdminRoute />}>
+            <Route
+              path="comercial"
+              element={<Navigate to="/painel/comercial/reservar-material" replace />}
+            />
+            <Route
+              path="logistica"
+              element={<Navigate to="/painel/logistica/agendamentos" replace />}
+            />
+            <Route
+              path="comercial/composicao-carga"
+              element={<Navigate to="/painel/comercial/agendamentos" replace />}
+            />
+            <Route
+              path="comercial/composicao-carga/*"
+              element={<Navigate to="/painel/comercial/agendamentos" replace />}
+            />
+
+            <Route element={<ScreenAccessRoute />}>
               <Route path="dashboard" element={<Dashboard />} />
-              <Route
-                path="comercial"
-                element={<Navigate to="/painel/comercial/reservar-material" replace />}
-              />
               <Route path="comercial/reservar-material" element={<ReservarMaterial />} />
               <Route path="comercial/solicitacoes-saida" element={<SolicitacoesSaida />} />
               <Route
@@ -49,11 +63,15 @@ export default function PainelRoutes() {
                 path="comercial/solicitacoes-saida/visualizar/:id"
                 element={<SolicitacaoSaidaView />}
               />
-              <Route path="comercial/composicao-carga" element={<ComposicaoCarga />} />
               <Route path="comercial/agendamentos" element={<Agendamentos />} />
-              <Route path="logistica" element={<Logistica />} />
+              <Route path="logistica/agendamentos" element={<LogisticaAgendamentos />} />
+              <Route path="logistica/carregamentos" element={<LogisticaCarregamentos />} />
+            </Route>
+
+            <Route element={<AdminRoute />}>
               <Route path="usuarios" element={<Usuarios />} />
-              <Route path="perfis" element={<Perfis />} />
+              <Route path="permissoes" element={<Permissoes />} />
+              <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/painel/home" replace />} />

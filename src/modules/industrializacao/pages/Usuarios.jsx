@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { Plus, Search, Pencil, Power, Trash2, EyeOff, Eye } from 'lucide-react';
+import { Plus, Search, Pencil, Power, Trash2, EyeOff, Eye, Shield } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import { translateUserStatus, translateUserType } from '@/i18n/domainMaps';
-import { listProfiles } from '@industrializacao/lib/rbac/rbacApi';
+import { grantDefaultUserPermissions, listProfiles } from '@industrializacao/lib/rbac/rbacApi';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
@@ -212,7 +213,14 @@ export default function Usuarios() {
       } else {
         data.senha = newPassword;
         data.criado_por = currentUser?.nome_completo || 'Sistema';
-        await base44.entities.Usuario.create(data);
+        const created = await base44.entities.Usuario.create(data);
+        if (created?.id) {
+          try {
+            await grantDefaultUserPermissions(created.id);
+          } catch (_) {
+            // Trigger SQL também concede o mínimo; falha da RPC não bloqueia a criação.
+          }
+        }
         toast({ title: t('users.messages.created') });
       }
       setShowForm(false);
@@ -313,6 +321,15 @@ export default function Usuarios() {
                             <button onClick={() => openEdit(u)} className="p-1.5 rounded hover:bg-blue-50" title={t('buttons.edit')}>
                               <Pencil className="w-3.5 h-3.5 text-blue-500" />
                             </button>
+                          </Can>
+                          <Can permission="profiles.edit">
+                            <Link
+                              to={`/painel/permissoes?user=${encodeURIComponent(u.id)}`}
+                              className="p-1.5 rounded hover:bg-blue-50 inline-flex"
+                              title={t('users.actions.managePermissions')}
+                            >
+                              <Shield className="w-3.5 h-3.5 text-blue-500" />
+                            </Link>
                           </Can>
                           <Can permission="users.edit">
                             <button onClick={() => toggleGuard.run(() => toggleActive(u))} disabled={toggleGuard.busy} className="p-1.5 rounded hover:bg-muted disabled:opacity-50" title={inactive ? t('users.actions.activate') : t('users.actions.deactivate')}>
