@@ -1,5 +1,4 @@
 import { syncOrderFromProductions } from '@industrializacao/lib/orderProductionStatus';
-import { callRPC } from '@industrializacao/api/rpcClient';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -7,20 +6,17 @@ export const isTransferOpNumber = (opNumber) =>
   Boolean(opNumber && String(opNumber).startsWith('TB'));
 
 export const isEnvaseContainerForProduction = (container, production) => {
-  if (!production || !container) return false;
-  const op = production.op_number;
-  if (!op || isTransferOpNumber(container.op_number)) return false;
-  return container.op_number === op;
+  if (!production?.id || !container) return false;
+  if (isTransferOpNumber(container.op_number)) return false;
+  if (!container.production_id) return false;
+  return String(container.production_id) === String(production.id);
 };
 
 export const isEnvaseOriginForProduction = (origin, production) => {
-  if (!production || !origin) return false;
-  const op = production.op_number;
-  if (op && origin.op_number === op && !isTransferOpNumber(origin.op_number)) return true;
-  if (production.id && origin.production_id && String(origin.production_id) === String(production.id)) {
-    return !isTransferOpNumber(origin.op_number);
-  }
-  return false;
+  if (!production?.id || !origin) return false;
+  if (isTransferOpNumber(origin.op_number)) return false;
+  if (!origin.production_id) return false;
+  return String(origin.production_id) === String(production.id);
 };
 
 export const productionHasRegisteredEnvase = (production, containers = [], origins = []) => {
@@ -32,43 +28,25 @@ export const productionHasRegisteredEnvase = (production, containers = [], origi
 
 export async function loadEnvaseEvidence(entities, production) {
   const empty = { containers: [], origins: [] };
-  if (!production || !entities?.Container) return empty;
+  if (!production?.id || !entities?.Container) return empty;
 
-  let containers = [];
-  if (production.op_number) {
-    containers = await entities.Container.filter(
-      { op_number: production.op_number },
-      '-created_date',
-      200,
-    ).catch(() => []);
-  }
+  // Sempre amarra ao id da produção — nunca busque só por op_number
+  // (o rótulo OP### pode se repetir em dados legados).
+  let containers = await entities.Container.filter(
+    { production_id: production.id },
+    '-created_date',
+    200,
+  ).catch(() => []);
   containers = (containers || []).filter((c) => isEnvaseContainerForProduction(c, production));
 
   let origins = [];
   if (entities.ContainerOrigin) {
-    const seen = new Set();
-    const merge = (rows) => {
-      for (const row of rows || []) {
-        if (!row?.id || seen.has(row.id)) continue;
-        seen.add(row.id);
-        origins.push(row);
-      }
-    };
-    if (production.op_number) {
-      merge(await entities.ContainerOrigin.filter(
-        { op_number: production.op_number },
-        '-created_date',
-        200,
-      ).catch(() => []));
-    }
-    if (production.id) {
-      merge(await entities.ContainerOrigin.filter(
-        { production_id: production.id },
-        '-created_date',
-        200,
-      ).catch(() => []));
-    }
-    origins = origins.filter((o) => isEnvaseOriginForProduction(o, production));
+    origins = await entities.ContainerOrigin.filter(
+      { production_id: production.id },
+      '-created_date',
+      200,
+    ).catch(() => []);
+    origins = (origins || []).filter((o) => isEnvaseOriginForProduction(o, production));
   }
 
   return { containers, origins };
@@ -114,19 +92,28 @@ export async function finalizeProductionAfterEnvase(entities, production, {
 }
 
 /**
- * Corrige OPs em Envase que já possuem vasilhame/composição registrados.
- * No-op se a RPC ainda não existir no banco.
+ * Corrige OPs em Envase que já possuem vasilhame/composição da MESMA produção.
+ * Sempre amarra por production_id — op_number pode se repetir entre OPs distintas.
+ * Não usa a RPC legada (que filtrava só por op_number e podia finalizar a OP errada).
  */
-export async function reconcileStuckEnvaseProductions() {
+export async function reconcileStuckEnvaseProductions(entities) {
+  if (!entities?.Production || !entities?.Container) return 0;
+
   try {
-    const result = await callRPC('reconcile_stuck_envase_productions');
-    const count = Number(result?.finalized_count || 0);
-    return Number.isFinite(count) ? count : 0;
-  } catch (err) {
-    const msg = String(err?.message || err || '');
-    if (err?.status === 404 || msg.includes('404') || msg.includes('PGRST202') || msg.includes('Could not find the function')) {
-      return 0;
+    const stuck = await entities.Production.filter({ status: 'Envase' }, '-created_date', 200).catch(() => []);
+    let finalized = 0;
+    for (const production of stuck || []) {
+      const evidence = await loadEnvaseEvidence(entities, production);
+      if (!productionHasRegisteredEnvase(production, evidence.containers, evidence.origins)) {
+        continue;
+      }
+      await finalizeProductionAfterEnvase(entities, production, {
+        packagingType: evidence.containers[0]?.type || production.packaging_type,
+      });
+      finalized += 1;
     }
+    return finalized;
+  } catch (err) {
     console.warn('Falha ao reconciliar OPs envasadas:', err);
     return 0;
   }

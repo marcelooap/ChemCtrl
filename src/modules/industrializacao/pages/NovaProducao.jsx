@@ -33,6 +33,7 @@ import {
   containerDisplayVolume,
 } from '@industrializacao/lib/fractionalSupply';
 import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber } from '@industrializacao/lib/recipeRevisions';
+import { allocateUniqueOpNumber, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
 
 const convertToKg = (value, unit, density) => {
   const d = density || 1;
@@ -556,8 +557,8 @@ export default function NovaProducao() {
         }
       }
 
-      const allProductions = await base44.entities.Production.list('-created_date', 500);
-      const nextNum = allProductions.length + 1;
+      const opNumber = await allocateUniqueOpNumber(base44.entities.Production, { pageSize: 1000 });
+      const nextNum = parseOpNumber(opNumber);
       const lotNumber = `${moment().format('YYMMDD')}-${String(nextNum).padStart(3, '0')}`;
       const allocatedLots = flattenAllocatedLots(mpList);
       const metrics = calcVolumeMetrics(volNum, totalOperationQty, totalNeeded);
@@ -568,7 +569,7 @@ export default function NovaProducao() {
         date: new Date(form.date).toISOString(),
         volume: volNum,
         density: densityNum,
-        op_number: `OP${String(nextNum).padStart(2, '0')}`,
+        op_number: opNumber,
         lot: lotNumber,
         public_token: generatePublicToken(),
         status: 'Aguardando Início',

@@ -1,17 +1,17 @@
 -- ============================================================================
--- Fix: OP em Envase após vasilhame já registrado (ex.: OP118 / ID 218)
+-- Fix: detecção de envase por production_id (não só op_number)
 -- Execute no: Supabase Dashboard → SQL Editor → New Query → Paste & Run
 --
--- Causa:
---   O envase cria o vasilhame e só depois atualiza ind_lista_producoes.status
---   para Finalizado. Se o UPDATE falhar (rede, trigger de checklist 15 min),
---   o pátio fica certo e a OP permanece em Envase.
+-- Causa (OP121 PROCHINOR TL 93):
+--   Existiam DUAS produções com op_number = 'OP121'.
+--   A evidência de envase filtrava só por op_number e achou o vasilhame
+--   da OP121 antiga (RO SC F656). A UI mostrou "Envase já registrado" /
+--   "Finalizar OP" e marcou a produção nova como Finalizado sem envase.
 --
 -- Correção:
---   1) Detectar envase já registrado (vasilhame/composição da OP, não TB)
---   2) Permitir Finalizado se o envase existe e o finish_filling já ocorreu
---      (mesmo fora da janela de 15 minutos)
---   3) Reconciliar OPs presas (inclui OP118) e sincronizar o pedido
+--   1) production_has_registered_envase usa production_id
+--   2) Reabre a OP121 PROCHINOR (id 12043c58-...) para Envase
+--   3) Recalcula o pedido vinculado
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION production_has_registered_envase(
@@ -54,6 +54,7 @@ BEGIN
     RETURN false;
   END IF;
 
+  -- Fallback legado (sem production_id): só op_number, excluindo TB
   IF p_op_number IS NOT NULL AND btrim(p_op_number) <> '' AND p_op_number NOT LIKE 'TB%' THEN
     SELECT EXISTS (
       SELECT 1
@@ -85,62 +86,6 @@ $$;
 GRANT EXECUTE ON FUNCTION production_has_registered_envase(text, text) TO anon;
 GRANT EXECUTE ON FUNCTION production_has_registered_envase(text, text) TO authenticated;
 
-CREATE OR REPLACE FUNCTION require_operational_checklist_on_production()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF OLD.status IS DISTINCT FROM NEW.status
-     AND OLD.status = 'Aguardando Início'
-     AND NEW.status = 'Em Produção'
-  THEN
-    IF NOT has_operational_checklist(NEW.id, 'start_production', now() - interval '15 minutes') THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes de iniciar a produção (start_production).';
-    END IF;
-  END IF;
-
-  IF OLD.pause_start_time IS NULL AND NEW.pause_start_time IS NOT NULL THEN
-    IF NOT has_operational_checklist(NEW.id, 'pause_production', now() - interval '15 minutes') THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes de pausar a produção (pause_production).';
-    END IF;
-  END IF;
-
-  IF OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'Finalizado' THEN
-    -- Reconciliação (vasilhame já no pátio): não usa session_replication_role
-    IF current_setting('chemctrl.reconcile_envase', true) = 'on' THEN
-      RETURN NEW;
-    END IF;
-
-    IF NOT has_operational_checklist(NEW.id, 'start_filling', NULL) THEN
-      RAISE EXCEPTION 'Checklist operacional obrigatório antes do envase (start_filling).';
-    END IF;
-
-    -- Happy path: finish_filling recente
-    IF has_operational_checklist(NEW.id, 'finish_filling', now() - interval '15 minutes') THEN
-      RETURN NEW;
-    END IF;
-
-    -- Retry/heal: vasilhame já gravado e checklist de encerramento existe
-    IF production_has_registered_envase(NEW.id, NEW.op_number)
-       AND has_operational_checklist(NEW.id, 'finish_filling', NULL) THEN
-      RETURN NEW;
-    END IF;
-
-    RAISE EXCEPTION 'Checklist operacional obrigatório antes de finalizar o envase (finish_filling).';
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_require_operational_checklist ON ind_lista_producoes;
-CREATE TRIGGER trg_require_operational_checklist
-  BEFORE UPDATE ON ind_lista_producoes
-  FOR EACH ROW
-  EXECUTE FUNCTION require_operational_checklist_on_production();
-
 CREATE OR REPLACE FUNCTION reconcile_stuck_envase_productions()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -160,7 +105,6 @@ BEGIN
       end_time = COALESCE(p.end_time, now()),
       updated_date = now()
     WHERE p.status = 'Envase'
-      -- production_has_registered_envase agora amarra por production_id
       AND production_has_registered_envase(p.id, p.op_number)
     RETURNING p.id
   )
@@ -212,3 +156,53 @@ $$;
 
 GRANT EXECUTE ON FUNCTION reconcile_stuck_envase_productions() TO anon;
 GRANT EXECUTE ON FUNCTION reconcile_stuck_envase_productions() TO authenticated;
+
+-- Reabre a OP121 PROCHINOR TL 93 (sem vasilhame próprio)
+UPDATE ind_lista_producoes
+SET
+  status = 'Envase',
+  end_time = NULL,
+  updated_date = now()
+WHERE id = '12043c58-af36-4106-816e-545c14a15ec4'
+  AND op_number = 'OP121'
+  AND status = 'Finalizado'
+  AND NOT production_has_registered_envase(id, op_number);
+
+-- Recalcula o pedido da OP reaberta
+WITH op_totals AS (
+  SELECT
+    p.order_id,
+    COALESCE(SUM(p.volume) FILTER (WHERE p.status = 'Finalizado'), 0) AS vol_finalizado,
+    BOOL_OR(p.status NOT IN ('Cancelado', 'Finalizado')) AS has_open_op
+  FROM ind_lista_producoes p
+  WHERE p.order_id = 'e8afae56-d5cc-4877-a2e4-39021e1ba9cf'
+  GROUP BY p.order_id
+)
+UPDATE ind_lista_pedidos o
+SET
+  volume_produced = COALESCE(t.vol_finalizado, 0),
+  volume_pending = GREATEST(0, COALESCE(o.volume_ordered, 0) - COALESCE(t.vol_finalizado, 0)),
+  status = CASE
+    WHEN COALESCE(o.volume_ordered, 0) > 0
+         AND COALESCE(t.vol_finalizado, 0) >= COALESCE(o.volume_ordered, 0) - 0.05
+      THEN 'Finalizado'
+    WHEN COALESCE(t.has_open_op, false)
+      THEN 'Em produção'
+    ELSE 'Pendente'
+  END,
+  updated_date = now()
+FROM op_totals t
+WHERE o.id = t.order_id;
+
+-- Confirmação
+SELECT
+  p.id,
+  p.op_number,
+  p.product,
+  p.lot,
+  p.status,
+  p.end_time,
+  production_has_registered_envase(p.id, p.op_number) AS has_envase
+FROM ind_lista_producoes p
+WHERE p.op_number = 'OP121'
+ORDER BY p.created_date;

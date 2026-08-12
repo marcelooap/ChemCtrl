@@ -7,6 +7,7 @@ import { canAccessRoute, isReadOnly, getRoleLabel } from '@industrializacao/lib/
 import AppShell from '@shared/components/layout/AppShell';
 import { SystemManualMenu } from '@industrializacao/components/user/SystemManualMenu';
 import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
+import { createSupabaseEntities } from '@industrializacao/api/supabaseClient';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -22,7 +23,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!user) return;
-    reconcileStuckEnvaseProductions();
+    reconcileStuckEnvaseProductions(createSupabaseEntities());
   }, [user]);
 
   if (!user) {
