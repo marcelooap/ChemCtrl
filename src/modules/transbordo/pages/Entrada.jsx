@@ -17,7 +17,7 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ComunicacaoRecebimentoDialog from "@transbordo/components/entrada/ComunicacaoRecebimentoDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
-import { loteToKg, loteUnidadeEstoque } from "@transbordo/lib/conversao";
+import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatMass, formatNum, roundMass, roundVolume } from "@transbordo/lib/format";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
 import { Can } from '@industrializacao/lib/rbac/Can';
@@ -499,7 +499,7 @@ export default function Entrada() {
     });
 
     const estoqueRecords = (entradaPayload.lotes || []).map((lote, index) => {
-      const loteQtd = loteToKg(lote);
+      const loteQtd = loteQuantidadeEstoque(lote);
       const lotePreco = lote.preco_unitario || data.preco_unitario || 0;
       const prev = existingByIndex[index];
       const prevLoteJson =

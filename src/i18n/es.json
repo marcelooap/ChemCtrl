@@ -767,6 +767,14 @@
           "placa": "Placa",
           "saveSuccess": "Datos de transporte guardados"
         },
+        "concluir": {
+          "title": "Concluir carga",
+          "button": "Concluir carga",
+          "horaLabel": "Horario de carga",
+          "horaHint": "Completado con la hora actual de Brasilia (editable).",
+          "confirm": "Concluir",
+          "saveSuccess": "Carga concluida"
+        },
         "columns": {
           "codigo": "Código",
           "cliente": "Cliente",
@@ -793,7 +801,9 @@
           "transportadora": "Informe el transportista.",
           "motorista": "Informe el conductor.",
           "placa": "Informe la placa.",
-          "transporteFailed": "No fue posible guardar los datos de transporte."
+          "transporteFailed": "No fue posible guardar los datos de transporte.",
+          "horaCarregamento": "Informe un horario de carga válido.",
+          "concluirFailed": "No fue posible concluir la carga."
         }
       },
       "reservarMaterial": {
@@ -859,9 +869,40 @@
         },
         "carregamentos": {
           "title": "Cargamentos",
-          "subtitle": "Seguimiento operacional de los cargamentos",
+          "subtitle": "Historial de cargamentos concluidos",
           "emptyTitle": "Cargamentos",
           "emptyDescription": "Estructura inicial preparada para el control de cargamentos."
+        }
+      },
+      "carregamentos": {
+        "tableTitle": "Cargamentos concluidos",
+        "tableCount": "{{count}} registro(s)",
+        "searchPlaceholder": "Buscar salida, cliente, conductor, placa...",
+        "empty": "No se encontraron cargamentos concluidos.",
+        "view": "Ver salida",
+        "viewSaidaPickTitle": "¿Qué salida desea visualizar?",
+        "viewSaidaMissingTitle": "Salida no encontrada",
+        "viewSaidaMissing": "La salida de este cargamento ya no está disponible.",
+        "produtoCountOne": "{{count}} producto",
+        "produtoCountMany": "{{count}} productos",
+        "loadErrorTitle": "Error al cargar cargamentos",
+        "loadErrorDescription": "Verifique la conexión con ChemFlow y si se aplicaron las migraciones de agendamientos.",
+        "columns": {
+          "saida": "ID de salida",
+          "cliente": "Cliente",
+          "produto": "Producto",
+          "transportadora": "Transportista",
+          "motorista": "Conductor",
+          "placa": "Placa",
+          "horarioAgendado": "Horario agendado",
+          "horarioCarregamento": "Horario de carga",
+          "status": "Estado",
+          "operador": "Operador",
+          "acoes": "Acciones"
+        },
+        "status": {
+          "dentro": "Dentro del horario",
+          "fora": "Fuera de horario"
         }
       },
       "topics": {

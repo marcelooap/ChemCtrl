@@ -377,6 +377,201 @@ export async function updateTransporte({
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
 
+/** Horário atual em America/Sao_Paulo no formato HH:MM. */
+export function nowBrasiliaHHMM(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const hour = parts.find((p) => p.type === 'hour')?.value || '00';
+  const minute = parts.find((p) => p.type === 'minute')?.value || '00';
+  // en-GB pode retornar "24" em meia-noite em alguns ambientes
+  const h = hour === '24' ? '00' : hour;
+  return `${h}:${minute}`;
+}
+
+export function normalizeHoraHHMM(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+    return null;
+  }
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Conclui o carregamento do(s) agendamento(s) do horário.
+ * Libera o slot na grade (status deixa de ser 'agendado').
+ */
+export async function concluirCarregamento({ bookings, horaCarregamento, user, t }) {
+  const list = normalizeBookings(bookings);
+  const ids = list.map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) throw new Error('Agendamento inválido.');
+
+  const hora = normalizeHoraHHMM(horaCarregamento);
+  if (!hora) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.errors.horaCarregamento') ||
+        'Informe um horário de carregamento válido.'
+    );
+  }
+
+  const grupoId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : null;
+
+  const patch = {
+    status: 'concluido',
+    hora_carregamento: hora,
+    operador_conclusao_id: toUserIdText(user?.id),
+    operador_conclusao_nome:
+      user?.nome || user?.full_name || user?.username || user?.email || '—',
+    ...(grupoId ? { grupo_conclusao_id: grupoId } : {}),
+  };
+  await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
+}
+
+export async function listAgendamentosConcluidos() {
+  assertConfigured('t_agendamentos_carregamento.listConcluidos');
+  const { data, error } = await chemflowSupabase
+    .from('t_agendamentos_carregamento')
+    .select('*')
+    .eq('status', 'concluido')
+    .order('data', { ascending: false })
+    .order('hora_carregamento', { ascending: false });
+
+  if (error) {
+    throw new Error(
+      `[ChemFlow:t_agendamentos_carregamento.listConcluidos] ${error.message || 'Erro desconhecido'}`
+    );
+  }
+  return data || [];
+}
+
+/**
+ * Janela do slot: horário agendado até +29 min (ex.: 08:30 → 08:30–08:59).
+ * Antes ou dentro da janela = dentro; após = fora.
+ * Encaixe não tem janela fixa → considerado dentro.
+ */
+export function getStatusPontualidade(horarioAgendado, horaCarregamento) {
+  if (!horaCarregamento) return 'fora';
+  if (horarioAgendado === ENCAIXE_HORARIO) return 'dentro';
+  const start = timeToMinutes(horarioAgendado);
+  if (!Number.isFinite(start)) return 'fora';
+  const windowEnd = start + 29;
+  const actual = timeToMinutes(horaCarregamento);
+  if (!Number.isFinite(actual)) return 'fora';
+  return actual <= windowEnd ? 'dentro' : 'fora';
+}
+
+/** Contagem de produtos distintos: "01 produto", "02 produtos". */
+export function produtosCountLabel(saidas = [], t) {
+  const distinct = new Map();
+  for (const saida of saidas || []) {
+    for (const item of saida?.itens || []) {
+      const key = item.produto_id || item.produto_nome;
+      if (!key) continue;
+      if (!distinct.has(key)) distinct.set(key, true);
+    }
+  }
+  const count = distinct.size;
+  if (count === 0) return '—';
+  const padded = String(count).padStart(2, '0');
+  if (count === 1) {
+    return t?.('painel.logistica.carregamentos.produtoCountOne', { count: padded }) || `${padded} produto`;
+  }
+  return (
+    t?.('painel.logistica.carregamentos.produtoCountMany', { count: padded }) ||
+    `${padded} produtos`
+  );
+}
+
+export function saidasCodigosLabel(bookings = []) {
+  const codes = [
+    ...new Set(
+      normalizeBookings(bookings)
+        .map((b) => b.saida_codigo)
+        .filter(Boolean)
+    ),
+  ];
+  if (codes.length === 0) return '—';
+  return codes.join(' - ');
+}
+
+export function clientesLabelFromBookings(bookings = []) {
+  const names = [
+    ...new Set(
+      normalizeBookings(bookings)
+        .map((b) => b.cliente_nome)
+        .filter(Boolean)
+    ),
+  ];
+  if (names.length === 0) return '—';
+  return names.join(' · ');
+}
+
+/**
+ * Agrupa linhas concluídas do mesmo carregamento (mesmo grupo / slot + horário).
+ * @returns {Array<{ id: string, bookings: object[], data: string, horario: string, hora_carregamento: string, transportadora: string|null, motorista: string|null, placa: string|null, operador_nome: string, pontualidade: 'dentro'|'fora' }>}
+ */
+export function groupCarregamentosConcluidos(agendamentos = []) {
+  const groups = new Map();
+
+  for (const row of agendamentos || []) {
+    if (!row || row.status !== 'concluido') continue;
+    const data = String(row.data).slice(0, 10);
+    const key =
+      row.grupo_conclusao_id ||
+      `${data}|${row.horario}|${row.hora_carregamento || ''}|${row.transportadora || ''}|${row.motorista || ''}|${row.placa || ''}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id: key,
+        bookings: [],
+        data,
+        horario: row.horario,
+        hora_carregamento: row.hora_carregamento || null,
+        transportadora: row.transportadora || null,
+        motorista: row.motorista || null,
+        placa: row.placa || null,
+        operador_nome: row.operador_conclusao_nome || row.usuario_nome || '—',
+        updated_at: row.updated_at || null,
+      });
+    }
+    const group = groups.get(key);
+    group.bookings.push(row);
+    if (!group.operador_nome || group.operador_nome === '—') {
+      group.operador_nome = row.operador_conclusao_nome || row.usuario_nome || '—';
+    }
+    if (row.updated_at && (!group.updated_at || row.updated_at > group.updated_at)) {
+      group.updated_at = row.updated_at;
+    }
+  }
+
+  const rows = [...groups.values()].map((group) => ({
+    ...group,
+    codesLabel: saidasCodigosLabel(group.bookings),
+    clientesLabel: clientesLabelFromBookings(group.bookings),
+    pontualidade: getStatusPontualidade(group.horario, group.hora_carregamento),
+  }));
+
+  rows.sort((a, b) => {
+    const dataCmp = String(b.data).localeCompare(String(a.data));
+    if (dataCmp !== 0) return dataCmp;
+    const ha = timeToMinutes(a.hora_carregamento || '00:00');
+    const hb = timeToMinutes(b.hora_carregamento || '00:00');
+    return hb - ha;
+  });
+
+  return rows;
+}
+
 export function formatSlotRef(row) {
   if (!row) return '—';
   const data = formatDateBR(row.data);

@@ -25,13 +25,18 @@ create table if not exists t_agendamentos_carregamento (
   saida_codigo text,
   cliente_id uuid,
   cliente_nome text,
-  status text not null default 'agendado' check (status in ('agendado', 'cancelado')),
+  status text not null default 'agendado' check (status in ('agendado', 'cancelado', 'concluido')),
   usuario_id text,
   usuario_nome text,
   observacao text,
   transportadora text,
   motorista text,
   placa text,
+  -- Horário real do carregamento (HH:MM, fuso America/Sao_Paulo)
+  hora_carregamento text,
+  operador_conclusao_id text,
+  operador_conclusao_nome text,
+  grupo_conclusao_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

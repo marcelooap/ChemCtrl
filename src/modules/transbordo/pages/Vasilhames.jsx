@@ -43,6 +43,11 @@ import {
   getVolumePorEmbalagemFromVasilhame,
   buildPlacaEmbalagens,
 } from "@transbordo/lib/tiposEmbalagem";
+import {
+  buildVasilhameYardRestorePatch,
+  collectConvencionalItemsForVasilhame,
+  needsVasilhameYardVolumeHeal,
+} from "@transbordo/lib/vasilhamePatio";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 
 export default function Vasilhames() {
@@ -119,6 +124,59 @@ export default function Vasilhames() {
         .filter(Boolean);
       if (loteFixes.length > 0) {
         entities.vasilhames.bulkUpdate(loteFixes).catch(() => {});
+      }
+
+      // Corrige tanques no pátio com volume/peso zerados após reverter saída
+      const zeroPatioCandidates = list.filter((v) => {
+        if ((v.tipo || "") === "Tankagem") return false;
+        const expedido =
+          (v.status || "") === "Expedido" ||
+          (v.data_saida != null && String(v.data_saida).trim() !== "");
+        if (expedido) return false;
+        return (
+          (Number(v.volume) || 0) <= 0 && (Number(v.peso_liquido) || 0) <= 0
+        );
+      });
+      if (zeroPatioCandidates.length > 0) {
+        let saidasList = [];
+        try {
+          saidasList = await entities.saidas.list("-created_date");
+        } catch {
+          saidasList = [];
+        }
+
+        const healed = [];
+        for (let i = 0; i < list.length; i++) {
+          const v = list[i];
+          const linked = collectConvencionalItemsForVasilhame(saidasList, v.id);
+          if (!needsVasilhameYardVolumeHeal(v, linked)) {
+            healed.push(v);
+            continue;
+          }
+          const restore = buildVasilhameYardRestorePatch(v, {
+            linkedItems: linked,
+            transbordos: trans,
+          });
+          if (!restore || ((restore.volume || 0) <= 0 && (restore.peso_liquido || 0) <= 0)) {
+            healed.push(v);
+            continue;
+          }
+          const volumePatch = {
+            volume: restore.volume,
+            peso_liquido: restore.peso_liquido,
+            peso_bruto: restore.peso_bruto,
+            ...(restore.placa != null ? { placa: restore.placa } : {}),
+            ...(restore.composicao ? { composicao: restore.composicao } : {}),
+          };
+          try {
+            await entities.vasilhames.update(v.id, volumePatch);
+            healed.push({ ...v, ...volumePatch });
+          } catch (healErr) {
+            console.warn("[ChemFlow] Heal volume pátio:", v.placa || v.id, healErr);
+            healed.push(v);
+          }
+        }
+        list = healed;
       }
 
       setVasilhames(list.map((v) => normalizeVasilhameLote(v)));
@@ -216,8 +274,44 @@ export default function Vasilhames() {
 
     let saved = editingVasilhame;
     if (editingVasilhame) {
-      await entities.vasilhames.update(editingVasilhame.id, data);
-      saved = { ...editingVasilhame, ...data };
+      let payload = data;
+      if (prevExpedido && !nextExpedido) {
+        try {
+          const [saidasList, trans] = await Promise.all([
+            entities.saidas.list("-created_date"),
+            entities.transbordos.list(),
+          ]);
+          const linked = collectConvencionalItemsForVasilhame(
+            saidasList,
+            editingVasilhame.id
+          );
+          const restore = buildVasilhameYardRestorePatch(editingVasilhame, {
+            linkedItems: linked,
+            transbordos: trans,
+          });
+          if (restore) {
+            payload = {
+              ...data,
+              ...restore,
+              // Mantém volume/peso do formulário se o usuário já informou valores > 0
+              volume:
+                Number(data.volume) > 0 ? data.volume : restore.volume,
+              peso_liquido:
+                Number(data.peso_liquido) > 0
+                  ? data.peso_liquido
+                  : restore.peso_liquido,
+              peso_bruto:
+                Number(data.peso_bruto) > 0
+                  ? data.peso_bruto
+                  : restore.peso_bruto,
+            };
+          }
+        } catch (restoreErr) {
+          console.warn("[ChemFlow] Restore pátio (edit):", restoreErr);
+        }
+      }
+      await entities.vasilhames.update(editingVasilhame.id, payload);
+      saved = { ...editingVasilhame, ...payload };
     } else {
       saved = await entities.vasilhames.create({
         ...data,
@@ -256,10 +350,42 @@ export default function Vasilhames() {
   const handleSaidaSave = async () => {
     if (!saidaVasilhame) return;
     try {
+      const reverting =
+        saidaData == null || String(saidaData).trim() === "";
+      let updatedVasilhame = { ...saidaVasilhame };
+
+      // Remover data de saída → No Pátio + restaurar volume/peso
+      if (reverting) {
+        const [saidasList, trans] = await Promise.all([
+          entities.saidas.list("-created_date"),
+          entities.transbordos.list(),
+        ]);
+        const linked = collectConvencionalItemsForVasilhame(
+          saidasList,
+          saidaVasilhame.id
+        );
+        const patch =
+          buildVasilhameYardRestorePatch(saidaVasilhame, {
+            linkedItems: linked,
+            transbordos: trans,
+          }) || {
+            status: "No Pátio",
+            data_saida: null,
+          };
+        await entities.vasilhames.update(saidaVasilhame.id, patch);
+        updatedVasilhame = { ...saidaVasilhame, ...patch };
+        await syncEstoqueFromVasilhame(updatedVasilhame);
+        await loadData();
+        setSaidaVasilhame(null);
+        setSaidaData("");
+        setSaidaQtdEmbalagens("");
+        setSaidaError("");
+        return;
+      }
+
       const isUnitario = isDestinoEmbalagemUnitaria(saidaVasilhame.tipo);
       const qtdAtual = getQuantidadeEmbalagensFromVasilhame(saidaVasilhame);
       const qtdSaida = Math.round(Number(saidaQtdEmbalagens) || 0);
-      let updatedVasilhame = { ...saidaVasilhame };
 
       if (isUnitario) {
         if (qtdSaida <= 0) {
@@ -286,8 +412,8 @@ export default function Vasilhames() {
 
         if (restante <= 0) {
           const patch = {
-            data_saida: saidaData || null,
-            status: saidaData ? "Expedido" : "No Pátio",
+            data_saida: saidaData,
+            status: "Expedido",
             volume: 0,
             peso_liquido: 0,
             peso_bruto: roundMass(saidaVasilhame.tara || 0),
@@ -332,10 +458,9 @@ export default function Vasilhames() {
           updatedVasilhame = { ...saidaVasilhame, ...patch };
         }
       } else {
-        const status = saidaData ? "Expedido" : "No Pátio";
         const patch = {
-          data_saida: saidaData || null,
-          status,
+          data_saida: saidaData,
+          status: "Expedido",
         };
         await entities.vasilhames.update(saidaVasilhame.id, patch);
         updatedVasilhame = { ...saidaVasilhame, ...patch };

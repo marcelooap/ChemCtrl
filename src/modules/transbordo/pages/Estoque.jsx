@@ -19,9 +19,17 @@ import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
-import { loteToKg, loteUnidadeEstoque, saldoKgToLitros } from "@transbordo/lib/conversao";
+import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatMass, formatVolume, formatCurrency } from "@transbordo/lib/format";
-import { computeEstoqueSaldo, getEstoqueQuantidade, getEstoqueUnidade, getEstoqueUnidadeEntrada, getEstoqueSaldoEntrada, hydrateEstoqueFiscal } from "@transbordo/lib/estoqueSaldo";
+import {
+  computeEstoqueSaldo,
+  getEstoqueQuantidade,
+  getEstoqueUnidade,
+  getEstoqueUnidadeEntrada,
+  valorNaUnidadeEntrada,
+  isUnidadeVolumeEntrada,
+  hydrateEstoqueFiscal,
+} from "@transbordo/lib/estoqueSaldo";
 import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
 import {
   resolveTipoRecebimentoEstoque,
@@ -37,61 +45,12 @@ const STATUS_OPTIONS = [
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
-/** Converte valor operacional (kg no convencional) para a unidade de entrada. */
-function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
-  const valor = Number(valorOperacional) || 0;
-  if (valor <= 0) return 0;
-
-  if (estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) {
-    return Math.round(valor);
-  }
-
-  const um = getEstoqueUnidadeEntrada(estoqueItem);
-  const dens =
-    parseFloat(
-      String(
-        estoqueItem?.densidade ||
-          estoqueItem?.lotes?.[0]?.densidade ||
-          "0"
-      ).replace(",", ".")
-    ) || 0;
-
-  switch (um) {
-    case "L":
-      return saldoKgToLitros(valor, dens, {
-        ...estoqueItem,
-        quantidade: getEstoqueQuantidade(estoqueItem),
-      });
-    case "gal": {
-      const litros = saldoKgToLitros(valor, dens, estoqueItem);
-      return Math.round(litros / 3.78541);
-    }
-    case "lb":
-      return Math.round(valor / 0.453592);
-    case "kg":
-    default:
-      return Math.round(valor);
-  }
-}
-
-function formatValorEntrada(estoqueItem, valorOperacional) {
-  const valor = valorNaUnidadeEntrada(estoqueItem, valorOperacional);
-  const unidade = getEstoqueUnidadeEntrada(estoqueItem);
-  const u = String(unidade || "kg").toLowerCase();
-  if (u === "l" || u === "lt" || u === "litro" || u === "litros" || u === "gal") {
+function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
+  const valor = Number(valorEntrada) || 0;
+  if (isUnidadeVolumeEntrada(getEstoqueUnidadeEntrada(estoqueItem))) {
     return formatVolume(valor, { empty: "-" });
   }
   return formatMass(valor, { empty: "-" });
-}
-
-function formatSaldoEntrada(estoqueItem) {
-  const saldo = getEstoqueSaldoEntrada(estoqueItem);
-  const unidade = getEstoqueUnidadeEntrada(estoqueItem);
-  const u = String(unidade || "kg").toLowerCase();
-  if (u === "l" || u === "lt" || u === "litro" || u === "litros" || u === "gal") {
-    return formatVolume(saldo, { empty: "-" });
-  }
-  return formatMass(saldo, { empty: "-" });
 }
 
 function SaldoBadge({ children, tone }) {
@@ -163,12 +122,11 @@ export default function Estoque() {
         const hydrated = hydrateEstoqueFiscal(e);
         const quantidade = getEstoqueQuantidade(hydrated);
         const unidade_medida = getEstoqueUnidade(hydrated);
+        const itemOp = { ...hydrated, quantidade, unidade_medida };
         return {
-          ...hydrated,
-          quantidade,
-          unidade_medida,
+          ...itemOp,
           saldo_atual: computeEstoqueSaldo(
-            { ...hydrated, quantidade },
+            itemOp,
             trans,
             saics,
             vascs
@@ -394,7 +352,7 @@ export default function Estoque() {
       }));
 
     const buildPayloadFromLote = (lote, { saldoAtual } = {}) => {
-      const loteQtd = loteToKg(lote);
+      const loteQtd = loteQuantidadeEstoque(lote);
       const preco = Number(lote.preco_unitario ?? data.preco_unitario) || 0;
       const saldo = saldoAtual != null ? saldoAtual : loteQtd;
       return {
@@ -573,9 +531,22 @@ export default function Estoque() {
               ) : (
                 filtered.map((e, i) => {
                   const saldoZerado = Number(e.saldo_atual) === 0;
-                  const qtdInicialOp = getEstoqueQuantidade(e);
-                  const saldoAtualOp = Number(e.saldo_atual) || 0;
-                  const saldoExpedidoOp = Math.max(0, qtdInicialOp - saldoAtualOp);
+                  // Recalcula na renderização (não depende de saldo_atual stale após HMR)
+                  const qtdOp = getEstoqueQuantidade(e);
+                  const saldoAtualOp = computeEstoqueSaldo(
+                    e,
+                    transbordos,
+                    saidas,
+                    vasilhames
+                  );
+                  const saldoExpedidoOp = Math.max(0, qtdOp - saldoAtualOp);
+                  const saldoInicialEntrada = valorNaUnidadeEntrada(e, qtdOp);
+                  const saldoExpedidoEntrada = valorNaUnidadeEntrada(
+                    e,
+                    saldoExpedidoOp
+                  );
+                  const saldoAtualEntrada = valorNaUnidadeEntrada(e, saldoAtualOp);
+                  const unidadeEntrada = getEstoqueUnidadeEntrada(e);
                   return (
                   <tr
                     key={e.id}
@@ -608,21 +579,21 @@ export default function Estoque() {
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
                     <td className="px-5 py-3">
                       <SaldoBadge tone="blue">
-                        {formatValorEntrada(e, qtdInicialOp)}
+                        {formatValorNaUnidadeEntrada(e, saldoInicialEntrada)}
                       </SaldoBadge>
                     </td>
                     <td className="px-5 py-3">
                       <SaldoBadge tone="red">
-                        {formatValorEntrada(e, saldoExpedidoOp)}
+                        {formatValorNaUnidadeEntrada(e, saldoExpedidoEntrada)}
                       </SaldoBadge>
                     </td>
                     <td className="px-5 py-3">
                       <SaldoBadge tone="green">
-                        {formatSaldoEntrada(e)}
+                        {formatValorNaUnidadeEntrada(e, saldoAtualEntrada)}
                       </SaldoBadge>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {getEstoqueUnidadeEntrada(e)}
+                      {unidadeEntrada}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">

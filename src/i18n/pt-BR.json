@@ -767,6 +767,14 @@
           "placa": "Placa",
           "saveSuccess": "Dados de transporte salvos"
         },
+        "concluir": {
+          "title": "Concluir carregamento",
+          "button": "Concluir carregamento",
+          "horaLabel": "Horário de carregamento",
+          "horaHint": "Preenchido com o horário atual de Brasília (editável).",
+          "confirm": "Concluir",
+          "saveSuccess": "Carregamento concluído"
+        },
         "columns": {
           "codigo": "Código",
           "cliente": "Cliente",
@@ -793,7 +801,9 @@
           "transportadora": "Informe a transportadora.",
           "motorista": "Informe o motorista.",
           "placa": "Informe a placa.",
-          "transporteFailed": "Não foi possível salvar os dados de transporte."
+          "transporteFailed": "Não foi possível salvar os dados de transporte.",
+          "horaCarregamento": "Informe um horário de carregamento válido.",
+          "concluirFailed": "Não foi possível concluir o carregamento."
         }
       },
       "reservarMaterial": {
@@ -859,9 +869,40 @@
         },
         "carregamentos": {
           "title": "Carregamentos",
-          "subtitle": "Acompanhamento operacional dos carregamentos",
+          "subtitle": "Histórico dos carregamentos concluídos na operação",
           "emptyTitle": "Carregamentos",
           "emptyDescription": "Estrutura inicial preparada para o controle de carregamentos."
+        }
+      },
+      "carregamentos": {
+        "tableTitle": "Carregamentos concluídos",
+        "tableCount": "{{count}} registro(s)",
+        "searchPlaceholder": "Buscar saída, cliente, motorista, placa...",
+        "empty": "Nenhum carregamento concluído encontrado.",
+        "view": "Visualizar saída",
+        "viewSaidaPickTitle": "Qual saída deseja visualizar?",
+        "viewSaidaMissingTitle": "Saída não encontrada",
+        "viewSaidaMissing": "A saída deste carregamento não está mais disponível.",
+        "produtoCountOne": "{{count}} produto",
+        "produtoCountMany": "{{count}} produtos",
+        "loadErrorTitle": "Erro ao carregar carregamentos",
+        "loadErrorDescription": "Verifique a conexão com o ChemFlow e se as migrations de agendamentos foram aplicadas.",
+        "columns": {
+          "saida": "ID da saída",
+          "cliente": "Cliente",
+          "produto": "Produto",
+          "transportadora": "Transportadora",
+          "motorista": "Motorista",
+          "placa": "Placa",
+          "horarioAgendado": "Horário agendado",
+          "horarioCarregamento": "Horário do carregamento",
+          "status": "Status",
+          "operador": "Operador",
+          "acoes": "Ações"
+        },
+        "status": {
+          "dentro": "Dentro do Horário",
+          "fora": "Fora do horário"
         }
       },
       "topics": {

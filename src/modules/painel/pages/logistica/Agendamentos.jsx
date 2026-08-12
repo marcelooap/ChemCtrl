@@ -10,6 +10,7 @@ export default function LogisticaAgendamentos() {
       subtitle={t('painel.logistica.sections.agendamentos.subtitle')}
       permissionPrefix="painel_logistica_agendamentos"
       showViewSaida
+      showConcluirCarregamento
     />
   );
 }

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
 import { entities } from '@transbordo/services/entities';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import AgendamentoSlotModal from '@painel/components/comercial/AgendamentoSlotModal';
 import AgendamentoTransporteModal from '@painel/components/comercial/AgendamentoTransporteModal';
+import AgendamentoConcluirCarregamentoModal from '@painel/components/comercial/AgendamentoConcluirCarregamentoModal';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
   ENCAIXE_HORARIO,
   addDays,
   bookSlotSaidas,
+  concluirCarregamento,
   getDefaultSelectedDate,
   getSlotsForWeekday,
   getWeekDays,
@@ -39,7 +41,7 @@ const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
 /**
  * Grade semanal de agendamentos de carregamento (Comercial e Logística).
- * @param {{ title: string, subtitle: string, permissionPrefix?: string, showViewSaida?: boolean, showTransporte?: boolean }} props
+ * @param {{ title: string, subtitle: string, permissionPrefix?: string, showViewSaida?: boolean, showTransporte?: boolean, showConcluirCarregamento?: boolean }} props
  */
 export default function AgendamentosGrade({
   title,
@@ -47,6 +49,7 @@ export default function AgendamentosGrade({
   permissionPrefix = 'painel_comercial_agendamentos',
   showViewSaida = false,
   showTransporte = false,
+  showConcluirCarregamento = false,
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -63,6 +66,7 @@ export default function AgendamentosGrade({
   const [viewSaida, setViewSaida] = useState(null);
   const [viewPicker, setViewPicker] = useState(null);
   const [transporteBookings, setTransporteBookings] = useState(null);
+  const [concluirBookings, setConcluirBookings] = useState(null);
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
   const today = todayISO();
@@ -212,6 +216,19 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
+  const handleConcluirCarregamento = async ({ horaCarregamento }) => {
+    const list = normalizeBookings(concluirBookings);
+    if (list.length === 0) return;
+    await concluirCarregamento({
+      bookings: list,
+      horaCarregamento,
+      user,
+      t,
+    });
+    toast({ title: t('painel.comercial.agendamentos.concluir.saveSuccess') });
+    await loadData({ silent: true });
+  };
+
   const locale = i18n.language || 'pt-BR';
   const selectedDateLabel = parseISODate(selectedIso).toLocaleDateString(locale, {
     weekday: 'long',
@@ -347,6 +364,8 @@ export default function AgendamentosGrade({
                 viewLabel={t('painel.comercial.agendamentos.viewSaida')}
                 onEditTransporte={showTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
+                onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
@@ -379,6 +398,8 @@ export default function AgendamentosGrade({
                 viewLabel={t('painel.comercial.agendamentos.viewSaida')}
                 onEditTransporte={showTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
+                onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
@@ -400,6 +421,8 @@ export default function AgendamentosGrade({
               viewLabel={t('painel.comercial.agendamentos.viewSaida')}
               onEditTransporte={showTransporte ? setTransporteBookings : undefined}
               transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
+              onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+              concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
               saidasCountLabel={(count) =>
                 t('painel.comercial.agendamentos.saidasCount', { count })
               }
@@ -428,6 +451,16 @@ export default function AgendamentosGrade({
           permissionPrefix={permissionPrefix}
           onClose={() => setTransporteBookings(null)}
           onSave={handleSaveTransporte}
+        />
+      ) : null}
+
+      {showConcluirCarregamento ? (
+        <AgendamentoConcluirCarregamentoModal
+          open={!!concluirBookings}
+          bookings={concluirBookings}
+          permissionPrefix={permissionPrefix}
+          onClose={() => setConcluirBookings(null)}
+          onConfirm={handleConcluirCarregamento}
         />
       ) : null}
 
@@ -502,6 +535,8 @@ function TimeSlotButton({
   viewLabel,
   onEditTransporte,
   transporteLabel,
+  onConcluir,
+  concluirLabel,
   saidasCountLabel,
 }) {
   const list = normalizeBookings(bookings);
@@ -509,7 +544,9 @@ function TimeSlotButton({
   const occupied = list.length > 0;
   const showEye = occupied && showViewSaida;
   const showTruck = occupied && Boolean(onEditTransporte);
+  const showCheck = occupied && Boolean(onConcluir);
   const filled = hasTransporte(summary.first);
+  const hasSideActions = showTruck || showEye || showCheck;
 
   return (
     <div
@@ -525,7 +562,7 @@ function TimeSlotButton({
         type="button"
         onClick={onClick}
         className={`w-full h-full min-h-[72px] text-left px-3 py-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          showEye || showTruck ? 'pr-10' : ''
+          hasSideActions ? 'pr-10' : ''
         }`}
       >
         <span className="flex items-center gap-1.5">
@@ -571,7 +608,7 @@ function TimeSlotButton({
         )}
       </button>
 
-      {showTruck || showEye ? (
+      {hasSideActions ? (
         <div className="absolute top-1.5 right-1.5 flex flex-col gap-0.5">
           {showTruck ? (
             <Button
@@ -591,6 +628,22 @@ function TimeSlotButton({
               }}
             >
               <Truck className="w-4 h-4" />
+            </Button>
+          ) : null}
+          {showCheck ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-200/70"
+              title={concluirLabel}
+              aria-label={concluirLabel}
+              onClick={(e) => {
+                e.stopPropagation();
+                onConcluir?.(list);
+              }}
+            >
+              <CheckCircle2 className="w-4 h-4" />
             </Button>
           ) : null}
           {showEye ? (

@@ -767,6 +767,14 @@
           "placa": "Plaque",
           "saveSuccess": "Données de transport enregistrées"
         },
+        "concluir": {
+          "title": "Terminer le chargement",
+          "button": "Terminer le chargement",
+          "horaLabel": "Heure de chargement",
+          "horaHint": "Prérempli avec l'heure actuelle de Brasília (modifiable).",
+          "confirm": "Terminer",
+          "saveSuccess": "Chargement terminé"
+        },
         "columns": {
           "codigo": "Code",
           "cliente": "Client",
@@ -793,7 +801,9 @@
           "transportadora": "Indiquez le transporteur.",
           "motorista": "Indiquez le chauffeur.",
           "placa": "Indiquez la plaque.",
-          "transporteFailed": "Impossible d'enregistrer les données de transport."
+          "transporteFailed": "Impossible d'enregistrer les données de transport.",
+          "horaCarregamento": "Saisissez une heure de chargement valide.",
+          "concluirFailed": "Impossible de terminer le chargement."
         }
       },
       "reservarMaterial": {
@@ -859,9 +869,40 @@
         },
         "carregamentos": {
           "title": "Chargements",
-          "subtitle": "Suivi opérationnel des chargements",
+          "subtitle": "Historique des chargements terminés",
           "emptyTitle": "Chargements",
           "emptyDescription": "Structure initiale préparée pour le contrôle des chargements."
+        }
+      },
+      "carregamentos": {
+        "tableTitle": "Chargements terminés",
+        "tableCount": "{{count}} enregistrement(s)",
+        "searchPlaceholder": "Rechercher sortie, client, chauffeur, plaque...",
+        "empty": "Aucun chargement terminé trouvé.",
+        "view": "Voir la sortie",
+        "viewSaidaPickTitle": "Quelle sortie souhaitez-vous afficher ?",
+        "viewSaidaMissingTitle": "Sortie introuvable",
+        "viewSaidaMissing": "La sortie de ce chargement n'est plus disponible.",
+        "produtoCountOne": "{{count}} produit",
+        "produtoCountMany": "{{count}} produits",
+        "loadErrorTitle": "Erreur lors du chargement",
+        "loadErrorDescription": "Vérifiez la connexion ChemFlow et si les migrations de planification ont été appliquées.",
+        "columns": {
+          "saida": "ID de sortie",
+          "cliente": "Client",
+          "produto": "Produit",
+          "transportadora": "Transporteur",
+          "motorista": "Chauffeur",
+          "placa": "Plaque",
+          "horarioAgendado": "Heure planifiée",
+          "horarioCarregamento": "Heure de chargement",
+          "status": "Statut",
+          "operador": "Opérateur",
+          "acoes": "Actions"
+        },
+        "status": {
+          "dentro": "Dans les temps",
+          "fora": "Hors délai"
         }
       },
       "topics": {

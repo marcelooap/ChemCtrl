@@ -16,13 +16,22 @@ export const loteToKg = (lote) => {
 
   const lDens =
     parseFloat(String(lote?.densidade || "0").replace(",", ".")) || 0;
+  const um = String(lote?.unidade_medida || "kg").trim().toLowerCase();
 
-  switch (lote?.unidade_medida) {
-    case "L":
+  switch (um) {
+    case "l":
+    case "lt":
+    case "litro":
+    case "litros":
       return lDens > 0 ? Math.round(lQtd * lDens) : Math.round(lQtd);
     case "lb":
+    case "lbs":
+    case "libra":
+    case "libras":
       return Math.round(lQtd * 0.453592);
     case "gal":
+    case "gallon":
+    case "gallons":
       return lDens > 0
         ? Math.round(lQtd * 3.78541 * lDens)
         : Math.round(lQtd * 3.78541);
@@ -41,15 +50,23 @@ export const loteToLitros = (lote) => {
 
   const lDens =
     parseFloat(String(lote?.densidade || "0").replace(",", ".")) || 0;
+  const um = String(lote?.unidade_medida || "kg").trim().toLowerCase();
 
-  switch (lote?.unidade_medida) {
-    case "L":
+  switch (um) {
+    case "l":
+    case "lt":
+    case "litro":
+    case "litros":
       return Math.round(lQtd);
     case "gal":
+    case "gallon":
+    case "gallons":
       return Math.round(lQtd * 3.78541);
     case "kg":
+    case "kgs":
       return lDens > 0 ? Math.round(lQtd / lDens) : 0;
-    case "lb": {
+    case "lb":
+    case "lbs": {
       const kg = Math.round(lQtd * 0.453592);
       return lDens > 0 ? Math.round(kg / lDens) : 0;
     }
@@ -72,9 +89,13 @@ export const saldoKgToLitros = (saldoKg, densidade, estoqueItem) => {
   if (saldo <= 0) return 0;
 
   const lote = estoqueItem?.lotes?.[0];
-  const um = lote?.unidade_medida;
-  if (lote && (um === "L" || um === "gal")) {
-    const declaredL = loteToLitros(lote);
+  const um = String(lote?.unidade_medida || "").trim().toLowerCase();
+  if (lote && (um === "l" || um === "lt" || um === "litro" || um === "litros" || um === "gal")) {
+    const declaredL = loteToLitros({
+      ...lote,
+      unidade_medida:
+        um === "gal" ? "gal" : "L",
+    });
     const originalKg =
       (Number(estoqueItem?.quantidade) || 0) > 0
         ? Math.round(Number(estoqueItem.quantidade))
@@ -95,5 +116,47 @@ export const loteUnidadeEstoque = (lote) => {
   if (lote?.embalado) {
     return lote.unidade_medida || "kg";
   }
+  const um = String(lote?.unidade_medida || "kg").trim().toLowerCase();
+  // Entrada em volume → estoque operacional em litros
+  if (
+    um === "l" ||
+    um === "lt" ||
+    um === "litro" ||
+    um === "litros" ||
+    um === "gal" ||
+    um === "gallon" ||
+    um === "gallons" ||
+    um === "galão" ||
+    um === "galoes" ||
+    um === "galões"
+  ) {
+    return "L";
+  }
   return "kg";
+};
+
+/**
+ * Quantidade operacional a gravar no estoque a partir do lote.
+ * Volume (L/gal) → litros; demais → kg.
+ */
+export const loteQuantidadeEstoque = (lote) => {
+  if (lote?.embalado) {
+    return Math.round(parseFloat(lote?.quantidade) || 0);
+  }
+  const um = String(lote?.unidade_medida || "kg").trim().toLowerCase();
+  if (
+    um === "l" ||
+    um === "lt" ||
+    um === "litro" ||
+    um === "litros" ||
+    um === "gal" ||
+    um === "gallon" ||
+    um === "gallons" ||
+    um === "galão" ||
+    um === "galoes" ||
+    um === "galões"
+  ) {
+    return loteToLitros(lote);
+  }
+  return loteToKg(lote);
 };
