@@ -32,7 +32,11 @@ import {
   kgLotesToLitrosInteiros,
 } from "@transbordo/lib/format";
 import { loteToKg, loteToLitros, saldoKgToLitros } from "@transbordo/lib/conversao";
-import { computeDisponivelTransbordo } from "@transbordo/lib/estoqueSaldo";
+import {
+  computeDisponivelTransbordo,
+  isEstoqueEmbalado,
+  isUnidadeMassaEntrada,
+} from "@transbordo/lib/estoqueSaldo";
 import {
   findAllLinkedTransbordos,
   multipleTransbordosMessage,
@@ -542,10 +546,16 @@ export default function TransbordoModal({
         (e.produto_id === produtoId || e.produto_nome === produtoNome) &&
         (e.saldo_atual || 0) > 0
     )
-    .map((e) => ({
-      ...e,
-      display_label: `${entradaIdMap[e.id] || "E000"} - ${e.produto_nome || ""}`,
-    }));
+    .map((e) => {
+      const um = e.unidade_medida || "kg";
+      const saldo = Math.round(Number(e.saldo_atual) || 0);
+      return {
+        ...e,
+        embalado: true,
+        unidade_medida: um,
+        display_label: `${entradaIdMap[e.id] || "E000"} - ${e.produto_nome || ""} (${saldo} ${um})`,
+      };
+    });
 
   // Saldo consumido por fonte (para excluir fontes esgotadas em origens subsequentes)
   const consumedBySource = {};
@@ -601,22 +611,26 @@ export default function TransbordoModal({
           (consumedBySource[opt.id] || 0) - (isSelf ? selfVol : 0)
         );
         const saldo = opt.saldo_atual || 0;
-        const unid = opt.unidade_medida || "L";
-        const saldoL =
-          unid === "kg" && densidade > 0
+        const keepEntryUom = isEstoqueEmbalado(opt);
+        const unid = opt.unidade_medida || (keepEntryUom ? "kg" : "L");
+        // Embalado: saldo permanece na UOM da entrada (sem kg→L por densidade)
+        const saldoOp = keepEntryUom
+          ? Math.round(Number(saldo) || 0)
+          : unid === "kg" && densidade > 0
             ? saldoKgToLitros(saldo, densidade, opt)
             : roundVolume(saldo);
-        const available = roundVolume(saldoL - consumedL);
+        const available = keepEntryUom
+          ? Math.max(0, Math.round(saldoOp - consumedL))
+          : roundVolume(saldoOp - consumedL);
         if (!isSelf && available <= 0) return null;
 
         const baseLotes = opt.lotes_disponiveis || [];
         if (baseLotes.length === 0) {
-          // saldo_atual já normalizado em litros — marca unidade para evitar
-          // segunda conversão kg→L em OrigemCard / saldoExcedido
           return {
             ...opt,
-            saldo_atual: isSelf ? saldoL : available,
-            unidade_medida: "L",
+            saldo_atual: isSelf ? saldoOp : available,
+            unidade_medida: keepEntryUom ? unid : "L",
+            embalado: keepEntryUom || opt.embalado,
           };
         }
 
@@ -657,7 +671,8 @@ export default function TransbordoModal({
         return {
           ...opt,
           saldo_atual: saldoAjustado > 0 ? saldoAjustado : available,
-          unidade_medida: "L",
+          unidade_medida: keepEntryUom ? unid : "L",
+          embalado: keepEntryUom || opt.embalado,
           lotes_disponiveis: lotesParaCard,
           display_label: opt.display_label,
         };
@@ -1372,7 +1387,19 @@ export default function TransbordoModal({
                       destinosCount={destinosDaOrigem.length}
                       onAddDestino={() => handleAddDestino(origem._uid)}
                     >
-                      {destinosDaOrigem.map(({ d, globalIdx }, localIdx) => (
+                      {destinosDaOrigem.map(({ d, globalIdx }, localIdx) => {
+                        const origemEmbalado =
+                          origem.tipo_origem === "embalado" ||
+                          Boolean(origem.embalado);
+                        const umOrigem =
+                          origem.unidade_medida ||
+                          adjustOptionsForOrigem(entradasEmbaladas, origem).find(
+                            (o) => o.id === origem.entrada_id
+                          )?.unidade_medida ||
+                          "kg";
+                        const preserveEntryMass =
+                          origemEmbalado && isUnidadeMassaEntrada(umOrigem);
+                        return (
                         <DestinoCard
                           key={`${d.origem_uid || "d"}-${globalIdx}`}
                           index={localIdx}
@@ -1382,6 +1409,8 @@ export default function TransbordoModal({
                           produtoId={produtoId}
                           produtoNome={produtoNome}
                           densidade={densidade}
+                          preserveEntryMass={preserveEntryMass}
+                          unidadeEntrada={umOrigem}
                           onChange={(data) =>
                             handleUpdateDestino(globalIdx, data)
                           }
@@ -1392,7 +1421,8 @@ export default function TransbordoModal({
                             toggleDestinoCollapse(globalIdx)
                           }
                         />
-                      ))}
+                        );
+                      })}
                     </OrigemCard>
                   );
                 })

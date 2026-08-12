@@ -120,6 +120,16 @@ export function isUnidadeVolumeEntrada(unidade) {
   return u === "l" || u === "gal";
 }
 
+export function isUnidadeMassaEntrada(unidade) {
+  const u = normalizeUnidadeEntrada(unidade);
+  return u === "kg" || u === "lb";
+}
+
+/** Estoque embalado: quantidade operacional segue a UOM da entrada (sem densidade). */
+export function isEstoqueEmbalado(estoqueItem) {
+  return Boolean(estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado);
+}
+
 /**
  * Converte valor operacional para a unidade de medida da entrada.
  * Quando o estoque já opera em litros (entrada L/gal), não reconverte via kg.
@@ -216,7 +226,8 @@ export function calcTransbordado(estoqueItem, transbordos) {
     );
     if (matches.length === 0) return sum;
 
-    if (estoqueOperaEmLitros(estoqueItem)) {
+    // Embalado e entrada em L/gal: volume_retirado já está na UOM da entrada
+    if (estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem)) {
       return (
         sum + matches.reduce((s, o) => s + (Number(o.volume_retirado) || 0), 0)
       );
@@ -560,35 +571,68 @@ export function listHistoricoTransbordosEncadeados(
  * Frações do conteúdo do vasilhame atribuídas a cada estoque de origem.
  * Retorna Map<estoqueId, weight> com soma ≈ 1.
  *
- * Inclui vínculo de entrada direta (tipo_recebimento = vasilhame), quando o
- * tanque foi criado na entrada sem passar por transbordo.
+ * Prefere a composição do próprio vasilhame (FIFO por destino). Fallback:
+ * origens do OP (legado). Inclui vínculo de entrada direta.
  */
 export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = [], estoqueItem = null) {
   const weights = new Map();
   const related = findTransbordosForVasilhame(vasilhame, transbordos);
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
 
-  related.forEach((t) => {
-    (t.origens || []).forEach((o) => {
-      if (!o.entrada_id) return;
-      const dens =
-        parseFloat(String(t.densidade || "0").replace(",", ".")) || 0;
-      const vol = Number(o.volume_retirado) || 0;
-      const massa =
-        Number(o.massa_retirada) ||
-        (dens > 0 ? vol * dens : 0) ||
-        vol ||
-        0;
-      const key =
-        estoqueItem && origemMatchesEstoque(o, estoqueItem)
-          ? estoqueItem.id
-          : o.entrada_id;
-      weights.set(key, (weights.get(key) || 0) + massa);
+  // 1) Composição do destino: atribui só as origens que realmente alimentaram este tanque
+  if (composicao.length > 0 && related.length > 0) {
+    for (const t of related) {
+      const origens = t.origens || [];
+      for (const c of composicao) {
+        let o = null;
+        const idx = Number(c.origem_index);
+        if (Number.isInteger(idx) && idx >= 0 && origens[idx]) {
+          o = origens[idx];
+        } else if ((c.lote || "").trim()) {
+          const loteKey = String(c.lote).trim();
+          o = origens.find((x) => String(x.lote || "").trim() === loteKey);
+        }
+        if (!o?.entrada_id) continue;
+        const qtd =
+          Number(c.quantidade_l) ||
+          Number(c.quantidade_kg) ||
+          0;
+        if (qtd <= 0) continue;
+        const key =
+          estoqueItem && origemMatchesEstoque(o, estoqueItem)
+            ? estoqueItem.id
+            : o.entrada_id;
+        weights.set(key, (weights.get(key) || 0) + qtd);
+      }
+    }
+  }
+
+  // 2) Fallback legado: todas as origens do OP (pode diluir multi-origem)
+  if ([...weights.values()].reduce((a, b) => a + b, 0) <= 0) {
+    related.forEach((t) => {
+      (t.origens || []).forEach((o) => {
+        if (!o.entrada_id) return;
+        const dens =
+          parseFloat(String(t.densidade || "0").replace(",", ".")) || 0;
+        const vol = Number(o.volume_retirado) || 0;
+        const massa =
+          Number(o.massa_retirada) ||
+          (dens > 0 ? vol * dens : 0) ||
+          vol ||
+          0;
+        const key =
+          estoqueItem && origemMatchesEstoque(o, estoqueItem)
+            ? estoqueItem.id
+            : o.entrada_id;
+        weights.set(key, (weights.get(key) || 0) + massa);
+      });
     });
-  });
+  }
 
   const total = [...weights.values()].reduce((a, b) => a + b, 0);
   if (total <= 0) {
-    // Sem massa conhecida: divide igualmente entre origens
     const ids = new Set();
     related.forEach((t) =>
       (t.origens || []).forEach((o) => {
@@ -596,7 +640,6 @@ export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = [], estoq
       })
     );
     if (ids.size === 0) {
-      // Entrada direta como vasilhame (sem OP): 100% deste estoque
       if (estoqueItem && isVasilhameFromEntradaDireta(vasilhame, estoqueItem)) {
         weights.set(estoqueItem.id, 1);
       }
@@ -670,8 +713,12 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
 }
 
 /**
- * Massa (kg) já baixada por saídas convencionais fiscais
+ * Massa/volume já baixado por saídas convencionais fiscais
  * cujos vasilhames se originaram deste estoque (via transbordo ou entrada direta).
+ *
+ * Se o tanque ainda está No Pátio com conteúdo, a baixa fiscal não consumiu o
+ * físico — não debita (evita saldo errado quando a saída fiscal existe mas o
+ * vasilhame foi mantido/restaurado no pátio).
  */
 export function calcSaidasConvencional(
   estoqueItem,
@@ -692,15 +739,25 @@ export function calcSaidasConvencional(
         if (item.tipo !== "convencional" || !item.vasilhame_id) return s;
         const v = vasilhameById.get(item.vasilhame_id);
         if (!v) return s;
+        // Tanque ainda no pátio com volume/peso → conteúdo não saiu de fato
+        const aindaNoPatio =
+          (v.status || "No Pátio") === "No Pátio" &&
+          (v.data_saida == null || String(v.data_saida).trim() === "") &&
+          ((Number(v.volume) || 0) > 0 || (Number(v.peso_liquido) || 0) > 0);
+        if (aindaNoPatio) return s;
+
         const weights = getEstoqueWeightsForVasilhame(v, transbordos, estoqueItem);
         const w = weights.get(id) || 0;
         if (w <= 0) return s;
         // Baixa na unidade do estoque: L → volume_solicitado; kg → massa
-        const qtd = estoqueOperaEmLitros(estoqueItem)
-          ? Number(item.volume_solicitado) || 0
-          : Number(item.quantidade_solicitada) ||
-            Number(item.peso_liquido) ||
-            0;
+        const qtd =
+          estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem)
+            ? Number(item.volume_solicitado) ||
+              Number(item.quantidade_solicitada) ||
+              0
+            : Number(item.quantidade_solicitada) ||
+              Number(item.peso_liquido) ||
+              0;
         return s + qtd * w;
       }, 0)
     );
@@ -880,24 +937,32 @@ export function resolveMassaVasilhameParaBaixa(vasilhame, transbordos = []) {
 }
 
 /**
- * Quantidade a baixar do estoque na unidade operacional do registro
- * (L para embalado em litros; kg no convencional).
+ * Quantidade a baixar do estoque na unidade operacional do registro.
+ * Embalado: sempre a quantidade na UOM da entrada (campo volume do OP/vasilhame),
+ * sem conversão por densidade.
  */
 export function resolveQuantidadeVasilhameParaBaixa(
   estoqueItem,
   vasilhame,
   transbordos = []
 ) {
-  if (estoqueOperaEmLitros(estoqueItem)) {
-    return resolveVolumeVasilhameParaBaixa(vasilhame, transbordos);
+  if (estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem)) {
+    const vol = resolveVolumeVasilhameParaBaixa(vasilhame, transbordos);
+    if (vol > 0) return vol;
+    // Fallback legado quando só havia massa gravada
+    if (isEstoqueEmbalado(estoqueItem) && isUnidadeMassaEntrada(getEstoqueUnidadeEntrada(estoqueItem))) {
+      return resolveMassaVasilhameParaBaixa(vasilhame, transbordos);
+    }
+    return vol;
   }
   return resolveMassaVasilhameParaBaixa(vasilhame, transbordos);
 }
 
 /**
  * Quantidade já baixada porque o vasilhame de origem foi expedido no pátio.
- * Em estoque com entrada em L: percorre os OPs (ex.: T008) e soma volume_retirado
- * proporcional aos destinos já expedidos — nunca peso÷densidade.
+ * Em estoque com entrada em L/gal ou Embalado: percorre os OPs e soma
+ * volume_retirado (já na UOM da entrada) proporcional aos destinos expedidos —
+ * nunca peso÷densidade / volume×densidade.
  */
 export function calcVasilhamesExpedidosPatio(
   estoqueItem,
@@ -918,7 +983,10 @@ export function calcVasilhamesExpedidosPatio(
     });
   });
 
-  if (estoqueOperaEmLitros(estoqueItem)) {
+  const usaQtdOrigemOp =
+    estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem);
+
+  if (usaQtdOrigemOp) {
     let total = 0;
     const countedDirect = new Set();
 
@@ -959,10 +1027,17 @@ export function calcVasilhamesExpedidosPatio(
       if (!isVasilhameExpedido(v)) continue;
       if (fiscalVasilhameIds.has(v.id)) continue;
       if (!isVasilhameFromEntradaDireta(v, estoqueItem)) continue;
-      total += resolveVolumeVasilhameParaBaixa(v, transbordos);
+      total += resolveQuantidadeVasilhameParaBaixa(
+        estoqueItem,
+        v,
+        transbordos
+      );
     }
 
-    return roundVolume(total);
+    return isEstoqueEmbalado(estoqueItem) &&
+      isUnidadeMassaEntrada(getEstoqueUnidadeEntrada(estoqueItem))
+      ? roundMass(total)
+      : roundVolume(total);
   }
 
   return (vasilhames || []).reduce((sum, v) => {
@@ -1117,7 +1192,8 @@ export function resolveEstoqueIdsFromSaidaConvencional(
  * Regras de negócio:
  * - Na entrada: saldo = quantidade recebida
  * - Transbordo (OP) NÃO reduz o saldo (movimento interno granel → vasilhame)
- * - Embalado: reduz quando há saída enviada ao fiscal
+ * - Embalado: reduz na UOM da entrada quando o vasilhame destino é expedido
+ *   ou quando há saída embalado enviada ao fiscal (sem conversão por densidade)
  * - Convencional: reduz quando o vasilhame é expedido
  *   (Registrar Saída no pátio ou saída enviada ao fiscal)
  */

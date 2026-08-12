@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
 import ProdutoModal from "@transbordo/components/cadastro/ProdutoModal";
+import { cascadeProdutoIdentity } from "@transbordo/lib/cascadeProdutoUpdate";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { formatDensidade } from "@transbordo/lib/format";
 
@@ -122,6 +123,17 @@ export default function ProdutosTab() {
 
       if (editingProduto) {
         await entities.produtos.update(editingProduto.id, payload);
+        await cascadeProdutoIdentity({
+          produtoId: editingProduto.id,
+          before: {
+            codigo: editingProduto.codigo,
+            produto: editingProduto.produto,
+          },
+          after: {
+            codigo: payload.codigo,
+            produto: payload.produto,
+          },
+        });
       } else {
         await entities.produtos.create(payload);
       }

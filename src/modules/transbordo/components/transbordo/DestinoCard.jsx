@@ -96,6 +96,8 @@ export default function DestinoCard({
   produtoId,
   produtoNome,
   densidade,
+  preserveEntryMass = false,
+  unidadeEntrada = "L",
   onChange,
   onRemove,
   readOnly,
@@ -136,24 +138,33 @@ export default function DestinoCard({
   })();
 
   const volumeEnvasado = roundVolume(destino.volume_total || destino.volume || 0);
+  const unidadeLabel =
+    String(unidadeEntrada || "L").trim().toLowerCase() === "kg"
+      ? "kg"
+      : String(unidadeEntrada || "L").trim().toLowerCase() === "lb"
+        ? "lb"
+        : "L";
 
   const recalc = (d) => {
+    const pesoFromQty = (qty) =>
+      preserveEntryMass ? roundMass(qty) : roundMass(qty * densidade);
+
     if (d.tipo_embalagem === "Vasilhame") {
       d.volume = roundVolume(d.volume);
       d.volume_total = d.volume;
-      d.peso_liquido = roundMass(d.volume * densidade);
+      d.peso_liquido = pesoFromQty(d.volume);
       d.peso_bruto = roundMass((d.tara || 0) + (d.peso_liquido || 0));
     } else if (d.tipo_embalagem === "Tankagem") {
       d.volume = roundVolume(d.volume);
       d.volume_total = d.volume;
-      d.peso_liquido = roundMass(d.volume * densidade);
+      d.peso_liquido = pesoFromQty(d.volume);
     } else {
       d.quantidade_embalagens = Math.round(d.quantidade_embalagens || 0);
       d.volume_por_embalagem = roundVolume(d.volume_por_embalagem);
       d.volume_total = roundVolume(
         (d.quantidade_embalagens || 0) * (d.volume_por_embalagem || 0)
       );
-      d.peso_liquido = roundMass(d.volume_total * densidade);
+      d.peso_liquido = pesoFromQty(d.volume_total);
     }
   };
 
@@ -259,7 +270,9 @@ export default function DestinoCard({
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-sm font-semibold text-foreground tabular-nums">
-          {formatVolume(volumeEnvasado)} L
+          {preserveEntryMass
+            ? `${formatMass(volumeEnvasado)} ${unidadeLabel}`
+            : `${formatVolume(volumeEnvasado)} L`}
         </span>
         {collapseControls}
       </div>
@@ -373,9 +386,13 @@ export default function DestinoCard({
             />
           </FieldGroup>
 
-          <FieldGroup title="Volume e Peso">
+          <FieldGroup title={preserveEntryMass ? "Quantidade e Peso" : "Volume e Peso"}>
             <IntegerField
-              label="Volume (L) *"
+              label={
+                preserveEntryMass
+                  ? `Quantidade (${unidadeLabel}) *`
+                  : "Volume (L) *"
+              }
               value={destino.volume}
               onChange={(v) => updateField("volume", v)}
               readOnly={readOnly}
@@ -529,9 +546,11 @@ export default function DestinoCard({
       {tipo && (
         <div className="flex justify-end pt-1 border-t border-border/60">
           <span className="text-xs text-muted-foreground">
-            Volume deste destino:{" "}
+            {preserveEntryMass ? "Quantidade deste destino:" : "Volume deste destino:"}{" "}
             <span className="font-medium text-primary">
-              {formatVolume(destino.volume_total || 0)} L
+              {preserveEntryMass
+                ? `${formatMass(destino.volume_total || 0)} ${unidadeLabel}`
+                : `${formatVolume(destino.volume_total || 0)} L`}
             </span>
           </span>
         </div>

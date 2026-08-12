@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
+import { syncEstoqueSaldos, isUnidadeMassaEntrada } from "@transbordo/lib/estoqueSaldo";
 import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -538,19 +538,40 @@ export default function Transbordo() {
           lotesRet.length > 0
             ? roundVolume(lotesRet.reduce((s, l) => s + l.volume_retirado, 0))
             : roundVolume(o.volume_retirado);
+        const embaladoOrigem =
+          o.tipo_origem === "embalado" || Boolean(o.embalado);
+        const um = o.unidade_medida || (embaladoOrigem ? "kg" : "L");
+        const massaEmbaladoMassa = isUnidadeMassaEntrada(um)
+          ? String(um).toLowerCase() === "lb"
+            ? roundMass(volume_retirado * 0.453592)
+            : roundMass(volume_retirado)
+          : dens > 0
+            ? roundMass(volume_retirado * dens)
+            : roundMass(o.massa_retirada || 0);
         return {
           ...o,
           lote:
             lotesRet.find((l) => l.volume_retirado > 0)?.lote || o.lote || "",
           volume_retirado,
-          massa_retirada: roundMass(
-            o.massa_retirada ?? volume_retirado * dens
-          ),
+          unidade_medida: um,
+          embalado: embaladoOrigem,
+          massa_retirada: embaladoOrigem
+            ? massaEmbaladoMassa
+            : roundMass(o.massa_retirada ?? volume_retirado * dens),
           ...(lotesRet.length > 0 ? { lotes_retirados: lotesRet } : {}),
         };
       });
       const destinos = (data.destinos || []).map((d) => {
         const volume_total = roundVolume(d.volume_total || d.volume || 0);
+        const origemLinked = origens.find((o) => o._uid && o._uid === d.origem_uid);
+        const embaladoMass =
+          (origemLinked?.tipo_origem === "embalado" || origemLinked?.embalado) &&
+          isUnidadeMassaEntrada(origemLinked?.unidade_medida || "kg");
+        const pesoAuto = embaladoMass
+          ? roundMass(volume_total)
+          : dens > 0
+            ? roundMass(volume_total * dens)
+            : 0;
         return {
           ...d,
           volume: d.tipo_embalagem === "Vasilhame" || d.tipo_embalagem === "Tankagem" || isDestinoEstoqueEmbalado(d.tipo_embalagem)
@@ -560,7 +581,7 @@ export default function Transbordo() {
           volume_por_embalagem: roundVolume(d.volume_por_embalagem || 0),
           quantidade_embalagens: Math.round(d.quantidade_embalagens || 0),
           tara: roundMass(d.tara || 0),
-          peso_liquido: roundMass(d.peso_liquido || (dens > 0 ? volume_total * dens : 0)),
+          peso_liquido: roundMass(d.peso_liquido || pesoAuto),
           peso_bruto: roundMass(d.peso_bruto || 0),
         };
       });
@@ -579,12 +600,22 @@ export default function Transbordo() {
         ) {
           last.volume = last.volume_total;
         }
-        last.peso_liquido =
-          dens > 0 ? roundMass(last.volume_total * dens) : last.peso_liquido;
+        const origemLast = origens.find((o) => o._uid === last.origem_uid);
+        const embaladoMassLast =
+          (origemLast?.tipo_origem === "embalado" || origemLast?.embalado) &&
+          isUnidadeMassaEntrada(origemLast?.unidade_medida || "kg");
+        last.peso_liquido = embaladoMassLast
+          ? roundMass(last.volume_total)
+          : dens > 0
+            ? roundMass(last.volume_total * dens)
+            : last.peso_liquido;
       }
 
       const volume_total = origens.reduce((s, o) => s + o.volume_retirado, 0);
-      const massa_total = roundMass(volume_total * dens);
+      const massa_total = roundMass(
+        origens.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0) ||
+          volume_total * dens
+      );
       // `id` fica fora do payload: no insert ele deve ser gerado pelo banco
       // (id: null violaria a constraint) e no update o alvo já é o editingId.
       const { id: _formId, ...dataSemId } = data;
@@ -649,6 +680,18 @@ export default function Transbordo() {
         destinos,
         dens
       );
+      // Embalado em massa: quantidade_kg = quantidade informada (UOM da entrada), sem dens
+      for (const comp of destinoCompositions) {
+        for (const c of comp) {
+          const o = origensFifo[c.origem_index];
+          if (
+            (o?.tipo_origem === "embalado" || o?.embalado) &&
+            isUnidadeMassaEntrada(o?.unidade_medida || "kg")
+          ) {
+            c.quantidade_kg = roundMass(c.quantidade_l || 0);
+          }
+        }
+      }
 
       // Recarrega vasilhames atuais (após possível revert)
       const vasilhamesAtuais = await entities.vasilhames.list();

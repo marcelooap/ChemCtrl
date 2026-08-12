@@ -19,6 +19,11 @@ import {
   roundMass,
 } from "@transbordo/lib/format";
 import { saldoKgToLitros } from "@transbordo/lib/conversao";
+import {
+  isEstoqueEmbalado,
+  isUnidadeMassaEntrada,
+  normalizeUnidadeEntrada,
+} from "@transbordo/lib/estoqueSaldo";
 
 const TIPOS_ORIGEM = [
   { value: "entrada", label: "Entrada (Estoque)" },
@@ -31,6 +36,20 @@ const TIPOS_ORIGEM = [
 const TIPOS_ORIGEM_SELECIONAVEIS = TIPOS_ORIGEM.filter(
   (t) => t.value !== "entrada"
 );
+
+function formatQtd(valor, unidade) {
+  const um = normalizeUnidadeEntrada(unidade);
+  if (um === "kg" || um === "lb") return formatMass(valor);
+  return formatVolume(valor);
+}
+
+function labelUnidade(unidade) {
+  const um = normalizeUnidadeEntrada(unidade);
+  if (um === "kg") return "kg";
+  if (um === "lb") return "lb";
+  if (um === "gal") return "gal";
+  return "L";
+}
 
 function buildLotesRetirados(
   lotesDisponiveis = [],
@@ -100,6 +119,11 @@ export default function OrigemCard({
     !!origem.entrada_id &&
     !selectedSource;
 
+  const isEmbaladoOrigem =
+    tipoOrigem === "embalado" ||
+    isEstoqueEmbalado(selectedSource) ||
+    Boolean(origem.embalado);
+
   const lotesDisponiveis =
     selectedSource?.lotes_disponiveis ||
     origem.lotes_disponiveis ||
@@ -115,21 +139,46 @@ export default function OrigemCard({
 
   const saldoDisponivel =
     selectedSource?.saldo_atual ?? origem.saldo_disponivel ?? 0;
-  const unidadeMedida = selectedSource?.unidade_medida || "L";
+  const unidadeMedida =
+    (isEmbaladoOrigem
+      ? selectedSource?.unidade_medida ||
+        origem.unidade_medida ||
+        "kg"
+      : selectedSource?.unidade_medida || "L") || "L";
+  const unidadeLabel = labelUnidade(unidadeMedida);
+  const keepEntryUom = isEmbaladoOrigem;
   const volumeRetirado = roundVolume(
     isMultiLote
       ? lotesRetirados.reduce((s, l) => s + (l.volume_retirado || 0), 0)
       : origem.volume_retirado || 0
   );
-  const massaRetirada = roundMass(volumeRetirado * densidade);
 
-  const saldoEmLitros =
-    unidadeMedida === "kg" && densidade > 0
-      ? saldoKgToLitros(saldoDisponivel, densidade, selectedSource)
-      : roundVolume(saldoDisponivel);
+  const massaRetirada = (() => {
+    if (keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)) {
+      const um = normalizeUnidadeEntrada(unidadeMedida);
+      return um === "lb"
+        ? roundMass(volumeRetirado * 0.453592)
+        : roundMass(volumeRetirado);
+    }
+    return roundMass(volumeRetirado * densidade);
+  })();
 
-  const saldoRestanteL = Math.max(0, saldoEmLitros - volumeRetirado);
-  const saldoRestanteKg = roundMass(saldoRestanteL * densidade);
+  // Embalado: saldo e retirada na UOM da entrada (sem kg→L)
+  const saldoOperacional =
+    keepEntryUom
+      ? Math.round(Number(saldoDisponivel) || 0)
+      : unidadeMedida === "kg" && densidade > 0
+        ? saldoKgToLitros(saldoDisponivel, densidade, selectedSource)
+        : roundVolume(saldoDisponivel);
+
+  const saldoRestanteOp = Math.max(0, saldoOperacional - volumeRetirado);
+  const saldoRestanteKg = keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
+    ? roundMass(
+        normalizeUnidadeEntrada(unidadeMedida) === "lb"
+          ? saldoRestanteOp * 0.453592
+          : saldoRestanteOp
+      )
+    : roundMass(saldoRestanteOp * densidade);
 
   const handleTipoChange = (label, item) => {
     onChange({
@@ -142,6 +191,8 @@ export default function OrigemCard({
       massa_retirada: 0,
       saldo_restante: 0,
       saldo_disponivel: 0,
+      unidade_medida: undefined,
+      embalado: item?.value === "embalado",
       lotes_disponiveis: undefined,
       lotes_retirados: undefined,
     });
@@ -149,10 +200,12 @@ export default function OrigemCard({
 
   const handleSourceChange = (label, item) => {
     if (item) {
-      const unid = item.unidade_medida || "L";
+      const emb = isEstoqueEmbalado(item) || tipoOrigem === "embalado";
+      const unid = item.unidade_medida || (emb ? "kg" : "L");
       const saldo = item.saldo_atual || 0;
-      const saldoL =
-        unid === "kg" && densidade > 0
+      const saldoOp = emb
+        ? Math.round(Number(saldo) || 0)
+        : unid === "kg" && densidade > 0
           ? saldoKgToLitros(saldo, densidade, item)
           : roundVolume(saldo);
       const lotes = item.lotes_disponiveis || [];
@@ -163,22 +216,33 @@ export default function OrigemCard({
         entrada_id: item.id,
         entrada_codigo: label,
         lote: multi ? lotes[0]?.lote || "" : item.lote || "",
-        saldo_disponivel: saldoL,
+        saldo_disponivel: saldoOp,
+        unidade_medida: unid,
+        embalado: emb,
         lotes_disponiveis: multi ? lotes : undefined,
         lotes_retirados: lotesRet,
         volume_retirado: 0,
         massa_retirada: 0,
-        saldo_restante: saldoL,
+        saldo_restante: saldoOp,
       });
     }
   };
 
   const handleVolumeChange = (val) => {
     const v = roundVolume(val);
+    const massa =
+      keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
+        ? normalizeUnidadeEntrada(unidadeMedida) === "lb"
+          ? roundMass(v * 0.453592)
+          : roundMass(v)
+        : roundMass(v * densidade);
     onChange({
       ...origem,
       volume_retirado: v,
-      saldo_restante: Math.max(0, saldoEmLitros - v),
+      massa_retirada: massa,
+      saldo_restante: Math.max(0, saldoOperacional - v),
+      unidade_medida: unidadeMedida,
+      embalado: keepEntryUom,
       lotes_retirados: undefined,
     });
   };
@@ -192,17 +256,24 @@ export default function OrigemCard({
       next.reduce((s, l) => s + (l.volume_retirado || 0), 0)
     );
     const firstWithVol = next.find((l) => (l.volume_retirado || 0) > 0);
+    const massa =
+      keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
+        ? roundMass(total)
+        : roundMass(total * densidade);
     onChange({
       ...origem,
       lotes_disponiveis: lotesDisponiveis,
       lotes_retirados: next,
       volume_retirado: total,
+      massa_retirada: massa,
       lote: firstWithVol?.lote || next[0]?.lote || origem.lote || "",
-      saldo_restante: Math.max(0, saldoEmLitros - total),
+      saldo_restante: Math.max(0, saldoOperacional - total),
+      unidade_medida: unidadeMedida,
+      embalado: keepEntryUom,
     });
   };
 
-  const excedeuSaldo = volumeRetirado > saldoEmLitros;
+  const excedeuSaldo = volumeRetirado > saldoOperacional;
   const excedeuLote = lotesRetirados.some(
     (l) => roundVolume(l.volume_retirado) > roundVolume(l.saldo_disponivel)
   );
@@ -286,13 +357,13 @@ export default function OrigemCard({
             .join(" • ") || "Origem não configurada"}
         </p>
         <p className="text-xs text-muted-foreground">
-          {formatVolume(volumeRetirado)} L retirados •{" "}
-          {formatVolume(volumeDestinadoL)} L destinados
+          {formatQtd(volumeRetirado, unidadeMedida)} {unidadeLabel} retirados •{" "}
+          {formatQtd(volumeDestinadoL, unidadeMedida)} {unidadeLabel} destinados
           {destinosCount > 0
             ? ` • ${destinosCount} destino${destinosCount === 1 ? "" : "s"}`
             : ""}
           {volumePendenteOrigem > 0
-            ? ` • ${formatVolume(volumePendenteOrigem)} L pendentes`
+            ? ` • ${formatQtd(volumePendenteOrigem, unidadeMedida)} ${unidadeLabel} pendentes`
             : ""}
         </p>
       </div>
@@ -336,17 +407,17 @@ export default function OrigemCard({
             >
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">
-                  Lote — Volume
+                  Lote — Quantidade
                 </Label>
                 <Input
-                  value={`${l.lote || "—"} — ${formatVolume(l.saldo_disponivel)} L`}
+                  value={`${l.lote || "—"} — ${formatQtd(l.saldo_disponivel, unidadeMedida)} ${unidadeLabel}`}
                   disabled
                   className="bg-muted/40 font-medium"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">
-                  Volume Retirado (L) *
+                  Quantidade Retirada ({unidadeLabel}) *
                 </Label>
                 <NumberInputBr
                   decimals={0}
@@ -361,7 +432,7 @@ export default function OrigemCard({
                 {excedeu && (
                   <p className="text-xs text-red-600">
                     ⚠ Superior ao saldo do lote (
-                    {formatVolume(l.saldo_disponivel)} L)
+                    {formatQtd(l.saldo_disponivel, unidadeMedida)} {unidadeLabel})
                   </p>
                 )}
               </div>
@@ -373,13 +444,13 @@ export default function OrigemCard({
         <span className="text-muted-foreground">
           Total retirado:{" "}
           <span className="font-medium text-primary">
-            {formatVolume(volumeRetirado)} L
+            {formatQtd(volumeRetirado, unidadeMedida)} {unidadeLabel}
           </span>
         </span>
         <span className="text-muted-foreground">
           Saldo restante:{" "}
           <span className="font-medium text-green-700">
-            {formatVolume(saldoRestanteL)} L
+            {formatQtd(saldoRestanteOp, unidadeMedida)} {unidadeLabel}
           </span>
         </span>
       </div>
@@ -435,13 +506,13 @@ export default function OrigemCard({
         <div>
           <p className="text-[11px] text-muted-foreground">Retirado</p>
           <p className="font-semibold tabular-nums">
-            {formatVolume(volumeRetirado)} L
+            {formatQtd(volumeRetirado, unidadeMedida)} {unidadeLabel}
           </p>
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground">Destinado</p>
           <p className="font-semibold tabular-nums">
-            {formatVolume(volumeDestinadoL)} L
+            {formatQtd(volumeDestinadoL, unidadeMedida)} {unidadeLabel}
           </p>
         </div>
         <div>
@@ -455,7 +526,7 @@ export default function OrigemCard({
                 : ""
             }`}
           >
-            {formatVolume(volumeDiffOrigem)} L
+            {formatQtd(volumeDiffOrigem, unidadeMedida)} {unidadeLabel}
           </p>
         </div>
       </div>
@@ -474,8 +545,8 @@ export default function OrigemCard({
               </div>
               <p className="text-xs text-muted-foreground">
                 {volumePendenteOrigem > 0
-                  ? `${formatVolume(volumePendenteOrigem)} L ainda não destinados`
-                  : `${formatVolume(Math.abs(volumePendenteOrigem))} L destinados a mais`}
+                  ? `${formatQtd(volumePendenteOrigem, unidadeMedida)} ${unidadeLabel} ainda não destinados`
+                  : `${formatQtd(Math.abs(volumePendenteOrigem), unidadeMedida)} ${unidadeLabel} destinados a mais`}
               </p>
             </div>
           )}
@@ -532,15 +603,15 @@ export default function OrigemCard({
         <Input value={origem.lote || ""} disabled className="bg-card" />
       </div>
       <div className="space-y-1.5">
-        <Label>Saldo Disponível (L)</Label>
+        <Label>Saldo Disponível ({unidadeLabel})</Label>
         <Input
-          value={formatVolume(origem.saldo_disponivel || 0)}
+          value={formatQtd(origem.saldo_disponivel || 0, unidadeMedida)}
           disabled
           className="bg-muted/40"
         />
       </div>
       <div className="space-y-1.5">
-        <Label>Volume Retirado (L)</Label>
+        <Label>Quantidade Retirada ({unidadeLabel})</Label>
         <NumberInputBr
           decimals={0}
           min={0}
@@ -551,21 +622,23 @@ export default function OrigemCard({
         />
       </div>
       <div className="space-y-1.5">
-        <Label>Saldo Restante (L)</Label>
+        <Label>Saldo Restante ({unidadeLabel})</Label>
         <Input
-          value={formatVolume(origem.saldo_restante ?? saldoRestanteL)}
+          value={formatQtd(origem.saldo_restante ?? saldoRestanteOp, unidadeMedida)}
           disabled
           className="bg-card font-medium text-green-600"
         />
       </div>
-      <div className="space-y-1.5">
-        <Label>Massa Correspondente (kg)</Label>
-        <Input
-          value={formatMass(massaRetirada)}
-          disabled
-          className="bg-card font-medium"
-        />
-      </div>
+      {!keepEntryUom || !isUnidadeMassaEntrada(unidadeMedida) ? (
+        <div className="space-y-1.5">
+          <Label>Massa Correspondente (kg)</Label>
+          <Input
+            value={formatMass(massaRetirada)}
+            disabled
+            className="bg-card font-medium"
+          />
+        </div>
+      ) : null}
     </div>
   );
 
@@ -610,7 +683,7 @@ export default function OrigemCard({
               <Input value={origem.lote || ""} disabled className="bg-card" />
             </div>
             <div className="space-y-1.5">
-              <Label>Volume Retirado (L) *</Label>
+              <Label>Quantidade Retirada ({unidadeLabel}) *</Label>
               <NumberInputBr
                 decimals={0}
                 min={0}
@@ -622,32 +695,34 @@ export default function OrigemCard({
               />
               {(excedeuSaldo || excedeuLote) && (
                 <p className="text-xs text-red-600">
-                  ⚠ Volume superior ao saldo disponível (
-                  {formatVolume(saldoEmLitros)} L)
+                  ⚠ Quantidade superior ao saldo disponível (
+                  {formatQtd(saldoOperacional, unidadeMedida)} {unidadeLabel})
                 </p>
               )}
             </div>
           </>
         )}
 
-        <div className="space-y-1.5">
-          <Label>Massa Correspondente (kg)</Label>
-          <Input
-            value={formatMass(massaRetirada)}
-            disabled
-            className="bg-card font-medium"
-          />
-        </div>
+        {(!keepEntryUom || !isUnidadeMassaEntrada(unidadeMedida)) && (
+          <div className="space-y-1.5">
+            <Label>Massa Correspondente (kg)</Label>
+            <Input
+              value={formatMass(massaRetirada)}
+              disabled
+              className="bg-card font-medium"
+            />
+          </div>
+        )}
       </div>
       {!isMultiLote && (
         <div className="flex items-center gap-4 text-xs">
           <span className="text-muted-foreground">
             Saldo restante:{" "}
             <span className="font-medium text-green-700">
-              {formatVolume(saldoRestanteL)} L
+              {formatQtd(saldoRestanteOp, unidadeMedida)} {unidadeLabel}
             </span>
           </span>
-          {unidadeMedida !== "L" && (
+          {!keepEntryUom && unidadeMedida !== "L" && (
             <span className="text-muted-foreground">
               /{" "}
               <span className="font-medium text-green-700">
