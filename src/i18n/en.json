@@ -796,6 +796,10 @@
           "release": "Release slot",
           "releaseCarregamento": "Release loading"
         },
+        "afterSave": {
+          "title": "Schedule loading — {{codigo}}",
+          "subtitle": "Select the day and a time slot for {{cliente}}. This step is required."
+        },
         "errors": {
           "selectSaida": "Select at least one outbound request to schedule.",
           "saidaAssigned": "Outbound {{codigo}} is already scheduled at {{slot}}.",
@@ -811,8 +815,8 @@
         }
       },
       "reservarMaterial": {
-        "subtitle": "Transshipment stock aggregated by lot, with commercial reservation control",
-        "tableTitle": "Stock by lot",
+        "subtitle": "Reserve packaged stock from Transshipment and yard containers from Industrialization and Transshipment",
+        "tableTitle": "Packaged stock by lot",
         "searchPlaceholder": "Search client, code, product or lot...",
         "filterClient": "All clients",
         "allClients": "All clients",
@@ -822,7 +826,44 @@
           "reservado": "Reserved",
           "livre": "Available"
         },
-        "empty": "No stock found for the selected filter.",
+        "empty": "No packaged stock found for the selected filter.",
+        "tabs": {
+          "embalados": "Packaged",
+          "vasilhames": "Containers"
+        },
+        "vasilhames": {
+          "tableTitle": "Containers in stock",
+          "searchPlaceholder": "Search ID, client, code, product or lot...",
+          "empty": "No containers in stock for the selected filter.",
+          "confirmTitle": "Reserve container",
+          "confirmMessage": "Confirm reservation of container {{id}} ({{produto}} — {{cliente}})? Status will change to Reserved.",
+          "confirmAction": "Reserve",
+          "reserveSuccess": "Container reserved",
+          "releaseTitle": "Remove reservation",
+          "releaseMessage": "Remove the reservation of container {{id}} ({{produto}} — {{cliente}})? Status will return to Available.",
+          "releaseAction": "Remove reservation",
+          "releaseSuccess": "Reservation removed",
+          "columns": {
+            "id": "ID",
+            "origem": "Origin",
+            "volume": "Volume",
+            "massa": "Mass",
+            "status": "Status"
+          },
+          "status": {
+            "livre": "Available",
+            "reservado": "Reserved"
+          },
+          "origem": {
+            "transbordo": "Transshipment",
+            "industrializacao": "Industrialization"
+          },
+          "actions": {
+            "view": "View",
+            "reservar": "Reserve",
+            "remover": "Remove reservation"
+          }
+        },
         "editTitle": "Edit reserved balance",
         "viewTitle": "Balance and reservation details",
         "productSummary": "Product summary",

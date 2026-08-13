@@ -5,6 +5,7 @@ import {
 } from '@transbordo/lib/estoqueSaldo';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
+import { isVasilhameReservaChave } from '@painel/lib/vasilhameReservas';
 import { entities } from '@transbordo/services/entities';
 
 const UUID_RE =
@@ -122,7 +123,7 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = []) {
   for (const r of reservas || []) {
     if (!r || r.status !== 'ativa') continue;
     const chave = r.chave;
-    if (!chave) continue;
+    if (!chave || isVasilhameReservaChave(chave)) continue;
     reservadoByChave.set(
       chave,
       (reservadoByChave.get(chave) || 0) + (Number(r.quantidade) || 0)

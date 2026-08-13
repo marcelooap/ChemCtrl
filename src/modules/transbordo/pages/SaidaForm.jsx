@@ -40,11 +40,13 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * `basePath` permite reutilizar a mesma UI no Painel / Industrialização.
  * `enableMultiOrigem` habilita seleção Industrialização + Transbordo por item.
  * `lockedOrigem` força um módulo (esconde seletor) e carrega as fontes correspondentes.
+ * `onCreateSuccess` (opcional) é chamado após criar uma nova saída, em vez de navegar.
  */
 export default function SaidaForm({
   basePath = DEFAULT_BASE_PATH,
   enableMultiOrigem = false,
   lockedOrigem = null,
+  onCreateSuccess = null,
 } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -568,10 +570,11 @@ export default function SaidaForm({
         usuario_responsavel: user?.nome || "",
       };
 
+      let createdSaida = null;
       if (editingSaida) {
         await entities.saidas.update(editingSaida.id, data);
       } else {
-        await entities.saidas.create({
+        createdSaida = await entities.saidas.create({
           ...data,
           codigo,
           status: "aguardando",
@@ -613,6 +616,12 @@ export default function SaidaForm({
             current_stock: Math.max(0, stockSaldos[sid] || 0),
           });
         }
+      }
+
+      if (!editingSaida && typeof onCreateSuccess === "function" && createdSaida?.id) {
+        onCreateSuccess(createdSaida);
+        setSaving(false);
+        return;
       }
 
       navigate(basePath);

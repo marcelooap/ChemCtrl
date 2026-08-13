@@ -796,6 +796,10 @@
           "release": "Liberar horario",
           "releaseCarregamento": "Liberar cargamento"
         },
+        "afterSave": {
+          "title": "Agendar carga — {{codigo}}",
+          "subtitle": "Seleccione el día y un horario para la salida de {{cliente}}. Este paso es obligatorio."
+        },
         "errors": {
           "selectSaida": "Seleccione al menos una salida para agendar.",
           "saidaAssigned": "La salida {{codigo}} ya está agendada en {{slot}}.",
@@ -811,8 +815,8 @@
         }
       },
       "reservarMaterial": {
-        "subtitle": "Stock de Transbordo agregado por lote, con control de reservas comerciales",
-        "tableTitle": "Stock por lote",
+        "subtitle": "Reserve embalados de Transbordo y envases en stock de Industrialización y Transbordo",
+        "tableTitle": "Embalados por lote",
         "searchPlaceholder": "Buscar cliente, código, producto o lote...",
         "filterClient": "Todos los clientes",
         "allClients": "Todos los clientes",
@@ -822,7 +826,44 @@
           "reservado": "Reservado",
           "livre": "Libre"
         },
-        "empty": "No se encontró stock para el filtro seleccionado.",
+        "empty": "No se encontró embalado para el filtro seleccionado.",
+        "tabs": {
+          "embalados": "Embalados",
+          "vasilhames": "Envases"
+        },
+        "vasilhames": {
+          "tableTitle": "Envases en stock",
+          "searchPlaceholder": "Buscar ID, cliente, código, producto o lote...",
+          "empty": "Ningún envase en stock para el filtro seleccionado.",
+          "confirmTitle": "Reservar envase",
+          "confirmMessage": "¿Confirmar la reserva del envase {{id}} ({{produto}} — {{cliente}})? El estado pasará a Reservado.",
+          "confirmAction": "Reservar",
+          "reserveSuccess": "Envase reservado",
+          "releaseTitle": "Quitar reserva",
+          "releaseMessage": "¿Quitar la reserva del envase {{id}} ({{produto}} — {{cliente}})? El estado volverá a Libre.",
+          "releaseAction": "Quitar reserva",
+          "releaseSuccess": "Reserva quitada",
+          "columns": {
+            "id": "ID",
+            "origem": "Origen",
+            "volume": "Volumen",
+            "massa": "Masa",
+            "status": "Estado"
+          },
+          "status": {
+            "livre": "Libre",
+            "reservado": "Reservado"
+          },
+          "origem": {
+            "transbordo": "Transbordo",
+            "industrializacao": "Industrialización"
+          },
+          "actions": {
+            "view": "Ver",
+            "reservar": "Reservar",
+            "remover": "Quitar reserva"
+          }
+        },
         "editTitle": "Editar saldo reservado",
         "viewTitle": "Detalles del saldo y reservas",
         "productSummary": "Resumen del producto",

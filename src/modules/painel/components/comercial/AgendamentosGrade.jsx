@@ -46,7 +46,7 @@ const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
 /**
  * Grade semanal de agendamentos de carregamento (Comercial e Logística).
- * @param {{ title: string, subtitle: string, permissionPrefix?: string, showViewSaida?: boolean, showTransporte?: boolean, showConcluirCarregamento?: boolean }} props
+ * @param {{ title?: string, subtitle?: string, permissionPrefix?: string, showViewSaida?: boolean, showTransporte?: boolean, showConcluirCarregamento?: boolean, compact?: boolean, hideHeader?: boolean, lockedSaida?: object|null, onBooked?: function }} props
  */
 export default function AgendamentosGrade({
   title,
@@ -55,6 +55,10 @@ export default function AgendamentosGrade({
   showViewSaida = false,
   showTransporte = false,
   showConcluirCarregamento = false,
+  compact = false,
+  hideHeader = false,
+  lockedSaida = null,
+  onBooked,
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -73,6 +77,11 @@ export default function AgendamentosGrade({
   const [viewPicker, setViewPicker] = useState(null);
   const [transporteBookings, setTransporteBookings] = useState(null);
   const [concluirBookings, setConcluirBookings] = useState(null);
+  const [bookingLocked, setBookingLocked] = useState(false);
+
+  const canViewSaida = showViewSaida && !lockedSaida;
+  const canTransporte = showTransporte && !lockedSaida;
+  const canConcluir = showConcluirCarregamento && !lockedSaida;
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
   const today = todayISO();
@@ -95,8 +104,8 @@ export default function AgendamentosGrade({
         const [bookings, saidasList, vascs, ents, expedidas] = await Promise.all([
           listAgendamentosByRange(fromIso, toIso),
           entities.saidas.list('-created_date'),
-          showViewSaida ? entities.vasilhames.list() : Promise.resolve([]),
-          showViewSaida ? entities.estoque.list() : Promise.resolve([]),
+          canViewSaida ? entities.vasilhames.list() : Promise.resolve([]),
+          canViewSaida ? entities.estoque.list() : Promise.resolve([]),
           listSaidaIdsExpedidas(),
         ]);
         setAgendamentos(bookings || []);
@@ -119,7 +128,7 @@ export default function AgendamentosGrade({
         if (!silent) setLoading(false);
       }
     },
-    [weekStart, t, toast, showViewSaida]
+    [weekStart, t, toast, canViewSaida]
   );
 
   useEffect(() => {
@@ -164,6 +173,46 @@ export default function AgendamentosGrade({
     return { total: allHorarios.length, occupied, free: allHorarios.length - occupied };
   }, [slots, bookingMap, selectedIso]);
 
+  const bookLockedSaida = async (horario, tipo = 'regular') => {
+    if (!lockedSaida?.id || bookingLocked) return;
+    setBookingLocked(true);
+    try {
+      const key = `${selectedIso}|${horario}`;
+      const existing = normalizeBookings(bookingMap.get(key));
+      const existingAsSaidas = existing.map((row) => ({
+        id: row.saida_id,
+        codigo: row.saida_codigo,
+        cliente_id: row.cliente_id,
+        cliente_nome: row.cliente_nome,
+      }));
+      const alreadyOnSlot = existingAsSaidas.some(
+        (s) => String(s.id) === String(lockedSaida.id)
+      );
+      await bookSlotSaidas({
+        dateIso: selectedIso,
+        horario,
+        tipo,
+        saidas: alreadyOnSlot ? existingAsSaidas : [...existingAsSaidas, lockedSaida],
+        user,
+        t,
+      });
+      toast({ title: t('painel.comercial.agendamentos.saveSuccess') });
+      if (typeof onBooked === 'function') {
+        await onBooked({ dateIso: selectedIso, horario, tipo, saida: lockedSaida });
+        return;
+      }
+      await loadData({ silent: true });
+    } catch (err) {
+      toast({
+        title: t('painel.comercial.agendamentos.errors.saveFailed'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setBookingLocked(false);
+    }
+  };
+
   const encaixeGroups = useMemo(
     () =>
       groupSlotCarregamentos(bookingMap.get(`${selectedIso}|${ENCAIXE_HORARIO}`), {
@@ -173,6 +222,10 @@ export default function AgendamentosGrade({
   );
 
   const openSlot = (horario, tipo = 'regular', groupBookings = null) => {
+    if (lockedSaida) {
+      bookLockedSaida(horario, tipo);
+      return;
+    }
     const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
     const scoped = normalizeBookings(groupBookings);
     setActiveSlot({
@@ -284,18 +337,26 @@ export default function AgendamentosGrade({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className={`flex items-center justify-center ${compact ? 'h-40' : 'h-64'}`}>
         <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
-      </div>
+    <div className={`w-full relative ${compact ? 'space-y-3' : 'space-y-5'}`}>
+      {bookingLocked ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-background/70">
+          <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
+        </div>
+      ) : null}
+
+      {hideHeader ? null : (
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Button
@@ -334,7 +395,9 @@ export default function AgendamentosGrade({
               type="button"
               aria-pressed={selected}
               onClick={() => setSelectedIso(day.iso)}
-              className={`relative rounded-xl border px-2 py-3 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`relative rounded-xl border px-2 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                compact ? 'py-2' : 'py-3'
+              } ${
                 selected
                   ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                   : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
@@ -343,7 +406,7 @@ export default function AgendamentosGrade({
               <span className="block text-[11px] font-semibold uppercase tracking-wide opacity-80">
                 {t(`painel.comercial.agendamentos.weekdays.${WEEKDAY_KEYS[index]}`)}
               </span>
-              <span className="mt-0.5 block text-lg font-semibold tabular-nums leading-none">
+              <span className={`mt-0.5 block font-semibold tabular-nums leading-none ${compact ? 'text-base' : 'text-lg'}`}>
                 {day.date.getDate()}
               </span>
               <span
@@ -369,7 +432,7 @@ export default function AgendamentosGrade({
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm">
-        <div className="px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+        <div className={`border-b border-border flex flex-wrap items-center justify-between gap-3 ${compact ? 'px-3 py-3' : 'px-5 py-4'}`}>
           <div>
             <h2 className="text-sm font-semibold text-foreground capitalize">{selectedDateLabel}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -387,8 +450,8 @@ export default function AgendamentosGrade({
           </div>
         </div>
 
-        <div className="p-5 space-y-5">
-          <SlotSection title={t('painel.comercial.agendamentos.morning')}>
+        <div className={`${compact ? 'p-3 space-y-3' : 'p-5 space-y-5'}`}>
+          <SlotSection compact={compact} title={t('painel.comercial.agendamentos.morning')}>
             {slots.morning.map((hora) => (
               <TimeSlotButton
                 key={hora}
@@ -396,16 +459,17 @@ export default function AgendamentosGrade({
                 bookings={bookingMap.get(`${selectedIso}|${hora}`)}
                 onClick={() => openSlot(hora, 'regular')}
                 availableLabel={t('painel.comercial.agendamentos.available')}
-                showViewSaida={showViewSaida}
+                showViewSaida={canViewSaida}
                 onView={openSaidaView}
                 viewLabel={t('painel.comercial.agendamentos.viewSaida')}
-                onEditTransporte={showTransporte ? setTransporteBookings : undefined}
+                onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
-                onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                onConcluir={canConcluir ? setConcluirBookings : undefined}
                 concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
+                compact={compact}
               />
             ))}
           </SlotSection>
@@ -422,7 +486,7 @@ export default function AgendamentosGrade({
             </div>
           </div>
 
-          <SlotSection title={t('painel.comercial.agendamentos.afternoon')}>
+          <SlotSection compact={compact} title={t('painel.comercial.agendamentos.afternoon')}>
             {slots.afternoon.map((hora) => (
               <TimeSlotButton
                 key={hora}
@@ -430,16 +494,17 @@ export default function AgendamentosGrade({
                 bookings={bookingMap.get(`${selectedIso}|${hora}`)}
                 onClick={() => openSlot(hora, 'regular')}
                 availableLabel={t('painel.comercial.agendamentos.available')}
-                showViewSaida={showViewSaida}
+                showViewSaida={canViewSaida}
                 onView={openSaidaView}
                 viewLabel={t('painel.comercial.agendamentos.viewSaida')}
-                onEditTransporte={showTransporte ? setTransporteBookings : undefined}
+                onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
-                onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                onConcluir={canConcluir ? setConcluirBookings : undefined}
                 concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
+                compact={compact}
               />
             ))}
           </SlotSection>
@@ -451,7 +516,13 @@ export default function AgendamentosGrade({
             <p className="text-xs text-muted-foreground mb-2">
               {t('painel.comercial.agendamentos.encaixeHint')}
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div
+              className={
+                compact
+                  ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+                  : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2'
+              }
+            >
               {encaixeGroups.map((group) => (
                 <TimeSlotButton
                   key={group.key}
@@ -459,16 +530,17 @@ export default function AgendamentosGrade({
                   bookings={group.bookings}
                   onClick={() => openSlot(ENCAIXE_HORARIO, 'encaixe', group.bookings)}
                   availableLabel={t('painel.comercial.agendamentos.available')}
-                  showViewSaida={showViewSaida}
+                  showViewSaida={canViewSaida}
                   onView={openSaidaView}
                   viewLabel={t('painel.comercial.agendamentos.viewSaida')}
-                  onEditTransporte={showTransporte ? setTransporteBookings : undefined}
+                  onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                   transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
-                  onConcluir={showConcluirCarregamento ? setConcluirBookings : undefined}
+                  onConcluir={canConcluir ? setConcluirBookings : undefined}
                   concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
                   saidasCountLabel={(count) =>
                     t('painel.comercial.agendamentos.saidasCount', { count })
                   }
+                  compact={compact}
                   encaixe
                 />
               ))}
@@ -477,6 +549,7 @@ export default function AgendamentosGrade({
                 bookings={[]}
                 onClick={() => openSlot(ENCAIXE_HORARIO, 'encaixe', [])}
                 availableLabel={t('painel.comercial.agendamentos.encaixeNew')}
+                compact={compact}
                 encaixe
               />
             </div>
@@ -484,19 +557,21 @@ export default function AgendamentosGrade({
         </div>
       </div>
 
-      <AgendamentoSlotModal
-        open={!!activeSlot}
-        slot={activeSlot}
-        bookings={activeBookings}
-        saidas={saidasAguardando}
-        scheduledSaidaIds={scheduledSaidaIds}
-        permissionPrefix={permissionPrefix}
-        onClose={() => setActiveSlot(null)}
-        onBook={handleBook}
-        onRelease={handleRelease}
-      />
+      {lockedSaida ? null : (
+        <AgendamentoSlotModal
+          open={!!activeSlot}
+          slot={activeSlot}
+          bookings={activeBookings}
+          saidas={saidasAguardando}
+          scheduledSaidaIds={scheduledSaidaIds}
+          permissionPrefix={permissionPrefix}
+          onClose={() => setActiveSlot(null)}
+          onBook={handleBook}
+          onRelease={handleRelease}
+        />
+      )}
 
-      {showTransporte ? (
+      {canTransporte ? (
         <AgendamentoTransporteModal
           open={!!transporteBookings}
           booking={normalizeBookings(transporteBookings)[0] || null}
@@ -506,7 +581,7 @@ export default function AgendamentosGrade({
         />
       ) : null}
 
-      {showConcluirCarregamento ? (
+      {canConcluir ? (
         <AgendamentoConcluirCarregamentoModal
           open={!!concluirBookings}
           bookings={concluirBookings}
@@ -549,7 +624,7 @@ export default function AgendamentosGrade({
         </DialogContent>
       </Dialog>
 
-      {showViewSaida ? (
+      {canViewSaida ? (
         <SaidaViewDialog
           open={!!viewSaida}
           saida={viewSaida}
@@ -563,13 +638,19 @@ export default function AgendamentosGrade({
   );
 }
 
-function SlotSection({ title, children }) {
+function SlotSection({ title, children, compact = false }) {
   return (
     <section>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
         {title}
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+      <div
+        className={
+          compact
+            ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+            : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2'
+        }
+      >
         {children}
       </div>
     </section>
@@ -590,6 +671,7 @@ function TimeSlotButton({
   onConcluir,
   concluirLabel,
   saidasCountLabel,
+  compact = false,
 }) {
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
@@ -599,10 +681,11 @@ function TimeSlotButton({
   const showCheck = occupied && Boolean(onConcluir);
   const filled = hasTransporte(summary.first);
   const hasSideActions = showTruck || showEye || showCheck;
+  const minH = compact ? 'min-h-[56px]' : 'min-h-[72px]';
 
   return (
     <div
-      className={`relative min-h-[72px] rounded-xl border transition-all ${
+      className={`relative ${minH} rounded-xl border transition-all ${
         occupied
           ? 'border-red-200 bg-red-50 hover:bg-red-100/80'
           : encaixe
@@ -613,7 +696,7 @@ function TimeSlotButton({
       <button
         type="button"
         onClick={onClick}
-        className={`w-full h-full min-h-[72px] text-left px-3 py-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`w-full h-full ${minH} text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           hasSideActions ? 'pr-10' : ''
         }`}
       >

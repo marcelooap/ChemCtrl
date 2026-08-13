@@ -796,6 +796,10 @@
           "release": "Liberar horário",
           "releaseCarregamento": "Liberar carregamento"
         },
+        "afterSave": {
+          "title": "Agendar carregamento — {{codigo}}",
+          "subtitle": "Selecione o dia e um horário para a saída de {{cliente}}. Esta etapa é obrigatória."
+        },
         "errors": {
           "selectSaida": "Selecione ao menos uma saída para agendar.",
           "saidaAssigned": "A saída {{codigo}} já está agendada em {{slot}}.",
@@ -811,8 +815,8 @@
         }
       },
       "reservarMaterial": {
-        "subtitle": "Estoque do Transbordo agregado por lote, com controle de reservas comerciais",
-        "tableTitle": "Estoque por lote",
+        "subtitle": "Reserve embalados do Transbordo e vasilhames em estoque da Industrialização e do Transbordo",
+        "tableTitle": "Embalados por lote",
         "searchPlaceholder": "Buscar cliente, código, produto ou lote...",
         "filterClient": "Todos os clientes",
         "allClients": "Todos os clientes",
@@ -822,7 +826,44 @@
           "reservado": "Reservado",
           "livre": "Livre"
         },
-        "empty": "Nenhum estoque encontrado para o filtro selecionado.",
+        "empty": "Nenhum embalado encontrado para o filtro selecionado.",
+        "tabs": {
+          "embalados": "Embalados",
+          "vasilhames": "Vasilhames"
+        },
+        "vasilhames": {
+          "tableTitle": "Vasilhames em estoque",
+          "searchPlaceholder": "Buscar ID, cliente, código, produto ou lote...",
+          "empty": "Nenhum vasilhame em estoque para o filtro selecionado.",
+          "confirmTitle": "Reservar vasilhame",
+          "confirmMessage": "Confirmar reserva do vasilhame {{id}} ({{produto}} — {{cliente}})? O status passará para Reservado.",
+          "confirmAction": "Reservar",
+          "reserveSuccess": "Vasilhame reservado",
+          "releaseTitle": "Remover reserva",
+          "releaseMessage": "Remover a reserva do vasilhame {{id}} ({{produto}} — {{cliente}})? O status voltará para Livre.",
+          "releaseAction": "Remover reserva",
+          "releaseSuccess": "Reserva removida",
+          "columns": {
+            "id": "ID",
+            "origem": "Origem",
+            "volume": "Volume",
+            "massa": "Massa",
+            "status": "Status"
+          },
+          "status": {
+            "livre": "Livre",
+            "reservado": "Reservado"
+          },
+          "origem": {
+            "transbordo": "Transbordo",
+            "industrializacao": "Industrialização"
+          },
+          "actions": {
+            "view": "Visualizar",
+            "reservar": "Reservar",
+            "remover": "Remover reserva"
+          }
+        },
         "editTitle": "Editar saldo reservado",
         "viewTitle": "Detalhes do saldo e reservas",
         "productSummary": "Resumo do produto",

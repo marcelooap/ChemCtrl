@@ -796,6 +796,10 @@
           "release": "Libérer le créneau",
           "releaseCarregamento": "Libérer le chargement"
         },
+        "afterSave": {
+          "title": "Planifier le chargement — {{codigo}}",
+          "subtitle": "Sélectionnez le jour et un créneau pour la sortie de {{cliente}}. Cette étape est obligatoire."
+        },
         "errors": {
           "selectSaida": "Sélectionnez au moins une sortie à planifier.",
           "saidaAssigned": "La sortie {{codigo}} est déjà planifiée à {{slot}}.",
@@ -811,8 +815,8 @@
         }
       },
       "reservarMaterial": {
-        "subtitle": "Stock Transbordement agrégé par lot, avec contrôle des réservations commerciales",
-        "tableTitle": "Stock par lot",
+        "subtitle": "Réservez les produits emballés du Transbordement et les contenants en stock d'Industrialisation et de Transbordement",
+        "tableTitle": "Emballés par lot",
         "searchPlaceholder": "Rechercher client, code, produit ou lot...",
         "filterClient": "Tous les clients",
         "allClients": "Tous les clients",
@@ -822,7 +826,44 @@
           "reservado": "Réservé",
           "livre": "Libre"
         },
-        "empty": "Aucun stock trouvé pour le filtre sélectionné.",
+        "empty": "Aucun produit emballé trouvé pour le filtre sélectionné.",
+        "tabs": {
+          "embalados": "Emballés",
+          "vasilhames": "Contenants"
+        },
+        "vasilhames": {
+          "tableTitle": "Contenants en stock",
+          "searchPlaceholder": "Rechercher ID, client, code, produit ou lot...",
+          "empty": "Aucun contenant en stock pour le filtre sélectionné.",
+          "confirmTitle": "Réserver le contenant",
+          "confirmMessage": "Confirmer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut passera à Réservé.",
+          "confirmAction": "Réserver",
+          "reserveSuccess": "Contenant réservé",
+          "releaseTitle": "Retirer la réservation",
+          "releaseMessage": "Retirer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut redeviendra Libre.",
+          "releaseAction": "Retirer la réservation",
+          "releaseSuccess": "Réservation retirée",
+          "columns": {
+            "id": "ID",
+            "origem": "Origine",
+            "volume": "Volume",
+            "massa": "Masse",
+            "status": "Statut"
+          },
+          "status": {
+            "livre": "Libre",
+            "reservado": "Réservé"
+          },
+          "origem": {
+            "transbordo": "Transbordement",
+            "industrializacao": "Industrialisation"
+          },
+          "actions": {
+            "view": "Voir",
+            "reservar": "Réserver",
+            "remover": "Retirer la réservation"
+          }
+        },
         "editTitle": "Modifier le solde réservé",
         "viewTitle": "Détails du solde et des réservations",
         "productSummary": "Résumé du produit",
