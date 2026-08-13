@@ -745,6 +745,7 @@
         "encaixeNew": "Novo carregamento",
         "available": "Disponível",
         "occupied": "Ocupado",
+        "carregado": "Carregado",
         "saidasCount": "{{count}} saídas",
         "viewSaidaPickTitle": "Qual saída deseja visualizar?",
         "slotSummary": "{{free}} disponíveis · {{occupied}} ocupados · {{total}} horários",
@@ -803,6 +804,7 @@
         "errors": {
           "selectSaida": "Selecione ao menos uma saída para agendar.",
           "saidaAssigned": "A saída {{codigo}} já está agendada em {{slot}}.",
+          "slotCarregado": "Este horário já foi carregado e não pode ser reagendado.",
           "conflict": "Este horário ou saída acabou de ser ocupado. Atualize a grade e tente novamente.",
           "saveFailed": "Não foi possível salvar o agendamento.",
           "releaseFailed": "Não foi possível liberar o horário.",
@@ -914,7 +916,7 @@
       "sections": {
         "agendamentos": {
           "title": "Agendamentos",
-          "subtitle": "Grade de horários de carregamento — visualize a saída de cada horário ocupado",
+          "subtitle": "Grade de horários de carregamento — visualize e confirme os carregamentos (agendamento apenas no Comercial)",
           "emptyTitle": "Agendamentos de Logística",
           "emptyDescription": "Estrutura inicial preparada para os agendamentos logísticos."
         },

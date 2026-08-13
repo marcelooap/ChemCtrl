@@ -16,7 +16,7 @@ import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
 import { formatMass, formatNum } from "@transbordo/lib/format";
-import { loteToKg } from "@transbordo/lib/conversao";
+import { loteToKg, applyPesoLiquidoForaMargem, getLoteQuantidadeDeclarada } from "@transbordo/lib/conversao";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { entities } from "@transbordo/services/entities";
 import {
@@ -42,6 +42,12 @@ function mapLoteFromEntrada(l, entrada = {}) {
     lote: l.lote || "",
     densidade: l.densidade || "",
     quantidade: l.quantidade != null ? String(l.quantidade) : "",
+    quantidade_nf:
+      l.quantidade_declarada != null && l.quantidade_declarada !== ""
+        ? String(l.quantidade_declarada)
+        : l.quantidade != null
+          ? String(l.quantidade)
+          : "",
     unidade_medida: l.unidade_medida || "",
     data_fabricacao: l.data_fabricacao || "",
     data_validade: l.data_validade || "",
@@ -310,12 +316,24 @@ export default function EntradaModal({
 
   // ── Totais derivados dos lotes ──
   const qtd = lotes.reduce(
-    (sum, l) => sum + (parseFloat(l.quantidade) || 0),
+    (sum, l) => sum + (parseFloat(getLoteQuantidadeDeclarada(l)) || 0),
     0
   );
 
-  // ── Quantidade operacional somando todos os lotes ──
+  // ── Quantidade operacional somando todos os lotes (valor efetivo da entrada) ──
   const qtdKg = lotes.reduce((sum, l) => sum + loteToKg(l), 0);
+
+  // ── kg declarados (NF) — a margem compara pesagem contra este valor, não o ajustado ──
+  const qtdKgDeclarada = lotes.reduce((sum, l) => {
+    if (resolveTipoRecebimento(l) !== "granel") return sum;
+    return (
+      sum +
+      loteToKg({
+        ...l,
+        quantidade: getLoteQuantidadeDeclarada(l),
+      })
+    );
+  }, 0);
 
   // ── Verifica se todos os lotes têm o mesmo produto ──
   const allSameProduct =
@@ -331,24 +349,55 @@ export default function EntradaModal({
   const showPesagemGranel = hasGranel;
   const granelPesagemAtiva = showPesagemGranel && granelPesagem;
 
-  // ── Custo total somando todos os lotes ──
-  const custoTotal = lotes.reduce((sum, l) => {
-    const lQtd = parseFloat(l.quantidade) || 0;
-    const lPreco = parseFloat(l.preco_unitario) || 0;
-    return sum + lQtd * lPreco;
-  }, 0);
-
   // ── Pesagem Granel ──
   const gPb = parseFloat(granelPesoBruto) || 0;
   const gPl = parseFloat(granelPesoLiquido) || 0;
   const valBruto = gPb >= 10000 && gPb <= 40000 ? 60 : 80;
   const valLiquido = gPl >= 10000 && gPl <= 40000 ? 60 : 80;
   const erroAdmissivel = granelPesagemAtiva ? valBruto + valLiquido : 0;
-  const pesoMinimo = qtdKg - erroAdmissivel;
-  const pesoMaximo = qtdKg + erroAdmissivel;
+  const pesoMinimo = qtdKgDeclarada - erroAdmissivel;
+  const pesoMaximo = qtdKgDeclarada + erroAdmissivel;
   const dentroMargem =
     granelPesagemAtiva && gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
   const foraMargem = granelPesagemAtiva && gPl > 0 && !dentroMargem;
+  const granelConvKey = lotes
+    .filter((l) => resolveTipoRecebimento(l) === "granel")
+    .map(
+      (l) =>
+        `${l.unidade_medida || ""}|${l.densidade || ""}|${getLoteQuantidadeDeclarada(l) ?? ""}`
+    )
+    .join(";");
+
+  useEffect(() => {
+    if (!open || readOnly || !granelPesagemAtiva || gPl <= 0) return;
+
+    setLotes((prev) => {
+      const hasGranelLote = prev.some(
+        (l) => resolveTipoRecebimento(l) === "granel"
+      );
+      if (!hasGranelLote) return prev;
+
+      if (foraMargem) {
+        const next = applyPesoLiquidoForaMargem(prev, gPl);
+        const changed = next.some(
+          (l, i) => String(l.quantidade) !== String(prev[i]?.quantidade)
+        );
+        return changed ? next : prev;
+      }
+
+      let changed = false;
+      const restored = prev.map((l) => {
+        if (resolveTipoRecebimento(l) !== "granel") return l;
+        const nf = getLoteQuantidadeDeclarada(l);
+        if (nf == null || nf === "" || String(nf) === String(l.quantidade)) {
+          return l;
+        }
+        changed = true;
+        return { ...l, quantidade: String(nf) };
+      });
+      return changed ? restored : prev;
+    });
+  }, [open, readOnly, granelPesagemAtiva, gPl, foraMargem, granelConvKey]);
 
   // ── Handlers dos lotes ──
   const addLote = () => {
@@ -378,7 +427,18 @@ export default function EntradaModal({
   };
 
   const updateLote = (index, data) =>
-    setLotes((prev) => prev.map((l, i) => (i === index ? data : l)));
+    setLotes((prev) =>
+      prev.map((l, i) => {
+        if (i !== index) return l;
+        const qtdChanged = String(data.quantidade ?? "") !== String(l.quantidade ?? "");
+        return {
+          ...data,
+          quantidade_nf: qtdChanged
+            ? data.quantidade
+            : data.quantidade_nf ?? l.quantidade_nf ?? data.quantidade,
+        };
+      })
+    );
 
   const toggleLoteCollapse = (index) => {
     setCollapsedLotes((prev) => ({
@@ -466,7 +526,11 @@ export default function EntradaModal({
       }
     }
 
-    const parsedLotes = lotes.map((l) => {
+    const lotesEfetivos = foraMargem
+      ? applyPesoLiquidoForaMargem(lotes, gPl)
+      : lotes;
+
+    const parsedLotes = lotesEfetivos.map((l, idx) => {
       const tipo = resolveTipoRecebimento(l);
       const isEmbalado = tipo === "embalado";
       const isVasilhame = tipo === "vasilhame";
@@ -476,6 +540,7 @@ export default function EntradaModal({
         ? parseFloat(l.peso_liquido) || 0
         : null;
       const pesoBruto = isVasilhame ? parseFloat(l.peso_bruto) || 0 : null;
+      const qtdDeclarada = parseFloat(getLoteQuantidadeDeclarada(lotes[idx] || l)) || 0;
 
       return {
         produto_id: l.produto_id,
@@ -487,6 +552,7 @@ export default function EntradaModal({
         quantidade: isVasilhame
           ? volume
           : parseFloat(l.quantidade) || 0,
+        quantidade_declarada: tipo === "granel" ? qtdDeclarada : null,
         unidade_medida: isVasilhame ? "L" : l.unidade_medida,
         data_fabricacao: l.data_fabricacao,
         data_validade: l.data_validade,
@@ -517,6 +583,12 @@ export default function EntradaModal({
     });
 
     const firstLote = parsedLotes[0];
+    const qtdKgEfetiva = lotesEfetivos.reduce((sum, l) => sum + loteToKg(l), 0);
+    const custoTotalEfetivo = lotesEfetivos.reduce((sum, l) => {
+      const lQtd = parseFloat(l.quantidade) || 0;
+      const lPreco = parseFloat(l.preco_unitario) || 0;
+      return sum + lQtd * lPreco;
+    }, 0);
 
     return {
       data: dataEntrada || todayISO(),
@@ -530,11 +602,11 @@ export default function EntradaModal({
       densidade: firstLote.densidade,
       data_fabricacao: firstLote.data_fabricacao,
       data_validade: firstLote.data_validade,
-      quantidade: qtdKg,
+      quantidade: qtdKgEfetiva,
       unidade_medida: "kg",
       preco_unitario: firstLote.preco_unitario,
-      custo_total: custoTotal,
-      saldo_atual: editingEntrada?.saldo_atual ?? qtdKg,
+      custo_total: custoTotalEfetivo,
+      saldo_atual: editingEntrada?.saldo_atual ?? qtdKgEfetiva,
       embalado: firstLote.embalado,
       peso_liquido:
         firstLote.embalado || firstLote.tipo_recebimento === "vasilhame"
@@ -762,7 +834,17 @@ export default function EntradaModal({
                 </div>
                 <Switch
                   checked={granelPesagem}
-                  onCheckedChange={setGranelPesagem}
+                  onCheckedChange={(checked) => {
+                    setGranelPesagem(checked);
+                    if (!checked) {
+                      setLotes((prev) =>
+                        prev.map((l) => ({
+                          ...l,
+                          quantidade: getLoteQuantidadeDeclarada(l) ?? l.quantidade,
+                        }))
+                      );
+                    }
+                  }}
                   disabled={readOnly}
                 />
               </div>
@@ -806,7 +888,7 @@ export default function EntradaModal({
                     </div>
                   </div>
 
-                  {qtdKg > 0 && (
+                  {qtdKgDeclarada > 0 && (
                     <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-blue-200">
                       <span className="text-sm text-muted-foreground">
                         Peso Esperado (kg)
@@ -816,7 +898,7 @@ export default function EntradaModal({
                         :
                       </span>
                       <span className="text-lg font-bold text-primary">
-                        {formatMass(qtdKg)} kg
+                        {formatMass(qtdKgDeclarada)} kg
                       </span>
                     </div>
                   )}
@@ -839,8 +921,8 @@ export default function EntradaModal({
                       </div>
                       {foraMargem && (
                         <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-amber-50 border-2 border-amber-400 text-amber-800">
-                          <span className="text-sm font-semibold">
-                            Valor a considerar: Peso Líquido ={" "}
+                          <span className="text-sm font-semibold text-center">
+                            Quantidade ajustada para o peso líquido da pesagem:{" "}
                             {formatMass(gPl)} kg
                           </span>
                         </div>

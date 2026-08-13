@@ -36,6 +36,7 @@ const emptyLote = () => ({
   lote: "",
   densidade: "",
   quantidade: "",
+  quantidade_nf: "",
   unidade_medida: "",
   data_fabricacao: "",
   data_validade: "",
@@ -458,6 +459,14 @@ export default function LoteBlock({
               disabled={readOnly}
               className={INPUT_EDITABLE}
             />
+            {lote.quantidade_nf != null &&
+              lote.quantidade_nf !== "" &&
+              String(lote.quantidade_nf) !== String(lote.quantidade) && (
+                <p className="text-xs text-amber-700">
+                  Ajustado pela pesagem (NF: {formatNum(lote.quantidade_nf, 0)}{" "}
+                  {lote.unidade_medida || ""})
+                </p>
+              )}
           </div>
           <div className="space-y-1.5">
             <Label>Unidade *</Label>

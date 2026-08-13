@@ -503,28 +503,26 @@ export default function Estoque() {
                 <th className="px-5 py-3 font-medium">Código</th>
                 <th className="px-5 py-3 font-medium">Tipo</th>
                 <th className="px-5 py-3 font-medium">Produto</th>
-                <th className="px-5 py-3 font-medium">Cliente</th>
+                <th className="px-5 py-3 font-medium whitespace-nowrap">Cliente</th>
                 <th className="px-5 py-3 font-medium">Lote</th>
                 <th className="px-5 py-3 font-medium">Saldo Inicial</th>
                 <th className="px-5 py-3 font-medium">Saldo Expedido</th>
                 <th className="px-5 py-3 font-medium">Saldo Atual</th>
                 <th className="px-5 py-3 font-medium">Unidade</th>
                 <th className="px-5 py-3 font-medium">Status WMS</th>
-                <th className="px-5 py-3 font-medium">Preço Unit.</th>
-                <th className="px-5 py-3 font-medium">Custo Total</th>
                 <th className="px-5 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando estoque...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum registro de estoque encontrado.
                   </td>
                 </tr>
@@ -575,7 +573,7 @@ export default function Estoque() {
                       })()}
                     </td>
                     <td className="px-5 py-3 text-foreground">{e.produto_nome || "-"}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{e.cliente_nome || "-"}</td>
+                    <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">{e.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
                     <td className="px-5 py-3">
                       <SaldoBadge tone="blue">
@@ -615,12 +613,6 @@ export default function Estoque() {
                           {e.status_wms ? "OK" : "NOK"}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {formatCurrency(e.preco_unitario)}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-green-600">
-                      {formatCurrency((e.saldo_atual || 0) * (e.preco_unitario || 0))}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">

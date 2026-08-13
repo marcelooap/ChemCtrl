@@ -4,13 +4,34 @@
  */
 
 import { roundVolume, roundMass, parseDensidade } from "@transbordo/lib/format";
-import { calculateFIFOAllocation } from "@transbordo/lib/fifo";
+import { calculateFIFOAllocation, expandOrigensForFifo } from "@transbordo/lib/fifo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
 
 function normPlaca(v) {
   return String(v || "")
     .trim()
     .toUpperCase();
+}
+
+function transbordoTimestamp(t) {
+  const raw = t?.created_at || t?.created_date || t?.data;
+  const ms = new Date(raw || 0).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function transbordoSeq(t) {
+  const code = String(t?.codigo_transbordo || t?.codigo || "");
+  const m = code.match(/(\d+)\s*$/);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Ordem cronológica real (created_at). `data` sozinha empata OPs do mesmo dia. */
+function sortTransbordosChrono(transbordos = []) {
+  return [...(transbordos || [])].sort((a, b) => {
+    const dt = transbordoTimestamp(a) - transbordoTimestamp(b);
+    if (dt !== 0) return dt;
+    return transbordoSeq(a) - transbordoSeq(b);
+  });
 }
 
 /** True se destino/origem se refere à tanka (por id ou código). */
@@ -61,19 +82,22 @@ function applyOrigemSaida(map, o) {
   const lotes = (o.lotes_retirados || []).filter(
     (l) => roundVolume(l.volume_retirado || 0) > 0
   );
+  let subtracted = 0;
   if (lotes.length > 0) {
     for (const l of lotes) {
-      subtractLote(map, l.lote, l.volume_retirado);
+      const vol = roundVolume(l.volume_retirado);
+      subtractLote(map, l.lote, vol);
+      subtracted += vol;
     }
+  }
+  const volTotal = roundVolume(o.volume_retirado || 0);
+  const leftover = volTotal - subtracted;
+  if (leftover <= 0) return;
+  if (lotes.length === 0 && (o.lote || "").trim()) {
+    subtractLote(map, o.lote, leftover);
     return;
   }
-  const vol = roundVolume(o.volume_retirado || 0);
-  if (vol <= 0) return;
-  if ((o.lote || "").trim()) {
-    subtractLote(map, o.lote, vol);
-  } else {
-    subtractFifo(map, vol);
-  }
+  subtractFifo(map, leftover);
 }
 
 function applyTankaFillFromTransbordo(map, t, isotanqueId, tankaCodigo) {
@@ -90,8 +114,9 @@ function applyTankaFillFromTransbordo(map, t, isotanqueId, tankaCodigo) {
   if (indices.length === 0) return;
 
   const dens = parseDensidade(t.densidade);
+  const origensFifo = expandOrigensForFifo(t.origens || [], dens);
   const { destinoCompositions } = calculateFIFOAllocation(
-    t.origens || [],
+    origensFifo,
     destinos,
     dens
   );
@@ -106,7 +131,7 @@ function applyTankaFillFromTransbordo(map, t, isotanqueId, tankaCodigo) {
       // Fallback: rateia o volume do destino pelas origens do OP
       const d = destinos[i];
       const volDest = roundVolume(d.volume_total || d.volume || 0);
-      const origens = t.origens || [];
+      const origens = origensFifo;
       const totalOrig = roundVolume(
         origens.reduce((s, o) => s + (o.volume_retirado || 0), 0)
       );
@@ -198,11 +223,7 @@ export function computeTankaLotesDisponiveis({
 }) {
   const map = new Map();
 
-  const sorted = [...(transbordos || [])].sort(
-    (a, b) =>
-      new Date(a.data || a.created_at || a.created_date || 0) -
-      new Date(b.data || b.created_at || b.created_date || 0)
-  );
+  const sorted = sortTransbordosChrono(transbordos);
 
   for (const t of sorted) {
     if (excludeTransbordoId && t.id === excludeTransbordoId) continue;
@@ -247,11 +268,7 @@ export function computeTankaLotesDisponiveis({
  */
 function collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo) {
   const meta = new Map();
-  const sorted = [...(transbordos || [])].sort(
-    (a, b) =>
-      new Date(a.data || a.created_at || a.created_date || 0) -
-      new Date(b.data || b.created_at || b.created_date || 0)
-  );
+  const sorted = sortTransbordosChrono(transbordos);
 
   for (const t of sorted) {
     const destinos = t.destinos || [];
@@ -267,8 +284,9 @@ function collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo) {
     if (indices.length === 0) continue;
 
     const dens = parseDensidade(t.densidade);
+    const origensFifo = expandOrigensForFifo(t.origens || [], dens);
     const { destinoCompositions } = calculateFIFOAllocation(
-      t.origens || [],
+      origensFifo,
       destinos,
       dens
     );
@@ -314,11 +332,11 @@ export function buildTankaDetalhe({ isotanque, transbordos = [] }) {
           matchesTanka(d, isotanqueId, tankaCodigo)
       )
     )
-    .sort(
-      (a, b) =>
-        new Date(b.data || b.created_at || b.created_date || 0) -
-        new Date(a.data || a.created_at || a.created_date || 0)
-    );
+    .sort((a, b) => {
+      const dt = transbordoTimestamp(b) - transbordoTimestamp(a);
+      if (dt !== 0) return dt;
+      return transbordoSeq(b) - transbordoSeq(a);
+    });
 
   const latest = fillings[0];
   const dens =

@@ -728,9 +728,14 @@ export default function Transbordo() {
 
           if (existing) {
             const addVol = roundVolume(d.volume_total || d.volume || 0);
-            const newVol = roundVolume((existing.volume || 0) + addVol);
-            // Preserva aporte inicial mesmo se composicao estiver vazia/incompleta
             const baseComp = seedComposicaoFromVasilhame(existing);
+            const baseVol = Math.max(
+              roundVolume(existing.volume || 0),
+              roundVolume(
+                baseComp.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+              )
+            );
+            const newVol = roundVolume(baseVol + addVol);
             const merged = mergeComposicao(baseComp, comp, {
               transbordo_codigo: codigo,
               data: payload.data || null,

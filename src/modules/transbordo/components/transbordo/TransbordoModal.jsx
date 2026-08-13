@@ -31,7 +31,7 @@ import {
   roundMass,
   kgLotesToLitrosInteiros,
 } from "@transbordo/lib/format";
-import { loteToKg, loteToLitros, saldoKgToLitros } from "@transbordo/lib/conversao";
+import { loteToKg, loteToLitros, saldoKgToLitros, applyPesoLiquidoForaMargem } from "@transbordo/lib/conversao";
 import {
   computeDisponivelTransbordo,
   isEstoqueEmbalado,
@@ -317,7 +317,7 @@ export default function TransbordoModal({
       setDensidade(dens);
       setOperadores([]);
       setObservacoes("");
-      const entradaLotes =
+      const lotesRaw =
         prefillEntrada.lotes && prefillEntrada.lotes.length > 0
           ? prefillEntrada.lotes
           : [
@@ -328,6 +328,11 @@ export default function TransbordoModal({
                 unidade_medida: prefillEntrada.unidade_medida || "L",
               },
             ];
+      const pesoLiqPesagem = Number(prefillEntrada.granel_peso_liquido) || 0;
+      const entradaLotes =
+        prefillEntrada.granel_margem === "fora" && pesoLiqPesagem > 0
+          ? applyPesoLiquidoForaMargem(lotesRaw, pesoLiqPesagem)
+          : lotesRaw;
 
       // Prefer volume declarado em L/gal (evita perda de 1 L no round-trip L→kg→L).
       // Fallback: kg por lote → litros inteiros com soma = total.
@@ -335,7 +340,9 @@ export default function TransbordoModal({
         const estoqueRow = savedEstoques[i];
         const lDens = parseDensidade(lt.densidade || estoqueRow?.densidade || dens);
         let quantidade_kg;
-        if (estoqueRow) {
+        if (prefillEntrada.granel_margem === "fora") {
+          quantidade_kg = loteToKg(lt);
+        } else if (estoqueRow) {
           quantidade_kg = estoqueRow.quantidade ?? estoqueRow.saldo_atual ?? 0;
         } else if ((lt.unidade_medida || "L") === "kg") {
           quantidade_kg = lt.quantidade || 0;

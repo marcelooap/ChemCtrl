@@ -131,11 +131,11 @@ export function rebuildComposicaoFromTransbordos(
   const barril = String(vasilhame.barril || "").trim().toUpperCase();
   const entries = [];
 
-  const sorted = [...(transbordos || [])].sort(
-    (a, b) =>
-      new Date(a.data || a.created_at || 0) -
-      new Date(b.data || b.created_at || 0)
-  );
+  const sorted = [...(transbordos || [])].sort((a, b) => {
+    const ta = new Date(a.created_at || a.created_date || a.data || 0).getTime();
+    const tb = new Date(b.created_at || b.created_date || b.data || 0).getTime();
+    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+  });
 
   for (const t of sorted) {
     const dens =
@@ -300,6 +300,29 @@ export function mergeComposicao(existing = [], incoming = [], meta = {}) {
   return [...base, ...extras].filter((c) => (c.quantidade_l || 0) > 0);
 }
 
+function transbordoOpCodes(transbordos = []) {
+  return new Set(
+    (transbordos || [])
+      .map((t) => String(t.codigo_transbordo || "").trim())
+      .filter(Boolean)
+  );
+}
+
+function isOpComposicaoEntry(c, opCodes) {
+  const code = String(c?.transbordo_codigo || "").trim();
+  if (!code) return false;
+  if (code.toLowerCase() === "manual") return false;
+  return opCodes.has(code);
+}
+
+/** Aportes anteriores aos OPs (entrada manual / residual), para não perder no repair. */
+export function preTransbordoEntries(vasilhame, transbordos = []) {
+  const opCodes = transbordoOpCodes(transbordos);
+  return seedComposicaoFromVasilhame(vasilhame).filter(
+    (c) => !isOpComposicaoEntry(c, opCodes)
+  );
+}
+
 /** Remove entradas de composição de um transbordo específico. */
 export function removeComposicaoByTransbordo(composicao = [], codigo) {
   if (!codigo) return composicao || [];
@@ -310,17 +333,18 @@ export function removeComposicaoByTransbordo(composicao = [], codigo) {
  * Localiza vasilhame fracionado No Pátio pela placa/barril.
  */
 export function findFracionadoNoPatio(vasilhames = [], { placa, barril, id } = {}) {
-  const noPatio = (vasilhames || []).filter(
+  const noPatioAll = (vasilhames || []).filter(
     (v) =>
       (v.status || "No Pátio") === "No Pátio" &&
-      v.fracionado === true &&
       !TIPOS_NAO_VASILHAME.has(v.tipo || "Vasilhame")
   );
 
   if (id) {
-    const byId = noPatio.find((v) => v.id === id);
+    const byId = noPatioAll.find((v) => v.id === id);
     if (byId) return byId;
   }
+
+  const noPatio = noPatioAll.filter((v) => v.fracionado === true);
 
   const p = String(placa || "").trim();
   if (!p) return null;
@@ -501,9 +525,10 @@ export async function repairVasilhameComposicao(
   let composicao = seeded;
   let volume = vol;
   let syncVolume = false;
+  let preservedPreOp = false;
 
-  // Corrige volume inflado vs histórico real de OPs (ex.: 3000 com um único T010 de 1500).
-  // Sem alignToVolume para não “preencher” o valor errado.
+  // Histórico só dos OPs não inclui aporte manual. Nunca reduzir volume
+  // de tanque manual/completado a apenas a soma dos transbordos.
   if (
     vol > 0 &&
     transbordosPlaca.length > 0 &&
@@ -517,7 +542,46 @@ export async function repairVasilhameComposicao(
     const historySum = roundVolume(
       history.reduce((s, c) => s + (c.quantidade_l || 0), 0)
     );
-    if (historySum > 0 && historySum < vol) {
+    const pre = preTransbordoEntries(vasilhame, transbordos).filter(
+      (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
+    );
+    const preSum = roundVolume(
+      pre.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+    );
+    const isManual = vasilhame.origem === "manual";
+
+    if (historySum > 0 && preSum > 0) {
+      composicao = [...pre, ...history];
+      preservedPreOp = true;
+    } else if (historySum > 0 && historySum < vol && isManual) {
+      const residual = vol - historySum;
+      const densSeed =
+        parseFloat(String(vasilhame.densidade || "0").replace(",", ".")) || 0;
+      const historyLotes = new Set(
+        history.map((c) => (c.lote || "").trim()).filter(isLoteReal)
+      );
+      const loteCampo = (vasilhame.lote || "").trim();
+      const loteInicial =
+        loteCampo && loteCampo !== LOTE_APORTE_ANTERIOR && !historyLotes.has(loteCampo)
+          ? loteCampo
+          : "";
+      composicao = [
+        {
+          lote: loteInicial,
+          quantidade_l: residual,
+          quantidade_kg: densSeed > 0 ? roundMass(residual * densSeed) : 0,
+          transbordo_codigo: "Manual",
+          data: null,
+        },
+        ...history,
+      ];
+      preservedPreOp = true;
+    } else if (
+      historySum > 0 &&
+      historySum < vol &&
+      !isManual &&
+      preSum <= 0
+    ) {
       composicao = history.length > 0 ? history : seeded;
       volume = historySum;
       syncVolume = true;
@@ -536,6 +600,7 @@ export async function repairVasilhameComposicao(
   // único lote com vários transbordos (histórico faltando).
   // NÃO altera volume salvo ao limpar aporte sintético (e só para baixo).
   const needsRebuild =
+    !preservedPreOp &&
     !syncVolume &&
     vol > 0 &&
     !composicaoCoerente &&
@@ -568,8 +633,12 @@ export async function repairVasilhameComposicao(
         rebuiltSum === vol)
     ) {
       composicao = rebuiltClean;
-      // Sincroniza volume para baixo quando histórico real for menor
-      if (rebuiltSum > 0 && rebuiltSum < volume) {
+      if (
+        rebuiltSum > 0 &&
+        rebuiltSum < volume &&
+        vasilhame.origem !== "manual" &&
+        preTransbordoEntries(vasilhame, transbordos).length === 0
+      ) {
         volume = rebuiltSum;
         syncVolume = true;
       }

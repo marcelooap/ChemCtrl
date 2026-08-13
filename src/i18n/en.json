@@ -745,6 +745,7 @@
         "encaixeNew": "New loading",
         "available": "Available",
         "occupied": "Occupied",
+        "carregado": "Loaded",
         "saidasCount": "{{count}} outbound",
         "viewSaidaPickTitle": "Which outbound request do you want to view?",
         "slotSummary": "{{free}} available · {{occupied}} occupied · {{total}} slots",
@@ -803,6 +804,7 @@
         "errors": {
           "selectSaida": "Select at least one outbound request to schedule.",
           "saidaAssigned": "Outbound {{codigo}} is already scheduled at {{slot}}.",
+          "slotCarregado": "This slot has already been loaded and cannot be rescheduled.",
           "conflict": "This slot or outbound request was just taken. Refresh and try again.",
           "saveFailed": "Could not save the booking.",
           "releaseFailed": "Could not release the slot.",
@@ -914,7 +916,7 @@
       "sections": {
         "agendamentos": {
           "title": "Schedules",
-          "subtitle": "Loading time slots — view the outbound request on each occupied slot",
+          "subtitle": "Loading time slots — view and confirm loadings (scheduling only in Commercial)",
           "emptyTitle": "Logistics schedules",
           "emptyDescription": "Initial structure prepared for logistics scheduling."
         },

@@ -1,3 +1,9 @@
+import { distributeByWeights } from "@transbordo/lib/format";
+import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
+
+const LB_TO_KG = 0.453592;
+const GAL_TO_L = 3.78541;
+
 /**
  * Converte a quantidade do lote para a unidade operacional do estoque.
  *
@@ -28,13 +34,16 @@ export const loteToKg = (lote) => {
     case "lbs":
     case "libra":
     case "libras":
-      return Math.round(lQtd * 0.453592);
+      return Math.round(lQtd * LB_TO_KG);
     case "gal":
     case "gallon":
     case "gallons":
+    case "galão":
+    case "galoes":
+    case "galões":
       return lDens > 0
-        ? Math.round(lQtd * 3.78541 * lDens)
-        : Math.round(lQtd * 3.78541);
+        ? Math.round(lQtd * GAL_TO_L * lDens)
+        : Math.round(lQtd * GAL_TO_L);
     default:
       return Math.round(lQtd);
   }
@@ -61,13 +70,13 @@ export const loteToLitros = (lote) => {
     case "gal":
     case "gallon":
     case "gallons":
-      return Math.round(lQtd * 3.78541);
+      return Math.round(lQtd * GAL_TO_L);
     case "kg":
     case "kgs":
       return lDens > 0 ? Math.round(lQtd / lDens) : 0;
     case "lb":
     case "lbs": {
-      const kg = Math.round(lQtd * 0.453592);
+      const kg = Math.round(lQtd * LB_TO_KG);
       return lDens > 0 ? Math.round(kg / lDens) : 0;
     }
     default:
@@ -160,3 +169,86 @@ export const loteQuantidadeEstoque = (lote) => {
   }
   return loteToKg(lote);
 };
+
+/** Quantidade declarada (NF) do lote, antes do ajuste pela pesagem. */
+export function getLoteQuantidadeDeclarada(lote) {
+  if (lote?.quantidade_nf != null && lote.quantidade_nf !== "") {
+    return lote.quantidade_nf;
+  }
+  if (lote?.quantidade_declarada != null && lote.quantidade_declarada !== "") {
+    return lote.quantidade_declarada;
+  }
+  return lote?.quantidade;
+}
+
+/**
+ * Converte massa em kg para a unidade de medida do lote.
+ * kg → kg; L = kg / densidade; gal = kg / (densidade × 3,78541); lb = kg / 0,453592.
+ */
+export const kgToLoteUnidade = (kg, unidade, densidade) => {
+  const massa = Math.round(Number(kg) || 0);
+  if (massa <= 0) return 0;
+
+  const dens =
+    parseFloat(String(densidade || "0").replace(",", ".")) || 0;
+  const um = String(unidade || "kg").trim().toLowerCase();
+
+  switch (um) {
+    case "l":
+    case "lt":
+    case "litro":
+    case "litros":
+      return dens > 0 ? Math.round(massa / dens) : massa;
+    case "gal":
+    case "gallon":
+    case "gallons":
+    case "galão":
+    case "galoes":
+    case "galões":
+      return dens > 0
+        ? Math.round(massa / (dens * GAL_TO_L))
+        : Math.round(massa / GAL_TO_L);
+    case "lb":
+    case "lbs":
+    case "libra":
+    case "libras":
+      return Math.round(massa / LB_TO_KG);
+    default:
+      return massa;
+  }
+};
+
+/**
+ * Pesagem granel fora da margem: a quantidade de cada lote granel passa a ser
+ * o peso líquido, convertido para a UOM do lote. Vários lotes → rateio proporcional.
+ */
+export function applyPesoLiquidoForaMargem(lotes = [], pesoLiquidoKg) {
+  const totalKg = Math.round(Number(pesoLiquidoKg) || 0);
+  if (totalKg <= 0 || !lotes.length) return lotes;
+
+  const granelIdx = [];
+  const weights = [];
+  lotes.forEach((l, i) => {
+    if (resolveTipoRecebimento(l) !== "granel") return;
+    granelIdx.push(i);
+    weights.push(
+      loteToKg({
+        ...l,
+        quantidade: getLoteQuantidadeDeclarada(l),
+      })
+    );
+  });
+  if (granelIdx.length === 0) return lotes;
+
+  const portions = distributeByWeights(totalKg, weights);
+  return lotes.map((l, i) => {
+    const pos = granelIdx.indexOf(i);
+    if (pos < 0) return l;
+    const qtd = kgToLoteUnidade(
+      portions[pos] || 0,
+      l.unidade_medida,
+      l.densidade
+    );
+    return { ...l, quantidade: String(qtd) };
+  });
+}

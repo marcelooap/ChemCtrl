@@ -141,12 +141,13 @@ export function produtosLabel(saida) {
   return `${String(count).padStart(2, '0')} produtos`;
 }
 
+/** Agendados e concluídos — a grade mantém o horário preenchido após o carregamento. */
 export async function listAgendamentosByRange(fromIso, toIso) {
   assertConfigured('t_agendamentos_carregamento.listRange');
   const { data, error } = await chemflowSupabase
     .from('t_agendamentos_carregamento')
     .select('*')
-    .eq('status', 'agendado')
+    .in('status', ['agendado', 'concluido'])
     .gte('data', fromIso)
     .lte('data', toIso)
     .order('data', { ascending: true })
@@ -164,17 +165,24 @@ export function slotKey(data, horario) {
   return `${String(data).slice(0, 10)}|${horario}`;
 }
 
-/** Agrupa os agendamentos ativos por horário. Valor: array de linhas. */
+/** Agrupa agendamentos (ativos e concluídos) por horário. Valor: array de linhas. */
 export function indexAgendamentosBySlot(agendamentos = []) {
   const map = new Map();
   for (const row of agendamentos) {
-    if (!row || row.status !== 'agendado') continue;
+    if (!row || (row.status !== 'agendado' && row.status !== 'concluido')) continue;
     const key = slotKey(row.data, row.horario);
     const list = map.get(key) || [];
     list.push(row);
     map.set(key, list);
   }
   return map;
+}
+
+/** Slot já confirmado pela logística (carregamento concluído). */
+export function isCarregado(bookings) {
+  const list = normalizeBookings(bookings);
+  if (list.length === 0) return false;
+  return list.every((row) => row.status === 'concluido');
 }
 
 export function normalizeBookings(bookings) {
@@ -319,6 +327,23 @@ export async function bookSlotSaidas({
   }
 
   const ativos = await entities.agendamentosCarregamento.filter({ status: 'agendado' });
+  const concluidosNoSlot = (
+    (await entities.agendamentosCarregamento.filter({
+      status: 'concluido',
+      data: dateIso,
+      horario,
+    })) || []
+  ).filter((row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario);
+
+  // Horário regular já carregado permanece ocupado (não reagenda).
+  // No Encaixe, outros clientes podem continuar sendo adicionados.
+  if (!(scopeSaidaIds instanceof Set) && concluidosNoSlot.length > 0) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.errors.slotCarregado') ||
+        'Este horário já foi carregado e não pode ser reagendado.'
+    );
+  }
+
   const noSlot = (ativos || []).filter(
     (row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario
   );
@@ -467,7 +492,7 @@ export function normalizeHoraHHMM(value) {
 
 /**
  * Conclui o carregamento do(s) agendamento(s) do horário.
- * Libera o slot na grade (status deixa de ser 'agendado').
+ * O horário permanece na grade como "carregado" (status = concluido).
  */
 export async function concluirCarregamento({ bookings, horaCarregamento, user, t }) {
   const list = normalizeBookings(bookings);
