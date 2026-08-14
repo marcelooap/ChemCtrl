@@ -154,6 +154,24 @@ export function deriveOrderFromProductions(order, productions) {
   };
 }
 
+/** Volume ainda não alocado em OP aberta (pendente menos o que já está em produção). */
+export function getOrderAllocatableVolume(order) {
+  return Math.max(0, toNum(order?.volume_pending) - toNum(order?.volume_in_production));
+}
+
+/**
+ * Pedido elegível para programar: Pendente, ou Em produção com saldo
+ * depois de abater o volume das OPs abertas.
+ */
+export function isOrderOpenForProgramming(order) {
+  if (!order) return false;
+  if (isOrderFullyProduced(order.volume_ordered, order.volume_produced, order.volume_pending)) {
+    return false;
+  }
+  if (getOrderAllocatableVolume(order) <= VOLUME_EPS) return false;
+  return order.status === 'Pendente' || order.status === 'Em produção';
+}
+
 /**
  * Recarrega as OPs do pedido e persiste status/volumes derivados.
  * Usar após cancelar OP (ou rejeição CQ) para manter o pedido consistente.

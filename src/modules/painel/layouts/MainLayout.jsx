@@ -13,6 +13,7 @@ import {
   Calendar,
   CalendarClock,
   PackageCheck,
+  Settings,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { canAccessRoute, isAdminUser } from '@industrializacao/lib/permissions';
@@ -89,7 +90,13 @@ export default function MainLayout() {
       }]
       : [];
 
-    return [...base, ...business, ...adminItems];
+    const configItem = {
+      path: '/painel/configuracao',
+      label: t('painel.nav.configuracao'),
+      icon: Settings,
+    };
+
+    return [...base, ...business, ...adminItems, configItem];
   }, [t, admin]);
 
   if (user?.tipo === 'externo') {
@@ -107,7 +114,11 @@ export default function MainLayout() {
           moduleName={t('sidebar.moduleName')}
           moduleSubtitle={t('painel.subtitle')}
           items={items}
-          canAccessPath={(path) => path === '/painel/home' || canAccessRoute(user, path)}
+          canAccessPath={(path) =>
+            path === '/painel/home'
+            || path === '/painel/configuracao'
+            || canAccessRoute(user, path)
+          }
           showModulesLink={false}
         />
       )}

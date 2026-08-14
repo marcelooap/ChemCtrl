@@ -248,6 +248,7 @@
     "dashboard": "Dashboard",
     "recipes": "Receitas",
     "orders": "Pedidos",
+    "programming": "Programação",
     "rawMaterialStock": "Estoque de MP",
     "inventory": "Inventário",
     "newProduction": "Nova Produção",
@@ -406,6 +407,7 @@
       "dashboard": "Dashboard",
       "recipes": "Receitas",
       "orders": "Pedidos",
+      "programming": "Programação",
       "rawMaterialStock": "Estoque de MP",
       "inventory": "Inventário",
       "containers": "Vasilhames",
@@ -575,7 +577,8 @@
       "usersAndPermissions": "Usuários e Permissões",
       "users": "Usuários",
       "permissions": "Permissões",
-      "profiles": "Permissões"
+      "profiles": "Permissões",
+      "configuracao": "Configuração"
     },
     "modules": {
       "switch": "Trocar módulo",
@@ -588,6 +591,12 @@
       "subtitle": "Acesse os módulos do ChemCtrl",
       "preparedForData": "Área preparada para dados consolidados",
       "openModule": "Acessar módulo"
+    },
+    "configuracao": {
+      "title": "Configuração",
+      "subtitle": "Ajustes da plataforma ChemCtrl",
+      "emptyTitle": "Configuração",
+      "emptyDescription": "Área preparada para os parâmetros e preferências do sistema."
     },
     "areas": {
       "industrializacao": {
@@ -2113,6 +2122,67 @@
     "deleteConfirm": {
       "title": "Excluir Usuário",
       "message": "Tem certeza que deseja excluir o usuário {{name}} ({{username}})? Esta ação não pode ser desfeita."
+    }
+  },
+  "programming": {
+    "title": "Programação de Industrialização",
+    "subtitle": "Selecione o dia e clique em um card para registrar a programação",
+    "prevMonth": "Mês anterior",
+    "nextMonth": "Próximo mês",
+    "monthTitle": "Programação de {{month}} {{year}}",
+    "daySummary": "{{count}} programações · Volume: {{volume}}",
+    "available": "Disponível",
+    "scheduled": "Programado",
+    "dayEmpty": "Nenhuma programação neste dia.",
+    "weekdays": {
+      "mon": "Seg",
+      "tue": "Ter",
+      "wed": "Qua",
+      "thu": "Qui",
+      "fri": "Sex",
+      "sat": "Sáb"
+    },
+    "weekdaysFull": {
+      "mon": "Segunda-feira",
+      "tue": "Terça-feira",
+      "wed": "Quarta-feira",
+      "thu": "Quinta-feira",
+      "fri": "Sexta-feira",
+      "sat": "Sábado"
+    },
+    "view": {
+      "title": "Detalhes da programação",
+      "button": "Visualizar",
+      "pickTitle": "Selecione a programação",
+      "total": "Total"
+    },
+    "form": {
+      "createTitle": "Nova programação",
+      "editTitle": "Editar programação",
+      "date": "Data",
+      "product": "Produto",
+      "productPlaceholder": "Selecione o produto",
+      "order": "Pedido",
+      "orderPlaceholder": "Selecione o pedido",
+      "noOrders": "Nenhum pedido pendente para este produto",
+      "pendingHint": "Volume pendente do produto: {{volume}}",
+      "client": "Cliente",
+      "clientPlaceholder": "Selecione ou informe o cliente",
+      "volume": "Volume (L)",
+      "volumePlaceholder": "Ex.: 5000",
+      "save": "Salvar",
+      "saveChanges": "Salvar alterações"
+    },
+    "messages": {
+      "fillRequired": "Preencha produto, cliente e volume.",
+      "invalidVolume": "Informe um volume maior que zero.",
+      "created": "Programação cadastrada",
+      "updated": "Programação atualizada",
+      "deleted": "Programação excluída"
+    },
+    "deleteConfirm": {
+      "title": "Excluir programação?",
+      "message": "A programação de {{product}} será removida deste dia. Esta ação não cria nem altera ordens de produção."
     }
   },
   "orders": {

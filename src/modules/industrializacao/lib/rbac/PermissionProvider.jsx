@@ -5,7 +5,7 @@ import {
   getViewPermissionForPath,
   permissionKey,
 } from '@industrializacao/lib/rbac/permissionCatalog';
-import { augmentQualityAnalysesPermissions } from '@industrializacao/lib/permissions';
+import { augmentQualityAnalysesPermissions, augmentProgrammingPermissions } from '@industrializacao/lib/permissions';
 
 const PermissionsContext = createContext(null);
 
@@ -14,7 +14,7 @@ function resolvePermissions(user) {
   const base = Array.isArray(user.permissions) && user.permissions.length > 0
     ? user.permissions
     : getLegacyPermissionsForUser(user);
-  return augmentQualityAnalysesPermissions(base);
+  return augmentProgrammingPermissions(augmentQualityAnalysesPermissions(base));
 }
 
 export function PermissionProvider({ children }) {

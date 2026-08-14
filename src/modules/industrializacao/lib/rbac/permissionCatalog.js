@@ -125,6 +125,19 @@ export const permissionModules = [
           { key: 'delete', labelKey: 'rbac.actions.delete' },
         ],
       },
+      {
+        id: 'programming',
+        labelKey: 'rbac.resources.programming',
+        icon: 'CalendarDays',
+        route: '/programacao',
+        nav: { showInSidebar: true, order: 4.5 },
+        actions: [
+          { key: 'view', labelKey: 'rbac.actions.view' },
+          { key: 'create', labelKey: 'rbac.actions.create' },
+          { key: 'edit', labelKey: 'rbac.actions.edit' },
+          { key: 'delete', labelKey: 'rbac.actions.delete' },
+        ],
+      },
     ],
   },
   {
@@ -870,6 +883,7 @@ function mapResourceToSidebarLabel(resourceId) {
     dashboard: 'sidebar.dashboard',
     recipes: 'sidebar.recipes',
     orders: 'sidebar.orders',
+    programming: 'sidebar.programming',
     raw_material_stock: 'sidebar.rawMaterialStock',
     inventory: 'sidebar.inventory',
     new_production: 'sidebar.newProduction',
@@ -936,6 +950,7 @@ export function getLegacyPermissionsForUser(user) {
       'containers.view',
       'raw_material_stock.view',
       'home.view',
+      'programming.view', 'programming.create', 'programming.edit', 'programming.delete',
     ];
   }
 

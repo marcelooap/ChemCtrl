@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import WelcomeModal from '@/components/WelcomeModal';
 
 const DefaultFallback = () => {
   const { t } = useTranslation();
@@ -21,6 +23,14 @@ const DefaultFallback = () => {
 export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
   const { user, loading } = useInternalAuth();
   const location = useLocation();
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (sessionStorage.getItem('chemctrl_welcome') !== '1') return;
+    sessionStorage.removeItem('chemctrl_welcome');
+    setShowWelcome(true);
+  }, [user]);
 
   if (loading) {
     return fallback;
@@ -34,5 +44,10 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
     );
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      {showWelcome ? <WelcomeModal user={user} onClose={() => setShowWelcome(false)} /> : null}
+    </>
+  );
 }

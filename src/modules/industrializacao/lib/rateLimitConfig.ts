@@ -78,6 +78,7 @@ export const CACHE_TTL_BY_ENTITY: Record<string, number> = {
   PerfilPermissao: 60_000,
   Production: 5_000,
   ProductionChecklist: 0,
+  ProductionSchedule: 0,
 };
 export const CACHE_TTL_DEFAULT = 30_000;
 export const CACHE_TTL_PUBLIC = 15_000;

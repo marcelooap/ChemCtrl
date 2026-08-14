@@ -248,6 +248,7 @@
     "dashboard": "Dashboard",
     "recipes": "Recipes",
     "orders": "Orders",
+    "programming": "Scheduling",
     "rawMaterialStock": "Raw Material Stock",
     "inventory": "Inventory",
     "newProduction": "New Production",
@@ -406,6 +407,7 @@
       "dashboard": "Dashboard",
       "recipes": "Recipes",
       "orders": "Orders",
+      "programming": "Scheduling",
       "rawMaterialStock": "Raw Material Stock",
       "inventory": "Inventory",
       "containers": "Containers",
@@ -575,7 +577,8 @@
       "usersAndPermissions": "Users and Permissions",
       "users": "Users",
       "permissions": "Permissions",
-      "profiles": "Permissions"
+      "profiles": "Permissions",
+      "configuracao": "Settings"
     },
     "modules": {
       "switch": "Switch module",
@@ -588,6 +591,12 @@
       "subtitle": "Access ChemCtrl modules",
       "preparedForData": "Area prepared for consolidated data",
       "openModule": "Open module"
+    },
+    "configuracao": {
+      "title": "Settings",
+      "subtitle": "ChemCtrl platform settings",
+      "emptyTitle": "Settings",
+      "emptyDescription": "This area is ready for system parameters and preferences."
     },
     "areas": {
       "industrializacao": {
@@ -2212,6 +2221,67 @@
     "deleteConfirm": {
       "title": "Delete User",
       "message": "Are you sure you want to delete user {{name}} ({{username}})? This action cannot be undone."
+    }
+  },
+  "programming": {
+    "title": "Industrialization Schedule",
+    "subtitle": "Select the day and click a card to register a schedule",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "monthTitle": "Schedule for {{month}} {{year}}",
+    "daySummary": "{{count}} schedules · Volume: {{volume}}",
+    "available": "Available",
+    "scheduled": "Scheduled",
+    "dayEmpty": "No schedules on this day.",
+    "weekdays": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "weekdaysFull": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday"
+    },
+    "view": {
+      "title": "Schedule details",
+      "button": "View",
+      "pickTitle": "Select a schedule",
+      "total": "Total"
+    },
+    "form": {
+      "createTitle": "New schedule",
+      "editTitle": "Edit schedule",
+      "date": "Date",
+      "product": "Product",
+      "productPlaceholder": "Select a product",
+      "order": "Order",
+      "orderPlaceholder": "Select an order",
+      "noOrders": "No pending orders for this product",
+      "pendingHint": "Pending volume for this product: {{volume}}",
+      "client": "Client",
+      "clientPlaceholder": "Select or enter the client",
+      "volume": "Volume (L)",
+      "volumePlaceholder": "E.g. 5000",
+      "save": "Save",
+      "saveChanges": "Save changes"
+    },
+    "messages": {
+      "fillRequired": "Fill in product, client and volume.",
+      "invalidVolume": "Enter a volume greater than zero.",
+      "created": "Schedule saved",
+      "updated": "Schedule updated",
+      "deleted": "Schedule deleted"
+    },
+    "deleteConfirm": {
+      "title": "Delete schedule?",
+      "message": "The schedule for {{product}} will be removed from this day. This does not create or change production orders."
     }
   },
   "orders": {

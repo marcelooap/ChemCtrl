@@ -48,6 +48,7 @@ const entityTableMap = {
   StockMovement: 'ind_retornos_perdas',
   LabEquipment: 'ind_lista_equipamentoslab',
   ProductionChecklist: 'ind_checklist_op',
+  ProductionSchedule: 'ind_programacao_demanda',
 };
 export { entityTableMap };
 
@@ -111,7 +112,7 @@ const cleanData = (data) => {
 };
 
 /** Tables introduced by later migrations — list/filter must not break core flows if absent. */
-const OPTIONAL_TABLES = new Set(['ind_composicao_vasilhame']);
+const OPTIONAL_TABLES = new Set(['ind_composicao_vasilhame', 'ind_programacao_demanda']);
 
 const isMissingTableError = (code, msg) => {
   const m = String(msg || '');

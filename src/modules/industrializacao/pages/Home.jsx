@@ -63,7 +63,7 @@ export default function Home() {
   const { user } = useOutletContext();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { data: productions, loading, reload: load } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
+  const { data: productions, loading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 200));
   const { data: orders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 200));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
@@ -85,7 +85,13 @@ export default function Home() {
     [stocks]
   );
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
+  if (loading && productions.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const now = moment();
   const startOfMonth = now.clone().startOf('month');
@@ -142,7 +148,6 @@ export default function Home() {
         await base44.entities.Production.update(p.id, updates);
         toast({ title: t('dashboard.bypass.enabled', { op: p.op_number }) });
       }
-      load();
     } catch (err) {
       toast({ title: t('common.error'), description: err?.message, variant: 'destructive' });
     } finally {

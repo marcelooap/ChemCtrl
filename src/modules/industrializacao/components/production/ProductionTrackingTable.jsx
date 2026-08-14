@@ -70,6 +70,7 @@ export default function ProductionTrackingTable({ productions, onBypass, bypassi
                 {showBypass && (
                   <td className="px-5 py-2 text-center">
                     <button
+                      type="button"
                       onClick={() => onBypass?.(p)}
                       disabled={bypassing === p.id}
                       className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded border disabled:opacity-50 transition-colors ${

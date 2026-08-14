@@ -9,6 +9,7 @@ import EstoqueCliente from '@industrializacao/pages/EstoqueCliente';
 import TelaClientes from '@industrializacao/pages/TelaClientes';
 import Estoque from '@industrializacao/pages/Estoque';
 import Pedidos from '@industrializacao/pages/Pedidos';
+import Programacao from '@industrializacao/pages/Programacao';
 import Receitas from '@industrializacao/pages/Receitas';
 import NovaProducao from '@industrializacao/pages/NovaProducao';
 import OrdensProducao from '@industrializacao/pages/OrdensProducao';
@@ -49,6 +50,7 @@ export default function ChemCtrlRoutes() {
             <Route path="tela-clientes" element={<TelaClientes />} />
             <Route path="estoque" element={<Estoque />} />
             <Route path="pedidos" element={<Pedidos />} />
+            <Route path="programacao" element={<Programacao />} />
             <Route path="receitas" element={<Receitas />} />
             <Route path="nova-producao" element={<NovaProducao />} />
             <Route path="ordens" element={<OrdensProducao />} />

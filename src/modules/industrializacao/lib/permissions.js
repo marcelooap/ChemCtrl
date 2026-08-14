@@ -20,7 +20,19 @@ function resolvePermissions(user) {
   const base = Array.isArray(user.permissions) && user.permissions.length > 0
     ? user.permissions
     : getLegacyPermissionsForUser(user);
-  return augmentLogisticaPermissions(augmentQualityAnalysesPermissions(base));
+  return augmentProgrammingPermissions(
+    augmentLogisticaPermissions(augmentQualityAnalysesPermissions(base))
+  );
+}
+
+/** Bridge: Programação herda o acesso de Pedidos até os perfis serem re-semeados. */
+export function augmentProgrammingPermissions(permissions) {
+  const set = new Set(permissions || []);
+  if (set.has('orders.view')) set.add('programming.view');
+  if (set.has('orders.create')) set.add('programming.create');
+  if (set.has('orders.edit')) set.add('programming.edit');
+  if (set.has('orders.delete')) set.add('programming.delete');
+  return Array.from(set);
 }
 
 /** Bridge: Lista de Ensaios inherits Cadastro CQ access until profiles are re-seeded. */
@@ -60,7 +72,7 @@ export function canAccessRoute(user, path) {
     return true;
   }
   if (
-    (path === '/painel/home' || path === '/painel' || path === '/painel/')
+    (path === '/painel/home' || path === '/painel' || path === '/painel/' || path === '/painel/configuracao')
     && user.tipo !== 'externo'
   ) {
     return true;
