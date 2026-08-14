@@ -111,15 +111,15 @@ export default function FiltracaoTab() {
   const colSpan = 8 + PARTICULA_TAMANHOS.length + 1;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
+      <div className="shrink-0 flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 min-w-[260px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por ID, placa, produto, lote, filtro..."
-            className="pl-10 bg-card"
+            className="pl-10 bg-card h-9"
           />
         </div>
         <div className="w-56">
@@ -137,8 +137,8 @@ export default function FiltracaoTab() {
         </span>
       </div>
 
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-300px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">

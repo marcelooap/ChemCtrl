@@ -212,6 +212,7 @@ export function sumReservadoForProdutoCliente(
 
   return (reservas || []).reduce((sum, r) => {
     if (!r || r.status !== 'ativa') return sum;
+    if (isVasilhameReservaChave(r.chave)) return sum;
     if (norm(r.produto_codigo) !== cod) return sum;
     if (String(r.unidade_medida || 'kg').trim() !== uni) return sum;
 

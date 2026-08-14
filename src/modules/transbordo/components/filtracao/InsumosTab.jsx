@@ -138,23 +138,23 @@ export default function InsumosTab() {
   const emUsoCount = elementos.filter((e) => e.status === "Em uso").length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
+      <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-sm text-muted-foreground">
           {elementos.length} elemento(s) filtrante(s)
           {emUsoCount > 0 ? ` · ${emUsoCount} em uso` : ""}
         </p>
         <Button
           onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary/90 gap-2"
+          className="bg-primary hover:bg-primary/90 gap-2 h-9"
         >
           <Plus className="w-4 h-4" />
           Entrada de elementos
         </Button>
       </div>
 
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-300px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">

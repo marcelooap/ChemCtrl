@@ -396,7 +396,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
 
   if (!saida) {
     return (
-      <div className="space-y-6">
+      <div className="h-full min-h-0 overflow-y-auto space-y-6">
         <Button
           variant="ghost"
           size="icon"
@@ -410,7 +410,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

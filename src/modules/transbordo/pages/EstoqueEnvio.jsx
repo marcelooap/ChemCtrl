@@ -28,6 +28,12 @@ import {
 import {
   sumReservadoForProdutoCliente,
 } from "@painel/lib/materialReservas";
+import {
+  ORIGEM_TRANSBORDO,
+  buildVasilhameReservaChave,
+  isVasilhameReservado,
+  sumReservadoVasilhamesConteudo,
+} from "@painel/lib/vasilhameReservas";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
 import { formatMass, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
@@ -160,6 +166,34 @@ function SaldoBadge({ children, tone = "green" }) {
       }`}
     >
       {children}
+    </span>
+  );
+}
+
+/** Total no pátio + quantidade reservada (quando > 0). */
+function CapacidadeCount({ total = 0, reservado = 0 }) {
+  return (
+    <div className="leading-tight">
+      <div className="tabular-nums">{total}</div>
+      {reservado > 0 ? (
+        <div className="text-[10px] font-semibold text-amber-700 tabular-nums">
+          {reservado} res.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusReservaBadge({ reservado }) {
+  return (
+    <span
+      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+        reservado
+          ? "bg-purple-100 text-purple-800"
+          : "bg-green-100 text-green-800"
+      }`}
+    >
+      {reservado ? "Reservado" : "Livre"}
     </span>
   );
 }
@@ -362,14 +396,26 @@ export default function EstoqueEnvio() {
 
     return [...map.values()]
       .map((row) => {
-        const saldoReservado = Math.round(
-          sumReservadoForProdutoCliente(reservas, {
+        const reservadoEmbalado = sumReservadoForProdutoCliente(reservas, {
+          clienteId: row.clienteId,
+          clienteNome: row.cliente_nome,
+          produtoCodigo: row.codigo,
+          produtoNome: row.produto,
+          unidade: row.unidade,
+        });
+        const reservadoVasilhame = sumReservadoVasilhamesConteudo(
+          vasilhames,
+          reservas,
+          {
             clienteId: row.clienteId,
             clienteNome: row.cliente_nome,
             produtoCodigo: row.codigo,
             produtoNome: row.produto,
             unidade: row.unidade,
-          })
+          }
+        );
+        const saldoReservado = Math.round(
+          reservadoEmbalado + reservadoVasilhame
         );
         const saldoAtual = Math.round(row.saldo || 0);
         const saldoFinal = Math.max(0, saldoAtual - saldoReservado);
@@ -392,30 +438,41 @@ export default function EstoqueEnvio() {
         if (byNome !== 0) return byNome;
         return String(a.unidade).localeCompare(String(b.unidade), "pt-BR");
       });
-  }, [estoque, clienteFilter, clientes, q, reservas]);
+  }, [estoque, clienteFilter, clientes, q, reservas, vasilhames]);
 
   const filteredVasilhames = useMemo(() => {
-    return vasilhames.filter((v) => {
-      if ((v.tipo || "") === "Tankagem") return false;
-      if ((v.status || "No Pátio") !== "No Pátio") return false;
-      if (!matchesCliente(v, clienteFilter, clientes)) return false;
+    return vasilhames
+      .filter((v) => {
+        if ((v.tipo || "") === "Tankagem") return false;
+        if ((v.status || "No Pátio") !== "No Pátio") return false;
+        if (!matchesCliente(v, clienteFilter, clientes)) return false;
 
-      if (!q) return true;
-      const hay = [
-        v.codigo,
-        v.placa,
-        v.barril,
-        v.produto_codigo,
-        v.produto_nome,
-        v.cliente_nome,
-        v.lote,
-        v.tipo,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [vasilhames, clienteFilter, clientes, q]);
+        if (!q) return true;
+        const hay = [
+          v.codigo,
+          v.placa,
+          v.barril,
+          v.produto_codigo,
+          v.produto_nome,
+          v.cliente_nome,
+          v.lote,
+          v.tipo,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .map((v) => {
+        const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id);
+        const reservado = isVasilhameReservado(reservas, chave);
+        return {
+          ...v,
+          reservaChave: chave,
+          reservado,
+          statusReserva: reservado ? "Reservado" : "Livre",
+        };
+      });
+  }, [vasilhames, clienteFilter, clientes, q, reservas]);
 
   /** Resumo por produto × capacidade (e fracionados) sobre o conjunto filtrado. */
   const vasilhamesResumoPorProduto = useMemo(() => {
@@ -440,6 +497,7 @@ export default function EstoqueEnvio() {
       const produto = String(v.produto_nome || "").trim() || "—";
       const cliente = String(v.cliente_nome || "").trim();
       const key = `${codigo}||${produto.toUpperCase()}||${cliente.toUpperCase()}`;
+      const isReservado = v.reservado === true;
 
       let row = map.get(key);
       if (!row) {
@@ -453,20 +511,35 @@ export default function EstoqueEnvio() {
           outros: 0,
           fracionados: 0,
           total: 0,
+          cap5000Reservado: 0,
+          cap1500Reservado: 0,
+          outrosReservado: 0,
+          fracionadosReservado: 0,
+          totalReservado: 0,
         };
         map.set(key, row);
       }
 
       row.total += 1;
+      if (isReservado) row.totalReservado += 1;
+
       if (v.fracionado === true) {
         row.fracionados += 1;
+        if (isReservado) row.fracionadosReservado += 1;
         continue;
       }
 
       const cap = resolveVasilhameCapacidade(v, placaStats);
-      if (matchesCapacidadePadrao(cap, 5000)) row.cap5000 += 1;
-      else if (matchesCapacidadePadrao(cap, 1500)) row.cap1500 += 1;
-      else row.outros += 1;
+      if (matchesCapacidadePadrao(cap, 5000)) {
+        row.cap5000 += 1;
+        if (isReservado) row.cap5000Reservado += 1;
+      } else if (matchesCapacidadePadrao(cap, 1500)) {
+        row.cap1500 += 1;
+        if (isReservado) row.cap1500Reservado += 1;
+      } else {
+        row.outros += 1;
+        if (isReservado) row.outrosReservado += 1;
+      }
     }
 
     return [...map.values()].sort((a, b) => {
@@ -656,7 +729,7 @@ export default function EstoqueEnvio() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Estoque Envio</h1>
@@ -810,8 +883,11 @@ export default function EstoqueEnvio() {
         </div>
 
         <div className="px-5 py-3 border-b border-border bg-muted/20">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
             Resumo por produto / capacidade
+          </p>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Em cada capacidade: total no pátio e, quando houver, quantidade reservada.
           </p>
           {vasilhamesResumoPorProduto.length === 0 ? (
             <p className="text-sm text-muted-foreground py-1">
@@ -860,20 +936,35 @@ export default function EstoqueEnvio() {
                           {row.cliente_nome || "—"}
                         </td>
                       )}
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {row.cap5000}
+                      <td className="px-3 py-2 text-right">
+                        <CapacidadeCount
+                          total={row.cap5000}
+                          reservado={row.cap5000Reservado}
+                        />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {row.cap1500}
+                      <td className="px-3 py-2 text-right">
+                        <CapacidadeCount
+                          total={row.cap1500}
+                          reservado={row.cap1500Reservado}
+                        />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {row.outros}
+                      <td className="px-3 py-2 text-right">
+                        <CapacidadeCount
+                          total={row.outros}
+                          reservado={row.outrosReservado}
+                        />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {row.fracionados}
+                      <td className="px-3 py-2 text-right">
+                        <CapacidadeCount
+                          total={row.fracionados}
+                          reservado={row.fracionadosReservado}
+                        />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-foreground">
-                        {row.total}
+                      <td className="px-3 py-2 text-right font-semibold text-foreground">
+                        <CapacidadeCount
+                          total={row.total}
+                          reservado={row.totalReservado}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -946,9 +1037,7 @@ export default function EstoqueEnvio() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          {v.status || "No Pátio"}
-                        </span>
+                        <StatusReservaBadge reservado={v.reservado} />
                       </td>
                     </tr>
                   );

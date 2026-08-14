@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,12 +7,18 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 
+function normKey(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 export default function ProdutoModal({
   open,
@@ -20,7 +26,9 @@ export default function ProdutoModal({
   onSave,
   editingProduto,
   readOnly,
-  clientes,
+  clientes = [],
+  produtos = [],
+  estoque = [],
   externalError = "",
 }) {
   const [codigo, setCodigo] = useState("");
@@ -31,6 +39,7 @@ export default function ProdutoModal({
   const [densidade, setDensidade] = useState("");
   const [filtrado, setFiltrado] = useState(false);
   const [error, setError] = useState("");
+  const [clienteAutoFilled, setClienteAutoFilled] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +55,7 @@ export default function ProdutoModal({
           : ""
       );
       setFiltrado(editingProduto.filtrado || false);
+      setClienteAutoFilled(false);
     } else {
       setCodigo("");
       setProduto("");
@@ -54,19 +64,120 @@ export default function ProdutoModal({
       setDensidadeTabelada(false);
       setDensidade("");
       setFiltrado(false);
+      setClienteAutoFilled(false);
     }
     setError("");
   }, [editingProduto, open]);
 
+  /** Códigos únicos já cadastrados. */
+  const codigoOptions = useMemo(() => {
+    const map = new Map();
+    for (const p of produtos || []) {
+      const cod = String(p.codigo || "").trim();
+      if (!cod) continue;
+      const key = normKey(cod);
+      if (!map.has(key)) {
+        map.set(key, { id: key, codigo: cod });
+      }
+    }
+    return [...map.values()].sort((a, b) =>
+      a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true })
+    );
+  }, [produtos]);
+
+  const codigoNorm = normKey(codigo);
+
+  /** Descrições já em estoque para o código selecionado (somente referência). */
+  const descricoesEmEstoque = useMemo(() => {
+    if (!codigoNorm) return [];
+    const map = new Map();
+    for (const e of estoque || []) {
+      if ((Number(e.saldo_atual) || 0) <= 0) continue;
+      if (normKey(e.produto_codigo) !== codigoNorm) continue;
+      const nome = String(e.produto_nome || "").trim();
+      if (!nome) continue;
+      const key = normKey(nome);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          produto: nome,
+          cliente_id: e.cliente_id || null,
+          cliente_nome: e.cliente_nome || "",
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) =>
+      a.produto.localeCompare(b.produto, "pt-BR", { sensitivity: "base" })
+    );
+  }, [estoque, codigoNorm]);
+
+  /** Produtos cadastrados com o mesmo código (para validar duplicidade e cliente). */
+  const produtosDoCodigo = useMemo(() => {
+    if (!codigoNorm) return [];
+    return (produtos || []).filter((p) => normKey(p.codigo) === codigoNorm);
+  }, [produtos, codigoNorm]);
+
+  const isDuplicateDescricao = useMemo(() => {
+    const nomeNorm = normKey(produto);
+    if (!codigoNorm || !nomeNorm) return false;
+    return produtosDoCodigo.some((p) => {
+      if (editingProduto?.id && p.id === editingProduto.id) return false;
+      return normKey(p.produto) === nomeNorm;
+    });
+  }, [produtosDoCodigo, produto, codigoNorm, editingProduto?.id]);
+
+  const aplicarClienteDoCodigo = (codLabel) => {
+    const key = normKey(codLabel);
+    if (!key) {
+      setClienteAutoFilled(false);
+      return;
+    }
+
+    // Só preenche automaticamente se o código já tiver saldo em estoque
+    const est = (estoque || []).find(
+      (e) =>
+        (Number(e.saldo_atual) || 0) > 0 &&
+        normKey(e.produto_codigo) === key &&
+        (e.cliente_nome || e.cliente_id)
+    );
+    if (est) {
+      setClienteId(est.cliente_id || "");
+      setClienteNome(est.cliente_nome || "");
+      setClienteAutoFilled(true);
+      return;
+    }
+
+    setClienteAutoFilled(false);
+  };
+
+  const handleCodigoChange = (label) => {
+    setCodigo(label);
+    setError("");
+    if (!editingProduto && !readOnly) {
+      aplicarClienteDoCodigo(label);
+    }
+  };
+
+  const handleProdutoChange = (label) => {
+    setProduto(label);
+    setError("");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!codigo || !produto) {
+    if (!codigo?.trim() || !produto?.trim()) {
       setError("Preencha os campos obrigatórios (Código e Nome).");
       return;
     }
+    if (isDuplicateDescricao) {
+      setError(
+        "Já existe um produto cadastrado com este código e esta descrição. Informe uma descrição diferente."
+      );
+      return;
+    }
     onSave({
-      codigo,
-      produto,
+      codigo: codigo.trim(),
+      produto: produto.trim(),
       cliente_id: clienteId,
       cliente_nome: clienteNome,
       densidade: densidadeTabelada ? densidade || "-" : "-",
@@ -85,10 +196,15 @@ export default function ProdutoModal({
     : "Novo Produto";
 
   const displayError = error || externalError;
+  const codigoJaExiste = codigoNorm && codigoOptions.some((o) => o.id === codigoNorm);
+  const temEstoqueNoCodigo = descricoesEmEstoque.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-2xl"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -98,21 +214,46 @@ export default function ProdutoModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Código do Produto *</Label>
-              <Input
+              <SearchableSelect
                 value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                placeholder="Ex: AD1700"
+                onChange={(label) => handleCodigoChange(label)}
+                options={codigoOptions}
+                getOptionLabel={(o) => o.codigo}
+                getOptionValue={(o) => o.id}
+                placeholder="Selecione ou digite um código"
                 disabled={readOnly}
               />
+              {!editingProduto && codigoJaExiste ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Código já cadastrado — você pode criar outra descrição.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label>Nome do Produto *</Label>
-              <Input
+              <SearchableSelect
                 value={produto}
-                onChange={(e) => setProduto(e.target.value)}
-                placeholder="Ex: INIPOL AD 1700"
+                onChange={(label) => handleProdutoChange(label)}
+                options={descricoesEmEstoque}
+                getOptionLabel={(o) => o.produto}
+                getOptionValue={(o) => o.id}
+                placeholder={
+                  temEstoqueNoCodigo
+                    ? "Nova descrição (veja as existentes)"
+                    : "Ex: INIPOL AD 1700"
+                }
                 disabled={readOnly}
               />
+              {temEstoqueNoCodigo ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Lista mostra descrições já em estoque para este código.
+                </p>
+              ) : null}
+              {isDuplicateDescricao ? (
+                <p className="text-[11px] text-red-600">
+                  Esta descrição já está cadastrada para este código.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -123,6 +264,7 @@ export default function ProdutoModal({
               onChange={(label, item) => {
                 setClienteNome(label);
                 setClienteId(item?.id || "");
+                setClienteAutoFilled(false);
               }}
               options={clientes}
               getOptionLabel={(c) => c.nome}
@@ -130,6 +272,11 @@ export default function ProdutoModal({
               placeholder="Selecione ou digite um cliente"
               disabled={readOnly}
             />
+            {clienteAutoFilled && !editingProduto ? (
+              <p className="text-[11px] text-muted-foreground">
+                Cliente preenchido automaticamente a partir do código em estoque.
+              </p>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
@@ -178,7 +325,7 @@ export default function ProdutoModal({
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={isDuplicateDescricao}>
                 {editingProduto ? "Salvar Alterações" : "Cadastrar Produto"}
               </Button>
             </DialogFooter>

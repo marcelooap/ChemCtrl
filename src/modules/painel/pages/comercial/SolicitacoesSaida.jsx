@@ -16,6 +16,7 @@ export default function SolicitacoesSaida() {
       basePath={BASE_PATH}
       title={t('painel.comercial.sections.solicitacoesSaida.title')}
       statusMode="expedicao"
+      excludeChemflow
     />
   );
 }

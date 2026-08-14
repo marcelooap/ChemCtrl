@@ -14,6 +14,7 @@ import {
   resolveTipoRecebimentoEstoque,
   getTipoRecebimentoLabel,
 } from "@transbordo/lib/tipoRecebimento";
+import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 
 const M = 14;
 const PW = 210;
@@ -419,6 +420,7 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
 export function generateRelatorioEstoquePDF({
   item,
   displayId,
+  estoqueCodigo,
   destinosList = [],
   historicoTransbordos = [],
   saidasHistorico = [],
@@ -430,6 +432,8 @@ export function generateRelatorioEstoquePDF({
   const codigo = item.produto_codigo || "-";
   const produto = item.produto_nome || "-";
   const lote = item.lote || "-";
+  const idEstoque =
+    estoqueCodigo || formatEstoqueCodigo(item.codigo_estoque);
   const idEntrada = displayId || item.entrada_codigo || "-";
   const custoTotal =
     (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
@@ -449,7 +453,8 @@ export function generateRelatorioEstoquePDF({
     doc,
     y,
     [
-      ["ID Entrada", idEntrada],
+      ["ID", idEstoque],
+      ["Entrada", idEntrada],
       ["Código", codigo],
       ["Lote", lote],
       ["Produto", produto, 2],
@@ -728,6 +733,12 @@ export function generateEstoqueEnvioPDF({
     doc.text("Nenhum vasilhame para resumir no filtro.", M, y);
     y += 8;
   } else {
+    const fmtCap = (total, reservado) => {
+      const t = Number(total) || 0;
+      const r = Number(reservado) || 0;
+      return r > 0 ? `${fmtNum(t, 0)} (${fmtNum(r, 0)} res.)` : fmtNum(t, 0);
+    };
+
     const sum5000 = containersSummary.reduce(
       (s, r) => s + (Number(r.cap5000) || 0),
       0
@@ -748,6 +759,26 @@ export function generateEstoqueEnvioPDF({
       (s, r) => s + (Number(r.total) || 0),
       0
     );
+    const sum5000Res = containersSummary.reduce(
+      (s, r) => s + (Number(r.cap5000Reservado) || 0),
+      0
+    );
+    const sum1500Res = containersSummary.reduce(
+      (s, r) => s + (Number(r.cap1500Reservado) || 0),
+      0
+    );
+    const sumOutrosRes = containersSummary.reduce(
+      (s, r) => s + (Number(r.outrosReservado) || 0),
+      0
+    );
+    const sumFracRes = containersSummary.reduce(
+      (s, r) => s + (Number(r.fracionadosReservado) || 0),
+      0
+    );
+    const sumTotalRes = containersSummary.reduce(
+      (s, r) => s + (Number(r.totalReservado) || 0),
+      0
+    );
 
     y = addTable(
       doc,
@@ -764,21 +795,21 @@ export function generateEstoqueEnvioPDF({
       containersSummary.map((r) => [
         r.codigo || "-",
         r.produto || "-",
-        fmtNum(r.cap5000, 0),
-        fmtNum(r.cap1500, 0),
-        fmtNum(r.outros, 0),
-        fmtNum(r.fracionados, 0),
-        fmtNum(r.total, 0),
+        fmtCap(r.cap5000, r.cap5000Reservado),
+        fmtCap(r.cap1500, r.cap1500Reservado),
+        fmtCap(r.outros, r.outrosReservado),
+        fmtCap(r.fracionados, r.fracionadosReservado),
+        fmtCap(r.total, r.totalReservado),
       ]),
-      [24, 58, 22, 22, 20, 26, 18],
+      [22, 48, 26, 26, 24, 28, 26],
       [
         "TOTAL",
         "",
-        fmtNum(sum5000, 0),
-        fmtNum(sum1500, 0),
-        fmtNum(sumOutros, 0),
-        fmtNum(sumFrac, 0),
-        fmtNum(sumTotal, 0),
+        fmtCap(sum5000, sum5000Res),
+        fmtCap(sum1500, sum1500Res),
+        fmtCap(sumOutros, sumOutrosRes),
+        fmtCap(sumFrac, sumFracRes),
+        fmtCap(sumTotal, sumTotalRes),
       ],
       [],
       {
@@ -806,7 +837,16 @@ export function generateEstoqueEnvioPDF({
     y = addTable(
       doc,
       y,
-      ["PLACA", "BARRIL", "PRODUTO", "LOTE", "VOLUME", "P. LÍQ.", "P. BRUTO"],
+      [
+        "PLACA",
+        "BARRIL",
+        "PRODUTO",
+        "LOTE",
+        "VOLUME",
+        "P. LÍQ.",
+        "P. BRUTO",
+        "STATUS",
+      ],
       containers.map((c) => [
         c.placa || "-",
         c.barril || "-",
@@ -815,8 +855,9 @@ export function generateEstoqueEnvioPDF({
         fmtNum(c.volume, 0),
         fmtNum(c.peso_liquido, 0),
         fmtNum(c.peso_bruto, 0),
+        c.statusReserva || (c.reservado ? "Reservado" : "Livre"),
       ]),
-      [24, 18, 60, 22, 20, 19, 19],
+      [22, 16, 48, 20, 18, 18, 18, 22],
       [
         "TOTAL",
         "",
@@ -825,10 +866,20 @@ export function generateEstoqueEnvioPDF({
         `${fmtNum(totalContainerVolume, 0)} L`,
         `${fmtNum(totalContainerMass, 0)} kg`,
         `${fmtNum(totalContainerGross, 0)} kg`,
+        "",
       ],
       [],
       {
-        align: ["center", "center", "left", "center", "center", "center", "center"],
+        align: [
+          "center",
+          "center",
+          "left",
+          "center",
+          "center",
+          "center",
+          "center",
+          "center",
+        ],
       }
     );
   }

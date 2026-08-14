@@ -50,8 +50,8 @@ export default function VasilhamesReservaTable({
 
   return (
     <>
-      <div className="bg-card rounded-xl border border-border shadow-sm">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2">
+      <div className="h-full bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
+        <div className="shrink-0 px-5 py-4 border-b border-border flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">
             {t('painel.comercial.reservarMaterial.vasilhames.tableTitle')}
           </h3>
@@ -61,42 +61,42 @@ export default function VasilhamesReservaTable({
         </div>
 
         {rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
             {t('painel.comercial.reservarMaterial.vasilhames.empty')}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto flex-1 min-h-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.id')}
                   </th>
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}
                   </th>
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.columns.cliente')}
                   </th>
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.columns.cod')}
                   </th>
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.columns.produto')}
                   </th>
-                  <th className="px-4 py-3 font-medium text-right">
+                  <th className="px-4 py-3 font-medium text-right bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.volume')}
                   </th>
-                  <th className="px-4 py-3 font-medium text-right">
+                  <th className="px-4 py-3 font-medium text-right bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
                   </th>
-                  <th className="px-4 py-3 font-medium">
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.columns.lote')}
                   </th>
-                  <th className="px-4 py-3 font-medium text-center">
+                  <th className="px-4 py-3 font-medium text-center bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.status')}
                   </th>
-                  <th className="px-4 py-3 font-medium text-center">
+                  <th className="px-4 py-3 font-medium text-center bg-muted/40">
                     {t('common.actions')}
                   </th>
                 </tr>

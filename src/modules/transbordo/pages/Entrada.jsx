@@ -644,49 +644,51 @@ export default function Entrada() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Entradas</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {entradas.length} registro(s) de recebimento
-          </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Entradas</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {entradas.length} registro(s) de recebimento
+            </p>
+          </div>
+          <Can permission="tb_entrada.create">
+            <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
+              <Plus className="w-4 h-4" />
+              Nova Entrada
+            </Button>
+          </Can>
         </div>
-        <Can permission="tb_entrada.create">
-          <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-            <Plus className="w-4 h-4" />
-            Nova Entrada
-          </Button>
-        </Can>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por produto, cliente, lote ou NF..."
-            className="pl-10 bg-white"
-          />
-        </div>
-        <div className="w-52">
-          <SearchableSelect
-            value={origemFilter}
-            onChange={(label) => setOrigemFilter(label)}
-            options={ORIGEM_OPTIONS}
-            getOptionLabel={(o) => o.label}
-            getOptionValue={(o) => o.value}
-            placeholder="Origem"
-          />
+        {/* Filters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por produto, cliente, lote ou NF..."
+              className="pl-10 bg-white"
+            />
+          </div>
+          <div className="w-52">
+            <SearchableSelect
+              value={origemFilter}
+              onChange={(label) => setOrigemFilter(label)}
+              options={ORIGEM_OPTIONS}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder="Origem"
+            />
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-260px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">

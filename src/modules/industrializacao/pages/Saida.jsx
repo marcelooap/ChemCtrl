@@ -15,6 +15,7 @@ export default function IndSaida() {
       basePath={BASE_PATH}
       title={t('saida.title')}
       onlyIndustrializacao
+      excludeChemflow
     />
   );
 }

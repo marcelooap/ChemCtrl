@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Check } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import {
@@ -18,9 +18,23 @@ import { cascadeProdutoIdentity } from "@transbordo/lib/cascadeProdutoUpdate";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { formatDensidade } from "@transbordo/lib/format";
 
+function buildProdutoEstoqueKey(produtoId, codigo, clienteId, clienteNome) {
+  if (produtoId) return `id:${String(produtoId)}`;
+  const cod = String(codigo || "")
+    .trim()
+    .toUpperCase();
+  if (!cod) return "";
+  const cli = String(clienteId || clienteNome || "")
+    .trim()
+    .toUpperCase();
+  return `cod:${cod}||${cli}`;
+}
+
 export default function ProdutosTab() {
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [estoque, setEstoque] = useState([]);
+  const [estoqueComSaldoKeys, setEstoqueComSaldoKeys] = useState(() => new Set());
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduto, setEditingProduto] = useState(null);
@@ -32,9 +46,10 @@ export default function ProdutosTab() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [prods, cliens] = await Promise.all([
+      const [prods, cliens, ests] = await Promise.all([
         entities.produtos.list(),
         entities.clientes.list(),
+        entities.estoque.list().catch(() => []),
       ]);
 
       // Sincroniza clientes referidos em produtos mas ainda ausentes em t_clientes
@@ -59,13 +74,32 @@ export default function ProdutosTab() {
         ];
       }
 
+      const saldoKeys = new Set();
+      for (const e of ests || []) {
+        if ((Number(e.saldo_atual) || 0) <= 0) continue;
+        if (e.produto_id) {
+          saldoKeys.add(buildProdutoEstoqueKey(e.produto_id));
+        }
+        const byCodigo = buildProdutoEstoqueKey(
+          null,
+          e.produto_codigo,
+          e.cliente_id,
+          e.cliente_nome
+        );
+        if (byCodigo) saldoKeys.add(byCodigo);
+      }
+
       setProdutos(prods);
       setClientes(clientesAtualizados);
+      setEstoque(ests || []);
+      setEstoqueComSaldoKeys(saldoKeys);
     } catch (err) {
       console.error("[Transbordo] Erro ao carregar produtos/clientes:", err);
       if (!silent) {
         setProdutos([]);
         setClientes([]);
+        setEstoque([]);
+        setEstoqueComSaldoKeys(new Set());
       }
     } finally {
       if (!silent) setLoading(false);
@@ -75,6 +109,22 @@ export default function ProdutosTab() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const produtoTemSaldo = useMemo(() => {
+    return (p) => {
+      if (!p) return false;
+      if (p.id && estoqueComSaldoKeys.has(buildProdutoEstoqueKey(p.id))) {
+        return true;
+      }
+      const byCodigo = buildProdutoEstoqueKey(
+        null,
+        p.codigo,
+        p.cliente_id,
+        p.cliente_nome
+      );
+      return Boolean(byCodigo && estoqueComSaldoKeys.has(byCodigo));
+    };
+  }, [estoqueComSaldoKeys]);
 
   const sortedAll = [...produtos].sort((a, b) => {
     const da = new Date(a.created_date || a.data_cadastro);
@@ -184,27 +234,27 @@ export default function ProdutosTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
       {/* Search + Button */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="shrink-0 flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por ID, produto ou cliente..."
-            className="pl-10 bg-white"
+            className="pl-10 bg-white h-9"
           />
         </div>
-        <Button onClick={handleNew} className="gap-2">
+        <Button onClick={handleNew} className="gap-2 h-9">
           <Plus className="w-4 h-4" />
           Novo Produto
         </Button>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-320px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-foreground/70 border-b-2 border-border bg-muted uppercase tracking-wide sticky top-0 z-10">
@@ -252,7 +302,19 @@ export default function ProdutosTab() {
                         {p.codigo}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 font-medium text-foreground">{p.produto}</td>
+                    <td className="px-5 py-3.5 font-medium text-foreground">
+                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                        {produtoTemSaldo(p) ? (
+                          <Check
+                            className="w-3.5 h-3.5 text-green-600 shrink-0"
+                            strokeWidth={3}
+                            aria-label="Com saldo em estoque"
+                            title="Com saldo em estoque"
+                          />
+                        ) : null}
+                        <span className="truncate">{p.produto}</span>
+                      </span>
+                    </td>
                     <td className="px-5 py-3.5 text-muted-foreground">
                       {p.cliente_nome || "-"}
                     </td>
@@ -325,6 +387,8 @@ export default function ProdutosTab() {
         editingProduto={editingProduto}
         readOnly={readOnly}
         clientes={mergedClientes}
+        produtos={produtos}
+        estoque={estoque}
         externalError={saveError}
       />
 

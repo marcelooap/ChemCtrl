@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from "@transbordo/services/entities";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import TankSilo from "@transbordo/components/tankagem/TankSilo";
 import TankagemViewDialog from "@transbordo/components/tankagem/TankagemViewDialog";
@@ -9,6 +10,7 @@ import {
   computeTankaSaldo,
   buildTankaDetalhe,
 } from "@transbordo/lib/tankaVolume";
+import { listTankaIdsLinkedToEstoque } from "@transbordo/lib/estoqueSaldo";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -18,30 +20,69 @@ const PRODUCT_COLORS = [
 ];
 
 export default function Tankagem() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isotanques, setIsotanques] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
+  const [vasilhames, setVasilhames] = useState([]);
+  const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [viewDetalhe, setViewDetalhe] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
 
+  const estoqueFilterId = location.state?.estoqueId || null;
+  const estoqueFilterCodigo = location.state?.estoqueCodigo || null;
+
+  const clearEstoqueFilter = () => {
+    setEstoqueFilterItem(null);
+    navigate(location.pathname, { replace: true, state: {} });
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [isot, trans] = await Promise.all([
+        const [isot, trans, vas] = await Promise.all([
           entities.isotanques.list(),
           entities.transbordos.list(),
+          entities.vasilhames.list(),
         ]);
         setIsotanques(isot);
         setTransbordos(trans);
+        setVasilhames(vas);
       } catch {
         setIsotanques([]);
         setTransbordos([]);
+        setVasilhames([]);
       }
       setLoading(false);
     };
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!estoqueFilterId) {
+      setEstoqueFilterItem(null);
+      return;
+    }
+    let cancelled = false;
+    entities.estoque
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        setEstoqueFilterItem(
+          (list || []).find((e) => e.id === estoqueFilterId) || {
+            id: estoqueFilterId,
+          }
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEstoqueFilterItem({ id: estoqueFilterId });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [estoqueFilterId]);
 
   const tanksWithVolume = useMemo(() => {
     return isotanques.map((iso) => {
@@ -85,10 +126,32 @@ export default function Tankagem() {
     });
   }, [tanksWithVolume]);
 
+  const linkedTankaFilter = useMemo(() => {
+    if (!estoqueFilterId || !estoqueFilterItem) return null;
+    return listTankaIdsLinkedToEstoque(estoqueFilterItem, {
+      transbordos,
+      vasilhames,
+    });
+  }, [estoqueFilterId, estoqueFilterItem, transbordos, vasilhames]);
+
   const filteredTanks = useMemo(() => {
+    let list = sortedTanks;
+
+    if (linkedTankaFilter) {
+      list = list.filter((tank) => {
+        const codigo = String(tank.tanka || tank.codigo_itku || "")
+          .trim()
+          .toUpperCase();
+        return (
+          linkedTankaFilter.ids.has(tank.id) ||
+          (codigo && linkedTankaFilter.codigos.has(codigo))
+        );
+      });
+    }
+
     const q = search.toLowerCase().trim();
-    if (!q) return sortedTanks;
-    return sortedTanks.filter((tank) => {
+    if (!q) return list;
+    return list.filter((tank) => {
       const tanka = String(tank.tanka || tank.codigo_itku || "").toLowerCase();
       const produto = String(tank.produto || "").toLowerCase();
       const cliente = String(tank.cliente_nome || "").toLowerCase();
@@ -98,7 +161,7 @@ export default function Tankagem() {
         cliente.includes(q)
       );
     });
-  }, [sortedTanks, search]);
+  }, [sortedTanks, search, linkedTankaFilter]);
 
   const productColorMap = useMemo(() => {
     const map = {};
@@ -132,7 +195,7 @@ export default function Tankagem() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Tankagem</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -150,6 +213,20 @@ export default function Tankagem() {
             className="pl-10 bg-card"
           />
         </div>
+        {estoqueFilterId && (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+            Estoque {estoqueFilterCodigo || estoqueFilterId}
+            <button
+              type="button"
+              onClick={clearEstoqueFilter}
+              className="hover:text-primary/80"
+              title="Limpar filtro de estoque"
+              aria-label="Limpar filtro de estoque"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -158,8 +235,8 @@ export default function Tankagem() {
         </div>
       ) : Object.entries(groupedByClient).length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
-          {search.trim()
-            ? "Nenhum isotanque encontrado para a busca."
+          {estoqueFilterId || search.trim()
+            ? "Nenhum isotanque encontrado para o filtro."
             : "Nenhum isotanque cadastrado."}
         </div>
       ) : (

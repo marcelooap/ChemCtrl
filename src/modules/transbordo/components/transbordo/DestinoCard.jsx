@@ -282,8 +282,8 @@ export default function DestinoCard({
   if (collapsed) {
     return (
       <div
-        className={`rounded-md border border-border/80 bg-background px-3 py-2.5 ${
-          onToggleCollapse ? "cursor-pointer hover:bg-muted/30 transition-colors" : ""
+        className={`rounded-lg border-2 border-border bg-card px-3.5 py-3 shadow-sm ${
+          onToggleCollapse ? "cursor-pointer hover:border-primary/30 hover:bg-muted/20 transition-colors" : ""
         }`}
         onClick={onToggleCollapse}
         role={onToggleCollapse ? "button" : undefined}
@@ -305,7 +305,7 @@ export default function DestinoCard({
   }
 
   return (
-    <div className="rounded-md border border-border bg-background p-3 space-y-4">
+    <div className="rounded-lg border-2 border-border bg-card p-4 space-y-4 shadow-sm">
       {destinoHeader}
 
       <div className="space-y-1.5 max-w-md">
@@ -323,8 +323,8 @@ export default function DestinoCard({
       </div>
 
       {tipo === "Vasilhame" && (
-        <div className="space-y-4">
-          <FieldGroup title="Identificação">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label>Nº da Placa</Label>
               <SearchableSelect
@@ -384,9 +384,6 @@ export default function DestinoCard({
               placeholder="Nº barril"
               readOnly={readOnly}
             />
-          </FieldGroup>
-
-          <FieldGroup title={preserveEntryMass ? "Quantidade e Peso" : "Volume e Peso"}>
             <IntegerField
               label={
                 preserveEntryMass
@@ -397,38 +394,27 @@ export default function DestinoCard({
               onChange={(v) => updateField("volume", v)}
               readOnly={readOnly}
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <IntegerField
               label="Tara (kg)"
               value={destino.tara}
               onChange={(v) => updateField("tara", v)}
               readOnly={readOnly}
             />
-            <div className="space-y-1.5">
-              <Label>Peso Líquido (kg) - auto</Label>
-              <Input
-                value={formatMass(destino.peso_liquido || 0)}
-                disabled
-                className="bg-card font-medium"
+            <div className="sm:col-span-2">
+              <Field
+                label="Lacres"
+                value={destino.lacres}
+                onChange={(v) => updateField("lacres", v)}
+                placeholder="Nº lacres"
+                readOnly={readOnly}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Peso Bruto (kg) - auto</Label>
-              <Input
-                value={formatMass(destino.peso_bruto || 0)}
-                disabled
-                className="bg-card font-medium"
-              />
-            </div>
-          </FieldGroup>
+          </div>
 
-          <FieldGroup title="Controle / Segurança">
-            <Field
-              label="Lacres"
-              value={destino.lacres}
-              onChange={(v) => updateField("lacres", v)}
-              placeholder="Nº lacres"
-              readOnly={readOnly}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field
               label="Eslinga"
               value={destino.eslinga}
@@ -453,7 +439,7 @@ export default function DestinoCard({
                 className={INPUT_EDITABLE}
               />
             </div>
-          </FieldGroup>
+          </div>
 
           <div className="rounded-md border border-border/80 bg-background/60 px-3 py-3 space-y-1">
             <div className="flex items-center gap-2">
@@ -527,15 +513,27 @@ export default function DestinoCard({
             readOnly={readOnly}
           />
           <IntegerField
-            label="Volume por Embalagem (L)"
+            label={
+              preserveEntryMass
+                ? `Quantidade por Embalagem (${unidadeLabel})`
+                : "Volume por Embalagem (L)"
+            }
             value={destino.volume_por_embalagem}
             onChange={(v) => updateField("volume_por_embalagem", v)}
             readOnly={readOnly}
           />
           <div className="space-y-1.5">
-            <Label>Volume Total (L) - auto</Label>
+            <Label>
+              {preserveEntryMass
+                ? `Quantidade Total (${unidadeLabel}) - auto`
+                : "Volume Total (L) - auto"}
+            </Label>
             <Input
-              value={formatVolume(destino.volume_total || 0)}
+              value={
+                preserveEntryMass
+                  ? formatMass(destino.volume_total || 0)
+                  : formatVolume(destino.volume_total || 0)
+              }
               disabled
               className="bg-card font-medium"
             />

@@ -11,6 +11,25 @@ import {
 /** Rótulo sintético — só quando há residual sem lote real atribuível. */
 export const LOTE_APORTE_ANTERIOR = "Aporte anterior";
 
+const isMassaOrigem = (origem) => {
+  const embalado =
+    origem?.tipo_origem === "embalado" || Boolean(origem?.embalado);
+  const u = String(origem?.unidade_medida || (embalado ? "kg" : ""))
+    .trim()
+    .toLowerCase();
+  return (
+    embalado &&
+    (u === "kg" ||
+      u === "kgs" ||
+      u === "quilo" ||
+      u === "quilos" ||
+      u === "lb" ||
+      u === "lbs" ||
+      u === "libra" ||
+      u === "libras")
+  );
+};
+
 const placaKey = (placa, barril) =>
   `${String(placa || "").trim().toUpperCase()}||${String(barril || "").trim().toUpperCase()}`;
 
@@ -183,11 +202,17 @@ export function rebuildComposicaoFromTransbordos(
                   : oVol
               );
         if (share <= 0) return;
+        const estoqueId = o.estoque_id || o.entrada_id || null;
+        const massaEmbalado = isMassaOrigem(o);
         entries.push({
           lote: o.lote || "",
+          origem_index: oi,
+          estoque_id: estoqueId,
+          entrada_id: estoqueId,
           quantidade_l: share,
-          quantidade_kg:
-            dens > 0
+          quantidade_kg: massaEmbalado
+            ? roundMass(share)
+            : dens > 0
               ? roundMass(share * dens)
               : roundMass(o.massa_retirada || 0),
           transbordo_codigo: t.codigo_transbordo || null,
@@ -292,12 +317,16 @@ export function mergeComposicao(existing = [], incoming = [], meta = {}) {
   const extras = (incoming || []).map((c) => ({
     lote: c.lote || "",
     origem_index: c.origem_index,
+    estoque_id: c.estoque_id || null,
+    entrada_id: c.entrada_id || c.estoque_id || null,
     quantidade_l: roundVolume(c.quantidade_l || 0),
     quantidade_kg: roundMass(c.quantidade_kg || 0),
     transbordo_codigo: meta.transbordo_codigo || c.transbordo_codigo || null,
     data: meta.data || c.data || null,
   }));
-  return [...base, ...extras].filter((c) => (c.quantidade_l || 0) > 0);
+  return [...base, ...extras].filter(
+    (c) => (c.quantidade_l || 0) > 0 || (c.quantidade_kg || 0) > 0
+  );
 }
 
 function transbordoOpCodes(transbordos = []) {

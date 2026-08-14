@@ -25,6 +25,7 @@ import {
 } from "@transbordo/lib/estoqueSaldo";
 import {
   saidaHasIndustrializacaoItems,
+  isSaidaModuloChemflow,
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
 } from "@transbordo/lib/saidaOrigem";
@@ -55,12 +56,14 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * Tela de listagem de saídas.
  * `basePath` / `title` permitem reutilizar a mesma UI no Painel / Industrialização.
  * `onlyIndustrializacao` limita à saídas com itens do módulo Industrialização.
+ * `excludeChemflow` oculta saídas criadas no ChemFlow (transbordo).
  * `statusMode`: "validacao" (ChemFlow) | "expedicao" (Painel Comercial — Expedido/Aguardando).
  */
 export default function Saida({
   basePath = DEFAULT_BASE_PATH,
   title = "Saídas",
   onlyIndustrializacao = false,
+  excludeChemflow = false,
   statusMode = "validacao",
 } = {}) {
   const navigate = useNavigate();
@@ -99,9 +102,13 @@ export default function Saida({
           ? entities.agendamentosCarregamento.list("-created_at").catch(() => [])
           : Promise.resolve([]),
       ]);
-      const list = onlyIndustrializacao
-        ? (saics || []).filter(saidaHasIndustrializacaoItems)
-        : saics || [];
+      let list = saics || [];
+      if (onlyIndustrializacao) {
+        list = list.filter(saidaHasIndustrializacaoItems);
+      }
+      if (excludeChemflow) {
+        list = list.filter((s) => !isSaidaModuloChemflow(s));
+      }
       setSaidas(list);
       setClientes(cliens);
       setEntradas(ents);
@@ -118,7 +125,7 @@ export default function Saida({
 
   useEffect(() => {
     loadData();
-  }, [onlyIndustrializacao, isExpedicao]);
+  }, [onlyIndustrializacao, excludeChemflow, isExpedicao]);
 
   const getExpedicaoStatus = (saida) =>
     isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";

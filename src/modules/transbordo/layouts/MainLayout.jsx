@@ -1,7 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import AppShell from '@shared/components/layout/AppShell';
 import Sidebar from '@transbordo/components/Sidebar';
-import { BackToChemCtrlButton } from '@transbordo/components/user/BackToChemCtrlButton';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { canAccessRoute } from '@industrializacao/lib/permissions';
 import {
@@ -31,9 +30,8 @@ export default function MainLayout() {
     <AppShell
       sidebar={<Sidebar />}
       banner={banner}
-      topBarProps={{
-        topBarActions: <BackToChemCtrlButton />,
-      }}
+      contentClassName="overflow-hidden"
+      topBarProps={{}}
     />
   );
 }

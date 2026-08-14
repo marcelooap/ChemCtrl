@@ -164,28 +164,28 @@ export default function IsotanquesTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
       {/* Search + Buttons */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="shrink-0 flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código ITKU, tanka, produto ou cliente..."
-            className="pl-10 bg-white"
+            className="pl-10 bg-white h-9"
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             onClick={() => setDescontamOpen(true)}
-            className="gap-2 border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900"
+            className="gap-2 h-9 border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-900"
           >
             <Sparkles className="w-4 h-4" />
             Descontaminação
           </Button>
-          <Button onClick={handleNew} className="gap-2">
+          <Button onClick={handleNew} className="gap-2 h-9">
             <Plus className="w-4 h-4" />
             Novo Isotanque
           </Button>
@@ -193,8 +193,8 @@ export default function IsotanquesTab() {
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-320px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-foreground/70 border-b-2 border-border bg-muted uppercase tracking-wide sticky top-0 z-10">

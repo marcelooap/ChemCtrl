@@ -238,7 +238,7 @@ export default function Home() {
   const estoqueNok = estoque.filter((e) => !e.status_wms);
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto space-y-6">
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Home</h1>

@@ -6,6 +6,7 @@ import {
 } from '@industrializacao/lib/fractionalSupply';
 import { resolveProductCode } from '@industrializacao/lib/recipeRevisions';
 import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
+import { parseNumero } from '@transbordo/lib/format';
 import { entities } from '@transbordo/services/entities';
 
 const UUID_RE =
@@ -64,6 +65,13 @@ export function isIndContainerEmEstoque(container) {
   return (container.status || '') === 'No Pátio';
 }
 
+function rowCreatedAtMs(row) {
+  const raw = row?.createdAt;
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 export function mapTransbordoVasilhame(vasilhame, reservas = []) {
   const origemId = vasilhame.id;
   const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, origemId);
@@ -81,6 +89,7 @@ export function mapTransbordoVasilhame(vasilhame, reservas = []) {
     volume: Number(vasilhame.volume) || 0,
     massa: Number(vasilhame.peso_liquido) || 0,
     lote: dash(getDominantLote(vasilhame.composicao) || vasilhame.lote),
+    createdAt: vasilhame.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     source: vasilhame,
   };
@@ -105,6 +114,7 @@ export function mapIndContainer(container, reservas = [], recipes = [], producti
     volume: containerDisplayVolume(container, productions),
     massa: containerDisplayNetWeight(container, productions, recipes),
     lote: dash(container.lot),
+    createdAt: container.created_date || container.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     source: container,
   };
@@ -125,11 +135,10 @@ export function buildVasilhameReservaRows({
     .filter(isIndContainerEmEstoque)
     .map((c) => mapIndContainer(c, reservas, recipes, productions));
 
+  // Mais recente no topo (último cadastrado primeiro), sem agrupar por origem.
   return [...transbordo, ...industrializacao].sort((a, b) => {
-    const byOrigem = String(a.origem).localeCompare(String(b.origem), 'pt-BR');
-    if (byOrigem !== 0) return byOrigem;
-    const byCliente = String(a.clienteNome).localeCompare(String(b.clienteNome), 'pt-BR');
-    if (byCliente !== 0) return byCliente;
+    const byCreated = rowCreatedAtMs(b) - rowCreatedAtMs(a);
+    if (byCreated !== 0) return byCreated;
     return String(a.displayId).localeCompare(String(b.displayId), 'pt-BR', { numeric: true });
   });
 }
@@ -150,6 +159,98 @@ export async function loadIndustrializacaoVasilhames() {
     console.warn('[ReservarMaterial] industrialização:', err);
     return { containers: [], productions: [], recipes: [] };
   }
+}
+
+function normKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isUnidadeVolume(unidade) {
+  const u = String(unidade || '')
+    .trim()
+    .toLowerCase();
+  return u === 'l' || u === 'lt' || u === 'litro' || u === 'litros' || u === 'gal';
+}
+
+function isUnidadeMassa(unidade) {
+  const u = String(unidade || '')
+    .trim()
+    .toLowerCase();
+  return (
+    u === 'kg' ||
+    u === 'kgs' ||
+    u === 'quilo' ||
+    u === 'quilos' ||
+    u === 'lb' ||
+    u === 'lbs'
+  );
+}
+
+/** Litros: trata milhar BR ("5.000") que Number/parseFloat interpretaria como 5. */
+function parseLitros(value) {
+  if (value == null || value === '') return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const s = String(value).trim();
+  if (!s || s === '-') return 0;
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    const n = parseFloat(s.replace(/\./g, ''));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return parseNumero(s);
+}
+
+/**
+ * Soma o conteúdo dos vasilhames de transbordo com reserva comercial ativa,
+ * na unidade do estoque de produtos (L → volume; kg → peso líquido).
+ */
+export function sumReservadoVasilhamesConteudo(
+  vasilhames = [],
+  reservas = [],
+  { clienteId, clienteNome, produtoCodigo, produtoNome, unidade } = {}
+) {
+  const cod = normKey(produtoCodigo);
+  const nome = produtoNome != null ? normKey(produtoNome) : '';
+  const cliNome = normKey(clienteNome);
+  const cliId = clienteId ? String(clienteId).trim() : '';
+  const asVolume = isUnidadeVolume(unidade);
+  const asMassa = isUnidadeMassa(unidade);
+  if (!asVolume && !asMassa) return 0;
+
+  return (vasilhames || []).reduce((sum, v) => {
+    if (!v || (v.tipo || '') === 'Tankagem') return sum;
+    if ((v.status || 'No Pátio') !== 'No Pátio') return sum;
+
+    const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id);
+    if (!isVasilhameReservado(reservas, chave)) return sum;
+
+    if (cod && normKey(v.produto_codigo) !== cod) return sum;
+    if (nome && nome !== '—') {
+      const vNome = normKey(v.produto_nome);
+      if (vNome && vNome !== '—' && vNome !== nome) return sum;
+    }
+
+    const vId = v.cliente_id ? String(v.cliente_id).trim() : '';
+    const vCliNome = normKey(v.cliente_nome);
+    let sameCliente = false;
+    if (cliId && vId) sameCliente = cliId === vId;
+    else if (cliNome && vCliNome) sameCliente = cliNome === vCliNome;
+    else if (cliId && !vId && cliNome && vCliNome) sameCliente = cliNome === vCliNome;
+    else if (!cliId && cliNome && vId && vCliNome) sameCliente = cliNome === vCliNome;
+    else sameCliente = !cliId && !cliNome && !vId && !vCliNome;
+    if (!sameCliente) return sum;
+
+    if (asVolume) {
+      const volume = parseLitros(v.volume);
+      const capacidade = parseLitros(v.capacidade);
+      return sum + (volume > 0 ? volume : capacidade);
+    }
+
+    return sum + (parseNumero(v.peso_liquido) || 0);
+  }, 0);
 }
 
 /**

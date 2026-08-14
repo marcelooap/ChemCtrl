@@ -1,19 +1,10 @@
 import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Trash2, Truck } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Truck, X } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@shared/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -36,9 +27,16 @@ import { migrateEstoqueEmbaladoParaVasilhames, normalizeBarrilEmbalagensUnitaria
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromVasilhame,
+  isVasilhameLinkedToEstoque,
+  findTransbordosForVasilhame,
+  isEstoqueEmbalado,
+  getEstoqueUnidadeEntrada,
+  isUnidadeVolumeEntrada,
+  normalizeUnidadeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   isDestinoEmbalagemUnitaria,
+  isVasilhameLegadoEmbalado,
   getQuantidadeEmbalagensFromVasilhame,
   getVolumePorEmbalagemFromVasilhame,
   buildPlacaEmbalagens,
@@ -49,6 +47,143 @@ import {
   needsVasilhameYardVolumeHeal,
 } from "@transbordo/lib/vasilhamePatio";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+
+function labelUnidadeEntrada(unidade) {
+  const u = normalizeUnidadeEntrada(unidade);
+  if (u === "l") return "L";
+  if (u === "gal") return "gal";
+  if (u === "kg") return "kg";
+  if (u === "lb") return "lb";
+  return String(unidade || "").trim() || "";
+}
+
+/** Resolve se o vasilhame veio de estoque embalado e a UOM da entrada. */
+function resolveVasilhameMedida(vasilhame, transbordos = [], estoqueById = null) {
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
+  if (estoqueById) {
+    for (const c of composicao) {
+      const est =
+        estoqueById.get(c.estoque_id) || estoqueById.get(c.entrada_id);
+      if (!est) continue;
+      return {
+        embalado: isEstoqueEmbalado(est),
+        unidade: getEstoqueUnidadeEntrada(est),
+      };
+    }
+  }
+
+  const related = findTransbordosForVasilhame(vasilhame, transbordos);
+  for (const t of related) {
+    for (const o of t.origens || []) {
+      if (o.tipo_origem === "embalado" || o.embalado) {
+        return {
+          embalado: true,
+          unidade: o.unidade_medida || "kg",
+        };
+      }
+      if (
+        o.entrada_id &&
+        (!o.tipo_origem ||
+          o.tipo_origem === "entrada" ||
+          o.tipo_origem === "estoque")
+      ) {
+        const est = estoqueById?.get(o.entrada_id);
+        if (est) {
+          return {
+            embalado: isEstoqueEmbalado(est),
+            unidade: getEstoqueUnidadeEntrada(est),
+          };
+        }
+        return {
+          embalado: false,
+          unidade: o.unidade_medida || "L",
+        };
+      }
+    }
+  }
+
+  if (
+    isDestinoEmbalagemUnitaria(vasilhame?.tipo) ||
+    isVasilhameLegadoEmbalado(vasilhame?.tipo)
+  ) {
+    return { embalado: true, unidade: "kg" };
+  }
+  return { embalado: false, unidade: "L" };
+}
+
+function renderVolumeQuantidadeCells(vasilhame, medida) {
+  const fracionadoBadge =
+    vasilhame.fracionado &&
+    new Set(
+      (vasilhame.composicao || [])
+        .map((c) => (c.lote || "").trim())
+        .filter(Boolean)
+    ).size <= 1 ? (
+      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
+        Fracionado
+      </span>
+    ) : null;
+
+  const umLabel = labelUnidadeEntrada(medida.unidade);
+  const isEmbalado = Boolean(medida.embalado);
+  const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
+
+  if (isEmbalado && !umIsVolume) {
+    const qtd =
+      Number(vasilhame.volume) > 0
+        ? Number(vasilhame.volume)
+        : Number(vasilhame.peso_liquido) || 0;
+    const qtdTxt =
+      qtd > 0
+        ? `${formatMass(qtd, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
+        : "-";
+    return {
+      volume: <span className="text-muted-foreground">-</span>,
+      quantidade: (
+        <span className="inline-flex items-center whitespace-nowrap">
+          {qtdTxt}
+          {fracionadoBadge}
+        </span>
+      ),
+    };
+  }
+
+  if (isEmbalado && umIsVolume) {
+    const qtd = Number(vasilhame.volume) || 0;
+    const volTxt =
+      qtd > 0
+        ? `${formatVolume(qtd, { empty: "-" })} ${umLabel || "L"}`
+        : "-";
+    return {
+      volume: (
+        <span className="inline-flex items-center whitespace-nowrap">
+          {volTxt}
+          {fracionadoBadge}
+        </span>
+      ),
+      quantidade: <span className="whitespace-nowrap">{volTxt}</span>,
+    };
+  }
+
+  // Granel: volume em L + quantidade em kg
+  const vol = Number(vasilhame.volume) || 0;
+  const mass = Number(vasilhame.peso_liquido) || 0;
+  return {
+    volume: (
+      <span className="inline-flex items-center whitespace-nowrap">
+        {vol > 0 ? `${formatVolume(vol, { empty: "-" })} L` : "-"}
+        {fracionadoBadge}
+      </span>
+    ),
+    quantidade: (
+      <span className="whitespace-nowrap">
+        {mass > 0 ? `${formatMass(mass, { empty: "-" })} kg` : "-"}
+      </span>
+    ),
+  };
+}
 
 export default function Vasilhames() {
   const [vasilhames, setVasilhames] = useState([]);
@@ -62,15 +197,50 @@ export default function Vasilhames() {
   const [readOnly, setReadOnly] = useState(false);
   const [viewVasilhame, setViewVasilhame] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
   const [saidaVasilhame, setSaidaVasilhame] = useState(null);
   const [saidaData, setSaidaData] = useState("");
   const [saidaQtdEmbalagens, setSaidaQtdEmbalagens] = useState("");
   const [saidaError, setSaidaError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [transbordos, setTransbordos] = useState([]);
+  const [estoqueById, setEstoqueById] = useState(() => new Map());
+  const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const estoqueFilterId = location.state?.estoqueId || null;
+  const estoqueFilterCodigo = location.state?.estoqueCodigo || null;
 
-  const loadData = async () => {
-    setLoading(true);
+  const clearEstoqueFilter = () => {
+    setEstoqueFilterItem(null);
+    navigate(location.pathname, { replace: true, state: {} });
+  };
+
+  useEffect(() => {
+    if (!estoqueFilterId) {
+      setEstoqueFilterItem(null);
+      return;
+    }
+    let cancelled = false;
+    entities.estoque
+      .list()
+      .then((list) => {
+        if (cancelled) return;
+        setEstoqueFilterItem(
+          (list || []).find((e) => e.id === estoqueFilterId) || {
+            id: estoqueFilterId,
+          }
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEstoqueFilterItem({ id: estoqueFilterId });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [estoqueFilterId]);
+
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       try {
         const mig = await migrateEstoqueEmbaladoParaVasilhames();
@@ -85,12 +255,17 @@ export default function Vasilhames() {
         console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
 
-      const [vas, prods, cliens, trans] = await Promise.all([
+      const [vas, prods, cliens, trans, ests] = await Promise.all([
         entities.vasilhames.list("-created_date"),
         entities.produtos.list(),
         entities.clientes.list(),
         entities.transbordos.list(),
+        entities.estoque.list(),
       ]);
+      setTransbordos(trans);
+      setEstoqueById(
+        new Map((ests || []).filter((e) => e?.id).map((e) => [e.id, e]))
+      );
 
       const { kept, deletedIds } = await unifyDuplicateVasilhames(vas, entities);
       let list =
@@ -183,9 +358,9 @@ export default function Vasilhames() {
       setProdutos(prods);
       setClientes(cliens);
     } catch {
-      setVasilhames([]);
+      if (!silent) setVasilhames([]);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -195,6 +370,18 @@ export default function Vasilhames() {
   const filtered = vasilhames.filter((v) => {
     // Tankagem fica só na tela de Tankagem
     if ((v.tipo || "") === "Tankagem") return false;
+
+    if (estoqueFilterId) {
+      if (!estoqueFilterItem) return false;
+      if (
+        !isVasilhameLinkedToEstoque(v, estoqueFilterItem, {
+          transbordos,
+          vasilhames,
+        })
+      ) {
+        return false;
+      }
+    }
 
     const q = search.toLowerCase();
     const matchSearch =
@@ -274,7 +461,55 @@ export default function Vasilhames() {
 
     let saved = editingVasilhame;
     if (editingVasilhame) {
-      let payload = data;
+      let payload = { ...data };
+      const newLote = String(data?.lote ?? "").trim();
+      const oldLote = String(editingVasilhame.lote || "").trim();
+
+      // Lote da tela é o campo editável; a composição precisa acompanhar,
+      // senão loadData/normalizeVasilhameLote reverte pelo lote dominante.
+      if (newLote !== oldLote) {
+        const prevComp = Array.isArray(editingVasilhame.composicao)
+          ? editingVasilhame.composicao
+          : [];
+        const uniqueLotes = new Set(
+          prevComp
+            .map((c) => String(c.lote || "").trim())
+            .filter(Boolean)
+        );
+        let nextComp;
+        if (prevComp.length === 0) {
+          const vol = Number(data.volume ?? editingVasilhame.volume) || 0;
+          nextComp = newLote
+            ? [
+                {
+                  lote: newLote,
+                  quantidade_l: vol,
+                  quantidade_kg:
+                    Number(data.peso_liquido ?? editingVasilhame.peso_liquido) ||
+                    0,
+                  estoque_id:
+                    editingVasilhame.composicao?.[0]?.estoque_id || null,
+                  entrada_id:
+                    editingVasilhame.composicao?.[0]?.entrada_id || null,
+                  transbordo_codigo:
+                    editingVasilhame.numero_op ||
+                    editingVasilhame.codigo ||
+                    null,
+                },
+              ]
+            : [];
+        } else if (uniqueLotes.size <= 1) {
+          nextComp = prevComp.map((c) => ({ ...c, lote: newLote }));
+        } else {
+          nextComp = prevComp.map((c) => {
+            const cl = String(c.lote || "").trim();
+            if (!oldLote || cl === oldLote) return { ...c, lote: newLote };
+            return c;
+          });
+        }
+        payload = { ...payload, lote: newLote || null, composicao: nextComp };
+      }
+
       if (prevExpedido && !nextExpedido) {
         try {
           const [saidasList, trans] = await Promise.all([
@@ -291,19 +526,21 @@ export default function Vasilhames() {
           });
           if (restore) {
             payload = {
-              ...data,
+              ...payload,
               ...restore,
-              // Mantém volume/peso do formulário se o usuário já informou valores > 0
               volume:
-                Number(data.volume) > 0 ? data.volume : restore.volume,
+                Number(payload.volume) > 0 ? payload.volume : restore.volume,
               peso_liquido:
-                Number(data.peso_liquido) > 0
-                  ? data.peso_liquido
+                Number(payload.peso_liquido) > 0
+                  ? payload.peso_liquido
                   : restore.peso_liquido,
               peso_bruto:
-                Number(data.peso_bruto) > 0
-                  ? data.peso_bruto
+                Number(payload.peso_bruto) > 0
+                  ? payload.peso_bruto
                   : restore.peso_bruto,
+              // Não deixa o restore apagar o lote/composição recém-editados
+              lote: payload.lote,
+              ...(payload.composicao ? { composicao: payload.composicao } : {}),
             };
           }
         } catch (restoreErr) {
@@ -324,19 +561,9 @@ export default function Vasilhames() {
       await syncEstoqueFromVasilhame(saved);
     }
 
-    await loadData();
+    await loadData({ silent: true });
     setModalOpen(false);
     setEditingVasilhame(null);
-  };
-
-  const handleDelete = async () => {
-    try {
-      await entities.vasilhames.delete(deleteId);
-      await loadData();
-    } catch {
-      // ignore
-    }
-    setDeleteId(null);
   };
 
   const handleSaida = (v) => {
@@ -375,7 +602,7 @@ export default function Vasilhames() {
         await entities.vasilhames.update(saidaVasilhame.id, patch);
         updatedVasilhame = { ...saidaVasilhame, ...patch };
         await syncEstoqueFromVasilhame(updatedVasilhame);
-        await loadData();
+        await loadData({ silent: true });
         setSaidaVasilhame(null);
         setSaidaData("");
         setSaidaQtdEmbalagens("");
@@ -469,7 +696,7 @@ export default function Vasilhames() {
       // Abate/restaura saldo do estoque de origem (ex.: E012 via OP T008)
       await syncEstoqueFromVasilhame(updatedVasilhame);
 
-      await loadData();
+      await loadData({ silent: true });
       setSaidaVasilhame(null);
       setSaidaData("");
       setSaidaQtdEmbalagens("");
@@ -494,55 +721,71 @@ export default function Vasilhames() {
   const volumePatio = noPatio.reduce((sum, v) => sum + (v.volume || 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Vasilhames / Envase</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Vasilhames / Envase</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
+          </div>
+          <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
+            <Plus className="w-4 h-4" />
+            Adicionar Tanque
+          </Button>
         </div>
-        <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-          <Plus className="w-4 h-4" />
-          Adicionar Tanque
-        </Button>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar produto, nº placa, nº barril, cliente..."
-            className="pl-10 bg-card"
-          />
-        </div>
-        <div className="w-48">
-          <SearchableSelect
-            value={statusFilter}
-            onChange={(label) => setStatusFilter(label)}
-            options={statusFilterOptions}
-            getOptionLabel={(o) => o.label}
-            getOptionValue={(o) => o.value}
-            placeholder="Todos"
-          />
-        </div>
-        <div className="w-56">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-          />
+        {/* Filters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar produto, nº placa, nº barril, cliente..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          {estoqueFilterId && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+              Estoque {estoqueFilterCodigo || estoqueFilterId}
+              <button
+                type="button"
+                onClick={clearEstoqueFilter}
+                className="hover:text-primary/80"
+                title="Limpar filtro de estoque"
+                aria-label="Limpar filtro de estoque"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="w-48">
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(label) => setStatusFilter(label)}
+              options={statusFilterOptions}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder="Todos"
+            />
+          </div>
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+            />
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-260px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
@@ -553,8 +796,8 @@ export default function Vasilhames() {
                 <th className="px-4 py-3 font-medium">Produto</th>
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Lote</th>
-                <th className="px-4 py-3 font-medium">Volume (L)</th>
-                <th className="px-4 py-3 font-medium">Massa (kg)</th>
+                <th className="px-4 py-3 font-medium">Volume</th>
+                <th className="px-4 py-3 font-medium">Quantidade</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Data Saída</th>
                 <th className="px-4 py-3 font-medium">Ações</th>
@@ -577,6 +820,9 @@ export default function Vasilhames() {
                 filtered.map((v, i) => {
                   const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
                   const isExpedido = status === "Expedido";
+                  const medida = resolveVasilhameMedida(v, transbordos, estoqueById);
+                  const { volume: volumeCell, quantidade: quantidadeCell } =
+                    renderVolumeQuantidadeCells(v, medida);
                   return (
                     <tr
                       key={v.id}
@@ -592,8 +838,10 @@ export default function Vasilhames() {
                       <td className="px-4 py-3 text-muted-foreground">{v.cliente_nome || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {(() => {
-                          const dominant =
-                            getDominantLote(v.composicao) || v.lote || "-";
+                          const displayLote =
+                            (v.lote || "").trim() ||
+                            getDominantLote(v.composicao) ||
+                            "-";
                           const uniqueLotes = new Set(
                             (v.composicao || [])
                               .map((c) => (c.lote || "").trim())
@@ -603,7 +851,7 @@ export default function Vasilhames() {
                           ).size;
                           return (
                             <span className="inline-flex items-center gap-1.5">
-                              <span>{dominant}</span>
+                              <span>{displayLote}</span>
                               {uniqueLotes > 1 && (
                                 <span
                                   className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
@@ -617,19 +865,11 @@ export default function Vasilhames() {
                         })()}
                       </td>
                       <td className="px-4 py-3 text-foreground font-medium whitespace-nowrap">
-                        {formatVolume(v.volume, { empty: "-" })}
-                        {v.fracionado &&
-                          new Set(
-                            (v.composicao || [])
-                              .map((c) => (c.lote || "").trim())
-                              .filter(Boolean)
-                          ).size <= 1 && (
-                          <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
-                            Fracionado
-                          </span>
-                        )}
+                        {volumeCell}
                       </td>
-                      <td className="px-4 py-3 text-foreground font-medium">{formatMass(v.peso_liquido, { empty: "-" })}</td>
+                      <td className="px-4 py-3 text-foreground font-medium">
+                        {quantidadeCell}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -647,9 +887,6 @@ export default function Vasilhames() {
                           </button>
                           <button onClick={() => handleEdit(v)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Editar">
                             <Pencil className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => setDeleteId(v.id)} className="text-red-400 hover:text-red-600 transition-colors" title="Excluir">
-                            <Trash2 className="w-4 h-4" />
                           </button>
                           <button onClick={() => handleSaida(v)} className="text-muted-foreground hover:text-primary transition-colors" title="Lançar Saída">
                             <Truck className="w-4 h-4" />
@@ -702,24 +939,6 @@ export default function Vasilhames() {
         }}
         vasilhame={viewVasilhame}
       />
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir este vasilhame? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Saída Dialog */}
       <Dialog

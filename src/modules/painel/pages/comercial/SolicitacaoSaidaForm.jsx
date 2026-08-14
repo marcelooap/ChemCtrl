@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SaidaForm from '@transbordo/pages/SaidaForm';
 import AgendamentoPosSaidaModal from '@painel/components/comercial/AgendamentoPosSaidaModal';
+import { MODULO_SAIDA_PAINEL } from '@transbordo/lib/saidaOrigem';
 
 const BASE_PATH = '/painel/comercial/solicitacoes-saida';
 
@@ -15,6 +16,7 @@ export default function SolicitacaoSaidaForm() {
       <SaidaForm
         basePath={BASE_PATH}
         enableMultiOrigem
+        moduloOrigem={MODULO_SAIDA_PAINEL}
         onCreateSuccess={setSaidaParaAgendar}
       />
       <AgendamentoPosSaidaModal

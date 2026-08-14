@@ -150,6 +150,7 @@ create trigger t_entradas_set_updated_at
 -- ============================================================
 create table if not exists t_estoque (
   id uuid primary key default gen_random_uuid(),
+  codigo_estoque integer,
   entrada_id uuid references t_entradas(id) on delete cascade,
   entrada_codigo text,
   grupo_entrada text,
@@ -302,6 +303,11 @@ create table if not exists t_saidas (
   -- não possui tabela própria de usuários (autenticação é da plataforma).
   usuario_criador text,
   usuario_responsavel text,
+  -- Módulo que criou a saída: chemflow | painel | industrializacao
+  modulo_origem text check (
+    modulo_origem is null
+    or modulo_origem in ('chemflow', 'painel', 'industrializacao')
+  ),
   status text not null default 'aguardando' check (status in ('aguardando', 'enviado_fiscal')),
   enviado_ao_fiscal boolean not null default false,
   enviado_fiscal_usuario text,
@@ -426,6 +432,7 @@ create index if not exists idx_t_saidas_status on t_saidas (status);
 create index if not exists idx_t_saidas_cliente_id on t_saidas (cliente_id);
 create index if not exists idx_t_saidas_data_programada on t_saidas (data_programada);
 create index if not exists idx_t_saidas_enviado_ao_fiscal on t_saidas (enviado_ao_fiscal);
+create index if not exists idx_t_saidas_modulo_origem on t_saidas (modulo_origem);
 create index if not exists idx_t_saidas_itens_gin on t_saidas using gin (itens);
 
 -- t_elementos_filtrantes

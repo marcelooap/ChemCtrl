@@ -458,9 +458,9 @@ export default function OrigemCard({
   );
 
   const destinosSection = (
-    <div className="space-y-3 pt-3 border-t border-border/70">
+    <div className="space-y-3 pt-4 mt-1 border-t border-primary/15">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-primary/80">
           Destinos
         </h4>
         {!readOnly && onAddDestino && (
@@ -477,9 +477,9 @@ export default function OrigemCard({
         )}
       </div>
 
-      <div className="pl-0 sm:pl-3 space-y-2 border-l-0 sm:border-l-2 sm:border-primary/20">
+      <div className="rounded-lg border border-dashed border-primary/25 bg-muted/30 p-3 space-y-2.5">
         {destinosCount === 0 ? (
-          <p className="text-sm text-muted-foreground py-3 px-3 border border-dashed border-border rounded-md">
+          <p className="text-sm text-muted-foreground py-3 px-2 text-center">
             Nenhum destino nesta origem.
           </p>
         ) : (
@@ -558,8 +558,8 @@ export default function OrigemCard({
   if (collapsed) {
     return (
       <div
-        className={`rounded-lg border border-border bg-muted/30 px-4 py-3 ${
-          onToggleCollapse ? "cursor-pointer hover:bg-muted/40 transition-colors" : ""
+        className={`rounded-xl border-2 border-primary/20 bg-card px-4 py-3.5 shadow-sm ${
+          onToggleCollapse ? "cursor-pointer hover:border-primary/35 hover:bg-muted/20 transition-colors" : ""
         }`}
         onClick={onToggleCollapse}
         role={onToggleCollapse ? "button" : undefined}
@@ -736,7 +736,7 @@ export default function OrigemCard({
   );
 
   return (
-    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+    <div className="rounded-xl border-2 border-primary/25 bg-card p-5 space-y-4 shadow-sm ring-1 ring-primary/5">
       {origemHeaderExpanded}
       {fieldsLocked}
       {fieldsNormal}

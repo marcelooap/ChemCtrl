@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
-import { Plus, AlertCircle, CheckCircle2, X, ChevronDown } from "lucide-react";
+import { Plus, AlertCircle, X, ChevronDown } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import OrigemCard from "./OrigemCard";
 import DestinoCard from "./DestinoCard";
@@ -207,6 +207,8 @@ export default function TransbordoModal({
   const [operadoresOpen, setOperadoresOpen] = useState(false);
   const [collapsedOrigens, setCollapsedOrigens] = useState({});
   const [collapsedDestinos, setCollapsedDestinos] = useState({});
+  /** Com origens: cabeçalho compacto (só cliente/produto), a menos que o usuário expanda. */
+  const [headerExpanded, setHeaderExpanded] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [pendingPayload, setPendingPayload] = useState(null);
@@ -240,6 +242,7 @@ export default function TransbordoModal({
       setDestinos([]);
       setCollapsedOrigens({});
       setCollapsedDestinos({});
+      setHeaderExpanded(true);
       setSaving(false);
       setConfirmOpen(false);
       setConfirmMessage("");
@@ -414,6 +417,8 @@ export default function TransbordoModal({
     // Ao vir da entrada, origem/destino abrem minimizados
     setCollapsedOrigens(fromPrefill ? collapseMap(nextOrigens) : {});
     setCollapsedDestinos(fromPrefill ? collapseMap(nextDestinos) : {});
+    // Com origens já carregadas, cabeçalho inicia compacto (cliente + produto).
+    setHeaderExpanded(nextOrigens.length === 0);
     setConfirmOpen(false);
     setConfirmMessage("");
     setPendingPayload(null);
@@ -691,31 +696,28 @@ export default function TransbordoModal({
     origens.reduce((sum, o) => sum + (o.volume_retirado || 0), 0)
   );
   const volumeDestinos = roundVolume(
-    destinos.reduce((sum, d) => sum + (d.volume_total || 0), 0)
+    destinos.reduce((sum, d) => sum + (d.volume_total || d.volume || 0), 0)
   );
-  const volumeDiff = Math.abs(volumeOrigens - volumeDestinos);
-  const volumePendente = roundVolume(volumeOrigens - volumeDestinos);
   const massaTotal = roundMass(volumeOrigens * densidade);
-  const volumesMatch = volumeDiff === 0;
-  const conferenciaAtiva = volumeOrigens > 0 || volumeDestinos > 0;
-  const progressoDestinado =
-    volumeOrigens > 0
-      ? Math.min(100, Math.round((volumeDestinos / volumeOrigens) * 100))
-      : 0;
-  const lotesOperacao = [
-    ...new Set(
-      origens
-        .flatMap((o) => {
-          const multi = (o.lotes_retirados || []).filter(
-            (l) => roundVolume(l.volume_retirado || 0) > 0
-          );
-          if (multi.length > 0) return multi.map((l) => l.lote || "");
-          return [o.lote || ""];
-        })
-        .map((l) => String(l).trim())
-        .filter(Boolean)
-    ),
-  ];
+  const volumesMatch = Math.abs(volumeOrigens - volumeDestinos) === 0;
+
+  const findOrigemDesbalanceada = () =>
+    origens.find((o) => {
+      const volO = roundVolume(o.volume_retirado || 0);
+      const volD = roundVolume(
+        destinos
+          .filter((d) => d.origem_uid === o._uid)
+          .reduce((s, d) => s + (d.volume_total || d.volume || 0), 0)
+      );
+      return volO !== volD;
+    });
+
+  const origemDesbalanceadaAtual = findOrigemDesbalanceada();
+  const resumoOrigemOk =
+    origens.length > 0 &&
+    destinos.length > 0 &&
+    !origemDesbalanceadaAtual &&
+    volumesMatch;
 
   const tankaExcedido = destinos.some((d) => {
     if (d.tipo_embalagem !== "Tankagem" || !d.tanka_id) return false;
@@ -797,11 +799,25 @@ export default function TransbordoModal({
     setCollapsedDestinos(
       Object.fromEntries(destinos.map((_, i) => [i, true]))
     );
+    // Foco na operação: cabeçalho compacto (cliente + produto).
+    setHeaderExpanded(false);
+    setOperadoresOpen(false);
+
+    const produtoEhEmbalado = entradas.some(
+      (e) =>
+        (e.embalado === true ||
+          e.lotes?.[0]?.embalado === true ||
+          e.lotes?.[0]?.tipo_recebimento === "embalado") &&
+        (e.produto_id === produtoId || e.produto_nome === produtoNome) &&
+        (e.saldo_atual || 0) > 0
+    );
+
     setOrigens((prev) => [
       ...prev,
       {
         _uid: createClientUid(),
-        tipo_origem: "",
+        tipo_origem: produtoEhEmbalado ? "embalado" : "",
+        embalado: produtoEhEmbalado,
         entrada_id: "",
         entrada_codigo: "",
         lote: "",
@@ -829,6 +845,7 @@ export default function TransbordoModal({
     const remainingDestinos = removedUid
       ? destinos.filter((d) => d.origem_uid !== removedUid)
       : destinos;
+    const remainingCount = origens.length - 1;
 
     setOrigens((prev) => prev.filter((_, i) => i !== idx));
     setDestinos(remainingDestinos);
@@ -844,6 +861,7 @@ export default function TransbordoModal({
       });
       return next;
     });
+    if (remainingCount <= 0) setHeaderExpanded(true);
   };
 
   const toggleOrigemCollapse = (idx) => {
@@ -1101,29 +1119,20 @@ export default function TransbordoModal({
       setError("Um ou mais destinos excedem a capacidade do tanka.");
       return;
     }
-    // Cada origem deve ter volume destinado igual ao retirado (necessário para o FIFO
-    // global continuar equivalente à alocação por origem na UI).
-    const origemDesbalanceada = origens.find((o) => {
-      const volO = roundVolume(o.volume_retirado || 0);
-      const volD = roundVolume(
-        destinos
-          .filter((d) => d.origem_uid === o._uid)
-          .reduce((s, d) => s + (d.volume_total || 0), 0)
-      );
-      return volO !== volD;
-    });
+    // Cada origem: quantidade retirada = destinada (mesmo critério do Resumo da origem).
+    const origemDesbalanceada = findOrigemDesbalanceada();
     if (origemDesbalanceada) {
       const label =
         origemDesbalanceada.entrada_codigo ||
         `Origem ${origens.indexOf(origemDesbalanceada) + 1}`;
       setError(
-        `A origem "${label}" não está balanceada: o volume destinado deve ser igual ao volume retirado.`
+        `Não é possível registrar: no resumo da origem "${label}", a quantidade retirada deve coincidir com a destinada.`
       );
       return;
     }
     if (!volumesMatch) {
       setError(
-        "O volume total das origens deve ser exatamente igual ao volume total dos destinos. Verifique os valores informados."
+        "Não é possível registrar: a quantidade total retirada nas origens deve ser igual à destinada."
       );
       return;
     }
@@ -1169,66 +1178,66 @@ export default function TransbordoModal({
             </div>
           )}
 
-          {/* 01 — Dados da Operação */}
-          <section className="space-y-4">
-            <div className="flex items-baseline gap-2 border-b border-border pb-2">
-              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
-                01
-              </span>
-              <h3 className="text-sm font-semibold text-primary">
-                Dados da Operação
-              </h3>
-            </div>
-
-            {(produtoNome || volumeOrigens > 0 || operadores.length > 0) && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 rounded-lg border border-border/80 bg-muted/20 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Produto
-                  </p>
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {produtoNome || "—"}
-                  </p>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Lote
-                  </p>
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {lotesOperacao.length > 0 ? lotesOperacao.join(" / ") : "—"}
-                  </p>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Volume da operação
-                  </p>
-                  <p className="text-sm font-semibold text-foreground tabular-nums">
-                    {formatVolume(volumeOrigens)} L
-                  </p>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Operadores
-                  </p>
-                  <p className="text-sm font-semibold text-foreground truncate">
-                    {operadores.length > 0 ? operadores.join(" / ") : "—"}
-                  </p>
-                </div>
+          {/* Dados da operação — compacto com origens (só cliente + produto) */}
+          <section
+            className={`rounded-lg border transition-all ${
+              origens.length > 0 && !headerExpanded
+                ? "border-border/70 bg-muted/20 px-3 py-2.5 space-y-0"
+                : "border-transparent space-y-4"
+            }`}
+          >
+            {origens.length > 0 && (
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {headerExpanded ? "Dados da operação" : "Operação"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setHeaderExpanded((v) => !v)}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-1 rounded-md hover:bg-muted/60"
+                  aria-expanded={headerExpanded}
+                  aria-label={
+                    headerExpanded
+                      ? "Recolher dados da operação"
+                      : "Expandir dados da operação"
+                  }
+                >
+                  {headerExpanded ? "Recolher" : "Mais detalhes"}
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${
+                      headerExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label>Data *</Label>
-                <Input
-                  type="date"
-                  value={data}
-                  onChange={(e) => setData(e.target.value)}
-                  disabled={readOnly}
-                  className={INPUT_EDITABLE}
-                />
-              </div>
-              <div className="space-y-1.5">
+            <div
+              className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${
+                origens.length > 0 && !headerExpanded
+                  ? ""
+                  : "lg:grid-cols-12 gap-4"
+              }`}
+            >
+              {(origens.length === 0 || headerExpanded) && (
+                <div className="space-y-1.5 lg:col-span-2">
+                  <Label>Data *</Label>
+                  <Input
+                    type="date"
+                    value={data}
+                    onChange={(e) => setData(e.target.value)}
+                    disabled={readOnly}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+              <div
+                className={`space-y-1.5 ${
+                  origens.length > 0 && !headerExpanded
+                    ? ""
+                    : "lg:col-span-4"
+                }`}
+              >
                 <Label>Cliente *</Label>
                 <SearchableSelect
                   value={clienteNome}
@@ -1241,7 +1250,13 @@ export default function TransbordoModal({
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div
+                className={`space-y-1.5 ${
+                  origens.length > 0 && !headerExpanded
+                    ? "sm:col-span-1"
+                    : "sm:col-span-2 lg:col-span-6"
+                }`}
+              >
                 <Label>Produto *</Label>
                 <SearchableSelect
                   value={produtoDisplay}
@@ -1249,90 +1264,120 @@ export default function TransbordoModal({
                   options={produtosComSaldo}
                   getOptionLabel={(p) => `${p.codigo || ""} - ${p.produto}`}
                   getOptionValue={(p) => p.id}
-                  placeholder={clienteNome ? "Selecione um produto" : "Selecione um cliente primeiro"}
+                  placeholder={
+                    clienteNome
+                      ? "Selecione um produto"
+                      : "Selecione um cliente primeiro"
+                  }
                   disabled={readOnly || !clienteNome}
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
             </div>
 
-            {/* Operadores Multi-Select */}
-            <div className="space-y-1.5">
-              <Label>Operadores *</Label>
-              <div className="relative" ref={operadoresRef}>
-                <button
-                  type="button"
-                  onClick={() => !readOnly && setOperadoresOpen(!operadoresOpen)}
-                  disabled={readOnly}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-white text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
-                >
-                  <span className={operadores.length ? "text-foreground" : "text-muted-foreground"}>
-                    {operadores.length
-                      ? `${operadores.length} operador(es) selecionado(s)`
-                      : "Selecionar operadores"}
-                  </span>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${operadoresOpen ? "rotate-180" : ""}`} />
-                </button>
-                {operadoresOpen && !readOnly && (
-                  <div className="absolute z-50 mt-1 w-full bg-card rounded-md border border-border shadow-lg overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto">
-                      {OPERADORES.map((op) => (
-                        <label
+            {(origens.length === 0 || headerExpanded) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Operadores Multi-Select */}
+                <div className="space-y-1.5">
+                  <Label>Operadores *</Label>
+                  <div className="relative" ref={operadoresRef}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        !readOnly && setOperadoresOpen(!operadoresOpen)
+                      }
+                      disabled={readOnly}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-white text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
+                    >
+                      <span
+                        className={
+                          operadores.length
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {operadores.length
+                          ? `${operadores.length} operador(es) selecionado(s)`
+                          : "Selecionar operadores"}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-muted-foreground transition-transform ${
+                          operadoresOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {operadoresOpen && !readOnly && (
+                      <div className="absolute z-50 mt-1 w-full bg-card rounded-md border border-border shadow-lg overflow-hidden">
+                        <div className="max-h-48 overflow-y-auto">
+                          {OPERADORES.map((op) => (
+                            <label
+                              key={op}
+                              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={operadores.includes(op)}
+                                onChange={() => toggleOperador(op)}
+                                className="w-4 h-4 rounded border-border"
+                              />
+                              <span className="text-foreground/80">{op}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {operadores.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {operadores.map((op) => (
+                        <span
                           key={op}
-                          className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
                         >
-                          <input
-                            type="checkbox"
-                            checked={operadores.includes(op)}
-                            onChange={() => toggleOperador(op)}
-                            className="w-4 h-4 rounded border-border"
-                          />
-                          <span className="text-foreground/80">{op}</span>
-                        </label>
+                          {op}
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => toggleOperador(op)}
+                              className="hover:text-blue-900"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </span>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-              {operadores.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {operadores.map((op) => (
-                    <span key={op} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                      {op}
-                      {!readOnly && (
-                        <button type="button" onClick={() => toggleOperador(op)} className="hover:text-blue-900">
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </span>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="space-y-1.5">
-              <Label>Observações</Label>
-              <Input
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Observações..."
-                disabled={readOnly}
-                className={INPUT_EDITABLE}
-              />
-            </div>
+                <div className="space-y-1.5">
+                  <Label>Observações</Label>
+                  <Input
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    placeholder="Observações..."
+                    disabled={readOnly}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              </div>
+            )}
           </section>
 
-          {/* 02 — Origens (com destinos aninhados) */}
-          <section className="space-y-3">
+          {/* Origens (com destinos aninhados) */}
+          <section
+            className={`space-y-3 ${
+              origens.length > 0 ? "pt-1" : ""
+            }`}
+          >
             <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
-                  02
-                </span>
-                <h3 className="text-sm font-semibold text-primary">
-                  Origens e Destinos
-                </h3>
-              </div>
+              <h3
+                className={`font-semibold text-primary ${
+                  origens.length > 0 ? "text-base" : "text-sm"
+                }`}
+              >
+                Origens e Destinos
+              </h3>
               {!readOnly && (
                 <Button
                   type="button"
@@ -1358,7 +1403,7 @@ export default function TransbordoModal({
                     .filter(({ d }) => d.origem_uid === origem._uid);
                   const volumeDestinadoOrigem = roundVolume(
                     destinosDaOrigem.reduce(
-                      (s, { d }) => s + (d.volume_total || 0),
+                      (s, { d }) => s + (d.volume_total || d.volume || 0),
                       0
                     )
                   );
@@ -1437,129 +1482,25 @@ export default function TransbordoModal({
             </div>
           </section>
 
-          {/* 03 — Conferência */}
-          <section className="space-y-3">
-            <div className="flex items-baseline gap-2 border-b border-border pb-2">
-              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">
-                03
-              </span>
-              <h3 className="text-sm font-semibold text-primary">
-                Conferência da Movimentação
-              </h3>
-            </div>
-
-            <div
-              className={`rounded-lg border p-5 space-y-5 ${
-                !conferenciaAtiva
-                  ? "border-border bg-muted/20"
-                  : volumesMatch
-                  ? "border-green-200 bg-green-50/40"
-                  : "border-amber-200 bg-amber-50/40"
-              }`}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="text-center space-y-1">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Volume Retirado
-                  </p>
-                  <p className="text-2xl font-bold tabular-nums text-foreground">
-                    {formatVolume(volumeOrigens)} L
-                  </p>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Volume Destinado
-                  </p>
-                  <p className="text-2xl font-bold tabular-nums text-foreground">
-                    {formatVolume(volumeDestinos)} L
-                  </p>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Diferença
-                  </p>
-                  <p
-                    className={`text-2xl font-bold tabular-nums ${
-                      !conferenciaAtiva
-                        ? "text-foreground"
-                        : volumesMatch
-                        ? "text-green-700"
-                        : "text-amber-700"
-                    }`}
-                  >
-                    {formatVolume(volumeDiff)} L
-                  </p>
-                </div>
-              </div>
-
-              {conferenciaAtiva && (
-                <div className="flex flex-col items-center gap-1 text-center">
-                  {volumesMatch ? (
-                    <>
-                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-green-700">
-                        <CheckCircle2 className="w-5 h-5" />
-                        Operação balanceada
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
-                        <AlertCircle className="w-5 h-5" />
-                        Divergência
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {volumePendente > 0
-                          ? `${formatVolume(volumePendente)} L ainda não destinados`
-                          : `${formatVolume(Math.abs(volumePendente))} L destinados a mais`}
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {volumeOrigens > 0 && (
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{formatVolume(volumeOrigens)} L retirados</span>
-                    <span className="font-medium text-foreground">{progressoDestinado}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        volumesMatch ? "bg-green-600" : "bg-primary"
-                      }`}
-                      style={{ width: `${progressoDestinado}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{formatVolume(volumeDestinos)} L destinados</span>
-                    {volumePendente > 0 && (
-                      <span>{formatVolume(volumePendente)} L pendentes</span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-border/70 flex justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Massa total:{" "}
-                  <span className="font-medium text-foreground">
-                    {formatMass(massaTotal)} kg
-                  </span>
-                </span>
-              </div>
-            </div>
-          </section>
-
           {!readOnly && (
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              {!resumoOrigemOk && origens.length > 0 && (
+                <p className="text-xs text-amber-700 sm:mr-auto order-last sm:order-first">
+                  Ajuste o resumo da origem: quantidade retirada e destinada devem coincidir.
+                </p>
+              )}
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 className="bg-primary hover:bg-primary/90"
-                disabled={saving}
+                disabled={saving || !resumoOrigemOk}
+                title={
+                  !resumoOrigemOk
+                    ? "Quantidade retirada e destinada devem coincidir no resumo da origem"
+                    : undefined
+                }
               >
                 {saving
                   ? "Salvando..."

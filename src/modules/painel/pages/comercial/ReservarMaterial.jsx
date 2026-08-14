@@ -418,7 +418,7 @@ export default function ReservarMaterial() {
 
         <TabsContent
           value="vasilhames"
-          className="flex-1 min-h-0 mt-4 overflow-auto data-[state=inactive]:hidden"
+          className="flex-1 min-h-0 mt-4 overflow-hidden data-[state=inactive]:hidden"
         >
           <VasilhamesReservaTable
             rows={filteredVasilhames}

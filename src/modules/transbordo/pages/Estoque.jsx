@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
+import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
-import { Button } from "@shared/components/ui/button";
+import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { Switch } from "@shared/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,14 +16,14 @@ import {
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
-import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
-import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
+import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 import { formatMass, formatVolume, formatCurrency } from "@transbordo/lib/format";
 import {
   computeEstoqueSaldo,
+  computeEstoqueQuantidadesPorLocal,
   getEstoqueQuantidade,
   getEstoqueUnidade,
   getEstoqueUnidadeEntrada,
@@ -33,8 +34,6 @@ import {
 import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
 import {
   resolveTipoRecebimentoEstoque,
-  getTipoRecebimentoLabel,
-  getTipoRecebimentoBadgeClass,
 } from "@transbordo/lib/tipoRecebimento";
 
 const STATUS_OPTIONS = [
@@ -42,6 +41,9 @@ const STATUS_OPTIONS = [
   { value: "ok", label: "OK" },
   { value: "nok", label: "NOK" },
 ];
+
+const TIPO_TAB_TRIGGER_CLASS =
+  "gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -70,7 +72,44 @@ function SaldoBadge({ children, tone }) {
   );
 }
 
+function LocalArmazenamentoCard({
+  title,
+  quantidade,
+  unidade,
+  estoqueItem,
+  onNavigate,
+  navigateLabel,
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
+            title={navigateLabel || "Abrir tela filtrada"}
+          >
+            Ver
+            <ExternalLink className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      <p className="text-sm font-semibold tabular-nums text-foreground">
+        {formatValorNaUnidadeEntrada(estoqueItem, quantidade)}{" "}
+        <span className="text-xs font-medium text-muted-foreground">
+          {unidade || ""}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 export default function Estoque() {
+  const navigate = useNavigate();
   const [estoque, setEstoque] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -81,13 +120,14 @@ export default function Estoque() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [tipoFilter, setTipoFilter] = useState("granel");
   const [editOpen, setEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [viewItem, setViewItem] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [expandedLocais, setExpandedLocais] = useState({});
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -176,53 +216,62 @@ export default function Estoque() {
     loadData();
   }, []);
 
-  /** Mesmo ID da tela de Entradas (E001…), para rastrear a origem. */
+  /** Código da entrada (E001…), para rastrear a origem. */
   const entradaIdMap = buildEntradaCodigoById(entradas);
 
-  const getEstoqueDisplayId = (e) => {
+  const getEstoqueEntradaLabel = (e) => {
     if (e?.entrada_id && entradaIdMap[e.entrada_id]) {
       return entradaIdMap[e.entrada_id];
     }
     return e?.entrada_codigo || "-";
   };
 
-  const filtered = estoque.filter((e) => {
-    const q = search.toLowerCase().trim();
-    const displayId = getEstoqueDisplayId(e).toLowerCase();
-    const matchSearch =
-      !q ||
-      displayId.includes(q) ||
-      e.entrada_codigo?.toLowerCase().includes(q) ||
-      e.produto_codigo?.toLowerCase().includes(q) ||
-      e.produto_nome?.toLowerCase().includes(q) ||
-      e.cliente_nome?.toLowerCase().includes(q) ||
-      e.lote?.toLowerCase().includes(q) ||
-      e.nota_fiscal?.toLowerCase().includes(q) ||
-      e.nota_fiscal_troca?.toLowerCase().includes(q);
+  const filtered = estoque
+    .filter((e) => {
+      const tipo = resolveTipoRecebimentoEstoque(e);
+      if (tipoFilter === "granel" && tipo !== "granel") return false;
+      if (tipoFilter === "embalado" && tipo !== "embalado") return false;
 
-    const matchStatus =
-      !statusFilter ||
-      statusFilter === "Todos" ||
-      (statusFilter === "OK" && e.status_wms) ||
-      (statusFilter === "NOK" && !e.status_wms);
+      const q = search.toLowerCase().trim();
+      const entradaLabel = getEstoqueEntradaLabel(e).toLowerCase();
+      const codigoEstoque = formatEstoqueCodigo(e.codigo_estoque).toLowerCase();
+      const matchSearch =
+        !q ||
+        codigoEstoque.includes(q) ||
+        entradaLabel.includes(q) ||
+        e.entrada_codigo?.toLowerCase().includes(q) ||
+        e.produto_codigo?.toLowerCase().includes(q) ||
+        e.produto_nome?.toLowerCase().includes(q) ||
+        e.cliente_nome?.toLowerCase().includes(q) ||
+        e.lote?.toLowerCase().includes(q) ||
+        e.nota_fiscal?.toLowerCase().includes(q) ||
+        e.nota_fiscal_troca?.toLowerCase().includes(q);
 
-    const matchCliente =
-      !clienteFilter ||
-      clienteFilter === "Todos os clientes" ||
-      e.cliente_nome === clienteFilter;
+      const matchStatus =
+        !statusFilter ||
+        statusFilter === "Todos" ||
+        (statusFilter === "OK" && e.status_wms) ||
+        (statusFilter === "NOK" && !e.status_wms);
 
-    return matchSearch && matchStatus && matchCliente;
-  });
+      const matchCliente =
+        !clienteFilter ||
+        clienteFilter === "Todos os clientes" ||
+        e.cliente_nome === clienteFilter;
+
+      return matchSearch && matchStatus && matchCliente;
+    })
+    .sort((a, b) => {
+      const ca = Number(a.codigo_estoque) || 0;
+      const cb = Number(b.codigo_estoque) || 0;
+      if (ca !== cb) return cb - ca; // mais novo (maior ID) no topo
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
 
   const totalSaldo = filtered.reduce((sum, e) => sum + (e.saldo_atual || 0), 0);
   const totalCusto = filtered.reduce(
     (sum, e) => sum + (e.saldo_atual || 0) * (e.preco_unitario || 0),
     0
   );
-
-  const handleNew = () => {
-    setModalOpen(true);
-  };
 
   const handleEdit = (item) => {
     setEditingItem(item);
@@ -342,76 +391,6 @@ export default function Estoque() {
     await loadData({ silent: true });
   };
 
-  const handleSave = async (data) => {
-    const sanitizeLotes = (lotes) =>
-      (lotes || []).map((l) => ({
-        ...l,
-        produto_id: nullIfEmpty(l.produto_id),
-        data_fabricacao: nullIfEmpty(l.data_fabricacao),
-        data_validade: nullIfEmpty(l.data_validade),
-      }));
-
-    const buildPayloadFromLote = (lote, { saldoAtual } = {}) => {
-      const loteQtd = loteQuantidadeEstoque(lote);
-      const preco = Number(lote.preco_unitario ?? data.preco_unitario) || 0;
-      const saldo = saldoAtual != null ? saldoAtual : loteQtd;
-      return {
-        cliente_id: nullIfEmpty(data.cliente_id),
-        cliente_nome: data.cliente_nome || "",
-        produto_id: nullIfEmpty(lote.produto_id || data.produto_id),
-        produto_nome: lote.produto_nome || data.produto_nome,
-        produto_codigo: lote.produto_codigo || data.produto_codigo,
-        nota_fiscal: lote.nota_fiscal,
-        lote: lote.lote,
-        densidade: lote.densidade ?? null,
-        data_fabricacao: nullIfEmpty(lote.data_fabricacao),
-        data_validade: nullIfEmpty(lote.data_validade),
-        quantidade: loteQtd,
-        unidade_medida: loteUnidadeEstoque(lote),
-        saldo_atual: saldo,
-        preco_unitario: preco,
-        custo_total: saldo * preco,
-        embalado: lote.embalado || false,
-        peso_liquido: lote.embalado ? lote.peso_liquido ?? null : null,
-        quantidade_embalagens: lote.embalado
-          ? lote.quantidade_embalagens ?? null
-          : null,
-        status_wms: data.status_wms || false,
-        origem: data.origem || null,
-        grupo_entrada: data.grupo_entrada || null,
-        granel_pesagem: data.granel_pesagem || false,
-        granel_ticket: data.granel_ticket || null,
-        granel_peso_bruto: data.granel_peso_bruto ?? null,
-        granel_validacao_bruto: data.granel_validacao_bruto ?? null,
-        granel_peso_liquido: data.granel_peso_liquido ?? null,
-        granel_validacao_liquido: data.granel_validacao_liquido ?? null,
-        granel_erro_admissivel: data.granel_erro_admissivel ?? null,
-        granel_peso_minimo: data.granel_peso_minimo ?? null,
-        granel_peso_maximo: data.granel_peso_maximo ?? null,
-        granel_margem: data.granel_margem || null,
-        lotes: sanitizeLotes([lote]),
-      };
-    };
-
-    let saved;
-    const lotes = data.lotes?.length ? data.lotes : [data];
-
-    if (lotes.length > 1) {
-      const grupoId = data.grupo_entrada || `GRP-${Date.now()}`;
-      const records = lotes.map((lote) => ({
-        ...buildPayloadFromLote(lote),
-        grupo_entrada: grupoId,
-      }));
-      saved = await entities.estoque.bulkCreate(records);
-    } else {
-      saved = [await entities.estoque.create(buildPayloadFromLote(lotes[0]))];
-    }
-
-    await loadData();
-    setModalOpen(false);
-    return saved;
-  };
-
   const handleDelete = async () => {
     try {
       await entities.estoque.delete(deleteId);
@@ -445,69 +424,82 @@ export default function Estoque() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header + Action Bar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Estoque</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {estoque.length} registro(s) em estoque
-          </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-foreground leading-tight">Estoque</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {filtered.length} registro(s) em estoque
+              {tipoFilter === "granel"
+                ? " · Granel"
+                : tipoFilter === "embalado"
+                  ? " · Embalado"
+                  : ""}
+            </p>
+          </div>
+          <Tabs value={tipoFilter} onValueChange={setTipoFilter}>
+            <TabsList className="h-auto p-1 gap-1 bg-muted/80 border border-border shadow-sm w-fit shrink-0">
+              <TabsTrigger value="granel" className={TIPO_TAB_TRIGGER_CLASS}>
+                <Droplets className="w-4 h-4" />
+                Granel
+              </TabsTrigger>
+              <TabsTrigger value="embalado" className={TIPO_TAB_TRIGGER_CLASS}>
+                <Package className="w-4 h-4" />
+                Embalado
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-        <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-          <Plus className="w-4 h-4" />
-          Novo Registro
-        </Button>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por ID, código, produto, cliente ou lote..."
-            className="pl-10 bg-card"
-          />
-        </div>
-        <div className="w-44">
-          <SearchableSelect
-            value={statusFilter}
-            onChange={(label) => setStatusFilter(label)}
-            options={STATUS_OPTIONS}
-            getOptionLabel={(o) => o.label}
-            getOptionValue={(o) => o.value}
-            placeholder="Status WMS"
-          />
-        </div>
-        <div className="w-56">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-          />
+        {/* Filters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por ID, entrada, código, produto, cliente ou lote..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <div className="w-44">
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(label) => setStatusFilter(label)}
+              options={STATUS_OPTIONS}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder="Status WMS"
+            />
+          </div>
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+            />
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-260px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-5 py-3 font-medium">ID</th>
-                <th className="px-5 py-3 font-medium">Código</th>
-                <th className="px-5 py-3 font-medium">Tipo</th>
+                <th className="px-5 py-3 font-medium">Entrada</th>
                 <th className="px-5 py-3 font-medium">Produto</th>
                 <th className="px-5 py-3 font-medium whitespace-nowrap">Cliente</th>
                 <th className="px-5 py-3 font-medium">Lote</th>
-                <th className="px-5 py-3 font-medium">Saldo Inicial</th>
-                <th className="px-5 py-3 font-medium">Saldo Expedido</th>
-                <th className="px-5 py-3 font-medium">Saldo Atual</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Inicial</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Expedido</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Atual</th>
                 <th className="px-5 py-3 font-medium">Unidade</th>
                 <th className="px-5 py-3 font-medium">Status WMS</th>
                 <th className="px-5 py-3 font-medium">Ações</th>
@@ -516,13 +508,13 @@ export default function Estoque() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando estoque...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum registro de estoque encontrado.
                   </td>
                 </tr>
@@ -545,50 +537,54 @@ export default function Estoque() {
                   );
                   const saldoAtualEntrada = valorNaUnidadeEntrada(e, saldoAtualOp);
                   const unidadeEntrada = getEstoqueUnidadeEntrada(e);
+                  const isExpanded = !!expandedLocais[e.id];
+                  const locais = isExpanded
+                    ? computeEstoqueQuantidadesPorLocal(e, {
+                        transbordos,
+                        vasilhames,
+                        saidas,
+                      })
+                    : null;
                   return (
+                  <Fragment key={e.id}>
                   <tr
-                    key={e.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       i % 2 === 1 ? "bg-muted/40/30" : ""
                     } ${saldoZerado ? "opacity-50" : ""}`}
                   >
-                    <td className="px-5 py-3 font-medium text-primary">
-                      {getEstoqueDisplayId(e)}
+                    <td className="px-5 py-3 font-mono font-medium text-primary">
+                      {formatEstoqueCodigo(e.codigo_estoque)}
                     </td>
                     <td className="px-5 py-3 font-medium text-foreground">
-                      {e.produto_codigo || "-"}
+                      {getEstoqueEntradaLabel(e)}
                     </td>
-                    <td className="px-5 py-3">
-                      {(() => {
-                        const tipo = resolveTipoRecebimentoEstoque(e);
-                        return (
-                          <span
-                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getTipoRecebimentoBadgeClass(
-                              tipo
-                            )}`}
-                          >
-                            {getTipoRecebimentoLabel(tipo)}
-                          </span>
-                        );
-                      })()}
+                    <td className="px-5 py-3 text-foreground max-w-[28rem]" title={[e.produto_codigo, e.produto_nome].filter(Boolean).join(" - ") || undefined}>
+                      {e.produto_codigo && e.produto_nome
+                        ? `${e.produto_codigo} - ${e.produto_nome}`
+                        : e.produto_codigo || e.produto_nome || "-"}
                     </td>
-                    <td className="px-5 py-3 text-foreground">{e.produto_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">{e.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
-                    <td className="px-5 py-3">
-                      <SaldoBadge tone="blue">
-                        {formatValorNaUnidadeEntrada(e, saldoInicialEntrada)}
-                      </SaldoBadge>
+                    <td className="px-5 py-3 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <SaldoBadge tone="blue">
+                          {formatValorNaUnidadeEntrada(e, saldoInicialEntrada)}
+                        </SaldoBadge>
+                      </div>
                     </td>
-                    <td className="px-5 py-3">
-                      <SaldoBadge tone="red">
-                        {formatValorNaUnidadeEntrada(e, saldoExpedidoEntrada)}
-                      </SaldoBadge>
+                    <td className="px-5 py-3 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <SaldoBadge tone="red">
+                          {formatValorNaUnidadeEntrada(e, saldoExpedidoEntrada)}
+                        </SaldoBadge>
+                      </div>
                     </td>
-                    <td className="px-5 py-3">
-                      <SaldoBadge tone="green">
-                        {formatValorNaUnidadeEntrada(e, saldoAtualEntrada)}
-                      </SaldoBadge>
+                    <td className="px-5 py-3 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <SaldoBadge tone="green">
+                          {formatValorNaUnidadeEntrada(e, saldoAtualEntrada)}
+                        </SaldoBadge>
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {unidadeEntrada}
@@ -617,6 +613,28 @@ export default function Estoque() {
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedLocais((prev) => ({
+                              ...prev,
+                              [e.id]: !prev[e.id],
+                            }))
+                          }
+                          className={`transition-colors ${
+                            isExpanded
+                              ? "text-primary"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                          title={
+                            isExpanded
+                              ? "Ocultar locais de armazenamento"
+                              : "Locais de armazenamento"
+                          }
+                          aria-expanded={isExpanded}
+                        >
+                          <MapPin className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleView(e)}
                           className="text-muted-foreground hover:text-muted-foreground transition-colors"
                           title="Visualizar"
@@ -640,6 +658,61 @@ export default function Estoque() {
                       </div>
                     </td>
                   </tr>
+                  {isExpanded && locais && (
+                    <tr className="border-b border-border bg-muted/20">
+                      <td colSpan={11} className="px-5 py-3">
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <ChevronDown className="w-3.5 h-3.5 text-primary rotate-180" />
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Locais de armazenamento
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <LocalArmazenamentoCard
+                            title="Vasilhames"
+                            quantidade={locais.vasilhames}
+                            unidade={locais.unidade}
+                            estoqueItem={e}
+                            navigateLabel="Abrir Vasilhames filtrado por este estoque"
+                            onNavigate={() =>
+                              navigate("/chemflow/vasilhames", {
+                                state: {
+                                  estoqueId: e.id,
+                                  estoqueCodigo:
+                                    formatEstoqueCodigo(e.codigo_estoque) ||
+                                    e.id,
+                                },
+                              })
+                            }
+                          />
+                          <LocalArmazenamentoCard
+                            title="Tankas"
+                            quantidade={locais.tankas}
+                            unidade={locais.unidade}
+                            estoqueItem={e}
+                            navigateLabel="Abrir Tankagem filtrada por este estoque"
+                            onNavigate={() =>
+                              navigate("/chemflow/tankagem", {
+                                state: {
+                                  estoqueId: e.id,
+                                  estoqueCodigo:
+                                    formatEstoqueCodigo(e.codigo_estoque) ||
+                                    e.id,
+                                },
+                              })
+                            }
+                          />
+                          <LocalArmazenamentoCard
+                            title="Armazenagem pátio"
+                            quantidade={locais.patio}
+                            unidade={locais.unidade}
+                            estoqueItem={e}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                   );
                 })
               )}
@@ -669,17 +742,6 @@ export default function Estoque() {
         </div>
       </div>
 
-      {/* Novo registro (fluxo completo de entrada) */}
-      <EntradaModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSave}
-        editingEntrada={null}
-        readOnly={false}
-        clientes={clientes}
-        produtos={produtos}
-      />
-
       {/* Edição simplificada do estoque */}
       <EstoqueEditModal
         open={editOpen}
@@ -699,7 +761,8 @@ export default function Estoque() {
           setViewItem(null);
         }}
         item={viewItem}
-        displayId={getEstoqueDisplayId(viewItem)}
+        displayId={getEstoqueEntradaLabel(viewItem)}
+        estoqueCodigo={formatEstoqueCodigo(viewItem?.codigo_estoque)}
         transbordos={transbordos}
         saidas={saidas}
         vasilhames={vasilhames}

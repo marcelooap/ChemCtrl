@@ -152,27 +152,27 @@ export default function VasilhamesTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
       {/* Search + Button */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="shrink-0 flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nº placa ou barril..."
-            className="pl-10 bg-white"
+            className="pl-10 bg-white h-9"
           />
         </div>
-        <Button onClick={handleNew} className="gap-2">
+        <Button onClick={handleNew} className="gap-2 h-9">
           <Plus className="w-4 h-4" />
           Cadastrar Vasilhame
         </Button>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-320px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-foreground/70 border-b-2 border-border bg-muted uppercase tracking-wide sticky top-0 z-10">

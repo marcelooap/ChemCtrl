@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { syncEstoqueSaldos, isUnidadeMassaEntrada } from "@transbordo/lib/estoqueSaldo";
+import { syncEstoqueSaldos, isUnidadeMassaEntrada, isUnidadeVolumeEntrada, normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
 import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -327,6 +327,70 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
   };
 }
 
+function labelUnidadeEntrada(unidade) {
+  const u = normalizeUnidadeEntrada(unidade);
+  if (u === "l") return "L";
+  if (u === "gal") return "gal";
+  if (u === "kg") return "kg";
+  if (u === "lb") return "lb";
+  return String(unidade || "").trim() || "";
+}
+
+/** Embalado vs granel a partir das origens do OP. */
+function resolveTransbordoMedida(transbordo) {
+  const origens = Array.isArray(transbordo?.origens) ? transbordo.origens : [];
+  for (const o of origens) {
+    if (o?.tipo_origem === "embalado" || o?.embalado) {
+      return {
+        embalado: true,
+        unidade: o.unidade_medida || "kg",
+      };
+    }
+  }
+  const first = origens[0];
+  if (
+    first?.unidade_medida &&
+    isUnidadeMassaEntrada(first.unidade_medida) &&
+    (first.embalado || first.tipo_origem === "embalado")
+  ) {
+    return { embalado: true, unidade: first.unidade_medida };
+  }
+  return { embalado: false, unidade: first?.unidade_medida || "L" };
+}
+
+function renderTransbordoVolumeQuantidade(transbordo) {
+  const medida = resolveTransbordoMedida(transbordo);
+  const umLabel = labelUnidadeEntrada(medida.unidade);
+  const isEmbalado = Boolean(medida.embalado);
+  const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
+  const vol = Number(transbordo?.volume_total) || 0;
+  const mass = Number(transbordo?.massa_total) || 0;
+
+  if (isEmbalado && !umIsVolume) {
+    const qtd = vol > 0 ? vol : mass;
+    return {
+      volume: "-",
+      quantidade:
+        qtd > 0
+          ? `${formatMass(qtd, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
+          : "-",
+    };
+  }
+
+  if (isEmbalado && umIsVolume) {
+    const qtdTxt =
+      vol > 0
+        ? `${formatVolume(vol, { empty: "-" })} ${umLabel || "L"}`
+        : "-";
+    return { volume: qtdTxt, quantidade: qtdTxt };
+  }
+
+  return {
+    volume: vol > 0 ? `${formatVolume(vol, { empty: "-" })} L` : "-",
+    quantidade: mass > 0 ? `${formatMass(mass, { empty: "-" })} kg` : "-",
+  };
+}
+
 export default function Transbordo() {
   const [transbordos, setTransbordos] = useState([]);
   const [produtos, setProdutos] = useState([]);
@@ -359,8 +423,8 @@ export default function Transbordo() {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       // Migra Bombona/IBC/Tambor legados do Estoque → Vasilhames
       try {
@@ -390,9 +454,9 @@ export default function Transbordo() {
       setIsotanques(isos);
       setVasilhames(vascs);
     } catch {
-      setTransbordos([]);
+      if (!silent) setTransbordos([]);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -476,6 +540,21 @@ export default function Transbordo() {
 
     return matchSearch && matchCliente;
   });
+
+  /** Largura da coluna Produto limitada (não estica com nomes longos). */
+  const produtoColCh = useMemo(() => {
+    let maxLen = "Produto".length;
+    for (const p of produtos) {
+      const label = `${p.codigo ? `${p.codigo} - ` : ""}${p.produto || p.nome || ""}`;
+      if (label.length > maxLen) maxLen = label.length;
+    }
+    for (const t of transbordos) {
+      const label = `${t.produto_codigo ? `${t.produto_codigo} - ` : ""}${t.produto_nome || ""}`;
+      if (label.length > maxLen) maxLen = label.length;
+    }
+    // Cabe o conteúdo, mas limita nomes muito longos
+    return Math.min(Math.max(maxLen, 10), 36);
+  }, [produtos, transbordos]);
 
   const formatDate = (d) => {
     if (!d) return "-";
@@ -680,10 +759,15 @@ export default function Transbordo() {
         destinos,
         dens
       );
-      // Embalado em massa: quantidade_kg = quantidade informada (UOM da entrada), sem dens
+      // Lastreia cada fatia FIFO ao id do registro de estoque (origem.entrada_id).
       for (const comp of destinoCompositions) {
         for (const c of comp) {
           const o = origensFifo[c.origem_index];
+          const estoqueId = o?.estoque_id || o?.entrada_id || null;
+          if (estoqueId) {
+            c.estoque_id = estoqueId;
+            c.entrada_id = estoqueId;
+          }
           if (
             (o?.tipo_origem === "embalado" || o?.embalado) &&
             isUnidadeMassaEntrada(o?.unidade_medida || "kg")
@@ -856,7 +940,7 @@ export default function Transbordo() {
 
       await syncEstoqueSaldos(affectedEstoqueIds);
 
-      await loadData();
+      await loadData({ silent: true });
       setModalOpen(false);
       setEditingTransbordo(null);
       setActivePrefill(null);
@@ -871,11 +955,15 @@ export default function Transbordo() {
   };
 
   const handleDelete = async () => {
-    const toDelete = transbordos.find((t) => t.id === deleteId);
+    const id = deleteId;
+    const toDelete = transbordos.find((t) => t.id === id);
     if (!toDelete) {
       setDeleteId(null);
       return;
     }
+
+    setDeleteId(null);
+    setTransbordos((prev) => prev.filter((t) => t.id !== id));
 
     try {
       const dens = parseDensidade(toDelete.densidade);
@@ -913,21 +1001,21 @@ export default function Transbordo() {
       });
 
       // 3) Remove embalagens, estoque embalado e filtrações criadas por este transbordo
-      await entities.vasilhames.deleteMany({ transbordo_id: deleteId });
-      await entities.filtracoes.deleteMany({ transbordo_id: deleteId });
-      await deleteEstoqueDoTransbordo(deleteId);
+      await entities.vasilhames.deleteMany({ transbordo_id: id });
+      await entities.filtracoes.deleteMany({ transbordo_id: id });
+      await deleteEstoqueDoTransbordo(id);
 
       // 4) Remove o movimento — libera novamente o disponível nas origens de estoque
-      await entities.transbordos.delete(deleteId);
+      await entities.transbordos.delete(id);
 
       // 5) Recalcula saldo_atual dos estoques de origem
       await syncEstoqueSaldos(affectedEstoqueIds);
 
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error("[ChemFlow] Erro ao excluir transbordo:", err);
+      await loadData({ silent: true });
     }
-    setDeleteId(null);
   };
 
   const clienteFilterOptions = [
@@ -939,58 +1027,65 @@ export default function Transbordo() {
   const totalMassa = filtered.reduce((sum, t) => sum + (t.massa_total || 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Transbordos</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {transbordos.length} registro(s) cadastrado(s)
-          </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
+      <div className="shrink-0 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Transbordos</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {transbordos.length} registro(s) cadastrado(s)
+            </p>
+          </div>
+          <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
+            <Plus className="w-4 h-4" />
+            Novo Transbordo
+          </Button>
         </div>
-        <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-          <Plus className="w-4 h-4" />
-          Novo Transbordo
-        </Button>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por tanka, produto ou cliente..."
-            className="pl-10"
-          />
-        </div>
-        <div className="w-56">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-          />
+        {/* Filters */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por tanka, produto ou cliente..."
+              className="pl-10 bg-card"
+            />
+          </div>
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+            />
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col h-[calc(100vh-260px)]">
-        <div className="overflow-auto flex-1">
+      <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                <th className="px-5 py-3 font-medium">ID</th>
-                <th className="px-5 py-3 font-medium">Data</th>
-                <th className="px-5 py-3 font-medium">Produto</th>
-                <th className="px-5 py-3 font-medium">Cliente</th>
-                <th className="px-5 py-3 font-medium">Volume Transbordado</th>
-                <th className="px-5 py-3 font-medium">Massa Transbordada</th>
-                <th className="px-5 py-3 font-medium">Operadores</th>
-                <th className="px-5 py-3 font-medium">Ações</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">ID</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Data</th>
+                <th
+                  className="px-4 py-3 font-medium whitespace-nowrap"
+                  style={{ width: `${produtoColCh}ch`, maxWidth: `${produtoColCh}ch` }}
+                >
+                  Produto
+                </th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Cliente</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Volume</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Quantidade</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Operadores</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -1007,44 +1102,59 @@ export default function Transbordo() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((t, i) => (
+                filtered.map((t, i) => {
+                  const produtoLabel = `${t.produto_codigo ? `${t.produto_codigo} - ` : ""}${t.produto_nome || "-"}`;
+                  const { volume: volumeCell, quantidade: quantidadeCell } =
+                    renderTransbordoVolumeQuantidade(t);
+                  return (
                   <tr
                     key={t.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       i % 2 === 1 ? "bg-muted/40/30" : ""
                     }`}
                   >
-                    <td className="px-5 py-3 font-medium text-primary">
+                    <td className="px-4 py-3 align-middle font-medium text-primary whitespace-nowrap">
                       {t.codigo_transbordo || "-"}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">{formatDate(t.data)}</td>
-                    <td className="px-5 py-3 text-foreground">
-                      {t.produto_codigo ? `${t.produto_codigo} - ` : ""}
-                      {t.produto_nome || "-"}
+                    <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
+                      {formatDate(t.data)}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">{t.cliente_nome || "-"}</td>
-                    <td className="px-5 py-3 text-foreground font-medium">
-                      {formatVolume(t.volume_total, { empty: "-" })} L
+                    <td
+                      className="px-4 py-3 align-middle text-foreground"
+                      style={{ width: `${produtoColCh}ch`, maxWidth: `${produtoColCh}ch` }}
+                    >
+                      <span className="block truncate" title={produtoLabel}>
+                        {produtoLabel}
+                      </span>
                     </td>
-                    <td className="px-5 py-3 text-foreground font-medium">
-                      {formatMass(t.massa_total, { empty: "-" })} kg
+                    <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap w-0">
+                      {t.cliente_nome || "-"}
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-4 py-3 align-middle text-foreground font-medium whitespace-nowrap">
+                      {volumeCell}
+                    </td>
+                    <td className="px-4 py-3 align-middle text-foreground font-medium whitespace-nowrap">
+                      {quantidadeCell}
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                         {(t.operadores || []).slice(0, 2).map((op) => (
-                          <span key={op} className="inline-flex px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                          <span
+                            key={op}
+                            className="inline-flex shrink-0 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium whitespace-nowrap"
+                          >
                             {op.split(" ")[0]}
                           </span>
                         ))}
                         {(t.operadores || []).length > 2 && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
                             +{t.operadores.length - 2}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="px-4 py-3 align-middle">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
                         <button onClick={() => handleView(t)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Visualizar">
                           <Eye className="w-4 h-4" />
                         </button>
@@ -1057,7 +1167,8 @@ export default function Transbordo() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1072,7 +1183,7 @@ export default function Transbordo() {
             Volume total: <span className="font-medium text-foreground">{formatVolume(totalVolume)} L</span>
           </span>
           <span className="text-muted-foreground">
-            Massa total: <span className="font-medium text-foreground">{formatMass(totalMassa)} kg</span>
+            Quantidade total: <span className="font-medium text-foreground">{formatMass(totalMassa)} kg</span>
           </span>
         </div>
       </div>
@@ -1109,6 +1220,8 @@ export default function Transbordo() {
           setViewTransbordo(null);
         }}
         transbordo={viewTransbordo}
+        produtos={produtos}
+        entradas={entradas}
       />
 
       {/* Delete Confirmation */}
@@ -1124,7 +1237,13 @@ export default function Transbordo() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

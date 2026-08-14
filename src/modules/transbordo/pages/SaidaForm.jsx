@@ -16,6 +16,7 @@ import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal
 import {
   ORIGEM_TRANSBORDO,
   ORIGEM_INDUSTRIALIZACAO,
+  MODULO_SAIDA_CHEMFLOW,
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
   TIPO_IND_VASILHAME,
@@ -40,12 +41,14 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * `basePath` permite reutilizar a mesma UI no Painel / Industrialização.
  * `enableMultiOrigem` habilita seleção Industrialização + Transbordo por item.
  * `lockedOrigem` força um módulo (esconde seletor) e carrega as fontes correspondentes.
+ * `moduloOrigem` grava em `t_saidas.modulo_origem` (chemflow | painel | industrializacao).
  * `onCreateSuccess` (opcional) é chamado após criar uma nova saída, em vez de navegar.
  */
 export default function SaidaForm({
   basePath = DEFAULT_BASE_PATH,
   enableMultiOrigem = false,
   lockedOrigem = null,
+  moduloOrigem = MODULO_SAIDA_CHEMFLOW,
   onCreateSuccess = null,
 } = {}) {
   const { id } = useParams();
@@ -579,6 +582,7 @@ export default function SaidaForm({
           codigo,
           status: "aguardando",
           enviado_ao_fiscal: false,
+          modulo_origem: moduloOrigem || MODULO_SAIDA_CHEMFLOW,
         });
       }
 
@@ -640,7 +644,7 @@ export default function SaidaForm({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button

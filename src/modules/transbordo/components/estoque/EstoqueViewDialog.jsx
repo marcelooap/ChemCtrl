@@ -26,6 +26,7 @@ import {
   getTipoRecebimentoLabel,
   getTipoRecebimentoBadgeClass,
 } from "@transbordo/lib/tipoRecebimento";
+import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -84,6 +85,7 @@ export default function EstoqueViewDialog({
   onClose,
   item,
   displayId,
+  estoqueCodigo,
   transbordos = [],
   saidas = [],
   vasilhames = [],
@@ -91,6 +93,8 @@ export default function EstoqueViewDialog({
   if (!item) return null;
 
   const unidade = item.unidade_medida || "kg";
+  const idEstoque =
+    estoqueCodigo || formatEstoqueCodigo(item.codigo_estoque);
   const custoTotal =
     (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
 
@@ -193,11 +197,16 @@ export default function EstoqueViewDialog({
           <DialogTitle>Detalhe do Estoque</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-4 rounded-lg bg-primary/10 p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-lg bg-primary/10 p-4">
           <InfoItem
-            label="ID ENTRADA"
-            value={displayId || item.entrada_codigo || "—"}
+            label="ID"
+            value={idEstoque}
             highlight="text-primary text-lg font-bold"
+          />
+          <InfoItem
+            label="ENTRADA"
+            value={displayId || item.entrada_codigo || "—"}
+            highlight="text-foreground text-lg font-bold"
           />
           <InfoItem
             label="CÓDIGO"
@@ -646,6 +655,7 @@ export default function EstoqueViewDialog({
               generateRelatorioEstoquePDF({
                 item,
                 displayId,
+                estoqueCodigo: idEstoque,
                 destinosList,
                 historicoTransbordos,
                 saidasHistorico,

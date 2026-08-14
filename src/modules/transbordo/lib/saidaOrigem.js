@@ -3,6 +3,15 @@
 export const ORIGEM_TRANSBORDO = "transbordo";
 export const ORIGEM_INDUSTRIALIZACAO = "industrializacao";
 
+/** Módulo que criou a solicitação de saída (header em `t_saidas.modulo_origem`). */
+export const MODULO_SAIDA_CHEMFLOW = "chemflow";
+export const MODULO_SAIDA_PAINEL = "painel";
+export const MODULO_SAIDA_INDUSTRIALIZACAO = "industrializacao";
+
+export function isSaidaModuloChemflow(saida) {
+  return saida?.modulo_origem === MODULO_SAIDA_CHEMFLOW;
+}
+
 export const TIPO_EMBALADO = "embalado";
 export const TIPO_CONVENCIONAL = "convencional";
 export const TIPO_IND_VASILHAME = "ind_vasilhame";
