@@ -22,6 +22,16 @@ function formatVolumeInput(n) {
   return String(Number(n.toFixed(3)));
 }
 
+function getScheduledOrderIds(schedules, exceptScheduleId) {
+  const ids = new Set();
+  for (const row of schedules || []) {
+    if (!row?.order_id) continue;
+    if (exceptScheduleId && String(row.id) === String(exceptScheduleId)) continue;
+    ids.add(String(row.order_id));
+  }
+  return ids;
+}
+
 export default function ProgramacaoFormDialog({
   open,
   onOpenChange,
@@ -29,6 +39,7 @@ export default function ProgramacaoFormDialog({
   editing,
   recipes,
   orders = [],
+  schedules = [],
   saving,
   onSave,
 }) {
@@ -46,12 +57,20 @@ export default function ProgramacaoFormDialog({
     [recipes]
   );
 
+  const scheduledOrderIds = useMemo(
+    () => getScheduledOrderIds(schedules, editing?.id),
+    [schedules, editing?.id]
+  );
+
   const eligibleOrders = useMemo(() => {
     if (!product) return [];
     return (orders || []).filter(
-      (order) => sameProduct(order.product, product) && isOrderOpenForProgramming(order)
+      (order) =>
+        sameProduct(order.product, product)
+        && isOrderOpenForProgramming(order)
+        && !scheduledOrderIds.has(String(order.id))
     );
-  }, [orders, product]);
+  }, [orders, product, scheduledOrderIds]);
 
   const orderOptions = useMemo(() => {
     const list = [...eligibleOrders];
@@ -85,7 +104,10 @@ export default function ProgramacaoFormDialog({
   const applyProductDefaults = (productName, selectedOrder = null) => {
     const recipe = getLatestRecipeForProduct(recipes, productName);
     const matches = (orders || []).filter(
-      (order) => sameProduct(order.product, productName) && isOrderOpenForProgramming(order)
+      (order) =>
+        sameProduct(order.product, productName)
+        && isOrderOpenForProgramming(order)
+        && !scheduledOrderIds.has(String(order.id))
     );
     const onlyOrder = matches.length === 1 ? matches[0] : selectedOrder;
     const pendingTotal = matches.reduce((sum, order) => sum + getOrderAllocatableVolume(order), 0);

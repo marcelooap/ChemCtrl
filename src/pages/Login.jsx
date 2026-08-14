@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { resolvePostLoginRoute } from '@/lib/modules/access';
@@ -10,6 +11,7 @@ import { Factory, User, Lock, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-re
 export default function Login() {
   const { t } = useTranslation();
   const { login } = useInternalAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export default function Login() {
     try {
       const result = await login(username, password);
       if (result.success) {
-        window.location.href = resolvePostLoginRoute(result.user);
+        navigate(resolvePostLoginRoute(result.user), { replace: true });
       } else {
         setError(result.error || t('login.errors.invalidCredentials'));
       }

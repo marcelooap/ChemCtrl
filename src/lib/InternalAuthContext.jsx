@@ -8,6 +8,7 @@ import { clearAllCache } from '@industrializacao/lib/queryCache';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';
+export const WELCOME_SESSION_KEY = 'chemctrl_welcome';
 
 function normalizeLanguage(value) {
   return isSupportedLocale(value) ? value : DEFAULT_LOCALE;
@@ -82,6 +83,7 @@ async function syncUserLanguage(userData) {
 function clearLocalAuth() {
   clearSessionId();
   localStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(WELCOME_SESSION_KEY);
 }
 
 export const InternalAuthProvider = ({ children }) => {
@@ -199,7 +201,7 @@ export const InternalAuthProvider = ({ children }) => {
       };
       setSessionId(result.session_id);
       persistUserSession(userData);
-      sessionStorage.setItem('chemctrl_welcome', '1');
+      sessionStorage.setItem(WELCOME_SESSION_KEY, '1');
       // Recria o cliente Realtime com o novo x-session-id (headers são fixados no createClient)
       resetRealtimeClient();
 

@@ -41,7 +41,7 @@ export default function Programacao() {
   const [formOpen, setFormOpen] = useState(false);
   const [formDateIso, setFormDateIso] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [viewing, setViewing] = useState(null);
+  const [viewingDate, setViewingDate] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -98,13 +98,16 @@ export default function Programacao() {
     setFormOpen(true);
   };
 
+  const viewingItems = viewingDate ? (byDay.get(viewingDate) || []) : [];
+
   const openView = (items) => {
-    if (!items?.length) return;
-    setViewing(items);
+    const date = items?.[0] ? scheduleDateKey(items[0]) : null;
+    if (!date) return;
+    setViewingDate(date);
   };
 
   const openEdit = (row) => {
-    setViewing(null);
+    setViewingDate(null);
     setEditing(row);
     setFormDateIso(scheduleDateKey(row));
     setFormOpen(true);
@@ -152,10 +155,11 @@ export default function Programacao() {
 
   const confirmDelete = async () => {
     if (!deleteTarget?.id) return;
+    const remaining = viewingItems.filter((row) => row.id !== deleteTarget.id);
     await base44.entities.ProductionSchedule.delete(deleteTarget.id);
     toast({ title: t('programming.messages.deleted') });
     setDeleteTarget(null);
-    setViewing(null);
+    if (remaining.length === 0) setViewingDate(null);
   };
 
   const monthMotion = {
@@ -397,14 +401,16 @@ export default function Programacao() {
         editing={editing}
         recipes={recipes}
         orders={enrichedOrders}
+        schedules={schedules}
         saving={saving}
         onSave={handleSave}
       />
 
       <ProgramacaoViewDialog
-        open={!!viewing}
-        onOpenChange={(open) => { if (!open) setViewing(null); }}
-        items={viewing || []}
+        open={!!viewingDate}
+        onOpenChange={(open) => { if (!open && !deleteTarget) setViewingDate(null); }}
+        items={viewingItems}
+        dismissible={!deleteTarget}
         canEdit={canEdit}
         canDelete={canDelete}
         onEdit={openEdit}

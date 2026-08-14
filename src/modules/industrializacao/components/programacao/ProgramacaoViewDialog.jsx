@@ -9,6 +9,7 @@ export default function ProgramacaoViewDialog({
   open,
   onOpenChange,
   items = [],
+  dismissible = true,
   canEdit,
   canDelete,
   onEdit,
@@ -24,8 +25,19 @@ export default function ProgramacaoViewDialog({
   const showActions = canEdit || canDelete;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !dismissible) return;
+        onOpenChange?.(next);
+      }}
+    >
+      <DialogContent
+        className="max-w-2xl"
+        onPointerDownOutside={(e) => { if (!dismissible) e.preventDefault(); }}
+        onFocusOutside={(e) => { if (!dismissible) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (!dismissible) e.preventDefault(); }}
+      >
         <DialogHeader>
           <DialogTitle>{t('programming.view.title')}</DialogTitle>
         </DialogHeader>

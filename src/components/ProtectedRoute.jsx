@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { useInternalAuth, WELCOME_SESSION_KEY } from '@/lib/InternalAuthContext';
 import WelcomeModal from '@/components/WelcomeModal';
+
+function isWelcomePending() {
+  try {
+    return sessionStorage.getItem(WELCOME_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 const DefaultFallback = () => {
   const { t } = useTranslation();
@@ -23,14 +31,21 @@ const DefaultFallback = () => {
 export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
   const { user, loading } = useInternalAuth();
   const location = useLocation();
-  const [showWelcome, setShowWelcome] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(isWelcomePending);
 
   useEffect(() => {
-    if (!user) return;
-    if (sessionStorage.getItem('chemctrl_welcome') !== '1') return;
-    sessionStorage.removeItem('chemctrl_welcome');
+    if (!user || !isWelcomePending()) return;
     setShowWelcome(true);
   }, [user]);
+
+  const closeWelcome = () => {
+    try {
+      sessionStorage.removeItem(WELCOME_SESSION_KEY);
+    } catch {
+      // ignore quota / private-mode failures
+    }
+    setShowWelcome(false);
+  };
 
   if (loading) {
     return fallback;
@@ -47,7 +62,7 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
   return (
     <>
       <Outlet />
-      {showWelcome ? <WelcomeModal user={user} onClose={() => setShowWelcome(false)} /> : null}
+      {showWelcome ? <WelcomeModal user={user} onClose={closeWelcome} /> : null}
     </>
   );
 }
