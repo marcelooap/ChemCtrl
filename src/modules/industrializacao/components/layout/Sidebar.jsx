@@ -8,6 +8,8 @@ import {
 import { canAccessRoute, getUserClient } from '@industrializacao/lib/permissions';
 import { getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
+import { useSaidaNovas } from '@transbordo/context/SaidaNovasContext';
+import { SAIDA_PATH_INDUSTRIALIZACAO } from '@transbordo/lib/saidaNovas';
 
 const ICONS = {
   LayoutDashboard,
@@ -38,6 +40,7 @@ function resolveIcon(name) {
 
 export default function Sidebar({ collapsed, setCollapsed, user }) {
   const { t } = useTranslation();
+  const { count } = useSaidaNovas();
   const navSpec = useMemo(() => getSidebarNavSpec(), []);
 
   const isExterno = user?.tipo === 'externo';
@@ -51,12 +54,14 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
           children: item.children.map((child) => ({
             ...child,
             icon: resolveIcon(child.icon),
+            badgeCount: child.path === SAIDA_PATH_INDUSTRIALIZACAO ? count : 0,
           })),
         };
       }
       return {
         ...item,
         icon: resolveIcon(item.icon),
+        badgeCount: item.path === SAIDA_PATH_INDUSTRIALIZACAO ? count : 0,
       };
     });
 
@@ -68,7 +73,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       );
     }
     return mapped;
-  }, [isExterno, navSpec]);
+  }, [isExterno, navSpec, count]);
 
   const resolveLabel = (item) => {
     let label = t(item.labelKey);

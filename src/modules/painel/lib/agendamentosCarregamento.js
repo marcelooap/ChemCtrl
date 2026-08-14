@@ -54,7 +54,10 @@ export function buildTimeRange(start, end, step = SLOT_STEP_MINUTES) {
   return times;
 }
 
-/** weekday: 1 = segunda … 5 = sexta */
+/** Semana operacional: segunda (1) a sábado (6). */
+export const WEEKDAY_COUNT = 6;
+
+/** weekday: 1 = segunda … 6 = sábado; sexta fecha 15:30. */
 export function getAfternoonEnd(weekday) {
   return weekday === 5 ? AFTERNOON_END_FRI : AFTERNOON_END_MON_THU;
 }
@@ -99,7 +102,7 @@ export function isSameISODate(a, b) {
 }
 
 export function getWeekDays(weekStart) {
-  return [0, 1, 2, 3, 4].map((i) => {
+  return Array.from({ length: WEEKDAY_COUNT }, (_, i) => {
     const date = addDays(weekStart, i);
     return {
       date,
@@ -109,14 +112,30 @@ export function getWeekDays(weekStart) {
   });
 }
 
-/** Dia útil atual; no fim de semana, próxima segunda. */
+/** Dia operacional atual (seg–sáb); no domingo, próxima segunda. */
 export function getDefaultSelectedDate(now = new Date()) {
   const d = new Date(now);
   d.setHours(0, 0, 0, 0);
   const day = d.getDay();
-  if (day >= 1 && day <= 5) return toISODate(d);
+  if (day >= 1 && day <= 6) return toISODate(d);
   const monday = startOfWeekMonday(d);
   return toISODate(addDays(monday, 7));
+}
+
+/**
+ * Data da grade a partir da data da solicitação da saída.
+ * Domingo cai na segunda seguinte (fora da semana operacional).
+ */
+export function resolveScheduleDateFromSaida(saida) {
+  const raw = String(saida?.data_solicitacao || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const date = parseISODate(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  const adjusted = date.getDay() === 0 ? addDays(date, 1) : date;
+  return {
+    iso: toISODate(adjusted),
+    weekStart: startOfWeekMonday(adjusted),
+  };
 }
 
 export function todayISO(now = new Date()) {

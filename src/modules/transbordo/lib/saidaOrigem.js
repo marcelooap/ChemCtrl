@@ -12,6 +12,23 @@ export function isSaidaModuloChemflow(saida) {
   return saida?.modulo_origem === MODULO_SAIDA_CHEMFLOW;
 }
 
+export function isSaidaModuloPainel(saida) {
+  return saida?.modulo_origem === MODULO_SAIDA_PAINEL;
+}
+
+/**
+ * No Transbordo, só se exclui saída criada no próprio módulo.
+ * Origem Painel (`modulo_origem = painel`) não pode ser apagada por esse fluxo.
+ */
+export function canExcluirSaidaNoTransbordo(saida) {
+  return !isSaidaModuloPainel(saida);
+}
+
+/** Alias: Painel não pode excluir a saída pelos módulos operacionais. */
+export function canExcluirSaidaNoModuloOperacional(saida) {
+  return canExcluirSaidaNoTransbordo(saida);
+}
+
 export const TIPO_EMBALADO = "embalado";
 export const TIPO_CONVENCIONAL = "convencional";
 export const TIPO_IND_VASILHAME = "ind_vasilhame";
@@ -103,6 +120,54 @@ export function isTransbordoItem(item) {
 /** Saída com pelo menos um item da Industrialização. */
 export function saidaHasIndustrializacaoItems(saida) {
   return (saida?.itens || []).some(isIndustrializacaoItem);
+}
+
+/** Saída com pelo menos um item do Transbordo. */
+export function saidaHasTransbordoItems(saida) {
+  return (saida?.itens || []).some(isTransbordoItem);
+}
+
+export function getValidacaoModulo(saida, modulo) {
+  const raw = saida?.validacao_modulos;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const entry = raw[modulo];
+  if (!entry || typeof entry !== "object") return null;
+  return entry;
+}
+
+/** Módulos que de fato têm itens nesta saída. */
+export function getModulosRelevantesSaida(saida) {
+  const mods = [];
+  if (saidaHasTransbordoItems(saida)) mods.push(ORIGEM_TRANSBORDO);
+  if (saidaHasIndustrializacaoItems(saida)) mods.push(ORIGEM_INDUSTRIALIZACAO);
+  return mods;
+}
+
+/**
+ * Validação do módulo (Painel misto) ou status global legado.
+ * `enviado_ao_fiscal` só vale como fallback quando o módulo ainda
+ * não gravou `validacao_modulos`.
+ */
+export function isSaidaValidadaNoModulo(saida, modulo) {
+  const entry = getValidacaoModulo(saida, modulo);
+  if (entry && typeof entry.validado === "boolean") {
+    return Boolean(entry.validado);
+  }
+  return Boolean(saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal");
+}
+
+export function allModulosRelevantesValidados(saida, validacaoOverride = null) {
+  const mods = getModulosRelevantesSaida(saida);
+  if (mods.length === 0) {
+    return Boolean(saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal");
+  }
+  const merged = {
+    ...(saida?.validacao_modulos && typeof saida.validacao_modulos === "object"
+      ? saida.validacao_modulos
+      : {}),
+    ...(validacaoOverride || {}),
+  };
+  return mods.every((m) => Boolean(merged[m]?.validado));
 }
 
 export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {

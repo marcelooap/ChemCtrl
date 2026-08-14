@@ -14,7 +14,7 @@ export default function AgendamentoPosSaidaModal({ open, saida, onScheduled }) {
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
-        className="max-w-3xl max-h-[88vh] overflow-y-auto gap-3 [&>button.absolute]:hidden"
+        className="max-w-4xl max-h-[88vh] overflow-y-auto gap-3 [&>button.absolute]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
@@ -34,6 +34,7 @@ export default function AgendamentoPosSaidaModal({ open, saida, onScheduled }) {
 
         {saida ? (
           <AgendamentosGrade
+            key={saida.id}
             compact
             hideHeader
             lockedSaida={saida}

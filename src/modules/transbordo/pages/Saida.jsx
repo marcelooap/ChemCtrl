@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
@@ -26,6 +26,11 @@ import {
 import {
   saidaHasIndustrializacaoItems,
   isSaidaModuloChemflow,
+  isSaidaModuloPainel,
+  canExcluirSaidaNoModuloOperacional,
+  isSaidaValidadaNoModulo,
+  ORIGEM_INDUSTRIALIZACAO,
+  ORIGEM_TRANSBORDO,
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
 } from "@transbordo/lib/saidaOrigem";
@@ -37,6 +42,7 @@ import {
   findAgendamentoDisplayBySaida,
   formatSlotRef,
 } from "@painel/lib/agendamentosCarregamento";
+import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 
 const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
@@ -68,7 +74,14 @@ export default function Saida({
 } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isNew, markAsRead, saidasRevision } = useSaidaNovas();
   const isExpedicao = statusMode === "expedicao";
+  const trackNewFromPainel =
+    !isExpedicao && (!excludeChemflow || onlyIndustrializacao);
+  const isModuloOperacional = !isExpedicao;
+  const operationalModule = onlyIndustrializacao
+    ? ORIGEM_INDUSTRIALIZACAO
+    : ORIGEM_TRANSBORDO;
   const statusOptions = isExpedicao
     ? STATUS_OPTIONS_EXPEDICAO
     : STATUS_OPTIONS_VALIDACAO;
@@ -89,8 +102,8 @@ export default function Saida({
   const [loading, setLoading] = useState(true);
   const tableColSpan = isExpedicao ? 11 : 10;
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [saics, cliens, ents, vascs, expedidas, agends] = await Promise.all([
         entities.saidas.list("-created_date"),
@@ -116,16 +129,26 @@ export default function Saida({
       setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
       setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {
-      setSaidas([]);
-      setExpedidasIds(new Set());
-      setAgendamentos([]);
+      if (!silent) {
+        setSaidas([]);
+        setExpedidasIds(new Set());
+        setAgendamentos([]);
+      }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     loadData();
   }, [onlyIndustrializacao, excludeChemflow, isExpedicao]);
+
+  const saidasRevisionSeen = useRef(saidasRevision);
+  useEffect(() => {
+    if (!trackNewFromPainel) return;
+    if (saidasRevision === saidasRevisionSeen.current) return;
+    saidasRevisionSeen.current = saidasRevision;
+    loadData({ silent: true });
+  }, [saidasRevision, trackNewFromPainel]);
 
   const getExpedicaoStatus = (saida) =>
     isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
@@ -206,6 +229,10 @@ export default function Saida({
 
   const handleDelete = async () => {
     const saida = saidas.find((s) => s.id === deleteId);
+    if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
+      setDeleteId(null);
+      return;
+    }
     if (saida?.enviado_ao_fiscal) {
       // Restaurar estoque / vasilhames via mesma lógica de reverter fiscal
       try {
@@ -265,9 +292,7 @@ export default function Saida({
 
   const requestFiscalToggle = (saida) => {
     if (fiscalBusyId) return;
-    const enviar = !(
-      saida.enviado_ao_fiscal || saida.status === "enviado_fiscal"
-    );
+    const enviar = !isSaidaValidadaNoModulo(saida, operationalModule);
     setFiscalConfirm({ saida, enviar });
   };
 
@@ -282,10 +307,14 @@ export default function Saida({
         userNome: user?.nome || "",
         estoque: entradas,
         vasilhames,
+        moduleScope: isSaidaModuloPainel(saida) ? operationalModule : "all",
       });
       setSaidas((prev) =>
         prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s))
       );
+      if (enviar && trackNewFromPainel) {
+        markAsRead(saida.id);
+      }
       // Atualiza caches locais de estoque/vasilhames
       await loadData();
     } catch (err) {
@@ -403,8 +432,9 @@ export default function Saida({
                   const agendamento = isExpedicao
                     ? findAgendamentoDisplayBySaida(agendamentos, s.id)
                     : null;
-                  const isValidated =
-                    s.enviado_ao_fiscal || s.status === "enviado_fiscal";
+                  const isValidated = isExpedicao
+                    ? false
+                    : isSaidaValidadaNoModulo(s, operationalModule);
                   const hideDias = isExpedicao
                     ? expedicaoStatus === "expedido"
                     : isValidated;
@@ -417,7 +447,14 @@ export default function Saida({
                     }`}
                   >
                     <td className="px-5 py-3 font-medium text-primary">
-                      {s.codigo || "-"}
+                      <span className="inline-flex items-center gap-1.5">
+                        {s.codigo || "-"}
+                        {trackNewFromPainel && isNew(s.id) ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none bg-primary/10 text-primary">
+                            Novo
+                          </span>
+                        ) : null}
+                      </span>
                     </td>
                     <td className="px-5 py-3 text-foreground">
                       {s.usuario_criador || "-"}
@@ -496,7 +533,12 @@ export default function Saida({
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setViewSaida(s)}
+                          onClick={() => {
+                            setViewSaida(s);
+                            if (trackNewFromPainel && isNew(s.id)) {
+                              markAsRead(s.id);
+                            }
+                          }}
                           className="text-muted-foreground hover:text-foreground transition-colors"
                           title="Visualizar"
                         >
@@ -509,13 +551,16 @@ export default function Saida({
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => setDeleteId(s.id)}
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {(!isModuloOperacional ||
+                          canExcluirSaidaNoModuloOperacional(s)) ? (
+                          <button
+                            onClick={() => setDeleteId(s.id)}
+                            className="text-red-400 hover:text-red-600 transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -552,6 +597,7 @@ export default function Saida({
         vasilhames={vasilhames}
         entradas={entradas}
         showRelatorioFiscal={!isExpedicao}
+        highlightModule={isModuloOperacional ? operationalModule : null}
       />
 
       {/* Validação Confirmation (ChemFlow / Industrialização) */}
@@ -570,7 +616,9 @@ export default function Saida({
               <AlertDialogDescription>
                 {fiscalConfirm?.enviar
                   ? "Confirma a validação desta saída?"
-                  : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
+                  : isSaidaModuloPainel(fiscalConfirm?.saida)
+                    ? "Os saldos dos produtos deste módulo retornarão para o estoque. Itens de outros módulos não são alterados."
+                    : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

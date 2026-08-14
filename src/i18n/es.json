@@ -665,7 +665,7 @@
         },
         "agendamentos": {
           "title": "Agendamiento de Cargas",
-          "subtitle": "Horarios de carga de lunes a viernes",
+          "subtitle": "Horarios de carga de lunes a sábado",
           "emptyTitle": "Agendamientos",
           "emptyDescription": "Estructura inicial preparada para los agendamientos comerciales."
         }
@@ -732,10 +732,11 @@
           "tue": "Mar",
           "wed": "Mié",
           "thu": "Jue",
-          "fri": "Vie"
+          "fri": "Vie",
+          "sat": "Sáb"
         },
-        "dayFree": "Libre",
-        "dayBooked": "{{count}} ocup.",
+        "dayFree": "Ningún horario agendado",
+        "dayBooked": "{{count}} horarios agendados",
         "morning": "Mañana",
         "afternoon": "Tarde",
         "lunch": "Almuerzo",

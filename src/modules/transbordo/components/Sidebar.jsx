@@ -17,6 +17,8 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { canAccessRoute } from '@industrializacao/lib/permissions';
 import { APP_MODULE_IDS, getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
+import { useSaidaNovas } from '@transbordo/context/SaidaNovasContext';
+import { SAIDA_PATH_TRANSBORDO } from '@transbordo/lib/saidaNovas';
 
 const ICONS = {
   LayoutDashboard,
@@ -39,6 +41,7 @@ function resolveIcon(name) {
 export default function Sidebar({ collapsed, setCollapsed }) {
   const { t } = useTranslation();
   const { user } = useInternalAuth();
+  const { count } = useSaidaNovas();
   const navSpec = useMemo(() => getSidebarNavSpec(APP_MODULE_IDS.TRANSBORDO), []);
 
   const items = useMemo(() => navSpec.map((item) => {
@@ -51,6 +54,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           ...child,
           label: t(child.labelKey),
           icon: resolveIcon(child.icon),
+          badgeCount: child.path === SAIDA_PATH_TRANSBORDO ? count : 0,
         })),
       };
     }
@@ -59,8 +63,9 @@ export default function Sidebar({ collapsed, setCollapsed }) {
       label: t(item.labelKey),
       icon: resolveIcon(item.icon),
       end: item.path === '/chemflow',
+      badgeCount: item.path === SAIDA_PATH_TRANSBORDO ? count : 0,
     };
-  }), [navSpec, t]);
+  }), [navSpec, t, count]);
 
   return (
     <ModuleSidebar

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -27,6 +28,8 @@ import {
   getDefaultSelectedDate,
   getSlotsForWeekday,
   getWeekDays,
+  resolveScheduleDateFromSaida,
+  WEEKDAY_COUNT,
   groupSlotCarregamentos,
   hasTransporte,
   indexAgendamentosBySlot,
@@ -43,7 +46,7 @@ import {
   updateTransporte,
 } from '@painel/lib/agendamentosCarregamento';
 
-const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 /**
  * Grade semanal de agendamentos de carregamento (Comercial e Logística).
@@ -66,9 +69,17 @@ export default function AgendamentosGrade({
   const { toast } = useToast();
   const { user } = useInternalAuth();
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeekMonday());
-  const [selectedIso, setSelectedIso] = useState(() => getDefaultSelectedDate());
+  const [weekStart, setWeekStart] = useState(() => {
+    const fromSaida = resolveScheduleDateFromSaida(lockedSaida);
+    return fromSaida?.weekStart || startOfWeekMonday();
+  });
+  const [selectedIso, setSelectedIso] = useState(() => {
+    const fromSaida = resolveScheduleDateFromSaida(lockedSaida);
+    return fromSaida?.iso || getDefaultSelectedDate();
+  });
   const [loading, setLoading] = useState(true);
+  const didLoadOnceRef = useRef(false);
+  const loadSeqRef = useRef(0);
   const [agendamentos, setAgendamentos] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [expedidasIds, setExpedidasIds] = useState(() => new Set());
@@ -80,6 +91,8 @@ export default function AgendamentosGrade({
   const [transporteBookings, setTransporteBookings] = useState(null);
   const [concluirBookings, setConcluirBookings] = useState(null);
   const [bookingLocked, setBookingLocked] = useState(false);
+  const [weekDir, setWeekDir] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   const canBook = Boolean(allowBooking || lockedSaida);
   const canViewSaida = showViewSaida && !lockedSaida;
@@ -99,10 +112,12 @@ export default function AgendamentosGrade({
   );
 
   const loadData = useCallback(
-    async ({ silent = false } = {}) => {
-      if (!silent) setLoading(true);
+    async ({ silent } = {}) => {
+      const seq = ++loadSeqRef.current;
+      const isSilent = silent ?? didLoadOnceRef.current;
+      if (!isSilent) setLoading(true);
       const fromIso = toISODate(weekStart);
-      const toIso = toISODate(addDays(weekStart, 4));
+      const toIso = toISODate(addDays(weekStart, WEEKDAY_COUNT - 1));
       try {
         const [bookings, saidasList, vascs, ents, expedidas] = await Promise.all([
           listAgendamentosByRange(fromIso, toIso),
@@ -111,12 +126,15 @@ export default function AgendamentosGrade({
           canViewSaida ? entities.estoque.list() : Promise.resolve([]),
           listSaidaIdsExpedidas(),
         ]);
+        if (seq !== loadSeqRef.current) return;
         setAgendamentos(bookings || []);
         setSaidas(saidasList || []);
         setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
         setVasilhames(vascs || []);
         setEntradas(ents || []);
+        didLoadOnceRef.current = true;
       } catch (err) {
+        if (seq !== loadSeqRef.current) return;
         console.error('[AgendamentosGrade] loadData:', err);
         toast({
           title: t('painel.comercial.agendamentos.loadErrorTitle'),
@@ -128,7 +146,7 @@ export default function AgendamentosGrade({
         setSaidas([]);
         setExpedidasIds(new Set());
       } finally {
-        if (!silent) setLoading(false);
+        if (seq === loadSeqRef.current && !isSilent) setLoading(false);
       }
     },
     [weekStart, t, toast, canViewSaida]
@@ -138,7 +156,23 @@ export default function AgendamentosGrade({
     loadData();
   }, [loadData]);
 
+  const lockedSaidaId = lockedSaida?.id;
+  const lockedSaidaDate = lockedSaida?.data_solicitacao;
+
+  useEffect(() => {
+    if (!lockedSaidaId) return;
+    const fromSaida = resolveScheduleDateFromSaida({
+      data_solicitacao: lockedSaidaDate,
+    });
+    if (!fromSaida) return;
+    setWeekStart((prev) =>
+      toISODate(prev) === toISODate(fromSaida.weekStart) ? prev : fromSaida.weekStart
+    );
+    setSelectedIso((prev) => (prev === fromSaida.iso ? prev : fromSaida.iso));
+  }, [lockedSaidaId, lockedSaidaDate]);
+
   const goWeek = (delta) => {
+    setWeekDir(delta);
     const nextStart = addDays(weekStart, delta * 7);
     setWeekStart(nextStart);
     const days = getWeekDays(nextStart);
@@ -147,6 +181,13 @@ export default function AgendamentosGrade({
       const todayInWeek = days.find((d) => d.iso === today);
       setSelectedIso(todayInWeek?.iso || days[0].iso);
     }
+  };
+
+  const weekKey = toISODate(weekStart);
+  const weekMotion = {
+    initial: reduceMotion || weekDir === 0 ? false : { opacity: 0.4, x: weekDir * 56 },
+    animate: { opacity: 1, x: 0 },
+    transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
   };
 
   const scheduledSaidaIds = useMemo(() => {
@@ -343,7 +384,7 @@ export default function AgendamentosGrade({
   });
   const weekLabel = t('painel.comercial.agendamentos.weekRange', {
     start: weekDays[0].date.toLocaleDateString(locale, { day: '2-digit', month: 'short' }),
-    end: weekDays[4].date.toLocaleDateString(locale, {
+    end: weekDays[WEEKDAY_COUNT - 1].date.toLocaleDateString(locale, {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -384,9 +425,15 @@ export default function AgendamentosGrade({
         >
           <ChevronLeft className="w-4 h-4" />
         </Button>
-        <p className="flex-1 text-center text-sm font-medium text-foreground capitalize">
-          {weekLabel}
-        </p>
+        <div className="flex-1 overflow-hidden">
+          <motion.p
+            key={weekKey}
+            {...weekMotion}
+            className="text-center text-sm font-medium text-foreground capitalize"
+          >
+            {weekLabel}
+          </motion.p>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -399,7 +446,9 @@ export default function AgendamentosGrade({
         </Button>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="overflow-hidden">
+        <motion.div key={weekKey} {...weekMotion} className={compact ? 'space-y-3' : 'space-y-5'}>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         {weekDays.map((day, index) => {
           const selected = isSameISODate(day.iso, selectedIso);
           const isToday = isSameISODate(day.iso, today);
@@ -409,9 +458,14 @@ export default function AgendamentosGrade({
               key={day.iso}
               type="button"
               aria-pressed={selected}
+              aria-label={`${t(`painel.comercial.agendamentos.weekdays.${WEEKDAY_KEYS[index]}`)} ${day.date.getDate()}, ${
+                dayBookings > 0
+                  ? t('painel.comercial.agendamentos.dayBooked', { count: dayBookings })
+                  : t('painel.comercial.agendamentos.dayFree')
+              }`}
               onClick={() => setSelectedIso(day.iso)}
-              className={`relative rounded-xl border px-2 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                compact ? 'py-2' : 'py-3'
+              className={`relative flex flex-col items-center rounded-xl border px-2 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                compact ? 'py-2 pb-7' : 'py-3 pb-8'
               } ${
                 selected
                   ? 'border-primary bg-primary text-primary-foreground shadow-sm'
@@ -424,15 +478,15 @@ export default function AgendamentosGrade({
               <span className={`mt-0.5 block font-semibold tabular-nums leading-none ${compact ? 'text-base' : 'text-lg'}`}>
                 {day.date.getDate()}
               </span>
-              <span
-                className={`mt-1.5 block text-[10px] font-medium ${
-                  selected ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                }`}
-              >
-                {dayBookings > 0
-                  ? t('painel.comercial.agendamentos.dayBooked', { count: dayBookings })
-                  : t('painel.comercial.agendamentos.dayFree')}
-              </span>
+              {dayBookings > 0 ? (
+                <span
+                  className="absolute bottom-1.5 right-1.5 inline-flex items-center justify-center gap-0.5 min-w-[1.5rem] rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none text-orange-700"
+                  title={t('painel.comercial.agendamentos.dayBooked', { count: dayBookings })}
+                >
+                  <Clock className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                  {dayBookings}
+                </span>
+              ) : null}
               {isToday ? (
                 <span
                   className={`absolute top-2 right-2 h-1.5 w-1.5 rounded-full ${
@@ -581,6 +635,8 @@ export default function AgendamentosGrade({
             </div>
           </div>
         </div>
+      </div>
+        </motion.div>
       </div>
 
       {canBook && !lockedSaida ? (

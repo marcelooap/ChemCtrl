@@ -819,7 +819,6 @@ export default function Vasilhames() {
               ) : (
                 filtered.map((v, i) => {
                   const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
-                  const isExpedido = status === "Expedido";
                   const medida = resolveVasilhameMedida(v, transbordos, estoqueById);
                   const { volume: volumeCell, quantidade: quantidadeCell } =
                     renderVolumeQuantidadeCells(v, medida);
@@ -828,7 +827,7 @@ export default function Vasilhames() {
                       key={v.id}
                       className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                         i % 2 === 1 ? "bg-muted/40/30" : ""
-                      } ${isExpedido ? "opacity-50" : ""}`}
+                      }`}
                     >
                       <td className="px-4 py-3 font-medium text-primary">{v.codigo || "-"}</td>
                       <td className="px-4 py-3 text-foreground">{v.placa || "-"}</td>

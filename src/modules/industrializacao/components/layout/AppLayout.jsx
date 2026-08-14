@@ -8,6 +8,7 @@ import AppShell from '@shared/components/layout/AppShell';
 import { SystemManualMenu } from '@industrializacao/components/user/SystemManualMenu';
 import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
 import { createSupabaseEntities } from '@industrializacao/api/supabaseClient';
+import { SaidaNovasProvider } from '@transbordo/context/SaidaNovasContext';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -35,7 +36,7 @@ export default function AppLayout() {
   }
 
   return (
-    <>
+    <SaidaNovasProvider onlyIndustrializacao>
       <AppShell
         sidebar={<Sidebar />}
         topBarProps={{
@@ -47,6 +48,6 @@ export default function AppLayout() {
         contentClassName="overflow-y-auto"
       />
       {showWelcome && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
-    </>
+    </SaidaNovasProvider>
   );
 }

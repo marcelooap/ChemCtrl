@@ -149,4 +149,5 @@ export const entities = {
   elementos_filtrantes: createEntity('t_elementos_filtrantes'),
   materialReservas: createEntity('t_material_reservas'),
   agendamentosCarregamento: createEntity('t_agendamentos_carregamento'),
+  saidaLeituras: createEntity('t_saida_leituras'),
 };

@@ -11,6 +11,7 @@ import {
 } from "@transbordo/lib/fifo";
 import { entities } from "@transbordo/services/entities";
 import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
+import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
 
 /**
  * Quantidade original do registro de estoque (unidade operacional).
@@ -814,7 +815,7 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
   const emLitros = estoqueOperaEmLitros(estoqueItem);
 
   return (saidas || []).reduce((sum, saida) => {
-    if (!saida?.enviado_ao_fiscal) return sum;
+    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return sum;
     return (
       sum +
       (saida.itens || []).reduce((s, item) => {
@@ -850,7 +851,7 @@ export function calcSaidasConvencional(
   const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
 
   return (saidas || []).reduce((sum, saida) => {
-    if (!saida?.enviado_ao_fiscal) return sum;
+    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return sum;
     return (
       sum +
       (saida.itens || []).reduce((s, item) => {
@@ -1093,7 +1094,7 @@ export function calcVasilhamesExpedidosPatio(
 
   const fiscalVasilhameIds = new Set();
   (saidas || []).forEach((saida) => {
-    if (!saida?.enviado_ao_fiscal) return;
+    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
     (saida.itens || []).forEach((item) => {
       if (item.tipo === "convencional" && item.vasilhame_id) {
         fiscalVasilhameIds.add(item.vasilhame_id);
@@ -1255,18 +1256,16 @@ export function listSaidasHistoricoForEstoque(
         vasilhame: vasilhameLabel,
         quantidade,
         unidade,
-        status: saida.enviado_ao_fiscal
+        status: isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)
           ? "Validado"
-          : saida.status === "enviado_fiscal"
-            ? "Validado"
-            : "Pendente",
+          : "Pendente",
         enviadoEm: saida.enviado_fiscal_data,
         responsavel:
           saida.enviado_fiscal_usuario ||
           saida.usuario_responsavel ||
           saida.usuario_criador ||
           "—",
-        enviado_ao_fiscal: !!saida.enviado_ao_fiscal,
+        enviado_ao_fiscal: isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO),
       });
     });
   });

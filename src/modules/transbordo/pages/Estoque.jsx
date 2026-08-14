@@ -552,7 +552,7 @@ export default function Estoque() {
                       i % 2 === 1 ? "bg-muted/40/30" : ""
                     } ${saldoZerado ? "opacity-50" : ""}`}
                   >
-                    <td className="px-5 py-3 font-mono font-medium text-primary">
+                    <td className="px-5 py-3 font-medium text-primary">
                       {formatEstoqueCodigo(e.codigo_estoque)}
                     </td>
                     <td className="px-5 py-3 font-medium text-foreground">

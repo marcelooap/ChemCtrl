@@ -665,7 +665,7 @@
         },
         "agendamentos": {
           "title": "Loading Schedule",
-          "subtitle": "Loading time slots from Monday to Friday",
+          "subtitle": "Loading time slots from Monday to Saturday",
           "emptyTitle": "Schedules",
           "emptyDescription": "Initial structure prepared for commercial schedules."
         }
@@ -732,10 +732,11 @@
           "tue": "Tue",
           "wed": "Wed",
           "thu": "Thu",
-          "fri": "Fri"
+          "fri": "Fri",
+          "sat": "Sat"
         },
-        "dayFree": "Free",
-        "dayBooked": "{{count}} booked",
+        "dayFree": "No slots scheduled",
+        "dayBooked": "{{count}} scheduled slots",
         "morning": "Morning",
         "afternoon": "Afternoon",
         "lunch": "Lunch",

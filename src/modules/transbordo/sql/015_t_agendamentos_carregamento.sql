@@ -1,6 +1,6 @@
 -- Transbordo / Painel Comercial — Agendamentos de carregamento
 -- ============================================================
--- Grade de horários (seg–sex) vinculada às saídas (t_saidas).
+-- Grade de horários (seg–sáb) vinculada às saídas (t_saidas).
 -- Executar no SQL Editor do Supabase do ChemFlow.
 --
 -- usuario_id é TEXT porque o ID do usuário vem da plataforma ChemCtrl.

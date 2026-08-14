@@ -22,6 +22,8 @@ import {
   TIPO_IND_RETORNO_MP,
   tipoItemLabel,
   formatSaidaItemInformacoes,
+  resolveItemOrigem,
+  isSaidaValidadaNoModulo,
 } from "@transbordo/lib/saidaOrigem";
 
 const formatDate = (d) => {
@@ -77,6 +79,7 @@ export default function SaidaViewDialog({
   entradas = [],
   variant = "default",
   showRelatorioFiscal = true,
+  highlightModule = null,
 }) {
   const { t } = useTranslation();
   if (!saida) return null;
@@ -84,8 +87,11 @@ export default function SaidaViewDialog({
   const isAgendamento = variant === "agendamento";
   const itens = saida.itens || [];
   const colCount = isAgendamento ? 7 : 6;
-  const statusLabel =
-    saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
+  const statusLabel = highlightModule
+    ? isSaidaValidadaNoModulo(saida, highlightModule)
+      ? "Validado"
+      : "Pendente"
+    : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
       ? "Validado"
       : "Pendente";
   const showRelatorio = isAgendamento || showRelatorioFiscal;
@@ -161,22 +167,31 @@ export default function SaidaViewDialog({
                   const vasilhame = item.vasilhame_id
                     ? vasilhames.find((v) => v.id === item.vasilhame_id)
                     : null;
+                  const isForeignModule =
+                    Boolean(highlightModule) &&
+                    resolveItemOrigem(item) !== highlightModule;
                   return (
                   <tr
                     key={i}
                     className={`border-b border-border last:border-0 ${
                       i % 2 === 1 ? "bg-muted/30" : ""
-                    }`}
+                    } ${isForeignModule ? "text-muted-foreground/80" : ""}`}
                   >
-                    <td className="px-3 py-2.5 font-medium text-primary whitespace-nowrap">
+                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                      isForeignModule ? "text-muted-foreground" : "text-primary"
+                    }`}>
                       {saida.codigo || item.produto_codigo || "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-foreground">
+                    <td className={`px-3 py-2.5 ${
+                      isForeignModule ? "text-muted-foreground" : "text-foreground"
+                    }`}>
                       {item.produto_nome || "—"}
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadgeClass(item.tipo)}`}
+                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadgeClass(item.tipo)} ${
+                          isForeignModule ? "opacity-60" : ""
+                        }`}
                       >
                         {tipoItemLabel(item)}
                       </span>
@@ -188,10 +203,14 @@ export default function SaidaViewDialog({
                         context: isAgendamento ? "agendamento" : "default",
                       })}
                     </td>
-                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">
+                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                      isForeignModule ? "text-muted-foreground" : "text-foreground"
+                    }`}>
                       {qtdSolicitada(item)}
                     </td>
-                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">
+                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                      isForeignModule ? "text-muted-foreground" : "text-foreground"
+                    }`}>
                       {isAgendamento ? formatQtdEmbalagens(item) : qtdFinalEstoque(item)}
                     </td>
                     {isAgendamento ? (

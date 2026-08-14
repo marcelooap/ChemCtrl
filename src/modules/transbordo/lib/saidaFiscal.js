@@ -18,16 +18,53 @@ import {
   TIPO_IND_VASILHAME,
   TIPO_IND_RETORNO_MP,
   DESTINO_RETORNO_MP,
+  ORIGEM_INDUSTRIALIZACAO,
+  ORIGEM_TRANSBORDO,
+  isIndustrializacaoItem,
+  isTransbordoItem,
+  isSaidaModuloPainel,
+  allModulosRelevantesValidados,
+  getModulosRelevantesSaida,
 } from "@transbordo/lib/saidaOrigem";
-import {
-  getContainerPackageQty,
-  isUnitPackagingType,
-  formatAggregatedContainerLabel,
-} from "@industrializacao/lib/packagingTypes";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
 
 function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
+}
+
+function itemsForModuleScope(itens, moduleScope) {
+  if (!moduleScope || moduleScope === "all") return itens || [];
+  if (moduleScope === ORIGEM_INDUSTRIALIZACAO) {
+    return (itens || []).filter(isIndustrializacaoItem);
+  }
+  return (itens || []).filter(isTransbordoItem);
+}
+
+function mergeValidacaoModulos(saida, moduleScope, checked, userNome) {
+  const prev =
+    saida?.validacao_modulos &&
+    typeof saida.validacao_modulos === "object" &&
+    !Array.isArray(saida.validacao_modulos)
+      ? { ...saida.validacao_modulos }
+      : {};
+  const hasEntries = Object.keys(prev).length > 0;
+  if (
+    !hasEntries &&
+    (saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal")
+  ) {
+    for (const m of getModulosRelevantesSaida(saida)) {
+      prev[m] = { validado: true };
+    }
+  }
+  if (!moduleScope || moduleScope === "all") return prev;
+  prev[moduleScope] = checked
+    ? {
+        validado: true,
+        usuario: userNome || null,
+        data: new Date().toISOString(),
+      }
+    : { validado: false, usuario: null, data: null };
+  return prev;
 }
 
 /** Densidade do vasilhame (campo, peso/volume atuais ou snapshot do item da saída). */
@@ -60,22 +97,46 @@ export async function applySaidaFiscalToggle(
     estoque = [],
     vasilhames = [],
     transbordos = null,
+    moduleScope = "all",
   } = {}
 ) {
   if (!saida?.id) throw new Error("Saída inválida");
 
-  const itens = saida.itens || [];
+  const itensAll = saida.itens || [];
+  const scope =
+    isSaidaModuloPainel(saida) &&
+    (moduleScope === ORIGEM_TRANSBORDO ||
+      moduleScope === ORIGEM_INDUSTRIALIZACAO)
+      ? moduleScope
+      : "all";
+  const itens = itemsForModuleScope(itensAll, scope);
+  const scopedRefs = new Set(itens);
   // Data de registro da expedição = dia local em que o fiscal marca como enviado
   // (não usar data_programada nem toISOString UTC, que atrasa/avança o dia no BR).
   const dataSaidaRegistro = todayDateInputValue();
   const dataSaidaProgramada = saida.data_programada || "";
   const dataSaida = dataSaidaRegistro || dataSaidaProgramada;
 
+  const validacaoModulos = mergeValidacaoModulos(
+    saida,
+    scope,
+    checked,
+    userNome
+  );
+  const allDone =
+    scope === "all"
+      ? checked
+      : allModulosRelevantesValidados(
+          { ...saida, itens: itensAll },
+          validacaoModulos
+        );
+
   const updates = {
-    enviado_ao_fiscal: checked,
-    status: checked ? "enviado_fiscal" : "aguardando",
-    enviado_fiscal_usuario: checked ? userNome || null : null,
-    enviado_fiscal_data: checked ? new Date().toISOString() : null,
+    enviado_ao_fiscal: allDone,
+    status: allDone ? "enviado_fiscal" : "aguardando",
+    enviado_fiscal_usuario: allDone ? userNome || null : null,
+    enviado_fiscal_data: allDone ? new Date().toISOString() : null,
+    validacao_modulos: validacaoModulos,
   };
 
   const estoqueById = new Map((estoque || []).map((e) => [e.id, e]));
@@ -98,7 +159,8 @@ export async function applySaidaFiscalToggle(
   const containerById = new Map(containersInd.map((c) => [c.id, c]));
   const stockById = new Map(stocksInd.map((s) => [s.id, s]));
 
-  const updatedItens = itens.map((item) => {
+  const updatedItens = itensAll.map((item) => {
+    if (scope !== "all" && !scopedRefs.has(item)) return item;
     if (item.tipo === "embalado" && item.entrada_id) {
       const e = estoqueById.get(item.entrada_id);
       const estoqueAtual = e?.saldo_atual || 0;
@@ -265,55 +327,28 @@ export async function applySaidaFiscalToggle(
     const c = containerById.get(cid);
     if (!c) continue;
     const item = itemByContainer[cid];
-    const volTaken = volByContainer[cid] || 0;
-    const currentVol = Number(c.volume) || 0;
-
-    let newVol;
-    let newNet;
     let patch;
 
     if (!checked) {
-      // Reverter: restaura volume absoluto do snapshot (idempotente se já voltou ao pátio)
-      const restore = buildContainerYardRestorePatch(c, [{ item }]);
-      patch = restore || {
-        status: "No Pátio",
-        departure_date: null,
-        volume: Math.max(0, roundVolume(currentVol + volTaken)),
-      };
-      newVol = patch.volume;
-      newNet = patch.net_weight;
-    } else {
-      newVol = Math.max(0, roundVolume(currentVol - volTaken));
-      const dens = parseDensidade(c.density);
-      newNet =
-        dens > 0
-          ? roundMass(newVol * dens)
-          : Math.max(
-              0,
-              roundMass(
-                (Number(c.net_weight) || 0) - (item?.peso_liquido || 0)
-              )
-            );
-
-      patch = {
-        volume: newVol,
-        net_weight: newNet,
-        gross_weight: roundMass((Number(c.tare) || 0) + newNet),
-        status: newVol <= 0 ? "Expedido" : "No Pátio",
-        departure_date: newVol <= 0 ? dataSaidaRegistro || null : null,
-      };
-
-      if (isUnitPackagingType(c.type)) {
-        const qtdAtual = getContainerPackageQty(c);
-        const qtdSaida =
-          Number(item?.quantidade_embalagens) > 0
-            ? Math.round(Number(item.quantidade_embalagens))
-            : 0;
-        const qtdNova = Math.max(0, qtdAtual - qtdSaida);
-        if (qtdNova > 0) {
-          patch.container_number = formatAggregatedContainerLabel(qtdNova, c.type);
-        }
+      const currentVolNow = Number(c.volume) || 0;
+      if (currentVolNow <= 0) {
+        // Volume zerado em validação antiga: restaura snapshot para o pátio.
+        const restore = buildContainerYardRestorePatch(c, [{ item }]);
+        patch = restore || {
+          status: "No Pátio",
+          departure_date: null,
+        };
+      } else {
+        patch = {
+          status: "No Pátio",
+          departure_date: null,
+        };
       }
+    } else {
+      patch = {
+        status: "Expedido",
+        departure_date: dataSaidaRegistro || null,
+      };
     }
 
     await base44.entities.Container.update(cid, patch);

@@ -665,7 +665,7 @@
         },
         "agendamentos": {
           "title": "Planification des Chargements",
-          "subtitle": "Créneaux de chargement du lundi au vendredi",
+          "subtitle": "Créneaux de chargement du lundi au samedi",
           "emptyTitle": "Planifications",
           "emptyDescription": "Structure initiale préparée pour les planifications commerciales."
         }
@@ -732,10 +732,11 @@
           "tue": "Mar",
           "wed": "Mer",
           "thu": "Jeu",
-          "fri": "Ven"
+          "fri": "Ven",
+          "sat": "Sam"
         },
-        "dayFree": "Libre",
-        "dayBooked": "{{count}} occ.",
+        "dayFree": "Aucun créneau planifié",
+        "dayBooked": "{{count}} créneaux planifiés",
         "morning": "Matin",
         "afternoon": "Après-midi",
         "lunch": "Déjeuner",

@@ -665,7 +665,7 @@
         },
         "agendamentos": {
           "title": "Agendamentos de Carregamento",
-          "subtitle": "Grade de horários de carregamento de segunda a sexta",
+          "subtitle": "Grade de horários de carregamento de segunda a sábado",
           "emptyTitle": "Agendamentos",
           "emptyDescription": "Estrutura inicial preparada para os agendamentos comerciais."
         }
@@ -732,10 +732,11 @@
           "tue": "Ter",
           "wed": "Qua",
           "thu": "Qui",
-          "fri": "Sex"
+          "fri": "Sex",
+          "sat": "Sáb"
         },
-        "dayFree": "Livre",
-        "dayBooked": "{{count}} ocup.",
+        "dayFree": "Nenhum horário agendado",
+        "dayBooked": "{{count}} horários agendados",
         "morning": "Manhã",
         "afternoon": "Tarde",
         "lunch": "Almoço",

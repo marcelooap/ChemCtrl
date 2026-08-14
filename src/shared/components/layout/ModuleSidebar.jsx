@@ -23,7 +23,7 @@ const labelClass = (collapsed) =>
  * @param {string} props.logoAlt
  * @param {string} props.moduleName
  * @param {string} props.moduleSubtitle
- * @param {Array} props.items - flat or grouped nav items
+ * @param {Array} props.items - flat or grouped nav items (optional badgeCount)
  * @param {(path: string) => boolean} [props.canAccessPath]
  * @param {(item: object) => string} [props.resolveLabel] - defaults to item.label
  * @param {boolean} [props.showModulesLink] - link de volta ao ChemCtrl
@@ -80,6 +80,8 @@ export default function ModuleSidebar({
     const Icon = item.icon || LayoutDashboard;
     const label = resolveLabel(item);
     const active = isActive(item.path, item.end);
+    const badgeCount = Number(item.badgeCount) || 0;
+    const badgeText = badgeCount > 99 ? '+99' : badgeCount > 0 ? `+${badgeCount}` : '';
 
     if (nested) {
       return (
@@ -92,6 +94,11 @@ export default function ModuleSidebar({
         >
           <Icon className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">{label}</span>
+          {badgeText ? (
+            <span className="ml-auto shrink-0 text-[10px] font-semibold tabular-nums text-sky-300">
+              {badgeText}
+            </span>
+          ) : null}
         </Link>
       );
     }
@@ -100,13 +107,34 @@ export default function ModuleSidebar({
       <Link
         key={item.path}
         to={item.path}
+        title={collapsed && badgeText ? `${label} ${badgeText}` : undefined}
         className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
           active ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/5'
         }`}
         style={active ? { background: ACTIVE_BG } : {}}
       >
-        <Icon className="w-4 h-4 shrink-0" />
+        <span className="relative shrink-0">
+          <Icon className="w-4 h-4" />
+          {collapsed && badgeText ? (
+            <span
+              className={`pointer-events-none absolute -top-1.5 -right-2.5 min-w-[1.15rem] h-[1.15rem] px-0.5 rounded-full text-[9px] font-bold leading-none flex items-center justify-center tabular-nums ${
+                active ? 'bg-white text-[#2575D1]' : 'bg-[#2575D1] text-white'
+              }`}
+              aria-label={`${badgeCount} novas solicitações`}
+            >
+              {badgeText}
+            </span>
+          ) : null}
+        </span>
         <span className={labelClass(collapsed)}>{label}</span>
+        {!collapsed && badgeText ? (
+          <span
+            className="shrink-0 text-[11px] font-semibold tabular-nums text-sky-300"
+            aria-label={`${badgeCount} novas solicitações`}
+          >
+            {badgeText}
+          </span>
+        ) : null}
       </Link>
     );
   };
