@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Truck, X } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Truck, X, Printer, Loader2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
@@ -47,6 +47,8 @@ import {
   needsVasilhameYardVolumeHeal,
 } from "@transbordo/lib/vasilhamePatio";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+import { printEtiquetaVasilhame } from "@transbordo/lib/printSaidaAgendamento";
+import { useToast } from "@shared/components/ui/use-toast";
 
 function labelUnidadeEntrada(unidade) {
   const u = normalizeUnidadeEntrada(unidade);
@@ -186,6 +188,7 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
 }
 
 export default function Vasilhames() {
+  const { toast } = useToast();
   const [vasilhames, setVasilhames] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -202,6 +205,7 @@ export default function Vasilhames() {
   const [saidaQtdEmbalagens, setSaidaQtdEmbalagens] = useState("");
   const [saidaError, setSaidaError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [printingId, setPrintingId] = useState(null);
   const [transbordos, setTransbordos] = useState([]);
   const [estoqueById, setEstoqueById] = useState(() => new Map());
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
@@ -427,6 +431,23 @@ export default function Vasilhames() {
   const handleView = (v) => {
     setViewVasilhame(v);
     setViewOpen(true);
+  };
+
+  const handlePrintLabel = async (v) => {
+    if (!v?.id || printingId) return;
+    setPrintingId(v.id);
+    try {
+      await printEtiquetaVasilhame(v);
+    } catch (err) {
+      console.error("[Vasilhames] imprimir etiqueta:", err);
+      toast({
+        title: "Não foi possível imprimir a etiqueta.",
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setPrintingId(null);
+    }
   };
 
   const syncEstoqueFromVasilhame = async (vasilhame) => {
@@ -881,10 +902,23 @@ export default function Vasilhames() {
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(v.data_saida)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => handleView(v)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Visualizar">
+                          <button onClick={() => handleView(v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Visualizar">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleEdit(v)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Editar">
+                          <button
+                            type="button"
+                            onClick={() => handlePrintLabel(v)}
+                            disabled={printingId === v.id}
+                            className="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                            title="Imprimir etiqueta"
+                          >
+                            {printingId === v.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Printer className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button onClick={() => handleEdit(v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Editar">
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button onClick={() => handleSaida(v)} className="text-muted-foreground hover:text-primary transition-colors" title="Lançar Saída">

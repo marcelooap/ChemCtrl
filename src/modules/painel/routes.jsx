@@ -4,7 +4,8 @@ import RealtimeProvider from '@industrializacao/components/RealtimeProvider';
 import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
 import Home from '@painel/pages/Home';
-import Configuracao from '@painel/pages/Configuracao';
+import Operadores from '@painel/pages/configuracao/Operadores';
+import Etiquetas from '@painel/pages/configuracao/Etiquetas';
 import Dashboard from '@painel/pages/Dashboard';
 import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
@@ -30,7 +31,9 @@ export default function PainelRoutes() {
           <Route element={<MainLayout />}>
             <Route index element={<Navigate to="home" replace />} />
             <Route path="home" element={<Home />} />
-            <Route path="configuracao" element={<Configuracao />} />
+            <Route path="configuracao" element={<Navigate to="/painel/configuracao/operadores" replace />} />
+            <Route path="configuracao/operadores" element={<Operadores />} />
+            <Route path="configuracao/etiquetas" element={<Etiquetas />} />
 
             <Route
               path="comercial"

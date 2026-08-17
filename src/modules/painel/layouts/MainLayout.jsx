@@ -13,6 +13,8 @@ import {
   Calendar,
   CalendarClock,
   PackageCheck,
+  HardHat,
+  Tag,
   Settings,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -91,9 +93,21 @@ export default function MainLayout() {
       : [];
 
     const configItem = {
-      path: '/painel/configuracao',
+      groupId: 'configuracao',
       label: t('painel.nav.configuracao'),
       icon: Settings,
+      children: [
+        {
+          path: '/painel/configuracao/operadores',
+          label: t('painel.nav.operadores'),
+          icon: HardHat,
+        },
+        {
+          path: '/painel/configuracao/etiquetas',
+          label: t('painel.nav.etiquetas'),
+          icon: Tag,
+        },
+      ],
     };
 
     return [...base, ...business, ...adminItems, configItem];
@@ -117,6 +131,7 @@ export default function MainLayout() {
           canAccessPath={(path) =>
             path === '/painel/home'
             || path === '/painel/configuracao'
+            || path.startsWith('/painel/configuracao/')
             || canAccessRoute(user, path)
           }
           showModulesLink={false}

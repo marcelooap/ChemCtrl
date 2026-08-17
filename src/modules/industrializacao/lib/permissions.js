@@ -72,7 +72,7 @@ export function canAccessRoute(user, path) {
     return true;
   }
   if (
-    (path === '/painel/home' || path === '/painel' || path === '/painel/' || path === '/painel/configuracao')
+    (path === '/painel/home' || path === '/painel' || path === '/painel/' || path === '/painel/configuracao' || path.startsWith('/painel/configuracao/'))
     && user.tipo !== 'externo'
   ) {
     return true;

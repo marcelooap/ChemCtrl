@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,10 @@ import {
   seedComposicaoFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
+import {
+  listOperadoresAtivosNomes,
+  mergeOperadoresDropdown,
+} from "@transbordo/lib/operadoresCadastro";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -105,14 +109,6 @@ function destinoMassaKg(d, dens) {
   return roundMass(dens > 0 ? vol * dens : 0);
 }
 
-const OPERADORES = [
-  "Adriano Q.",
-  "Leonardo S.",
-  "Rafael N.",
-  "Mariano",
-  "Ezequiel F.",
-  "Wandre C.",
-];
 
 const createdAt = (row) => row?.created_at || row?.created_date || 0;
 
@@ -199,6 +195,7 @@ export default function TransbordoModal({
   const [produtoDisplay, setProdutoDisplay] = useState("");
   const [densidade, setDensidade] = useState(0);
   const [operadores, setOperadores] = useState([]);
+  const [operadoresAtivos, setOperadoresAtivos] = useState([]);
   const [observacoes, setObservacoes] = useState("");
   const [origens, setOrigens] = useState([]);
   const [destinos, setDestinos] = useState([]);
@@ -433,6 +430,26 @@ export default function TransbordoModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listOperadoresAtivosNomes()
+      .then((ativos) => {
+        if (!cancelled) setOperadoresAtivos(ativos);
+      })
+      .catch(() => {
+        if (!cancelled) setOperadoresAtivos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const operadoresOpcoes = useMemo(
+    () => mergeOperadoresDropdown(operadoresAtivos, operadores),
+    [operadoresAtivos, operadores]
+  );
 
   const clientesComProdutos = produtos
     .filter((p) => p.cliente_nome)
@@ -1309,7 +1326,12 @@ export default function TransbordoModal({
                     {operadoresOpen && !readOnly && (
                       <div className="absolute z-50 mt-1 w-full bg-card rounded-md border border-border shadow-lg overflow-hidden">
                         <div className="max-h-48 overflow-y-auto">
-                          {OPERADORES.map((op) => (
+                          {operadoresOpcoes.length === 0 ? (
+                            <p className="px-3 py-3 text-sm text-muted-foreground">
+                              Nenhum operador cadastrado. Cadastre em Painel → Configurações → Operadores.
+                            </p>
+                          ) : (
+                            operadoresOpcoes.map((op) => (
                             <label
                               key={op}
                               className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
@@ -1322,7 +1344,8 @@ export default function TransbordoModal({
                               />
                               <span className="text-foreground/80">{op}</span>
                             </label>
-                          ))}
+                            ))
+                          )}
                         </div>
                       </div>
                     )}

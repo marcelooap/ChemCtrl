@@ -200,7 +200,10 @@ export default function Estoque() {
           (prev || []).map((e) => (e.id === item.id ? { ...e, public_token: publicToken } : e))
         );
       }
-      await printRawMaterialLabel({ ...item, public_token: publicToken }, publicToken);
+      await printRawMaterialLabel({ ...item, public_token: publicToken }, publicToken, {
+        clienteNome: item.client,
+        contexto: 'industrializacao',
+      });
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     }

@@ -1,12 +1,21 @@
-// Gera e imprime etiqueta de vasilhame (105mm x 50mm) para impressora Zebra
-// Layout: fundo branco, texto preto — com coluna de QR Code (SVG) para rastreabilidade pública
+// Gera e imprime etiqueta (105mm x 50mm) para impressora Zebra
+// Layout configurável por cliente (Painel → Configurações → Etiquetas).
+// Sem config salva, usa o layout histórico (não quebra etiquetas existentes).
 
 import React from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { QRCodeSVG } from 'qrcode.react';
 import i18n from '@/i18n';
-import { fmtDate, fmtNumber, toDateInputValue } from '@/i18n/formatters';
+import { fmtNumber, toDateInputValue } from '@/i18n/formatters';
+import {
+  formatEtiquetaDate,
+  extractDateFormat,
+  extractOrientation,
+  partitionEtiquetaCampos,
+  resolveEtiquetaPrintConfig,
+  resolveResponsavelTecnico,
+} from '@transbordo/lib/etiquetaConfig';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -31,11 +40,9 @@ function addCalendarDays(dateValue, days) {
   return local;
 }
 
-function calcValidity(fabDateStr, validityDays, lang) {
-  if (!fabDateStr) return '—';
-  const expiry = addCalendarDays(fabDateStr, validityDays);
-  if (!expiry) return '—';
-  return fmtDate(expiry, undefined, lang);
+function calcValidityDate(fabDateStr, validityDays) {
+  if (!fabDateStr) return null;
+  return addCalendarDays(fabDateStr, validityDays);
 }
 
 function makeQrElement(publicUrl) {
@@ -82,279 +89,390 @@ async function buildQrSvgMarkup(publicToken) {
   return markup;
 }
 
+function dataRowLabel(key, t) {
+  switch (key) {
+    case 'id': return t('pdf.label.ref');
+    case 'lote': return t('pdf.label.lot');
+    case 'fabricacao': return t('pdf.label.manufacture');
+    case 'validade': return t('pdf.label.expiry');
+    case 'cliente': return t('pdf.label.client');
+    case 'volume': return t('pdf.label.volume');
+    case 'responsavel_tecnico': return t('pdf.label.technicalManager');
+    default: return key;
+  }
+}
+
+function labelCss(orientation = 'horizontal') {
+  const vertical = orientation === 'vertical';
+  const pageW = vertical ? '50mm' : '105mm';
+  const pageH = vertical ? '105mm' : '50mm';
+  return `
+  @page { size: ${pageW} ${pageH}; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', Arial, sans-serif; }
+  html, body { margin: 0; padding: 0; width: ${pageW}; height: ${pageH}; }
+  .label {
+    width: ${pageW}; height: ${pageH};
+    background: #FFFFFF; color: #000000;
+    padding: ${vertical ? '2mm 2.4mm' : '1.2mm 3.5mm'};
+    display: flex; flex-direction: column;
+    justify-content: flex-start;
+    border: 1px solid #000;
+    overflow: hidden;
+  }
+  .top-section { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2mm; min-width: 0; overflow: hidden; }
+  .product { font-size: ${vertical ? '11pt' : '13pt'}; font-weight: 800; line-height: 1.05; flex-shrink: 0; }
+  .label.dense .product { font-size: 11.5pt; }
+  .label.vertical .product { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .data-block { display: flex; gap: 1.5mm; margin-top: 0.8mm; flex: 1; min-height: 0; overflow: hidden; }
+  .icon-col { display: flex; align-items: flex-start; padding-top: 0.3mm; }
+  .icon-col svg { width: 5.5mm; height: 5.5mm; }
+  .fields { flex: 1; display: flex; gap: 2mm; min-width: 0; overflow: hidden; }
+  .fields-left, .fields-right { display: flex; flex-direction: column; justify-content: flex-start; gap: 0.4mm; min-width: 0; }
+  .fields-left { flex: 1; }
+  .fields-right { width: 34%; flex-shrink: 0; gap: 1.2mm; }
+  .field-row { display: flex; align-items: baseline; font-size: 7.5pt; line-height: 1.15; min-width: 0; }
+  .field-row .lbl { font-weight: 800; text-transform: uppercase; flex-shrink: 0; }
+  .field-row .sep { margin: 0 0.6mm; flex-shrink: 0; }
+  .field-row .val { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-row.wrap .val { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: ellipsis; }
+  .fields-right .field-row { flex-direction: column; align-items: flex-start; gap: 0.15mm; }
+  .fields-right .sep { display: none; }
+  .fields-right .lbl { font-size: 6pt; }
+  .fields-right .val { font-size: 8pt; white-space: nowrap; }
+  .qr-col {
+    width: 26mm;
+    display: flex; flex-direction: column; align-items: center;
+    border-left: 0.5px solid #000;
+    padding: 0.3mm 0 0.3mm 2mm;
+    flex-shrink: 0;
+  }
+  .label.vertical .qr-col {
+    width: 100%;
+    border-left: none;
+    padding: 1.2mm 0;
+  }
+  .label.vertical .fields { flex-direction: column; gap: 0.8mm; flex: 1; }
+  .label.vertical .fields-main { display: flex; flex-direction: column; gap: 0.5mm; }
+  .label.vertical .fields-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; }
+  .label.vertical .fields-dates .field-row { flex-direction: column; align-items: flex-start; gap: 0.15mm; }
+  .label.vertical .fields-dates .sep { display: none; }
+  .label.vertical .fields-dates .lbl { font-size: 6pt; }
+  .label.vertical .fields-dates .val { font-size: 8pt; }
+  .label.vertical .field-row { font-size: 8pt; }
+  .ref { font-size: 8pt; font-weight: 700; align-self: flex-start; }
+  .label.vertical .ref { align-self: center; font-size: 7.5pt; }
+  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .qr-code svg { width: 18mm; height: 18mm; }
+  .label.vertical .qr-code svg { width: 22mm; height: 22mm; }
+  .qr-hint { font-size: 5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
+  .weight-table { width: 100%; border-collapse: collapse; margin-top: 0.5mm; flex-shrink: 0; }
+  .weight-table td { border: 0.5px solid #000; padding: 0.5mm 1.2mm; font-size: 7pt; }
+  .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
+  .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
+  .wt-value { font-weight: 800; text-align: right; width: 35%; }
+  .footer { font-size: 8pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; margin-top: 0.4mm; flex-shrink: 0; min-width: 0; }
+  .footer .sep { margin: 0 0.6mm; }
+  .footer .emb { font-size: 9pt; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }`;
+}
+
+function qrColumnHtml({ publicToken, qrSvgMarkup, refId, showId, qrHint, t }) {
+  const refLine = showId
+    ? `<div class="ref">${t('pdf.label.ref')}: ${escapeHtml(refId)}</div>`
+    : '';
+  if (publicToken && qrSvgMarkup) {
+    return `<div class="qr-col">${refLine}<div class="qr-code">${qrSvgMarkup}</div><div class="qr-hint">${qrHint}</div></div>`;
+  }
+  if (publicToken) {
+    return `<div class="qr-col">${refLine}<div class="qr-code"><span style="font-size:5pt;color:#999;">${t('pdf.label.qrError')}</span></div><div class="qr-hint">${qrHint}</div></div>`;
+  }
+  return `<div class="qr-col">${refLine}<div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div><div class="qr-hint">${qrHint}</div></div>`;
+}
+
+async function printConfiguredLabel({
+  title,
+  product,
+  refId,
+  lot,
+  client,
+  fabDate,
+  valDate,
+  netWeight,
+  grossWeight,
+  volume,
+  embalagem,
+  publicToken,
+  qrHint,
+  campos,
+  lang,
+  t,
+  responsavelTecnico,
+  orientation = 'horizontal',
+}) {
+  const vertical = orientation === 'vertical';
+  const win = window.open('', '_blank', vertical ? 'width=280,height=520' : 'width=420,height=300');
+  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
+
+  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
+  win.document.close();
+
+  const layout = partitionEtiquetaCampos(campos);
+  const qrSvgMarkup = layout.showQr ? await buildQrSvgMarkup(publicToken) : '';
+
+  const dataValues = {
+    id: refId,
+    lote: lot,
+    fabricacao: fabDate,
+    validade: valDate,
+    cliente: client,
+    volume,
+    responsavel_tecnico: responsavelTecnico || '—',
+  };
+
+  const wrapKeys = new Set(['responsavel_tecnico', 'cliente']);
+  const fieldRowHtml = (row) => {
+    const val = dataValues[row.key] ?? '—';
+    const wrap = wrapKeys.has(row.key) ? ' wrap' : '';
+    return `<div class="field-row${wrap}"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep">•</span><span class="val">${escapeHtml(val)}</span></div>`;
+  };
+
+  const dataLayout = layout.dataLayout || { mode: 'stack', left: layout.dataRows || [], right: [] };
+  const split = dataLayout.mode === 'split' && dataLayout.right.length > 0;
+  const allRows = [...(dataLayout.left || []), ...(dataLayout.right || [])];
+  const uniqueRows = allRows.filter((row, index) => allRows.findIndex((item) => item.key === row.key) === index);
+  const dateRows = uniqueRows.filter((row) => row.key === 'fabricacao' || row.key === 'validade');
+  const rtRows = uniqueRows.filter((row) => row.key === 'responsavel_tecnico');
+  const otherRows = uniqueRows.filter(
+    (row) => row.key !== 'fabricacao' && row.key !== 'validade' && row.key !== 'responsavel_tecnico'
+  );
+
+  let fieldRows;
+  if (vertical) {
+    fieldRows = `
+      <div class="fields-main">${otherRows.map(fieldRowHtml).join('')}</div>
+      ${dateRows.length ? `<div class="fields-dates">${dateRows.map(fieldRowHtml).join('')}</div>` : ''}
+      ${rtRows.map(fieldRowHtml).join('')}
+    `;
+  } else {
+    const leftHtml = dataLayout.left.map(fieldRowHtml).join('');
+    const rightHtml = split ? dataLayout.right.map(fieldRowHtml).join('') : '';
+    fieldRows = split
+      ? `<div class="fields-left">${leftHtml}</div><div class="fields-right">${rightHtml}</div>`
+      : `<div class="fields-left">${leftHtml}</div>`;
+  }
+
+  const productHtml = layout.showNome
+    ? `<div class="product">${escapeHtml(product)}</div>`
+    : '';
+
+  const dense = split || dataLayout.left.length >= 4;
+  const flaskIcon = fieldRows && !dense && !vertical
+    ? `<div class="icon-col">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2">
+            <path d="M9 2c-1 3-4 5-4 9a7 7 0 0 0 14 0c0-4-3-6-4-9"/>
+            <path d="M9 11a3 3 0 0 0 6 0"/>
+          </svg>
+        </div>`
+    : '';
+
+  const qrHtml = layout.showQr
+    ? qrColumnHtml({
+        publicToken,
+        qrSvgMarkup,
+        refId,
+        showId: layout.showId,
+        qrHint,
+        t,
+      })
+    : '';
+
+  const weightRows = layout.weights
+    .map((w, i) => {
+      const isBruto = w.key === 'peso_bruto';
+      const titleCell =
+        i === 0
+          ? `<td class="wt-title" rowspan="${layout.weights.length}">${t('pdf.label.mass')}</td>`
+          : '';
+      return `<tr>${titleCell}<td class="wt-label">${isBruto ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}</td><td class="wt-value">${isBruto ? grossWeight : netWeight} kg</td></tr>`;
+    })
+    .join('');
+
+  const weightTable = weightRows
+    ? `<table class="weight-table">${weightRows}</table>`
+    : '';
+
+  const footer = layout.showEmbalagem
+    ? `<div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${escapeHtml(embalagem)}</span></div>`
+    : '';
+
+  const labelClass = `label${dense ? ' dense' : ''}${vertical ? ' vertical' : ''}`;
+  const bodyHtml = vertical
+    ? `<div class="${labelClass}">
+  ${productHtml}
+  ${qrHtml}
+  <div class="fields">${fieldRows}</div>
+  ${weightTable}
+  ${footer}
+</div>`
+    : `<div class="${labelClass}">
+  <div class="top-section">
+    <div class="left-col">
+      ${productHtml}
+      <div class="data-block">
+        ${flaskIcon}
+        <div class="fields">${fieldRows}</div>
+      </div>
+    </div>
+    ${qrHtml}
+  </div>
+  ${weightTable}
+  ${footer}
+</div>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(title)}</title>
+<style>${labelCss(orientation)}</style>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
+}
+
 export const printContainerLabel = async (container, validityDays, publicToken, options) => {
   if (!container) return;
 
   const { lang, t } = getLabelLabels(options?.locale);
   const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 
-  const win = window.open('', '_blank', 'width=420,height=300');
-  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
-
-  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
-  win.document.close();
-
-  const qrSvgMarkup = await buildQrSvgMarkup(publicToken);
-
-  const opNum = escapeHtml(container.op_number || '—');
-  const product = escapeHtml(container.product || '—');
-  const lot = escapeHtml(container.lot || '—');
+  const opNum = container.op_number || '—';
   const placa = container.container_number || '';
   const barril = container.barril_number || '';
-  const embalagem = escapeHtml(barril ? `${placa} (${barril})` : placa || '—');
+  const embalagem = barril ? `${placa} (${barril})` : placa || '—';
   const fabDateStr = options?.manufactureDate || container.created_date;
-  const fabDate = fabDateStr ? fmtDate(fabDateStr, undefined, lang) : '—';
-  const valDate = calcValidity(fabDateStr, validityDays, lang);
-  const netWeight = numFmt(container.net_weight || 0);
-  const grossWeight = numFmt(container.gross_weight || 0);
+  const volumeRaw = container.volume ?? options?.volume;
+  const volume =
+    volumeRaw != null && Number(volumeRaw) > 0
+      ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
+      : '—';
 
-  const qrColumnHtml = publicToken ? (qrSvgMarkup ? `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
-      <div class="qr-code">${qrSvgMarkup}</div>
-      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
-    </div>` : `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;">${t('pdf.label.qrError')}</span></div>
-      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
-    </div>`) : `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${opNum}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div>
-      <div class="qr-hint">${t('pdf.label.qrHint')}</div>
-    </div>`;
+  const clienteNome = options?.clienteNome || container.client || container.cliente_nome;
+  const printConfig = options?.campos
+    ? {
+        campos: options.campos,
+        dateFormat: options.dateFormat || extractDateFormat({ campos: options.campos }),
+        orientation: options.orientation || extractOrientation({ campos: options.campos }),
+      }
+    : await resolveEtiquetaPrintConfig({
+        clienteId: options?.clienteId,
+        clienteNome,
+        contexto: options?.contexto || 'industrializacao',
+      });
+  const campos = printConfig.campos;
+  const dateFormat = printConfig.dateFormat;
+  const fabDate = formatEtiquetaDate(fabDateStr, dateFormat, lang);
+  const valDate = formatEtiquetaDate(
+    options?.expiryDate || calcValidityDate(fabDateStr, validityDays),
+    dateFormat,
+    lang
+  );
+  const responsavelTecnico =
+    options?.responsavelTecnico ??
+    (await resolveResponsavelTecnico({
+      clienteId: options?.clienteId,
+      clienteNome,
+    }));
 
-  const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-<meta charset="UTF-8">
-<title>${t('pdf.label.title', { op: opNum })}</title>
-<style>
-  @page { size: 105mm 50mm; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Inter', Arial, sans-serif; }
-  html, body { margin: 0; padding: 0; width: 105mm; height: 50mm; }
-  .label {
-    width: 105mm; height: 50mm;
-    background: #FFFFFF; color: #000000;
-    padding: 1mm 4.5mm;
-    display: flex; flex-direction: column;
-    justify-content: center;
-    border: 1px solid #000;
-  }
-  .top-section { display: flex; flex: 1; }
-  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2.5mm; }
-  .product { font-size: 16pt; font-weight: 800; line-height: 1.05; }
-  .data-block { display: flex; gap: 2mm; margin-top: 1.5mm; flex: 1; }
-  .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
-  .icon-col svg { width: 7mm; height: 7mm; }
-  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.8mm; }
-  .field-row { display: flex; align-items: baseline; font-size: 8.5pt; line-height: 1.25; }
-  .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 24mm; }
-  .field-row .sep { margin: 0 0.8mm; }
-  .field-row .val { font-weight: 700; }
-  .qr-col {
-    width: 28mm;
-    display: flex; flex-direction: column; align-items: center;
-    border-left: 0.5px solid #000;
-    padding: 0.5mm 0 0.5mm 2.5mm;
-  }
-  .ref { font-size: 9pt; font-weight: 700; align-self: flex-start; }
-  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
-  .qr-code svg { width: 20mm; height: 20mm; }
-  .qr-hint { font-size: 5.5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
-  .weight-table { width: 100%; border-collapse: collapse; }
-  .weight-table td { border: 0.5px solid #000; padding: 1mm 1.5mm; font-size: 7.5pt; }
-  .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
-  .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
-  .wt-value { font-weight: 800; text-align: right; width: 35%; }
-  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; }
-  .footer .sep { margin: 0 0.8mm; }
-  .footer .emb { font-size: 10pt; font-weight: 800; }
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-</style>
-</head>
-<body>
-<div class="label">
-  <div class="top-section">
-    <div class="left-col">
-      <div class="product">${product}</div>
-      <div class="data-block">
-        <div class="icon-col">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2">
-            <path d="M9 2c-1 3-4 5-4 9a7 7 0 0 0 14 0c0-4-3-6-4-9"/>
-            <path d="M9 11a3 3 0 0 0 6 0"/>
-          </svg>
-        </div>
-        <div class="fields">
-          <div class="field-row"><span class="lbl">${t('pdf.label.lot')}</span><span class="sep">•</span><span class="val">${lot}</span></div>
-          <div class="field-row"><span class="lbl">${t('pdf.label.manufacture')}</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
-          <div class="field-row"><span class="lbl">${t('pdf.label.expiry')}</span><span class="sep">•</span><span class="val">${valDate}</span></div>
-        </div>
-      </div>
-    </div>
-    ${qrColumnHtml}
-  </div>
-  <table class="weight-table">
-    <tr>
-      <td class="wt-title" rowspan="2">${t('pdf.label.mass')}</td>
-      <td class="wt-label">${t('pdf.label.netWeight')}</td>
-      <td class="wt-value">${netWeight} kg</td>
-    </tr>
-    <tr>
-      <td class="wt-label">${t('pdf.label.grossWeight')}</td>
-      <td class="wt-value">${grossWeight} kg</td>
-    </tr>
-  </table>
-  <div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>
-</div>
-</body>
-</html>`;
-
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
+  await printConfiguredLabel({
+    title: t('pdf.label.title', { op: opNum }),
+    product: container.product || '—',
+    refId: opNum,
+    lot: container.lot || '—',
+    client: clienteNome || '—',
+    fabDate,
+    valDate,
+    netWeight: numFmt(container.net_weight || 0),
+    grossWeight: numFmt(container.gross_weight || 0),
+    volume,
+    embalagem,
+    publicToken,
+    qrHint: t('pdf.label.qrHint'),
+    campos,
+    lang,
+    t,
+    responsavelTecnico,
+    orientation: printConfig.orientation || 'horizontal',
+  });
 };
 
-/** Etiqueta de estoque de MP (105mm × 50mm) — Cliente / Lote / Fab / Val + peso líquido da embalagem */
+/** Etiqueta de estoque de MP (105mm × 50mm, ou 50mm × 105mm na vertical) */
 export const printRawMaterialLabel = async (stockItem, publicToken, options) => {
   if (!stockItem) return;
 
   const { lang, t } = getLabelLabels(options?.locale);
   const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 
-  const win = window.open('', '_blank', 'width=420,height=300');
-  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
+  const refId = stockItem.entry_id || '—';
+  const volumeRaw = stockItem.volume ?? options?.volume;
+  const volume =
+    volumeRaw != null && Number(volumeRaw) > 0
+      ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
+      : '—';
 
-  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
-  win.document.close();
+  const clienteNome = options?.clienteNome || stockItem.client;
+  const printConfig = options?.campos
+    ? {
+        campos: options.campos,
+        dateFormat: options.dateFormat || extractDateFormat({ campos: options.campos }),
+        orientation: options.orientation || extractOrientation({ campos: options.campos }),
+      }
+    : await resolveEtiquetaPrintConfig({
+        clienteId: options?.clienteId,
+        clienteNome,
+        contexto: options?.contexto || 'industrializacao',
+      });
+  const campos = printConfig.campos;
+  const dateFormat = printConfig.dateFormat;
+  const fabDate = formatEtiquetaDate(stockItem.manufacture_date, dateFormat, lang);
+  const valDate = formatEtiquetaDate(stockItem.expiry_date, dateFormat, lang);
+  const responsavelTecnico =
+    options?.responsavelTecnico ??
+    (await resolveResponsavelTecnico({
+      clienteId: options?.clienteId,
+      clienteNome,
+    }));
 
-  const qrSvgMarkup = await buildQrSvgMarkup(publicToken);
-
-  const refId = escapeHtml(stockItem.entry_id || '—');
-  const product = escapeHtml(stockItem.mp_name || '—');
-  const client = escapeHtml(stockItem.client || '—');
-  const lot = escapeHtml(stockItem.lot || '—');
-  const embalagem = escapeHtml(stockItem.packaging_type || '—');
-  const fabDate = stockItem.manufacture_date
-    ? fmtDate(stockItem.manufacture_date, { timeZone: 'America/Sao_Paulo' }, lang)
-    : '—';
-  const valDate = stockItem.expiry_date
-    ? fmtDate(stockItem.expiry_date, { timeZone: 'America/Sao_Paulo' }, lang)
-    : '—';
-  const netWeight = numFmt(stockItem.packaging_capacity || 0);
-
-  const qrColumnHtml = publicToken ? (qrSvgMarkup ? `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
-      <div class="qr-code">${qrSvgMarkup}</div>
-      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
-    </div>` : `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;">${t('pdf.label.qrError')}</span></div>
-      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
-    </div>`) : `
-    <div class="qr-col">
-      <div class="ref">${t('pdf.label.ref')}: ${refId}</div>
-      <div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div>
-      <div class="qr-hint">${t('pdf.label.qrHintMp')}</div>
-    </div>`;
-
-  const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-<meta charset="UTF-8">
-<title>${t('pdf.label.titleMp', { ref: refId })}</title>
-<style>
-  @page { size: 105mm 50mm; margin: 0; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Inter', Arial, sans-serif; }
-  html, body { margin: 0; padding: 0; width: 105mm; height: 50mm; }
-  .label {
-    width: 105mm; height: 50mm;
-    background: #FFFFFF; color: #000000;
-    padding: 1mm 4.5mm;
-    display: flex; flex-direction: column;
-    justify-content: center;
-    border: 1px solid #000;
-  }
-  .top-section { display: flex; flex: 1; }
-  .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2.5mm; }
-  .product { font-size: 15pt; font-weight: 800; line-height: 1.05; }
-  .data-block { display: flex; gap: 2mm; margin-top: 1.2mm; flex: 1; }
-  .icon-col { display: flex; align-items: flex-start; padding-top: 0.5mm; }
-  .icon-col svg { width: 6.5mm; height: 6.5mm; }
-  .fields { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.5mm; }
-  .field-row { display: flex; align-items: baseline; font-size: 7.5pt; line-height: 1.2; }
-  .field-row .lbl { font-weight: 800; text-transform: uppercase; min-width: 22mm; }
-  .field-row .sep { margin: 0 0.8mm; }
-  .field-row .val { font-weight: 700; }
-  .qr-col {
-    width: 28mm;
-    display: flex; flex-direction: column; align-items: center;
-    border-left: 0.5px solid #000;
-    padding: 0.5mm 0 0.5mm 2.5mm;
-  }
-  .ref { font-size: 8pt; font-weight: 700; align-self: flex-start; }
-  .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
-  .qr-code svg { width: 19mm; height: 19mm; }
-  .qr-hint { font-size: 5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
-  .weight-table { width: 100%; border-collapse: collapse; }
-  .weight-table td { border: 0.5px solid #000; padding: 1mm 1.5mm; font-size: 7.5pt; }
-  .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
-  .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
-  .wt-value { font-weight: 800; text-align: right; width: 35%; }
-  .footer { font-size: 9pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; }
-  .footer .sep { margin: 0 0.8mm; }
-  .footer .emb { font-size: 10pt; font-weight: 800; }
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-</style>
-</head>
-<body>
-<div class="label">
-  <div class="top-section">
-    <div class="left-col">
-      <div class="product">${product}</div>
-      <div class="data-block">
-        <div class="icon-col">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2">
-            <path d="M9 2c-1 3-4 5-4 9a7 7 0 0 0 14 0c0-4-3-6-4-9"/>
-            <path d="M9 11a3 3 0 0 0 6 0"/>
-          </svg>
-        </div>
-        <div class="fields">
-          <div class="field-row"><span class="lbl">${t('pdf.label.client')}</span><span class="sep">•</span><span class="val">${client}</span></div>
-          <div class="field-row"><span class="lbl">${t('pdf.label.lot')}</span><span class="sep">•</span><span class="val">${lot}</span></div>
-          <div class="field-row"><span class="lbl">${t('pdf.label.manufacture')}</span><span class="sep">•</span><span class="val">${fabDate}</span></div>
-          <div class="field-row"><span class="lbl">${t('pdf.label.expiry')}</span><span class="sep">•</span><span class="val">${valDate}</span></div>
-        </div>
-      </div>
-    </div>
-    ${qrColumnHtml}
-  </div>
-  <table class="weight-table">
-    <tr>
-      <td class="wt-title">${t('pdf.label.mass')}</td>
-      <td class="wt-label">${t('pdf.label.netWeight')}</td>
-      <td class="wt-value">${netWeight} kg</td>
-    </tr>
-  </table>
-  <div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${embalagem}</span></div>
-</div>
-</body>
-</html>`;
-
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
+  await printConfiguredLabel({
+    title: t('pdf.label.titleMp', { ref: refId }),
+    product: stockItem.mp_name || '—',
+    refId,
+    lot: stockItem.lot || '—',
+    client: clienteNome || '—',
+    fabDate,
+    valDate,
+    netWeight: numFmt(stockItem.packaging_capacity || stockItem.net_weight || 0),
+    grossWeight: numFmt(stockItem.gross_weight || 0),
+    volume,
+    embalagem: stockItem.packaging_type || '—',
+    publicToken,
+    qrHint: t('pdf.label.qrHintMp'),
+    campos,
+    lang,
+    t,
+    responsavelTecnico,
+    orientation: printConfig.orientation || 'horizontal',
+  });
 };

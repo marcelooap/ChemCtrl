@@ -150,4 +150,6 @@ export const entities = {
   materialReservas: createEntity('t_material_reservas'),
   agendamentosCarregamento: createEntity('t_agendamentos_carregamento'),
   saidaLeituras: createEntity('t_saida_leituras'),
+  operadores: createEntity('t_operadores'),
+  etiquetaConfigs: createEntity('t_etiqueta_configs'),
 };

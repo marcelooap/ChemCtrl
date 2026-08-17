@@ -24,6 +24,8 @@ const TIPOS = ["Contentor", "Vasilhame", "Tambor", "Bombona", "IBC", "One Way"];
 
 const EDITABLE_WHEN_VASILHAME = new Set([
   "tipo",
+  "placa",
+  "barril",
   "lote",
   "lacres",
   "tara",
@@ -172,7 +174,7 @@ export default function VasilhameModal({
 
   /**
    * Em edição:
-   * - tipo Vasilhame → tipo, lote, lacres, tara, eslinga, gps, menor teste, densidade
+   * - tipo Vasilhame → tipo, nº placa, nº barril, lote, lacres, tara, eslinga, gps, menor teste, densidade
    * - demais tipos → somente tipo e lote
    * Cadastro novo: todos os campos liberados.
    */

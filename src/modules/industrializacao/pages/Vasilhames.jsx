@@ -203,6 +203,8 @@ export default function Vasilhames() {
       await printContainerLabel(container, validityDays, publicToken, {
         manufactureDate: production?.end_time || container.created_date,
         locale: i18n.language,
+        clienteNome: container.client || production?.client,
+        contexto: 'industrializacao',
       });
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
