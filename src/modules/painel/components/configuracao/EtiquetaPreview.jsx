@@ -6,18 +6,14 @@ import {
   partitionEtiquetaCampos,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false, unlimited = false }) {
-  if (stacked || (wrap && unlimited)) {
+function FieldRow({ label, value, wrap = false, stacked = false }) {
+  if (stacked) {
     return (
       <div className="min-w-0">
         <div className="text-[8px] font-extrabold uppercase leading-none tracking-wide">
           {label}
         </div>
-        <div
-          className={`text-[10px] font-bold leading-snug mt-[1px] ${
-            wrap || unlimited ? 'whitespace-normal break-words' : 'truncate'
-          }`}
-        >
+        <div className="text-[10px] font-bold leading-tight truncate mt-[1px]">
           {value}
         </div>
       </div>
@@ -25,24 +21,10 @@ function FieldRow({ label, value, wrap = false, stacked = false, unlimited = fal
   }
 
   return (
-    <div className="flex items-baseline gap-1 text-[10px] leading-tight min-w-0">
+    <div className={`flex gap-1 min-w-0 text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`}>
       <span className="font-extrabold uppercase shrink-0">{label}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
-      <span
-        className={`font-bold min-w-0 ${
-          wrap ? 'break-words whitespace-normal leading-snug' : 'truncate'
-        }`}
-        style={
-          wrap
-            ? {
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }
-            : undefined
-        }
-      >
+      <span className={`font-bold min-w-0 flex-1 ${wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
         {value}
       </span>
     </div>
@@ -130,7 +112,7 @@ export default function EtiquetaPreview({
     return map[key] || key;
   };
 
-  const wrapKey = (key) => key === 'responsavel_tecnico' || key === 'cliente';
+  const wrapKey = (key) => vertical || key === 'responsavel_tecnico' || key === 'cliente';
 
   const renderRows = (rows, stacked = false) =>
     rows.map((row) => (
@@ -138,7 +120,6 @@ export default function EtiquetaPreview({
         key={row.key}
         stacked={stacked}
         wrap={wrapKey(row.key)}
-        unlimited={vertical && wrapKey(row.key)}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />
@@ -151,10 +132,10 @@ export default function EtiquetaPreview({
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
   const packaging = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem) && (
-    <div className={`font-extrabold uppercase flex items-baseline gap-1 shrink-0 min-w-0 ${vertical ? 'text-[9px] mt-1' : 'text-[10px] mt-0.5'}`}>
+    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? 'text-[10px] mt-1 items-start leading-snug' : 'text-[10px] mt-0.5 items-baseline'}`}>
       <span className="shrink-0">{t('pdf.label.packaging')}</span>
-      <span>•</span>
-      <span className={`truncate ${vertical ? 'text-[10px]' : 'text-[11px]'}`}>{embalagem}</span>
+      <span className="font-bold text-black/80 shrink-0">•</span>
+      <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words text-[10px]' : 'truncate text-[11px]'}`}>{embalagem}</span>
     </div>
   );
 
@@ -194,11 +175,24 @@ export default function EtiquetaPreview({
                 {v.product || '—'}
               </div>
             )}
-            <div className="shrink-0 flex flex-col justify-start gap-[4px]">
+            <div className="shrink-0 flex flex-col justify-start gap-[5px]">
               {renderRows(verticalLayout.dataRows)}
             </div>
             {qrBlock}
-            <WeightTable layout={verticalLayout} t={t} v={v} compact />
+            <div className="shrink-0 flex flex-col justify-start gap-[5px] mt-1">
+              {verticalLayout.weights.map((w) => (
+                <FieldRow
+                  key={w.key}
+                  wrap
+                  label={w.key === 'peso_bruto' ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}
+                  value={
+                    w.key === 'peso_bruto'
+                      ? `${Number(v.gross_weight || 0).toFixed(3)} kg`
+                      : `${Number(v.net_weight || 0).toFixed(3)} kg`
+                  }
+                />
+              ))}
+            </div>
             {packaging}
           </div>
         ) : (
