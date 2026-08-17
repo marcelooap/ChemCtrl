@@ -11,6 +11,7 @@ import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+import ProdutoFdsSection from "@transbordo/components/cadastro/ProdutoFdsSection";
 
 function normKey(value) {
   return String(value ?? "")
@@ -30,6 +31,8 @@ export default function ProdutoModal({
   produtos = [],
   estoque = [],
   externalError = "",
+  uploadedBy = "",
+  onFdsMetadataChange,
 }) {
   const [codigo, setCodigo] = useState("");
   const [produto, setProduto] = useState("");
@@ -40,6 +43,11 @@ export default function ProdutoModal({
   const [filtrado, setFiltrado] = useState(false);
   const [error, setError] = useState("");
   const [clienteAutoFilled, setClienteAutoFilled] = useState(false);
+  const [fdsMeta, setFdsMeta] = useState({
+    fds_url: null,
+    fds_filename: null,
+    fds_uploaded_at: null,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +64,11 @@ export default function ProdutoModal({
       );
       setFiltrado(editingProduto.filtrado || false);
       setClienteAutoFilled(false);
+      setFdsMeta({
+        fds_url: editingProduto.fds_url || null,
+        fds_filename: editingProduto.fds_filename || null,
+        fds_uploaded_at: editingProduto.fds_uploaded_at || null,
+      });
     } else {
       setCodigo("");
       setProduto("");
@@ -65,9 +78,19 @@ export default function ProdutoModal({
       setDensidade("");
       setFiltrado(false);
       setClienteAutoFilled(false);
+      setFdsMeta({
+        fds_url: null,
+        fds_filename: null,
+        fds_uploaded_at: null,
+      });
     }
     setError("");
-  }, [editingProduto, open]);
+  }, [editingProduto?.id, open]);
+
+  const handleFdsMetadataChange = (metadata) => {
+    setFdsMeta((prev) => ({ ...prev, ...metadata }));
+    onFdsMetadataChange?.(metadata);
+  };
 
   /** Códigos únicos já cadastrados. */
   const codigoOptions = useMemo(() => {
@@ -202,7 +225,7 @@ export default function ProdutoModal({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className="max-w-2xl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -319,6 +342,18 @@ export default function ProdutoModal({
               disabled={readOnly}
             />
           </div>
+
+          {editingProduto?.id ? (
+            <ProdutoFdsSection
+              produtoId={editingProduto.id}
+              fdsUrl={fdsMeta.fds_url}
+              fdsFilename={fdsMeta.fds_filename}
+              fdsUploadedAt={fdsMeta.fds_uploaded_at}
+              uploadedBy={uploadedBy}
+              onMetadataChange={handleFdsMetadataChange}
+              readOnly={readOnly}
+            />
+          ) : null}
 
           {!readOnly && (
             <DialogFooter>

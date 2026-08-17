@@ -79,6 +79,7 @@ export default function EtiquetaPreview({
   values,
   dateFormat = 'dmy',
   orientation = 'horizontal',
+  consultaPath = '/consulta',
   className = '',
 }) {
   const { t, i18n } = useTranslation();
@@ -140,7 +141,7 @@ export default function EtiquetaPreview({
     ? `${v.container_number || ''} (${v.barril_number})`
     : v.container_number || v.packaging_type || '—';
 
-  const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}/consulta/${v.publicToken || 'preview'}`;
+  const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
   const allRows = [...(dataLayout.left || []), ...(dataLayout.right || [])];
   const byKey = new Map(allRows.map((row) => [row.key, row]));

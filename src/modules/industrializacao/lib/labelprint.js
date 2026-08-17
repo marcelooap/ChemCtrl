@@ -80,10 +80,11 @@ function tryFlushSync(publicUrl) {
   return '';
 }
 
-async function buildQrSvgMarkup(publicToken) {
+async function buildQrSvgMarkup(publicToken, consultaPath = '/consulta') {
   if (!publicToken) return '';
   const baseUrl = (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
-  const publicUrl = `${baseUrl}/consulta/${publicToken}`;
+  const prefix = consultaPath.startsWith('/') ? consultaPath : `/${consultaPath}`;
+  const publicUrl = `${baseUrl}${prefix}/${publicToken}`;
   let markup = await tryServerRender(publicUrl);
   if (!markup) markup = tryFlushSync(publicUrl);
   return markup;
@@ -212,6 +213,7 @@ async function printConfiguredLabel({
   t,
   responsavelTecnico,
   orientation = 'horizontal',
+  consultaPath = '/consulta',
 }) {
   const vertical = orientation === 'vertical';
   const win = window.open('', '_blank', vertical ? 'width=280,height=520' : 'width=420,height=300');
@@ -221,7 +223,7 @@ async function printConfiguredLabel({
   win.document.close();
 
   const layout = partitionEtiquetaCampos(campos);
-  const qrSvgMarkup = layout.showQr ? await buildQrSvgMarkup(publicToken) : '';
+  const qrSvgMarkup = layout.showQr ? await buildQrSvgMarkup(publicToken, consultaPath) : '';
 
   const dataValues = {
     id: refId,
@@ -415,6 +417,7 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
     t,
     responsavelTecnico,
     orientation: printConfig.orientation || 'horizontal',
+    consultaPath: options?.contexto === 'convencional' ? '/consulta-produto' : '/consulta',
   });
 };
 

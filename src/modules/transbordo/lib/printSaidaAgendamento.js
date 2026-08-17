@@ -1,6 +1,7 @@
 import { printContainerLabel } from '@industrializacao/lib/labelprint';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
+import { resolveProdutoPublicToken } from '@transbordo/lib/ensureProdutoPublicToken';
 import {
   TIPO_CONVENCIONAL,
   TIPO_EMBALADO,
@@ -203,7 +204,13 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
     created_date: vasilhame?.created_at || saida?.data_programada,
   };
 
-  await printContainerLabel(container, null, null, {
+  const publicToken = await resolveProdutoPublicToken({
+    produtoId: item?.produto_id || vasilhame?.produto_id,
+    codigo: item?.produto_codigo || vasilhame?.produto_codigo,
+    nome: item?.produto_nome || vasilhame?.produto_nome,
+  }).catch(() => null);
+
+  await printContainerLabel(container, null, publicToken, {
     manufactureDate: vasilhame?.created_at || saida?.data_programada,
     clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
     clienteId: saida?.cliente_id || vasilhame?.cliente_id,
@@ -230,7 +237,13 @@ export async function printEtiquetaVasilhame(vasilhame) {
     created_date: vasilhame.created_at || vasilhame.created_date,
   };
 
-  await printContainerLabel(container, null, null, {
+  const publicToken = await resolveProdutoPublicToken({
+    produtoId: vasilhame.produto_id,
+    codigo: vasilhame.produto_codigo,
+    nome: vasilhame.produto_nome,
+  }).catch(() => null);
+
+  await printContainerLabel(container, null, publicToken, {
     manufactureDate: vasilhame.created_at || vasilhame.created_date,
     volume: vasilhame.volume,
     clienteNome: vasilhame.cliente_nome,

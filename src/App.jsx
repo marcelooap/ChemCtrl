@@ -26,6 +26,7 @@ import PlatformLayout from '@/layouts/PlatformLayout';
 // ChemCtrl — app principal (industrialização)
 import ChemCtrlRoutes from '@industrializacao/routes';
 import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
+import ConsultaPublicaProduto from '@transbordo/pages/ConsultaPublicaProduto';
 
 // Módulos (lazy)
 const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
@@ -65,8 +66,10 @@ function CatchAllRoute() {
 const AuthenticatedApp = () => {
   return (
     <Routes>
-      {/* Público: consulta por token */}
+      {/* Público: consulta por token (industrialização) */}
       <Route path="/consulta/:token" element={<ConsultaPublica />} />
+      {/* Público: FDS do produto transbordo (etiqueta convencional) */}
+      <Route path="/consulta-produto/:token" element={<ConsultaPublicaProduto />} />
 
       {/* Público: Login — se já autenticado, vai para seleção / módulo */}
       <Route element={<GuestRoute />}>

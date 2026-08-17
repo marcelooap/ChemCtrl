@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Pencil, Trash2, Check } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Check, FileText } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import {
@@ -17,6 +17,9 @@ import ProdutoModal from "@transbordo/components/cadastro/ProdutoModal";
 import { cascadeProdutoIdentity } from "@transbordo/lib/cascadeProdutoUpdate";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { formatDensidade } from "@transbordo/lib/format";
+import { generatePublicToken } from "@industrializacao/lib/publicToken";
+import { deleteProdutoDocument } from "@transbordo/api/storage";
+import { useInternalAuth } from "@/lib/InternalAuthContext";
 
 function buildProdutoEstoqueKey(produtoId, codigo, clienteId, clienteNome) {
   if (produtoId) return `id:${String(produtoId)}`;
@@ -31,6 +34,7 @@ function buildProdutoEstoqueKey(produtoId, codigo, clienteId, clienteNome) {
 }
 
 export default function ProdutosTab() {
+  const { user } = useInternalAuth();
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [estoque, setEstoque] = useState([]);
@@ -185,7 +189,19 @@ export default function ProdutosTab() {
           },
         });
       } else {
-        await entities.produtos.create(payload);
+        try {
+          await entities.produtos.create({
+            ...payload,
+            public_token: generatePublicToken(),
+          });
+        } catch (err) {
+          const msg = String(err?.message || '');
+          if (/public_token/i.test(msg)) {
+            await entities.produtos.create(payload);
+          } else {
+            throw err;
+          }
+        }
       }
       await loadData({ silent: true });
       setModalOpen(false);
@@ -199,10 +215,24 @@ export default function ProdutosTab() {
     }
   };
 
+  const handleFdsMetadataChange = (metadata) => {
+    if (!editingProduto?.id) return;
+    setEditingProduto((prev) => (prev ? { ...prev, ...metadata } : prev));
+    setProdutos((prev) =>
+      prev.map((p) =>
+        p.id === editingProduto.id ? { ...p, ...metadata } : p
+      )
+    );
+  };
+
   const handleDelete = async () => {
     const idToDelete = deleteId;
+    const target = produtos.find((p) => p.id === idToDelete);
     setDeleteId(null);
     try {
+      if (target?.fds_url) {
+        await deleteProdutoDocument(idToDelete).catch(() => {});
+      }
       await entities.produtos.delete(idToDelete);
       setProdutos((prev) => prev.filter((p) => p.id !== idToDelete));
     } catch (err) {
@@ -313,6 +343,13 @@ export default function ProdutosTab() {
                           />
                         ) : null}
                         <span className="truncate">{p.produto}</span>
+                        {p.fds_url ? (
+                          <FileText
+                            className="w-3.5 h-3.5 shrink-0 text-muted-foreground"
+                            title="FDS anexada"
+                            aria-label="FDS anexada"
+                          />
+                        ) : null}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-muted-foreground">
@@ -390,6 +427,8 @@ export default function ProdutosTab() {
         produtos={produtos}
         estoque={estoque}
         externalError={saveError}
+        uploadedBy={user?.nome || user?.full_name || user?.id || ""}
+        onFdsMetadataChange={handleFdsMetadataChange}
       />
 
       {/* Delete Confirmation */}

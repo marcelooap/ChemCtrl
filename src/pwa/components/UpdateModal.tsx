@@ -14,7 +14,7 @@ export function UpdateModal() {
     useUpdate();
 
   // Public / unauthenticated surfaces must never be blocked by update UI
-  if (pathname.startsWith('/consulta/') || pathname.startsWith('/login')) return null;
+  if (pathname.startsWith('/consulta/') || pathname.startsWith('/consulta-produto/') || pathname.startsWith('/login')) return null;
   if (authLoading || !isAuthenticated) return null;
   if (!updateAvailable) return null;
 

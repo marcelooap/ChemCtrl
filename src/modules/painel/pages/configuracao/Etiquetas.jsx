@@ -377,6 +377,7 @@ export default function Etiquetas() {
                   values={previewValues}
                   dateFormat={dateFormat}
                   orientation={orientation}
+                  consultaPath={contexto === 'convencional' ? '/consulta-produto' : '/consulta'}
                 />
               </div>
             </div>

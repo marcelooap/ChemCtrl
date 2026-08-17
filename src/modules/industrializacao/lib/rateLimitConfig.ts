@@ -110,6 +110,8 @@ export const RPC_PUBLIC = new Set<string>([
   'get_public_coa_data',
   'get_public_sds_path',
   'get_public_raw_material_info',
+  'get_public_produto_info',
+  'get_public_produto_sds_path',
 ]);
 
 export const RPC_WRITE = new Set<string>([
