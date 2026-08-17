@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, Search } from 'lucide-react';
+import { Eye, Search, Undo2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { useToast } from '@shared/components/ui/use-toast';
@@ -10,6 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@shared/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@shared/components/ui/alert-dialog';
 import { entities } from '@transbordo/services/entities';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import {
@@ -19,6 +29,7 @@ import {
   listAgendamentosConcluidos,
   normalizeBookings,
   produtosCountLabel,
+  reverterCarregamento,
 } from '@painel/lib/agendamentosCarregamento';
 
 export default function LogisticaCarregamentos() {
@@ -33,6 +44,8 @@ export default function LogisticaCarregamentos() {
   const [search, setSearch] = useState('');
   const [viewSaida, setViewSaida] = useState(null);
   const [viewPicker, setViewPicker] = useState(null);
+  const [revertTarget, setRevertTarget] = useState(null);
+  const [reverting, setReverting] = useState(false);
 
   const saidasById = useMemo(() => {
     const map = new Map();
@@ -131,6 +144,28 @@ export default function LogisticaCarregamentos() {
       return;
     }
     setViewPicker(list);
+  };
+
+  const handleRevert = async () => {
+    const row = revertTarget;
+    if (!row) return;
+    setReverting(true);
+    try {
+      await reverterCarregamento({ bookings: row.bookings });
+      setRevertTarget(null);
+      await loadData({ silent: true });
+      toast({ title: t('painel.logistica.carregamentos.revertSuccess') });
+    } catch (err) {
+      console.error('[LogisticaCarregamentos] revert:', err);
+      toast({
+        title: t('painel.logistica.carregamentos.revertErrorTitle'),
+        description:
+          err?.message || t('painel.logistica.carregamentos.revertErrorDescription'),
+        variant: 'destructive',
+      });
+    } finally {
+      setReverting(false);
+    }
   };
 
   const horarioLabel = (horario) =>
@@ -258,7 +293,12 @@ export default function LogisticaCarregamentos() {
                       <span className="block text-[11px]">{formatDateBR(row.data)}</span>
                     </td>
                     <td className="px-4 py-3 tabular-nums text-foreground whitespace-nowrap text-center">
-                      {row.hora_carregamento || '—'}
+                      <span className="block">{row.hora_carregamento || '—'}</span>
+                      {row.data_carregamento ? (
+                        <span className="block text-[11px] text-muted-foreground">
+                          {formatDateBR(row.data_carregamento)}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center">
                       <PontualidadeBadge status={row.pontualidade} t={t} />
@@ -267,17 +307,30 @@ export default function LogisticaCarregamentos() {
                       {row.operador_nome || '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        title={t('painel.logistica.carregamentos.view')}
-                        aria-label={t('painel.logistica.carregamentos.view')}
-                        onClick={() => openView(row)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
+                      <div className="inline-flex items-center justify-end gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title={t('painel.logistica.carregamentos.view')}
+                          aria-label={t('painel.logistica.carregamentos.view')}
+                          onClick={() => openView(row)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                          title={t('painel.logistica.carregamentos.revert')}
+                          aria-label={t('painel.logistica.carregamentos.revert')}
+                          onClick={() => setRevertTarget(row)}
+                        >
+                          <Undo2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -319,6 +372,42 @@ export default function LogisticaCarregamentos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!revertTarget}
+        onOpenChange={(open) => {
+          if (!open && !reverting) setRevertTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('painel.logistica.carregamentos.revertConfirmTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('painel.logistica.carregamentos.revertConfirmDescription', {
+                saida: revertTarget?.codesLabel || '—',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reverting}>
+              {t('buttons.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reverting}
+              onClick={(e) => {
+                e.preventDefault();
+                handleRevert();
+              }}
+            >
+              {reverting
+                ? t('painel.logistica.carregamentos.reverting')
+                : t('painel.logistica.carregamentos.revertConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <SaidaViewDialog
         open={!!viewSaida}

@@ -544,13 +544,15 @@ export default function Saida({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => navigate(`${basePath}/editar/${s.id}`)}
-                          className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                        {!(isExpedicao && expedicaoStatus === "expedido") ? (
+                          <button
+                            onClick={() => navigate(`${basePath}/editar/${s.id}`)}
+                            className="text-muted-foreground hover:text-muted-foreground transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        ) : null}
                         {(!isModuloOperacional ||
                           canExcluirSaidaNoModuloOperacional(s)) ? (
                           <button

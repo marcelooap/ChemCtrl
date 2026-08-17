@@ -7,8 +7,9 @@ import {
   } from "@shared/components/ui/dialog";
   import { Button } from "@shared/components/ui/button";
   import { Package, FileText, CheckCircle, AlertCircle } from "lucide-react";
-  import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
-  import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
+import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
+import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
+import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
   
   export default function EntradaViewDialog({ open, onClose, entrada, entradaId, transbordos = [], estoque = [] }) {
     if (!entrada) return null;
@@ -30,11 +31,14 @@ import {
           produto_codigo: entrada.produto_codigo,
           lote: entrada.lote,
           quantidade: entrada.quantidade,
+          quantidade_declarada: entrada.quantidade_declarada,
           unidade_medida: entrada.unidade_medida,
           data_fabricacao: entrada.data_fabricacao,
           data_validade: entrada.data_validade,
           densidade: entrada.densidade,
         }];
+    const lotesCount = lotes.length;
+    const foraMargem = entrada.granel_margem === "fora";
 
     const origemIds = new Set([entrada.id]);
     (estoque || []).forEach((row) => {
@@ -85,7 +89,7 @@ import {
       doc.setFontSize(8);
       doc.setTextColor(94, 108, 132);
       lotes.forEach((l) => {
-        doc.text(`${l.produto_nome || "-"} | ${formatMass(l.quantidade, { empty: "-" })} ${l.unidade_medida || ""} | Lote: ${l.lote || "-"}`, 14, y);
+        doc.text(`${l.produto_nome || "-"} | ${formatMass(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })} ${l.unidade_medida || ""} | Lote: ${l.lote || "-"}`, 14, y);
         y += 5;
       });
   
@@ -147,7 +151,7 @@ import {
                   {lotes.map((l, i) => (
                     <tr key={i}>
                       <td className={tdClass}>{l.produto_nome || "-"}</td>
-                      <td className={tdClass}>{formatMass(l.quantidade, { empty: "-" })}</td>
+                      <td className={tdClass}>{formatMass(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })}</td>
                       <td className={tdClass}>{l.unidade_medida || "-"}</td>
                       <td className={tdClass}>{l.lote || "-"}</td>
                     </tr>
@@ -196,7 +200,9 @@ import {
                   <tbody>
                     <tr>
                       <td className={tdClass}>{formatMass(entrada.granel_peso_bruto, { empty: "-" })}</td>
-                      <td className={tdClass}>{formatMass(entrada.granel_peso_liquido, { empty: "-" })}</td>
+                      <td className={`${tdClass} ${foraMargem ? "font-bold text-red-800 bg-red-50" : ""}`}>
+                        {formatMass(entrada.granel_peso_liquido, { empty: "-" })}
+                      </td>
                       <td className={tdClass}>
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${entrada.granel_margem === "dentro" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                           {entrada.granel_margem === "dentro" ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}

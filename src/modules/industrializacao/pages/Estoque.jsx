@@ -703,25 +703,23 @@ export default function Estoque() {
               <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.manufactureDate')}</label><Input type="date" value={form.manufacture_date} onChange={e => setForm({ ...form, manufacture_date: e.target.value })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.expiryDate')}</label><Input type="date" value={form.expiry_date} onChange={e => setForm({ ...form, expiry_date: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${editing ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.initialStock')} *</label><Input type="number" value={form.initial_stock} onChange={e => setForm({ ...form, initial_stock: e.target.value })} /></div>
               {editing && (
                 <div><label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.currentBalance')}</label><Input type="number" value={form.current_stock} onChange={e => setForm({ ...form, current_stock: e.target.value })} /></div>
               )}
-              {!editing && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.unit')} *</label>
-                  <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kg">{t('common.units.kg')}</SelectItem>
-                      <SelectItem value="L">{t('common.units.L')}</SelectItem>
-                      <SelectItem value="gal">gal</SelectItem>
-                      <SelectItem value="lb">lb</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.unit')} *</label>
+                <Select value={form.unit} onValueChange={v => setForm({ ...form, unit: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">{t('common.units.kg')}</SelectItem>
+                    <SelectItem value="L">{t('common.units.L')}</SelectItem>
+                    <SelectItem value="gal">gal</SelectItem>
+                    <SelectItem value="lb">lb</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {form.density > 0 && (
               <div>

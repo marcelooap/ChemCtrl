@@ -510,6 +510,35 @@ export function normalizeHoraHHMM(value) {
 }
 
 /**
+ * Data YYYY-MM-DD no fuso America/Sao_Paulo.
+ */
+export function isoDateInBrasilia(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  if (!y || !m || !d) return null;
+  return `${y}-${m}-${d}`;
+}
+
+function combineDateAndTime(isoDate, hhmm) {
+  const date = String(isoDate || '').slice(0, 10);
+  const time = normalizeHoraHHMM(hhmm);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !time) return null;
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  return new Date(y, mo - 1, d, h, mi, 0, 0);
+}
+
+/**
  * Conclui o carregamento do(s) agendamento(s) do horário.
  * O horário permanece na grade como "carregado" (status = concluido).
  */
@@ -542,6 +571,25 @@ export async function concluirCarregamento({ bookings, horaCarregamento, user, t
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
 
+/**
+ * Reverte a expedição: apaga horário/operador de carregamento e volta o slot
+ * para "agendado" (card deixa de aparecer como carregado; saída volta a ser editável).
+ */
+export async function reverterCarregamento({ bookings }) {
+  const list = normalizeBookings(bookings);
+  const ids = list.map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) throw new Error('Agendamento inválido.');
+
+  const patch = {
+    status: 'agendado',
+    hora_carregamento: null,
+    operador_conclusao_id: null,
+    operador_conclusao_nome: null,
+    grupo_conclusao_id: null,
+  };
+  await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
+}
+
 export async function listAgendamentosConcluidos() {
   assertConfigured('t_agendamentos_carregamento.listConcluidos');
   const { data, error } = await chemflowSupabase
@@ -568,19 +616,35 @@ export {
 } from '@transbordo/lib/saidaExpedicao';
 
 /**
- * Janela do slot: horário agendado até +29 min (ex.: 08:30 → 08:30–08:59).
- * Antes ou dentro da janela = dentro; após = fora.
+ * Limite do agendamento = data + horário do slot (+29 min da janela).
+ * Carregar antes ou dentro da janela = dentro; depois = fora.
  * Encaixe não tem janela fixa → considerado dentro.
  */
-export function getStatusPontualidade(horarioAgendado, horaCarregamento) {
+export function getStatusPontualidade(
+  horarioAgendado,
+  horaCarregamento,
+  { dataAgendada, dataCarregamento } = {}
+) {
   if (!horaCarregamento) return 'fora';
   if (horarioAgendado === ENCAIXE_HORARIO) return 'dentro';
+
+  const scheduledStart = combineDateAndTime(dataAgendada, horarioAgendado);
+  const actual = combineDateAndTime(
+    dataCarregamento || dataAgendada,
+    horaCarregamento
+  );
+
+  if (scheduledStart && actual) {
+    const windowEnd = new Date(scheduledStart.getTime() + 29 * 60 * 1000);
+    return actual.getTime() <= windowEnd.getTime() ? 'dentro' : 'fora';
+  }
+
   const start = timeToMinutes(horarioAgendado);
   if (!Number.isFinite(start)) return 'fora';
   const windowEnd = start + 29;
-  const actual = timeToMinutes(horaCarregamento);
-  if (!Number.isFinite(actual)) return 'fora';
-  return actual <= windowEnd ? 'dentro' : 'fora';
+  const actualMins = timeToMinutes(horaCarregamento);
+  if (!Number.isFinite(actualMins)) return 'fora';
+  return actualMins <= windowEnd ? 'dentro' : 'fora';
 }
 
 /** Contagem de produtos distintos: "01 produto", "02 produtos". */
@@ -650,6 +714,7 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
         data,
         horario: row.horario,
         hora_carregamento: row.hora_carregamento || null,
+        data_carregamento: isoDateInBrasilia(row.updated_at) || data,
         transportadora: row.transportadora || null,
         motorista: row.motorista || null,
         placa: row.placa || null,
@@ -664,6 +729,7 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
     }
     if (row.updated_at && (!group.updated_at || row.updated_at > group.updated_at)) {
       group.updated_at = row.updated_at;
+      group.data_carregamento = isoDateInBrasilia(row.updated_at) || group.data_carregamento;
     }
   }
 
@@ -671,7 +737,10 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
     ...group,
     codesLabel: saidasCodigosLabel(group.bookings),
     clientesLabel: clientesLabelFromBookings(group.bookings),
-    pontualidade: getStatusPontualidade(group.horario, group.hora_carregamento),
+    pontualidade: getStatusPontualidade(group.horario, group.hora_carregamento, {
+      dataAgendada: group.data,
+      dataCarregamento: group.data_carregamento,
+    }),
   }));
 
   rows.sort((a, b) => {

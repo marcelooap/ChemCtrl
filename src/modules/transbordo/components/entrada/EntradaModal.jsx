@@ -16,7 +16,12 @@ import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
 import { formatMass, formatNum } from "@transbordo/lib/format";
-import { loteToKg, applyPesoLiquidoForaMargem, getLoteQuantidadeDeclarada } from "@transbordo/lib/conversao";
+import {
+  loteToKg,
+  applyPesoLiquidoForaMargem,
+  getLoteQuantidadeDeclarada,
+  getQuantidadeNotaFiscal,
+} from "@transbordo/lib/conversao";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { entities } from "@transbordo/services/entities";
 import {
@@ -33,6 +38,10 @@ function mapLoteFromEntrada(l, entrada = {}) {
     embalado,
     tipo_recebimento: l.tipo_recebimento || entrada.tipo_recebimento,
   });
+  const nfQtd = getQuantidadeNotaFiscal(l, entrada, {
+    lotesCount: Array.isArray(entrada.lotes) ? entrada.lotes.length : 1,
+  });
+  const quantidadeNf = nfQtd != null && nfQtd !== "" ? String(nfQtd) : l.quantidade != null ? String(l.quantidade) : "";
 
   return {
     produto_id: l.produto_id || entrada.produto_id || "",
@@ -41,13 +50,8 @@ function mapLoteFromEntrada(l, entrada = {}) {
     nota_fiscal: l.nota_fiscal || "",
     lote: l.lote || "",
     densidade: l.densidade || "",
-    quantidade: l.quantidade != null ? String(l.quantidade) : "",
-    quantidade_nf:
-      l.quantidade_declarada != null && l.quantidade_declarada !== ""
-        ? String(l.quantidade_declarada)
-        : l.quantidade != null
-          ? String(l.quantidade)
-          : "",
+    quantidade: quantidadeNf,
+    quantidade_nf: quantidadeNf,
     unidade_medida: l.unidade_medida || "",
     data_fabricacao: l.data_fabricacao || "",
     data_validade: l.data_validade || "",
@@ -360,44 +364,6 @@ export default function EntradaModal({
   const dentroMargem =
     granelPesagemAtiva && gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
   const foraMargem = granelPesagemAtiva && gPl > 0 && !dentroMargem;
-  const granelConvKey = lotes
-    .filter((l) => resolveTipoRecebimento(l) === "granel")
-    .map(
-      (l) =>
-        `${l.unidade_medida || ""}|${l.densidade || ""}|${getLoteQuantidadeDeclarada(l) ?? ""}`
-    )
-    .join(";");
-
-  useEffect(() => {
-    if (!open || readOnly || !granelPesagemAtiva || gPl <= 0) return;
-
-    setLotes((prev) => {
-      const hasGranelLote = prev.some(
-        (l) => resolveTipoRecebimento(l) === "granel"
-      );
-      if (!hasGranelLote) return prev;
-
-      if (foraMargem) {
-        const next = applyPesoLiquidoForaMargem(prev, gPl);
-        const changed = next.some(
-          (l, i) => String(l.quantidade) !== String(prev[i]?.quantidade)
-        );
-        return changed ? next : prev;
-      }
-
-      let changed = false;
-      const restored = prev.map((l) => {
-        if (resolveTipoRecebimento(l) !== "granel") return l;
-        const nf = getLoteQuantidadeDeclarada(l);
-        if (nf == null || nf === "" || String(nf) === String(l.quantidade)) {
-          return l;
-        }
-        changed = true;
-        return { ...l, quantidade: String(nf) };
-      });
-      return changed ? restored : prev;
-    });
-  }, [open, readOnly, granelPesagemAtiva, gPl, foraMargem, granelConvKey]);
 
   // ── Handlers dos lotes ──
   const addLote = () => {
@@ -435,7 +401,7 @@ export default function EntradaModal({
           ...data,
           quantidade_nf: qtdChanged
             ? data.quantidade
-            : data.quantidade_nf ?? l.quantidade_nf ?? data.quantidade,
+            : data.quantidade_nf ?? l.quantidade_nf ?? l.quantidade ?? data.quantidade,
         };
       })
     );
@@ -875,7 +841,9 @@ export default function EntradaModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Peso Líquido (kg)</Label>
+                      <Label className={foraMargem ? "text-red-700" : undefined}>
+                        Peso Líquido (kg)
+                      </Label>
                       <NumberInputBr
                         decimals={0}
                         min={0}
@@ -883,7 +851,11 @@ export default function EntradaModal({
                         onChange={(v) => setGranelPesoLiquido(v === "" ? "" : v)}
                         placeholder="0"
                         disabled={readOnly}
-                        className={INPUT_EDITABLE}
+                        className={
+                          foraMargem
+                            ? "bg-red-50 border-red-400 text-red-800 font-semibold"
+                            : INPUT_EDITABLE
+                        }
                       />
                     </div>
                   </div>
@@ -922,8 +894,9 @@ export default function EntradaModal({
                       {foraMargem && (
                         <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-amber-50 border-2 border-amber-400 text-amber-800">
                           <span className="text-sm font-semibold text-center">
-                            Quantidade ajustada para o peso líquido da pesagem:{" "}
-                            {formatMass(gPl)} kg
+                            Fora da margem: o estoque usará o peso líquido (
+                            {formatMass(gPl)} kg). A quantidade da nota fiscal
+                            permanece inalterada.
                           </span>
                         </div>
                       )}

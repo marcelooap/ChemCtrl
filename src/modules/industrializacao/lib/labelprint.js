@@ -116,27 +116,37 @@ function labelCss(orientation = 'horizontal') {
   .label {
     width: ${pageW}; height: ${pageH};
     background: #FFFFFF; color: #000000;
-    padding: ${vertical ? '2mm 2.4mm' : '1.2mm 3.5mm'};
+    padding: ${vertical ? '1.8mm 2mm' : '1.2mm 3.5mm'};
     display: flex; flex-direction: column;
     justify-content: flex-start;
     border: 1px solid #000;
     overflow: hidden;
   }
+  .label.vertical { justify-content: stretch; }
   .top-section { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2mm; min-width: 0; overflow: hidden; }
   .product { font-size: ${vertical ? '11pt' : '13pt'}; font-weight: 800; line-height: 1.05; flex-shrink: 0; }
   .label.dense .product { font-size: 11.5pt; }
   .label.vertical .product {
-    font-size: 12pt;
+    font-size: 13.5pt;
     text-align: center;
-    line-height: 1.1;
-    margin-bottom: 1.4mm;
+    line-height: 1.12;
+    margin-bottom: 1mm;
     padding-bottom: 1.2mm;
     border-bottom: 0.5px solid #000;
     display: -webkit-box;
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  .label.vertical .vertical-body {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.6mm;
   }
   .data-block { display: flex; gap: 1.5mm; margin-top: 0.8mm; flex: 1; min-height: 0; overflow: hidden; }
   .icon-col { display: flex; align-items: flex-start; padding-top: 0.3mm; }
@@ -164,29 +174,39 @@ function labelCss(orientation = 'horizontal') {
   .label.vertical .qr-col {
     width: 100%;
     border-left: none;
-    padding: 0.8mm 0 0.4mm;
+    padding: 0.6mm 0;
+    flex-shrink: 0;
   }
   .label.vertical .fields {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    width: 100%;
     flex-direction: column;
-    gap: 0.7mm;
+    justify-content: space-evenly;
+    gap: 0.5mm;
     margin-top: 0;
     overflow: visible;
+  }
+  .label.vertical .fields-weights {
+    flex: 0 0 auto;
+    width: 100%;
+    gap: 1mm;
   }
   .label.vertical .field-row {
     display: flex;
     flex-direction: row;
     align-items: flex-start;
-    gap: 0.6mm;
-    font-size: 7.5pt;
-    line-height: 1.2;
+    width: 100%;
+    gap: 0.8mm;
+    font-size: 9.5pt;
+    line-height: 1.22;
   }
   .label.vertical .field-row .lbl { flex-shrink: 0; }
   .label.vertical .field-row .sep { flex-shrink: 0; margin: 0; }
   .label.vertical .field-row .val,
   .label.vertical .field-row.wrap .val {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
+    width: auto;
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
@@ -195,15 +215,16 @@ function labelCss(orientation = 'horizontal') {
     -webkit-box-orient: unset;
     word-break: break-word;
     overflow-wrap: anywhere;
-    font-size: 7.5pt;
-    line-height: 1.2;
+    font-size: 9.5pt;
+    line-height: 1.22;
   }
   .ref { font-size: 8pt; font-weight: 700; align-self: flex-start; }
   .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
   .qr-code svg { width: 18mm; height: 18mm; }
   .label.vertical .qr-code { flex: 0 0 auto; }
-  .label.vertical .qr-code svg { width: 16mm; height: 16mm; }
+  .label.vertical .qr-code svg { width: 20mm; height: 20mm; }
   .qr-hint { font-size: 5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
+  .label.vertical .qr-hint { font-size: 5.5pt; }
   .weight-table { width: 100%; border-collapse: collapse; margin-top: 0.5mm; flex-shrink: 0; }
   .label.vertical .weight-table { margin-top: 0.8mm; }
   .weight-table td { border: 0.5px solid #000; padding: 0.5mm 1.2mm; font-size: 7pt; }
@@ -211,10 +232,16 @@ function labelCss(orientation = 'horizontal') {
   .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
   .wt-value { font-weight: 800; text-align: right; width: 35%; }
   .footer { font-size: 8pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; margin-top: 0.4mm; flex-shrink: 0; min-width: 0; }
-  .label.vertical .footer { margin-top: 0.8mm; align-items: flex-start; }
+  .label.vertical .footer {
+    margin-top: 0;
+    width: 100%;
+    align-items: flex-start;
+    font-size: 9.5pt;
+  }
   .footer .sep { margin: 0 0.6mm; }
   .footer .emb { font-size: 9pt; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .label.vertical .footer .emb {
+    font-size: 9.5pt;
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
@@ -368,10 +395,11 @@ async function printConfiguredLabel({
   const bodyHtml = vertical
     ? `<div class="${labelClass}">
   ${productHtml}
-  <div class="fields">${fieldRows}</div>
-  ${qrHtml}
-  ${verticalWeightRows ? `<div class="fields">${verticalWeightRows}</div>` : ''}
-  ${footer}
+  <div class="vertical-body">
+    <div class="fields">${fieldRows}</div>
+    ${qrHtml}
+    ${(verticalWeightRows || footer) ? `<div class="fields fields-weights">${verticalWeightRows}${footer}</div>` : ''}
+  </div>
 </div>`
     : `<div class="${labelClass}">
   <div class="top-section">

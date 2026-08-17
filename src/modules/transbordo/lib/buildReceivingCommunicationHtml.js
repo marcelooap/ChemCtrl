@@ -1,4 +1,5 @@
 import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
+import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
 
 const FONT = "Arial,Helvetica,sans-serif";
 const C = {
@@ -59,6 +60,7 @@ export function buildReceivingCommunicationHtml(receiving) {
     hasPesagem = false,
     pesoBruto = "-",
     pesoLiquido = "-",
+    pesoLiquidoDestaque = false,
     tara = "-",
     margemLabel = null,
     dentroMargem = false,
@@ -118,7 +120,14 @@ export function buildReceivingCommunicationHtml(receiving) {
             <tbody>
               <tr>
                 ${td(pesoBruto, 130)}
-                ${td(pesoLiquido, 130)}
+                ${td(
+                  pesoLiquido,
+                  130,
+                  "left",
+                  pesoLiquidoDestaque
+                    ? `font-weight:700;color:${C.redText};background-color:${C.redBg};`
+                    : ""
+                )}
                 ${td(tara, 110)}
                 <td width="150" style="width:150px;font-family:${FONT};font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};padding:6px 8px;">${margemHtml}</td>
               </tr>
@@ -291,12 +300,15 @@ export function buildReceivingCommunicationHtml(receiving) {
 }
 
 /** Helpers reutilizados pelo dialog ao montar o payload. */
-export function formatReceivingLoteRow(lote, { notaFiscal, densidade, formatDate }) {
+export function formatReceivingLoteRow(lote, { notaFiscal, densidade, formatDate, entrada, lotesCount = 1 }) {
   return {
     produto_codigo: lote.produto_codigo,
     produto_nome: lote.produto_nome,
     nota_fiscal: lote.nota_fiscal || notaFiscal,
-    quantidadeFmt: formatMass(lote.quantidade, { empty: "-" }),
+    quantidadeFmt: formatMass(
+      getQuantidadeNotaFiscal(lote, entrada, { lotesCount }),
+      { empty: "-" }
+    ),
     unidade_medida: lote.unidade_medida,
     lote: lote.lote,
     fabricacaoFmt: formatDate(lote.data_fabricacao),

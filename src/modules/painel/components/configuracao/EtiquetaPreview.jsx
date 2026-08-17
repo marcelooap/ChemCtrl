@@ -6,7 +6,7 @@ import {
   partitionEtiquetaCampos,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false }) {
+function FieldRow({ label, value, wrap = false, stacked = false, fill = false }) {
   if (stacked) {
     return (
       <div className="min-w-0">
@@ -21,10 +21,12 @@ function FieldRow({ label, value, wrap = false, stacked = false }) {
   }
 
   return (
-    <div className={`flex gap-1 min-w-0 text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`}>
+    <div
+      className={`flex gap-1 min-w-0 ${fill ? 'w-full text-[12px] items-start leading-snug' : `text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`}`}
+    >
       <span className="font-extrabold uppercase shrink-0">{label}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className={`font-bold min-w-0 flex-1 ${wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
+      <span className={`font-bold min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
         {value}
       </span>
     </div>
@@ -119,6 +121,7 @@ export default function EtiquetaPreview({
       <FieldRow
         key={row.key}
         stacked={stacked}
+        fill={vertical}
         wrap={wrapKey(row.key)}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
@@ -132,24 +135,24 @@ export default function EtiquetaPreview({
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
   const packaging = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem) && (
-    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? 'text-[10px] mt-1 items-start leading-snug' : 'text-[10px] mt-0.5 items-baseline'}`}>
+    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? 'w-full text-[12px] items-start leading-snug' : 'text-[10px] mt-0.5 items-baseline'}`}>
       <span className="shrink-0">{t('pdf.label.packaging')}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words text-[10px]' : 'truncate text-[11px]'}`}>{embalagem}</span>
+      <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words' : 'truncate text-[11px]'}`}>{embalagem}</span>
     </div>
   );
 
   const qrBlock = (vertical ? verticalLayout.showQr : layout.showQr) && (
-    <div className={`shrink-0 flex flex-col items-center ${vertical ? 'py-1' : 'w-[88px] border-l border-black pl-2'}`}>
+    <div className={`shrink-0 flex flex-col items-center ${vertical ? 'w-full py-1' : 'w-[88px] border-l border-black pl-2'}`}>
       {!vertical && layout.showId && (
         <div className="font-bold text-[10px] self-start">
           {t('pdf.label.ref')}: {v.op_number || '—'}
         </div>
       )}
       <div className="flex items-center justify-center py-0.5">
-        <QRCodeSVG value={qrUrl} size={vertical ? 72 : dense ? 64 : 72} level="M" bgColor="#ffffff" fgColor="#000000" />
+        <QRCodeSVG value={qrUrl} size={vertical ? 88 : dense ? 64 : 72} level="M" bgColor="#ffffff" fgColor="#000000" />
       </div>
-      <div className="text-[6px] font-bold uppercase text-center leading-tight">
+      <div className={`font-bold uppercase text-center leading-tight ${vertical ? 'text-[7px]' : 'text-[6px]'}`}>
         {t('pdf.label.qrHint')}
       </div>
     </div>
@@ -164,36 +167,39 @@ export default function EtiquetaPreview({
         className="bg-white text-black border border-black shadow-lg origin-top"
         style={
           vertical
-            ? { width: 200, minHeight: 420, padding: '8px 10px' }
+            ? { width: 200, height: 420, padding: '7px 8px' }
             : { width: 420, height: 200, padding: '5px 12px', overflow: 'hidden' }
         }
       >
         {vertical ? (
-          <div className="flex h-full flex-col min-h-0">
+          <div className="flex h-full min-h-0 w-full flex-col">
             {verticalLayout.showNome && (
-              <div className="text-[15px] font-extrabold leading-tight text-center shrink-0 line-clamp-4 pb-1.5 mb-1.5 border-b border-black">
+              <div className="text-[17px] font-extrabold leading-tight text-center shrink-0 line-clamp-4 pb-1.5 mb-1 border-b border-black">
                 {v.product || '—'}
               </div>
             )}
-            <div className="shrink-0 flex flex-col justify-start gap-[5px]">
-              {renderRows(verticalLayout.dataRows)}
+            <div className="flex min-h-0 flex-1 flex-col justify-between gap-1">
+              <div className="flex w-full flex-1 flex-col justify-evenly gap-0.5">
+                {renderRows(verticalLayout.dataRows)}
+              </div>
+              {qrBlock}
+              <div className="flex w-full shrink-0 flex-col justify-evenly gap-1">
+                {verticalLayout.weights.map((w) => (
+                  <FieldRow
+                    key={w.key}
+                    fill
+                    wrap
+                    label={w.key === 'peso_bruto' ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}
+                    value={
+                      w.key === 'peso_bruto'
+                        ? `${Number(v.gross_weight || 0).toFixed(3)} kg`
+                        : `${Number(v.net_weight || 0).toFixed(3)} kg`
+                    }
+                  />
+                ))}
+                {packaging}
+              </div>
             </div>
-            {qrBlock}
-            <div className="shrink-0 flex flex-col justify-start gap-[5px] mt-1">
-              {verticalLayout.weights.map((w) => (
-                <FieldRow
-                  key={w.key}
-                  wrap
-                  label={w.key === 'peso_bruto' ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}
-                  value={
-                    w.key === 'peso_bruto'
-                      ? `${Number(v.gross_weight || 0).toFixed(3)} kg`
-                      : `${Number(v.net_weight || 0).toFixed(3)} kg`
-                  }
-                />
-              ))}
-            </div>
-            {packaging}
           </div>
         ) : (
           <div className="flex h-full flex-col min-h-0">

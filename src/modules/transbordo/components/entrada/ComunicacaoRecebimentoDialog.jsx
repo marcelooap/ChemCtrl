@@ -12,6 +12,7 @@ import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/forma
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import { copyHtmlToClipboard } from "@transbordo/lib/clipboard";
+import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
 import {
   buildReceivingCommunicationHtml,
   formatReceivingLoteRow,
@@ -105,6 +106,7 @@ export default function ComunicacaoRecebimentoDialog({
         nota_fiscal: entrada.nota_fiscal,
         lote: entrada.lote,
         quantidade: entrada.quantidade,
+        quantidade_declarada: entrada.quantidade_declarada,
         unidade_medida: entrada.unidade_medida,
         data_fabricacao: entrada.data_fabricacao,
         data_validade: entrada.data_validade,
@@ -174,6 +176,8 @@ export default function ComunicacaoRecebimentoDialog({
       ? pesoBruto - pesoLiquido
       : null;
   const dentroMargem = entrada.granel_margem === "dentro";
+  const foraMargem = entrada.granel_margem === "fora";
+  const lotesCount = lotes.length;
 
   const thClass =
     "px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border bg-muted/50 whitespace-nowrap";
@@ -187,6 +191,8 @@ export default function ComunicacaoRecebimentoDialog({
           notaFiscal: entrada.nota_fiscal,
           densidade: resolveDensidade(l, produtosById),
           formatDate,
+          entrada,
+          lotesCount,
         })
       );
 
@@ -199,6 +205,7 @@ export default function ComunicacaoRecebimentoDialog({
         hasPesagem,
         pesoBruto: formatMass(entrada.granel_peso_bruto, { empty: "-" }),
         pesoLiquido: formatMass(entrada.granel_peso_liquido, { empty: "-" }),
+        pesoLiquidoDestaque: foraMargem,
         tara: diferenca == null ? "-" : formatMass(diferenca, { empty: "-" }),
         margemLabel: entrada.granel_margem
           ? dentroMargem
@@ -279,7 +286,10 @@ export default function ComunicacaoRecebimentoDialog({
                     </td>
                     <td className={tdClass}>{l.nota_fiscal || entrada.nota_fiscal || "-"}</td>
                     <td className={`${tdClass} text-right tabular-nums`}>
-                      {formatMass(l.quantidade, { empty: "-" })}
+                      {formatMass(
+                        getQuantidadeNotaFiscal(l, entrada, { lotesCount }),
+                        { empty: "-" }
+                      )}
                     </td>
                     <td className={tdClass}>{l.unidade_medida || "-"}</td>
                     <td className={tdClass}>{l.lote || "-"}</td>
@@ -330,7 +340,13 @@ export default function ComunicacaoRecebimentoDialog({
                     <td className={`${tdClass} tabular-nums`}>
                       {formatMass(entrada.granel_peso_bruto, { empty: "-" })}
                     </td>
-                    <td className={`${tdClass} tabular-nums`}>
+                    <td
+                      className={`${tdClass} tabular-nums ${
+                        foraMargem
+                          ? "font-bold text-red-800 bg-red-50"
+                          : ""
+                      }`}
+                    >
                       {formatMass(entrada.granel_peso_liquido, { empty: "-" })}
                     </td>
                     <td className={`${tdClass} tabular-nums`}>

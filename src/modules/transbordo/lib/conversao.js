@@ -181,6 +181,46 @@ export function getLoteQuantidadeDeclarada(lote) {
   return lote?.quantidade;
 }
 
+function toFiniteNumber(value) {
+  if (value == null || value === "") return null;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Quantidade da nota fiscal para exibição (comunicação / modal).
+ * Se a pesagem fora da margem gravou o peso líquido em `quantidade`,
+ * recupera a NF de `quantidade_declarada` ou da janela de margem.
+ */
+export function getQuantidadeNotaFiscal(lote, entrada, { lotesCount = 1 } = {}) {
+  const operacional = toFiniteNumber(lote?.quantidade);
+  const candidates = [lote?.quantidade_declarada, lote?.quantidade_nf]
+    .map(toFiniteNumber)
+    .filter((n) => n != null);
+  const declaredDistinct = candidates.find(
+    (n) => operacional == null || Math.abs(n - operacional) > 0.5
+  );
+  if (declaredDistinct != null) return declaredDistinct;
+
+  if (entrada?.granel_margem === "fora" && lotesCount <= 1) {
+    const um = String(lote?.unidade_medida || entrada?.unidade_medida || "kg")
+      .trim()
+      .toLowerCase();
+    const isKg = um === "" || um === "kg" || um === "kgs";
+    const min = Number(entrada.granel_peso_minimo);
+    const err = Number(entrada.granel_erro_admissivel);
+    if (isKg && Number.isFinite(min) && Number.isFinite(err)) {
+      const nfKg = Math.round(min + err);
+      if (nfKg > 0 && (operacional == null || Math.abs(nfKg - operacional) > 0.5)) {
+        return nfKg;
+      }
+    }
+  }
+
+  if (candidates.length > 0) return candidates[0];
+  return operacional ?? toFiniteNumber(entrada?.quantidade);
+}
+
 /**
  * Converte massa em kg para a unidade de medida do lote.
  * kg → kg; L = kg / densidade; gal = kg / (densidade × 3,78541); lb = kg / 0,453592.

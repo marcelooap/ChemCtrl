@@ -683,10 +683,6 @@ export function generateEstoqueEnvioPDF({
     (s, c) => s + (Number(c.peso_liquido) || 0),
     0
   );
-  const totalContainerGross = containers.reduce(
-    (s, c) => s + (Number(c.peso_bruto) || 0),
-    0
-  );
 
   y = ensureSpace(doc, y, 30);
   y = addSectionTitle(doc, y, "Estoque de produtos");
@@ -844,7 +840,6 @@ export function generateEstoqueEnvioPDF({
         "LOTE",
         "VOLUME",
         "P. LÍQ.",
-        "P. BRUTO",
         "STATUS",
       ],
       containers.map((c) => [
@@ -854,10 +849,9 @@ export function generateEstoqueEnvioPDF({
         c.lote || "-",
         fmtNum(c.volume, 0),
         fmtNum(c.peso_liquido, 0),
-        fmtNum(c.peso_bruto, 0),
         c.statusReserva || (c.reservado ? "Reservado" : "Livre"),
       ]),
-      [22, 16, 48, 20, 18, 18, 18, 22],
+      [22, 16, 52, 36, 20, 22, 22],
       [
         "TOTAL",
         "",
@@ -865,7 +859,6 @@ export function generateEstoqueEnvioPDF({
         "",
         `${fmtNum(totalContainerVolume, 0)} L`,
         `${fmtNum(totalContainerMass, 0)} kg`,
-        `${fmtNum(totalContainerGross, 0)} kg`,
         "",
       ],
       [],
@@ -874,7 +867,6 @@ export function generateEstoqueEnvioPDF({
           "center",
           "center",
           "left",
-          "center",
           "center",
           "center",
           "center",
@@ -921,18 +913,28 @@ export function generateEstoqueEnvioPDF({
 
     const loteLines = [];
     const volumeLines = [];
-    const ocupacaoLines = [];
+    let tankaVolume = 0;
 
     for (const l of lotes) {
       const vol = Number(l.quantidade_l) || 0;
+      tankaVolume += vol;
       totalTankVolume += vol;
-      const pct = cap > 0 ? Math.min(100, (vol / cap) * 100) : 0;
       loteLines.push(l.lote || "-");
       volumeLines.push(fmtNum(vol, 0));
-      ocupacaoLines.push(`${pct.toFixed(1)}%`);
     }
 
-    tankRows.push([tankaNome, produto, loteLines, volumeLines, ocupacaoLines]);
+    if (lotes.length > 1) {
+      volumeLines.push(`Total ${fmtNum(tankaVolume, 0)}`);
+    }
+
+    const ocupacaoPct = cap > 0 ? Math.min(100, (tankaVolume / cap) * 100) : 0;
+    tankRows.push([
+      tankaNome,
+      produto,
+      loteLines,
+      volumeLines,
+      `${ocupacaoPct.toFixed(1)}%`,
+    ]);
   }
 
   if (tankRows.length === 0) {
@@ -946,7 +948,7 @@ export function generateEstoqueEnvioPDF({
       y,
       ["TANKA", "PRODUTO", "LOTE", "VOLUME ATUAL", "OCUPAÇÃO"],
       tankRows,
-      [28, 72, 30, 28, 24],
+      [28, 66, 30, 34, 24],
       ["TOTAL", "", "", `${fmtNum(totalTankVolume, 0)} L`, ""],
       [4], // coluna ocupação com badge verde (apenas PDF)
       {
