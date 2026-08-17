@@ -2,17 +2,22 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import {
   formatEtiquetaDate,
+  getVerticalEtiquetaLayout,
   partitionEtiquetaCampos,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false }) {
-  if (stacked) {
+function FieldRow({ label, value, wrap = false, stacked = false, unlimited = false }) {
+  if (stacked || (wrap && unlimited)) {
     return (
       <div className="min-w-0">
         <div className="text-[8px] font-extrabold uppercase leading-none tracking-wide">
           {label}
         </div>
-        <div className="text-[10px] font-bold leading-tight truncate mt-[1px]">
+        <div
+          className={`text-[10px] font-bold leading-snug mt-[1px] ${
+            wrap || unlimited ? 'whitespace-normal break-words' : 'truncate'
+          }`}
+        >
           {value}
         </div>
       </div>
@@ -84,6 +89,7 @@ export default function EtiquetaPreview({
 }) {
   const { t, i18n } = useTranslation();
   const layout = partitionEtiquetaCampos(campos);
+  const verticalLayout = getVerticalEtiquetaLayout(campos);
   const dataLayout = layout.dataLayout || { mode: 'stack', left: layout.dataRows || [], right: [] };
   const v = values || {};
   const vertical = orientation === 'vertical';
@@ -132,6 +138,7 @@ export default function EtiquetaPreview({
         key={row.key}
         stacked={stacked}
         wrap={wrapKey(row.key)}
+        unlimited={vertical && wrapKey(row.key)}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />
@@ -143,19 +150,7 @@ export default function EtiquetaPreview({
 
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
-  const allRows = [...(dataLayout.left || []), ...(dataLayout.right || [])];
-  const byKey = new Map(allRows.map((row) => [row.key, row]));
-  const dateRows = ['fabricacao', 'validade'].map((key) => byKey.get(key)).filter(Boolean);
-  const rtRows = byKey.get('responsavel_tecnico') ? [byKey.get('responsavel_tecnico')] : [];
-  const otherRows = allRows.filter(
-    (row, index, list) =>
-      list.findIndex((item) => item.key === row.key) === index &&
-      row.key !== 'fabricacao' &&
-      row.key !== 'validade' &&
-      row.key !== 'responsavel_tecnico'
-  );
-
-  const packaging = layout.showEmbalagem && (
+  const packaging = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem) && (
     <div className={`font-extrabold uppercase flex items-baseline gap-1 shrink-0 min-w-0 ${vertical ? 'text-[9px] mt-1' : 'text-[10px] mt-0.5'}`}>
       <span className="shrink-0">{t('pdf.label.packaging')}</span>
       <span>•</span>
@@ -163,15 +158,15 @@ export default function EtiquetaPreview({
     </div>
   );
 
-  const qrBlock = layout.showQr && (
+  const qrBlock = (vertical ? verticalLayout.showQr : layout.showQr) && (
     <div className={`shrink-0 flex flex-col items-center ${vertical ? 'py-1' : 'w-[88px] border-l border-black pl-2'}`}>
-      {layout.showId && (
-        <div className={`font-bold ${vertical ? 'text-[9px]' : 'text-[10px] self-start'}`}>
+      {!vertical && layout.showId && (
+        <div className="font-bold text-[10px] self-start">
           {t('pdf.label.ref')}: {v.op_number || '—'}
         </div>
       )}
       <div className="flex items-center justify-center py-0.5">
-        <QRCodeSVG value={qrUrl} size={vertical ? 84 : dense ? 64 : 72} level="M" bgColor="#ffffff" fgColor="#000000" />
+        <QRCodeSVG value={qrUrl} size={vertical ? 72 : dense ? 64 : 72} level="M" bgColor="#ffffff" fgColor="#000000" />
       </div>
       <div className="text-[6px] font-bold uppercase text-center leading-tight">
         {t('pdf.label.qrHint')}
@@ -185,31 +180,25 @@ export default function EtiquetaPreview({
         {t('painel.configuracao.etiquetas.previewTitle')}
       </p>
       <div
-        className="bg-white text-black border border-black shadow-lg origin-top overflow-hidden"
+        className="bg-white text-black border border-black shadow-lg origin-top"
         style={
           vertical
-            ? { width: 200, height: 420, padding: '8px 10px' }
-            : { width: 420, height: 200, padding: '5px 12px' }
+            ? { width: 200, minHeight: 420, padding: '8px 10px' }
+            : { width: 420, height: 200, padding: '5px 12px', overflow: 'hidden' }
         }
       >
         {vertical ? (
           <div className="flex h-full flex-col min-h-0">
-            {layout.showNome && (
-              <div className="text-[13px] font-extrabold leading-tight shrink-0 line-clamp-3">
+            {verticalLayout.showNome && (
+              <div className="text-[15px] font-extrabold leading-tight text-center shrink-0 line-clamp-4 pb-1.5 mb-1.5 border-b border-black">
                 {v.product || '—'}
               </div>
             )}
-            {qrBlock}
-            <div className="flex-1 min-h-0 flex flex-col justify-start gap-[4px] overflow-hidden pt-1">
-              {renderRows(otherRows)}
-              {dateRows.length > 0 && (
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                  {renderRows(dateRows, true)}
-                </div>
-              )}
-              {renderRows(rtRows)}
+            <div className="shrink-0 flex flex-col justify-start gap-[4px]">
+              {renderRows(verticalLayout.dataRows)}
             </div>
-            <WeightTable layout={layout} t={t} v={v} compact />
+            {qrBlock}
+            <WeightTable layout={verticalLayout} t={t} v={v} compact />
             {packaging}
           </div>
         ) : (

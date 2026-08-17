@@ -12,6 +12,7 @@ import {
   formatEtiquetaDate,
   extractDateFormat,
   extractOrientation,
+  getVerticalEtiquetaLayout,
   partitionEtiquetaCampos,
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
@@ -125,7 +126,18 @@ function labelCss(orientation = 'horizontal') {
   .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2mm; min-width: 0; overflow: hidden; }
   .product { font-size: ${vertical ? '11pt' : '13pt'}; font-weight: 800; line-height: 1.05; flex-shrink: 0; }
   .label.dense .product { font-size: 11.5pt; }
-  .label.vertical .product { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .label.vertical .product {
+    font-size: 12pt;
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: 1.4mm;
+    padding-bottom: 1.2mm;
+    border-bottom: 0.5px solid #000;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .data-block { display: flex; gap: 1.5mm; margin-top: 0.8mm; flex: 1; min-height: 0; overflow: hidden; }
   .icon-col { display: flex; align-items: flex-start; padding-top: 0.3mm; }
   .icon-col svg { width: 5.5mm; height: 5.5mm; }
@@ -152,28 +164,49 @@ function labelCss(orientation = 'horizontal') {
   .label.vertical .qr-col {
     width: 100%;
     border-left: none;
-    padding: 1.2mm 0;
+    padding: 0.8mm 0 0.4mm;
   }
-  .label.vertical .fields { flex-direction: column; gap: 0.8mm; flex: 1; }
-  .label.vertical .fields-main { display: flex; flex-direction: column; gap: 0.5mm; }
-  .label.vertical .fields-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; }
-  .label.vertical .fields-dates .field-row { flex-direction: column; align-items: flex-start; gap: 0.15mm; }
-  .label.vertical .fields-dates .sep { display: none; }
-  .label.vertical .fields-dates .lbl { font-size: 6pt; }
-  .label.vertical .fields-dates .val { font-size: 8pt; }
-  .label.vertical .field-row { font-size: 8pt; }
+  .label.vertical .fields {
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 0.55mm;
+    margin-top: 0;
+    overflow: visible;
+  }
+  .label.vertical .field-row { font-size: 7.5pt; align-items: flex-start; }
+  .label.vertical .field-row.wrap {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2mm;
+  }
+  .label.vertical .field-row.wrap .sep { display: none; }
+  .label.vertical .field-row.wrap .lbl { font-size: 6pt; }
+  .label.vertical .field-row.wrap .val {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    display: block;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-size: 8pt;
+    line-height: 1.2;
+  }
   .ref { font-size: 8pt; font-weight: 700; align-self: flex-start; }
-  .label.vertical .ref { align-self: center; font-size: 7.5pt; }
   .qr-code { flex: 1; display: flex; align-items: center; justify-content: center; }
   .qr-code svg { width: 18mm; height: 18mm; }
-  .label.vertical .qr-code svg { width: 22mm; height: 22mm; }
+  .label.vertical .qr-code { flex: 0 0 auto; }
+  .label.vertical .qr-code svg { width: 16mm; height: 16mm; }
   .qr-hint { font-size: 5pt; font-weight: 700; text-transform: uppercase; text-align: center; line-height: 1.1; }
   .weight-table { width: 100%; border-collapse: collapse; margin-top: 0.5mm; flex-shrink: 0; }
+  .label.vertical .weight-table { margin-top: 0.8mm; }
   .weight-table td { border: 0.5px solid #000; padding: 0.5mm 1.2mm; font-size: 7pt; }
   .wt-title { font-weight: 800; text-transform: uppercase; text-align: center; vertical-align: middle; width: 30%; }
   .wt-label { font-weight: 700; text-transform: uppercase; width: 35%; }
   .wt-value { font-weight: 800; text-align: right; width: 35%; }
   .footer { font-size: 8pt; font-weight: 800; text-transform: uppercase; display: flex; align-items: baseline; margin-top: 0.4mm; flex-shrink: 0; min-width: 0; }
+  .label.vertical .footer { margin-top: 0.8mm; }
   .footer .sep { margin: 0 0.6mm; }
   .footer .emb { font-size: 9pt; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media print {
@@ -223,7 +256,10 @@ async function printConfiguredLabel({
   win.document.close();
 
   const layout = partitionEtiquetaCampos(campos);
-  const qrSvgMarkup = layout.showQr ? await buildQrSvgMarkup(publicToken, consultaPath) : '';
+  const verticalLayout = vertical ? getVerticalEtiquetaLayout(campos) : null;
+  const qrSvgMarkup = (vertical ? verticalLayout.showQr : layout.showQr)
+    ? await buildQrSvgMarkup(publicToken, consultaPath)
+    : '';
 
   const dataValues = {
     id: refId,
@@ -244,21 +280,10 @@ async function printConfiguredLabel({
 
   const dataLayout = layout.dataLayout || { mode: 'stack', left: layout.dataRows || [], right: [] };
   const split = dataLayout.mode === 'split' && dataLayout.right.length > 0;
-  const allRows = [...(dataLayout.left || []), ...(dataLayout.right || [])];
-  const uniqueRows = allRows.filter((row, index) => allRows.findIndex((item) => item.key === row.key) === index);
-  const dateRows = uniqueRows.filter((row) => row.key === 'fabricacao' || row.key === 'validade');
-  const rtRows = uniqueRows.filter((row) => row.key === 'responsavel_tecnico');
-  const otherRows = uniqueRows.filter(
-    (row) => row.key !== 'fabricacao' && row.key !== 'validade' && row.key !== 'responsavel_tecnico'
-  );
 
   let fieldRows;
   if (vertical) {
-    fieldRows = `
-      <div class="fields-main">${otherRows.map(fieldRowHtml).join('')}</div>
-      ${dateRows.length ? `<div class="fields-dates">${dateRows.map(fieldRowHtml).join('')}</div>` : ''}
-      ${rtRows.map(fieldRowHtml).join('')}
-    `;
+    fieldRows = verticalLayout.dataRows.map(fieldRowHtml).join('');
   } else {
     const leftHtml = dataLayout.left.map(fieldRowHtml).join('');
     const rightHtml = split ? dataLayout.right.map(fieldRowHtml).join('') : '';
@@ -267,7 +292,7 @@ async function printConfiguredLabel({
       : `<div class="fields-left">${leftHtml}</div>`;
   }
 
-  const productHtml = layout.showNome
+  const productHtml = (vertical ? verticalLayout.showNome : layout.showNome)
     ? `<div class="product">${escapeHtml(product)}</div>`
     : '';
 
@@ -281,23 +306,24 @@ async function printConfiguredLabel({
         </div>`
     : '';
 
-  const qrHtml = layout.showQr
+  const qrHtml = (vertical ? verticalLayout.showQr : layout.showQr)
     ? qrColumnHtml({
         publicToken,
         qrSvgMarkup,
         refId,
-        showId: layout.showId,
+        showId: vertical ? false : layout.showId,
         qrHint,
         t,
       })
     : '';
 
-  const weightRows = layout.weights
+  const activeWeights = vertical ? verticalLayout.weights : layout.weights;
+  const weightRows = activeWeights
     .map((w, i) => {
       const isBruto = w.key === 'peso_bruto';
       const titleCell =
         i === 0
-          ? `<td class="wt-title" rowspan="${layout.weights.length}">${t('pdf.label.mass')}</td>`
+          ? `<td class="wt-title" rowspan="${activeWeights.length}">${t('pdf.label.mass')}</td>`
           : '';
       return `<tr>${titleCell}<td class="wt-label">${isBruto ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}</td><td class="wt-value">${isBruto ? grossWeight : netWeight} kg</td></tr>`;
     })
@@ -307,7 +333,7 @@ async function printConfiguredLabel({
     ? `<table class="weight-table">${weightRows}</table>`
     : '';
 
-  const footer = layout.showEmbalagem
+  const footer = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem)
     ? `<div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${escapeHtml(embalagem)}</span></div>`
     : '';
 
@@ -315,8 +341,8 @@ async function printConfiguredLabel({
   const bodyHtml = vertical
     ? `<div class="${labelClass}">
   ${productHtml}
-  ${qrHtml}
   <div class="fields">${fieldRows}</div>
+  ${qrHtml}
   ${weightTable}
   ${footer}
 </div>`

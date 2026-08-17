@@ -181,6 +181,40 @@ export function partitionEtiquetaCampos(campos = []) {
   };
 }
 
+/** Ordem fixa da etiqueta vertical: produto no topo, dados, QR, pesos, embalagem. */
+export const VERTICAL_DATA_FIELD_ORDER = [
+  'cliente',
+  'lote',
+  'fabricacao',
+  'validade',
+  'volume',
+  'responsavel_tecnico',
+  'id',
+];
+
+export const VERTICAL_WEIGHT_ORDER = ['peso_liquido', 'peso_bruto'];
+
+export function getVerticalEtiquetaLayout(campos = []) {
+  const enabled = new Set(
+    (campos || [])
+      .filter((c) => c && c.enabled && c.key !== '_opcoes')
+      .map((c) => c.key)
+  );
+  return {
+    showNome: enabled.has('nome'),
+    showQr: enabled.has('qr'),
+    showEmbalagem: enabled.has('embalagem'),
+    dataRows: VERTICAL_DATA_FIELD_ORDER.filter((key) => enabled.has(key)).map((key) => ({
+      key,
+      enabled: true,
+    })),
+    weights: VERTICAL_WEIGHT_ORDER.filter((key) => enabled.has(key)).map((key) => ({
+      key,
+      enabled: true,
+    })),
+  };
+}
+
 export const ETIQUETA_DATE_FORMATS = [
   { value: 'dmy', labelKey: 'painel.configuracao.etiquetas.dateFormatDmy' },
   { value: 'month_year', labelKey: 'painel.configuracao.etiquetas.dateFormatMonthYear' },
