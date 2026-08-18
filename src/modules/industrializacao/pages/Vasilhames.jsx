@@ -892,6 +892,7 @@ export default function Vasilhames() {
       <AddTankDialog open={showAddTank} onOpenChange={setShowAddTank} onSaved={load} />
 
       <PrintContainerLabelDialog
+        key={labelTarget?.id || 'closed'}
         open={!!labelTarget}
         onOpenChange={(v) => { if (!v) setLabelTarget(null); }}
         container={labelTarget}

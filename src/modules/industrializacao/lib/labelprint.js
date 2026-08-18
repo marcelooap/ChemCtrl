@@ -476,7 +476,7 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
   if (!container) return null;
 
   const { lang, t } = getLabelLabels(options?.locale);
-  const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
+  const weightFmt = (n) => fmtNumber(Math.round(Number(n) || 0), { minimumFractionDigits: 0, maximumFractionDigits: 0 }, lang);
 
   const copies = Math.max(1, Math.round(Number(options?.copies) || 1));
   const volumeRaw = options?.volume ?? container.volume;
@@ -526,8 +526,8 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     client: clienteNome || '—',
     fabDate,
     valDate,
-    netWeight: numFmt(netWeight || 0),
-    grossWeight: numFmt(grossWeight || 0),
+    netWeight: weightFmt(netWeight || 0),
+    grossWeight: weightFmt(grossWeight || 0),
     volume,
     embalagem,
     publicToken,

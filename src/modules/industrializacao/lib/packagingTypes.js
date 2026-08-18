@@ -111,14 +111,15 @@ export function suggestLabelVolumePlaceholder(type) {
   return Number.isFinite(n) && n > 0 ? n : '';
 }
 
-/** Líquido = volume × densidade; bruto = líquido + tara. */
+/** Líquido = volume × densidade; bruto = líquido + tara. Pesos em kg inteiros. */
 export function calcLabelWeightsFromVolume({ volume, density, tare }) {
   const vol = Number(volume) || 0;
   const dens = Number(density) || 0;
-  const net = vol * dens;
+  const tareKg = Number(tare) || 0;
+  const net = Math.round(vol * dens);
   return {
     volume: vol,
     netWeight: net,
-    grossWeight: net + (Number(tare) || 0),
+    grossWeight: Math.round(vol * dens + tareKg),
   };
 }

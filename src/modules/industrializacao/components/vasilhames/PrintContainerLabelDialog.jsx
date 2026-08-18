@@ -33,6 +33,16 @@ import {
 } from '@industrializacao/lib/packagingTypes';
 import { fmtNumber } from '@/i18n/formatters';
 
+function defaultVolumeForContainer(container, productions) {
+  if (!container) return '';
+  if (labelRequiresManualVolume(container)) return '';
+  const display = Number(containerDisplayVolume(container, productions));
+  if (Number.isFinite(display) && display > 0) return Math.round(display);
+  const stored = Number(container.volume);
+  if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
+  return '';
+}
+
 async function resolveValidityDaysForContainer(container, production, recipes) {
   let validityDays = resolveValidityDays(recipes || [], container, production);
 
@@ -75,11 +85,21 @@ export default function PrintContainerLabelDialog({
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const sessionKey = open && container
+    ? String(container.id || `${container.container_number || ''}|${container.barril_number || ''}|${container.op_number || ''}`)
+    : '';
+  const [formSession, setFormSession] = useState('');
   const [volume, setVolume] = useState('');
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [meta, setMeta] = useState(null);
+
+  if (sessionKey !== formSession) {
+    setFormSession(sessionKey);
+    setVolume(sessionKey ? defaultVolumeForContainer(container, productions) : '');
+    setQty(1);
+  }
 
   const manualVolume = labelRequiresManualVolume(container);
   const production = useMemo(
@@ -100,16 +120,8 @@ export default function PrintContainerLabelDialog({
   useEffect(() => {
     if (!open || !container) return undefined;
 
-    if (manualVolume) {
-      setVolume('');
-    } else {
-      const tankVol = containerDisplayVolume(container, productions) || container.volume || '';
-      setVolume(tankVol === 0 ? '' : tankVol);
-    }
-    setQty(1);
-    setMeta(null);
-
     let cancelled = false;
+    setMeta(null);
     (async () => {
       setLoading(true);
       try {
@@ -202,13 +214,13 @@ export default function PrintContainerLabelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[760px] max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] max-w-[760px] flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{t('containers.vasilhames.printLabelTitle')}</DialogTitle>
         </DialogHeader>
 
         {container && (
-          <div className="space-y-5">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
             <div className="overflow-x-auto rounded-lg bg-muted/40 px-3 py-4">
               {loading && !meta ? (
                 <div className="flex items-center justify-center h-[220px] text-muted-foreground">
@@ -218,6 +230,7 @@ export default function PrintContainerLabelDialog({
               ) : (
                 <EtiquetaPreview
                   chrome={false}
+                  weightDecimals={0}
                   campos={meta?.printConfig?.campos}
                   dateFormat={meta?.printConfig?.dateFormat}
                   orientation={meta?.printConfig?.orientation}
@@ -233,6 +246,7 @@ export default function PrintContainerLabelDialog({
                   {t('containers.fields.volume')} (L) *
                 </label>
                 <NumberInputBr
+                  key={`vol-${sessionKey}`}
                   value={volume}
                   onChange={setVolume}
                   decimals={0}
@@ -251,6 +265,7 @@ export default function PrintContainerLabelDialog({
                   {t('containers.vasilhames.printLabelQty')} *
                 </label>
                 <NumberInputBr
+                  key={`qty-${sessionKey}`}
                   value={qty}
                   onChange={(v) => setQty(v === '' ? '' : Math.max(1, Math.round(Number(v) || 1)))}
                   decimals={0}
@@ -266,7 +281,7 @@ export default function PrintContainerLabelDialog({
                 <p className="text-xs text-muted-foreground mb-0.5">{t('containers.fields.netWeight')}</p>
                 <p className="font-semibold text-green-700">
                   {volumeOk
-                    ? `${fmtNumber(weights.netWeight, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language)} kg`
+                    ? `${fmtNumber(weights.netWeight, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language)} kg`
                     : '—'}
                 </p>
               </div>
@@ -274,7 +289,7 @@ export default function PrintContainerLabelDialog({
                 <p className="text-xs text-muted-foreground mb-0.5">{t('containers.fields.grossWeight')}</p>
                 <p className="font-semibold">
                   {volumeOk
-                    ? `${fmtNumber(weights.grossWeight, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language)} kg`
+                    ? `${fmtNumber(weights.grossWeight, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language)} kg`
                     : '—'}
                 </p>
               </div>
@@ -282,7 +297,7 @@ export default function PrintContainerLabelDialog({
           </div>
         )}
 
-        <DialogFooter className="mt-2">
+        <DialogFooter className="mt-2 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange?.(false)} disabled={printing}>
             {t('buttons.cancel')}
           </Button>

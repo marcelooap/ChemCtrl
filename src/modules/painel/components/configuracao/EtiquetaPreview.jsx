@@ -33,7 +33,13 @@ function FieldRow({ label, value, wrap = false, stacked = false, fill = false })
   );
 }
 
-function WeightTable({ layout, t, v, compact = false }) {
+function formatWeight(n, decimals = 3) {
+  const value = Number(n) || 0;
+  if (decimals <= 0) return `${Math.round(value)}`;
+  return value.toFixed(decimals);
+}
+
+function WeightTable({ layout, t, v, compact = false, weightDecimals = 3 }) {
   if (layout.weights.length === 0) return null;
   return (
     <table className={`w-full border-collapse shrink-0 ${compact ? 'mt-1 text-[8px]' : 'mt-0.5 text-[9px]'}`}>
@@ -53,8 +59,8 @@ function WeightTable({ layout, t, v, compact = false }) {
             </td>
             <td className="border border-black px-1 py-0.5 font-extrabold text-right">
               {w.key === 'peso_bruto'
-                ? `${Number(v.gross_weight || 0).toFixed(3)} kg`
-                : `${Number(v.net_weight || 0).toFixed(3)} kg`}
+                ? `${formatWeight(v.gross_weight, weightDecimals)} kg`
+                : `${formatWeight(v.net_weight, weightDecimals)} kg`}
             </td>
           </tr>
         ))}
@@ -71,6 +77,7 @@ export default function EtiquetaPreview({
   consultaPath = '/consulta',
   className = '',
   chrome = true,
+  weightDecimals = 3,
 }) {
   const { t, i18n } = useTranslation();
   const layout = partitionEtiquetaCampos(campos);
@@ -167,7 +174,7 @@ export default function EtiquetaPreview({
           {t('painel.configuracao.etiquetas.previewTitle')}
         </p>
       )}
-      <div>
+      <div
         className="bg-white text-black border border-black shadow-lg origin-top"
         style={
           vertical
@@ -196,8 +203,8 @@ export default function EtiquetaPreview({
                     label={w.key === 'peso_bruto' ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}
                     value={
                       w.key === 'peso_bruto'
-                        ? `${Number(v.gross_weight || 0).toFixed(3)} kg`
-                        : `${Number(v.net_weight || 0).toFixed(3)} kg`
+                        ? `${formatWeight(v.gross_weight, weightDecimals)} kg`
+                        : `${formatWeight(v.net_weight, weightDecimals)} kg`
                     }
                   />
                 ))}
@@ -231,7 +238,7 @@ export default function EtiquetaPreview({
               </div>
               {qrBlock}
             </div>
-            <WeightTable layout={layout} t={t} v={v} />
+            <WeightTable layout={layout} t={t} v={v} weightDecimals={weightDecimals} />
             {packaging}
           </div>
         )}

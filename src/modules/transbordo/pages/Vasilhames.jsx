@@ -439,6 +439,7 @@ export default function Vasilhames() {
 
   const labelContainer = labelVasilhame
     ? {
+        id: labelVasilhame.id,
         product: labelVasilhame.produto_nome || "—",
         lot:
           String(labelVasilhame.lote || "").trim() ||
@@ -1069,6 +1070,7 @@ export default function Vasilhames() {
       </Dialog>
 
       <PrintContainerLabelDialog
+        key={labelVasilhame?.id || 'closed'}
         open={!!labelVasilhame}
         onOpenChange={(v) => { if (!v) setLabelVasilhame(null); }}
         container={labelContainer}
