@@ -85,6 +85,11 @@ INSERT INTO permissoes (id, modulo, tela, acao, codigo, descricao) VALUES
   ('painel_logistica.view', 'painel', 'logistica', 'view', 'painel_logistica.view', 'Visualizar Logística'),
   ('painel_logistica_agendamentos.view', 'painel', 'logistica_agendamentos', 'view', 'painel_logistica_agendamentos.view', 'Visualizar Agendamentos de Logística'),
   ('painel_logistica_carregamentos.view', 'painel', 'logistica_carregamentos', 'view', 'painel_logistica_carregamentos.view', 'Visualizar Carregamentos de Logística'),
+  ('painel_operacional_ordem_transbordo.view', 'painel', 'operacional_ordem_transbordo', 'view', 'painel_operacional_ordem_transbordo.view', 'Visualizar Ordem de Transbordo'),
+  ('painel_operacional_ordem_transbordo.create', 'painel', 'operacional_ordem_transbordo', 'create', 'painel_operacional_ordem_transbordo.create', 'Criar Ordem de Transbordo'),
+  ('painel_operacional_ordem_transbordo.edit', 'painel', 'operacional_ordem_transbordo', 'edit', 'painel_operacional_ordem_transbordo.edit', 'Editar Ordem de Transbordo'),
+  ('painel_operacional_ordem_transbordo.delete', 'painel', 'operacional_ordem_transbordo', 'delete', 'painel_operacional_ordem_transbordo.delete', 'Excluir Ordem de Transbordo'),
+  ('painel_operacional_estoque.view', 'painel', 'operacional_estoque', 'view', 'painel_operacional_estoque.view', 'Visualizar Estoque Operacional'),
 
   -- Industrialização (keys existentes)
   ('home.view', 'industrializacao', 'home', 'view', 'home.view', 'Visualizar Home'),

@@ -315,11 +315,108 @@
       "entrada": "Entrée",
       "saida": "Sortie",
       "transbordo": "Transbordement",
+      "validacao": "Validation",
       "vasilhames": "Conteneurs",
       "filtracao": "Filtration",
       "estoque": "Stock",
       "estoqueEnvio": "Stock d'expédition",
       "tankagem": "Cuves"
+    },
+    "validacao": {
+      "title": "Validation",
+      "subtitle": "{{total}} enregistrement(s) — {{pendentes}} en attente, {{validados}} validé(s)",
+      "searchPlaceholder": "Rechercher par ID, produit, client ou lot...",
+      "empty": "Aucune validation trouvée.",
+      "viewTitle": "Validation #{{numero}}",
+      "table": {
+        "id": "ID",
+        "data": "Date",
+        "operador": "Opérateur",
+        "produto": "Produit",
+        "cliente": "Client",
+        "lote": "Lot",
+        "quantidade": "Quantité",
+        "unidade": "Unité",
+        "validar": "Valider",
+        "acoes": "Actions"
+      },
+      "origemTipo": {
+        "granel": "Vrac",
+        "tanka": "Cuve",
+        "vasilhame": "Conteneur",
+        "embalado": "Conditionné"
+      },
+      "status": {
+        "pendente": "En attente",
+        "processando": "En cours",
+        "validado": "Validé"
+      },
+      "summary": {
+        "total": "Total"
+      },
+      "actions": {
+        "view": "Voir",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "validate": "Valider"
+      },
+      "sections": {
+        "granel": "Réception en vrac",
+        "transbordo": "Transbordement"
+      },
+      "fields": {
+        "data": "Date",
+        "cliente": "Client",
+        "produto": "Produit",
+        "tipoOperacao": "Type d'opération",
+        "origemTipo": "Origine",
+        "lote": "Lot",
+        "quantidade": "Quantité",
+        "notaFiscal": "Facture",
+        "quantidadeGranel": "Quantité reçue",
+        "densidade": "Densité",
+        "precoUnitario": "Prix unitaire",
+        "ticket": "Ticket",
+        "pesoBruto": "Poids brut",
+        "pesoLiquido": "Poids net",
+        "margem": "Marge",
+        "origensCount": "Origines",
+        "destinosCount": "Destinations",
+        "origensList": "Origines",
+        "destinosList": "Destinations",
+        "operadores": "Opérateurs",
+        "observacoes": "Observations",
+        "criadoPor": "Enregistré par",
+        "validadoPor": "Validé par"
+      },
+      "tipo": {
+        "granelTransbordo": "Réception en vrac + Transbordement",
+        "transbordo": "Transbordement"
+      },
+      "margem": {
+        "dentro": "Dans la marge",
+        "fora": "Hors marge"
+      },
+      "deleteConfirmTitle": "Supprimer la validation",
+      "deleteConfirmDescription": "Voulez-vous vraiment supprimer cette opération ? Cette action ne pourra pas être annulée.",
+      "validateConfirmTitle": "Confirmer la validation",
+      "validateConfirmDescription": "Confirmer la validation de cette opération ? Après confirmation, les enregistrements seront effectifs dans le système et les mouvements correspondants seront réalisés.",
+      "deleteSuccessTitle": "Validation supprimée",
+      "validateSuccessTitle": "Opération validée",
+      "validateSuccessDescription": "Les mouvements ont été effectués avec succès.",
+      "editSuccessTitle": "Validation mise à jour",
+      "editSuccessDescription": "Modifications enregistrées. L'opération reste en attente de validation.",
+      "errors": {
+        "loadTitle": "Erreur de chargement des validations",
+        "loadDescription": "Impossible de charger les validations. Veuillez réessayer.",
+        "editNotAllowedTitle": "Modification non autorisée",
+        "editNotAllowedDescription": "Seules les validations en attente peuvent être modifiées.",
+        "editGeneric": "Erreur lors de l'enregistrement des modifications.",
+        "deleteTitle": "Erreur de suppression",
+        "deleteDescription": "Impossible de supprimer la validation.",
+        "validateTitle": "Erreur de validation",
+        "validateDescription": "Impossible d'effectuer l'opération."
+      }
     }
   },
   "accessDenied": {
@@ -435,6 +532,8 @@
       "painelLogistica": "Logistique",
       "painelLogisticaAgendamentos": "Planifications (Logistique)",
       "painelLogisticaCarregamentos": "Chargements",
+      "painelOrdemTransbordo": "Ordre de transbordement",
+      "painelEstoque": "Stock",
       "painelOperadores": "Opérateurs",
       "painelEtiquetas": "Étiquettes",
       "tbHome": "Accueil",
@@ -443,6 +542,7 @@
       "tbEntrada": "Entrée",
       "tbSaida": "Sortie",
       "tbTransbordo": "Transbordement",
+      "tbValidacao": "Validation",
       "tbVasilhames": "Conteneurs",
       "tbFiltracao": "Filtration",
       "tbEstoque": "Stock",
@@ -454,6 +554,7 @@
       "create": "Créer",
       "edit": "Modifier",
       "delete": "Supprimer",
+      "validate": "Valider",
       "createRecipe": "Créer Recette",
       "editRecipe": "Modifier Recette",
       "deleteRecipe": "Supprimer Recette",
@@ -558,7 +659,7 @@
       },
       "painel": {
         "name": "Panneau",
-        "description": "Vue consolidée des opérations : industrialisation, transbordement, commercial et logistique.",
+        "description": "Vue consolidée des opérations : industrialisation, transbordement, commercial, logistique et opérationnel.",
         "cta": "Accéder au panneau"
       }
     }
@@ -576,6 +677,9 @@
       "logistica": "Logistique",
       "logisticaAgendamentos": "Planifications",
       "logisticaCarregamentos": "Chargements",
+      "operacional": "Opérationnel",
+      "ordemTransbordo": "Ordre de transbordement",
+      "estoque": "Stock",
       "usersAndPermissions": "Utilisateurs et Permissions",
       "users": "Utilisateurs",
       "permissions": "Permissions",
@@ -713,6 +817,10 @@
       "logistica": {
         "title": "Logistique",
         "description": "Chargements, véhicules et livraisons"
+      },
+      "operacional": {
+        "title": "Opérationnel",
+        "description": "Ordres de transbordement et contrôle du stock"
       }
     },
     "dashboard": {
@@ -942,7 +1050,7 @@
         },
         "vasilhames": {
           "tableTitle": "Contenants en stock",
-          "searchPlaceholder": "Rechercher ID, client, code, produit ou lot...",
+          "searchPlaceholder": "Rechercher ID, plaque, fût, client, code, produit ou lot...",
           "empty": "Aucun contenant en stock pour le filtre sélectionné.",
           "confirmTitle": "Réserver le contenant",
           "confirmMessage": "Confirmer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut passera à Réservé.",
@@ -955,6 +1063,8 @@
           "columns": {
             "id": "ID",
             "origem": "Origine",
+            "placa": "N° Plaque",
+            "barril": "Nº Fût",
             "volume": "Volume",
             "massa": "Masse",
             "status": "Statut"
@@ -971,7 +1081,8 @@
             "view": "Voir",
             "reservar": "Réserver",
             "remover": "Retirer la réservation"
-          }
+          },
+          "fracionado": "Fractionné"
         },
         "editTitle": "Modifier le solde réservé",
         "viewTitle": "Détails du solde et des réservations",
@@ -1082,6 +1193,126 @@
         "loadComposition": "Composition de charge",
         "loadings": "Chargements",
         "deliveries": "Livraisons"
+      }
+    },
+    "operacional": {
+      "title": "Opérationnel",
+      "subtitle": "Gestion opérationnelle du transbordement et du stock",
+      "sections": {
+        "ordemTransbordo": {
+          "title": "Ordre de transbordement",
+          "subtitle": "Enregistrement opérationnel des transbordements",
+          "emptyTitle": "Ordre de transbordement",
+          "emptyDescription": "Enregistrez des transbordements depuis vrac, cuve, conteneur ou emballé."
+        },
+        "estoque": {
+          "title": "Stock",
+          "subtitle": "Vue du stock opérationnel",
+          "emptyTitle": "Stock",
+          "emptyDescription": "Structure initiale préparée pour le contrôle du stock opérationnel."
+        }
+      },
+      "ordemTransbordo": {
+        "subtitle": "Renseignez la date, le client, le produit et l'origine pour enregistrer le transbordement",
+        "formTitle": "Nouvel ordre",
+        "goToTransbordo": "Aller au transbordement",
+        "search": "Rechercher par code, produit ou client...",
+        "records": "{{count}} enregistrement(s)",
+        "empty": "Aucun transbordement trouvé.",
+        "densityListed": "Densité tabulée du produit",
+        "saveSuccessTitle": "Ordre envoyé à la validation",
+        "saveSuccessDescription": "L'ordre de transbordement a été enregistré avec succès.",
+        "saveSuccessValidacaoDescription": "L'opération attend d'être vérifiée dans Transbordement → Validation.",
+        "loadErrorTitle": "Erreur de chargement",
+        "loadErrorDescription": "Vérifiez la connexion et réessayez.",
+        "deleteTitle": "Confirmer la suppression",
+        "deleteDescription": "Le volume disponible aux origines sera restauré et les emballages créés par cette opération seront supprimés. Cette action est irréversible.",
+        "deleteErrorTitle": "Erreur de suppression",
+        "deleteErrorDescription": "Impossible de supprimer le transbordement.",
+        "origem": {
+          "granel": "VRAC",
+          "tanka": "CUVE",
+          "vasilhame": "CONTENEUR",
+          "embalado": "IBC / BIDON / FÛT"
+        },
+        "fields": {
+          "date": "Date",
+          "client": "Client",
+          "product": "Produit",
+          "origin": "Origine",
+          "nf": "Facture",
+          "qty": "Quantité",
+          "unit": "Unité",
+          "lot": "Lot",
+          "density": "Densité",
+          "unitPrice": "Prix unitaire",
+          "ticket": "Ticket",
+          "gross": "Poids brut (kg)",
+          "net": "Poids net (kg)"
+        },
+        "placeholders": {
+          "client": "Sélectionnez un client",
+          "product": "Sélectionnez un produit",
+          "productDisabled": "Sélectionnez d'abord un client",
+          "origin": "Sélectionnez l'origine",
+          "nf": "N° de facture",
+          "unit": "Unité",
+          "lot": "Lot",
+          "ticket": "N° de ticket"
+        },
+        "granel": {
+          "title": "Données de réception en vrac"
+        },
+        "weighing": {
+          "title": "Données de pesée",
+          "expected": "Poids attendu (kg)",
+          "convertedFrom": "converti de {{qty}} {{unit}}",
+          "inside": "Dans la tolérance",
+          "outside": "Hors tolérance",
+          "outsideHint": "Hors tolérance : le stock utilisera le poids net ({{weight}} kg). La quantité de la facture reste inchangée."
+        },
+        "errors": {
+          "date": "La date est obligatoire.",
+          "client": "Le client est obligatoire.",
+          "product": "Le produit est obligatoire.",
+          "origin": "L'origine est obligatoire.",
+          "nf": "La facture est obligatoire.",
+          "qty": "La quantité doit être positive.",
+          "unit": "L'unité de mesure est obligatoire.",
+          "lot": "Le lot est obligatoire.",
+          "density": "La densité est obligatoire pour cette réception.",
+          "gross": "Le poids brut est obligatoire.",
+          "net": "Le poids net est obligatoire.",
+          "saveEntrada": "Impossible d'enregistrer la réception en vrac.",
+          "saveTransbordo": "Impossible d'enregistrer le transbordement. Vérifiez les destinations et réessayez."
+        },
+        "pendentes": {
+          "title": "En attente de validation"
+        }
+      },
+      "estoque": {
+        "subtitle": "Stock actuel consolidé de l'Industrialisation et du Transbordement (consultation uniquement)",
+        "searchVasilhames": "Rechercher ID, plaque, fût, client, code, produit ou lot...",
+        "searchEmbalados": "Rechercher client, code, produit ou lot...",
+        "searchTankas": "Rechercher par cuve, produit ou client...",
+        "filterClient": "Tous les clients",
+        "allClients": "Tous les clients",
+        "loadErrorTitle": "Erreur lors du chargement du stock",
+        "loadErrorDescription": "Vérifiez la connexion et réessayez.",
+        "tabs": {
+          "vasilhames": "Conteneurs",
+          "tankas": "Cuves",
+          "embalados": "Emballés"
+        },
+        "embalados": {
+          "tableTitle": "Emballés par lot",
+          "empty": "Aucun emballé en stock pour le filtre sélectionné."
+        },
+        "tankas": {
+          "tankaCount": "{{count}} cuve(s)",
+          "noClient": "Sans client",
+          "empty": "Aucune cuve trouvée pour le filtre sélectionné."
+        }
       }
     }
   },

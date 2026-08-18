@@ -315,11 +315,108 @@
       "entrada": "Inbound",
       "saida": "Outbound",
       "transbordo": "Transshipment",
+      "validacao": "Validation",
       "vasilhames": "Containers",
       "filtracao": "Filtration",
       "estoque": "Stock",
       "estoqueEnvio": "Shipping Stock",
       "tankagem": "Tank Storage"
+    },
+    "validacao": {
+      "title": "Validation",
+      "subtitle": "{{total}} record(s) — {{pendentes}} pending, {{validados}} validated",
+      "searchPlaceholder": "Search by ID, product, client or batch...",
+      "empty": "No validation found.",
+      "viewTitle": "Validation #{{numero}}",
+      "table": {
+        "id": "ID",
+        "data": "Date",
+        "operador": "Operator",
+        "produto": "Product",
+        "cliente": "Client",
+        "lote": "Batch",
+        "quantidade": "Quantity",
+        "unidade": "Unit",
+        "validar": "Validate",
+        "acoes": "Actions"
+      },
+      "origemTipo": {
+        "granel": "Bulk",
+        "tanka": "Tank",
+        "vasilhame": "Container",
+        "embalado": "Packaged"
+      },
+      "status": {
+        "pendente": "Pending",
+        "processando": "Processing",
+        "validado": "Validated"
+      },
+      "summary": {
+        "total": "Total"
+      },
+      "actions": {
+        "view": "View",
+        "edit": "Edit",
+        "delete": "Delete",
+        "validate": "Validate"
+      },
+      "sections": {
+        "granel": "Bulk receipt",
+        "transbordo": "Transshipment"
+      },
+      "fields": {
+        "data": "Date",
+        "cliente": "Client",
+        "produto": "Product",
+        "tipoOperacao": "Operation type",
+        "origemTipo": "Source",
+        "lote": "Batch",
+        "quantidade": "Quantity",
+        "notaFiscal": "Invoice",
+        "quantidadeGranel": "Received quantity",
+        "densidade": "Density",
+        "precoUnitario": "Unit price",
+        "ticket": "Ticket",
+        "pesoBruto": "Gross weight",
+        "pesoLiquido": "Net weight",
+        "margem": "Margin",
+        "origensCount": "Sources",
+        "destinosCount": "Destinations",
+        "origensList": "Sources",
+        "destinosList": "Destinations",
+        "operadores": "Operators",
+        "observacoes": "Notes",
+        "criadoPor": "Created by",
+        "validadoPor": "Validated by"
+      },
+      "tipo": {
+        "granelTransbordo": "Bulk receipt + Transshipment",
+        "transbordo": "Transshipment"
+      },
+      "margem": {
+        "dentro": "Within margin",
+        "fora": "Out of margin"
+      },
+      "deleteConfirmTitle": "Delete validation",
+      "deleteConfirmDescription": "Do you really want to delete this operation? This action cannot be undone.",
+      "validateConfirmTitle": "Confirm validation",
+      "validateConfirmDescription": "Confirm validation of this operation? After confirmation, the records will be effected in the system and the corresponding movements will be performed.",
+      "deleteSuccessTitle": "Validation deleted",
+      "validateSuccessTitle": "Operation validated",
+      "validateSuccessDescription": "Movements were carried out successfully.",
+      "editSuccessTitle": "Validation updated",
+      "editSuccessDescription": "Changes saved. The operation is still pending validation.",
+      "errors": {
+        "loadTitle": "Error loading validations",
+        "loadDescription": "Unable to load validations. Please try again.",
+        "editNotAllowedTitle": "Editing not allowed",
+        "editNotAllowedDescription": "Only pending validations can be edited.",
+        "editGeneric": "Error saving validation changes.",
+        "deleteTitle": "Error deleting",
+        "deleteDescription": "Unable to delete the validation.",
+        "validateTitle": "Error validating",
+        "validateDescription": "Unable to effect the operation."
+      }
     }
   },
   "accessDenied": {
@@ -435,6 +532,8 @@
       "painelLogistica": "Logistics",
       "painelLogisticaAgendamentos": "Logistics Schedules",
       "painelLogisticaCarregamentos": "Loadings",
+      "painelOrdemTransbordo": "Transshipment Order",
+      "painelEstoque": "Inventory",
       "painelOperadores": "Operators",
       "painelEtiquetas": "Labels",
       "tbHome": "Home",
@@ -443,6 +542,7 @@
       "tbEntrada": "Inbound",
       "tbSaida": "Outbound",
       "tbTransbordo": "Transshipment",
+      "tbValidacao": "Validation",
       "tbVasilhames": "Containers",
       "tbFiltracao": "Filtration",
       "tbEstoque": "Stock",
@@ -454,6 +554,7 @@
       "create": "Create",
       "edit": "Edit",
       "delete": "Delete",
+      "validate": "Validate",
       "createRecipe": "Create Recipe",
       "editRecipe": "Edit Recipe",
       "deleteRecipe": "Delete Recipe",
@@ -558,7 +659,7 @@
       },
       "painel": {
         "name": "Panel",
-        "description": "Consolidated operations view: industrialization, transshipment, commercial, and logistics.",
+        "description": "Consolidated operations view: industrialization, transshipment, commercial, logistics, and operations.",
         "cta": "Open panel"
       }
     }
@@ -576,6 +677,9 @@
       "logistica": "Logistics",
       "logisticaAgendamentos": "Schedules",
       "logisticaCarregamentos": "Loadings",
+      "operacional": "Operations",
+      "ordemTransbordo": "Transshipment Order",
+      "estoque": "Inventory",
       "usersAndPermissions": "Users and Permissions",
       "users": "Users",
       "permissions": "Permissions",
@@ -713,6 +817,10 @@
       "logistica": {
         "title": "Logistics",
         "description": "Loads, vehicles, and deliveries"
+      },
+      "operacional": {
+        "title": "Operations",
+        "description": "Transshipment orders and inventory control"
       }
     },
     "dashboard": {
@@ -944,7 +1052,7 @@
         },
         "vasilhames": {
           "tableTitle": "Containers in stock",
-          "searchPlaceholder": "Search ID, client, code, product or lot...",
+          "searchPlaceholder": "Search ID, plate, barrel, client, code, product or lot...",
           "empty": "No containers in stock for the selected filter.",
           "confirmTitle": "Reserve container",
           "confirmMessage": "Confirm reservation of container {{id}} ({{produto}} — {{cliente}})? Status will change to Reserved.",
@@ -957,6 +1065,8 @@
           "columns": {
             "id": "ID",
             "origem": "Origin",
+            "placa": "Plate No.",
+            "barril": "Barrel No.",
             "volume": "Volume",
             "massa": "Mass",
             "status": "Status"
@@ -973,7 +1083,8 @@
             "view": "View",
             "reservar": "Reserve",
             "remover": "Remove reservation"
-          }
+          },
+          "fracionado": "Fractional"
         },
         "editTitle": "Edit reserved balance",
         "viewTitle": "Balance and reservation details",
@@ -1084,6 +1195,126 @@
         "loadComposition": "Load composition",
         "loadings": "Loadings",
         "deliveries": "Deliveries"
+      }
+    },
+    "operacional": {
+      "title": "Operations",
+      "subtitle": "Operational management of transshipment and inventory",
+      "sections": {
+        "ordemTransbordo": {
+          "title": "Transshipment Order",
+          "subtitle": "Operational registration of transshipments",
+          "emptyTitle": "Transshipment Order",
+          "emptyDescription": "Register transshipments from bulk, tank, IBC or packed origin."
+        },
+        "estoque": {
+          "title": "Inventory",
+          "subtitle": "Operational inventory overview",
+          "emptyTitle": "Inventory",
+          "emptyDescription": "Initial structure prepared for operational inventory control."
+        }
+      },
+      "ordemTransbordo": {
+        "subtitle": "Enter date, client, product and origin to register the transshipment",
+        "formTitle": "New order",
+        "goToTransbordo": "Go to transshipment",
+        "search": "Search by code, product or client...",
+        "records": "{{count}} record(s)",
+        "empty": "No transshipments found.",
+        "densityListed": "Listed product density",
+        "saveSuccessTitle": "Order sent for validation",
+        "saveSuccessDescription": "The transshipment order was saved successfully.",
+        "saveSuccessValidacaoDescription": "The operation is waiting to be reviewed in Transshipment → Validation.",
+        "loadErrorTitle": "Error loading orders",
+        "loadErrorDescription": "Check the connection and try again.",
+        "deleteTitle": "Confirm deletion",
+        "deleteDescription": "Available volume at the origins will be restored and packages created by this operation will be removed. This cannot be undone.",
+        "deleteErrorTitle": "Error deleting",
+        "deleteErrorDescription": "Could not delete the transshipment.",
+        "origem": {
+          "granel": "BULK",
+          "tanka": "TANK",
+          "vasilhame": "IBC / TOTE",
+          "embalado": "IBC / JERRYCAN / DRUM"
+        },
+        "fields": {
+          "date": "Date",
+          "client": "Client",
+          "product": "Product",
+          "origin": "Origin",
+          "nf": "Invoice",
+          "qty": "Quantity",
+          "unit": "Unit",
+          "lot": "Lot",
+          "density": "Density",
+          "unitPrice": "Unit price",
+          "ticket": "Ticket",
+          "gross": "Gross weight (kg)",
+          "net": "Net weight (kg)"
+        },
+        "placeholders": {
+          "client": "Select a client",
+          "product": "Select a product",
+          "productDisabled": "Select a client first",
+          "origin": "Select the origin",
+          "nf": "Invoice no.",
+          "unit": "Unit",
+          "lot": "Lot",
+          "ticket": "Ticket no."
+        },
+        "granel": {
+          "title": "Bulk receipt data"
+        },
+        "weighing": {
+          "title": "Weighing data",
+          "expected": "Expected weight (kg)",
+          "convertedFrom": "converted from {{qty}} {{unit}}",
+          "inside": "Within tolerance",
+          "outside": "Outside tolerance",
+          "outsideHint": "Outside tolerance: inventory will use the net weight ({{weight}} kg). The invoice quantity remains unchanged."
+        },
+        "errors": {
+          "date": "Date is required.",
+          "client": "Client is required.",
+          "product": "Product is required.",
+          "origin": "Origin is required.",
+          "nf": "Invoice is required.",
+          "qty": "Quantity must be positive.",
+          "unit": "Unit of measure is required.",
+          "lot": "Lot is required.",
+          "density": "Density is required for this receipt.",
+          "gross": "Gross weight is required.",
+          "net": "Net weight is required.",
+          "saveEntrada": "Could not register the bulk receipt.",
+          "saveTransbordo": "Could not register the transshipment. Check the destinations and try again."
+        },
+        "pendentes": {
+          "title": "Pending validation"
+        }
+      },
+      "estoque": {
+        "subtitle": "Current inventory consolidated from Industrialization and Transshipment (view only)",
+        "searchVasilhames": "Search ID, plate, barrel, client, code, product or lot...",
+        "searchEmbalados": "Search client, code, product or lot...",
+        "searchTankas": "Search by tank, product or client...",
+        "filterClient": "All clients",
+        "allClients": "All clients",
+        "loadErrorTitle": "Error loading inventory",
+        "loadErrorDescription": "Check the connection and try again.",
+        "tabs": {
+          "vasilhames": "Containers",
+          "tankas": "Tanks",
+          "embalados": "Packed goods"
+        },
+        "embalados": {
+          "tableTitle": "Packed goods by lot",
+          "empty": "No packed goods in stock for the selected filter."
+        },
+        "tankas": {
+          "tankaCount": "{{count}} tank(s)",
+          "noClient": "No client",
+          "empty": "No tanks found for the selected filter."
+        }
       }
     }
   },

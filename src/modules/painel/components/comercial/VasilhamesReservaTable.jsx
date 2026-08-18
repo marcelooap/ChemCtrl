@@ -21,6 +21,7 @@ export default function VasilhamesReservaTable({
   recipes = [],
   user,
   onReload,
+  readOnly = false,
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -76,6 +77,12 @@ export default function VasilhamesReservaTable({
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}
                   </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
+                    {t('painel.comercial.reservarMaterial.vasilhames.columns.placa')}
+                  </th>
+                  <th className="px-4 py-3 font-medium bg-muted/40">
+                    {t('painel.comercial.reservarMaterial.vasilhames.columns.barril')}
+                  </th>
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.columns.cliente')}
                   </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
@@ -115,11 +122,20 @@ export default function VasilhamesReservaTable({
                     <td className="px-4 py-3">
                       <OrigemBadge origem={row.origem} />
                     </td>
+                    <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
+                      {row.placa}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {row.barril}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{row.clienteNome}</td>
                     <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
                     <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {formatVolume(row.volume, { empty: '—' })}
+                      <span className="inline-flex items-center justify-end whitespace-nowrap">
+                        {formatVolume(row.volume, { empty: '—' })}
+                        {row.fracionado ? <FracionadoBadge /> : null}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {formatMass(row.massa, { empty: '—' })}
@@ -140,31 +156,33 @@ export default function VasilhamesReservaTable({
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
-                          {row.reservado ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title={t('painel.comercial.reservarMaterial.vasilhames.actions.remover')}
-                              onClick={() => setPendingAction({ type: 'liberar', row })}
-                            >
-                              <BookmarkMinus className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title={t('painel.comercial.reservarMaterial.vasilhames.actions.reservar')}
-                              onClick={() => setPendingAction({ type: 'reservar', row })}
-                            >
-                              <BookmarkPlus className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </Can>
+                        {!readOnly && (
+                          <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
+                            {row.reservado ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title={t('painel.comercial.reservarMaterial.vasilhames.actions.remover')}
+                                onClick={() => setPendingAction({ type: 'liberar', row })}
+                              >
+                                <BookmarkMinus className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title={t('painel.comercial.reservarMaterial.vasilhames.actions.reservar')}
+                                onClick={() => setPendingAction({ type: 'reservar', row })}
+                              >
+                                <BookmarkPlus className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </Can>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -191,6 +209,7 @@ export default function VasilhamesReservaTable({
         }}
       />
 
+      {!readOnly && (
       <ConfirmDialog
         open={!!pendingAction}
         onOpenChange={(open) => {
@@ -218,6 +237,7 @@ export default function VasilhamesReservaTable({
         }
         onConfirm={handleConfirmAction}
       />
+      )}
     </>
   );
 }
@@ -249,6 +269,17 @@ function StatusBadge({ reservado }) {
       {reservado
         ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
         : t('painel.comercial.reservarMaterial.vasilhames.status.livre')}
+    </span>
+  );
+}
+
+function FracionadoBadge() {
+  const { t } = useTranslation();
+  return (
+    <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
+      {t('painel.comercial.reservarMaterial.vasilhames.fracionado', {
+        defaultValue: 'Fracionado',
+      })}
     </span>
   );
 }

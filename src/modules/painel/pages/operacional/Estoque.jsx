@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cylinder, Eye, Package, Pencil, Search } from 'lucide-react';
+import { Cylinder, Eye, Package, Search, Warehouse } from 'lucide-react';
+import { base44 } from '@industrializacao/api/base44Client';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import SearchableSelect from '@transbordo/components/cadastro/SearchableSelect';
+import TankagemViewDialog from '@transbordo/components/tankagem/TankagemViewDialog';
 import { entities } from '@transbordo/services/entities';
 import {
   computeEstoqueSaldo,
@@ -15,15 +17,17 @@ import {
 } from '@transbordo/lib/estoqueSaldo';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
 import { resolveTipoRecebimentoEstoque } from '@transbordo/lib/tipoRecebimento';
-import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { Can } from '@industrializacao/lib/rbac/Can';
-import ReservaEditModal from '@painel/components/comercial/ReservaEditModal';
+import { buildTankaDetalhe } from '@transbordo/lib/tankaVolume';
+import {
+  buildIndTankaDetalhe,
+  mergeTankasUnificadas,
+} from '@transbordo/lib/tankaUnificada';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import VasilhamesReservaTable from '@painel/components/comercial/VasilhamesReservaTable';
+import OperacionalTankagemBoard from '@painel/components/operacional/OperacionalTankagemBoard';
 import {
   aggregateEstoqueByLote,
   formatQty,
-  setSaldoReservado,
 } from '@painel/lib/materialReservas';
 import {
   buildVasilhameReservaRows,
@@ -33,12 +37,18 @@ import {
 const TAB_TRIGGER_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
 
-export default function ReservarMaterial() {
+const PRODUCT_COLORS = [
+  '#90EE90', '#87CEEB', '#DDA0DD', '#F0E68C', '#FFB6C1',
+  '#E6E6FA', '#98FB98', '#FABD74', '#B0E0E6', '#DEB887',
+  '#BC8F8F', '#AED581', '#4FC3F7', '#FFD54F', '#FF8A65',
+  '#BA68C8', '#7986CB', '#4DB6AC', '#F06292', '#81C784',
+];
+
+export default function Estoque() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { user } = useInternalAuth();
 
-  const [tab, setTab] = useState('embalados');
+  const [tab, setTab] = useState('vasilhames');
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [vasilhameRows, setVasilhameRows] = useState([]);
@@ -46,34 +56,35 @@ export default function ReservarMaterial() {
   const [indRecipes, setIndRecipes] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [transbordos, setTransbordos] = useState([]);
+  const [unifiedTankas, setUnifiedTankas] = useState([]);
   const [search, setSearch] = useState('');
   const [clienteFilter, setClienteFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [editRow, setEditRow] = useState(null);
   const [viewRow, setViewRow] = useState(null);
+  const [viewDetalhe, setViewDetalhe] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [ests, trans, saics, vascs, cliens, indPack] = await Promise.all([
-        entities.estoque.list(),
-        entities.transbordos.list(),
-        entities.saidas.list(),
-        entities.vasilhames.list(),
-        entities.clientes.list(),
-        loadIndustrializacaoVasilhames(),
-      ]);
+      const [ests, trans, saics, vascs, cliens, isot, indPack, indTanks, indStock] =
+        await Promise.all([
+          entities.estoque.list(),
+          entities.transbordos.list(),
+          entities.saidas.list(),
+          entities.vasilhames.list(),
+          entities.clientes.list(),
+          entities.isotanques.list(),
+          loadIndustrializacaoVasilhames(),
+          base44.entities.Tank.list('-created_date', 500).catch(() => []),
+          base44.entities.RawMaterialStock.list('-created_date', 500).catch(() => []),
+        ]);
 
       let reservasList = [];
       try {
         reservasList = await entities.materialReservas.list('-created_at');
       } catch (reservaErr) {
-        console.warn('[ReservarMaterial] reservas:', reservaErr);
-        toast({
-          title: t('painel.comercial.reservarMaterial.loadErrorTitle'),
-          description: t('painel.comercial.reservarMaterial.loadErrorDescription'),
-          variant: 'destructive',
-        });
+        console.warn('[OperacionalEstoque] reservas:', reservaErr);
       }
 
       const estoqueWithSaldo = (ests || [])
@@ -99,8 +110,7 @@ export default function ReservarMaterial() {
           };
         });
 
-      const aggregated = aggregateEstoqueByLote(estoqueWithSaldo, reservasList || []);
-      setRows(aggregated);
+      setRows(aggregateEstoqueByLote(estoqueWithSaldo, reservasList || []));
       setVasilhameRows(
         buildVasilhameReservaRows({
           vasilhames: vascs || [],
@@ -115,16 +125,27 @@ export default function ReservarMaterial() {
       setIndRecipes(indPack.recipes);
       setReservas(reservasList || []);
       setClientes(cliens || []);
+      setTransbordos(trans || []);
+      setUnifiedTankas(
+        mergeTankasUnificadas({
+          isotanques: isot || [],
+          transbordos: trans || [],
+          indTanks: indTanks || [],
+          indContainers: indPack.containers || [],
+          indStock: indStock || [],
+        })
+      );
     } catch (err) {
-      console.error('[ReservarMaterial] loadData:', err);
+      console.error('[OperacionalEstoque] loadData:', err);
       toast({
-        title: t('painel.comercial.reservarMaterial.loadErrorTitle'),
+        title: t('painel.operacional.estoque.loadErrorTitle'),
         description:
-          err?.message || t('painel.comercial.reservarMaterial.loadErrorDescription'),
+          err?.message || t('painel.operacional.estoque.loadErrorDescription'),
         variant: 'destructive',
       });
       setRows([]);
       setVasilhameRows([]);
+      setUnifiedTankas([]);
       setReservas([]);
     } finally {
       if (!silent) setLoading(false);
@@ -135,10 +156,8 @@ export default function ReservarMaterial() {
     loadData();
   }, [loadData]);
 
-  const allClientsLabel = t('painel.comercial.reservarMaterial.allClients');
-  const allStatusLabel = t('painel.comercial.reservarMaterial.statusFilter.all');
-  const reservadoLabel = t('painel.comercial.reservarMaterial.statusFilter.reservado');
-  const livreLabel = t('painel.comercial.reservarMaterial.statusFilter.livre');
+  const allClientsLabel = t('painel.operacional.estoque.allClients');
+  const noClientLabel = t('painel.operacional.estoque.tankas.noClient');
 
   const matchesCliente = useCallback(
     (clienteNome) =>
@@ -148,38 +167,61 @@ export default function ReservarMaterial() {
     [clienteFilter, allClientsLabel]
   );
 
-  const matchesStatus = useCallback(
-    (isReserved) =>
-      !statusFilter ||
-      statusFilter === allStatusLabel ||
-      (statusFilter === reservadoLabel && isReserved) ||
-      (statusFilter === livreLabel && !isReserved),
-    [statusFilter, allStatusLabel, reservadoLabel, livreLabel]
-  );
-
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
       if (!matchesCliente(row.clienteNome)) return false;
-      if (!matchesStatus((Number(row.saldoReservado) || 0) > 0)) return false;
       if (!q) return true;
       const hay = `${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search, matchesCliente, matchesStatus]);
+  }, [rows, search, matchesCliente]);
 
   const filteredVasilhames = useMemo(() => {
     const q = search.trim().toLowerCase();
     return vasilhameRows.filter((row) => {
       if (!matchesCliente(row.clienteNome)) return false;
-      if (!matchesStatus(Boolean(row.reservado))) return false;
       if (!q) return true;
       const hay = `${row.displayId} ${row.placa} ${row.barril} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote}`
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [vasilhameRows, search, matchesCliente, matchesStatus]);
+  }, [vasilhameRows, search, matchesCliente]);
+
+  const filteredTankas = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return unifiedTankas.filter((tank) => {
+      const clienteNome = tank.cliente_nome || noClientLabel;
+      if (!matchesCliente(clienteNome)) return false;
+      if (!q) return true;
+      const hay = `${tank.tankaCodigo || ''} ${tank.tanka || ''} ${tank.produto || ''} ${tank.cliente_nome || ''}`
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [unifiedTankas, search, matchesCliente, noClientLabel]);
+
+  const productColorMap = useMemo(() => {
+    const map = {};
+    let colorIndex = 0;
+    for (const tank of filteredTankas) {
+      const prod = tank.produto || '';
+      if (prod && !(prod in map)) {
+        map[prod] = PRODUCT_COLORS[colorIndex % PRODUCT_COLORS.length];
+        colorIndex += 1;
+      }
+    }
+    return map;
+  }, [filteredTankas]);
+
+  const groupedByClient = useMemo(() => {
+    return filteredTankas.reduce((acc, tank) => {
+      const cliente = tank.cliente_nome || noClientLabel;
+      if (!acc[cliente]) acc[cliente] = [];
+      acc[cliente].push(tank);
+      return acc;
+    }, {});
+  }, [filteredTankas, noClientLabel]);
 
   const clienteOptions = useMemo(() => {
     const byName = new Map();
@@ -191,41 +233,58 @@ export default function ReservarMaterial() {
         byName.set(row.clienteNome, { id: row.clienteNome, nome: row.clienteNome });
       }
     }
+    for (const tank of unifiedTankas) {
+      const nome = String(tank.cliente_nome || '').trim();
+      if (nome && !byName.has(nome)) {
+        byName.set(nome, { id: `tank-client:${nome}`, nome });
+      }
+    }
+    const hasTankaSemCliente = unifiedTankas.some(
+      (tank) => !String(tank.cliente_nome || '').trim()
+    );
+    if (hasTankaSemCliente && !byName.has(noClientLabel)) {
+      byName.set(noClientLabel, { id: 'no-client', nome: noClientLabel });
+    }
     return [
       { id: 'all', nome: allClientsLabel },
       ...[...byName.values()].sort((a, b) =>
         String(a.nome).localeCompare(String(b.nome), 'pt-BR')
       ),
     ];
-  }, [clientes, vasilhameRows, allClientsLabel]);
+  }, [clientes, vasilhameRows, unifiedTankas, allClientsLabel, noClientLabel]);
 
-  const statusOptions = useMemo(
-    () => [
-      { id: 'all', nome: t('painel.comercial.reservarMaterial.statusFilter.all') },
-      {
-        id: 'reservado',
-        nome: t('painel.comercial.reservarMaterial.statusFilter.reservado'),
-      },
-      { id: 'livre', nome: t('painel.comercial.reservarMaterial.statusFilter.livre') },
-    ],
-    [t]
-  );
-
-  const handleSaveReserva = async ({ quantidade, observacao }) => {
-    if (!editRow) return;
-    await setSaldoReservado({
-      row: editRow,
-      novaQuantidade: quantidade,
-      user,
-      observacao,
-      motivoRemocao: observacao,
-    });
-    toast({
-      title: t('painel.comercial.reservarMaterial.saveSuccess'),
-    });
-    setEditRow(null);
-    await loadData({ silent: true });
+  const handleViewTanka = (tank) => {
+    if (
+      tank.volumeSource === 'ind_container' ||
+      tank.volumeSource === 'ind_stock' ||
+      tank.volumeSource === 'ind_cadastro' ||
+      !tank.hasTransbordo
+    ) {
+      setViewDetalhe(buildIndTankaDetalhe(tank));
+    } else if (tank.hasTransbordo && tank.isotanque) {
+      setViewDetalhe(
+        buildTankaDetalhe({
+          isotanque: {
+            ...tank.isotanque,
+            produto_nome: tank.produto || tank.isotanque.produto_nome,
+            cliente_nome: tank.cliente_nome || tank.isotanque.cliente_nome,
+            capacidade: tank.capacidade || tank.isotanque.capacidade,
+          },
+          transbordos,
+        })
+      );
+    } else {
+      setViewDetalhe(buildIndTankaDetalhe(tank));
+    }
+    setViewOpen(true);
   };
+
+  const searchPlaceholder =
+    tab === 'vasilhames'
+      ? t('painel.operacional.estoque.searchVasilhames')
+      : tab === 'tankas'
+        ? t('painel.operacional.estoque.searchTankas')
+        : t('painel.operacional.estoque.searchEmbalados');
 
   if (loading) {
     return (
@@ -239,10 +298,10 @@ export default function ReservarMaterial() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
       <div className="shrink-0">
         <h1 className="text-2xl font-bold text-foreground">
-          {t('painel.comercial.sections.reservarMaterial.title')}
+          {t('painel.operacional.sections.estoque.title')}
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {t('painel.comercial.reservarMaterial.subtitle')}
+          {t('painel.operacional.estoque.subtitle')}
         </p>
       </div>
 
@@ -253,13 +312,17 @@ export default function ReservarMaterial() {
       >
         <div className="shrink-0 space-y-4">
           <TabsList className="h-auto p-1.5 gap-1 bg-muted/80 border border-border shadow-sm">
-            <TabsTrigger value="embalados" className={TAB_TRIGGER_CLASS}>
-              <Package className="w-4 h-4" />
-              {t('painel.comercial.reservarMaterial.tabs.embalados')}
-            </TabsTrigger>
             <TabsTrigger value="vasilhames" className={TAB_TRIGGER_CLASS}>
               <Cylinder className="w-4 h-4" />
-              {t('painel.comercial.reservarMaterial.tabs.vasilhames')}
+              {t('painel.operacional.estoque.tabs.vasilhames')}
+            </TabsTrigger>
+            <TabsTrigger value="tankas" className={TAB_TRIGGER_CLASS}>
+              <Warehouse className="w-4 h-4" />
+              {t('painel.operacional.estoque.tabs.tankas')}
+            </TabsTrigger>
+            <TabsTrigger value="embalados" className={TAB_TRIGGER_CLASS}>
+              <Package className="w-4 h-4" />
+              {t('painel.operacional.estoque.tabs.embalados')}
             </TabsTrigger>
           </TabsList>
 
@@ -269,11 +332,7 @@ export default function ReservarMaterial() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  tab === 'vasilhames'
-                    ? t('painel.comercial.reservarMaterial.vasilhames.searchPlaceholder')
-                    : t('painel.comercial.reservarMaterial.searchPlaceholder')
-                }
+                placeholder={searchPlaceholder}
                 className="pl-10 bg-card"
               />
             </div>
@@ -284,21 +343,34 @@ export default function ReservarMaterial() {
                 options={clienteOptions}
                 getOptionLabel={(c) => c.nome}
                 getOptionValue={(c) => c.id}
-                placeholder={t('painel.comercial.reservarMaterial.filterClient')}
-              />
-            </div>
-            <div className="w-full sm:w-48">
-              <SearchableSelect
-                value={statusFilter}
-                onChange={(label) => setStatusFilter(label)}
-                options={statusOptions}
-                getOptionLabel={(o) => o.nome}
-                getOptionValue={(o) => o.id}
-                placeholder={t('painel.comercial.reservarMaterial.filterStatus')}
+                placeholder={t('painel.operacional.estoque.filterClient')}
               />
             </div>
           </div>
         </div>
+
+        <TabsContent
+          value="vasilhames"
+          className="flex-1 min-h-0 mt-4 overflow-hidden data-[state=inactive]:hidden"
+        >
+          <VasilhamesReservaTable
+            rows={filteredVasilhames}
+            productions={indProductions}
+            recipes={indRecipes}
+            readOnly
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="tankas"
+          className="flex-1 min-h-0 mt-4 overflow-hidden data-[state=inactive]:hidden"
+        >
+          <OperacionalTankagemBoard
+            groupedByClient={groupedByClient}
+            productColorMap={productColorMap}
+            onView={handleViewTanka}
+          />
+        </TabsContent>
 
         <TabsContent
           value="embalados"
@@ -307,7 +379,7 @@ export default function ReservarMaterial() {
           <div className="h-full bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
             <div className="shrink-0 px-5 py-4 border-b border-border flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">
-                {t('painel.comercial.reservarMaterial.tableTitle')}
+                {t('painel.operacional.estoque.embalados.tableTitle')}
               </h3>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                 {filteredRows.length}
@@ -316,7 +388,7 @@ export default function ReservarMaterial() {
 
             {filteredRows.length === 0 ? (
               <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                {t('painel.comercial.reservarMaterial.empty')}
+                {t('painel.operacional.estoque.embalados.empty')}
               </div>
             ) : (
               <div className="overflow-auto flex-1 min-h-0">
@@ -337,12 +409,6 @@ export default function ReservarMaterial() {
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         {t('painel.comercial.reservarMaterial.columns.saldoAtual')}
-                      </th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        {t('painel.comercial.reservarMaterial.columns.saldoReservado')}
-                      </th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        {t('painel.comercial.reservarMaterial.columns.saldoFinal')}
                       </th>
                       <th className="px-4 py-3 font-medium text-center">
                         {t('painel.comercial.reservarMaterial.columns.unidade')}
@@ -365,37 +431,15 @@ export default function ReservarMaterial() {
                         <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
                         <td className="px-4 py-3 font-mono">{row.lote}</td>
                         <td className="px-4 py-3 text-right">
-                          <SaldoBadge tone="blue">
+                          <SaldoBadge>
                             {formatQty(row.saldoAtual, row.unidade)}
-                          </SaldoBadge>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <SaldoBadge tone={row.saldoReservado > 0 ? 'amber' : 'muted'}>
-                            {formatQty(row.saldoReservado, row.unidade)}
-                          </SaldoBadge>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <SaldoBadge tone="green">
-                            {formatQty(row.saldoFinal, row.unidade)}
                           </SaldoBadge>
                         </td>
                         <td className="px-4 py-3 text-center font-semibold text-primary">
                           {row.unidade}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title={t('buttons.edit')}
-                                onClick={() => setEditRow(row)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                            </Can>
+                          <div className="flex items-center justify-center">
                             <Button
                               type="button"
                               variant="ghost"
@@ -416,27 +460,7 @@ export default function ReservarMaterial() {
             )}
           </div>
         </TabsContent>
-
-        <TabsContent
-          value="vasilhames"
-          className="flex-1 min-h-0 mt-4 overflow-hidden data-[state=inactive]:hidden"
-        >
-          <VasilhamesReservaTable
-            rows={filteredVasilhames}
-            productions={indProductions}
-            recipes={indRecipes}
-            user={user}
-            onReload={loadData}
-          />
-        </TabsContent>
       </Tabs>
-
-      <ReservaEditModal
-        open={!!editRow}
-        row={editRow}
-        onClose={() => setEditRow(null)}
-        onSave={handleSaveReserva}
-      />
 
       <ReservaViewModal
         open={!!viewRow}
@@ -444,23 +468,22 @@ export default function ReservarMaterial() {
         reservas={reservas}
         onClose={() => setViewRow(null)}
       />
+
+      <TankagemViewDialog
+        open={viewOpen}
+        onClose={() => {
+          setViewOpen(false);
+          setViewDetalhe(null);
+        }}
+        detalhe={viewDetalhe}
+      />
     </div>
   );
 }
 
-function SaldoBadge({ children, tone }) {
-  const tones = {
-    blue: 'bg-sky-100 text-sky-800',
-    amber: 'bg-amber-100 text-amber-800',
-    green: 'bg-emerald-100 text-emerald-700',
-    muted: 'bg-muted text-muted-foreground',
-  };
+function SaldoBadge({ children }) {
   return (
-    <span
-      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums ${
-        tones[tone] || tones.blue
-      }`}
-    >
+    <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums bg-sky-100 text-sky-800">
       {children}
     </span>
   );

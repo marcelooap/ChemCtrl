@@ -152,4 +152,5 @@ export const entities = {
   saidaLeituras: createEntity('t_saida_leituras'),
   operadores: createEntity('t_operadores'),
   etiquetaConfigs: createEntity('t_etiqueta_configs'),
+  transbordoValidacoes: createEntity('t_transbordo_validacoes'),
 };

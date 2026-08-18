@@ -5,7 +5,7 @@ import { PAINEL_HOME_ROUTE } from '@/lib/modules/access';
 
 /**
  * Gate de rota por permissão de tela (resource.view).
- * Usado no Painel para Dashboard / Comercial / Logística.
+ * Usado no Painel para Dashboard / Comercial / Logística / Operacional.
  */
 export default function ScreenAccessRoute({ fallbackPath = PAINEL_HOME_ROUTE }) {
   const { user, loading } = useInternalAuth();

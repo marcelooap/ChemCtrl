@@ -12,6 +12,7 @@ import {
   Boxes,
   PackageSearch,
   Cylinder,
+  ShieldCheck,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { canAccessRoute } from '@industrializacao/lib/permissions';
@@ -32,6 +33,7 @@ const ICONS = {
   Boxes,
   PackageSearch,
   Cylinder,
+  ShieldCheck,
 };
 
 function resolveIcon(name) {

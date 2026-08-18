@@ -16,6 +16,9 @@ import {
   HardHat,
   Tag,
   Settings,
+  Container,
+  ArrowLeftRight,
+  Warehouse,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { canAccessRoute, isAdminUser } from '@industrializacao/lib/permissions';
@@ -75,6 +78,23 @@ export default function MainLayout() {
             path: '/painel/logistica/carregamentos',
             label: t('painel.nav.logisticaCarregamentos'),
             icon: PackageCheck,
+          },
+        ],
+      },
+      {
+        groupId: 'operacional',
+        label: t('painel.nav.operacional'),
+        icon: Container,
+        children: [
+          {
+            path: '/painel/operacional/ordem-transbordo',
+            label: t('painel.nav.ordemTransbordo'),
+            icon: ArrowLeftRight,
+          },
+          {
+            path: '/painel/operacional/estoque',
+            label: t('painel.nav.estoque'),
+            icon: Warehouse,
           },
         ],
       },

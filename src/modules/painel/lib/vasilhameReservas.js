@@ -2,6 +2,7 @@ import { base44 } from '@industrializacao/api/base44Client';
 import {
   containerDisplayNetWeight,
   containerDisplayVolume,
+  isContainerFractional,
   productionOfContainer,
 } from '@industrializacao/lib/fractionalSupply';
 import { resolveProductCode } from '@industrializacao/lib/recipeRevisions';
@@ -35,6 +36,17 @@ function dash(value) {
 function padRegId(value) {
   if (value == null || value === '') return null;
   return String(value).padStart(2, '0');
+}
+
+/** Mesma regra da tela Transbordo → Vasilhames. */
+function isTransbordoFracionado(vasilhame) {
+  if (!vasilhame?.fracionado) return false;
+  const lotes = new Set(
+    (vasilhame.composicao || [])
+      .map((c) => (c.lote || '').trim())
+      .filter(Boolean)
+  );
+  return lotes.size <= 1;
 }
 
 /** True quando a reserva comercial é de um vasilhame (não de estoque embalado). */
@@ -81,6 +93,8 @@ export function mapTransbordoVasilhame(vasilhame, reservas = []) {
     origem: ORIGEM_TRANSBORDO,
     origemId,
     displayId: dash(vasilhame.codigo || (origemId ? String(origemId).slice(0, 8) : '')),
+    placa: dash(vasilhame.placa),
+    barril: dash(vasilhame.barril),
     clienteId: vasilhame.cliente_id || null,
     produtoId: vasilhame.produto_id || null,
     clienteNome: dash(vasilhame.cliente_nome),
@@ -91,11 +105,18 @@ export function mapTransbordoVasilhame(vasilhame, reservas = []) {
     lote: dash(getDominantLote(vasilhame.composicao) || vasilhame.lote),
     createdAt: vasilhame.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
+    fracionado: isTransbordoFracionado(vasilhame),
     source: vasilhame,
   };
 }
 
-export function mapIndContainer(container, reservas = [], recipes = [], productions = []) {
+export function mapIndContainer(
+  container,
+  reservas = [],
+  recipes = [],
+  productions = [],
+  transfers = []
+) {
   const origemId = container.id;
   const chave = buildVasilhameReservaChave(ORIGEM_INDUSTRIALIZACAO, origemId);
   const production = productionOfContainer(container, productions);
@@ -106,6 +127,8 @@ export function mapIndContainer(container, reservas = [], recipes = [], producti
     origem: ORIGEM_INDUSTRIALIZACAO,
     origemId,
     displayId: dash(padRegId(container.registration_id) || (origemId ? String(origemId).slice(0, 8) : '')),
+    placa: dash(container.container_number),
+    barril: dash(container.barril_number),
     clienteId: null,
     produtoId: null,
     clienteNome: dash(container.client),
@@ -116,6 +139,7 @@ export function mapIndContainer(container, reservas = [], recipes = [], producti
     lote: dash(container.lot),
     createdAt: container.created_date || container.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
+    fracionado: isContainerFractional(container, production, transfers),
     source: container,
   };
 }
@@ -126,6 +150,7 @@ export function buildVasilhameReservaRows({
   reservas = [],
   recipes = [],
   productions = [],
+  transfers = [],
 } = {}) {
   const transbordo = (vasilhames || [])
     .filter(isTransbordoVasilhameEmEstoque)
@@ -133,7 +158,7 @@ export function buildVasilhameReservaRows({
 
   const industrializacao = (containers || [])
     .filter(isIndContainerEmEstoque)
-    .map((c) => mapIndContainer(c, reservas, recipes, productions));
+    .map((c) => mapIndContainer(c, reservas, recipes, productions, transfers));
 
   // Mais recente no topo (último cadastrado primeiro), sem agrupar por origem.
   return [...transbordo, ...industrializacao].sort((a, b) => {
@@ -145,19 +170,21 @@ export function buildVasilhameReservaRows({
 
 export async function loadIndustrializacaoVasilhames() {
   try {
-    const [containers, productions, recipes] = await Promise.all([
+    const [containers, productions, recipes, transfers] = await Promise.all([
       base44.entities.Container.list('-created_date', 500),
       base44.entities.Production.list('-created_date', 500),
       base44.entities.Recipe.list('-updated_date', 500),
+      base44.entities.Transfer.list('-created_date', 500).catch(() => []),
     ]);
     return {
       containers: containers || [],
       productions: productions || [],
       recipes: recipes || [],
+      transfers: transfers || [],
     };
   } catch (err) {
     console.warn('[ReservarMaterial] industrialização:', err);
-    return { containers: [], productions: [], recipes: [] };
+    return { containers: [], productions: [], recipes: [], transfers: [] };
   }
 }
 

@@ -100,8 +100,12 @@ export default function OrigemCard({
   destinosCount = 0,
   onAddDestino,
   children,
+  lockOrigem = false,
+  lockOrigemTipo = false,
 }) {
   const tipoOrigem = origem.tipo_origem || "";
+  const origemLocked = readOnly || lockOrigem;
+  const origemTipoLocked = origemLocked || lockOrigemTipo;
   const sourceOptions =
     tipoOrigem === "entrada"
       ? entradaOptions
@@ -325,7 +329,7 @@ export default function OrigemCard({
           )}
         </button>
       )}
-      {!readOnly && !isEntradaLocked && (
+      {!readOnly && !lockOrigem && !lockOrigemTipo && !isEntradaLocked && (
         <button
           type="button"
           onClick={onRemove}
@@ -426,7 +430,7 @@ export default function OrigemCard({
                   value={l.volume_retirado || ""}
                   onChange={(v) => handleLoteVolumeChange(i, v)}
                   placeholder="0"
-                  disabled={readOnly}
+                  disabled={origemLocked}
                   className="bg-white"
                 />
                 {excedeu && (
@@ -617,7 +621,7 @@ export default function OrigemCard({
           min={0}
           value={origem.volume_retirado ?? ""}
           onChange={(v) => handleVolumeChange(v)}
-          disabled={readOnly}
+          disabled={origemLocked}
           className="bg-white font-medium text-primary"
         />
       </div>
@@ -654,7 +658,7 @@ export default function OrigemCard({
             getOptionLabel={(t) => t.label}
             getOptionValue={(t) => t.value}
             placeholder="Selecionar tipo"
-            disabled={readOnly}
+            disabled={origemTipoLocked}
             inputClassName="bg-white"
           />
         </div>
@@ -669,7 +673,7 @@ export default function OrigemCard({
             placeholder={
               tipoOrigem ? "Selecionar origem" : "Selecione um tipo primeiro"
             }
-            disabled={readOnly || !tipoOrigem}
+            disabled={origemLocked || !tipoOrigem}
             inputClassName="bg-white"
           />
         </div>
@@ -690,7 +694,7 @@ export default function OrigemCard({
                 value={origem.volume_retirado || ""}
                 onChange={(v) => handleVolumeChange(v)}
                 placeholder="0"
-                disabled={readOnly}
+                disabled={origemLocked}
                 className="bg-white"
               />
               {(excedeuSaldo || excedeuLote) && (

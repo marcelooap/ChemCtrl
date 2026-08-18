@@ -184,6 +184,10 @@ export default function TransbordoModal({
   vasilhames,
   transbordos,
   prefillEntrada,
+  prefillOrigemTipo = "",
+  headerPrefill = null,
+  destinosOnly = false,
+  lockHeader = false,
   externalError = "",
 }) {
   const [data, setData] = useState("");
@@ -218,7 +222,7 @@ export default function TransbordoModal({
 
     let nextOrigens = [];
     let nextDestinos = [];
-    const fromPrefill = !!prefillEntrada;
+    const fromPrefill = !!prefillEntrada || !!headerPrefill;
 
     // Se veio da entrada sem editingTransbordo no parent, tenta resolver o OP aqui
     const allLinkedFromPrefill =
@@ -303,7 +307,7 @@ export default function TransbordoModal({
         "E000";
       const entradaCodigo = `${codigoEntrada} - ${prefillEntrada.produto_nome || ""}`;
 
-      setData(new Date().toISOString().split("T")[0]);
+      setData(prefillEntrada.data || new Date().toISOString().split("T")[0]);
       setClienteId(prefillEntrada.cliente_id || "");
       setClienteNome(prefillEntrada.cliente_nome || "");
       setProdutoId(prefillEntrada.produto_id || "");
@@ -393,6 +397,43 @@ export default function TransbordoModal({
       nextDestinos = [];
       setOrigens(nextOrigens);
       setDestinos(nextDestinos);
+    } else if (headerPrefill) {
+      resolvedEditIdRef.current = null;
+      const dens = parseDensidade(headerPrefill.densidade);
+      setData(headerPrefill.data || new Date().toISOString().split("T")[0]);
+      setClienteId(headerPrefill.cliente_id || "");
+      setClienteNome(headerPrefill.cliente_nome || "");
+      setProdutoId(headerPrefill.produto_id || "");
+      setProdutoNome(headerPrefill.produto_nome || "");
+      setProdutoCodigo(headerPrefill.produto_codigo || "");
+      setProdutoDisplay(
+        headerPrefill.produto_codigo
+          ? `${headerPrefill.produto_codigo} - ${headerPrefill.produto_nome}`
+          : headerPrefill.produto_nome || ""
+      );
+      setDensidade(dens);
+      setOperadores([]);
+      setObservacoes("");
+      if (prefillOrigemTipo) {
+        nextOrigens = ensureOrigemUids([
+          {
+            tipo_origem: prefillOrigemTipo,
+            entrada_id: "",
+            entrada_codigo: "",
+            lote: "",
+            volume_retirado: 0,
+            massa_retirada: 0,
+            saldo_restante: 0,
+            saldo_disponivel: 0,
+            embalado: prefillOrigemTipo === "embalado",
+          },
+        ]);
+      } else {
+        nextOrigens = [];
+      }
+      nextDestinos = [];
+      setOrigens(nextOrigens);
+      setDestinos(nextDestinos);
     } else {
       resolvedEditIdRef.current = null;
       setData(new Date().toISOString().split("T")[0]);
@@ -419,7 +460,7 @@ export default function TransbordoModal({
     setConfirmOpen(false);
     setConfirmMessage("");
     setPendingPayload(null);
-  }, [editingTransbordo, open, prefillEntrada, entradas, transbordos, vasilhames]);
+  }, [editingTransbordo, open, prefillEntrada, prefillOrigemTipo, headerPrefill, entradas, transbordos, vasilhames]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1174,7 +1215,13 @@ export default function TransbordoModal({
     }
   };
 
-  const title = readOnly
+  const headerLocked = readOnly || lockHeader;
+  const lockOrigens = destinosOnly && !!prefillEntrada;
+  const lockOrigemTipo = destinosOnly || !!prefillOrigemTipo;
+
+  const title = destinosOnly
+    ? "Informar destinos"
+    : readOnly
     ? "Visualizar Transbordo"
     : editingTransbordo || isEditingResolved
     ? "Editar Transbordo"
@@ -1243,7 +1290,7 @@ export default function TransbordoModal({
                     type="date"
                     value={data}
                     onChange={(e) => setData(e.target.value)}
-                    disabled={readOnly}
+                    disabled={headerLocked}
                     className={INPUT_EDITABLE}
                   />
                 </div>
@@ -1263,7 +1310,7 @@ export default function TransbordoModal({
                   getOptionLabel={(c) => c.nome}
                   getOptionValue={(c) => c.id}
                   placeholder="Selecione um cliente"
-                  disabled={readOnly}
+                  disabled={headerLocked}
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
@@ -1286,105 +1333,12 @@ export default function TransbordoModal({
                       ? "Selecione um produto"
                       : "Selecione um cliente primeiro"
                   }
-                  disabled={readOnly || !clienteNome}
+                  disabled={headerLocked || !clienteNome}
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
             </div>
 
-            {(origens.length === 0 || headerExpanded) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Operadores Multi-Select */}
-                <div className="space-y-1.5">
-                  <Label>Operadores *</Label>
-                  <div className="relative" ref={operadoresRef}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        !readOnly && setOperadoresOpen(!operadoresOpen)
-                      }
-                      disabled={readOnly}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-white text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
-                    >
-                      <span
-                        className={
-                          operadores.length
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {operadores.length
-                          ? `${operadores.length} operador(es) selecionado(s)`
-                          : "Selecionar operadores"}
-                      </span>
-                      <ChevronDown
-                        className={`w-4 h-4 text-muted-foreground transition-transform ${
-                          operadoresOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                    {operadoresOpen && !readOnly && (
-                      <div className="absolute z-50 mt-1 w-full bg-card rounded-md border border-border shadow-lg overflow-hidden">
-                        <div className="max-h-48 overflow-y-auto">
-                          {operadoresOpcoes.length === 0 ? (
-                            <p className="px-3 py-3 text-sm text-muted-foreground">
-                              Nenhum operador cadastrado. Cadastre em Painel → Configurações → Operadores.
-                            </p>
-                          ) : (
-                            operadoresOpcoes.map((op) => (
-                            <label
-                              key={op}
-                              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={operadores.includes(op)}
-                                onChange={() => toggleOperador(op)}
-                                className="w-4 h-4 rounded border-border"
-                              />
-                              <span className="text-foreground/80">{op}</span>
-                            </label>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {operadores.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {operadores.map((op) => (
-                        <span
-                          key={op}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
-                        >
-                          {op}
-                          {!readOnly && (
-                            <button
-                              type="button"
-                              onClick={() => toggleOperador(op)}
-                              className="hover:text-blue-900"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Observações</Label>
-                  <Input
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Observações..."
-                    disabled={readOnly}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-              </div>
-            )}
           </section>
 
           {/* Origens (com destinos aninhados) */}
@@ -1399,9 +1353,9 @@ export default function TransbordoModal({
                   origens.length > 0 ? "text-base" : "text-sm"
                 }`}
               >
-                Origens e Destinos
+                {destinosOnly ? "Destinos" : "Origens e Destinos"}
               </h3>
-              {!readOnly && (
+              {!readOnly && !destinosOnly && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1456,6 +1410,8 @@ export default function TransbordoModal({
                       onChange={(data) => handleUpdateOrigem(idx, data)}
                       onRemove={() => handleRemoveOrigem(idx)}
                       readOnly={readOnly}
+                      lockOrigem={lockOrigens}
+                      lockOrigemTipo={lockOrigemTipo}
                       collapsed={!!collapsedOrigens[idx]}
                       onToggleCollapse={() => toggleOrigemCollapse(idx)}
                       volumeDestinado={volumeDestinadoOrigem}
@@ -1502,6 +1458,98 @@ export default function TransbordoModal({
                   );
                 })
               )}
+            </div>
+          </section>
+
+          {/* Operadores + Observações (final) */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <div className="space-y-1.5">
+              <Label>Operadores *</Label>
+              <div className="relative" ref={operadoresRef}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    !readOnly && setOperadoresOpen(!operadoresOpen)
+                  }
+                  disabled={readOnly}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-white text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
+                >
+                  <span
+                    className={
+                      operadores.length
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {operadores.length
+                      ? `${operadores.length} operador(es) selecionado(s)`
+                      : "Selecionar operadores"}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                      operadoresOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {operadoresOpen && !readOnly && (
+                  <div className="absolute z-50 mt-1 w-full bg-card rounded-md border border-border shadow-lg overflow-hidden">
+                    <div className="max-h-48 overflow-y-auto">
+                      {operadoresOpcoes.length === 0 ? (
+                        <p className="px-3 py-3 text-sm text-muted-foreground">
+                          Nenhum operador cadastrado. Cadastre em Painel → Configurações → Operadores.
+                        </p>
+                      ) : (
+                        operadoresOpcoes.map((op) => (
+                        <label
+                          key={op}
+                          className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={operadores.includes(op)}
+                            onChange={() => toggleOperador(op)}
+                            className="w-4 h-4 rounded border-border"
+                          />
+                          <span className="text-foreground/80">{op}</span>
+                        </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {operadores.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {operadores.map((op) => (
+                    <span
+                      key={op}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                    >
+                      {op}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => toggleOperador(op)}
+                          className="hover:text-blue-900"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Observações</Label>
+              <Input
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Observações..."
+                disabled={readOnly}
+                className={INPUT_EDITABLE}
+              />
             </div>
           </section>
 

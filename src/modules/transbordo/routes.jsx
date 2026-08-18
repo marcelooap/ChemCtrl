@@ -6,6 +6,7 @@ import Home from '@transbordo/pages/Home';
 import Dashboard from '@transbordo/pages/Dashboard';
 import Entrada from '@transbordo/pages/Entrada';
 import Transbordo from '@transbordo/pages/Transbordo';
+import Validacao from '@transbordo/pages/Validacao';
 import Cadastro from '@transbordo/pages/Cadastro';
 import Vasilhames from '@transbordo/pages/Vasilhames';
 import Tankagem from '@transbordo/pages/Tankagem';
@@ -36,6 +37,7 @@ export default function ChemFlowRoutes() {
         <Route path="saida/editar/:id" element={<SaidaForm />} />
         <Route path="saida/visualizar/:id" element={<SaidaView />} />
         <Route path="transbordo" element={<Transbordo />} />
+        <Route path="validacao" element={<Validacao />} />
         <Route path="vasilhames" element={<Vasilhames />} />
         <Route path="filtracao" element={<Filtracao />} />
         <Route path="estoque" element={<Estoque />} />
