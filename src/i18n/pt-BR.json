@@ -2616,6 +2616,14 @@
       "autoFill": "Auto-preenchido ou digite...",
       "client": "Cliente",
       "lot": "Lote",
+      "invoice": "Nota Fiscal",
+      "invoicePlaceholder": "Ex: 001234",
+      "invoiceShort": "Nota",
+      "addMp": "Adicionar MP",
+      "mpBlock": "MP {{index}}",
+      "expandMp": "Expandir",
+      "collapseMp": "Recolher",
+      "removeMp": "Remover MP",
       "supplier": "Fornecedor",
       "unitPrice": "Preço Unitário (R$)",
       "manufactureDate": "Data de Fabricação",
@@ -2665,8 +2673,10 @@
     },
     "messages": {
       "mpRequired": "Informe o nome da matéria prima",
+      "mpRequiredAt": "Informe o nome da matéria prima (MP {{index}})",
       "noItemsExport": "Nenhum item para exportar",
       "tankConferenceExceeded": "Quantidade na tanka superior ao estoque inicial",
+      "tankConferenceExceededAt": "Quantidade na tanka superior ao estoque inicial (MP {{index}})",
       "tankConferenceExceededDetail": "Alocado {{allocated}} {{unit}} — estoque inicial {{initialStock}} {{unit}}. Reduza o volume/massa das tankas."
     },
     "movementDialog": {
@@ -2868,6 +2878,7 @@
       "mpCode": "Código MP",
       "code": "Código",
       "name": "Nome",
+      "invoice": "Nota Fiscal",
       "supplier": "Fornecedor",
       "unit": "Unidade",
       "manufactureDate": "Data Fabricação",

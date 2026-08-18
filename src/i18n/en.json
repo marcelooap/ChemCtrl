@@ -2715,6 +2715,14 @@
       "autoFill": "Auto-filled or type...",
       "client": "Client",
       "lot": "Lot",
+      "invoice": "Invoice",
+      "invoicePlaceholder": "E.g. 001234",
+      "invoiceShort": "Invoice",
+      "addMp": "Add RM",
+      "mpBlock": "RM {{index}}",
+      "expandMp": "Expand",
+      "collapseMp": "Collapse",
+      "removeMp": "Remove RM",
       "supplier": "Supplier",
       "unitPrice": "Unit Price (R$)",
       "manufactureDate": "Manufacture Date",
@@ -2764,8 +2772,10 @@
     },
     "messages": {
       "mpRequired": "Enter raw material name",
+      "mpRequiredAt": "Enter raw material name (RM {{index}})",
       "noItemsExport": "No items to export",
       "tankConferenceExceeded": "Tank quantity exceeds the initial stock",
+      "tankConferenceExceededAt": "Tank quantity exceeds the initial stock (RM {{index}})",
       "tankConferenceExceededDetail": "Allocated {{allocated}} {{unit}} — initial stock {{initialStock}} {{unit}}. Reduce tank volume/mass."
     },
     "movementDialog": {
@@ -2980,6 +2990,7 @@
       "mpCode": "RM Code",
       "code": "Code",
       "name": "Name",
+      "invoice": "Invoice",
       "supplier": "Supplier",
       "unit": "Unit",
       "manufactureDate": "Manufacture Date",

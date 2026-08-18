@@ -2694,6 +2694,14 @@
       "autoFill": "Auto-rempli ou saisir...",
       "client": "Client",
       "lot": "Lot",
+      "invoice": "Facture",
+      "invoicePlaceholder": "Ex: 001234",
+      "invoiceShort": "Facture",
+      "addMp": "Ajouter MP",
+      "mpBlock": "MP {{index}}",
+      "expandMp": "Développer",
+      "collapseMp": "Réduire",
+      "removeMp": "Retirer MP",
       "supplier": "Fournisseur",
       "unitPrice": "Prix Unitaire (R$)",
       "manufactureDate": "Date de Fabrication",
@@ -2743,8 +2751,10 @@
     },
     "messages": {
       "mpRequired": "Saisissez le nom de la matière première",
+      "mpRequiredAt": "Saisissez le nom de la matière première (MP {{index}})",
       "noItemsExport": "Aucun article à exporter",
       "tankConferenceExceeded": "Quantité en cuve supérieure au stock initial",
+      "tankConferenceExceededAt": "Quantité en cuve supérieure au stock initial (MP {{index}})",
       "tankConferenceExceededDetail": "Alloué {{allocated}} {{unit}} — stock initial {{initialStock}} {{unit}}. Réduisez le volume/masse des cuves."
     },
     "movementDialog": {
@@ -2908,6 +2918,7 @@
       "mpCode": "RM Code",
       "code": "Code",
       "name": "Name",
+      "invoice": "Facture",
       "supplier": "Supplier",
       "unit": "Unit",
       "manufactureDate": "Manufacture Date",

@@ -2699,6 +2699,14 @@
       "autoFill": "Autocompletado o escriba...",
       "client": "Cliente",
       "lot": "Lote",
+      "invoice": "Nota Fiscal",
+      "invoicePlaceholder": "Ej: 001234",
+      "invoiceShort": "Nota",
+      "addMp": "Agregar MP",
+      "mpBlock": "MP {{index}}",
+      "expandMp": "Expandir",
+      "collapseMp": "Minimizar",
+      "removeMp": "Quitar MP",
       "supplier": "Proveedor",
       "unitPrice": "Precio Unitario (R$)",
       "manufactureDate": "Fecha de Fabricación",
@@ -2748,8 +2756,10 @@
     },
     "messages": {
       "mpRequired": "Ingrese el nombre de la materia prima",
+      "mpRequiredAt": "Ingrese el nombre de la materia prima (MP {{index}})",
       "noItemsExport": "Ningún ítem para exportar",
       "tankConferenceExceeded": "Cantidad en tanque superior al stock inicial",
+      "tankConferenceExceededAt": "Cantidad en tanque superior al stock inicial (MP {{index}})",
       "tankConferenceExceededDetail": "Asignado {{allocated}} {{unit}} — stock inicial {{initialStock}} {{unit}}. Reduzca el volumen/masa de los tanques."
     },
     "movementDialog": {
@@ -2914,6 +2924,7 @@
       "mpCode": "RM Code",
       "code": "Code",
       "name": "Name",
+      "invoice": "Factura",
       "supplier": "Supplier",
       "unit": "Unit",
       "manufactureDate": "Manufacture Date",

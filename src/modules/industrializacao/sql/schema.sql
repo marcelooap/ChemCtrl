@@ -101,6 +101,7 @@ create table if not exists ind_estoque_mp (
   mp_name text not null,
   client text,
   lot text,
+  nota_fiscal text,
   supplier text,
   manufacture_date date,
   expiry_date date,

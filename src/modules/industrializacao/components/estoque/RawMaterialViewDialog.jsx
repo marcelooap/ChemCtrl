@@ -82,6 +82,7 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
               <div><p className="text-xs text-muted-foreground">{t('common.name')}</p><p className="font-medium">{item.mp_name}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('common.client')}</p><p className="font-medium">{item.client || '—'}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{item.lot || '—'}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('rawMaterialStock.form.invoice')}</p><p className="font-medium">{item.nota_fiscal || '—'}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('rawMaterialStock.form.supplier')}</p><p className="font-medium">{item.supplier || '—'}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('rawMaterialStock.viewDialog.manufactureDate')}</p><p className="font-medium">{fmtDate(item.manufacture_date, undefined, i18n.language)}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('rawMaterialStock.viewDialog.expiryDate')}</p><p className="font-medium">{fmtDate(item.expiry_date, undefined, i18n.language)}</p></div>
