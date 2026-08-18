@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Truck, X, Printer, Loader2 } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Truck, X, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
@@ -47,8 +47,8 @@ import {
   needsVasilhameYardVolumeHeal,
 } from "@transbordo/lib/vasilhamePatio";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { printEtiquetaVasilhame } from "@transbordo/lib/printSaidaAgendamento";
-import { useToast } from "@shared/components/ui/use-toast";
+import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
+import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicToken";
 
 function labelUnidadeEntrada(unidade) {
   const u = normalizeUnidadeEntrada(unidade);
@@ -188,7 +188,6 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
 }
 
 export default function Vasilhames() {
-  const { toast } = useToast();
   const [vasilhames, setVasilhames] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -205,7 +204,7 @@ export default function Vasilhames() {
   const [saidaQtdEmbalagens, setSaidaQtdEmbalagens] = useState("");
   const [saidaError, setSaidaError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [printingId, setPrintingId] = useState(null);
+  const [labelVasilhame, setLabelVasilhame] = useState(null);
   const [transbordos, setTransbordos] = useState([]);
   const [estoqueById, setEstoqueById] = useState(() => new Map());
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
@@ -433,22 +432,40 @@ export default function Vasilhames() {
     setViewOpen(true);
   };
 
-  const handlePrintLabel = async (v) => {
-    if (!v?.id || printingId) return;
-    setPrintingId(v.id);
-    try {
-      await printEtiquetaVasilhame(v);
-    } catch (err) {
-      console.error("[Vasilhames] imprimir etiqueta:", err);
-      toast({
-        title: "Não foi possível imprimir a etiqueta.",
-        description: err?.message,
-        variant: "destructive",
-      });
-    } finally {
-      setPrintingId(null);
-    }
+  const handlePrintLabel = (v) => {
+    if (!v?.id) return;
+    setLabelVasilhame(v);
   };
+
+  const labelContainer = labelVasilhame
+    ? {
+        product: labelVasilhame.produto_nome || "—",
+        lot:
+          String(labelVasilhame.lote || "").trim() ||
+          getDominantLote(labelVasilhame.composicao) ||
+          "—",
+        client: labelVasilhame.cliente_nome,
+        op_number: labelVasilhame.codigo || "—",
+        container_number: labelVasilhame.placa || "",
+        barril_number: labelVasilhame.barril || "",
+        type: labelVasilhame.tipo || "",
+        volume: labelVasilhame.volume,
+        tare: labelVasilhame.tara || 0,
+        net_weight: labelVasilhame.peso_liquido,
+        gross_weight: labelVasilhame.peso_bruto,
+        created_date: labelVasilhame.created_at || labelVasilhame.created_date,
+      }
+    : null;
+
+  const labelDensity = (() => {
+    if (!labelVasilhame) return undefined;
+    const dens = Number(labelVasilhame.densidade);
+    if (dens > 0) return dens;
+    const vol = Number(labelVasilhame.volume) || 0;
+    const net = Number(labelVasilhame.peso_liquido) || 0;
+    if (vol > 0 && net > 0) return net / vol;
+    return undefined;
+  })();
 
   const syncEstoqueFromVasilhame = async (vasilhame) => {
     if (!vasilhame) return;
@@ -908,15 +925,10 @@ export default function Vasilhames() {
                           <button
                             type="button"
                             onClick={() => handlePrintLabel(v)}
-                            disabled={printingId === v.id}
-                            className="text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+                            className="text-muted-foreground hover:text-primary transition-colors"
                             title="Imprimir etiqueta"
                           >
-                            {printingId === v.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Printer className="w-4 h-4" />
-                            )}
+                            <Printer className="w-4 h-4" />
                           </button>
                           <button onClick={() => handleEdit(v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Editar">
                             <Pencil className="w-4 h-4" />
@@ -1055,6 +1067,26 @@ export default function Vasilhames() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PrintContainerLabelDialog
+        open={!!labelVasilhame}
+        onOpenChange={(v) => { if (!v) setLabelVasilhame(null); }}
+        container={labelContainer}
+        density={labelDensity}
+        contexto="convencional"
+        clienteId={labelVasilhame?.cliente_id}
+        clienteNome={labelVasilhame?.cliente_nome}
+        manufactureDate={labelVasilhame?.created_at || labelVasilhame?.created_date}
+        resolvePublicToken={
+          labelVasilhame
+            ? () => resolveProdutoPublicToken({
+                produtoId: labelVasilhame.produto_id,
+                codigo: labelVasilhame.produto_codigo,
+                nome: labelVasilhame.produto_nome,
+              }).catch(() => null)
+            : undefined
+        }
+      />
     </div>
   );
 }

@@ -12,16 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import { generateBoletaPDF, generateVasilhamesReportPDF } from '@industrializacao/lib/pdfReports';
-import { printContainerLabel, printContainerLabels } from '@industrializacao/lib/labelprint';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
-import { ensureProductionPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import { zeroOutTankaStock } from '@industrializacao/lib/tankUtils';
 import {
   PACKAGING_TYPES,
   isAggregatedUnitContainer,
   getContainerPackageQty,
   formatAggregatedContainerLabel,
-  isUnitPackagingLike,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtDate, fmtNumber, todayDateInputValue, toDateInputValue } from '@/i18n/formatters';
 import { entities as chemflowEntities } from '@transbordo/services/entities';
@@ -31,6 +28,7 @@ import {
 } from '@transbordo/lib/saidaIndContainer';
 import AddTankDialog from '@industrializacao/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@industrializacao/components/vasilhames/HistoryDialog';
+import PrintContainerLabelDialog from '@industrializacao/components/vasilhames/PrintContainerLabelDialog';
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
 import {
   productionOfContainer,
@@ -42,7 +40,6 @@ import {
 import {
   resolveRecipeForContainer as resolveRecipeFromList,
   resolveProductCode,
-  resolveValidityDays,
 } from '@industrializacao/lib/recipeRevisions';
 import { effectiveOriginsOfContainer, applyProportionalOriginReduction } from '@industrializacao/lib/containerOrigins';
 
@@ -128,7 +125,7 @@ export default function Vasilhames() {
   const [savingDepart, setSavingDepart] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [sending, setSending] = useState(false);
-  const [printingPatio, setPrintingPatio] = useState(false);
+  const [labelTarget, setLabelTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
@@ -174,72 +171,8 @@ export default function Vasilhames() {
     return resolveProductCode(recipes || [], c, production) || c.product;
   };
 
-  const resolveContainerLabelJob = async (container) => {
-    const production = productionOfContainer(container, productions || []);
-    let validityDays = resolveValidityDays(recipes || [], container, production);
-
-    if (validityDays == null && production?.recipe_id) {
-      try {
-        const remote = await base44.entities.Recipe.get(production.recipe_id);
-        const n = Number(remote?.validity_days);
-        if (Number.isFinite(n) && n > 0) validityDays = n;
-      } catch { /* ignore */ }
-    }
-    if (validityDays == null) {
-      const productName = container.product || production?.product;
-      if (productName) {
-        try {
-          const remoteList = await base44.entities.Recipe.filter(
-            { product_name: productName },
-            '-revision_number',
-            20,
-          );
-          validityDays = resolveValidityDays(remoteList || [], container, production);
-        } catch { /* ignore */ }
-      }
-    }
-
-    const publicToken = await ensureProductionPublicToken(production);
-    return {
-      validityDays,
-      publicToken,
-      options: {
-        manufactureDate: production?.end_time || container.created_date,
-        locale: i18n.language,
-        clienteNome: container.client || production?.client,
-        contexto: 'industrializacao',
-      },
-    };
-  };
-
-  const handlePrintLabel = async (container) => {
-    try {
-      const { validityDays, publicToken, options } = await resolveContainerLabelJob(container);
-      await printContainerLabel(container, validityDays, publicToken, options);
-    } catch (err) {
-      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
-    }
-  };
-
-  const patioUnitContainers = containers.filter((c) =>
-    c.status === 'No Pátio' && isUnitPackagingLike(c.type, c.container_number)
-  );
-
-  const handlePrintPatioUnitLabels = async () => {
-    if (patioUnitContainers.length === 0 || printingPatio) return;
-    setPrintingPatio(true);
-    try {
-      const jobs = [];
-      for (const container of patioUnitContainers) {
-        const { validityDays, publicToken, options } = await resolveContainerLabelJob(container);
-        jobs.push({ container, validityDays, publicToken, options });
-      }
-      await printContainerLabels(jobs);
-    } catch (err) {
-      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
-    } finally {
-      setPrintingPatio(false);
-    }
+  const handlePrintLabel = (container) => {
+    setLabelTarget(container);
   };
 
   const toggleSelect = (id) => {
@@ -532,19 +465,6 @@ export default function Vasilhames() {
           {selected.size > 0 && (
             <Button onClick={enviarDados} disabled={sending} className="text-white" style={{ background: '#2575D1' }}>
               {sending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('containers.vasilhames.generating')}</> : <><FileText className="w-4 h-4 mr-2" /> {t('containers.vasilhames.sendData', { count: selected.size })}</>}
-            </Button>
-          )}
-          {patioUnitContainers.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={handlePrintPatioUnitLabels}
-              disabled={printingPatio}
-              className="gap-2"
-              title={t('containers.vasilhames.printPatioUnitLabelsHint')}
-            >
-              {printingPatio
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> {t('containers.vasilhames.printingLabels')}</>
-                : <><Printer className="w-4 h-4" /> {t('containers.vasilhames.printPatioUnitLabels')}</>}
             </Button>
           )}
           <Button variant="outline" onClick={() => setShowHistory(true)} className="gap-2 ml-auto shrink-0">
@@ -970,6 +890,14 @@ export default function Vasilhames() {
 
       {/* Adicionar Tanque */}
       <AddTankDialog open={showAddTank} onOpenChange={setShowAddTank} onSaved={load} />
+
+      <PrintContainerLabelDialog
+        open={!!labelTarget}
+        onOpenChange={(v) => { if (!v) setLabelTarget(null); }}
+        container={labelTarget}
+        productions={productions}
+        recipes={recipes}
+      />
 
       {/* Histórico */}
       <HistoryDialog

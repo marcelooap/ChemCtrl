@@ -17,7 +17,7 @@ import {
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
-import { resolveUnitLabelMetrics } from '@industrializacao/lib/packagingTypes';
+import { formatLabelEmbalagem } from '@industrializacao/lib/packagingTypes';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -46,6 +46,8 @@ function calcValidityDate(fabDateStr, validityDays) {
   if (!fabDateStr) return null;
   return addCalendarDays(fabDateStr, validityDays);
 }
+
+export { calcValidityDate };
 
 function makeQrElement(publicUrl) {
   return React.createElement(QRCodeSVG, {
@@ -476,18 +478,14 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
   const { lang, t } = getLabelLabels(options?.locale);
   const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 
-  const unitMetrics = resolveUnitLabelMetrics(container, {
-    volume: options?.volume,
-    packageQty: options?.packageQty,
-  });
-  const copies = options?.copies != null
-    ? Math.max(1, Math.round(Number(options.copies) || 1))
-    : unitMetrics.copies;
+  const copies = Math.max(1, Math.round(Number(options?.copies) || 1));
+  const volumeRaw = options?.volume ?? container.volume;
+  const netWeight = options?.netWeight ?? container.net_weight ?? 0;
+  const grossWeight = options?.grossWeight ?? container.gross_weight ?? 0;
+  const embalagem = options?.embalagem || formatLabelEmbalagem(container);
 
   const opNum = container.op_number || '—';
-  const embalagem = unitMetrics.embalagem;
   const fabDateStr = options?.manufactureDate || container.created_date;
-  const volumeRaw = unitMetrics.volume;
   const volume =
     volumeRaw != null && Number(volumeRaw) > 0
       ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
@@ -528,8 +526,8 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     client: clienteNome || '—',
     fabDate,
     valDate,
-    netWeight: numFmt(unitMetrics.netWeight || 0),
-    grossWeight: numFmt(unitMetrics.grossWeight || 0),
+    netWeight: numFmt(netWeight || 0),
+    grossWeight: numFmt(grossWeight || 0),
     volume,
     embalagem,
     publicToken,
@@ -564,40 +562,6 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
       return;
     }
     printLabelPages({ ...job, win });
-  } catch (err) {
-    win.close();
-    throw err;
-  }
-};
-
-/** Imprime várias etiquetas em um único documento (uma via por embalagem física). */
-export const printContainerLabels = async (jobs) => {
-  const list = (jobs || []).filter((j) => j?.container);
-  if (list.length === 0) return;
-
-  const { t } = getLabelLabels(list[0]?.options?.locale);
-  const win = openLabelWindow(false, t);
-  if (!win) return;
-
-  try {
-    const pages = [];
-    let meta = null;
-    for (const item of list) {
-      const prepared = await prepareContainerLabelJob(
-        item.container,
-        item.validityDays,
-        item.publicToken,
-        item.options,
-      );
-      if (!prepared) continue;
-      if (!meta) meta = prepared;
-      pages.push(...prepared.pages);
-    }
-    if (!meta || pages.length === 0) {
-      win.close();
-      return;
-    }
-    printLabelPages({ ...meta, pages, win });
   } catch (err) {
     win.close();
     throw err;

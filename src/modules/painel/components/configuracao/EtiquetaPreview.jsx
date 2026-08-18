@@ -70,6 +70,7 @@ export default function EtiquetaPreview({
   orientation = 'horizontal',
   consultaPath = '/consulta',
   className = '',
+  chrome = true,
 }) {
   const { t, i18n } = useTranslation();
   const layout = partitionEtiquetaCampos(campos);
@@ -128,9 +129,10 @@ export default function EtiquetaPreview({
       />
     ));
 
-  const embalagem = v.barril_number
-    ? `${v.container_number || ''} (${v.barril_number})`
-    : v.container_number || v.packaging_type || '—';
+  const embalagem = v.embalagem
+    || (v.barril_number
+      ? `${v.container_number || ''} (${v.barril_number})`
+      : v.container_number || v.packaging_type || '—');
 
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
@@ -160,10 +162,12 @@ export default function EtiquetaPreview({
 
   return (
     <div className={`flex flex-col items-center gap-3 ${className}`}>
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        {t('painel.configuracao.etiquetas.previewTitle')}
-      </p>
-      <div
+      {chrome && (
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {t('painel.configuracao.etiquetas.previewTitle')}
+        </p>
+      )}
+      <div>
         className="bg-white text-black border border-black shadow-lg origin-top"
         style={
           vertical
@@ -232,11 +236,13 @@ export default function EtiquetaPreview({
           </div>
         )}
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        {vertical
-          ? t('painel.configuracao.etiquetas.previewHintVertical')
-          : t('painel.configuracao.etiquetas.previewHint')}
-      </p>
+      {chrome && (
+        <p className="text-[11px] text-muted-foreground">
+          {vertical
+            ? t('painel.configuracao.etiquetas.previewHintVertical')
+            : t('painel.configuracao.etiquetas.previewHint')}
+        </p>
+      )}
     </div>
   );
 }

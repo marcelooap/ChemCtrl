@@ -69,7 +69,6 @@ const UNIT_PACKAGING_HINT = /ibc|tambor|bombona|one\s*way/i;
 
 /**
  * IBC / tambor / bombona — inclusive tipos legados e placas agregadas ("02 x IBC").
- * Usado na etiqueta para não depender do valor exato de `type`.
  */
 export function isUnitPackagingLike(type, containerNumber = '') {
   if (isUnitPackagingType(type)) return true;
@@ -78,76 +77,48 @@ export function isUnitPackagingLike(type, containerNumber = '') {
   return /^\d+\s*x\s+/i.test(plate.trim()) && UNIT_PACKAGING_HINT.test(plate);
 }
 
+/** Volume informado pelo usuário na etiqueta (IBC, tambor, bombona). */
+export function labelRequiresManualVolume(container) {
+  if (!container) return false;
+  return isUnitPackagingLike(
+    container.type || container.tipo,
+    container.container_number || container.placa,
+  );
+}
+
 /** Remove o prefixo "02 x " da placa agregada. */
 export function stripAggregatedQtyPrefix(label) {
   return String(label || '').replace(/^\d+\s*x\s+/i, '').trim();
 }
 
-/**
- * Quantidade de embalagens físicas para a etiqueta (placa, tipo, ou campo explícito).
- */
-export function getLabelPackageQty(container) {
-  if (!container) return 1;
-  const plate = container.container_number || container.placa || '';
-  const type = container.type || container.tipo || '';
-  if (!isUnitPackagingLike(type, plate)) return 1;
-
-  const fromPlate = parseAggregatedPackageQty(plate);
-  if (fromPlate != null) return fromPlate;
-
-  const fromField = Number(container.quantidade_embalagens);
-  if (Number.isFinite(fromField) && fromField >= 1) return Math.round(fromField);
-
-  const fromComp = Array.isArray(container.composicao)
-    ? container.composicao.find((c) => Number(c.quantidade_embalagens) > 0)?.quantidade_embalagens
-    : null;
-  if (Number(fromComp) >= 1) return Math.round(Number(fromComp));
-
-  return getContainerPackageQty(container);
+/** Texto de embalagem na etiqueta (uma unidade, sem quantidade agregada). */
+export function formatLabelEmbalagem(container) {
+  const plate = container?.container_number || container?.placa || '';
+  const barril = container?.barril_number || container?.barril || '';
+  if (isUnitPackagingLike(container?.type || container?.tipo, plate)) {
+    return stripAggregatedQtyPrefix(plate) || plate || '—';
+  }
+  return barril ? `${plate} (${barril})` : (plate || '—');
 }
 
-/**
- * Métricas por unidade física para etiqueta de IBC / tambor / bombona.
- * Líquido = total ÷ qtd; bruto = líquido unitário + tara (por embalagem).
- * copies = qtd para gerar uma etiqueta por embalagem no pátio.
- */
-export function resolveUnitLabelMetrics(container, options = {}) {
-  const plate = container?.container_number || container?.placa || '';
-  const type = container?.type || container?.tipo || '';
-  const requestedQty = Number(options.packageQty);
-  const qty = Math.max(
-    1,
-    (Number.isFinite(requestedQty) && requestedQty >= 1)
-      ? Math.round(requestedQty)
-      : getLabelPackageQty(container),
-  );
-  const totalNet = Number(container?.net_weight) || 0;
-  const totalGross = Number(container?.gross_weight) || 0;
-  const tare = Number(container?.tare ?? container?.tara) || 0;
-  const totalVol = Number(container?.volume ?? options.volume) || 0;
-  const barril = container?.barril_number || container?.barril || '';
-  const fullEmbalagem = barril ? `${plate} (${barril})` : (plate || '—');
-  const unitLike = isUnitPackagingLike(type, plate);
+/** Placeholder de volume (L) para IBC / tambor / bombona. */
+export function suggestLabelVolumePlaceholder(type) {
+  const cap = getUnitPackagingCapacity(type);
+  if (cap) return cap;
+  const match = String(type || '').match(/(\d+(?:[.,]\d+)?)\s*l\b/i);
+  if (!match) return '';
+  const n = Number(String(match[1]).replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : '';
+}
 
-  if (qty <= 1 || !unitLike) {
-    return {
-      qty: 1,
-      copies: 1,
-      netWeight: totalNet,
-      grossWeight: totalGross,
-      volume: totalVol,
-      embalagem: fullEmbalagem,
-    };
-  }
-
-  const unitNet = totalNet / qty;
-  const unitTypeLabel = stripAggregatedQtyPrefix(plate);
+/** Líquido = volume × densidade; bruto = líquido + tara. */
+export function calcLabelWeightsFromVolume({ volume, density, tare }) {
+  const vol = Number(volume) || 0;
+  const dens = Number(density) || 0;
+  const net = vol * dens;
   return {
-    qty,
-    copies: qty,
-    netWeight: unitNet,
-    grossWeight: unitNet + tare,
-    volume: totalVol > 0 ? totalVol / qty : 0,
-    embalagem: unitTypeLabel || fullEmbalagem,
+    volume: vol,
+    netWeight: net,
+    grossWeight: net + (Number(tare) || 0),
   };
 }
