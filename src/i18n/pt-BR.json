@@ -2233,13 +2233,18 @@
   },
   "programming": {
     "title": "Programação de Industrialização",
-    "subtitle": "Selecione o dia e clique em um card para registrar a programação",
+    "subtitle": "Marque os produtos produzidos para acompanhar o que ainda resta no dia",
     "prevMonth": "Mês anterior",
     "nextMonth": "Próximo mês",
     "monthTitle": "Programação de {{month}} {{year}}",
     "daySummary": "{{count}} programações · Volume: {{volume}}",
     "available": "Disponível",
     "scheduled": "Programado",
+    "completed": "Concluído",
+    "markProduced": "Marcar {{product}} como produzido",
+    "markPending": "Desmarcar {{product}} como produzido",
+    "remainingVolume": "Volume restante: {{volume}}",
+    "remainingCount": "{{count}} produto(s) restante(s)",
     "dayEmpty": "Nenhuma programação neste dia.",
     "weekdays": {
       "mon": "Seg",
@@ -2261,7 +2266,10 @@
       "title": "Detalhes da programação",
       "button": "Visualizar",
       "pickTitle": "Selecione a programação",
-      "total": "Total"
+      "total": "Total",
+      "remaining": "Restante",
+      "produced": "Produzido",
+      "producedCount": "{{count}} de {{total}} produzidos"
     },
     "form": {
       "createTitle": "Nova programação",
@@ -2285,7 +2293,8 @@
       "invalidVolume": "Informe um volume maior que zero.",
       "created": "Programação cadastrada",
       "updated": "Programação atualizada",
-      "deleted": "Programação excluída"
+      "deleted": "Programação excluída",
+      "producedUnavailable": "Não foi possível marcar a produção. Aplique a atualização do banco e tente novamente."
     },
     "deleteConfirm": {
       "title": "Excluir programação?",

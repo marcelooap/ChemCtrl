@@ -96,4 +96,16 @@ ALTER TABLE ind_programacao_demanda ADD COLUMN IF NOT EXISTS order_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_ind_programacao_demanda_order_id
   ON ind_programacao_demanda (order_id);
 
+ALTER TABLE ind_programacao_demanda
+  ADD COLUMN IF NOT EXISTS produced BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE ind_programacao_demanda
+  ADD COLUMN IF NOT EXISTS produced_at TIMESTAMPTZ;
+
+ALTER TABLE ind_programacao_demanda
+  ADD COLUMN IF NOT EXISTS produced_by TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_ind_programacao_demanda_produced
+  ON ind_programacao_demanda (scheduled_date, produced);
+
 SELECT pg_notify('pgrst', 'reload schema');

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
@@ -11,8 +11,14 @@ import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import ProgramacaoFormDialog from '@industrializacao/components/programacao/ProgramacaoFormDialog';
 import ProgramacaoViewDialog from '@industrializacao/components/programacao/ProgramacaoViewDialog';
+import ProducedToggle from '@industrializacao/components/programacao/ProducedToggle';
 import { fmtVolume, getIntlLocale } from '@/i18n/formatters';
 import { deriveOrderFromProductions } from '@industrializacao/lib/orderProductionStatus';
+import {
+  buildProducedPayload,
+  getDayProgress,
+  isScheduleProduced,
+} from '@industrializacao/lib/programacaoStatus';
 import {
   addMonths,
   getMonthWeeksMonSat,
@@ -44,6 +50,8 @@ export default function Programacao() {
   const [viewingDate, setViewingDate] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [togglingIds, setTogglingIds] = useState(() => new Set());
+  const [producedOverrides, setProducedOverrides] = useState({});
 
   const { data: schedules, loading } = useRealtimeEntity(
     'ProductionSchedule',
@@ -98,7 +106,21 @@ export default function Programacao() {
     setFormOpen(true);
   };
 
-  const viewingItems = viewingDate ? (byDay.get(viewingDate) || []) : [];
+  const withProducedOverride = (row) => {
+    if (!row?.id || !Object.prototype.hasOwnProperty.call(producedOverrides, row.id)) return row;
+    return { ...row, produced: producedOverrides[row.id], produced_at: producedOverrides[row.id] ? (row.produced_at || new Date().toISOString()) : null };
+  };
+
+  const isProduced = (row) => {
+    if (row?.id && Object.prototype.hasOwnProperty.call(producedOverrides, row.id)) {
+      return Boolean(producedOverrides[row.id]);
+    }
+    return isScheduleProduced(row);
+  };
+
+  const viewingItems = viewingDate
+    ? (byDay.get(viewingDate) || []).map(withProducedOverride)
+    : [];
 
   const openView = (items) => {
     const date = items?.[0] ? scheduleDateKey(items[0]) : null;
@@ -150,6 +172,42 @@ export default function Programacao() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleProduced = async (row) => {
+    if (!canEdit || !row?.id || togglingIds.has(row.id)) return;
+    const next = !isProduced(row);
+    setProducedOverrides((prev) => ({ ...prev, [row.id]: next }));
+    setTogglingIds((prev) => new Set(prev).add(row.id));
+    try {
+      const updated = await base44.entities.ProductionSchedule.update(
+        row.id,
+        buildProducedPayload(next, user)
+      );
+      if (isScheduleProduced(updated) !== next) {
+        toast({
+          title: t('programming.messages.producedUnavailable'),
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: t('common.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setProducedOverrides((prev) => {
+        const copy = { ...prev };
+        delete copy[row.id];
+        return copy;
+      });
+      setTogglingIds((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.delete(row.id);
+        return nextSet;
+      });
     }
   };
 
@@ -221,9 +279,10 @@ export default function Programacao() {
           </Button>
         </div>
 
-        <div className="flex items-center justify-end gap-3 text-xs">
+        <div className="flex flex-wrap items-center justify-end gap-3 text-xs">
           <LegendDot className="bg-emerald-500" label={t('programming.available')} />
           <LegendDot className="bg-sky-500" label={t('programming.scheduled')} />
+          <LegendDot className="bg-zinc-400" label={t('programming.completed')} />
           <LegendDot className="bg-orange-400" label={t('programming.weekdaysFull.sat')} />
         </div>
 
@@ -272,11 +331,11 @@ export default function Programacao() {
                     );
                   }
 
-                  const items = byDay.get(cell.iso) || [];
+                  const items = (byDay.get(cell.iso) || []).map(withProducedOverride);
                   const hasSchedule = items.length > 0;
                   const isToday = isSameISODate(cell.iso, today);
                   const isSaturday = cell.weekday === 6;
-                  const dayVolume = items.reduce((sum, row) => sum + (Number(row.volume) || 0), 0);
+                  const progress = getDayProgress(items);
 
                   const tone = isSaturday
                     ? {
@@ -288,25 +347,35 @@ export default function Programacao() {
                         eye: 'text-orange-700 hover:text-orange-900 hover:bg-orange-200/70 dark:text-orange-300',
                         volume: 'text-orange-800 dark:text-orange-200',
                       }
-                    : hasSchedule
+                    : progress.allProduced
                       ? {
-                          shell: 'border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30',
-                          label: 'text-sky-800 dark:text-sky-200',
-                          day: 'text-sky-950 dark:text-sky-50',
-                          product: 'text-sky-900 dark:text-sky-100',
-                          extra: 'text-sky-700 dark:text-sky-300',
-                          eye: 'text-sky-700 hover:text-sky-900 hover:bg-sky-200/70 dark:text-sky-300',
-                          volume: 'text-sky-800 dark:text-sky-200',
+                          shell: 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40',
+                          label: 'text-zinc-600 dark:text-zinc-300',
+                          day: 'text-zinc-800 dark:text-zinc-100',
+                          product: 'text-zinc-600 dark:text-zinc-300',
+                          extra: 'text-zinc-400 dark:text-zinc-500',
+                          eye: 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/70 dark:text-zinc-400',
+                          volume: 'text-zinc-500 dark:text-zinc-400',
                         }
-                      : {
-                          shell: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30',
-                          label: 'text-emerald-800 dark:text-emerald-200',
-                          day: 'text-emerald-950 dark:text-emerald-50',
-                          product: 'text-emerald-900 dark:text-emerald-100',
-                          extra: 'text-emerald-700 dark:text-emerald-300',
-                          eye: '',
-                          volume: 'text-emerald-800 dark:text-emerald-200',
-                        };
+                      : hasSchedule
+                        ? {
+                            shell: 'border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30',
+                            label: 'text-sky-800 dark:text-sky-200',
+                            day: 'text-sky-950 dark:text-sky-50',
+                            product: 'text-sky-900 dark:text-sky-100',
+                            extra: 'text-sky-700 dark:text-sky-300',
+                            eye: 'text-sky-700 hover:text-sky-900 hover:bg-sky-200/70 dark:text-sky-300',
+                            volume: 'text-sky-800 dark:text-sky-200',
+                          }
+                        : {
+                            shell: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30',
+                            label: 'text-emerald-800 dark:text-emerald-200',
+                            day: 'text-emerald-950 dark:text-emerald-50',
+                            product: 'text-emerald-900 dark:text-emerald-100',
+                            extra: 'text-emerald-700 dark:text-emerald-300',
+                            eye: '',
+                            volume: 'text-emerald-800 dark:text-emerald-200',
+                          };
 
                   return (
                     <div
@@ -314,13 +383,17 @@ export default function Programacao() {
                       className={`relative min-h-[118px] rounded-xl border px-2 pt-3 pb-9 text-center transition-all ${tone.shell} ${
                         canCreate ? 'hover:brightness-[0.98] cursor-pointer' : ''
                       } ${isToday ? 'ring-1 ring-primary/40' : ''}`}
+                      onClick={canCreate ? () => openCreate(cell.iso) : undefined}
                     >
                       <button
                         type="button"
                         disabled={!canCreate}
-                        onClick={() => openCreate(cell.iso)}
-                        className={`flex flex-col items-center w-full h-full min-h-[84px] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          canCreate ? '' : 'cursor-default'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openCreate(cell.iso);
+                        }}
+                        className={`flex flex-col items-center w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          canCreate ? 'cursor-pointer' : 'cursor-default'
                         }`}
                         aria-label={`${weekdayLabel} ${cell.day}`}
                       >
@@ -330,24 +403,48 @@ export default function Programacao() {
                         <span className={`mt-0.5 block text-lg font-semibold tabular-nums leading-none ${tone.day}`}>
                           {cell.day}
                         </span>
-                        {hasSchedule ? (
-                          <span className="mt-2 w-full space-y-0.5 px-0.5">
-                            {items.slice(0, 2).map((row) => (
-                              <span
-                                key={row.id}
-                                className={`block text-xs font-semibold leading-snug line-clamp-1 ${tone.product}`}
-                              >
-                                {row.product}
-                              </span>
-                            ))}
-                            {items.length > 2 ? (
-                              <span className={`block text-[10px] font-medium ${tone.extra}`}>
-                                +{items.length - 2}
-                              </span>
-                            ) : null}
-                          </span>
-                        ) : null}
                       </button>
+
+                      {hasSchedule ? (
+                        <div className="mt-1.5 w-full space-y-0.5 px-0.5">
+                          {items.map((row) => {
+                            const produced = isProduced(row);
+                            return (
+                              <div
+                                key={row.id}
+                                className={`flex items-center gap-0.5 min-w-0 rounded-md ${
+                                  canEdit ? 'cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.04]' : ''
+                                }`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (canEdit) handleToggleProduced(row);
+                                }}
+                              >
+                                <ProducedToggle
+                                  produced={produced}
+                                  disabled={!canEdit}
+                                  busy={togglingIds.has(row.id)}
+                                  label={
+                                    produced
+                                      ? t('programming.markPending', { product: row.product })
+                                      : t('programming.markProduced', { product: row.product })
+                                  }
+                                  onToggle={() => handleToggleProduced(row)}
+                                  className={tone.product}
+                                />
+                                <span
+                                  className={`min-w-0 flex-1 text-left text-[11px] font-semibold leading-snug line-clamp-1 ${
+                                    produced ? `line-through ${tone.extra}` : tone.product
+                                  }`}
+                                  title={row.product}
+                                >
+                                  {row.product}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
 
                       {hasSchedule ? (
                         <Button
@@ -366,13 +463,28 @@ export default function Programacao() {
                         </Button>
                       ) : null}
 
-                      <span className={`absolute bottom-1.5 left-2 text-[11px] font-semibold tabular-nums ${tone.volume}`}>
-                        {fmtVolume(dayVolume)}
-                      </span>
+                      {hasSchedule ? (
+                        <span
+                          className={`absolute bottom-1.5 left-2 text-[11px] font-semibold tabular-nums ${tone.volume}`}
+                          title={t('programming.remainingVolume', { volume: fmtVolume(progress.remainingVolume) })}
+                        >
+                          {fmtVolume(progress.remainingVolume)}
+                        </span>
+                      ) : null}
 
-                      {items.length > 0 ? (
-                        <span className="absolute bottom-1.5 right-1.5 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none text-orange-700">
-                          {items.length}
+                      {progress.remainingCount > 0 ? (
+                        <span
+                          className="absolute bottom-1.5 right-1.5 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none text-orange-700"
+                          title={t('programming.remainingCount', { count: progress.remainingCount })}
+                        >
+                          {progress.remainingCount}
+                        </span>
+                      ) : hasSchedule ? (
+                        <span
+                          className="absolute bottom-1.5 right-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300"
+                          title={t('programming.completed')}
+                        >
+                          <Check className="h-3 w-3" strokeWidth={3} />
                         </span>
                       ) : null}
 
@@ -413,6 +525,9 @@ export default function Programacao() {
         dismissible={!deleteTarget}
         canEdit={canEdit}
         canDelete={canDelete}
+        canMarkProduced={canEdit}
+        togglingIds={togglingIds}
+        onToggleProduced={handleToggleProduced}
         onEdit={openEdit}
         onDelete={(row) => {
           if (!row) return;

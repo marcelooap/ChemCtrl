@@ -2311,13 +2311,18 @@
   },
   "programming": {
     "title": "Programmation d'industrialisation",
-    "subtitle": "Sélectionnez le jour et cliquez sur une carte pour enregistrer la programmation",
+    "subtitle": "Marquez les produits fabriqués pour suivre ce qu'il reste dans la journée",
     "prevMonth": "Mois précédent",
     "nextMonth": "Mois suivant",
     "monthTitle": "Programmation de {{month}} {{year}}",
     "daySummary": "{{count}} programmations · Volume : {{volume}}",
     "available": "Disponible",
     "scheduled": "Programmé",
+    "completed": "Terminé",
+    "markProduced": "Marquer {{product}} comme produit",
+    "markPending": "Démarquer {{product}} comme produit",
+    "remainingVolume": "Volume restant : {{volume}}",
+    "remainingCount": "{{count}} produit(s) restant(s)",
     "dayEmpty": "Aucune programmation ce jour.",
     "weekdays": {
       "mon": "Lun",
@@ -2339,7 +2344,10 @@
       "title": "Détails de la programmation",
       "button": "Afficher",
       "pickTitle": "Sélectionnez la programmation",
-      "total": "Total"
+      "total": "Total",
+      "remaining": "Restant",
+      "produced": "Produit",
+      "producedCount": "{{count}} sur {{total}} produits"
     },
     "form": {
       "createTitle": "Nouvelle programmation",
@@ -2363,7 +2371,8 @@
       "invalidVolume": "Saisissez un volume supérieur à zéro.",
       "created": "Programmation enregistrée",
       "updated": "Programmation mise à jour",
-      "deleted": "Programmation supprimée"
+      "deleted": "Programmation supprimée",
+      "producedUnavailable": "Impossible de marquer la production. Appliquez la mise à jour de la base de données et réessayez."
     },
     "deleteConfirm": {
       "title": "Supprimer la programmation ?",

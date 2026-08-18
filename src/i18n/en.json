@@ -2332,13 +2332,18 @@
   },
   "programming": {
     "title": "Industrialization Schedule",
-    "subtitle": "Select the day and click a card to register a schedule",
+    "subtitle": "Mark produced products to track what is still left for the day",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "monthTitle": "Schedule for {{month}} {{year}}",
     "daySummary": "{{count}} schedules · Volume: {{volume}}",
     "available": "Available",
     "scheduled": "Scheduled",
+    "completed": "Completed",
+    "markProduced": "Mark {{product}} as produced",
+    "markPending": "Unmark {{product}} as produced",
+    "remainingVolume": "Remaining volume: {{volume}}",
+    "remainingCount": "{{count}} product(s) remaining",
     "dayEmpty": "No schedules on this day.",
     "weekdays": {
       "mon": "Mon",
@@ -2360,7 +2365,10 @@
       "title": "Schedule details",
       "button": "View",
       "pickTitle": "Select a schedule",
-      "total": "Total"
+      "total": "Total",
+      "remaining": "Remaining",
+      "produced": "Produced",
+      "producedCount": "{{count}} of {{total}} produced"
     },
     "form": {
       "createTitle": "New schedule",
@@ -2384,7 +2392,8 @@
       "invalidVolume": "Enter a volume greater than zero.",
       "created": "Schedule saved",
       "updated": "Schedule updated",
-      "deleted": "Schedule deleted"
+      "deleted": "Schedule deleted",
+      "producedUnavailable": "Could not mark production. Apply the database update and try again."
     },
     "deleteConfirm": {
       "title": "Delete schedule?",

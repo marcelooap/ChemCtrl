@@ -2328,13 +2328,18 @@
   },
   "programming": {
     "title": "Programación de Industrialización",
-    "subtitle": "Seleccione el día y haga clic en una tarjeta para registrar la programación",
+    "subtitle": "Marque los productos producidos para seguir lo que aún resta en el día",
     "prevMonth": "Mes anterior",
     "nextMonth": "Próximo mes",
     "monthTitle": "Programación de {{month}} {{year}}",
     "daySummary": "{{count}} programaciones · Volumen: {{volume}}",
     "available": "Disponible",
     "scheduled": "Programado",
+    "completed": "Completado",
+    "markProduced": "Marcar {{product}} como producido",
+    "markPending": "Desmarcar {{product}} como producido",
+    "remainingVolume": "Volumen restante: {{volume}}",
+    "remainingCount": "{{count}} producto(s) restante(s)",
     "dayEmpty": "Ninguna programación en este día.",
     "weekdays": {
       "mon": "Lun",
@@ -2356,7 +2361,10 @@
       "title": "Detalles de la programación",
       "button": "Visualizar",
       "pickTitle": "Seleccione la programación",
-      "total": "Total"
+      "total": "Total",
+      "remaining": "Restante",
+      "produced": "Producido",
+      "producedCount": "{{count}} de {{total}} producidos"
     },
     "form": {
       "createTitle": "Nueva programación",
@@ -2380,7 +2388,8 @@
       "invalidVolume": "Informe un volumen mayor que cero.",
       "created": "Programación registrada",
       "updated": "Programación actualizada",
-      "deleted": "Programación excluida"
+      "deleted": "Programación excluida",
+      "producedUnavailable": "No se pudo marcar la producción. Aplique la actualización de la base de datos e inténtelo de nuevo."
     },
     "deleteConfirm": {
       "title": "¿Excluir programación?",
