@@ -6,24 +6,28 @@ import {
   partitionEtiquetaCampos,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false, fill = false }) {
+function FieldRow({ label, value, wrap = false, stacked = false, fill = false, emphasis = false }) {
   if (stacked) {
     return (
       <div className="min-w-0">
-        <div className="text-[8px] font-extrabold uppercase leading-none tracking-wide">
+        <div className={`font-extrabold uppercase leading-none tracking-wide ${emphasis ? 'text-[10px]' : 'text-[8px]'}`}>
           {label}
         </div>
-        <div className="text-[10px] font-bold leading-tight truncate mt-[1px]">
+        <div className={`font-bold leading-tight truncate mt-[1px] ${emphasis ? 'text-[12px]' : 'text-[10px]'}`}>
           {value}
         </div>
       </div>
     );
   }
 
+  const sizeClass = fill
+    ? (emphasis ? 'w-full text-[14px] items-start leading-snug' : 'w-full text-[12px] items-start leading-snug')
+    : emphasis
+      ? `text-[13px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-snug'}`
+      : `text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`;
+
   return (
-    <div
-      className={`flex gap-1 min-w-0 ${fill ? 'w-full text-[12px] items-start leading-snug' : `text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`}`}
-    >
+    <div className={`flex gap-1 min-w-0 ${sizeClass}`}>
       <span className="font-extrabold uppercase shrink-0">{label}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
       <span className={`font-bold min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
@@ -78,6 +82,7 @@ export default function EtiquetaPreview({
   className = '',
   chrome = true,
   weightDecimals = 3,
+  emphasis = false,
 }) {
   const { t, i18n } = useTranslation();
   const layout = partitionEtiquetaCampos(campos);
@@ -131,6 +136,7 @@ export default function EtiquetaPreview({
         stacked={stacked}
         fill={vertical}
         wrap={wrapKey(row.key)}
+        emphasis={emphasis}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />
@@ -144,7 +150,7 @@ export default function EtiquetaPreview({
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
   const packaging = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem) && (
-    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? 'w-full text-[12px] items-start leading-snug' : 'text-[10px] mt-0.5 items-baseline'}`}>
+    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? `w-full items-start leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}` : `${emphasis ? 'text-[12px]' : 'text-[10px]'} mt-0.5 items-baseline`}`}>
       <span className="shrink-0">{t('pdf.label.packaging')}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
       <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words' : 'truncate text-[11px]'}`}>{embalagem}</span>
@@ -185,12 +191,12 @@ export default function EtiquetaPreview({
         {vertical ? (
           <div className="flex h-full min-h-0 w-full flex-col">
             {verticalLayout.showNome && (
-              <div className="text-[17px] font-extrabold leading-tight text-center shrink-0 line-clamp-4 pb-1.5 mb-1 border-b border-black">
+              <div className={`font-extrabold leading-tight text-center shrink-0 line-clamp-4 pb-1.5 mb-1 border-b border-black ${emphasis ? 'text-[19px]' : 'text-[17px]'}`}>
                 {v.product || '—'}
               </div>
             )}
-            <div className="flex min-h-0 flex-1 flex-col justify-between gap-1">
-              <div className="flex w-full flex-1 flex-col justify-evenly gap-0.5">
+            <div className={`flex min-h-0 flex-1 flex-col justify-between ${emphasis ? 'gap-1.5' : 'gap-1'}`}>
+              <div className={`flex w-full flex-1 flex-col justify-evenly ${emphasis ? 'gap-1.5' : 'gap-0.5'}`}>
                 {renderRows(verticalLayout.dataRows)}
               </div>
               {qrBlock}
@@ -200,6 +206,7 @@ export default function EtiquetaPreview({
                     key={w.key}
                     fill
                     wrap
+                    emphasis={emphasis}
                     label={w.key === 'peso_bruto' ? t('pdf.label.grossWeight') : t('pdf.label.netWeight')}
                     value={
                       w.key === 'peso_bruto'
@@ -219,14 +226,16 @@ export default function EtiquetaPreview({
                 {layout.showNome && (
                   <div
                     className={`font-extrabold leading-tight truncate shrink-0 ${
-                      dense ? 'text-[15px]' : 'text-[18px]'
+                      emphasis
+                        ? (dense ? 'text-[16px]' : 'text-[19px]')
+                        : (dense ? 'text-[15px]' : 'text-[18px]')
                     }`}
                   >
                     {v.product || '—'}
                   </div>
                 )}
-                <div className="flex gap-2 pt-1 min-h-0 overflow-hidden">
-                  <div className="flex-1 flex flex-col justify-start gap-[3px] min-w-0">
+                <div className={`flex gap-2 min-h-0 overflow-hidden ${emphasis ? 'pt-1.5 flex-1' : 'pt-1'}`}>
+                  <div className={`flex-1 flex flex-col min-w-0 ${emphasis ? 'justify-evenly gap-1.5' : 'justify-start gap-[3px]'}`}>
                     {renderRows(dataLayout.left)}
                   </div>
                   {split && dataLayout.right.length > 0 && (

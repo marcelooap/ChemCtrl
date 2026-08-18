@@ -231,6 +231,7 @@ export default function PrintContainerLabelDialog({
                 <EtiquetaPreview
                   chrome={false}
                   weightDecimals={0}
+                  emphasis={contexto === 'industrializacao'}
                   campos={meta?.printConfig?.campos}
                   dateFormat={meta?.printConfig?.dateFormat}
                   orientation={meta?.printConfig?.orientation}

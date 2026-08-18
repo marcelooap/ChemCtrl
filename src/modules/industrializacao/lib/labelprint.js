@@ -256,6 +256,21 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     word-break: break-word;
     overflow-wrap: anywhere;
   }
+  .label.ind .field-row { font-size: 10pt; line-height: 1.28; }
+  .label.ind .fields-left { justify-content: space-evenly; gap: 1.1mm; }
+  .label.ind .data-block { margin-top: 1.4mm; }
+  .label.ind .product { font-size: 14pt; }
+  .label.ind.dense .product { font-size: 12.5pt; }
+  .label.ind .weight-table { margin-top: 0.8mm; }
+  .label.ind .weight-table td { font-size: 8pt; padding: 0.7mm 1.4mm; }
+  .label.ind .footer { font-size: 9pt; margin-top: 0.6mm; }
+  .label.ind .footer .emb { font-size: 10pt; }
+  .label.ind.vertical .field-row,
+  .label.ind.vertical .field-row .val { font-size: 11.5pt; line-height: 1.3; }
+  .label.ind.vertical .fields { gap: 1.4mm; }
+  .label.ind.vertical .product { font-size: 14.5pt; }
+  .label.ind.vertical .footer,
+  .label.ind.vertical .footer .emb { font-size: 11pt; }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }`;
@@ -292,6 +307,7 @@ async function buildConfiguredLabelBody({
   responsavelTecnico,
   orientation = 'horizontal',
   consultaPath = '/consulta',
+  contexto = 'industrializacao',
 }) {
   const vertical = orientation === 'vertical';
   const layout = partitionEtiquetaCampos(campos);
@@ -389,7 +405,7 @@ async function buildConfiguredLabelBody({
     ? `<div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${escapeHtml(embalagem)}</span></div>`
     : '';
 
-  const labelClass = `label${dense ? ' dense' : ''}${vertical ? ' vertical' : ''}`;
+  const labelClass = `label${dense ? ' dense' : ''}${vertical ? ' vertical' : ''}${contexto !== 'convencional' ? ' ind' : ''}`;
   return vertical
     ? `<div class="${labelClass}">
   ${productHtml}
@@ -538,6 +554,7 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     responsavelTecnico,
     orientation: printConfig.orientation || 'horizontal',
     consultaPath: options?.contexto === 'convencional' ? '/consulta-produto' : '/consulta',
+    contexto: options?.contexto || 'industrializacao',
     copies,
   };
 

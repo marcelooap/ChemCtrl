@@ -378,6 +378,7 @@ export default function Etiquetas() {
                   dateFormat={dateFormat}
                   orientation={orientation}
                   consultaPath={contexto === 'convencional' ? '/consulta-produto' : '/consulta'}
+                  emphasis={contexto === 'industrializacao'}
                 />
               </div>
             </div>
