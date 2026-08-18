@@ -23,11 +23,11 @@ function FieldRow({ label, value, wrap = false, stacked = false, fill = false, e
   const sizeClass = fill
     ? (emphasis ? 'w-full text-[14px] items-start leading-snug' : 'w-full text-[12px] items-start leading-snug')
     : emphasis
-      ? `text-[13px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-snug'}`
+      ? `text-[12px] ${wrap ? 'items-start leading-tight' : 'items-baseline leading-tight'}`
       : `text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`;
 
   return (
-    <div className={`flex gap-1 min-w-0 ${sizeClass}`}>
+    <div className={`flex gap-1 min-w-0 shrink-0 ${sizeClass}`}>
       <span className="font-extrabold uppercase shrink-0">{label}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
       <span className={`font-bold min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
@@ -43,10 +43,10 @@ function formatWeight(n, decimals = 3) {
   return value.toFixed(decimals);
 }
 
-function WeightTable({ layout, t, v, compact = false, weightDecimals = 3 }) {
+function WeightTable({ layout, t, v, compact = false, weightDecimals = 3, spaced = false }) {
   if (layout.weights.length === 0) return null;
   return (
-    <table className={`w-full border-collapse shrink-0 ${compact ? 'mt-1 text-[8px]' : 'mt-0.5 text-[9px]'}`}>
+    <table className={`w-full border-collapse shrink-0 ${compact ? 'mt-1 text-[8px]' : spaced ? 'mt-1 text-[9px]' : 'mt-0.5 text-[9px]'}`}>
       <tbody>
         {layout.weights.map((w, i) => (
           <tr key={w.key}>
@@ -226,16 +226,14 @@ export default function EtiquetaPreview({
                 {layout.showNome && (
                   <div
                     className={`font-extrabold leading-tight truncate shrink-0 ${
-                      emphasis
-                        ? (dense ? 'text-[16px]' : 'text-[19px]')
-                        : (dense ? 'text-[15px]' : 'text-[18px]')
+                      dense ? 'text-[15px]' : 'text-[18px]'
                     }`}
                   >
                     {v.product || '—'}
                   </div>
                 )}
-                <div className={`flex gap-2 min-h-0 overflow-hidden ${emphasis ? 'pt-1.5 flex-1' : 'pt-1'}`}>
-                  <div className={`flex-1 flex flex-col min-w-0 ${emphasis ? 'justify-evenly gap-1.5' : 'justify-start gap-[3px]'}`}>
+                <div className={`flex gap-2 min-h-0 overflow-hidden ${emphasis ? 'pt-1 flex-1' : 'pt-1'}`}>
+                  <div className={`flex-1 flex flex-col min-w-0 ${emphasis ? 'justify-between gap-0 pb-1' : 'justify-start gap-[3px]'}`}>
                     {renderRows(dataLayout.left)}
                   </div>
                   {split && dataLayout.right.length > 0 && (
@@ -247,7 +245,7 @@ export default function EtiquetaPreview({
               </div>
               {qrBlock}
             </div>
-            <WeightTable layout={layout} t={t} v={v} weightDecimals={weightDecimals} />
+            <WeightTable layout={layout} t={t} v={v} weightDecimals={weightDecimals} spaced={emphasis} />
             {packaging}
           </div>
         )}

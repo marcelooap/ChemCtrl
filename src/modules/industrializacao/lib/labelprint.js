@@ -256,15 +256,19 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     word-break: break-word;
     overflow-wrap: anywhere;
   }
-  .label.ind .field-row { font-size: 10pt; line-height: 1.28; }
-  .label.ind .fields-left { justify-content: space-evenly; gap: 1.1mm; }
-  .label.ind .data-block { margin-top: 1.4mm; }
-  .label.ind .product { font-size: 14pt; }
-  .label.ind.dense .product { font-size: 12.5pt; }
-  .label.ind .weight-table { margin-top: 0.8mm; }
-  .label.ind .weight-table td { font-size: 8pt; padding: 0.7mm 1.4mm; }
-  .label.ind .footer { font-size: 9pt; margin-top: 0.6mm; }
-  .label.ind .footer .emb { font-size: 10pt; }
+  .label.ind .field-row { font-size: 9pt; line-height: 1.18; flex-shrink: 0; }
+  .label.ind .fields-left {
+    justify-content: space-between;
+    gap: 0;
+    padding-bottom: 0.4mm;
+  }
+  .label.ind .data-block { margin-top: 0.7mm; overflow: hidden; }
+  .label.ind .product { font-size: 13pt; }
+  .label.ind.dense .product { font-size: 12pt; }
+  .label.ind .weight-table { margin-top: 0.9mm; }
+  .label.ind .weight-table td { font-size: 7.5pt; padding: 0.55mm 1.2mm; }
+  .label.ind .footer { font-size: 8.5pt; margin-top: 0.45mm; }
+  .label.ind .footer .emb { font-size: 9.5pt; }
   .label.ind.vertical .field-row,
   .label.ind.vertical .field-row .val { font-size: 11.5pt; line-height: 1.3; }
   .label.ind.vertical .fields { gap: 1.4mm; }
