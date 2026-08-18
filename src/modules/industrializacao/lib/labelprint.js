@@ -17,6 +17,7 @@ import {
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
+import { resolveUnitLabelMetrics } from '@industrializacao/lib/packagingTypes';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -104,15 +105,16 @@ function dataRowLabel(key, t) {
   }
 }
 
-function labelCss(orientation = 'horizontal') {
+function labelCss(orientation = 'horizontal', copies = 1) {
   const vertical = orientation === 'vertical';
   const pageW = vertical ? '50mm' : '105mm';
   const pageH = vertical ? '105mm' : '50mm';
+  const multi = copies > 1;
   return `
   @page { size: ${pageW} ${pageH}; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Inter', Arial, sans-serif; }
-  html, body { margin: 0; padding: 0; width: ${pageW}; height: ${pageH}; }
+  html, body { margin: 0; padding: 0; width: ${pageW}; ${multi ? '' : `height: ${pageH};`} }
   .label {
     width: ${pageW}; height: ${pageH};
     background: #FFFFFF; color: #000000;
@@ -121,7 +123,9 @@ function labelCss(orientation = 'horizontal') {
     justify-content: flex-start;
     border: 1px solid #000;
     overflow: hidden;
+    ${multi ? 'page-break-after: always; break-after: page;' : ''}
   }
+  ${multi ? '.label:last-child { page-break-after: auto; break-after: auto; }' : ''}
   .label.vertical { justify-content: stretch; }
   .top-section { display: flex; flex: 1; min-height: 0; overflow: hidden; }
   .left-col { flex: 1; display: flex; flex-direction: column; padding-right: 2mm; min-width: 0; overflow: hidden; }
@@ -268,8 +272,7 @@ function qrColumnHtml({ publicToken, qrSvgMarkup, refId, showId, qrHint, t }) {
   return `<div class="qr-col">${refLine}<div class="qr-code"><span style="font-size:5pt;color:#999;text-align:center;">${t('pdf.label.tokenUnavailable').replace(' ', '<br/>')}</span></div><div class="qr-hint">${qrHint}</div></div>`;
 }
 
-async function printConfiguredLabel({
-  title,
+async function buildConfiguredLabelBody({
   product,
   refId,
   lot,
@@ -283,19 +286,12 @@ async function printConfiguredLabel({
   publicToken,
   qrHint,
   campos,
-  lang,
   t,
   responsavelTecnico,
   orientation = 'horizontal',
   consultaPath = '/consulta',
 }) {
   const vertical = orientation === 'vertical';
-  const win = window.open('', '_blank', vertical ? 'width=280,height=520' : 'width=420,height=300');
-  if (!win) { alert(t('pdf.label.popupBlocked')); return; }
-
-  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
-  win.document.close();
-
   const layout = partitionEtiquetaCampos(campos);
   const verticalLayout = vertical ? getVerticalEtiquetaLayout(campos) : null;
   const qrSvgMarkup = (vertical ? verticalLayout.showQr : layout.showQr)
@@ -392,7 +388,7 @@ async function printConfiguredLabel({
     : '';
 
   const labelClass = `label${dense ? ' dense' : ''}${vertical ? ' vertical' : ''}`;
-  const bodyHtml = vertical
+  return vertical
     ? `<div class="${labelClass}">
   ${productHtml}
   <div class="vertical-body">
@@ -415,16 +411,34 @@ async function printConfiguredLabel({
   ${weightTable}
   ${footer}
 </div>`;
+}
+
+function openLabelWindow(vertical, t) {
+  const win = window.open('', '_blank', vertical ? 'width=280,height=520' : 'width=420,height=300');
+  if (!win) {
+    alert(t('pdf.label.popupBlocked'));
+    return null;
+  }
+  win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial;padding:20px;color:#666;">${t('pdf.label.loading')}</body></html>`);
+  win.document.close();
+  return win;
+}
+
+function printLabelPages({ title, lang, t, orientation, pages, win: existingWin }) {
+  const vertical = orientation === 'vertical';
+  const labelCount = Math.max(1, pages.length);
+  const win = existingWin || openLabelWindow(vertical, t);
+  if (!win) return;
 
   const html = `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
 <meta charset="UTF-8">
 <title>${escapeHtml(title)}</title>
-<style>${labelCss(orientation)}</style>
+<style>${labelCss(orientation, labelCount)}</style>
 </head>
 <body>
-${bodyHtml}
+${pages.join('\n')}
 </body>
 </html>`;
 
@@ -435,18 +449,45 @@ ${bodyHtml}
   setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
 }
 
-export const printContainerLabel = async (container, validityDays, publicToken, options) => {
-  if (!container) return;
+async function printConfiguredLabel(params) {
+  const { lang, t, title, orientation = 'horizontal', copies = 1 } = params;
+  const win = openLabelWindow(orientation === 'vertical', t);
+  if (!win) return;
+  try {
+    const bodyHtml = await buildConfiguredLabelBody(params);
+    const labelCount = Math.max(1, Math.round(Number(copies) || 1));
+    printLabelPages({
+      title,
+      lang,
+      t,
+      orientation,
+      pages: Array.from({ length: labelCount }, () => bodyHtml),
+      win,
+    });
+  } catch (err) {
+    win.close();
+    throw err;
+  }
+}
+
+async function prepareContainerLabelJob(container, validityDays, publicToken, options) {
+  if (!container) return null;
 
   const { lang, t } = getLabelLabels(options?.locale);
   const numFmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 
+  const unitMetrics = resolveUnitLabelMetrics(container, {
+    volume: options?.volume,
+    packageQty: options?.packageQty,
+  });
+  const copies = options?.copies != null
+    ? Math.max(1, Math.round(Number(options.copies) || 1))
+    : unitMetrics.copies;
+
   const opNum = container.op_number || '—';
-  const placa = container.container_number || '';
-  const barril = container.barril_number || '';
-  const embalagem = barril ? `${placa} (${barril})` : placa || '—';
+  const embalagem = unitMetrics.embalagem;
   const fabDateStr = options?.manufactureDate || container.created_date;
-  const volumeRaw = container.volume ?? options?.volume;
+  const volumeRaw = unitMetrics.volume;
   const volume =
     volumeRaw != null && Number(volumeRaw) > 0
       ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
@@ -479,7 +520,7 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
       clienteNome,
     }));
 
-  await printConfiguredLabel({
+  const labelParams = {
     title: t('pdf.label.title', { op: opNum }),
     product: container.product || '—',
     refId: opNum,
@@ -487,8 +528,8 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
     client: clienteNome || '—',
     fabDate,
     valDate,
-    netWeight: numFmt(container.net_weight || 0),
-    grossWeight: numFmt(container.gross_weight || 0),
+    netWeight: numFmt(unitMetrics.netWeight || 0),
+    grossWeight: numFmt(unitMetrics.grossWeight || 0),
     volume,
     embalagem,
     publicToken,
@@ -499,7 +540,68 @@ export const printContainerLabel = async (container, validityDays, publicToken, 
     responsavelTecnico,
     orientation: printConfig.orientation || 'horizontal',
     consultaPath: options?.contexto === 'convencional' ? '/consulta-produto' : '/consulta',
-  });
+    copies,
+  };
+
+  const bodyHtml = await buildConfiguredLabelBody(labelParams);
+  return {
+    lang,
+    t,
+    title: labelParams.title,
+    orientation: labelParams.orientation,
+    pages: Array.from({ length: copies }, () => bodyHtml),
+  };
+}
+
+export const printContainerLabel = async (container, validityDays, publicToken, options) => {
+  const { t } = getLabelLabels(options?.locale);
+  const win = openLabelWindow(false, t);
+  if (!win) return;
+  try {
+    const job = await prepareContainerLabelJob(container, validityDays, publicToken, options);
+    if (!job) {
+      win.close();
+      return;
+    }
+    printLabelPages({ ...job, win });
+  } catch (err) {
+    win.close();
+    throw err;
+  }
+};
+
+/** Imprime várias etiquetas em um único documento (uma via por embalagem física). */
+export const printContainerLabels = async (jobs) => {
+  const list = (jobs || []).filter((j) => j?.container);
+  if (list.length === 0) return;
+
+  const { t } = getLabelLabels(list[0]?.options?.locale);
+  const win = openLabelWindow(false, t);
+  if (!win) return;
+
+  try {
+    const pages = [];
+    let meta = null;
+    for (const item of list) {
+      const prepared = await prepareContainerLabelJob(
+        item.container,
+        item.validityDays,
+        item.publicToken,
+        item.options,
+      );
+      if (!prepared) continue;
+      if (!meta) meta = prepared;
+      pages.push(...prepared.pages);
+    }
+    if (!meta || pages.length === 0) {
+      win.close();
+      return;
+    }
+    printLabelPages({ ...meta, pages, win });
+  } catch (err) {
+    win.close();
+    throw err;
+  }
 };
 
 /** Etiqueta de estoque de MP (105mm × 50mm, ou 50mm × 105mm na vertical) */

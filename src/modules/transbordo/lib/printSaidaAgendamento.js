@@ -2,6 +2,7 @@ import { printContainerLabel } from '@industrializacao/lib/labelprint';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
 import { resolveProdutoPublicToken } from '@transbordo/lib/ensureProdutoPublicToken';
+import { getQuantidadeEmbalagensFromVasilhame } from '@transbordo/lib/tiposEmbalagem';
 import {
   TIPO_CONVENCIONAL,
   TIPO_EMBALADO,
@@ -199,8 +200,13 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
     lot: item?.lote || vasilhame?.lote || '—',
     container_number: item?.vasilhame_placa || vasilhame?.placa || '',
     barril_number: item?.vasilhame_barril || vasilhame?.barril || '',
+    type: vasilhame?.tipo || '',
+    tare: vasilhame?.tara || 0,
+    volume: vasilhame?.volume,
     net_weight: vasilhame?.peso_liquido || item?.peso_liquido || 0,
     gross_weight: vasilhame?.peso_bruto || 0,
+    composicao: vasilhame?.composicao,
+    quantidade_embalagens: vasilhame?.quantidade_embalagens,
     created_date: vasilhame?.created_at || saida?.data_programada,
   };
 
@@ -212,9 +218,11 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
 
   await printContainerLabel(container, null, publicToken, {
     manufactureDate: vasilhame?.created_at || saida?.data_programada,
+    volume: vasilhame?.volume,
     clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
     clienteId: saida?.cliente_id || vasilhame?.cliente_id,
     contexto: 'convencional',
+    packageQty: getQuantidadeEmbalagensFromVasilhame(vasilhame) || undefined,
   });
 }
 
@@ -232,8 +240,13 @@ export async function printEtiquetaVasilhame(vasilhame) {
     lot,
     container_number: vasilhame.placa || '',
     barril_number: vasilhame.barril || '',
+    type: vasilhame.tipo || '',
+    tare: vasilhame.tara || 0,
+    volume: vasilhame.volume,
     net_weight: vasilhame.peso_liquido || 0,
     gross_weight: vasilhame.peso_bruto || 0,
+    composicao: vasilhame.composicao,
+    quantidade_embalagens: vasilhame.quantidade_embalagens,
     created_date: vasilhame.created_at || vasilhame.created_date,
   };
 
@@ -249,5 +262,6 @@ export async function printEtiquetaVasilhame(vasilhame) {
     clienteNome: vasilhame.cliente_nome,
     clienteId: vasilhame.cliente_id,
     contexto: 'convencional',
+    packageQty: getQuantidadeEmbalagensFromVasilhame(vasilhame) || undefined,
   });
 }
