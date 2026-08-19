@@ -29,7 +29,7 @@ import {
 } from '@industrializacao/lib/mpStockForm';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
-import { allocateMpEntryIdsFromList } from '@industrializacao/lib/allocateMpEntryId';
+import { allocateMpEntryIdsFromList, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
 
 const VIEW_TAB_CLASS =
@@ -110,14 +110,18 @@ export default function Estoque() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [items, movements]);
 
-  const filtered = items.filter(i => {
+  const filtered = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
-    const matchesSearch = !q || [i.mp_name, i.mp_code, i.client, i.lot, i.supplier, i.nota_fiscal].some(v => (v || '').toLowerCase().includes(q));
-    const hasStock = (i.current_stock || 0) > 0;
-    const matchesFilter = stockFilter === 'todas' || (stockFilter === 'com_saldo' && hasStock) || (stockFilter === 'sem_saldo' && !hasStock);
-    const matchesClient = clientFilter === 'todos' || (i.client || '') === clientFilter;
-    return matchesSearch && matchesFilter && matchesClient;
-  });
+    return items
+      .filter((i) => {
+        const matchesSearch = !q || [i.mp_name, i.mp_code, i.client, i.lot, i.supplier, i.nota_fiscal].some((v) => (v || '').toLowerCase().includes(q));
+        const hasStock = (i.current_stock || 0) > 0;
+        const matchesFilter = stockFilter === 'todas' || (stockFilter === 'com_saldo' && hasStock) || (stockFilter === 'sem_saldo' && !hasStock);
+        const matchesClient = clientFilter === 'todos' || (i.client || '') === clientFilter;
+        return matchesSearch && matchesFilter && matchesClient;
+      })
+      .sort(compareMpEntryIdDesc);
+  }, [items, debouncedSearch, stockFilter, clientFilter]);
 
   const filteredMovements = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
@@ -542,7 +546,7 @@ export default function Estoque() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item, idx) => {
+                {filtered.map((item) => {
                   const zeroStock = (item.current_stock || 0) === 0;
                   const status = getStatus(item);
                   const isHighlighted = highlightId === item.id;
@@ -553,7 +557,7 @@ export default function Estoque() {
                       className={`border-b border-border hover:bg-accent/30 ${isHighlighted ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''}`}
                       style={{ opacity: zeroStock ? 0.45 : 1 }}
                     >
-                       <td className="px-4 py-2.5 text-sm font-medium text-primary">{item.entry_id || `#${idx + 1}`}</td>
+                       <td className="px-4 py-2.5 text-sm font-medium text-primary">{item.entry_id || t('common.notAvailable')}</td>
                        <td className="px-4 py-2.5 font-mono text-sm text-muted-foreground">{item.mp_code}</td>
                        <td className="px-4 py-2.5 font-medium text-sm text-foreground">{item.mp_name}</td>
                        <td className="px-4 py-2.5 text-center">

@@ -33,6 +33,15 @@ export function nextMpEntryIdFromList(stocks = []) {
   return formatMpEntryId(next);
 }
 
+export function compareMpEntryIdDesc(a, b) {
+  const na = parseMpEntryNumber(a?.entry_id);
+  const nb = parseMpEntryNumber(b?.entry_id);
+  if (na !== nb) return nb - na;
+  const da = new Date(a?.created_date || 0).getTime();
+  const db = new Date(b?.created_date || 0).getTime();
+  return db - da;
+}
+
 export function allocateMpEntryIdsFromList(stocks = [], count = 1) {
   const qty = Math.max(1, Number(count) || 1);
   const first = nextMpEntryIdFromList(stocks);
