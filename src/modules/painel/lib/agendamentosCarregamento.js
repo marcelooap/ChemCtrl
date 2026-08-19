@@ -123,11 +123,11 @@ export function getDefaultSelectedDate(now = new Date()) {
 }
 
 /**
- * Data da grade a partir da data da solicitação da saída.
+ * Data da grade a partir da saída (prioriza data programada).
  * Domingo cai na segunda seguinte (fora da semana operacional).
  */
 export function resolveScheduleDateFromSaida(saida) {
-  const raw = String(saida?.data_solicitacao || '').slice(0, 10);
+  const raw = String(saida?.data_programada || saida?.data_solicitacao || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
   const date = parseISODate(raw);
   if (Number.isNaN(date.getTime())) return null;
@@ -202,6 +202,13 @@ export function isCarregado(bookings) {
   const list = normalizeBookings(bookings);
   if (list.length === 0) return false;
   return list.every((row) => row.status === 'concluido');
+}
+
+/** Checklist preenchido e validado para todas as linhas do carregamento. */
+export function isChecklistValidado(bookings) {
+  const list = normalizeBookings(bookings);
+  if (list.length === 0) return false;
+  return list.every((row) => Boolean(row.checklist_validado_em));
 }
 
 export function normalizeBookings(bookings) {
@@ -547,6 +554,13 @@ export async function concluirCarregamento({ bookings, horaCarregamento, user, t
   const ids = list.map((row) => row.id).filter(Boolean);
   if (ids.length === 0) throw new Error('Agendamento inválido.');
 
+  if (!isChecklistValidado(list)) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.checklist.concluirBlockedHint') ||
+        'Preencha e valide o checklist antes de concluir o carregamento.'
+    );
+  }
+
   const hora = normalizeHoraHHMM(horaCarregamento);
   if (!hora) {
     throw new Error(
@@ -571,6 +585,29 @@ export async function concluirCarregamento({ bookings, horaCarregamento, user, t
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
 
+export async function submitCarregamentoChecklist({ bookings, respostas, user, t }) {
+  const list = normalizeBookings(bookings);
+  const ids = list.map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) throw new Error('Agendamento inválido.');
+
+  if (!Array.isArray(respostas) || respostas.length === 0) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.checklist.submitError') ||
+        'Não foi possível salvar o checklist.'
+    );
+  }
+
+  const patch = {
+    checklist_respostas: respostas,
+    checklist_validado_em: new Date().toISOString(),
+    checklist_operador_id: toUserIdText(user?.id),
+    checklist_operador_nome:
+      user?.nome || user?.full_name || user?.username || user?.email || '—',
+  };
+
+  await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
+}
+
 /**
  * Reverte a expedição: apaga horário/operador de carregamento e volta o slot
  * para "agendado" (card deixa de aparecer como carregado; saída volta a ser editável).
@@ -586,6 +623,10 @@ export async function reverterCarregamento({ bookings }) {
     operador_conclusao_id: null,
     operador_conclusao_nome: null,
     grupo_conclusao_id: null,
+    checklist_respostas: null,
+    checklist_validado_em: null,
+    checklist_operador_id: null,
+    checklist_operador_nome: null,
   };
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }

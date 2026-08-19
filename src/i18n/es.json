@@ -952,7 +952,7 @@
           "sat": "Sáb"
         },
         "dayFree": "Ningún horario agendado",
-        "dayBooked": "{{count}} horarios agendados",
+        "dayBooked": "{{count}} carga(s) pendiente(s)",
         "morning": "Mañana",
         "afternoon": "Tarde",
         "lunch": "Almuerzo",
@@ -993,6 +993,27 @@
           "horaHint": "Completado con la hora actual de Brasilia (editable).",
           "confirm": "Concluir",
           "saveSuccess": "Carga concluida"
+        },
+        "checklist": {
+          "button": "Checklist de carga",
+          "title": "Checklist de carga",
+          "confirm": "Validar checklist",
+          "readOnlyBadge": "Checklist validado",
+          "validatedAt": "Validado el {{date}} por {{operador}}",
+          "editSoonHint": "La edición del checklist estará disponible pronto.",
+          "submitSuccess": "Checklist validado con éxito",
+          "submitError": "No fue posible guardar el checklist",
+          "concluirBlockedHint": "Complete y valide el checklist antes de concluir la carga.",
+          "questions": {
+            "docConferida": "Documentación de la carga verificada",
+            "epiUtilizado": "EPP utilizado correctamente",
+            "veiculoPosicionado": "Vehículo posicionado y conectado a tierra",
+            "produtoConforme": "Producto conforme a la orden de salida"
+          },
+          "errors": {
+            "answerRequired": "Responda todas las preguntas",
+            "mustBeYes": "Esta verificación debe confirmarse con \"Sí\""
+          }
         },
         "columns": {
           "codigo": "Código",

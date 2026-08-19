@@ -952,7 +952,7 @@
           "sat": "Sat"
         },
         "dayFree": "No slots scheduled",
-        "dayBooked": "{{count}} scheduled slots",
+        "dayBooked": "{{count}} pending loading(s)",
         "morning": "Morning",
         "afternoon": "Afternoon",
         "lunch": "Lunch",
@@ -994,6 +994,27 @@
           "horaHint": "Pre-filled with the current Brasília time (editable).",
           "confirm": "Complete",
           "saveSuccess": "Loading completed"
+        },
+        "checklist": {
+          "button": "Loading checklist",
+          "title": "Loading checklist",
+          "confirm": "Validate checklist",
+          "readOnlyBadge": "Checklist validated",
+          "validatedAt": "Validated on {{date}} by {{operador}}",
+          "editSoonHint": "Checklist editing will be available soon.",
+          "submitSuccess": "Checklist validated successfully",
+          "submitError": "Could not save the checklist",
+          "concluirBlockedHint": "Fill in and validate the checklist before completing the loading.",
+          "questions": {
+            "docConferida": "Load documentation verified",
+            "epiUtilizado": "PPE used correctly",
+            "veiculoPosicionado": "Vehicle positioned and grounded",
+            "produtoConforme": "Product matches exit order"
+          },
+          "errors": {
+            "answerRequired": "Answer all questions",
+            "mustBeYes": "This check must be confirmed with \"Yes\""
+          }
         },
         "columns": {
           "codigo": "Code",

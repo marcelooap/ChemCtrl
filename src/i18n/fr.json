@@ -952,7 +952,7 @@
           "sat": "Sam"
         },
         "dayFree": "Aucun créneau planifié",
-        "dayBooked": "{{count}} créneaux planifiés",
+        "dayBooked": "{{count}} chargement(s) en attente",
         "morning": "Matin",
         "afternoon": "Après-midi",
         "lunch": "Déjeuner",
@@ -993,6 +993,27 @@
           "horaHint": "Prérempli avec l'heure actuelle de Brasília (modifiable).",
           "confirm": "Terminer",
           "saveSuccess": "Chargement terminé"
+        },
+        "checklist": {
+          "button": "Checklist de chargement",
+          "title": "Checklist de chargement",
+          "confirm": "Valider le checklist",
+          "readOnlyBadge": "Checklist validé",
+          "validatedAt": "Validé le {{date}} par {{operador}}",
+          "editSoonHint": "La modification du checklist sera bientôt disponible.",
+          "submitSuccess": "Checklist validé avec succès",
+          "submitError": "Impossible d'enregistrer le checklist",
+          "concluirBlockedHint": "Remplissez et validez le checklist avant de terminer le chargement.",
+          "questions": {
+            "docConferida": "Documentation de la carga vérifiée",
+            "epiUtilizado": "EPI utilisés correctement",
+            "veiculoPosicionado": "Véhicule positionné et mis à la terre",
+            "produtoConforme": "Produit conforme à l'ordre de sortie"
+          },
+          "errors": {
+            "answerRequired": "Répondez à toutes les questions",
+            "mustBeYes": "Cette vérification doit être confirmée par \"Oui\""
+          }
         },
         "columns": {
           "codigo": "Code",

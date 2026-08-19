@@ -952,7 +952,7 @@
           "sat": "Sáb"
         },
         "dayFree": "Nenhum horário agendado",
-        "dayBooked": "{{count}} horários agendados",
+        "dayBooked": "{{count}} carregamento(s) pendente(s)",
         "morning": "Manhã",
         "afternoon": "Tarde",
         "lunch": "Almoço",
@@ -994,6 +994,27 @@
           "horaHint": "Preenchido com o horário atual de Brasília (editável).",
           "confirm": "Concluir",
           "saveSuccess": "Carregamento concluído"
+        },
+        "checklist": {
+          "button": "Checklist de carregamento",
+          "title": "Checklist de carregamento",
+          "confirm": "Validar checklist",
+          "readOnlyBadge": "Checklist validado",
+          "validatedAt": "Validado em {{date}} por {{operador}}",
+          "editSoonHint": "A edição do checklist estará disponível em breve.",
+          "submitSuccess": "Checklist validado com sucesso",
+          "submitError": "Não foi possível salvar o checklist",
+          "concluirBlockedHint": "Preencha e valide o checklist antes de concluir o carregamento.",
+          "questions": {
+            "docConferida": "Documentação da carga conferida",
+            "epiUtilizado": "EPI utilizado corretamente",
+            "veiculoPosicionado": "Veículo posicionado e aterrado",
+            "produtoConforme": "Produto conforme ordem de saída"
+          },
+          "errors": {
+            "answerRequired": "Responda todas as perguntas",
+            "mustBeYes": "Esta verificação deve ser confirmada com \"Sim\""
+          }
         },
         "columns": {
           "codigo": "Código",

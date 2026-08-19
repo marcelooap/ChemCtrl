@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
 import { entities } from '@transbordo/services/entities';
@@ -13,6 +13,7 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import AgendamentoSlotModal from '@painel/components/comercial/AgendamentoSlotModal';
 import AgendamentoTransporteModal from '@painel/components/comercial/AgendamentoTransporteModal';
 import AgendamentoConcluirCarregamentoModal from '@painel/components/comercial/AgendamentoConcluirCarregamentoModal';
+import AgendamentoCarregamentoChecklistModal from '@painel/components/comercial/AgendamentoCarregamentoChecklistModal';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import {
   Dialog,
@@ -34,11 +35,13 @@ import {
   hasTransporte,
   indexAgendamentosBySlot,
   isCarregado,
+  isChecklistValidado,
   isSameISODate,
   listAgendamentosByRange,
   normalizeBookings,
   releaseSlotBookings,
   startOfWeekMonday,
+  submitCarregamentoChecklist,
   summarizeSlotBookings,
   todayISO,
   toISODate,
@@ -89,6 +92,7 @@ export default function AgendamentosGrade({
   const [viewSaida, setViewSaida] = useState(null);
   const [viewPicker, setViewPicker] = useState(null);
   const [transporteBookings, setTransporteBookings] = useState(null);
+  const [checklistBookings, setChecklistBookings] = useState(null);
   const [concluirBookings, setConcluirBookings] = useState(null);
   const [bookingLocked, setBookingLocked] = useState(false);
   const [weekDir, setWeekDir] = useState(0);
@@ -98,6 +102,7 @@ export default function AgendamentosGrade({
   const canViewSaida = showViewSaida && !lockedSaida;
   const canTransporte = showTransporte && !lockedSaida;
   const canConcluir = showConcluirCarregamento && !lockedSaida;
+  const canChecklist = canConcluir;
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
   const today = todayISO();
@@ -157,19 +162,17 @@ export default function AgendamentosGrade({
   }, [loadData]);
 
   const lockedSaidaId = lockedSaida?.id;
-  const lockedSaidaDate = lockedSaida?.data_solicitacao;
+  const lockedSaidaProgramada = lockedSaida?.data_programada;
 
   useEffect(() => {
     if (!lockedSaidaId) return;
-    const fromSaida = resolveScheduleDateFromSaida({
-      data_solicitacao: lockedSaidaDate,
-    });
+    const fromSaida = resolveScheduleDateFromSaida(lockedSaida);
     if (!fromSaida) return;
     setWeekStart((prev) =>
       toISODate(prev) === toISODate(fromSaida.weekStart) ? prev : fromSaida.weekStart
     );
     setSelectedIso((prev) => (prev === fromSaida.iso ? prev : fromSaida.iso));
-  }, [lockedSaidaId, lockedSaidaDate]);
+  }, [lockedSaidaId, lockedSaidaProgramada, lockedSaida?.data_solicitacao, lockedSaida]);
 
   const goWeek = (delta) => {
     setWeekDir(delta);
@@ -201,7 +204,8 @@ export default function AgendamentosGrade({
 
   const occupiedSlotCountByDay = useMemo(() => {
     const map = new Map();
-    for (const key of bookingMap.keys()) {
+    for (const [key, bookings] of bookingMap.entries()) {
+      if (isCarregado(bookings)) continue;
       const day = key.split('|')[0];
       map.set(day, (map.get(day) || 0) + 1);
     }
@@ -375,6 +379,19 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
+  const handleSubmitChecklist = async ({ respostas }) => {
+    const list = normalizeBookings(checklistBookings);
+    if (list.length === 0) return;
+    await submitCarregamentoChecklist({
+      bookings: list,
+      respostas,
+      user,
+      t,
+    });
+    toast({ title: t('painel.comercial.agendamentos.checklist.submitSuccess') });
+    await loadData({ silent: true });
+  };
+
   const locale = i18n.language || 'pt-BR';
   const selectedDateLabel = parseISODate(selectedIso).toLocaleDateString(locale, {
     weekday: 'long',
@@ -537,6 +554,8 @@ export default function AgendamentosGrade({
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                 onConcluir={canConcluir ? setConcluirBookings : undefined}
                 concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                onChecklist={canChecklist ? setChecklistBookings : undefined}
+                checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
@@ -573,6 +592,8 @@ export default function AgendamentosGrade({
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                 onConcluir={canConcluir ? setConcluirBookings : undefined}
                 concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                onChecklist={canChecklist ? setChecklistBookings : undefined}
+                checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
@@ -614,6 +635,8 @@ export default function AgendamentosGrade({
                   transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                   onConcluir={canConcluir ? setConcluirBookings : undefined}
                   concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                  onChecklist={canChecklist ? setChecklistBookings : undefined}
+                  checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                   saidasCountLabel={(count) =>
                     t('painel.comercial.agendamentos.saidasCount', { count })
                   }
@@ -670,6 +693,16 @@ export default function AgendamentosGrade({
           permissionPrefix={permissionPrefix}
           onClose={() => setConcluirBookings(null)}
           onConfirm={handleConcluirCarregamento}
+        />
+      ) : null}
+
+      {canChecklist ? (
+        <AgendamentoCarregamentoChecklistModal
+          open={!!checklistBookings}
+          bookings={checklistBookings}
+          permissionPrefix={permissionPrefix}
+          onClose={() => setChecklistBookings(null)}
+          onConfirm={handleSubmitChecklist}
         />
       ) : null}
 
@@ -751,6 +784,8 @@ function TimeSlotButton({
   viewLabel,
   onEditTransporte,
   transporteLabel,
+  onChecklist,
+  checklistLabel,
   onConcluir,
   concluirLabel,
   saidasCountLabel,
@@ -760,12 +795,14 @@ function TimeSlotButton({
   const summary = summarizeSlotBookings(list);
   const occupied = list.length > 0;
   const carregado = isCarregado(list);
+  const checklistValidado = isChecklistValidado(list);
   const interactive = typeof onClick === 'function' && !carregado;
   const showEye = occupied && showViewSaida;
   const showTruck = occupied && !carregado && Boolean(onEditTransporte);
-  const showCheck = occupied && !carregado && Boolean(onConcluir);
+  const showChecklistBtn = occupied && !carregado && Boolean(onChecklist);
+  const showCheck = occupied && !carregado && checklistValidado && Boolean(onConcluir);
   const filled = hasTransporte(summary.first);
-  const hasSideActions = showTruck || showEye || showCheck;
+  const hasSideActions = showTruck || showEye || showCheck || showChecklistBtn;
   const minH = compact ? 'min-h-[56px]' : 'min-h-[72px]';
 
   const tone = carregado
@@ -884,6 +921,26 @@ function TimeSlotButton({
               }}
             >
               <Truck className="w-4 h-4" />
+            </Button>
+          ) : null}
+          {showChecklistBtn ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 ${
+                checklistValidado
+                  ? 'text-emerald-700 hover:text-emerald-900 hover:bg-emerald-200/70'
+                  : 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/70'
+              }`}
+              title={checklistLabel}
+              aria-label={checklistLabel}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChecklist?.(list);
+              }}
+            >
+              <ClipboardList className="w-4 h-4" />
             </Button>
           ) : null}
           {showCheck ? (
