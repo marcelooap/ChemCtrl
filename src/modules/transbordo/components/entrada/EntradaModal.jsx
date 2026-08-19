@@ -117,6 +117,13 @@ export default function EntradaModal({
   produtos,
   transbordos: transbordosProp = [],
   estoque: estoqueProp = [],
+  hideIrParaTransbordo = false,
+  hidePesagemGranel = false,
+  hideTipoSelect = false,
+  hideProduto = false,
+  lockTipo = false,
+  allowedTipos = null,
+  submitLabel = null,
 }) {
   const [dataEntrada, setDataEntrada] = useState(todayISO);
   const [clienteId, setClienteId] = useState("");
@@ -375,6 +382,11 @@ export default function EntradaModal({
       {
         ...emptyLote(),
         unidade_medida: prev[0]?.unidade_medida || "",
+        tipo_recebimento: prev[0]?.tipo_recebimento || emptyLote().tipo_recebimento,
+        embalado: prev[0]?.embalado || false,
+        produto_id: hideProduto ? prev[0]?.produto_id || "" : "",
+        produto_nome: hideProduto ? prev[0]?.produto_nome || "" : "",
+        produto_codigo: hideProduto ? prev[0]?.produto_codigo || "" : "",
       },
     ]);
   };
@@ -762,6 +774,10 @@ export default function EntradaModal({
                 canRemove={lotes.length > 1}
                 collapsed={!!collapsedLotes[i]}
                 onToggleCollapse={() => toggleLoteCollapse(i)}
+                hideTipoSelect={hideTipoSelect}
+                hideProduto={hideProduto}
+                lockTipo={lockTipo}
+                allowedTipos={allowedTipos}
               />
             ))}
             {!readOnly && (
@@ -789,7 +805,7 @@ export default function EntradaModal({
           </div>
 
           {/* Dados de Pesagem Granel — só para tipo Granel */}
-          {showPesagemGranel && (
+          {showPesagemGranel && !hidePesagemGranel && (
             <>
               <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
                 <div>
@@ -924,7 +940,7 @@ export default function EntradaModal({
 
           {!readOnly && (
             <DialogFooter className="sm:justify-between flex-col sm:flex-row gap-3">
-              {!blockIrParaTransbordo ? (
+              {!blockIrParaTransbordo && !hideIrParaTransbordo ? (
                 <div className="flex flex-col gap-2 max-w-md">
                   <Button
                     type="button"
@@ -961,7 +977,8 @@ export default function EntradaModal({
                   Cancelar
                 </Button>
                 <Button type="submit">
-                  {editingEntrada ? "Salvar Alterações" : "Cadastrar Entrada"}
+                  {submitLabel
+                    || (editingEntrada ? "Salvar Alterações" : "Cadastrar Entrada")}
                 </Button>
               </div>
             </DialogFooter>

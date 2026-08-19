@@ -28,6 +28,7 @@ import Tankagem from '@industrializacao/pages/Tankagem';
 import Transbordo from '@industrializacao/pages/Transbordo';
 import Inventario from '@industrializacao/pages/Inventario';
 import InventarioConferencia from '@industrializacao/pages/InventarioConferencia';
+import Validacao from '@industrializacao/pages/Validacao';
 import AcessoNegado from '@industrializacao/pages/AcessoNegado';
 
 /**
@@ -49,6 +50,7 @@ export default function ChemCtrlRoutes() {
             <Route path="estoque-cliente" element={<EstoqueCliente />} />
             <Route path="tela-clientes" element={<TelaClientes />} />
             <Route path="estoque" element={<Estoque />} />
+            <Route path="validacao" element={<Validacao />} />
             <Route path="pedidos" element={<Pedidos />} />
             <Route path="programacao" element={<Programacao />} />
             <Route path="receitas" element={<Receitas />} />

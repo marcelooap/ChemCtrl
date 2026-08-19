@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  CheckCircle2,
-  Eye,
-  Pencil,
-  Search,
-  Trash2,
-} from "lucide-react";
-import { Button } from "@shared/components/ui/button";
+import { CheckCircle2, Eye, Pencil, Search, Trash2 } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -22,21 +15,25 @@ import {
 import { useToast } from "@shared/components/ui/use-toast";
 import { Can } from "@industrializacao/lib/rbac/Can";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
+import { base44 } from "@industrializacao/api/base44Client";
 import { entities } from "@transbordo/services/entities";
-import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
+import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
+import { buildEditingTransbordoFromValidacao } from "@transbordo/lib/validacaoTransbordo";
 import {
-  atualizarValidacaoTransbordoPayload,
-  buildEditingTransbordoFromValidacao,
-  efetivarValidacao,
-  excluirValidacao,
-  resumoQuantidadeValidacao,
-} from "@transbordo/lib/validacaoTransbordo";
+  atualizarValidacaoIndustrializacao,
+  efetivarValidacaoIndustrializacao,
+  excluirValidacaoIndustrializacao,
+  isValidacaoIndEntrada,
+  parseEntradaPayload,
+  resumoQuantidadeValidacaoInd,
+  toValidacaoViewModel,
+} from "@industrializacao/lib/validacaoIndustrializacao";
 import { formatNum } from "@transbordo/lib/format";
 import { useValidacaoNovas } from "@transbordo/context/ValidacaoNovasContext";
 
-const PERM = "tb_validacao";
+const PERM = "ind_validacao";
 
 function formatNumero(n) {
   const num = Number(n) || 0;
@@ -49,13 +46,13 @@ function StatusPill({ status, t }) {
   const cls = isValidado
     ? "bg-emerald-100 text-emerald-700 border-emerald-200"
     : isProcessando
-    ? "bg-blue-100 text-blue-700 border-blue-200"
-    : "bg-amber-100 text-amber-800 border-amber-200";
+      ? "bg-blue-100 text-blue-700 border-blue-200"
+      : "bg-amber-100 text-amber-800 border-amber-200";
   const label = isValidado
-    ? t("transbordo.validacao.status.validado")
+    ? t("industrializacao.validacao.status.validado")
     : isProcessando
-    ? t("transbordo.validacao.status.processando")
-    : t("transbordo.validacao.status.pendente");
+      ? t("industrializacao.validacao.status.processando")
+      : t("industrializacao.validacao.status.pendente");
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${cls}`}
@@ -66,7 +63,7 @@ function StatusPill({ status, t }) {
   );
 }
 
-export default function Validacao() {
+export default function ValidacaoIndustrializacao() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useInternalAuth();
@@ -81,13 +78,13 @@ export default function Validacao() {
   const [vasilhames, setVasilhames] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [search, setSearch] = useState("");
+  const [editSaveError, setEditSaveError] = useState("");
 
   const [viewOpen, setViewOpen] = useState(false);
   const [viewValidacao, setViewValidacao] = useState(null);
 
   const [editValidacao, setEditValidacao] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editSaveError, setEditSaveError] = useState("");
 
   const [deleteId, setDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -99,7 +96,7 @@ export default function Validacao() {
     if (!silent) setLoading(true);
     try {
       const [vals, cliens, prods, ents, isos, vascs, trans] = await Promise.all([
-        entities.transbordoValidacoes.list("-created_at"),
+        base44.entities.IndValidacao.list("-created_date"),
         entities.clientes.list(),
         entities.produtos.list(),
         entities.estoque.list(),
@@ -115,10 +112,11 @@ export default function Validacao() {
       setVasilhames(vascs || []);
       setTransbordos(trans || []);
     } catch (err) {
-      console.error("[Validacao] load:", err);
+      console.error("[ValidacaoIndustrializacao] load:", err);
       toast({
-        title: t("transbordo.validacao.errors.loadTitle"),
-        description: err?.message || t("transbordo.validacao.errors.loadDescription"),
+        title: t("industrializacao.validacao.errors.loadTitle"),
+        description:
+          err?.message || t("industrializacao.validacao.errors.loadDescription"),
         variant: "destructive",
       });
     }
@@ -166,93 +164,52 @@ export default function Validacao() {
     [validacoes]
   );
 
-  const handleView = (v) => {
-    acknowledgeNew(v?.id);
-    setViewValidacao(v);
-    setViewOpen(true);
+  const handleSaveEdit = async (entradaPayload) => {
+    if (!editValidacao) return;
+    await atualizarValidacaoIndustrializacao({
+      id: editValidacao.id,
+      entradaPayload,
+    });
+    await loadData({ silent: true });
+    setEditModalOpen(false);
+    setEditValidacao(null);
+    toast({
+      title: t("industrializacao.validacao.editSuccessTitle"),
+      description: t("industrializacao.validacao.editSuccessDescription"),
+    });
   };
 
-  const handleEdit = (v) => {
-    acknowledgeNew(v?.id);
-    if (v.status !== "pendente") {
-      toast({
-        title: t("transbordo.validacao.errors.editNotAllowedTitle"),
-        description: t("transbordo.validacao.errors.editNotAllowedDescription"),
-        variant: "destructive",
-      });
-      return;
-    }
-    setEditValidacao(v);
-    setEditSaveError("");
-    setEditModalOpen(true);
-  };
-
-  const handleSaveEditEntrada = async (entradaPayload) => {
+  const handleSaveEditTransbordo = async (transbordoPayload) => {
     if (!editValidacao) return;
     setEditSaveError("");
     try {
-      await atualizarValidacaoTransbordoPayload({
-        id: editValidacao.id,
-        granelPayload: entradaPayload,
-      });
-      await loadData({ silent: true });
-      setEditModalOpen(false);
-      setEditValidacao(null);
-      toast({
-        title: t("transbordo.validacao.editSuccessTitle"),
-        description: t("transbordo.validacao.editSuccessDescription"),
-      });
-    } catch (err) {
-      console.error("[Validacao] edit entrada:", err);
-      setEditSaveError(err?.message || t("transbordo.validacao.errors.editGeneric"));
-    }
-  };
-
-  const handleSaveEdit = async (transbordoPayload) => {
-    if (!editValidacao) return;
-    setEditSaveError("");
-    try {
-      // Sincroniza dados de cabeçalho no granel_payload (se existir), preservando
-      // dados específicos do recebimento (NF, ticket, peso).
-      const nextGranel = editValidacao.granel_payload
+      const nextEntrada = parseEntradaPayload(editValidacao.entrada_payload);
+      const syncedEntrada = nextEntrada
         ? {
-            ...editValidacao.granel_payload,
-            data: transbordoPayload.data || editValidacao.granel_payload.data,
-            cliente_id:
-              transbordoPayload.cliente_id ||
-              editValidacao.granel_payload.cliente_id,
-            cliente_nome:
-              transbordoPayload.cliente_nome ||
-              editValidacao.granel_payload.cliente_nome,
-            produto_id:
-              transbordoPayload.produto_id ||
-              editValidacao.granel_payload.produto_id,
-            produto_nome:
-              transbordoPayload.produto_nome ||
-              editValidacao.granel_payload.produto_nome,
-            produto_codigo:
-              transbordoPayload.produto_codigo ||
-              editValidacao.granel_payload.produto_codigo,
-            densidade:
-              transbordoPayload.densidade ||
-              editValidacao.granel_payload.densidade,
+            ...nextEntrada,
+            data: transbordoPayload.data || nextEntrada.data,
+            cliente_nome: transbordoPayload.cliente_nome || nextEntrada.cliente_nome,
+            produto_nome: transbordoPayload.produto_nome || nextEntrada.produto_nome,
+            produto_codigo: transbordoPayload.produto_codigo || nextEntrada.produto_codigo,
+            densidade: transbordoPayload.densidade || nextEntrada.densidade,
           }
         : null;
-      await atualizarValidacaoTransbordoPayload({
+      await atualizarValidacaoIndustrializacao({
         id: editValidacao.id,
+        entradaPayload: syncedEntrada,
         transbordoPayload,
-        granelPayload: nextGranel,
       });
       await loadData({ silent: true });
       setEditModalOpen(false);
       setEditValidacao(null);
       toast({
-        title: t("transbordo.validacao.editSuccessTitle"),
-        description: t("transbordo.validacao.editSuccessDescription"),
+        title: t("industrializacao.validacao.editSuccessTitle"),
+        description: t("industrializacao.validacao.editSuccessDescription"),
       });
     } catch (err) {
-      console.error("[Validacao] edit:", err);
-      setEditSaveError(err?.message || t("transbordo.validacao.errors.editGeneric"));
+      setEditSaveError(
+                    err?.message || t("industrializacao.validacao.errors.editGeneric")
+      );
     }
   };
 
@@ -260,16 +217,13 @@ export default function Validacao() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      await excluirValidacao(deleteId);
+      await excluirValidacaoIndustrializacao(deleteId);
       await loadData({ silent: true });
-      toast({
-        title: t("transbordo.validacao.deleteSuccessTitle"),
-      });
+      toast({ title: t("industrializacao.validacao.deleteSuccessTitle") });
     } catch (err) {
-      console.error("[Validacao] delete:", err);
       toast({
-        title: t("transbordo.validacao.errors.deleteTitle"),
-        description: err?.message || t("transbordo.validacao.errors.deleteDescription"),
+        title: t("industrializacao.validacao.errors.deleteTitle"),
+        description: err?.message || t("industrializacao.validacao.errors.deleteDescription"),
         variant: "destructive",
       });
     } finally {
@@ -282,7 +236,7 @@ export default function Validacao() {
     if (!validarId) return;
     setValidating(true);
     try {
-      await efetivarValidacao({
+      await efetivarValidacaoIndustrializacao({
         id: validarId,
         validadoPor: user
           ? { id: user.id, nome: user.nome || user.email || null }
@@ -290,14 +244,13 @@ export default function Validacao() {
       });
       await loadData({ silent: true });
       toast({
-        title: t("transbordo.validacao.validateSuccessTitle"),
-        description: t("transbordo.validacao.validateSuccessDescription"),
+        title: t("industrializacao.validacao.validateSuccessTitle"),
+        description: t("industrializacao.validacao.validateSuccessDescription"),
       });
     } catch (err) {
-      console.error("[Validacao] validar:", err);
       toast({
-        title: t("transbordo.validacao.errors.validateTitle"),
-        description: err?.message || t("transbordo.validacao.errors.validateDescription"),
+        title: t("industrializacao.validacao.errors.validateTitle"),
+        description: err?.message || t("industrializacao.validacao.errors.validateDescription"),
         variant: "destructive",
       });
     } finally {
@@ -316,79 +269,69 @@ export default function Validacao() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
-      {/* Header */}
       <div className="shrink-0 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {t("transbordo.validacao.title")}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t("transbordo.validacao.subtitle", {
-                total: validacoes.length,
-                pendentes,
-                validados,
-              })}
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {t("industrializacao.validacao.title")}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t("industrializacao.validacao.subtitle", {
+              total: validacoes.length,
+              pendentes,
+              validados,
+            })}
+          </p>
         </div>
-
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="relative flex-1 min-w-[260px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("transbordo.validacao.searchPlaceholder")}
-              className="pl-10 bg-card"
-            />
-          </div>
+        <div className="relative flex-1 min-w-[260px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("industrializacao.validacao.searchPlaceholder")}
+            className="pl-10 bg-card"
+          />
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.id")}
+                  {t("industrializacao.validacao.table.id")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
-                  {t("transbordo.validacao.table.operador")}
+                  {t("industrializacao.validacao.table.operador")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
-                  {t("transbordo.validacao.table.produto")}
+                  {t("industrializacao.validacao.table.produto")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
-                  {t("transbordo.validacao.table.cliente")}
+                  {t("industrializacao.validacao.table.cliente")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.lote")}
+                  {t("industrializacao.validacao.table.lote")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0 text-right">
-                  {t("transbordo.validacao.table.quantidade")}
+                  {t("industrializacao.validacao.table.quantidade")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.unidade")}
+                  {t("industrializacao.validacao.table.unidade")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.validar")}
+                  {t("industrializacao.validacao.table.validar")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.acoes")}
+                  {t("industrializacao.validacao.table.acoes")}
                 </th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="px-5 py-10 text-center text-muted-foreground"
-                  >
-                    {t("transbordo.validacao.empty")}
+                  <td colSpan={9} className="px-5 py-10 text-center text-muted-foreground">
+                    {t("industrializacao.validacao.empty")}
                   </td>
                 </tr>
               ) : (
@@ -397,7 +340,7 @@ export default function Validacao() {
                     ? `${v.produto_codigo} - ${v.produto_nome || "-"}`
                     : v.produto_nome || "-";
                   const isPendente = v.status === "pendente";
-                  const qtd = resumoQuantidadeValidacao(v);
+                  const qtd = resumoQuantidadeValidacaoInd(v);
                   return (
                     <tr
                       key={v.id}
@@ -416,12 +359,7 @@ export default function Validacao() {
                         </span>
                       </td>
                       <td className="px-4 py-3 align-middle text-foreground whitespace-nowrap">
-                        <span
-                          className="block truncate max-w-[200px]"
-                          title={v.criado_por_nome || ""}
-                        >
-                          {v.criado_por_nome || "-"}
-                        </span>
+                        {v.criado_por_nome || "-"}
                       </td>
                       <td className="px-4 py-3 align-middle text-foreground">
                         <span className="block truncate max-w-[280px]" title={produtoLabel}>
@@ -448,9 +386,13 @@ export default function Validacao() {
                           <Can permission={`${PERM}.view`}>
                             <button
                               type="button"
-                              onClick={() => handleView(v)}
+                              onClick={() => {
+                                acknowledgeNew(v.id);
+                                setViewValidacao(v);
+                                setViewOpen(true);
+                              }}
                               className="text-muted-foreground hover:text-foreground transition-colors"
-                              title={t("transbordo.validacao.actions.view")}
+                              title={t("industrializacao.validacao.actions.view")}
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -459,9 +401,15 @@ export default function Validacao() {
                             <Can permission={`${PERM}.edit`}>
                               <button
                                 type="button"
-                                onClick={() => handleEdit(v)}
+                                onClick={() => {
+                                  acknowledgeNew(v.id);
+                                  if (v.status !== "pendente") return;
+                                  setEditValidacao(v);
+                                  setEditSaveError("");
+                                  setEditModalOpen(true);
+                                }}
                                 className="text-muted-foreground hover:text-foreground transition-colors"
-                                title={t("transbordo.validacao.actions.edit")}
+                                title={t("industrializacao.validacao.actions.edit")}
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -473,7 +421,7 @@ export default function Validacao() {
                                 type="button"
                                 onClick={() => setDeleteId(v.id)}
                                 className="text-red-400 hover:text-red-600 transition-colors"
-                                title={t("transbordo.validacao.actions.delete")}
+                                title={t("industrializacao.validacao.actions.delete")}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -488,10 +436,9 @@ export default function Validacao() {
                                   setValidarId(v.id);
                                 }}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-colors"
-                                title={t("transbordo.validacao.actions.validate")}
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                {t("transbordo.validacao.actions.validate")}
+                                {t("industrializacao.validacao.actions.validate")}
                               </button>
                             </Can>
                           )}
@@ -504,91 +451,82 @@ export default function Validacao() {
             </tbody>
           </table>
         </div>
-
-        {/* Summary */}
         <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">
           <span className="text-muted-foreground">
-            {t("transbordo.validacao.summary.total")}:{" "}
+            {t("industrializacao.validacao.summary.total")}:{" "}
             <span className="font-medium text-foreground">{validacoes.length}</span>
           </span>
           <span className="text-muted-foreground">
-            {t("transbordo.validacao.status.pendente")}:{" "}
+            {t("industrializacao.validacao.status.pendente")}:{" "}
             <span className="font-medium text-amber-700">{pendentes}</span>
           </span>
           <span className="text-muted-foreground">
-            {t("transbordo.validacao.status.validado")}:{" "}
+            {t("industrializacao.validacao.status.validado")}:{" "}
             <span className="font-medium text-emerald-700">{validados}</span>
           </span>
         </div>
       </div>
 
-      {/* View Dialog */}
       <ValidacaoViewDialog
         open={viewOpen}
         onClose={() => {
           setViewOpen(false);
           setViewValidacao(null);
         }}
-        validacao={viewValidacao}
+        validacao={toValidacaoViewModel(viewValidacao)}
         produtos={produtos}
         entradas={entradas}
       />
 
-      {/* Edit modal — recebimento usa EntradaModal; transbordo usa TransbordoModal */}
-      {editValidacao?.tipo === "entrada" ? (
+      {isValidacaoIndEntrada(editValidacao) ? (
         <EntradaModal
           open={editModalOpen}
           onClose={() => {
             setEditModalOpen(false);
             setEditValidacao(null);
-            setEditSaveError("");
           }}
-          onSave={handleSaveEditEntrada}
-          editingEntrada={editValidacao?.granel_payload || null}
-          readOnly={false}
+          onSave={handleSaveEdit}
+          editingEntrada={parseEntradaPayload(editValidacao?.entrada_payload)}
           clientes={clientes}
           produtos={produtos}
           hideIrParaTransbordo
           hidePesagemGranel
           lockTipo
           allowedTipos={["embalado", "vasilhame"]}
-          submitLabel={t("transbordo.validacao.actions.edit")}
+          submitLabel={t("industrializacao.validacao.actions.edit")}
         />
       ) : (
-      <TransbordoModal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setEditValidacao(null);
-          setEditSaveError("");
-        }}
-        onSave={handleSaveEdit}
-        editingTransbordo={buildEditingTransbordoFromValidacao(editValidacao)}
-        clientes={clientes}
-        produtos={produtos}
-        entradas={entradas}
-        isotanques={isotanques}
-        vasilhames={vasilhames}
-        transbordos={transbordos}
-        externalError={editSaveError}
-      />
+        <TransbordoModal
+          open={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditValidacao(null);
+            setEditSaveError("");
+          }}
+          onSave={handleSaveEditTransbordo}
+          editingTransbordo={buildEditingTransbordoFromValidacao(
+            toValidacaoViewModel(editValidacao)
+          )}
+          clientes={clientes}
+          produtos={produtos}
+          entradas={entradas}
+          isotanques={isotanques}
+          vasilhames={vasilhames}
+          transbordos={transbordos}
+          externalError={editSaveError}
+        />
       )}
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && !deleting && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("transbordo.validacao.deleteConfirmTitle")}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t("industrializacao.validacao.deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("transbordo.validacao.deleteConfirmDescription")}
+              {t("industrializacao.validacao.deleteConfirmDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>
-              {t("common.cancel", "Cancelar")}
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t("common.cancel", "Cancelar")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleting}
               onClick={(e) => {
@@ -597,27 +535,22 @@ export default function Validacao() {
               }}
               className="bg-red-600 hover:bg-red-700"
             >
-              {t("transbordo.validacao.actions.delete")}
+              {t("industrializacao.validacao.actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Validate Confirmation */}
       <AlertDialog open={!!validarId} onOpenChange={(v) => !v && !validating && setValidarId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("transbordo.validacao.validateConfirmTitle")}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t("industrializacao.validacao.validateConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("transbordo.validacao.validateConfirmDescription")}
+              {t("industrializacao.validacao.validateConfirmDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={validating}>
-              {t("common.cancel", "Cancelar")}
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={validating}>{t("common.cancel", "Cancelar")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={validating}
               onClick={(e) => {
@@ -628,7 +561,7 @@ export default function Validacao() {
             >
               {validating
                 ? t("common.processing")
-                : t("transbordo.validacao.actions.validate")}
+                : t("industrializacao.validacao.actions.validate")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

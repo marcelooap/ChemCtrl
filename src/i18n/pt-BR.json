@@ -250,6 +250,7 @@
     "orders": "Pedidos",
     "programming": "Programação",
     "rawMaterialStock": "Estoque de MP",
+    "validacao": "Validação",
     "inventory": "Inventário",
     "newProduction": "Nova Produção",
     "productions": "Produções",
@@ -362,6 +363,7 @@
       },
       "sections": {
         "granel": "Recebimento (Granel)",
+        "entrada": "Recebimento",
         "transbordo": "Transbordo"
       },
       "fields": {
@@ -391,7 +393,8 @@
       },
       "tipo": {
         "granelTransbordo": "Recebimento granel + Transbordo",
-        "transbordo": "Transbordo"
+        "transbordo": "Transbordo",
+        "entrada": "Recebimento"
       },
       "margem": {
         "dentro": "Dentro da margem",
@@ -416,6 +419,55 @@
         "deleteDescription": "Não foi possível excluir a validação.",
         "validateTitle": "Erro ao validar",
         "validateDescription": "Não foi possível efetivar a operação."
+      }
+    }
+  },
+  "industrializacao": {
+    "validacao": {
+      "title": "Validação",
+      "subtitle": "{{total}} registro(s) — {{pendentes}} pendente(s), {{validados}} validado(s)",
+      "searchPlaceholder": "Buscar por ID, produto, cliente ou lote...",
+      "empty": "Nenhuma validação encontrada.",
+      "table": {
+        "id": "ID",
+        "operador": "Operador",
+        "produto": "Produto",
+        "cliente": "Cliente",
+        "lote": "Lote",
+        "quantidade": "Quantidade",
+        "unidade": "Unidade",
+        "validar": "Validar",
+        "acoes": "Ações"
+      },
+      "status": {
+        "pendente": "Pendente",
+        "processando": "Processando",
+        "validado": "Validado"
+      },
+      "summary": { "total": "Total" },
+      "actions": {
+        "view": "Visualizar",
+        "edit": "Editar",
+        "delete": "Excluir",
+        "validate": "Validar"
+      },
+      "deleteConfirmTitle": "Excluir validação",
+      "deleteConfirmDescription": "Deseja realmente excluir esta validação? Essa ação não poderá ser desfeita.",
+      "validateConfirmTitle": "Confirmar validação",
+      "validateConfirmDescription": "Confirmar validação desta operação? Após a confirmação, o movimento será efetivado no módulo.",
+      "deleteSuccessTitle": "Validação excluída",
+      "validateSuccessTitle": "Recebimento validado",
+      "validateSuccessDescription": "O material foi registrado no Estoque de MP.",
+      "editSuccessTitle": "Validação atualizada",
+      "editSuccessDescription": "Alterações salvas. O recebimento continua pendente de validação.",
+      "errors": {
+        "loadTitle": "Erro ao carregar validações",
+        "loadDescription": "Não foi possível carregar as validações. Tente novamente.",
+        "deleteTitle": "Erro ao excluir",
+        "deleteDescription": "Não foi possível excluir a validação.",
+        "validateTitle": "Erro ao validar",
+        "validateDescription": "Não foi possível efetivar a validação.",
+        "editGeneric": "Não foi possível salvar as alterações."
       }
     }
   },
@@ -532,6 +584,7 @@
       "painelLogistica": "Logística",
       "painelLogisticaAgendamentos": "Agendamentos (Logística)",
       "painelLogisticaCarregamentos": "Carregamentos",
+      "painelLogisticaRecebimento": "Recebimento",
       "painelOrdemTransbordo": "Ordem de Transbordo",
       "painelEstoque": "Estoque",
       "painelOperadores": "Operadores",
@@ -543,6 +596,7 @@
       "tbSaida": "Saída",
       "tbTransbordo": "Transbordo",
       "tbValidacao": "Validação",
+      "indValidacao": "Validação",
       "tbVasilhames": "Vasilhames",
       "tbFiltracao": "Filtração",
       "tbEstoque": "Estoque",
@@ -677,6 +731,7 @@
       "logistica": "Logística",
       "logisticaAgendamentos": "Agendamentos",
       "logisticaCarregamentos": "Carregamentos",
+      "logisticaRecebimento": "Recebimento",
       "operacional": "Operacional",
       "ordemTransbordo": "Ordem de Transbordo",
       "estoque": "Estoque",
@@ -1166,6 +1221,12 @@
           "subtitle": "Histórico dos carregamentos concluídos na operação",
           "emptyTitle": "Carregamentos",
           "emptyDescription": "Estrutura inicial preparada para o controle de carregamentos."
+        },
+        "recebimento": {
+          "title": "Recebimento",
+          "subtitle": "Registro de entrada de embalados e vasilhames",
+          "emptyTitle": "Recebimento",
+          "emptyDescription": "Registre recebimentos de embalados e vasilhames para validação."
         }
       },
       "carregamentos": {
@@ -1207,6 +1268,68 @@
           "fora": "Fora do horário"
         }
       },
+      "recebimento": {
+        "subtitle": "Informe data, destino e tipo. Cliente, produto e lote são preenchidos em seguida.",
+        "formTitle": "Dados do recebimento",
+        "detailsTitle": "Informações do lote",
+        "openDetails": "Informações do lote",
+        "addBlock": "Adicionar bloco",
+        "submit": "Enviar para validação",
+        "wmsHint": "Indica se o saldo está sincronizado com o WMS",
+        "totalQty": "Quantidade total ({{count}} bloco(s)):",
+        "saveSuccessTitle": "Recebimento enviado para validação",
+        "saveSuccessTbDescription": "Aguarde a conferência em Transbordo → Validação. Só então o material entra no estoque.",
+        "saveSuccessIndDescription": "Aguarde a conferência em Industrialização → Validação. Só então o material entra no Estoque de MP.",
+        "loadErrorTitle": "Erro ao carregar recebimento",
+        "loadErrorDescription": "Verifique a conexão e tente novamente.",
+        "tipo": {
+          "embalado": "Embalado",
+          "vasilhame": "Vasilhame"
+        },
+        "destino": {
+          "convencional": "Convencional",
+          "industrializacao": "Industrialização"
+        },
+        "fields": {
+          "date": "Data",
+          "client": "Cliente",
+          "product": "Produto",
+          "type": "Tipo",
+          "destino": "Destino"
+        },
+        "placeholders": {
+          "client": "Selecione um cliente",
+          "product": "Selecione um produto",
+          "productDisabled": "Selecione um cliente primeiro",
+          "productMp": "Selecione a matéria-prima",
+          "productPa": "Selecione o produto acabado",
+          "type": "Embalado ou vasilhame",
+          "destino": "Convencional ou Industrialização",
+          "destFirst": "Selecione um destino primeiro",
+          "typeFirst": "Selecione o tipo primeiro"
+        },
+        "errors": {
+          "header": "Preencha data, destino e tipo.",
+          "details": "Preencha cliente, produto e os dados do lote.",
+          "save": "Não foi possível enviar o recebimento."
+        },
+        "pendentes": {
+          "title": "Pendentes de validação",
+          "empty": "Nenhum recebimento aguardando validação.",
+          "columns": {
+            "id": "#",
+            "data": "Data",
+            "destino": "Destino",
+            "tipo": "Tipo",
+            "cliente": "Cliente",
+            "produto": "Produto",
+            "lote": "Lote",
+            "quantidade": "Qtd",
+            "unidade": "Un.",
+            "operador": "Operador"
+          }
+        }
+      },
       "topics": {
         "loads": "Cargas",
         "pickups": "Coletas",
@@ -1236,7 +1359,7 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Informe data, cliente, produto e origem para registrar o transbordo",
+        "subtitle": "Informe destino, data, cliente, produto e origem para registrar o transbordo",
         "formTitle": "Nova ordem",
         "goToTransbordo": "Ir para transbordo",
         "search": "Buscar por código, produto ou cliente...",
@@ -1246,6 +1369,7 @@
         "saveSuccessTitle": "Ordem enviada para validação",
         "saveSuccessDescription": "A ordem de transbordo foi salva com sucesso.",
         "saveSuccessValidacaoDescription": "A operação está aguardando conferência em Transbordo → Validação.",
+        "saveSuccessValidacaoIndDescription": "A operação está aguardando conferência em Industrialização → Validação.",
         "loadErrorTitle": "Erro ao carregar ordens",
         "loadErrorDescription": "Verifique a conexão e tente novamente.",
         "deleteTitle": "Confirmar exclusão",
@@ -1260,6 +1384,7 @@
         },
         "fields": {
           "date": "Data",
+          "destino": "Destino",
           "client": "Cliente",
           "product": "Produto",
           "origin": "Origem",
@@ -1274,6 +1399,9 @@
           "net": "Peso líquido (kg)"
         },
         "placeholders": {
+          "destino": "Convencional ou Industrialização",
+          "destFirst": "Selecione um destino primeiro",
+          "originFirst": "Selecione a origem primeiro",
           "client": "Selecione um cliente",
           "product": "Selecione um produto",
           "productDisabled": "Selecione um cliente primeiro",
@@ -1296,6 +1424,7 @@
         },
         "errors": {
           "date": "Data é obrigatória.",
+          "destino": "Destino é obrigatório.",
           "client": "Cliente é obrigatório.",
           "product": "Produto é obrigatório.",
           "origin": "Origem é obrigatória.",

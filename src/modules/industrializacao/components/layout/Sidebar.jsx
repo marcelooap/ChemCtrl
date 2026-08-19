@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Truck,
-  Users, Building2, Warehouse, ClipboardCheck, CalendarDays,
+  Users, Building2, Warehouse, ClipboardCheck, CalendarDays, ShieldCheck,
 } from 'lucide-react';
 import { canAccessRoute, getUserClient } from '@industrializacao/lib/permissions';
 import { getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
 import { useSaidaNovas } from '@transbordo/context/SaidaNovasContext';
+import { useValidacaoNovas } from '@transbordo/context/ValidacaoNovasContext';
 import { SAIDA_PATH_INDUSTRIALIZACAO } from '@transbordo/lib/saidaNovas';
+import { VALIDACAO_PATH_INDUSTRIALIZACAO } from '@transbordo/lib/validacaoNovas';
 
 const ICONS = {
   LayoutDashboard,
@@ -33,6 +35,7 @@ const ICONS = {
   Warehouse,
   ClipboardCheck,
   CalendarDays,
+  ShieldCheck,
 };
 
 function resolveIcon(name) {
@@ -41,12 +44,18 @@ function resolveIcon(name) {
 
 export default function Sidebar({ collapsed, setCollapsed, user }) {
   const { t } = useTranslation();
-  const { count } = useSaidaNovas();
+  const { count: saidaCount } = useSaidaNovas();
+  const { count: validacaoCount } = useValidacaoNovas();
   const navSpec = useMemo(() => getSidebarNavSpec(), []);
 
   const isExterno = user?.tipo === 'externo';
 
   const items = useMemo(() => {
+    const badgeForPath = (path) => {
+      if (path === SAIDA_PATH_INDUSTRIALIZACAO) return saidaCount;
+      if (path === VALIDACAO_PATH_INDUSTRIALIZACAO) return validacaoCount;
+      return 0;
+    };
     const mapped = navSpec.map((item) => {
       if (item.children) {
         return {
@@ -55,14 +64,14 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
           children: item.children.map((child) => ({
             ...child,
             icon: resolveIcon(child.icon),
-            badgeCount: child.path === SAIDA_PATH_INDUSTRIALIZACAO ? count : 0,
+            badgeCount: badgeForPath(child.path),
           })),
         };
       }
       return {
         ...item,
         icon: resolveIcon(item.icon),
-        badgeCount: item.path === SAIDA_PATH_INDUSTRIALIZACAO ? count : 0,
+        badgeCount: badgeForPath(item.path),
       };
     });
 
@@ -74,7 +83,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       );
     }
     return mapped;
-  }, [isExterno, navSpec, count]);
+  }, [isExterno, navSpec, saidaCount, validacaoCount]);
 
   const resolveLabel = (item) => {
     let label = t(item.labelKey);

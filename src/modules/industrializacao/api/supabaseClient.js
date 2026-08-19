@@ -45,6 +45,7 @@ const entityTableMap = {
   QualityTest: 'ind_cq_esp_tec',
   QualityAnalysis: 'ind_lista_ensaios',
   Inventory: 'ind_lista_inventario',
+  IndValidacao: 'ind_validacoes',
   StockMovement: 'ind_retornos_perdas',
   LabEquipment: 'ind_lista_equipamentoslab',
   ProductionChecklist: 'ind_checklist_op',
@@ -112,7 +113,7 @@ const cleanData = (data) => {
 };
 
 /** Tables introduced by later migrations — list/filter must not break core flows if absent. */
-const OPTIONAL_TABLES = new Set(['ind_composicao_vasilhame', 'ind_programacao_demanda']);
+const OPTIONAL_TABLES = new Set(['ind_composicao_vasilhame', 'ind_programacao_demanda', 'ind_validacoes']);
 
 const isMissingTableError = (code, msg) => {
   const m = String(msg || '');

@@ -250,6 +250,7 @@
     "orders": "Orders",
     "programming": "Scheduling",
     "rawMaterialStock": "Raw Material Stock",
+    "validacao": "Validation",
     "inventory": "Inventory",
     "newProduction": "New Production",
     "productions": "Productions",
@@ -362,6 +363,7 @@
       },
       "sections": {
         "granel": "Bulk receipt",
+        "entrada": "Receipt",
         "transbordo": "Transshipment"
       },
       "fields": {
@@ -391,7 +393,8 @@
       },
       "tipo": {
         "granelTransbordo": "Bulk receipt + Transshipment",
-        "transbordo": "Transshipment"
+        "transbordo": "Transshipment",
+        "entrada": "Receipt"
       },
       "margem": {
         "dentro": "Within margin",
@@ -416,6 +419,55 @@
         "deleteDescription": "Unable to delete the validation.",
         "validateTitle": "Error validating",
         "validateDescription": "Unable to effect the operation."
+      }
+    }
+  },
+  "industrializacao": {
+    "validacao": {
+      "title": "Validation",
+      "subtitle": "{{total}} record(s) — {{pendentes}} pending, {{validados}} validated",
+      "searchPlaceholder": "Search by ID, product, client or lot...",
+      "empty": "No validations found.",
+      "table": {
+        "id": "ID",
+        "operador": "Operator",
+        "produto": "Product",
+        "cliente": "Client",
+        "lote": "Lot",
+        "quantidade": "Quantity",
+        "unidade": "Unit",
+        "validar": "Validate",
+        "acoes": "Actions"
+      },
+      "status": {
+        "pendente": "Pending",
+        "processando": "Processing",
+        "validado": "Validated"
+      },
+      "summary": { "total": "Total" },
+      "actions": {
+        "view": "View",
+        "edit": "Edit",
+        "delete": "Delete",
+        "validate": "Validate"
+      },
+      "deleteConfirmTitle": "Delete validation",
+      "deleteConfirmDescription": "Do you really want to delete this validation? This cannot be undone.",
+      "validateConfirmTitle": "Confirm validation",
+      "validateConfirmDescription": "Confirm this operation? After confirmation, the movement will be posted in the module.",
+      "deleteSuccessTitle": "Validation deleted",
+      "validateSuccessTitle": "Receipt validated",
+      "validateSuccessDescription": "The material was posted to Raw Material Stock.",
+      "editSuccessTitle": "Validation updated",
+      "editSuccessDescription": "Changes saved. The receipt remains pending validation.",
+      "errors": {
+        "loadTitle": "Error loading validations",
+        "loadDescription": "Unable to load validations. Try again.",
+        "deleteTitle": "Error deleting",
+        "deleteDescription": "Unable to delete the validation.",
+        "validateTitle": "Error validating",
+        "validateDescription": "Unable to complete the validation.",
+        "editGeneric": "Unable to save the changes."
       }
     }
   },
@@ -532,6 +584,7 @@
       "painelLogistica": "Logistics",
       "painelLogisticaAgendamentos": "Logistics Schedules",
       "painelLogisticaCarregamentos": "Loadings",
+      "painelLogisticaRecebimento": "Receiving",
       "painelOrdemTransbordo": "Transshipment Order",
       "painelEstoque": "Inventory",
       "painelOperadores": "Operators",
@@ -543,6 +596,7 @@
       "tbSaida": "Outbound",
       "tbTransbordo": "Transshipment",
       "tbValidacao": "Validation",
+      "indValidacao": "Validation",
       "tbVasilhames": "Containers",
       "tbFiltracao": "Filtration",
       "tbEstoque": "Stock",
@@ -677,6 +731,7 @@
       "logistica": "Logistics",
       "logisticaAgendamentos": "Schedules",
       "logisticaCarregamentos": "Loadings",
+      "logisticaRecebimento": "Receiving",
       "operacional": "Operations",
       "ordemTransbordo": "Transshipment Order",
       "estoque": "Inventory",
@@ -1166,6 +1221,12 @@
           "subtitle": "History of completed loadings",
           "emptyTitle": "Loadings",
           "emptyDescription": "Initial structure prepared for loading control."
+        },
+        "recebimento": {
+          "title": "Receiving",
+          "subtitle": "Inbound of packaged goods and containers",
+          "emptyTitle": "Receiving",
+          "emptyDescription": "Register packaged and container receipts for validation."
         }
       },
       "carregamentos": {
@@ -1207,6 +1268,68 @@
           "fora": "Late"
         }
       },
+      "recebimento": {
+        "subtitle": "Enter date, destination and type. Client, product and lot are filled in next.",
+        "formTitle": "Receipt details",
+        "detailsTitle": "Lot information",
+        "openDetails": "Lot information",
+        "addBlock": "Add block",
+        "submit": "Send for validation",
+        "wmsHint": "Indicates whether the balance is synced with WMS",
+        "totalQty": "Total quantity ({{count}} block(s)):",
+        "saveSuccessTitle": "Receipt sent for validation",
+        "saveSuccessTbDescription": "Wait for review in Transshipment → Validation. Only then is the material posted to stock.",
+        "saveSuccessIndDescription": "Wait for review in Industrialization → Validation. Only then is the material posted to Raw Material Stock.",
+        "loadErrorTitle": "Error loading receiving",
+        "loadErrorDescription": "Check the connection and try again.",
+        "tipo": {
+          "embalado": "Packaged",
+          "vasilhame": "Container"
+        },
+        "destino": {
+          "convencional": "Conventional",
+          "industrializacao": "Industrialization"
+        },
+        "fields": {
+          "date": "Date",
+          "client": "Client",
+          "product": "Product",
+          "type": "Type",
+          "destino": "Destination"
+        },
+        "placeholders": {
+          "client": "Select a client",
+          "product": "Select a product",
+          "productDisabled": "Select a client first",
+          "productMp": "Select the raw material",
+          "productPa": "Select the finished product",
+          "type": "Packaged or container",
+          "destino": "Conventional or Industrialization",
+          "destFirst": "Select a destination first",
+          "typeFirst": "Select the type first"
+        },
+        "errors": {
+          "header": "Fill in date, destination and type.",
+          "details": "Fill in client, product and lot details.",
+          "save": "Unable to submit the receipt."
+        },
+        "pendentes": {
+          "title": "Pending validation",
+          "empty": "No receipts waiting for validation.",
+          "columns": {
+            "id": "#",
+            "data": "Date",
+            "destino": "Destination",
+            "tipo": "Type",
+            "cliente": "Client",
+            "produto": "Product",
+            "lote": "Lot",
+            "quantidade": "Qty",
+            "unidade": "UoM",
+            "operador": "Operator"
+          }
+        }
+      },
       "topics": {
         "loads": "Loads",
         "pickups": "Pickups",
@@ -1236,7 +1359,7 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Enter date, client, product and origin to register the transshipment",
+        "subtitle": "Enter destination, date, client, product and origin to register the transshipment",
         "formTitle": "New order",
         "goToTransbordo": "Go to transshipment",
         "search": "Search by code, product or client...",
@@ -1246,6 +1369,7 @@
         "saveSuccessTitle": "Order sent for validation",
         "saveSuccessDescription": "The transshipment order was saved successfully.",
         "saveSuccessValidacaoDescription": "The operation is waiting to be reviewed in Transshipment → Validation.",
+        "saveSuccessValidacaoIndDescription": "The operation is waiting to be reviewed in Industrialization → Validation.",
         "loadErrorTitle": "Error loading orders",
         "loadErrorDescription": "Check the connection and try again.",
         "deleteTitle": "Confirm deletion",
@@ -1260,6 +1384,7 @@
         },
         "fields": {
           "date": "Date",
+          "destino": "Destination",
           "client": "Client",
           "product": "Product",
           "origin": "Origin",
@@ -1274,6 +1399,9 @@
           "net": "Net weight (kg)"
         },
         "placeholders": {
+          "destino": "Conventional or Industrialization",
+          "destFirst": "Select a destination first",
+          "originFirst": "Select the origin first",
           "client": "Select a client",
           "product": "Select a product",
           "productDisabled": "Select a client first",
@@ -1296,6 +1424,7 @@
         },
         "errors": {
           "date": "Date is required.",
+          "destino": "Destination is required.",
           "client": "Client is required.",
           "product": "Product is required.",
           "origin": "Origin is required.",

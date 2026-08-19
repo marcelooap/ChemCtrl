@@ -24,6 +24,7 @@ import {
   TIPOS_RECEBIMENTO,
   resolveTipoRecebimento,
 } from "@transbordo/lib/tipoRecebimento";
+import { applyTipoRecebimento } from "@transbordo/lib/entradaForm";
 
 const UNIDADES = ["kg", "L", "lb", "gal", "unid."];
 const INPUT_EDITABLE = "bg-white";
@@ -74,57 +75,6 @@ function SummaryItem({ label, value }) {
   );
 }
 
-function applyTipoRecebimento(lote, tipo) {
-  const base = {
-    ...lote,
-    tipo_recebimento: tipo,
-    embalado: tipo === "embalado",
-  };
-
-  if (tipo === "embalado") {
-    return {
-      ...base,
-      densidade: "",
-      placa: "",
-      barril: "",
-      volume: "",
-      tara: "",
-      lacres: "",
-      eslinga: "",
-      gps: "",
-      menor_teste: "",
-      fracionado: false,
-      vasilhame_existente_id: null,
-      peso_bruto: "",
-    };
-  }
-
-  if (tipo === "vasilhame") {
-    return {
-      ...base,
-      quantidade_embalagens: "",
-      unidade_medida: "L",
-    };
-  }
-
-  return {
-    ...base,
-    peso_liquido: "",
-    quantidade_embalagens: "",
-    placa: "",
-    barril: "",
-    volume: "",
-    tara: "",
-    lacres: "",
-    eslinga: "",
-    gps: "",
-    menor_teste: "",
-    fracionado: false,
-    vasilhame_existente_id: null,
-    peso_bruto: "",
-  };
-}
-
 function recalcVasilhame(lote, densOverride) {
   const dens =
     densOverride != null
@@ -160,6 +110,10 @@ export default function LoteBlock({
   canRemove,
   collapsed = false,
   onToggleCollapse,
+  hideTipoSelect = false,
+  hideProduto = false,
+  lockTipo = false,
+  allowedTipos = null,
 }) {
   const update = (field, value) => {
     onChange({ ...lote, [field]: value });
@@ -332,6 +286,7 @@ export default function LoteBlock({
           <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary shrink-0">
             Bloco {index + 1}
           </span>
+          {!hideTipoSelect && (
           <div className="flex items-center gap-2 min-w-0">
             <Label
               htmlFor={`tipo-recebimento-${index}`}
@@ -342,7 +297,7 @@ export default function LoteBlock({
             <Select
               value={tipo}
               onValueChange={handleTipoChange}
-              disabled={readOnly}
+              disabled={readOnly || lockTipo}
             >
               <SelectTrigger
                 id={`tipo-recebimento-${index}`}
@@ -351,7 +306,10 @@ export default function LoteBlock({
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
-                {TIPOS_RECEBIMENTO.map((t) => (
+                {(allowedTipos
+                  ? TIPOS_RECEBIMENTO.filter((t) => allowedTipos.includes(t.value))
+                  : TIPOS_RECEBIMENTO
+                ).map((t) => (
                   <SelectItem key={t.value} value={t.value} className="text-xs">
                     {t.label}
                   </SelectItem>
@@ -359,6 +317,7 @@ export default function LoteBlock({
               </SelectContent>
             </Select>
           </div>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {onToggleCollapse && (
@@ -387,7 +346,7 @@ export default function LoteBlock({
         </div>
       </div>
 
-      {/* Produto */}
+      {!hideProduto && (
       <div className="space-y-1.5">
         <Label>Produto *</Label>
         <SearchableSelect
@@ -405,6 +364,7 @@ export default function LoteBlock({
           inputClassName={INPUT_EDITABLE}
         />
       </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">

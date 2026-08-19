@@ -532,6 +532,7 @@
       "painelLogistica": "Logística",
       "painelLogisticaAgendamentos": "Agendamientos (Logística)",
       "painelLogisticaCarregamentos": "Cargamentos",
+      "painelLogisticaRecebimento": "Recepción",
       "painelOrdemTransbordo": "Orden de Transbordo",
       "painelEstoque": "Stock",
       "painelOperadores": "Operadores",
@@ -677,6 +678,7 @@
       "logistica": "Logística",
       "logisticaAgendamentos": "Agendamientos",
       "logisticaCarregamentos": "Cargamentos",
+      "logisticaRecebimento": "Recepción",
       "operacional": "Operacional",
       "ordemTransbordo": "Orden de Transbordo",
       "estoque": "Stock",
@@ -1234,7 +1236,7 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Informe fecha, cliente, producto y origen para registrar el transbordo",
+        "subtitle": "Informe destino, fecha, cliente, producto y origen para registrar el transbordo",
         "formTitle": "Nueva orden",
         "goToTransbordo": "Ir a transbordo",
         "search": "Buscar por código, producto o cliente...",
@@ -1258,6 +1260,7 @@
         },
         "fields": {
           "date": "Fecha",
+          "destino": "Destino",
           "client": "Cliente",
           "product": "Producto",
           "origin": "Origen",
@@ -1272,6 +1275,9 @@
           "net": "Peso líquido (kg)"
         },
         "placeholders": {
+          "destino": "Convencional o Industrialización",
+          "destFirst": "Seleccione un destino primero",
+          "originFirst": "Seleccione el origen primero",
           "client": "Seleccione un cliente",
           "product": "Seleccione un producto",
           "productDisabled": "Seleccione un cliente primero",
@@ -1294,6 +1300,7 @@
         },
         "errors": {
           "date": "La fecha es obligatoria.",
+          "destino": "El destino es obligatorio.",
           "client": "El cliente es obligatorio.",
           "product": "El producto es obligatorio.",
           "origin": "El origen es obligatorio.",

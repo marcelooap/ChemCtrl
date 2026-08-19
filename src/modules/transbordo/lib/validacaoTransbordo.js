@@ -1,6 +1,7 @@
 import { chemflowSupabase } from "@/services/supabase/chemflow";
 import { entities } from "@transbordo/services/entities";
 import { createGranelEntrada } from "@transbordo/lib/createGranelEntrada";
+import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { persistTransbordo } from "@transbordo/lib/persistTransbordo";
 import {
   getLoteQuantidadeDeclarada,
@@ -113,10 +114,22 @@ function densidadeLoteGranel(lote, granelPayload) {
 export function resumoQuantidadeValidacao(validacao) {
   const granel = validacao?.granel_payload;
   const transbordo = validacao?.transbordo_payload;
+  const isEntrada = validacao?.tipo === "entrada";
   const isGranel =
     validacao?.tipo === "granel_transbordo" ||
-    validacao?.origem_tipo === "granel" ||
-    Boolean(granel);
+    validacao?.origem_tipo === "granel";
+
+  if (isEntrada && granel) {
+    const lotes = Array.isArray(granel.lotes) && granel.lotes.length
+      ? granel.lotes
+      : [granel];
+    const unidade = lotes[0]?.unidade_medida || granel.unidade_medida || "";
+    const quantidade = lotes.reduce(
+      (s, l) => s + (Number(l.quantidade) || 0),
+      0
+    );
+    return { quantidade, unidade_medida: unidade };
+  }
 
   if (isGranel && granel) {
     const lote = Array.isArray(granel.lotes) && granel.lotes.length
@@ -163,12 +176,17 @@ export function resumoQuantidadeValidacao(validacao) {
 function extractResumo(tipo, granelPayload, transbordoPayload) {
   const qty = resumoQuantidadeValidacao({
     tipo,
-    origem_tipo: tipo === "granel_transbordo" ? "granel" : null,
+    origem_tipo:
+      tipo === "granel_transbordo"
+        ? "granel"
+        : tipo === "entrada"
+          ? granelPayload?.lotes?.[0]?.tipo_recebimento || null
+          : null,
     granel_payload: granelPayload,
     transbordo_payload: transbordoPayload,
   });
   const lote =
-    tipo === "granel_transbordo" && granelPayload
+    (tipo === "granel_transbordo" || tipo === "entrada") && granelPayload
       ? granelPayload.lote || granelPayload.lotes?.[0]?.lote || ""
       : transbordoPayload?.origens?.[0]?.lote || "";
   return { lote, ...qty };
@@ -179,11 +197,11 @@ function extractResumo(tipo, granelPayload, transbordoPayload) {
  * Transbordo. Não executa nenhum movimento definitivo.
  *
  * @param {object} params
- * @param {'granel_transbordo'|'transbordo'} params.tipo
+ * @param {'granel_transbordo'|'transbordo'|'entrada'} params.tipo
  * @param {object} params.header  { data, cliente_id, cliente_nome, produto_id, produto_nome, produto_codigo }
  * @param {string} params.origemTipo  granel|tanka|vasilhame|embalado
- * @param {object} [params.granelPayload]  payload aceito por createGranelEntrada
- * @param {object} params.transbordoPayload  payload aceito por persistTransbordo
+ * @param {object} [params.granelPayload]  payload aceito por createGranelEntrada / createEntradaCompleta
+ * @param {object} [params.transbordoPayload]  payload aceito por persistTransbordo (obrigatório exceto tipo entrada)
  * @param {object} [params.criadoPor]  { id, nome }
  */
 export async function criarValidacao({
@@ -191,11 +209,16 @@ export async function criarValidacao({
   header,
   origemTipo,
   granelPayload = null,
-  transbordoPayload,
+  transbordoPayload = null,
   criadoPor = null,
 }) {
   if (!tipo) throw new Error("tipo obrigatório");
-  if (!transbordoPayload) throw new Error("transbordoPayload obrigatório");
+  if (tipo !== "entrada" && !transbordoPayload) {
+    throw new Error("transbordoPayload obrigatório");
+  }
+  if (tipo === "entrada" && !granelPayload) {
+    throw new Error("granelPayload obrigatório");
+  }
 
   const resumo = extractResumo(tipo, granelPayload, transbordoPayload);
 
@@ -227,7 +250,7 @@ export async function criarValidacao({
  */
 export async function atualizarValidacaoTransbordoPayload({
   id,
-  transbordoPayload,
+  transbordoPayload = null,
   granelPayload = null,
 }) {
   if (!id) throw new Error("id obrigatório");
@@ -238,37 +261,38 @@ export async function atualizarValidacaoTransbordoPayload({
   }
 
   const nextGranel = granelPayload ?? atual.granel_payload;
-  const resumo = extractResumo(atual.tipo, nextGranel, transbordoPayload);
+  const nextTransbordo = transbordoPayload ?? atual.transbordo_payload;
+  const resumo = extractResumo(atual.tipo, nextGranel, nextTransbordo);
 
   return entities.transbordoValidacoes.update(id, {
-    transbordo_payload: transbordoPayload,
+    transbordo_payload: nextTransbordo,
     granel_payload: nextGranel,
     lote: resumo.lote || null,
     quantidade: resumo.quantidade || 0,
     unidade_medida: resumo.unidade_medida || null,
     data:
-      transbordoPayload?.data ||
+      nextTransbordo?.data ||
       nextGranel?.data ||
       atual.data ||
       null,
     cliente_id:
-      nullIfEmpty(transbordoPayload?.cliente_id) ??
+      nullIfEmpty(nextTransbordo?.cliente_id) ??
       nullIfEmpty(nextGranel?.cliente_id) ??
       atual.cliente_id,
     cliente_nome:
-      transbordoPayload?.cliente_nome ||
+      nextTransbordo?.cliente_nome ||
       nextGranel?.cliente_nome ||
       atual.cliente_nome,
     produto_id:
-      nullIfEmpty(transbordoPayload?.produto_id) ??
+      nullIfEmpty(nextTransbordo?.produto_id) ??
       nullIfEmpty(nextGranel?.produto_id) ??
       atual.produto_id,
     produto_nome:
-      transbordoPayload?.produto_nome ||
+      nextTransbordo?.produto_nome ||
       nextGranel?.produto_nome ||
       atual.produto_nome,
     produto_codigo:
-      transbordoPayload?.produto_codigo ||
+      nextTransbordo?.produto_codigo ||
       nextGranel?.produto_codigo ||
       atual.produto_codigo,
   });
@@ -309,6 +333,55 @@ function swapGranelPlaceholders(transbordoPayload, savedEstoques, entradaCodigo)
 }
 
 /**
+ * Efetiva o movimento físico (entrada granel + transbordo) a partir dos
+ * payloads da validação. Usado pelo Transbordo e pela Industrialização.
+ */
+export async function persistOperacaoFromValidacao({
+  tipo,
+  granelPayload = null,
+  transbordoPayload = null,
+}) {
+  let entradaId = null;
+  let nextTransbordo = transbordoPayload || {};
+
+  if (tipo === "granel_transbordo") {
+    if (!granelPayload) {
+      throw new Error("granel_payload ausente na validação");
+    }
+    const { savedEntrada, savedEstoques, entrada_codigo } =
+      await createGranelEntrada({ data: granelPayload });
+    entradaId = savedEntrada?.id || null;
+    nextTransbordo = swapGranelPlaceholders(
+      nextTransbordo,
+      savedEstoques || [],
+      entrada_codigo
+    );
+  }
+
+  const [transbordos, produtos, isotanques, vasilhames] = await Promise.all([
+    entities.transbordos.list("-created_date"),
+    entities.produtos.list(),
+    entities.isotanques.list(),
+    entities.vasilhames.list(),
+  ]);
+
+  const savedTransbordo = await persistTransbordo({
+    data: nextTransbordo,
+    editingTransbordo: null,
+    transbordos,
+    produtos,
+    isotanques,
+    vasilhames,
+  });
+
+  return {
+    entradaId,
+    transbordoId: savedTransbordo?.id || null,
+    transbordoPayload: nextTransbordo,
+  };
+}
+
+/**
  * Executa efetivamente a operação (chama os fluxos existentes).
  * Idempotente: se a validação não estiver pendente, lança erro sem duplicar.
  *
@@ -341,46 +414,39 @@ export async function efetivarValidacao({ id, validadoPor = null }) {
   }
 
   try {
-    let entradaId = locked.entrada_id || null;
-    let transbordoPayload = locked.transbordo_payload || {};
-
-    if (locked.tipo === "granel_transbordo") {
+    if (locked.tipo === "entrada") {
       if (!locked.granel_payload) {
-        throw new Error("granel_payload ausente na validação");
+        throw new Error("payload de entrada ausente na validação");
       }
-      // Cria entrada + linhas de estoque (fluxo já existente).
-      const { savedEntrada, savedEstoques, entrada_codigo } =
-        await createGranelEntrada({ data: locked.granel_payload });
-      entradaId = savedEntrada?.id || null;
-      transbordoPayload = swapGranelPlaceholders(
-        transbordoPayload,
-        savedEstoques || [],
-        entrada_codigo
-      );
+      const produtosList = await entities.produtos.list();
+      const { savedEntrada } = await createEntradaCompleta({
+        data: locked.granel_payload,
+        produtos: produtosList,
+      });
+      const entradaId = savedEntrada?.id || null;
+
+      const validated = await entities.transbordoValidacoes.update(id, {
+        status: "validado",
+        entrada_id: entradaId,
+        transbordo_id: null,
+        validado_por_id: validadoPor?.id ? String(validadoPor.id) : null,
+        validado_por_nome: validadoPor?.nome || null,
+        validado_em: new Date().toISOString(),
+      });
+      return validated;
     }
 
-    // Carrega o mundo atual para a persistência do transbordo.
-    const [transbordos, produtos, isotanques, vasilhames] = await Promise.all([
-      entities.transbordos.list("-created_date"),
-      entities.produtos.list(),
-      entities.isotanques.list(),
-      entities.vasilhames.list(),
-    ]);
-
-    const savedTransbordo = await persistTransbordo({
-      data: transbordoPayload,
-      editingTransbordo: null,
-      transbordos,
-      produtos,
-      isotanques,
-      vasilhames,
+    const persisted = await persistOperacaoFromValidacao({
+      tipo: locked.tipo,
+      granelPayload: locked.granel_payload,
+      transbordoPayload: locked.transbordo_payload,
     });
 
     const validated = await entities.transbordoValidacoes.update(id, {
       status: "validado",
-      entrada_id: entradaId,
-      transbordo_id: savedTransbordo?.id || null,
-      transbordo_payload: transbordoPayload,
+      entrada_id: persisted.entradaId,
+      transbordo_id: persisted.transbordoId,
+      transbordo_payload: persisted.transbordoPayload,
       validado_por_id: validadoPor?.id ? String(validadoPor.id) : null,
       validado_por_nome: validadoPor?.nome || null,
       validado_em: new Date().toISOString(),

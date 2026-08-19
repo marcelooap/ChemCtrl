@@ -145,7 +145,9 @@ export default function ValidacaoViewDialog({
               value={
                 validacao.tipo === "granel_transbordo"
                   ? t("transbordo.validacao.tipo.granelTransbordo")
-                  : t("transbordo.validacao.tipo.transbordo")
+                  : validacao.tipo === "entrada"
+                    ? t("transbordo.validacao.tipo.entrada")
+                    : t("transbordo.validacao.tipo.transbordo")
               }
             />
             <InfoField
@@ -167,7 +169,9 @@ export default function ValidacaoViewDialog({
           {granel && (
             <section>
               <h3 className="text-sm font-semibold text-foreground mb-2">
-                {t("transbordo.validacao.sections.granel")}
+                {validacao.tipo === "entrada"
+                  ? t("transbordo.validacao.sections.entrada")
+                  : t("transbordo.validacao.sections.granel")}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 rounded-lg border border-border p-4 bg-muted/30">
                 <InfoField label={t("transbordo.validacao.fields.notaFiscal")} value={granel.nota_fiscal} />

@@ -8,6 +8,7 @@ import {
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
 import { SaidaNovasProvider } from '@transbordo/context/SaidaNovasContext';
+import { ValidacaoNovasProvider } from '@transbordo/context/ValidacaoNovasContext';
 
 export default function MainLayout() {
   const { user } = useInternalAuth();
@@ -29,12 +30,14 @@ export default function MainLayout() {
 
   return (
     <SaidaNovasProvider>
-      <AppShell
-        sidebar={<Sidebar />}
-        banner={banner}
-        contentClassName="overflow-hidden"
-        topBarProps={{}}
-      />
+      <ValidacaoNovasProvider>
+        <AppShell
+          sidebar={<Sidebar />}
+          banner={banner}
+          contentClassName="overflow-hidden"
+          topBarProps={{}}
+        />
+      </ValidacaoNovasProvider>
     </SaidaNovasProvider>
   );
 }

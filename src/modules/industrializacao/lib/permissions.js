@@ -53,6 +53,8 @@ export function augmentLogisticaPermissions(permissions) {
   if (set.has('painel_logistica.view')) {
     set.add('painel_logistica_agendamentos.view');
     set.add('painel_logistica_carregamentos.view');
+    set.add('painel_logistica_recebimento.view');
+    set.add('painel_logistica_recebimento.create');
   }
   return Array.from(set);
 }

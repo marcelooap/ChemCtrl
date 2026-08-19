@@ -8,6 +8,7 @@ import { SystemManualMenu } from '@industrializacao/components/user/SystemManual
 import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
 import { createSupabaseEntities } from '@industrializacao/api/supabaseClient';
 import { SaidaNovasProvider } from '@transbordo/context/SaidaNovasContext';
+import { ValidacaoNovasProvider } from '@transbordo/context/ValidacaoNovasContext';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -28,16 +29,18 @@ export default function AppLayout() {
 
   return (
     <SaidaNovasProvider onlyIndustrializacao>
-      <AppShell
-        sidebar={<Sidebar />}
-        topBarProps={{
-          userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
-          getRoleLabel,
-        }}
-        outletContext={{ user, isReadOnly: isReadOnly(user, location.pathname) }}
-        requireAuth={false}
-        contentClassName="overflow-y-auto"
-      />
+      <ValidacaoNovasProvider onlyIndustrializacao>
+        <AppShell
+          sidebar={<Sidebar />}
+          topBarProps={{
+            userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
+            getRoleLabel,
+          }}
+          outletContext={{ user, isReadOnly: isReadOnly(user, location.pathname) }}
+          requireAuth={false}
+          contentClassName="overflow-y-auto"
+        />
+      </ValidacaoNovasProvider>
     </SaidaNovasProvider>
   );
 }

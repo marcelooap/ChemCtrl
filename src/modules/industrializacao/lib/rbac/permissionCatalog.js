@@ -147,6 +147,19 @@ export const permissionModules = [
     order: 30,
     resources: [
       {
+        id: 'ind_validacao',
+        labelKey: 'rbac.resources.indValidacao',
+        icon: 'ShieldCheck',
+        route: '/validacao',
+        nav: { showInSidebar: true, order: 4.8 },
+        actions: [
+          { key: 'view', labelKey: 'rbac.actions.view' },
+          { key: 'edit', labelKey: 'rbac.actions.edit' },
+          { key: 'delete', labelKey: 'rbac.actions.delete' },
+          { key: 'validate', labelKey: 'rbac.actions.validate' },
+        ],
+      },
+      {
         id: 'raw_material_stock',
         labelKey: 'rbac.resources.rawMaterialStock',
         icon: 'Package',
@@ -573,6 +586,26 @@ export const permissionModules = [
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
       {
+        id: 'painel_logistica_recebimento',
+        labelKey: 'rbac.resources.painelLogisticaRecebimento',
+        icon: 'Inbox',
+        route: '/painel/logistica/recebimento',
+        nav: {
+          showInSidebar: true,
+          order: 3,
+          groupId: 'logistica',
+          groupLabelKey: 'painel.nav.logistica',
+          groupIcon: 'Truck',
+          groupOrder: 4,
+        },
+        actions: [
+          { key: 'view', labelKey: 'rbac.actions.view' },
+          { key: 'create', labelKey: 'rbac.actions.create' },
+          { key: 'edit', labelKey: 'rbac.actions.edit' },
+          { key: 'delete', labelKey: 'rbac.actions.delete' },
+        ],
+      },
+      {
         id: 'painel_operacional_ordem_transbordo',
         labelKey: 'rbac.resources.painelOrdemTransbordo',
         icon: 'ArrowLeftRight',
@@ -970,6 +1003,7 @@ function mapResourceToSidebarLabel(resourceId) {
     orders: 'sidebar.orders',
     programming: 'sidebar.programming',
     raw_material_stock: 'sidebar.rawMaterialStock',
+    ind_validacao: 'sidebar.validacao',
     inventory: 'sidebar.inventory',
     new_production: 'sidebar.newProduction',
     productions: 'sidebar.productions',
@@ -993,6 +1027,7 @@ function mapResourceToSidebarLabel(resourceId) {
     painel_comercial_agendamentos: 'painel.nav.agendamentos',
     painel_logistica_agendamentos: 'painel.nav.logisticaAgendamentos',
     painel_logistica_carregamentos: 'painel.nav.logisticaCarregamentos',
+    painel_logistica_recebimento: 'painel.nav.logisticaRecebimento',
     painel_operacional_ordem_transbordo: 'painel.nav.ordemTransbordo',
     painel_operacional_estoque: 'painel.nav.estoque',
     painel_config_operadores: 'painel.nav.operadores',

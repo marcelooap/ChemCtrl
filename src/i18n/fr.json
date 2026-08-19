@@ -532,6 +532,7 @@
       "painelLogistica": "Logistique",
       "painelLogisticaAgendamentos": "Planifications (Logistique)",
       "painelLogisticaCarregamentos": "Chargements",
+      "painelLogisticaRecebimento": "Réception",
       "painelOrdemTransbordo": "Ordre de transbordement",
       "painelEstoque": "Stock",
       "painelOperadores": "Opérateurs",
@@ -677,6 +678,7 @@
       "logistica": "Logistique",
       "logisticaAgendamentos": "Planifications",
       "logisticaCarregamentos": "Chargements",
+      "logisticaRecebimento": "Réception",
       "operacional": "Opérationnel",
       "ordemTransbordo": "Ordre de transbordement",
       "estoque": "Stock",
@@ -1234,7 +1236,7 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Renseignez la date, le client, le produit et l'origine pour enregistrer le transbordement",
+        "subtitle": "Renseignez la destination, la date, le client, le produit et l'origine pour enregistrer le transbordement",
         "formTitle": "Nouvel ordre",
         "goToTransbordo": "Aller au transbordement",
         "search": "Rechercher par code, produit ou client...",
@@ -1258,6 +1260,7 @@
         },
         "fields": {
           "date": "Date",
+          "destino": "Destination",
           "client": "Client",
           "product": "Produit",
           "origin": "Origine",
@@ -1272,6 +1275,9 @@
           "net": "Poids net (kg)"
         },
         "placeholders": {
+          "destino": "Conventionnel ou Industrialisation",
+          "destFirst": "Sélectionnez d'abord une destination",
+          "originFirst": "Sélectionnez d'abord l'origine",
           "client": "Sélectionnez un client",
           "product": "Sélectionnez un produit",
           "productDisabled": "Sélectionnez d'abord un client",
@@ -1294,6 +1300,7 @@
         },
         "errors": {
           "date": "La date est obligatoire.",
+          "destino": "La destination est obligatoire.",
           "client": "Le client est obligatoire.",
           "product": "Le produit est obligatoire.",
           "origin": "L'origine est obligatoire.",

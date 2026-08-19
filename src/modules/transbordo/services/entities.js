@@ -150,6 +150,7 @@ export const entities = {
   materialReservas: createEntity('t_material_reservas'),
   agendamentosCarregamento: createEntity('t_agendamentos_carregamento'),
   saidaLeituras: createEntity('t_saida_leituras'),
+  validacaoLeituras: createEntity('t_validacao_leituras'),
   operadores: createEntity('t_operadores'),
   etiquetaConfigs: createEntity('t_etiqueta_configs'),
   transbordoValidacoes: createEntity('t_transbordo_validacoes'),

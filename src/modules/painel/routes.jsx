@@ -9,6 +9,7 @@ import Etiquetas from '@painel/pages/configuracao/Etiquetas';
 import Dashboard from '@painel/pages/Dashboard';
 import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
+import LogisticaRecebimento from '@painel/pages/logistica/Recebimento';
 import OrdemTransbordo from '@painel/pages/operacional/OrdemTransbordo';
 import OperacionalEstoque from '@painel/pages/operacional/Estoque';
 import ReservarMaterial from '@painel/pages/comercial/ReservarMaterial';
@@ -77,6 +78,7 @@ export default function PainelRoutes() {
               <Route path="comercial/agendamentos" element={<Agendamentos />} />
               <Route path="logistica/agendamentos" element={<LogisticaAgendamentos />} />
               <Route path="logistica/carregamentos" element={<LogisticaCarregamentos />} />
+              <Route path="logistica/recebimento" element={<LogisticaRecebimento />} />
               <Route path="operacional/ordem-transbordo" element={<OrdemTransbordo />} />
               <Route path="operacional/estoque" element={<OperacionalEstoque />} />
             </Route>
