@@ -19,6 +19,67 @@ export const getRevisionNumber = (recipe) => {
 const normalizedProductName = (name) => (name || '').trim();
 const normalizeMatchKey = (name) => normalizedProductName(name).toLowerCase();
 
+/**
+ * Identidade de produto só com dados da Industrialização (receita × pedido).
+ * "PROSOLV EB 8379" e "PROSOLV EB8379" são o mesmo produto.
+ */
+export const normalizeProductMatchKey = (name) =>
+  String(name || '')
+    .normalize('NFKC')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-_./]+/g, '');
+
+export const productsMatch = (a, b) => {
+  const left = normalizeProductMatchKey(a);
+  const right = normalizeProductMatchKey(b);
+  return left.length > 0 && left === right;
+};
+
+/** Tokens de SKU (ex.: EB8379) a partir do nome cadastrado na industrialização. */
+export function extractProductSkuTokens(name) {
+  const collapsed = String(name || '')
+    .normalize('NFKC')
+    .replace(/\u00a0/g, ' ')
+    .toLowerCase()
+    .replace(/([a-zà-ÿ])\s+(\d)/gi, '$1$2')
+    .replace(/(\d)\s+([a-zà-ÿ])/gi, '$1$2');
+  return [...new Set((collapsed.match(/\b[a-z]{1,10}\d{3,}[a-z0-9]*/g) || []).filter((t) => t.length >= 5))];
+}
+
+function recipeCodesForProductName(name, recipes) {
+  const codes = new Set();
+  const normalizedName = normalizeProductMatchKey(name);
+  const trimmed = String(name || '').trim().toLowerCase();
+  for (const recipe of recipes || []) {
+    const code = String(recipe.code || '').trim().toLowerCase();
+    if (!code) continue;
+    if (productsMatch(recipe.product_name, name) || normalizeProductMatchKey(code) === normalizedName || code === trimmed) {
+      codes.add(code);
+    }
+  }
+  return codes;
+}
+
+/**
+ * Pedido e produto selecionado (receita) referem-se ao mesmo item da industrialização.
+ * Usa nome, SKU no nome e código da receita em `ind_lista_receitas`.
+ */
+export function orderMatchesSelectedProduct(orderProduct, selectedProduct, recipes = []) {
+  if (productsMatch(orderProduct, selectedProduct)) return true;
+
+  const selectedSkus = new Set(extractProductSkuTokens(selectedProduct));
+  if (extractProductSkuTokens(orderProduct).some((token) => selectedSkus.has(token))) return true;
+
+  const selectedCodes = recipeCodesForProductName(selectedProduct, recipes);
+  if (selectedCodes.size === 0) return false;
+  for (const code of recipeCodesForProductName(orderProduct, recipes)) {
+    if (selectedCodes.has(code)) return true;
+  }
+  return false;
+}
+
 /** Todas as revisões de um produto, ordenadas da mais antiga para a mais recente. */
 export const getRevisionsForProduct = (recipes, productName) => {
   const name = normalizedProductName(productName);

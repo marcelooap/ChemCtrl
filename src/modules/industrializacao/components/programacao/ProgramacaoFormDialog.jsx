@@ -7,29 +7,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/compon
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import ProductCombobox from '@shared/components/ui/ProductCombobox';
 import { fmtDate, fmtVolume } from '@/i18n/formatters';
-import { getLatestRecipeForProduct, getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, getLatestRecipes, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
 import {
-  getOrderAllocatableVolume,
-  isOrderOpenForProgramming,
+  isOrderEligibleForProgramming,
+  toNum,
 } from '@industrializacao/lib/orderProductionStatus';
-
-function sameProduct(a, b) {
-  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
-}
 
 function formatVolumeInput(n) {
   if (!Number.isFinite(n) || n <= 0) return '';
   return String(Number(n.toFixed(3)));
-}
-
-function getScheduledOrderIds(schedules, exceptScheduleId) {
-  const ids = new Set();
-  for (const row of schedules || []) {
-    if (!row?.order_id) continue;
-    if (exceptScheduleId && String(row.id) === String(exceptScheduleId)) continue;
-    ids.add(String(row.order_id));
-  }
-  return ids;
 }
 
 export default function ProgramacaoFormDialog({
@@ -39,7 +25,6 @@ export default function ProgramacaoFormDialog({
   editing,
   recipes,
   orders = [],
-  schedules = [],
   saving,
   onSave,
 }) {
@@ -57,20 +42,14 @@ export default function ProgramacaoFormDialog({
     [recipes]
   );
 
-  const scheduledOrderIds = useMemo(
-    () => getScheduledOrderIds(schedules, editing?.id),
-    [schedules, editing?.id]
-  );
-
   const eligibleOrders = useMemo(() => {
     if (!product) return [];
     return (orders || []).filter(
       (order) =>
-        sameProduct(order.product, product)
-        && isOrderOpenForProgramming(order)
-        && !scheduledOrderIds.has(String(order.id))
+        orderMatchesSelectedProduct(order.product, product, recipes)
+        && isOrderEligibleForProgramming(order)
     );
-  }, [orders, product, scheduledOrderIds]);
+  }, [orders, product, recipes]);
 
   const orderOptions = useMemo(() => {
     const list = [...eligibleOrders];
@@ -81,8 +60,10 @@ export default function ProgramacaoFormDialog({
     return list;
   }, [eligibleOrders, orders, orderId]);
 
+  const orderProgrammingVolume = (order) => toNum(order?.volume_pending);
+
   const productPendingVolume = useMemo(
-    () => eligibleOrders.reduce((sum, order) => sum + getOrderAllocatableVolume(order), 0),
+    () => eligibleOrders.reduce((sum, order) => sum + orderProgrammingVolume(order), 0),
     [eligibleOrders]
   );
 
@@ -105,13 +86,12 @@ export default function ProgramacaoFormDialog({
     const recipe = getLatestRecipeForProduct(recipes, productName);
     const matches = (orders || []).filter(
       (order) =>
-        sameProduct(order.product, productName)
-        && isOrderOpenForProgramming(order)
-        && !scheduledOrderIds.has(String(order.id))
+        orderMatchesSelectedProduct(order.product, productName, recipes)
+        && isOrderEligibleForProgramming(order)
     );
     const onlyOrder = matches.length === 1 ? matches[0] : selectedOrder;
-    const pendingTotal = matches.reduce((sum, order) => sum + getOrderAllocatableVolume(order), 0);
-    const orderVolume = onlyOrder ? getOrderAllocatableVolume(onlyOrder) : 0;
+    const pendingTotal = matches.reduce((sum, order) => sum + orderProgrammingVolume(order), 0);
+    const orderVolume = onlyOrder ? orderProgrammingVolume(onlyOrder) : 0;
 
     setProduct(productName);
     setOrderId(onlyOrder?.id || '');
@@ -128,7 +108,7 @@ export default function ProgramacaoFormDialog({
     setOrderId(nextOrderId);
     if (!order) return;
     if (order.client) setClient(order.client);
-    setVolume(formatVolumeInput(getOrderAllocatableVolume(order)));
+    setVolume(formatVolumeInput(orderProgrammingVolume(order)));
   };
 
   const handleSubmit = () => {
@@ -192,7 +172,7 @@ export default function ProgramacaoFormDialog({
                   <SelectItem key={order.id} value={order.id}>
                     {order.order_number || order.id}
                     {' · '}
-                    {fmtVolume(getOrderAllocatableVolume(order))}
+                    {fmtVolume(orderProgrammingVolume(order))}
                   </SelectItem>
                 ))}
               </SelectContent>

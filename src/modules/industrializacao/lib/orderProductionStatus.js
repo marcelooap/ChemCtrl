@@ -160,16 +160,22 @@ export function getOrderAllocatableVolume(order) {
 }
 
 /**
- * Pedido elegível para programar: Pendente, ou Em produção com saldo
- * depois de abater o volume das OPs abertas.
+ * Pedido elegível para programar: ainda tem volume pendente na industrialização
+ * (mesmo critério da lista de Pedidos). Não exige saldo após OP aberta —
+ * programação é planejamento, não apontamento de produção.
  */
 export function isOrderOpenForProgramming(order) {
   if (!order) return false;
   if (isOrderFullyProduced(order.volume_ordered, order.volume_produced, order.volume_pending)) {
     return false;
   }
-  if (getOrderAllocatableVolume(order) <= VOLUME_EPS) return false;
-  return order.status === 'Pendente' || order.status === 'Em produção';
+  if (toNum(order.volume_pending) <= VOLUME_EPS) return false;
+  if (order.status === 'Finalizado' || order.status === 'Cancelado') return false;
+  return true;
+}
+
+export function isOrderEligibleForProgramming(order) {
+  return isOrderOpenForProgramming(order);
 }
 
 /**

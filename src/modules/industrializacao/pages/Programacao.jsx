@@ -59,15 +59,15 @@ export default function Programacao() {
   );
   const { data: recipes } = useRealtimeEntity(
     'Recipe',
-    () => base44.entities.Recipe.list('-created_date', 500)
+    () => base44.entities.Recipe.list('-created_date', 2000)
   );
   const { data: orders } = useRealtimeEntity(
     'Order',
-    () => base44.entities.Order.list('-created_date', 500)
+    () => base44.entities.Order.list('-created_date', 2000)
   );
   const { data: productions } = useRealtimeEntity(
     'Production',
-    () => base44.entities.Production.list('-created_date', 500)
+    () => base44.entities.Production.list('-created_date', 2000)
   );
 
   const enrichedOrders = useMemo(
@@ -513,7 +513,6 @@ export default function Programacao() {
         editing={editing}
         recipes={recipes}
         orders={enrichedOrders}
-        schedules={schedules}
         saving={saving}
         onSave={handleSave}
       />

@@ -32,7 +32,7 @@ import {
   productionOfContainer,
   containerDisplayVolume,
 } from '@industrializacao/lib/fractionalSupply';
-import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
 import { allocateUniqueOpNumber, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
 
 const convertToKg = (value, unit, density) => {
@@ -334,7 +334,7 @@ export default function NovaProducao() {
     if (isComplementMode) return;
     const recipe = getLatestRecipeForProduct(recipes, productName);
     if (!recipe) return;
-    const linkedOrder = orders.find(o => o.product === productName);
+    const linkedOrder = orders.find(o => orderMatchesSelectedProduct(o.product, productName, recipes));
     setForm(prev => ({
       ...prev, product: productName, client: recipe.client || '',
       recipe_id: recipe.id, recipe_revision: recipe.revision || '',
@@ -858,7 +858,7 @@ export default function NovaProducao() {
               }}>
                 <SelectTrigger><SelectValue placeholder={t('common.selectOption')} /></SelectTrigger>
                 <SelectContent>
-                  {orders.filter(o => o.product === form.product).map(o => (
+                  {orders.filter(o => orderMatchesSelectedProduct(o.product, form.product, recipes)).map(o => (
                     <SelectItem key={o.id} value={o.id}>{o.order_number} - {o.product}</SelectItem>
                   ))}
                 </SelectContent>
