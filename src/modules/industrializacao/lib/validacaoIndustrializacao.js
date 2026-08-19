@@ -1,10 +1,8 @@
 import { chemflowSupabase } from "@/services/supabase/chemflow";
 import { base44 } from "@industrializacao/api/base44Client";
 import { buildMpStockPayload } from "@industrializacao/lib/mpStockForm";
-import {
-  persistOperacaoFromValidacao,
-  resumoQuantidadeValidacao,
-} from "@transbordo/lib/validacaoTransbordo";
+import { persistOperacaoFromValidacao, resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
+import { allocateMpEntryIds } from "@industrializacao/lib/allocateMpEntryId";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -243,13 +241,22 @@ export async function efetivarValidacaoIndustrializacao({ id, validadoPor = null
         throw new Error("entrada_payload ausente na validação");
       }
       const payload = asObject(locked.entrada_payload) || locked.entrada_payload;
-      const rows = entradaPayloadToMpRows(payload).map((row) => ({
-        ...row,
-        created_by_id: validadoPor?.id ? String(validadoPor.id) : null,
-      }));
-      if (rows.length === 0) {
+      const mapped = entradaPayloadToMpRows(payload);
+      if (mapped.length === 0) {
         throw new Error("Nenhum lote para registrar no estoque de MP.");
       }
+      const entryIds = await allocateMpEntryIds(
+        base44.entities.RawMaterialStock,
+        mapped.length
+      );
+      const rows = mapped.map((row, i) => {
+        const { id: _omitId, ...rest } = row;
+        return {
+          ...rest,
+          entry_id: entryIds[i],
+          created_by_id: validadoPor?.id ? String(validadoPor.id) : null,
+        };
+      });
       const created = await base44.entities.RawMaterialStock.bulkCreate(rows);
       const ids = (created || []).map((r) => r.id).filter(Boolean);
 

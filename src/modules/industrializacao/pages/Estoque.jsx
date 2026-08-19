@@ -29,7 +29,7 @@ import {
 } from '@industrializacao/lib/mpStockForm';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
-import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
+import { allocateMpEntryIdsFromList } from '@industrializacao/lib/allocateMpEntryId';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
 
 const VIEW_TAB_CLASS =
@@ -244,8 +244,12 @@ export default function Estoque() {
       } else {
         const rows = forms.map((form, i) => {
           const data = buildMpStockPayload(form, { isEditing: false });
-          data.entry_id = `MP${String(items.length + 1 + i).padStart(3, '0')}`;
+          delete data.id;
           return data;
+        });
+        const entryIds = allocateMpEntryIdsFromList(items, rows.length);
+        rows.forEach((data, i) => {
+          data.entry_id = entryIds[i];
         });
         if (rows.length === 1) {
           await base44.entities.RawMaterialStock.create(rows[0]);
