@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,9 @@ import {
   getLoteEnvaseDate,
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
+import { isDestinoEmbalagemUnitaria, isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
+import { entities } from "@transbordo/services/entities";
+import { listTbVasilhameExitHistory } from "@transbordo/lib/vasilhameExitHistory";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -52,6 +56,38 @@ const formatDate = (d) => {
   }
   
   export default function VasilhameViewDialog({ open, onClose, vasilhame }) {
+    const [saidas, setSaidas] = useState([]);
+    const [loadingSaidas, setLoadingSaidas] = useState(false);
+
+    const isUnitario = Boolean(
+      vasilhame &&
+      (isDestinoEmbalagemUnitaria(vasilhame.tipo) || isVasilhameLegadoEmbalado(vasilhame.tipo))
+    );
+
+    useEffect(() => {
+      if (!open || !vasilhame?.id || !isUnitario) {
+        setSaidas([]);
+        setLoadingSaidas(false);
+        return undefined;
+      }
+      let cancelled = false;
+      setLoadingSaidas(true);
+      entities.saidas
+        .list("-created_date")
+        .then((list) => {
+          if (!cancelled) setSaidas(list || []);
+        })
+        .catch(() => {
+          if (!cancelled) setSaidas([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSaidas(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [open, vasilhame?.id, isUnitario]);
+
     if (!vasilhame) return null;
     const status = vasilhame.status || (vasilhame.data_saida ? "Expedido" : "No Pátio");
     const loteDominante =
@@ -64,6 +100,19 @@ const formatDate = (d) => {
         (c.quantidade_l || 0) > 0 &&
         (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
     );
+    const exitRows = isUnitario ? listTbVasilhameExitHistory(vasilhame, saidas) : [];
+    const exitStatusLabel = {
+      fiscal: "Fiscal",
+      patio: "Pátio",
+      pending: "Aguardando",
+      cancelled: "Cancelado",
+    };
+    const exitStatusClass = {
+      fiscal: "bg-green-100 text-green-700",
+      patio: "bg-blue-100 text-blue-700",
+      pending: "bg-amber-100 text-amber-800",
+      cancelled: "bg-muted text-muted-foreground",
+    };
   
     return (
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -219,6 +268,88 @@ const formatDate = (d) => {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {isUnitario && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
+                  HISTÓRICO DE SAÍDA
+                </h3>
+                <p className="pl-2 text-xs text-muted-foreground">
+                  Embalagens (IBC, bombona ou tambor) já expedidas deste lote.
+                </p>
+                <div className="pl-2">
+                  <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="bg-muted/40 text-xs text-muted-foreground uppercase">
+                        <th className="px-4 py-2 text-left font-medium">Documento</th>
+                        <th className="px-4 py-2 text-left font-medium">Data</th>
+                        <th className="px-4 py-2 text-right font-medium">Qtd.</th>
+                        <th className="px-4 py-2 text-right font-medium">Volume (L)</th>
+                        <th className="px-4 py-2 text-left font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loadingSaidas ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                            Carregando...
+                          </td>
+                        </tr>
+                      ) : exitRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground text-xs">
+                            Nenhuma saída registrada para estas embalagens.
+                          </td>
+                        </tr>
+                      ) : (
+                        <>
+                          {exitRows.map((row) => (
+                            <tr key={row.key} className="border-t border-border">
+                              <td className="px-4 py-2 font-medium text-foreground">
+                                {row.codigo || "Saída de pátio"}
+                              </td>
+                              <td className="px-4 py-2 text-muted-foreground">
+                                {row.date ? formatDate(row.date) : "—"}
+                              </td>
+                              <td className="px-4 py-2 text-right text-foreground">
+                                {row.qty || "—"}
+                              </td>
+                              <td className="px-4 py-2 text-right text-foreground/80">
+                                {formatVolume(row.volume, { empty: "—" })}
+                              </td>
+                              <td className="px-4 py-2">
+                                <span
+                                  className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    exitStatusClass[row.status] || "bg-muted"
+                                  }`}
+                                >
+                                  {exitStatusLabel[row.status] || row.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-border bg-muted/40">
+                            <td colSpan={2} className="px-4 py-2 font-bold text-foreground">
+                              Total expedido
+                            </td>
+                            <td className="px-4 py-2 text-right font-bold text-primary">
+                              {exitRows.reduce((s, r) => s + (Number(r.qty) || 0), 0)}
+                            </td>
+                            <td className="px-4 py-2 text-right font-bold text-primary">
+                              {formatVolume(
+                                exitRows.reduce((s, r) => s + (Number(r.volume) || 0), 0),
+                                { empty: "—" }
+                              )}
+                            </td>
+                            <td />
+                          </tr>
+                        </>
+                      )}
                     </tbody>
                   </table>
                 </div>

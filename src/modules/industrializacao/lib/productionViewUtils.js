@@ -1,4 +1,6 @@
 import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
+import { formatOriginalAggregatedLabel, isUnitPackagingLike } from '@industrializacao/lib/packagingTypes';
+import { originsOfContainer, originMergeKey } from '@industrializacao/lib/containerOrigins';
 
 export const parseArr = (val) => {
   if (!val) return [];
@@ -55,6 +57,55 @@ export const stockUnitPriceOf = (mp, stocks) => {
     if (s) return s.unit_price || 0;
   }
   return 0;
+};
+
+function sumDistinctInitialVolumes(origins) {
+  const map = new Map();
+  for (const o of origins || []) {
+    const key = originMergeKey(o) || o.id || `row:${map.size}`;
+    const iv = parseFloat(o.initial_volume) || 0;
+    map.set(key, Math.max(map.get(key) || 0, iv));
+  }
+  return [...map.values()].reduce((s, v) => s + v, 0);
+}
+
+/** Volume inicial do envase deste container (preferência: origens da OP). */
+export function initialVolumeForProductionPackaging(container, origins = [], production = null) {
+  if (!container?.id) return 0;
+  const all = originsOfContainer(origins, container.id).filter((o) => !o._legacy);
+  if (all.length === 0) return 0;
+  const forProd = all.filter(
+    (o) =>
+      (production?.id && o.production_id === production.id)
+      || (production?.op_number && o.op_number === production.op_number)
+  );
+  return sumDistinctInitialVolumes(forProd.length ? forProd : all);
+}
+
+/**
+ * Embalagens que receberam o produto na OP — quantidade envasada, não saldo de pátio.
+ */
+export function formatContainerPackagingForProduction(container, production, origins = []) {
+  if (!container) return production?.packaging_info || production?.packaging_type || '';
+  if (!isUnitPackagingLike(container.type, container.container_number)) {
+    return container.container_number || production?.packaging_type || '';
+  }
+  return formatOriginalAggregatedLabel(container, {
+    initialVolume: initialVolumeForProductionPackaging(container, origins, production),
+    productionVolume: production?.volume,
+  }) || container.container_number || production?.packaging_type || '';
+}
+
+export const uniqueContainersFromPackagingRows = (rows) => {
+  const list = [];
+  const seen = new Set();
+  for (const r of rows || []) {
+    if (r.container?.id && !seen.has(r.container.id)) {
+      seen.add(r.container.id);
+      list.push(r.container);
+    }
+  }
+  return list;
 };
 
 /**

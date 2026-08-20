@@ -19,6 +19,8 @@ import {
   isAggregatedUnitContainer,
   getContainerPackageQty,
   formatAggregatedContainerLabel,
+  isUnitPackagingLike,
+  getOriginalPackageQty,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtDate, fmtNumber, todayDateInputValue, toDateInputValue } from '@/i18n/formatters';
 import { entities as chemflowEntities } from '@transbordo/services/entities';
@@ -42,6 +44,9 @@ import {
   resolveProductCode,
 } from '@industrializacao/lib/recipeRevisions';
 import { effectiveOriginsOfContainer, applyProportionalOriginReduction } from '@industrializacao/lib/containerOrigins';
+import { initialVolumeForProductionPackaging } from '@industrializacao/lib/productionViewUtils';
+import { appendPackageExit, listIndContainerExitHistory } from '@industrializacao/lib/packageExitHistory';
+import PackageExitHistory from '@industrializacao/components/vasilhames/PackageExitHistory';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -130,6 +135,8 @@ export default function Vasilhames() {
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
   const { toast } = useToast();
+  const [viewSaidas, setViewSaidas] = useState([]);
+  const [loadingViewSaidas, setLoadingViewSaidas] = useState(false);
 
   const na = t('common.notAvailable');
 
@@ -336,20 +343,44 @@ export default function Vasilhames() {
 
     setSavingDepart(true);
     try {
+      const production = prodOf(departItem);
+      const initialVolume = initialVolumeForProductionPackaging(
+        departItem,
+        containerOrigins,
+        production,
+      );
+      const originalQty = getOriginalPackageQty(departItem, {
+        initialVolume,
+        productionVolume: production?.volume,
+      });
+      const qtyShipped = aggregated ? parseInt(departQty, 10) : 1;
+      const oldVolume = parseFloat(departItem.volume) || 0;
+      const withdrawnVolume = aggregated && qtyShipped < stockQty
+        ? oldVolume * (qtyShipped / stockQty)
+        : oldVolume;
+      const historyPatch = {
+        original_package_qty: originalQty,
+        package_exits: appendPackageExit(departItem.package_exits, {
+          date: departDate,
+          qty: qtyShipped,
+          volume: withdrawnVolume,
+          source: 'patio',
+          operator: user?.nome || user?.full_name || '',
+        }),
+      };
+
       if (aggregated) {
         const removeQty = parseInt(departQty, 10);
         if (removeQty >= stockQty) {
-          // Saída total do lote agregado: mesmo comportamento histórico.
           await base44.entities.Container.update(departItem.id, {
             status: 'Expedido',
             departure_date: departDate,
             is_fractional: false,
+            ...historyPatch,
           });
         } else {
           const newQty = stockQty - removeQty;
           const ratio = newQty / stockQty;
-          const oldVolume = parseFloat(departItem.volume) || 0;
-          const withdrawnVolume = oldVolume * (removeQty / stockQty);
           const newVolume = oldVolume - withdrawnVolume;
           const newNet = (parseFloat(departItem.net_weight) || 0) * ratio;
           const tare = parseFloat(departItem.tare) || 0;
@@ -360,6 +391,7 @@ export default function Vasilhames() {
             volume: newVolume,
             net_weight: newNet,
             gross_weight: newGross,
+            ...historyPatch,
           });
 
           await applyProportionalOriginReduction(
@@ -370,12 +402,11 @@ export default function Vasilhames() {
           );
         }
       } else {
-        // Manual saída ships the container as-is: keep volume and origins for history.
-        // Volume is only reduced when product is withdrawn via transbordo.
         await base44.entities.Container.update(departItem.id, {
           status: 'Expedido',
           departure_date: departDate,
           is_fractional: false,
+          ...historyPatch,
         });
       }
       setShowDepart(false);
@@ -429,6 +460,30 @@ export default function Vasilhames() {
     const timer = setTimeout(() => setHighlightId(null), 4000);
     return () => clearTimeout(timer);
   }, [highlightId, filtered]);
+
+  useEffect(() => {
+    if (!showView || !viewing?.id || !isUnitPackagingLike(viewing.type, viewing.container_number)) {
+      setViewSaidas([]);
+      setLoadingViewSaidas(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoadingViewSaidas(true);
+    chemflowEntities.saidas
+      .list('-created_date')
+      .then((list) => {
+        if (!cancelled) setViewSaidas(list || []);
+      })
+      .catch(() => {
+        if (!cancelled) setViewSaidas([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingViewSaidas(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showView, viewing?.id, viewing?.type, viewing?.container_number]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -663,6 +718,18 @@ export default function Vasilhames() {
                   </div>
                 );
               })()}
+
+              {isUnitPackagingLike(viewing.type, viewing.container_number) && (
+                <PackageExitHistory
+                  loading={loadingViewSaidas}
+                  rows={listIndContainerExitHistory({
+                    container: containers.find((c) => c.id === viewing.id) || viewing,
+                    origins: containerOrigins,
+                    saidas: viewSaidas,
+                    production: prodOf(viewing),
+                  })}
+                />
+              )}
 
               <div>
                 <div className="flex items-center gap-2 mb-3">

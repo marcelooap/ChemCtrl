@@ -65,23 +65,45 @@ export default function ChecklistProducao() {
   const grouped = useMemo(() => {
     const rms = parseArr(production?.raw_materials_used);
     if (!rms.length) return [];
+
+    const recipeOrder = new Map();
+    parseArr(recipe?.raw_materials).forEach((m, i) => {
+      const key = (m.mp_code || m.mp_name || '').trim();
+      if (key && !recipeOrder.has(key)) recipeOrder.set(key, i);
+    });
+
     const map = new Map();
-    rms.forEach(mp => {
+    rms.forEach((mp) => {
       const key = mp.mp_code || mp.mp_name;
       if (!map.has(key)) {
         map.set(key, { mp_code: mp.mp_code, mp_name: mp.mp_name, lots: [] });
       }
       map.get(key).lots.push(mp);
     });
-    return Array.from(map.values());
-  }, [production?.raw_materials_used]);
+
+    const groups = Array.from(map.values());
+    groups.sort((a, b) => {
+      const ka = (a.mp_code || a.mp_name || '').trim();
+      const kb = (b.mp_code || b.mp_name || '').trim();
+      const ia = recipeOrder.has(ka) ? recipeOrder.get(ka) : Number.MAX_SAFE_INTEGER;
+      const ib = recipeOrder.has(kb) ? recipeOrder.get(kb) : Number.MAX_SAFE_INTEGER;
+      if (ia !== ib) return ia - ib;
+      return String(ka).localeCompare(String(kb), 'pt-BR');
+    });
+
+    return groups.map((g, i) => ({ ...g, seq: i + 1 }));
+  }, [production?.raw_materials_used, recipe?.raw_materials]);
 
   const toggleGroup = (groupIdx) => {
     const group = grouped[groupIdx];
-    const allChecked = group.lots.every(l => l.checked);
-    const updated = parseArr(production.raw_materials_used).map(mp =>
-      group.lots.some(l => l === mp) ? { ...mp, checked: !allChecked } : mp
+    const allChecked = group.lots.every((l) => l.checked);
+    const lotKeys = new Set(
+      group.lots.map((l) => `${l.mp_code || ''}|${l.stock_id || ''}|${l.lot || ''}|${l.qty_operational ?? ''}`)
     );
+    const updated = parseArr(production.raw_materials_used).map((mp) => {
+      const key = `${mp.mp_code || ''}|${mp.stock_id || ''}|${mp.lot || ''}|${mp.qty_operational ?? ''}`;
+      return lotKeys.has(key) ? { ...mp, checked: !allChecked } : mp;
+    });
     setProduction({ ...production, raw_materials_used: updated });
   };
 
@@ -211,8 +233,16 @@ export default function ChecklistProducao() {
               >
                 <div className="flex items-start gap-3">
                   <input type="checkbox" checked={allChecked} onChange={() => {}} onClick={e => e.stopPropagation()} className="mt-1 w-4 h-4 rounded accent-primary" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                  <div className="shrink-0 w-10 pt-0.5 text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground leading-none mb-0.5">
+                      {t('production.checklistPage.seq')}
+                    </p>
+                    <p className="text-sm font-bold tabular-nums" style={{ color: '#2575D1' }}>
+                      {t('recipes.view.seqOrdinal', { n: group.seq })}
+                    </p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{group.mp_code}</span>
                       <span className="text-sm font-semibold">{group.mp_name}</span>
                     </div>

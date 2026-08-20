@@ -382,6 +382,9 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
       min_test_date: payload.min_test_date || null,
       operator: operatorName,
       status: 'No Pátio',
+      original_package_qty: isUnitPackagingType(payload.type)
+        ? parsePackageQty(payload.package_qty) || suggestPackageQty(payload.type, volume)
+        : null,
     });
 
     if (created?.id) {

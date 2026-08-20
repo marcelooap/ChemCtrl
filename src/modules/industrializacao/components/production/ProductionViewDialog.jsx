@@ -18,6 +18,7 @@ import {
   convertToKg,
   convertFromKg,
   round3,
+  formatContainerPackagingForProduction,
 } from '@industrializacao/lib/productionViewUtils';
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
 import { isComplementPending } from '@industrializacao/lib/fractionalSupply';
@@ -493,7 +494,7 @@ export default function ProductionViewDialog({
                         <td className="px-3 py-2 font-medium">
                           <span className="inline-flex items-center gap-1">
                             <span className="text-muted-foreground tabular-nums">{seq}-</span>
-                            {c?.container_number || t('common.notAvailable')}
+                            {formatContainerPackagingForProduction(c, production, origins) || c?.container_number || t('common.notAvailable')}
                             {fromTransfer && (
                               <ArrowUpRight
                                 className="w-3.5 h-3.5 shrink-0"

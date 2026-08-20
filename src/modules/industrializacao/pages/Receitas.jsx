@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOutletContext } from 'react-router-dom';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
-import { Plus, Search, Eye, EyeOff, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame } from 'lucide-react';
+import { Plus, Search, Eye, EyeOff, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame, GripVertical } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Switch } from '@shared/components/ui/switch';
@@ -35,7 +36,10 @@ const DEFAULT_CREATED_BY = 'Marcelo Amaral';
 const normalizeCreatedBy = (value) => (value || '').trim();
 const resolveCreatedBy = (item) => item?.created_by || DEFAULT_CREATED_BY;
 
-const emptyMP = { mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0 };
+const newMpRowKey = () => `mp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const emptyMP = () => ({ mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0, _key: newMpRowKey() });
+const withMpRowKeys = (list) => (list || []).map((m) => (m?._key ? m : { ...m, _key: newMpRowKey() }));
+const stripMpRowKeys = (list) => (list || []).map(({ _key, ...rest }) => rest);
 
 function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, canViewFds, hideMpNames, onToggleHideMpNames }) {
   const { t } = useTranslation();
@@ -80,6 +84,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
       </div>
       <table className="w-full text-sm border rounded-lg overflow-hidden">
         <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
+          <th className="px-3 py-2 text-center w-14">{t('recipes.view.seq')}</th>
           <th className="px-3 py-2 text-left">{t('recipes.view.mpCode')}</th>
           <th className="px-3 py-2 text-left">{t('recipes.view.mpName')}</th>
           <th className="px-3 py-2 text-right">{t('recipes.view.mpDensity')}</th>
@@ -89,6 +94,9 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
         <tbody>
           {(viewing.raw_materials || []).map((m, i) => (
             <tr key={i} className="border-t">
+              <td className="px-3 py-2 text-center text-xs font-semibold text-muted-foreground tabular-nums">
+                {t('recipes.view.seqOrdinal', { n: i + 1 })}
+              </td>
               <td className="px-3 py-2 font-mono text-xs" style={{ color: '#2575D1' }}>{m.mp_code}</td>
               <td className="px-3 py-2">{hideMpNames ? '*******' : m.mp_name}</td>
               <td className="px-3 py-2 text-right">{m.mp_density}</td>
@@ -97,7 +105,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
             </tr>
           ))}
           <tr className="border-t bg-muted/50 font-bold">
-            <td colSpan={3} className="px-3 py-2">{t('common.totals')}</td>
+            <td colSpan={4} className="px-3 py-2">{t('common.totals')}</td>
             <td className="px-3 py-2 text-right">{(viewing.raw_materials || []).reduce((s, m) => s + (m.percentage || 0), 0).toFixed(2)}%</td>
             <td className="px-3 py-2 text-right">{fmtNumber((viewing.raw_materials || []).reduce((s, m) => s + (m.quantity_kg || 0), 0))} {t('common.units.kg')}</td>
           </tr>
@@ -131,7 +139,19 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
     </div>
   );
 }
-const emptyRecipe = { product_name: '', client: '', code: '', price: 0, density: '', validity_days: 365, revision_number: 1, revision: 'Revisão 01', revision_date: new Date().toISOString().split('T')[0], necessita_n2: false, raw_materials: [{ ...emptyMP }] };
+const emptyRecipe = () => ({
+  product_name: '',
+  client: '',
+  code: '',
+  price: 0,
+  density: '',
+  validity_days: 365,
+  revision_number: 1,
+  revision: 'Revisão 01',
+  revision_date: new Date().toISOString().split('T')[0],
+  necessita_n2: false,
+  raw_materials: [emptyMP()],
+});
 
 export default function Receitas() {
   const { t } = useTranslation();
@@ -288,7 +308,7 @@ export default function Receitas() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [hideMpNames, setHideMpNames] = useState(false);
-  const [form, setForm] = useState(emptyRecipe);
+  const [form, setForm] = useState(() => emptyRecipe());
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteRevisionTarget, setDeleteRevisionTarget] = useState(null);
@@ -341,7 +361,7 @@ export default function Receitas() {
     setEditing(null);
     setIsNewRevision(false);
     setPendingFdsFile(null);
-    setForm({ ...emptyRecipe, revision_number: 1, revision: formatRevisionLabel(1), revision_date: todayISO(), raw_materials: [{ ...emptyMP }] });
+    setForm({ ...emptyRecipe(), revision_number: 1, revision: formatRevisionLabel(1), revision_date: todayISO(), raw_materials: [emptyMP()] });
     setShowForm(true);
   };
 
@@ -349,9 +369,9 @@ export default function Receitas() {
     if (!row) return;
     setPendingFdsFile(null);
     setIsNewRevision(false);
-    const parsed = parseRawMaterialsField(row.raw_materials);
+    const parsed = withMpRowKeys(parseRawMaterialsField(row.raw_materials));
     setEditing(row);
-    setForm({ ...row, necessita_n2: Boolean(row.necessita_n2), raw_materials: parsed.length ? parsed : [{ ...emptyMP }] });
+    setForm({ ...row, necessita_n2: Boolean(row.necessita_n2), raw_materials: parsed.length ? parsed : [emptyMP()] });
   };
 
   const openEdit = (r) => {
@@ -407,8 +427,23 @@ export default function Receitas() {
     });
   };
 
-  const addMP = () => setForm({ ...form, raw_materials: [...form.raw_materials, { ...emptyMP }] });
+  const addMP = () => setForm({ ...form, raw_materials: [...form.raw_materials, emptyMP()] });
   const removeMP = (idx) => setForm({ ...form, raw_materials: form.raw_materials.filter((_, i) => i !== idx) });
+
+  const reorderMP = (from, to) => {
+    if (from === to) return;
+    setForm((prev) => {
+      const mps = [...prev.raw_materials];
+      const [moved] = mps.splice(from, 1);
+      mps.splice(to, 0, moved);
+      return { ...prev, raw_materials: mps };
+    });
+  };
+
+  const handleMpDragEnd = (result) => {
+    if (!result.destination) return;
+    reorderMP(result.source.index, result.destination.index);
+  };
 
   const totalPct = form.raw_materials.reduce((s, m) => s + (m.percentage || 0), 0);
   const totalKg = form.raw_materials.reduce((s, m) => s + (m.quantity_kg || 0), 0);
@@ -435,7 +470,9 @@ export default function Receitas() {
       }
     }
 
-    const mps = form.raw_materials.map(m => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }));
+    const mps = stripMpRowKeys(
+      form.raw_materials.map((m) => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }))
+    );
     const { id: _formId, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, revision, revision_date, revision_number, ...recipeData } = form;
 
     let revisionMeta;
@@ -684,7 +721,7 @@ export default function Receitas() {
 
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-visible flex flex-col">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-visible flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               <span>{editing ? t('recipes.editRecipe', { product: editing.product_name }) : t('recipes.newRecipe')}</span>
@@ -792,44 +829,118 @@ export default function Receitas() {
                 <h3 className="text-sm font-semibold">{t('recipes.form.rawMaterials')}</h3>
                 <Button variant="outline" size="sm" onClick={addMP}><Plus className="w-3 h-3 mr-1" /> {t('recipes.form.addMp')}</Button>
               </div>
-              <div className="border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                    <th className="px-3 py-2 text-left min-w-[140px]">{t('recipes.form.mpCode')}</th>
-                    <th className="px-3 py-2 text-left">{t('recipes.form.mpName')}</th>
-                    <th className="px-3 py-2 text-right">{t('recipes.form.density')}</th>
-                    <th className="px-3 py-2 text-right">{t('recipes.form.percentMass')}</th>
-                    <th className="px-3 py-2 text-right">{t('recipes.form.quantityKg')}</th>
-                    <th className="px-3 py-2 w-8"></th>
-                  </tr></thead>
-                  <tbody>
-                    {form.raw_materials.map((m, idx) => (
-                      <tr key={idx} className="border-t">
-                        <td className="px-2 py-1 align-top relative overflow-visible">
-                          <Combobox
-                            value={m.mp_code}
-                            onValueChange={(v) => handleMpCodeChange(idx, v)}
-                            onSelect={(item) => handleMpCodeSelect(idx, item)}
-                            options={mpCodeOptions}
-                            placeholder={t('recipes.form.mpCodePlaceholder')}
-                            inputClassName="h-8 text-xs pr-8"
-                          />
-                        </td>
-                        <td className="px-2 py-1"><Input value={m.mp_name} onChange={e => updateMP(idx, 'mp_name', e.target.value)} className="h-8 text-xs" placeholder={t('recipes.form.mpNamePlaceholder')} /></td>
-                        <td className="px-2 py-1"><Input type="number" step="0.001" value={m.mp_density} onChange={e => updateMP(idx, 'mp_density', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
-                        <td className="px-2 py-1"><Input type="number" step="0.01" value={m.percentage} onChange={e => updateMP(idx, 'percentage', parseFloat(e.target.value) || 0)} className="h-8 text-xs text-right" /></td>
-                        <td className="px-2 py-1 text-right text-xs font-medium text-muted-foreground">{calcQty(m.percentage || 0).toFixed(3)}</td>
-                        <td className="px-1"><button onClick={() => removeMP(idx)} className="p-1 hover:bg-muted rounded"><X className="w-3 h-3 text-red-400" /></button></td>
+              <p className="text-xs text-muted-foreground mb-2">{t('recipes.form.seqDragHint')}</p>
+              <div className="border rounded-lg overflow-x-auto">
+                <DragDropContext onDragEnd={handleMpDragEnd}>
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-14" />
+                      <col className="w-[9.5rem]" />
+                      <col />
+                      <col className="w-[4.75rem]" />
+                      <col className="w-[4.75rem]" />
+                      <col className="w-[5.5rem]" />
+                      <col className="w-8" />
+                    </colgroup>
+                    <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
+                      <th className="px-1 py-2 text-center">{t('recipes.form.seq')}</th>
+                      <th className="px-2 py-2 text-left">{t('recipes.form.mpCode')}</th>
+                      <th className="px-2 py-2 text-left">{t('recipes.form.mpName')}</th>
+                      <th className="px-1 py-2 text-right leading-tight">{t('recipes.form.density')}</th>
+                      <th className="px-1 py-2 text-right">{t('recipes.form.percentMass')}</th>
+                      <th className="px-2 py-2 text-right">{t('recipes.form.quantityKg')}</th>
+                      <th className="px-1 py-2"></th>
+                    </tr></thead>
+                    <Droppable droppableId="recipe-raw-materials">
+                      {(dropProvided) => (
+                        <tbody ref={dropProvided.innerRef} {...dropProvided.droppableProps}>
+                          {form.raw_materials.map((m, idx) => (
+                            <Draggable key={m._key} draggableId={m._key} index={idx}>
+                              {(dragProvided, snapshot) => (
+                                <tr
+                                  ref={dragProvided.innerRef}
+                                  {...dragProvided.draggableProps}
+                                  className={`border-t bg-card ${snapshot.isDragging ? 'shadow-md ring-1 ring-primary/30' : ''}`}
+                                  style={dragProvided.draggableProps.style}
+                                >
+                                  <td className="px-0.5 py-1 align-middle">
+                                    <div className="flex items-center justify-center gap-0.5">
+                                      <button
+                                        type="button"
+                                        className="p-1 rounded text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+                                        aria-label={t('recipes.form.seqReorder')}
+                                        title={t('recipes.form.seqReorder')}
+                                        {...dragProvided.dragHandleProps}
+                                      >
+                                        <GripVertical className="w-3.5 h-3.5" />
+                                      </button>
+                                      <span className="text-xs font-semibold text-muted-foreground tabular-nums min-w-[1.25rem] text-center">
+                                        {t('recipes.view.seqOrdinal', { n: idx + 1 })}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-1.5 py-1 align-top relative overflow-visible">
+                                    <Combobox
+                                      value={m.mp_code}
+                                      onValueChange={(v) => handleMpCodeChange(idx, v)}
+                                      onSelect={(item) => handleMpCodeSelect(idx, item)}
+                                      options={mpCodeOptions}
+                                      placeholder={t('recipes.form.mpCodePlaceholder')}
+                                      inputClassName="h-8 text-xs pr-8 w-full"
+                                    />
+                                  </td>
+                                  <td className="px-1.5 py-1">
+                                    <Input
+                                      value={m.mp_name}
+                                      onChange={e => updateMP(idx, 'mp_name', e.target.value)}
+                                      className="h-8 text-xs w-full min-w-0"
+                                      placeholder={t('recipes.form.mpNamePlaceholder')}
+                                    />
+                                  </td>
+                                  <td className="px-1 py-1">
+                                    <Input
+                                      type="number"
+                                      step="0.001"
+                                      value={m.mp_density}
+                                      onChange={e => updateMP(idx, 'mp_density', parseFloat(e.target.value) || 0)}
+                                      className="h-8 text-xs text-right w-full px-1.5"
+                                    />
+                                  </td>
+                                  <td className="px-1 py-1">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={m.percentage}
+                                      onChange={e => updateMP(idx, 'percentage', parseFloat(e.target.value) || 0)}
+                                      className="h-8 text-xs text-right w-full px-1.5"
+                                    />
+                                  </td>
+                                  <td className="px-1.5 py-1 text-right text-xs font-medium text-muted-foreground tabular-nums whitespace-nowrap">
+                                    {calcQty(m.percentage || 0).toFixed(3)}
+                                  </td>
+                                  <td className="px-0.5 py-1 text-center">
+                                    <button type="button" onClick={() => removeMP(idx)} className="p-1 hover:bg-muted rounded">
+                                      <X className="w-3 h-3 text-red-400" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )}
+                            </Draggable>
+                          ))}
+                          {dropProvided.placeholder}
+                        </tbody>
+                      )}
+                    </Droppable>
+                    <tbody>
+                      <tr className="border-t bg-muted/50">
+                        <td colSpan={4} className="px-3 py-2 text-xs font-bold" style={{ color: '#2575D1' }}>{t('common.totals').toUpperCase()}</td>
+                        <td className="px-1 py-2 text-right text-xs font-bold tabular-nums" style={{ color: totalPct === 100 ? '#10B981' : '#EF4444' }}>{totalPct.toFixed(2)} %</td>
+                        <td className="px-1.5 py-2 text-right text-xs font-bold tabular-nums" style={{ color: '#2575D1' }}>{totalKg.toFixed(3)} {t('common.units.kg')}</td>
+                        <td></td>
                       </tr>
-                    ))}
-                    <tr className="border-t bg-muted/50">
-                      <td colSpan={3} className="px-3 py-2 text-xs font-bold" style={{ color: '#2575D1' }}>{t('common.totals').toUpperCase()}</td>
-                      <td className="px-3 py-2 text-right text-xs font-bold" style={{ color: totalPct === 100 ? '#10B981' : '#EF4444' }}>{totalPct.toFixed(2)} %</td>
-                      <td className="px-3 py-2 text-right text-xs font-bold" style={{ color: '#2575D1' }}>{totalKg.toFixed(3)} {t('common.units.kg')}</td>
-                      <td></td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </DragDropContext>
               </div>
             </div>
 

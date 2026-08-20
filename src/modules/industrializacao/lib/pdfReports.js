@@ -11,6 +11,7 @@ import {
   containerLiveGrossWeight,
   resolveProductDensity,
   stockUnitPriceOf,
+  formatContainerPackagingForProduction,
 } from '@industrializacao/lib/productionViewUtils';
 import { getLatestRecipeForProduct, resolveProductCode } from '@industrializacao/lib/recipeRevisions';
 import {
@@ -803,9 +804,10 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
   const opNum = production.op_number || '';
   const opTitle = opNum + (production.product ? ' - ' + production.product : '');
   const pkgs = containers && containers.length > 0 ? containers : [];
+  const origins = options.origins || [];
   let packagingLabel = production.packaging_type || production.packaging_info || '-';
   if (pkgs.length === 1) {
-    packagingLabel = pkgs[0].container_number || packagingLabel;
+    packagingLabel = formatContainerPackagingForProduction(pkgs[0], production, origins) || pkgs[0].container_number || packagingLabel;
   } else if (pkgs.length > 1) {
     packagingLabel = t('pdf.production.fields.packagingCount', {
       count: String(pkgs.length).padStart(2, '0'),
@@ -887,9 +889,10 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
       const liveNet = containerLiveNetWeight(c, production, recipes);
       const liveGross = containerLiveGrossWeight(c, production, recipes);
       const seq = String(i + 1).padStart(2, '0');
+      const packagingName = formatContainerPackagingForProduction(c, production, origins) || c.container_number || '-';
       const label = complete
-        ? (seq + ' - ' + (c.container_number || '-'))
-        : (c.container_number || '-');
+        ? (seq + ' - ' + packagingName)
+        : packagingName;
       return [label, c.type || '-', fmtNum(c.volume, 1), fmtNum(liveNet, 0), fmtNum(liveGross, 0), tareVal];
     });
     const tVol = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
@@ -906,11 +909,12 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
   addFooter(doc, lang);
 }
 
-export function generateProductionPDF(production, containers, stocks, recipes = []) {
+export function generateProductionPDF(production, containers, stocks, recipes = [], origins = []) {
   const { t } = getPdfLabels();
   const doc = new jsPDF({ format: 'a4' });
   drawProductionReport(doc, production, containers, stocks, {
     recipes,
+    origins,
     complete: true,
     subtitle: t('pdf.production.completeSubtitle'),
   });

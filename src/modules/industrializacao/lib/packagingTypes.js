@@ -65,6 +65,51 @@ export function getContainerPackageQty(container) {
   return parsed != null ? parsed : 1;
 }
 
+/**
+ * Quantidade envasada original (não o saldo de pátio).
+ * Após expedição parcial o `container_number` passa a refletir o estoque restante
+ * ("01 x IBC"); a produção deve continuar mostrando as 25 unidades envasadas.
+ */
+export function getOriginalPackageQty(container, { initialVolume = 0, productionVolume = 0 } = {}) {
+  const current = getContainerPackageQty(container);
+  const stored = Math.floor(Number(container?.original_package_qty) || 0);
+  if (stored >= 1 && stored >= current) return stored;
+
+  const currVol = parseFloat(container?.volume) || 0;
+  const initVol = parseFloat(initialVolume) || 0;
+  const prodVol = parseFloat(productionVolume) || 0;
+  const referenceVol = Math.max(initVol, prodVol);
+
+  if (currVol > 0.0005 && current >= 1 && referenceVol > currVol + 0.0005) {
+    const perUnit = currVol / current;
+    if (perUnit > 0) {
+      const reconstructed = Math.round(referenceVol / perUnit);
+      if (Number.isFinite(reconstructed) && reconstructed >= current) return reconstructed;
+    }
+  }
+
+  if (isUnitPackagingType(container?.type) && referenceVol > 0) {
+    return Math.max(current, suggestPackageQty(container.type, referenceVol));
+  }
+
+  return Math.max(current, 1);
+}
+
+/** Rótulo agregado com a quantidade originalmente envasada. */
+export function formatOriginalAggregatedLabel(container, qtyHint = {}) {
+  if (!container) return '';
+  if (!isUnitPackagingLike(container.type, container.container_number)) {
+    return container.container_number || '';
+  }
+  const qty = getOriginalPackageQty(container, qtyHint);
+  if (isUnitPackagingType(container.type)) {
+    return formatAggregatedContainerLabel(qty, container.type);
+  }
+  const rest = stripAggregatedQtyPrefix(container.container_number);
+  if (rest) return `${String(qty).padStart(2, '0')} x ${rest}`;
+  return formatAggregatedContainerLabel(qty, container.type);
+}
+
 const UNIT_PACKAGING_HINT = /ibc|tambor|bombona|one\s*way/i;
 
 /**

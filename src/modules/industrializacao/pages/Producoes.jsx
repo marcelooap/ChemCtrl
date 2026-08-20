@@ -17,7 +17,7 @@ import QrCodeDialog from '@industrializacao/components/productions/QrCodeDialog'
 import ProductionViewDialog from '@industrializacao/components/production/ProductionViewDialog';
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
 import { isComplementPending } from '@industrializacao/lib/fractionalSupply';
-import { parseArr, containersOfProductionLot } from '@industrializacao/lib/productionViewUtils';
+import { parseArr, containersOfProductionLot, formatContainerPackagingForProduction, uniqueContainersFromPackagingRows } from '@industrializacao/lib/productionViewUtils';
 import { packagingRowsForProduction } from '@industrializacao/lib/containerOrigins';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
@@ -116,7 +116,11 @@ export default function Producoes() {
       return list.length ? list : containersOfProductionLot(containers, p);
     };
     const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
-      || opContainersOf().some(c => (c.container_number || '').toLowerCase().includes(q))
+      || opContainersOf().some((c) => {
+        const original = formatContainerPackagingForProduction(c, p, containerOrigins);
+        return (c.container_number || '').toLowerCase().includes(q)
+          || (original || '').toLowerCase().includes(q);
+      })
       || (p.packaging_type || '').toLowerCase().includes(q);
     const fabRaw = p.end_time || p.updated_date || null;
     const fabDate = fabRaw ? moment(fabRaw) : null;
@@ -463,31 +467,26 @@ export default function Producoes() {
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">
                       {(() => {
                         const rows = packagingRowsForProduction(containers, containerOrigins, p);
-                        const opContainers = [];
-                        const seen = new Set();
-                        for (const r of rows) {
-                          if (r.container?.id && !seen.has(r.container.id)) {
-                            seen.add(r.container.id);
-                            opContainers.push(r.container);
-                          }
-                        }
+                        const opContainers = uniqueContainersFromPackagingRows(rows);
+                        const na = t('common.notAvailable');
+                        const labelOf = (c) => formatContainerPackagingForProduction(c, p, containerOrigins) || c?.container_number || p.packaging_type || na;
                         if (opContainers.length === 0) {
                           const legacy = containersOfProductionLot(containers, p);
                           if (legacy.length > 0) {
                             if (legacy.length > 1) {
                               return t('production.packaging.loadUnits', { count: String(legacy.length).padStart(2, '0') });
                             }
-                            return legacy[0].container_number || p.packaging_type || t('common.notAvailable');
+                            return labelOf(legacy[0]);
                           }
-                          return p.packaging_type || t('common.notAvailable');
+                          return p.packaging_info || p.packaging_type || na;
                         }
                         if (rows.length > 1 && opContainers.length === 1) {
-                          return `${opContainers[0].container_number || t('common.notAvailable')} (${rows.length} ${t('production.opNumber').toLowerCase()})`;
+                          return `${labelOf(opContainers[0])} (${rows.length} ${t('production.opNumber').toLowerCase()})`;
                         }
                         if (opContainers.length > 1) {
                           return t('production.packaging.loadUnits', { count: String(opContainers.length).padStart(2, '0') });
                         }
-                        return opContainers[0].container_number || p.packaging_type || t('common.notAvailable');
+                        return labelOf(opContainers[0]);
                       })()}
                     </td>
                     <td className="px-4 py-2.5 text-center">
@@ -574,7 +573,7 @@ export default function Producoes() {
         canEditMp={isAdmin}
         savingMp={savingMp}
         onSaveMp={saveMpQuantities}
-        onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks, recipes)}
+        onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks, recipes, containerOrigins)}
         onGenerateTanksPdf={(selected) => {
           if (!selected || selected.length === 0) {
             generateProductionOpFiscalPDF(viewing, stocks, recipes);
