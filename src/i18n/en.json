@@ -2831,6 +2831,9 @@
       "expectedDate": "Expected Delivery Date",
       "observations": "Notes",
       "productPlaceholder": "Select or search...",
+      "requesterPlaceholder": "Select a person",
+      "requesterSelectProductFirst": "Select the product first",
+      "requesterEmpty": "No previous requester — type the name",
       "saveChanges": "Save Changes",
       "register": "Register Order"
     },
@@ -4006,6 +4009,14 @@
       "registerTank": "Register Tank",
       "emptyTitle": "No tanks registered",
       "emptyHint": "Click \"Register Tank\" to get started.",
+      "searchPlaceholder": "Filter by client, product or lot...",
+      "emptyFilterTitle": "No tanks found",
+      "emptyFilterHint": "Try a different search term.",
+      "viewTank": "View",
+      "viewDialog": {
+        "title": "Tank Details",
+        "details": "Tank Data"
+      },
       "overviewTitle": "Overview — Silos by Client",
       "tankCount": "{{count}} tank(s) · {{volume}} L",
       "noClient": "No client",

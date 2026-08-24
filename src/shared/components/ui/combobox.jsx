@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-export default function Combobox({ value, onValueChange, options = [], placeholder = '', onSelect, inputClassName }) {
+export default function Combobox({ value, onValueChange, options = [], placeholder = '', onSelect, inputClassName, emptyOptionsLabel, disabled = false }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -34,6 +34,10 @@ export default function Combobox({ value, onValueChange, options = [], placehold
     }
   }, [highlight]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   const pick = (opt) => {
     const next = opt.value != null && opt.value !== '' ? opt.value : opt.label;
     onValueChange(next);
@@ -42,6 +46,7 @@ export default function Combobox({ value, onValueChange, options = [], placehold
   };
 
   const onKey = (e) => {
+    if (disabled) return;
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) {
       setOpen(true);
       return;
@@ -57,8 +62,9 @@ export default function Combobox({ value, onValueChange, options = [], placehold
       <input
         type="text"
         value={value || ''}
+        disabled={disabled}
         onChange={e => { onValueChange(e.target.value); if (!open) setOpen(true); }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { if (!disabled) setOpen(true); }}
         onKeyDown={onKey}
         placeholder={placeholder}
         className={cn("flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50", inputClassName)}
@@ -66,17 +72,20 @@ export default function Combobox({ value, onValueChange, options = [], placehold
       <button
         type="button"
         tabIndex={-1}
-        onClick={() => setOpen(o => !o)}
-        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        disabled={disabled}
+        onClick={() => { if (!disabled) setOpen(o => !o); }}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:pointer-events-none"
       >
         <ChevronDown className={cn('w-4 h-4 transition-transform', open && 'rotate-180')} />
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div ref={listRef} className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-popover shadow-md">
           {filtered.length === 0 ? (
             <div className="py-4 text-center text-sm text-muted-foreground">
-              {options.length === 0 ? t('common.comboboxNoRawMaterial') : t('common.comboboxNoResult')}
+              {options.length === 0
+                ? (emptyOptionsLabel || t('common.comboboxNoRawMaterial'))
+                : t('common.comboboxNoResult')}
             </div>
           ) : (
             filtered.map((opt, idx) => {

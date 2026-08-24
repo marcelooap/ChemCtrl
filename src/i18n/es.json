@@ -2705,6 +2705,9 @@
       "expectedDate": "Fecha Prevista de Atención",
       "observations": "Observación",
       "productPlaceholder": "Seleccione o busque...",
+      "requesterPlaceholder": "Seleccione una persona",
+      "requesterSelectProductFirst": "Seleccione el producto primero",
+      "requesterEmpty": "Ningún solicitante anterior — escriba el nombre",
       "saveChanges": "Guardar Cambios",
       "register": "Registrar Pedido"
     },
@@ -3818,6 +3821,14 @@
       "registerTank": "Registrar Tanque",
       "emptyTitle": "Ningún tanque registrado",
       "emptyHint": "Haga clic en \"Registrar Tanque\" para comenzar.",
+      "searchPlaceholder": "Filtrar por cliente, producto o lote...",
+      "emptyFilterTitle": "Ningún tanque encontrado",
+      "emptyFilterHint": "Pruebe con otro término de búsqueda.",
+      "viewTank": "Visualizar",
+      "viewDialog": {
+        "title": "Detalles del Tanque",
+        "details": "Datos del Tanque"
+      },
       "overviewTitle": "Visión General — Silos por Cliente",
       "tankCount": "{{count}} tanque(s) · {{volume}} L",
       "noClient": "Sin cliente",

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@shared/components/ui/dropdown-menu';
 import ProductCombobox from '@shared/components/ui/ProductCombobox';
+import Combobox from '@shared/components/ui/combobox';
 import DateInputBr from '@shared/components/ui/DateInputBr';
 import { useToast } from '@shared/components/ui/use-toast';
 import OrderDetailsDialog from '@industrializacao/components/pedidos/OrderDetailsDialog';
@@ -229,9 +230,36 @@ export default function Pedidos() {
   };
   const openDetails = (o) => { setDetailOrder(o); setShowDetails(true); };
 
+  const requesterOptions = useMemo(() => {
+    const client = (form.client || '').trim().toLowerCase();
+    if (!client) return [];
+    const map = new Map();
+    rawOrders.forEach((o) => {
+      if ((o.client || '').trim().toLowerCase() !== client) return;
+      const name = (o.requester || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!map.has(key)) map.set(key, name);
+    });
+    return Array.from(map.values())
+      .sort((a, b) => a.localeCompare(b, i18n.language))
+      .map((name) => ({ value: name, label: name }));
+  }, [rawOrders, form.client, i18n.language]);
+
   const handleProductChange = (productName) => {
     const recipe = getLatestRecipeForProduct(recipes, productName);
-    setForm(prev => ({ ...prev, product: productName, client: recipe?.client || prev.client }));
+    const nextClient = recipe?.client || '';
+    setForm((prev) => {
+      const prevClient = (prev.client || '').trim().toLowerCase();
+      const newClient = (nextClient || prev.client || '').trim().toLowerCase();
+      const clientChanged = Boolean(newClient) && newClient !== prevClient;
+      return {
+        ...prev,
+        product: productName,
+        client: nextClient || prev.client,
+        requester: clientChanged ? '' : prev.requester,
+      };
+    });
   };
 
   const save = async () => {
@@ -490,9 +518,6 @@ export default function Pedidos() {
                 <label className="text-xs font-medium text-muted-foreground">{t('orders.form.date')} *</label>
                 <DateInputBr value={form.date} onChange={(date) => setForm({ ...form, date })} />
               </div>
-              <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.requester')} *</label><Input value={form.requester} onChange={e => setForm({ ...form, requester: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">{t('orders.form.product')} *</label>
                 <ProductCombobox
@@ -502,7 +527,21 @@ export default function Pedidos() {
                   placeholder={t('orders.form.productPlaceholder')}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.client')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('orders.form.requester')} *</label>
+                <Combobox
+                  value={form.requester}
+                  onValueChange={(requester) => setForm({ ...form, requester })}
+                  options={requesterOptions}
+                  placeholder={form.client ? t('orders.form.requesterPlaceholder') : t('orders.form.requesterSelectProductFirst')}
+                  emptyOptionsLabel={t('orders.form.requesterEmpty')}
+                  disabled={!form.client}
+                  inputClassName={!form.client ? 'bg-muted/50' : undefined}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('orders.form.clientOrder')}</label><Input value={form.client_order} onChange={e => setForm({ ...form, client_order: e.target.value })} /></div>

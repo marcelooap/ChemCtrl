@@ -2,13 +2,14 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
-import { Plus, Cylinder, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Cylinder, Eye, Search, Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
+import TankViewDialog from '@industrializacao/components/vasilhames/TankViewDialog';
 import { fmtNumber } from '@/i18n/formatters';
 
 const parseArr = (val) => {
@@ -51,6 +52,8 @@ export default function Tankagem() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [viewTank, setViewTank] = useState(null);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ name: '', client: '' });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -122,18 +125,36 @@ export default function Tankagem() {
     });
   }, [tanks, stockEntries, containers]);
 
+  const filteredTanks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tanksWithData;
+    return tanksWithData.filter((tank) => {
+      const haystack = [
+        tank.name,
+        tank.client,
+        tank.latest_product,
+        tank.computed_lot,
+        ...(tank.computed_products || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [tanksWithData, search]);
+
   const tanksByClient = useMemo(() => {
     const groups = {};
-    tanksWithData.forEach(item => {
+    filteredTanks.forEach(item => {
       const client = item.client || t('containers.tankagePage.noClient');
       if (!groups[client]) groups[client] = [];
       groups[client].push(item);
     });
     return groups;
-  }, [tanksWithData, t]);
+  }, [filteredTanks, t]);
 
-  const totalVolume = tanksWithData.reduce((s, item) => s + (item.current_volume || 0), 0);
-  const totalCapacity = tanksWithData.reduce((s, item) => s + (item.capacity || 26000), 0);
+  const totalVolume = filteredTanks.reduce((s, item) => s + (item.current_volume || 0), 0);
+  const totalCapacity = filteredTanks.reduce((s, item) => s + (item.capacity || 26000), 0);
 
   const openNew = () => {
     setEditing(null);
@@ -142,9 +163,15 @@ export default function Tankagem() {
   };
 
   const openEdit = (item) => {
+    setViewTank(null);
     setEditing(item);
     setForm({ name: item.name || '', client: item.client || '' });
     setShowForm(true);
+  };
+
+  const openDelete = (item) => {
+    setViewTank(null);
+    setDeleteTarget(item);
   };
 
   const save = async () => {
@@ -179,30 +206,54 @@ export default function Tankagem() {
   };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">🛢 {t('containers.tankage.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('containers.tankagePage.subtitle', { count: tanks.length, used: fmt(totalVolume), capacity: fmt(totalCapacity) })}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('containers.tankagePage.subtitle', {
+              count: filteredTanks.length,
+              used: fmt(totalVolume),
+              capacity: fmt(totalCapacity),
+            })}
+          </p>
         </div>
         <Button onClick={openNew} style={{ background: '#2575D1' }} className="text-white">
           <Plus className="w-4 h-4 mr-2" /> {t('containers.tankagePage.registerTank')}
         </Button>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
+      {tanks.length > 0 && (
+        <div className="shrink-0 relative mb-4 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder={t('containers.tankagePage.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 bg-white"
+          />
         </div>
-      ) : tanks.length === 0 ? (
-        <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
-          <Cylinder className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-lg font-medium text-muted-foreground">{t('containers.tankagePage.emptyTitle')}</p>
-          <p className="text-sm text-muted-foreground mt-1">{t('containers.tankagePage.emptyHint')}</p>
-        </div>
-      ) : (
-        <>
-          <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
+          </div>
+        ) : tanks.length === 0 ? (
+          <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
+            <Cylinder className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">{t('containers.tankagePage.emptyTitle')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('containers.tankagePage.emptyHint')}</p>
+          </div>
+        ) : filteredTanks.length === 0 ? (
+          <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
+            <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">{t('containers.tankagePage.emptyFilterTitle')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('containers.tankagePage.emptyFilterHint')}</p>
+          </div>
+        ) : (
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6">
             <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">{t('containers.tankagePage.overviewTitle')}</h2>
             {Object.entries(tanksByClient).map(([client, clientTanks]) => {
               const clientColor = getClientColor(client);
@@ -218,7 +269,7 @@ export default function Tankagem() {
                       const fillPercent = Math.min(100, ((tank.current_volume || 0) / (tank.capacity || 26000)) * 100);
                       const productColor = getProductColor(tank.latest_product) || clientColor;
                       return (
-                        <div key={tank.id} className="flex flex-col items-center">
+                        <div key={tank.id} className="flex flex-col items-center group">
                           <div className="relative" style={{ width: 100 }}>
                             <div className="h-7 rounded-t-full border-2 border-b-0 border-border bg-muted" />
                             <div className="relative h-52 border-2 border-t-0 overflow-hidden border-border bg-muted/50">
@@ -236,6 +287,16 @@ export default function Tankagem() {
                             <p className="text-xs font-medium truncate">{tank.latest_product || na}</p>
                             {tank.computed_lot && <p className="text-xs text-muted-foreground">{t('quality.fields.lot')}: {tank.computed_lot}</p>}
                             <p className="text-xs text-muted-foreground mt-0.5">{t('containers.tankagePage.capacityShort')}: {fmt(tank.capacity)} L</p>
+                            <button
+                              type="button"
+                              onClick={() => setViewTank(tank)}
+                              className="mt-2 inline-flex items-center justify-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors"
+                              title={t('containers.tankagePage.viewTank')}
+                              aria-label={t('containers.tankagePage.viewTank')}
+                            >
+                              <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                              {t('containers.tankagePage.viewTank')}
+                            </button>
                           </div>
                         </div>
                       );
@@ -245,60 +306,8 @@ export default function Tankagem() {
               );
             })}
           </div>
-
-          <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full chemctrl-table">
-                <thead><tr className="border-b border-border bg-muted/50/50">
-                  <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.tank')}</th>
-                  <th className="px-4 py-3 text-left">{t('containers.fields.client')}</th>
-                  <th className="px-4 py-3 text-left">{t('containers.tankagePage.table.products')}</th>
-                  <th className="px-4 py-3 text-left">{t('quality.fields.lot')}</th>
-                  <th className="px-4 py-3 text-right">{t('containers.tankagePage.table.currentVolume')}</th>
-                  <th className="px-4 py-3 text-right">{t('containers.tankagePage.table.capacity')}</th>
-                  <th className="px-4 py-3 text-center">{t('containers.tankagePage.table.occupancy')}</th>
-                  <th className="px-4 py-3 text-center">{t('common.actions')}</th>
-                </tr></thead>
-                <tbody>
-                  {tanksWithData.map(tank => {
-                    const fillPercent = Math.min(100, ((tank.current_volume || 0) / (tank.capacity || 26000)) * 100);
-                    const clientColor = getClientColor(tank.client);
-                    return (
-                      <tr key={tank.id} className="border-b border-border hover:bg-accent/30">
-                        <td className="px-4 py-3 font-bold text-sm">{tank.name}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: clientColor }} />
-                            {tank.client || na}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{tank.latest_product || na}</td>
-                        <td className="px-4 py-3 text-sm font-mono">{tank.computed_lot || na}</td>
-                        <td className="px-4 py-3 text-right text-sm font-bold">{fmt(tank.current_volume)}</td>
-                        <td className="px-4 py-3 text-right text-sm text-muted-foreground">{fmt(tank.capacity)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
-                              <div className="h-full rounded-full transition-all" style={{ width: `${fillPercent}%`, backgroundColor: clientColor }} />
-                            </div>
-                            <span className="text-xs font-medium text-muted-foreground w-10 text-right">{fillPercent.toFixed(0)}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => openEdit(tank)} className="p-1.5 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                            <button onClick={() => setDeleteTarget(tank)} className="p-1.5 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
+        )}
+      </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-md">
@@ -326,6 +335,15 @@ export default function Tankagem() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <TankViewDialog
+        tank={viewTank}
+        open={!!viewTank}
+        onOpenChange={(open) => { if (!open) setViewTank(null); }}
+        onEdit={openEdit}
+        onDelete={openDelete}
+        fmt={fmt}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

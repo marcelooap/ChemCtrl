@@ -680,12 +680,12 @@ export default function Receitas() {
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
                     <td className="px-4 py-2.5 text-center text-sm">
                       <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-                        {(r.price || 0).toFixed(4)}
+                        {Number(r.price) ? Number(r.price).toFixed(4) : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center text-sm">
                       <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">
-                        {calcPriceWithoutTax(r.price).toFixed(4)}
+                        {Number(r.price) ? calcPriceWithoutTax(r.price).toFixed(4) : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>

@@ -2688,6 +2688,9 @@
       "expectedDate": "Date de Livraison Prévue",
       "observations": "Observation",
       "productPlaceholder": "Sélectionner ou rechercher...",
+      "requesterPlaceholder": "Sélectionnez une personne",
+      "requesterSelectProductFirst": "Sélectionnez d'abord le produit",
+      "requesterEmpty": "Aucun demandeur précédent — saisissez le nom",
       "saveChanges": "Enregistrer Modifications",
       "register": "Enregistrer Commande"
     },
@@ -3812,6 +3815,14 @@
       "registerTank": "Enregistrer une Cuve",
       "emptyTitle": "Aucune cuve enregistrée",
       "emptyHint": "Cliquez sur \"Enregistrer une Cuve\" pour commencer.",
+      "searchPlaceholder": "Filtrer par client, produit ou lot...",
+      "emptyFilterTitle": "Aucune cuve trouvée",
+      "emptyFilterHint": "Essayez un autre terme de recherche.",
+      "viewTank": "Voir",
+      "viewDialog": {
+        "title": "Détails de la Cuve",
+        "details": "Données de la Cuve"
+      },
       "overviewTitle": "Vue d'Ensemble — Silos par Client",
       "tankCount": "{{count}} cuve(s) · {{volume}} L",
       "noClient": "Sans client",

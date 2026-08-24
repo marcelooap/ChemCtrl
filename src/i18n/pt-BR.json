@@ -2732,6 +2732,9 @@
       "expectedDate": "Data Prevista para Atendimento",
       "observations": "Observação",
       "productPlaceholder": "Selecione ou busque...",
+      "requesterPlaceholder": "Selecione uma pessoa",
+      "requesterSelectProductFirst": "Selecione o produto primeiro",
+      "requesterEmpty": "Nenhum solicitante anterior — digite o nome",
       "saveChanges": "Salvar Alterações",
       "register": "Registrar Pedido"
     },
@@ -3894,6 +3897,14 @@
       "registerTank": "Cadastrar Tanka",
       "emptyTitle": "Nenhuma tanka cadastrada",
       "emptyHint": "Clique em \"Cadastrar Tanka\" para começar.",
+      "searchPlaceholder": "Filtrar por cliente, produto ou lote...",
+      "emptyFilterTitle": "Nenhuma tanka encontrada",
+      "emptyFilterHint": "Tente outro termo de busca.",
+      "viewTank": "Visualizar",
+      "viewDialog": {
+        "title": "Detalhes da Tanka",
+        "details": "Dados da Tanka"
+      },
       "overviewTitle": "Visão Geral — Silos por Cliente",
       "tankCount": "{{count}} tanka(s) · {{volume}} L",
       "noClient": "Sem cliente",
