@@ -1216,6 +1216,12 @@
         "status": {
           "dentro": "Dentro del horario",
           "fora": "Fuera de horario"
+        },
+        "stats": {
+          "title": "Puntualidad del mes",
+          "dayTitle": "Puntualidad del día",
+          "monthFilter": "Filtrar por mes",
+          "total": "Total"
         }
       },
       "topics": {

@@ -1216,6 +1216,12 @@
         "status": {
           "dentro": "Dans les temps",
           "fora": "Hors délai"
+        },
+        "stats": {
+          "title": "Ponctualité du mois",
+          "dayTitle": "Ponctualité du jour",
+          "monthFilter": "Filtrer par mois",
+          "total": "Total"
         }
       },
       "topics": {

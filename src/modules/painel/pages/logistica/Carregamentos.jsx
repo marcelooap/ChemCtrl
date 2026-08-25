@@ -22,8 +22,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@shared/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shared/components/ui/select';
 import { entities } from '@transbordo/services/entities';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
+import PontualidadeStatsCard, {
+  computePontualidadeStats,
+} from '@painel/components/logistica/PontualidadeStatsCard';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
@@ -35,8 +45,17 @@ import {
 } from '@painel/lib/agendamentosCarregamento';
 import { checklistItemsFromBooking } from '@painel/lib/carregamentoChecklistConfig';
 
+/** Mês (YYYY-MM) da data efetiva do carregamento. */
+const rowMonthKey = (row) =>
+  String(row?.data_carregamento || row?.data || '').slice(0, 7);
+
+const currentMonthKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export default function LogisticaCarregamentos() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -52,6 +71,7 @@ export default function LogisticaCarregamentos() {
   const [viewPicker, setViewPicker] = useState(null);
   const [revertTarget, setRevertTarget] = useState(null);
   const [reverting, setReverting] = useState(false);
+  const [statsMonth, setStatsMonth] = useState(currentMonthKey);
 
   const saidasById = useMemo(() => {
     const map = new Map();
@@ -142,6 +162,35 @@ export default function LogisticaCarregamentos() {
 
   const hasDateFilter = Boolean(dateFrom || dateTo);
 
+  // Meses disponíveis para o filtro do contador (sempre inclui o mês atual).
+  const statsMonthOptions = useMemo(() => {
+    const months = new Set([currentMonthKey()]);
+    for (const row of rows) {
+      const key = rowMonthKey(row);
+      if (/^\d{4}-\d{2}$/.test(key)) months.add(key);
+    }
+    return [...months].sort((a, b) => b.localeCompare(a));
+  }, [rows]);
+
+  const statsMonthLabel = useCallback(
+    (key) => {
+      const [y, m] = key.split('-').map(Number);
+      if (!y || !m) return key;
+      const label = new Intl.DateTimeFormat(i18n.language, {
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date(y, m - 1, 1));
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    },
+    [i18n.language]
+  );
+
+  // Pontualidade dos carregamentos concluídos no mês selecionado.
+  const pontualidadeStats = useMemo(
+    () => computePontualidadeStats(rows.filter((row) => rowMonthKey(row) === statsMonth)),
+    [rows, statsMonth]
+  );
+
   const resolveSaida = (booking) => saidasById.get(String(booking?.saida_id));
 
   const openView = (row) => {
@@ -202,13 +251,36 @@ export default function LogisticaCarregamentos() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
-      <div className="shrink-0">
-        <h1 className="text-2xl font-bold text-foreground">
-          {t('painel.logistica.sections.carregamentos.title')}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {t('painel.logistica.sections.carregamentos.subtitle')}
-        </p>
+      <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground">
+            {t('painel.logistica.sections.carregamentos.title')}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {t('painel.logistica.sections.carregamentos.subtitle')}
+          </p>
+        </div>
+        <PontualidadeStatsCard
+          stats={pontualidadeStats}
+          title={t('painel.logistica.carregamentos.stats.title')}
+          action={
+            <Select value={statsMonth} onValueChange={setStatsMonth}>
+              <SelectTrigger
+                className="h-7 w-[160px] text-xs"
+                aria-label={t('painel.logistica.carregamentos.stats.monthFilter')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statsMonthOptions.map((key) => (
+                  <SelectItem key={key} value={key} className="text-xs">
+                    {statsMonthLabel(key)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
       </div>
 
       <div className="flex-1 min-h-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">

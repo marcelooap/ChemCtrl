@@ -1385,6 +1385,12 @@
         "status": {
           "dentro": "On time",
           "fora": "Late"
+        },
+        "stats": {
+          "title": "Monthly punctuality",
+          "dayTitle": "Daily punctuality",
+          "monthFilter": "Filter by month",
+          "total": "Total"
         }
       },
       "recebimento": {

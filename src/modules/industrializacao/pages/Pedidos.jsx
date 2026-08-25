@@ -36,6 +36,7 @@ import {
   getDaysUntilExpected,
   getOrderDisplayStatus,
   deriveOrderFromProductions,
+  healProductionsCanceledByCqReject,
 } from '@industrializacao/lib/orderProductionStatus';
 
 const emptyOrder = () => ({
@@ -96,17 +97,18 @@ export default function Pedidos() {
 
   // Corrige legado: OP Cancelado apenas por CQ Reprovado → Finalizado
   useEffect(() => {
-    const toHeal = (productions || []).filter(
-      (p) => p.status === 'Cancelado' && p.qc_status === 'Reprovado' && p.id
-    );
-    if (toHeal.length === 0) return;
-    const key = toHeal.map((p) => p.id).sort().join('|');
-    if (key === cqCancelHealRef.current) return;
+    if (!productions?.length) return;
+    const key = `v2|${productions
+      .filter((p) => p.status === 'Cancelado')
+      .map((p) => p.id)
+      .sort()
+      .join('|')}`;
+    if (!key || key === cqCancelHealRef.current) return;
     cqCancelHealRef.current = key;
-    Promise.all(
-      toHeal.map((p) => base44.entities.Production.update(p.id, { status: 'Finalizado' }))
-    )
-      .then(() => loadProductions?.())
+    healProductionsCanceledByCqReject(base44.entities, productions)
+      .then((count) => {
+        if (count > 0) loadProductions?.();
+      })
       .catch(() => {
         cqCancelHealRef.current = '';
       });

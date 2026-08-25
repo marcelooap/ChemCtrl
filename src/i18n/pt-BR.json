@@ -1385,6 +1385,12 @@
         "status": {
           "dentro": "Dentro do Horário",
           "fora": "Fora do horário"
+        },
+        "stats": {
+          "title": "Pontualidade no mês",
+          "dayTitle": "Pontualidade do dia",
+          "monthFilter": "Filtrar por mês",
+          "total": "Total"
         }
       },
       "recebimento": {

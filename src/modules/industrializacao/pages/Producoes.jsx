@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
@@ -24,7 +24,10 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { RBAC_ADMIN_SLUG } from '@industrializacao/lib/rbac/permissionCatalog';
-import { syncOrderFromProductions } from '@industrializacao/lib/orderProductionStatus';
+import {
+  healProductionsCanceledByCqReject,
+  syncOrderFromProductions,
+} from '@industrializacao/lib/orderProductionStatus';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -78,6 +81,26 @@ export default function Producoes() {
   const [showQr, setShowQr] = useState(false);
   const [qrToken, setQrToken] = useState(null);
   const [qrLabel, setQrLabel] = useState('');
+  const cqCancelHealRef = useRef('');
+
+  // Corrige legado: OP Cancelado por CQ Reprovado → Finalizado (ex.: OP146)
+  useEffect(() => {
+    if (!productions?.length) return;
+    const key = `v2|${productions
+      .filter((p) => p.status === 'Cancelado')
+      .map((p) => p.id)
+      .sort()
+      .join('|')}`;
+    if (!key || key === cqCancelHealRef.current) return;
+    cqCancelHealRef.current = key;
+    healProductionsCanceledByCqReject(base44.entities, productions)
+      .then((count) => {
+        if (count > 0) load?.();
+      })
+      .catch(() => {
+        cqCancelHealRef.current = '';
+      });
+  }, [productions, load]);
   const { toast } = useToast();
   const navigate = useNavigate();
 

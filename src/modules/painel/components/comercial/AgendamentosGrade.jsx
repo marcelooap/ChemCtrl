@@ -16,6 +16,9 @@ import AgendamentoConcluirCarregamentoModal from '@painel/components/comercial/A
 import AgendamentoCarregamentoChecklistModal from '@painel/components/comercial/AgendamentoCarregamentoChecklistModal';
 import AgendamentoJustificativaAtrasoModal from '@painel/components/comercial/AgendamentoJustificativaAtrasoModal';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
+import PontualidadeStatsCard, {
+  computePontualidadeStats,
+} from '@painel/components/logistica/PontualidadeStatsCard';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +35,7 @@ import {
   getWeekDays,
   resolveScheduleDateFromSaida,
   WEEKDAY_COUNT,
+  groupCarregamentosConcluidos,
   groupSlotCarregamentos,
   hasTransporte,
   indexAgendamentosBySlot,
@@ -231,6 +235,16 @@ export default function AgendamentosGrade({
     }
     return { total: allHorarios.length, occupied, free: allHorarios.length - occupied };
   }, [slots, bookingMap, selectedIso]);
+
+  // Pontualidade dos carregamentos concluídos do dia selecionado na grade.
+  const showPontualidade = canConcluir && !compact && !hideHeader;
+  const dayPontualidadeStats = useMemo(() => {
+    if (!showPontualidade) return null;
+    const groups = groupCarregamentosConcluidos(agendamentos).filter(
+      (group) => String(group.data || '').slice(0, 10) === selectedIso
+    );
+    return computePontualidadeStats(groups);
+  }, [showPontualidade, agendamentos, selectedIso]);
 
   const bookLockedSaida = async (horario, tipo = 'regular') => {
     if (!lockedSaida?.id || bookingLocked) return;
@@ -463,9 +477,18 @@ export default function AgendamentosGrade({
       ) : null}
 
       {hideHeader ? null : (
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex-1 min-w-[240px]">
+            <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+          </div>
+          {showPontualidade && dayPontualidadeStats ? (
+            <PontualidadeStatsCard
+              stats={dayPontualidadeStats}
+              title={t('painel.logistica.carregamentos.stats.dayTitle')}
+              className="shrink-0 ml-auto"
+            />
+          ) : null}
         </div>
       )}
 

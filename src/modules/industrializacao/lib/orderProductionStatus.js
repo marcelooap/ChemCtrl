@@ -1,3 +1,5 @@
+import { callRPC } from '@industrializacao/api/rpcClient';
+
 /** Tolerância em litros para fechar pedido (float / arredondamento de UI). */
 export const VOLUME_EPS = 0.05;
 
@@ -185,6 +187,64 @@ export function isOrderEligibleForProgramming(order) {
 }
 
 /**
+ * Indica se a OP foi cancelada por CQ reprovado (legado incorreto).
+ */
+export function isCanceledByCqReject(production) {
+  if (!production || production.status !== 'Cancelado') return false;
+  return String(production.qc_status || '').trim().toLowerCase() === 'reprovado';
+}
+
+/**
+ * Corrige OPs Cancelado por CQ Reprovado → Finalizado.
+ * Preferência: RPC SECURITY DEFINER (SQL 034). Fallback: PATCH direto.
+ * @returns {Promise<number>} quantidade corrigida
+ */
+export async function healProductionsCanceledByCqReject(entities, productions = []) {
+  const cancelados = (productions || []).filter((p) => isCanceledByCqReject(p));
+  if (cancelados.length === 0) return 0;
+
+  try {
+    const result = await callRPC('heal_cq_rejected_canceled_productions', {});
+    const count = Number(result?.updated) || 0;
+    if (count > 0) return count;
+  } catch {
+    // RPC ainda não existe — usa PATCH abaixo
+  }
+
+  if (!entities?.Production?.update) return 0;
+
+  let healed = 0;
+  for (const p of cancelados) {
+    try {
+      await entities.Production.update(p.id, {
+        status: 'Finalizado',
+        end_time: p.end_time || new Date().toISOString(),
+      });
+      healed += 1;
+
+      if (p.order_id && entities.Order) {
+        try {
+          const order = await entities.Order.get(p.order_id);
+          if (!order) continue;
+          const ops = await entities.Production.filter({ order_id: p.order_id }, '-created_date', 200);
+          const derived = deriveOrderFromProductions(order, ops);
+          await entities.Order.update(p.order_id, {
+            status: derived.status,
+            volume_produced: derived.volume_produced,
+            volume_pending: derived.volume_pending,
+          });
+        } catch {
+          // pedido pode ser sincronizado depois
+        }
+      }
+    } catch (err) {
+      console.error('[healProductionsCanceledByCqReject]', p.op_number || p.id, err);
+    }
+  }
+  return healed;
+}
+
+/**
  * Recarrega as OPs do pedido e persiste status/volumes derivados.
  * Usar após cancelar OP ou após salvar CQ (reprovado não cancela a OP).
  */
@@ -197,14 +257,8 @@ export async function syncOrderFromProductions(orderId, entities) {
   let productions = await entities.Production.filter({ order_id: orderId }, '-created_date', 200);
 
   // Legado: CQ reprovado não deve deixar OP Cancelado — corrige para Finalizado.
-  let healed = false;
-  for (const p of productions || []) {
-    if (p.status === 'Cancelado' && p.qc_status === 'Reprovado') {
-      await entities.Production.update(p.id, { status: 'Finalizado' });
-      healed = true;
-    }
-  }
-  if (healed) {
+  const healedCount = await healProductionsCanceledByCqReject(entities, productions);
+  if (healedCount > 0) {
     productions = await entities.Production.filter({ order_id: orderId }, '-created_date', 200);
   }
 
