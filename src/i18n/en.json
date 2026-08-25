@@ -1361,6 +1361,7 @@
         "checklistPrint": "Print A4",
         "checklistPrintTitle": "Checklist — {{saida}} — {{item}}",
         "checklistNoPhotos": "No photos recorded for this item.",
+        "checklistFotosNextPages": "see following pages",
         "checklistPrintError": "Could not prepare the printout.",
         "produtoCountOne": "{{count}} product",
         "produtoCountMany": "{{count}} products",

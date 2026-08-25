@@ -1361,6 +1361,7 @@
         "checklistPrint": "Imprimir A4",
         "checklistPrintTitle": "Checklist — {{saida}} — {{item}}",
         "checklistNoPhotos": "Nenhuma foto registrada para este item.",
+        "checklistFotosNextPages": "ver páginas seguintes",
         "checklistPrintError": "Não foi possível preparar a impressão.",
         "produtoCountOne": "{{count}} produto",
         "produtoCountMany": "{{count}} produtos",
