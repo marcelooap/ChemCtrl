@@ -474,6 +474,7 @@ export default function LogisticaCarregamentos() {
         variant="agendamento"
         checklistItems={viewChecklistItems}
         showPrintEtiqueta={false}
+        showRelatorioSaida={false}
         onClose={() => {
           setViewSaida(null);
           setViewChecklistItems([]);

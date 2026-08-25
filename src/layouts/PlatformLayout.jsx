@@ -7,7 +7,9 @@ import PlatformSidebar from '@/components/layout/PlatformSidebar';
 export default function PlatformLayout() {
   return (
     <AppShell
-      sidebar={<PlatformSidebar />}
+      sidebar={({ collapsed, setCollapsed }) => (
+        <PlatformSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+      )}
       contentClassName="overflow-y-auto"
     />
   );

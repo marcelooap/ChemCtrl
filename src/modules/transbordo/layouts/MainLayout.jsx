@@ -32,7 +32,9 @@ export default function MainLayout() {
     <SaidaNovasProvider>
       <ValidacaoNovasProvider>
         <AppShell
-          sidebar={<Sidebar />}
+          sidebar={({ collapsed, setCollapsed }) => (
+            <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+          )}
           banner={banner}
           contentClassName="overflow-hidden"
           topBarProps={{}}

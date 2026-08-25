@@ -31,7 +31,9 @@ export default function AppLayout() {
     <SaidaNovasProvider onlyIndustrializacao>
       <ValidacaoNovasProvider onlyIndustrializacao>
         <AppShell
-          sidebar={<Sidebar />}
+          sidebar={({ collapsed, setCollapsed }) => (
+            <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} user={user} />
+          )}
           topBarProps={{
             userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
             getRoleLabel,

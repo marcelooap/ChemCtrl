@@ -6,6 +6,7 @@ import { AppTopBar } from '@shared/components/layout/AppTopBar';
 /**
  * Shared application chrome: fixed sidebar + topbar + scrollable main.
  * Modules pass their own Sidebar element; page content comes from <Outlet />.
+ * Auto-recolhimento da sidebar (3s apos o mouse sair) fica em ModuleSidebar.
  */
 export default function AppShell({
   sidebar,
@@ -23,10 +24,18 @@ export default function AppShell({
     return <Navigate to="/login" replace />;
   }
 
+  const sidebarProps = {
+    collapsed,
+    setCollapsed,
+    user,
+  };
+
   const sidebarNode =
     typeof sidebar === 'function'
-      ? sidebar({ collapsed, setCollapsed, user })
-      : React.cloneElement(sidebar, { collapsed, setCollapsed, user });
+      ? sidebar(sidebarProps)
+      : React.isValidElement(sidebar)
+        ? React.cloneElement(sidebar, sidebarProps)
+        : null;
 
   return (
     <div className="h-screen overflow-hidden bg-background">

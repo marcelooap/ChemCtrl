@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { SidebarFooter } from '@shared/components/user/SidebarFooter';
@@ -8,6 +8,8 @@ import {
   TooltipTrigger,
 } from '@shared/components/ui/tooltip';
 import { cn } from '@shared/lib/utils';
+
+const AUTO_COLLAPSE_MS = 3000;
 
 const ACTIVE_BG = '#2575D1';
 const SIDEBAR_BG = 'hsl(230, 25%, 12%)';
@@ -65,6 +67,33 @@ export default function ModuleSidebar({
   showModulesLink = true,
 }) {
   const location = useLocation();
+  const setCollapsedRef = useRef(setCollapsed);
+  const autoCollapseTimerRef = useRef(null);
+  setCollapsedRef.current = setCollapsed;
+
+  const clearAutoCollapse = () => {
+    if (autoCollapseTimerRef.current != null) {
+      window.clearTimeout(autoCollapseTimerRef.current);
+      autoCollapseTimerRef.current = null;
+    }
+  };
+
+  const scheduleAutoCollapse = () => {
+    clearAutoCollapse();
+    if (collapsed) return;
+    if (typeof setCollapsedRef.current !== 'function') return;
+    autoCollapseTimerRef.current = window.setTimeout(() => {
+      autoCollapseTimerRef.current = null;
+      setCollapsedRef.current(true);
+    }, AUTO_COLLAPSE_MS);
+  };
+
+  // Ao recolher (manual ou automático), cancela qualquer timer pendente.
+  useEffect(() => {
+    if (collapsed) clearAutoCollapse();
+  }, [collapsed]);
+
+  useEffect(() => () => clearAutoCollapse(), []);
 
   const [expandedGroups, setExpandedGroups] = useState(() => {
     const initial = {};
@@ -170,6 +199,8 @@ export default function ModuleSidebar({
         collapsed ? 'w-16' : 'w-64'
       }`}
       style={{ background: SIDEBAR_BG }}
+      onMouseEnter={clearAutoCollapse}
+      onMouseLeave={scheduleAutoCollapse}
     >
       <button
         type="button"

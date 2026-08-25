@@ -83,6 +83,7 @@ export default function SaidaViewDialog({
   entradas = [],
   variant = "default",
   showRelatorioFiscal = true,
+  showRelatorioSaida = true,
   highlightModule = null,
   checklistItems = null,
   showPrintEtiqueta = true,
@@ -103,7 +104,7 @@ export default function SaidaViewDialog({
     : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
       ? "Validado"
       : "Pendente";
-  const showRelatorio = isAgendamento || showRelatorioFiscal;
+  const showRelatorio = isAgendamento ? showRelatorioSaida : showRelatorioFiscal;
 
   const handlePrintRelatorio = () => {
     if (isAgendamento) {
