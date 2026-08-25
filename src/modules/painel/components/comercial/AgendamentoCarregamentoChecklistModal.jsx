@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardList,
   Container,
+  ImagePlus,
   Loader2,
   MinusCircle,
   Package,
@@ -162,16 +163,16 @@ export default function AgendamentoCarregamentoChecklistModal({
 }) {
   const { t, i18n } = useTranslation();
   const { user } = useInternalAuth();
-  const photoInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
   const booking = summary.first;
-  const lockedByLiberation =
-    Boolean(booking?.checklist_validado_em) &&
-    areAllItemsApproved(parseStoredChecklist(booking?.checklist_respostas).items);
+  const alreadyLiberated = Boolean(booking?.checklist_validado_em);
   const isCarregado = list.length > 0 && list.every((r) => r.status === 'concluido');
-  const readOnly = isCarregado || lockedByLiberation;
+  // Após liberação ainda permite editar/anexar fotos; bloqueia só quando o carregamento já concluiu.
+  const readOnly = isCarregado;
 
   const builtItems = useMemo(
     () =>
@@ -316,6 +317,20 @@ export default function AgendamentoCarregamentoChecklistModal({
       await onLiberar?.(stamped);
     } catch (err) {
       setError(err?.message || t('painel.comercial.agendamentos.checklist.liberarError'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (readOnly) return;
+    setSaving(true);
+    setError('');
+    try {
+      await persist(items, { markValidated: areAllItemsApproved(items) });
+      dirtyRef.current = false;
+    } catch (err) {
+      setError(err?.message || t('painel.comercial.agendamentos.checklist.submitError'));
     } finally {
       setSaving(false);
     }
@@ -634,10 +649,18 @@ export default function AgendamentoCarregamentoChecklistModal({
                   {t('painel.comercial.agendamentos.checklist.sections.fotos')}
                 </p>
                 <input
-                  ref={photoInputRef}
+                  ref={galleryInputRef}
                   type="file"
                   accept="image/*"
                   multiple
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
                   className="hidden"
                   onChange={handlePhotoUpload}
                 />
@@ -662,19 +685,34 @@ export default function AgendamentoCarregamentoChecklistModal({
                     </div>
                   ))}
                   {!readOnly ? (
-                    <button
-                      type="button"
-                      disabled={uploading || saving}
-                      onClick={() => photoInputRef.current?.click()}
-                      className="flex h-16 min-w-[7rem] items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 text-xs font-medium text-gray-500 hover:border-[#2575D1] hover:text-[#2575D1] disabled:opacity-50"
-                    >
-                      {uploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Camera className="h-4 w-4" />
-                      )}
-                      {t('painel.comercial.agendamentos.checklist.attachPhotos')}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        disabled={uploading || saving}
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex h-16 min-w-[7rem] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 text-xs font-medium text-gray-500 hover:border-[#2575D1] hover:text-[#2575D1] disabled:opacity-50"
+                      >
+                        {uploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                        {t('painel.comercial.agendamentos.checklist.takePhoto')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={uploading || saving}
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex h-16 min-w-[7rem] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 px-3 text-xs font-medium text-gray-500 hover:border-[#2575D1] hover:text-[#2575D1] disabled:opacity-50"
+                      >
+                        {uploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ImagePlus className="h-4 w-4" />
+                        )}
+                        {t('painel.comercial.agendamentos.checklist.attachPhotos')}
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -722,6 +760,21 @@ export default function AgendamentoCarregamentoChecklistModal({
                   operador: booking.checklist_operador_nome || '—',
                 })}
               </p>
+            ) : alreadyLiberated && booking.checklist_validado_em ? (
+              <p className="text-xs text-emerald-700 font-medium">
+                {t('painel.comercial.agendamentos.checklist.validatedEditableHint', {
+                  date: new Date(booking.checklist_validado_em).toLocaleString(
+                    i18n.language || 'pt-BR',
+                    {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }
+                  ),
+                })}
+              </p>
             ) : null}
           </div>
 
@@ -739,27 +792,44 @@ export default function AgendamentoCarregamentoChecklistModal({
           </Button>
           {!readOnly ? (
             <Can anyOf={[`${permissionPrefix}.edit`, `${permissionPrefix}.view`]}>
-              <Button
-                type="button"
-                disabled={!allApproved || saving}
-                onClick={handleLiberar}
-                className="text-white"
-                style={{ background: allApproved ? '#059669' : '#94a3b8' }}
-                title={
-                  allApproved
-                    ? ''
-                    : anyRejected
-                      ? t('painel.comercial.agendamentos.checklist.rejectedBlockedHint')
-                      : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
-                }
-              >
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                )}
-                {t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
-              </Button>
+              {alreadyLiberated ? (
+                <Button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleSaveChanges}
+                  className="text-white"
+                  style={{ background: '#2575D1' }}
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                  )}
+                  {t('painel.comercial.agendamentos.checklist.saveProgress')}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={!allApproved || saving}
+                  onClick={handleLiberar}
+                  className="text-white"
+                  style={{ background: allApproved ? '#059669' : '#94a3b8' }}
+                  title={
+                    allApproved
+                      ? ''
+                      : anyRejected
+                        ? t('painel.comercial.agendamentos.checklist.rejectedBlockedHint')
+                        : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
+                  }
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                  )}
+                  {t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
+                </Button>
+              )}
             </Can>
           ) : null}
         </DialogFooter>

@@ -1082,6 +1082,7 @@
           "confirm": "Validate checklist",
           "readOnlyBadge": "Checklist validated",
           "validatedAt": "Validated on {{date}} by {{operador}}",
+          "validatedEditableHint": "Released on {{date}} — you can still edit and attach photos",
           "editSoonHint": "Checklist editing will be available soon.",
           "submitSuccess": "Checklist saved successfully",
           "submitError": "Could not save the checklist",
@@ -1106,6 +1107,7 @@
           "reopenItem": "Reopen inspection",
           "saveProgress": "Save progress",
           "attachPhotos": "Attach photos",
+          "takePhoto": "Take photo",
           "answers": {
             "aprovado": "Approved",
             "reprovado": "Rejected",

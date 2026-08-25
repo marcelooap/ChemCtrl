@@ -1082,6 +1082,7 @@
           "confirm": "Validar checklist",
           "readOnlyBadge": "Checklist validado",
           "validatedAt": "Validado em {{date}} por {{operador}}",
+          "validatedEditableHint": "Liberado em {{date}} — ainda é possível editar e anexar fotos",
           "editSoonHint": "A edição do checklist estará disponível em breve.",
           "submitSuccess": "Checklist salvo com sucesso",
           "submitError": "Não foi possível salvar o checklist",
@@ -1106,6 +1107,7 @@
           "reopenItem": "Reabrir conferência",
           "saveProgress": "Salvar progresso",
           "attachPhotos": "Anexar fotos",
+          "takePhoto": "Tirar foto",
           "answers": {
             "aprovado": "Aprovado",
             "reprovado": "Reprovado",
