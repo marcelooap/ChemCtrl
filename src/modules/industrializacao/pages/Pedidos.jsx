@@ -79,7 +79,7 @@ export default function Pedidos() {
   const canDelete = hasPermission('orders.delete');
   const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
-  const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: productions, reload: loadProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') || '');
   /** Array vazio = todos os status; caso contrário, OR dos status selecionados. */
@@ -92,6 +92,25 @@ export default function Pedidos() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const cqCancelHealRef = useRef('');
+
+  // Corrige legado: OP Cancelado apenas por CQ Reprovado → Finalizado
+  useEffect(() => {
+    const toHeal = (productions || []).filter(
+      (p) => p.status === 'Cancelado' && p.qc_status === 'Reprovado' && p.id
+    );
+    if (toHeal.length === 0) return;
+    const key = toHeal.map((p) => p.id).sort().join('|');
+    if (key === cqCancelHealRef.current) return;
+    cqCancelHealRef.current = key;
+    Promise.all(
+      toHeal.map((p) => base44.entities.Production.update(p.id, { status: 'Finalizado' }))
+    )
+      .then(() => loadProductions?.())
+      .catch(() => {
+        cqCancelHealRef.current = '';
+      });
+  }, [productions, loadProductions]);
 
   // Compute derived order statuses from production data (recomputed automatically on any realtime change)
   const orders = useMemo(() => {

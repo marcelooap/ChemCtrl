@@ -108,6 +108,13 @@ function addSectionTitle(doc, y, title) {
 
 function addInfoGrid(doc, y, pairs, cols = 3) {
   const colW = CW / cols;
+  const labelFs = 7;
+  const valueFs = 9;
+  const lineH = 4.2;
+  const padTop = 4;
+  const padLabelGap = 5.5;
+  const padBottom = 3.5;
+
   const rowsData = [];
   let currentRow = [];
   let usedCols = 0;
@@ -128,12 +135,18 @@ function addInfoGrid(doc, y, pairs, cols = 3) {
   }
   if (currentRow.length > 0) rowsData.push(currentRow);
 
+  const measureLines = (text, width) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(valueFs);
+    return doc.splitTextToSize(String(text != null && text !== '' ? text : '-'), Math.max(8, width));
+  };
+
   const rowHeights = rowsData.map((row) => {
-    let maxH = 14;
+    let maxH = padTop + padLabelGap + lineH + padBottom;
     row.forEach((cell) => {
       const cellW = colW * cell.span - 6;
-      const lines = doc.splitTextToSize(String(cell.value != null ? cell.value : '-'), cellW);
-      const textH = 5 + lines.length * 4.5 + 4;
+      const lines = measureLines(cell.value, cellW);
+      const textH = padTop + padLabelGap + lines.length * lineH + padBottom;
       if (textH > maxH) maxH = textH;
     });
     return maxH;
@@ -155,15 +168,16 @@ function addInfoGrid(doc, y, pairs, cols = 3) {
         doc.setLineWidth(0.3);
         doc.line(x, yy, x, yy + rowH);
       }
-      doc.setFontSize(7);
+      doc.setFontSize(labelFs);
       doc.setFont('helvetica', 'bold');
       setColor(doc, GRAY_LABEL);
-      doc.text(String(cell.label).toUpperCase(), x + 3, yy + 4.5);
-      doc.setFontSize(9.5);
-      doc.setFont('helvetica', 'bold');
+      doc.text(String(cell.label).toUpperCase(), x + 3, yy + padTop + 1.5);
+
+      const lines = measureLines(cell.value, cellW - 6);
       setColor(doc, BLACK);
-      const lines = doc.splitTextToSize(String(cell.value != null ? cell.value : '-'), cellW - 6);
-      doc.text(lines, x + 3, yy + 10);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFs);
+      doc.text(lines, x + 3, yy + padTop + padLabelGap);
       x += cellW;
     });
     if (ri < rowsData.length - 1) {
@@ -332,7 +346,8 @@ export async function generateChecklistItemPDF({
   y += 6;
 
   const infoPairs = [
-    [t('painel.comercial.agendamentos.checklist.fields.produto'), item.produto || '-'],
+    // Produto em linha inteira para não quebrar fora da célula
+    [t('painel.comercial.agendamentos.checklist.fields.produto'), item.produto || '-', 3],
     [t('painel.comercial.agendamentos.checklist.fields.tipo'), item.tipo_label || '-'],
     [t('painel.comercial.agendamentos.checklist.fields.lote'), item.lote || '-'],
     [t('painel.comercial.agendamentos.checklist.fields.quantidade'), item.quantidade || '-'],
@@ -350,6 +365,7 @@ export async function generateChecklistItemPDF({
     infoPairs.push([
       t('painel.comercial.agendamentos.checklist.fields.tanque'),
       [item.vasilhame_placa, item.vasilhame_barril].filter(Boolean).join(' / ') || '-',
+      3,
     ]);
   }
 

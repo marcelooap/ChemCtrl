@@ -104,7 +104,8 @@ export const getOrderDisplayStatus = (order, now = new Date()) => {
 
 /**
  * Deriva volumes e status do pedido a partir das OPs vinculadas.
- * volume_produced = soma apenas de OPs Finalizado (Cancelado e em andamento não contam).
+ * volume_produced = soma de OPs Finalizado + OPs Cancelado por CQ Reprovado
+ *   (já foram produzidas; rejeição de qualidade não reabre o pedido).
  * volume_in_production = soma das OPs abertas (não Finalizado/Cancelado).
  */
 export function deriveOrderFromProductions(order, productions) {
@@ -113,8 +114,13 @@ export function deriveOrderFromProductions(order, productions) {
     (p) => p.order_id != null && String(p.order_id) === orderId,
   );
   const openOPs = linkedOPs.filter((p) => !['Finalizado', 'Cancelado'].includes(p.status));
-  const finishedOPs = linkedOPs.filter((p) => p.status === 'Finalizado');
-  const opProduced = finishedOPs.reduce((s, p) => s + toNum(p.volume), 0);
+  // Conta Finalizado e também Cancelado por CQ Reprovado (produção já ocorreu).
+  const producedOPs = linkedOPs.filter(
+    (p) =>
+      p.status === 'Finalizado' ||
+      (p.status === 'Cancelado' && p.qc_status === 'Reprovado'),
+  );
+  const opProduced = producedOPs.reduce((s, p) => s + toNum(p.volume), 0);
   const volumeInProduction = openOPs.reduce((s, p) => s + toNum(p.volume), 0);
   const volumeOrdered = toNum(order.volume_ordered);
 
@@ -122,7 +128,7 @@ export function deriveOrderFromProductions(order, productions) {
   let volumePending;
 
   if (linkedOPs.length > 0) {
-    // Com OPs visíveis, confiar na soma de Finalizado — evita volume_produced
+    // Com OPs visíveis, confiar na soma produzida — evita volume_produced
     // obsoleto no DB após cancelamento forçar Finalizado indevidamente.
     totalProduced = opProduced;
   } else {
@@ -180,7 +186,7 @@ export function isOrderEligibleForProgramming(order) {
 
 /**
  * Recarrega as OPs do pedido e persiste status/volumes derivados.
- * Usar após cancelar OP (ou rejeição CQ) para manter o pedido consistente.
+ * Usar após cancelar OP ou após salvar CQ (reprovado não cancela a OP).
  */
 export async function syncOrderFromProductions(orderId, entities) {
   if (!orderId || !entities?.Order || !entities?.Production) return null;
@@ -188,7 +194,20 @@ export async function syncOrderFromProductions(orderId, entities) {
   const order = await entities.Order.get(orderId);
   if (!order) return null;
 
-  const productions = await entities.Production.filter({ order_id: orderId }, '-created_date', 200);
+  let productions = await entities.Production.filter({ order_id: orderId }, '-created_date', 200);
+
+  // Legado: CQ reprovado não deve deixar OP Cancelado — corrige para Finalizado.
+  let healed = false;
+  for (const p of productions || []) {
+    if (p.status === 'Cancelado' && p.qc_status === 'Reprovado') {
+      await entities.Production.update(p.id, { status: 'Finalizado' });
+      healed = true;
+    }
+  }
+  if (healed) {
+    productions = await entities.Production.filter({ order_id: orderId }, '-created_date', 200);
+  }
+
   const derived = deriveOrderFromProductions(order, productions);
 
   await entities.Order.update(orderId, {

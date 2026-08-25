@@ -193,30 +193,34 @@ export default function QualityAnalysisDialog({
       const currentStatus = production.status;
       const alreadyFinished = currentStatus === 'Finalizado';
       const alreadyInEnvase = currentStatus === 'Envase';
-      let newProdStatus;
-      if (status === 'Reprovado') {
-        newProdStatus = 'Cancelado';
-      } else if (alreadyFinished) {
-        newProdStatus = 'Finalizado';
-      } else if (alreadyInEnvase) {
-        // Re-edição a partir da COA: não reinicia o envase
-        newProdStatus = 'Envase';
-      } else {
-        newProdStatus = 'Envase';
-      }
 
       const prodUpdates = {
         qc_status: status,
         qc_analyst: analystName,
         qc_observations: analysisForm.observations,
-        status: newProdStatus,
       };
-      if (newProdStatus === 'Envase' && currentStatus !== 'Envase') {
-        prodUpdates.envase_start_time = new Date().toISOString();
+
+      if (status === 'Reprovado') {
+        // CQ reprovado não altera o fluxo da OP — só registra o resultado.
+        // Corrige legado: OPs que foram canceladas só por CQ voltam a Finalizado.
+        if (currentStatus === 'Cancelado') {
+          prodUpdates.status = 'Finalizado';
+        }
+      } else if (alreadyFinished) {
+        prodUpdates.status = 'Finalizado';
+      } else if (alreadyInEnvase) {
+        // Re-edição a partir da COA: não reinicia o envase
+        prodUpdates.status = 'Envase';
+      } else {
+        prodUpdates.status = 'Envase';
+        if (currentStatus !== 'Envase') {
+          prodUpdates.envase_start_time = new Date().toISOString();
+        }
       }
+
       await base44.entities.Production.update(production.id, prodUpdates);
 
-      if (newProdStatus === 'Cancelado' && production.order_id) {
+      if (production.order_id) {
         try {
           await syncOrderFromProductions(production.order_id, base44.entities);
         } catch {
