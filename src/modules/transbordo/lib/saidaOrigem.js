@@ -208,16 +208,9 @@ export function origemLabel(origem) {
 }
 
 /**
- * Texto da coluna "Informações" na visualização/relatório de saída.
- * - Embalado / retorno MP: lote (e embalagem no modo agendamento)
- * - Convencional / vasilhame: placa (barril) [- lote]
- *
- * @param {{ includeLote?: boolean, context?: 'default' | 'agendamento' | 'fiscal' }} [options]
+ * Resolve o lote do item (direto, vasilhame ou composição).
  */
-export function formatSaidaItemInformacoes(
-  item,
-  { vasilhame, includeLote = true, context = "default" } = {}
-) {
+export function resolveSaidaItemLote(item, { vasilhame } = {}) {
   const loteFromComp = () => {
     const comp = Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : [];
     let best = "";
@@ -233,14 +226,22 @@ export function formatSaidaItemInformacoes(
     return best;
   };
 
-  const lote = String(
-    item?.lote || vasilhame?.lote || loteFromComp() || ""
-  ).trim();
+  return String(item?.lote || vasilhame?.lote || loteFromComp() || "").trim();
+}
 
-  const withLote = includeLote && context !== "fiscal";
+/**
+ * Coluna Lote na visualização de saída.
+ */
+export function formatSaidaItemLote(item, { vasilhame } = {}) {
+  return resolveSaidaItemLote(item, { vasilhame }) || "—";
+}
 
+/**
+ * Coluna Embalagem: placa (barril) para convencional/vasilhame; "-" se embalado.
+ */
+export function formatSaidaItemEmbalagem(item, { vasilhame } = {}) {
   if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
-    return lote ? `Lote: ${lote}` : "—";
+    return "-";
   }
 
   const placa = String(
@@ -251,19 +252,36 @@ export function formatSaidaItemInformacoes(
   ).trim();
   const hasBarril = Boolean(barril) && barril !== "—" && barril !== "-";
 
-  let base = "";
-  if (!placa) {
-    base = "";
-  } else if (hasBarril) {
-    base = `${placa} (${barril})`;
-  } else {
-    base = placa;
+  if (!placa) return "—";
+  if (hasBarril) return `${placa} (${barril})`;
+  return placa;
+}
+
+/**
+ * Texto da coluna "Informações" (legado — PDF/relatórios).
+ * - Embalado / retorno MP: lote (e embalagem no modo agendamento)
+ * - Convencional / vasilhame: placa (barril) [- lote]
+ *
+ * @param {{ includeLote?: boolean, context?: 'default' | 'agendamento' | 'fiscal' }} [options]
+ */
+export function formatSaidaItemInformacoes(
+  item,
+  { vasilhame, includeLote = true, context = "default" } = {}
+) {
+  const lote = resolveSaidaItemLote(item, { vasilhame });
+  const withLote = includeLote && context !== "fiscal";
+
+  if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
+    return lote ? `Lote: ${lote}` : "—";
   }
 
+  const base = formatSaidaItemEmbalagem(item, { vasilhame });
+  const embalagem = base === "—" || base === "-" ? "" : base;
+
   if (withLote && lote) {
-    return base ? `${base} - ${lote}` : lote;
+    return embalagem ? `${embalagem} - ${lote}` : lote;
   }
-  return base || "—";
+  return embalagem || "—";
 }
 
 export function tipoItemLabel(item) {

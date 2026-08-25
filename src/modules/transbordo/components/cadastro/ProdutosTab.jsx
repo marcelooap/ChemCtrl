@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
 import ProdutoModal from "@transbordo/components/cadastro/ProdutoModal";
+import OrgaoRegulamentadorBadge from "@transbordo/components/cadastro/OrgaoRegulamentadorBadge";
 import { cascadeProdutoIdentity } from "@transbordo/lib/cascadeProdutoUpdate";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { formatDensidade } from "@transbordo/lib/format";
@@ -173,6 +174,10 @@ export default function ProdutosTab() {
         ...data,
         cliente_id: emptyToNull(cliente.id || data.cliente_id),
         cliente_nome: emptyToNull(cliente.nome || data.cliente_nome),
+        orgao_regulamentador: data.controlado
+          ? emptyToNull(data.orgao_regulamentador)
+          : null,
+        controlado: Boolean(data.controlado),
       };
 
       if (editingProduto) {
@@ -295,19 +300,20 @@ export default function ProdutosTab() {
                 <th className="px-5 py-3.5 font-semibold">Cliente</th>
                 <th className="px-5 py-3.5 font-semibold">Densidade</th>
                 <th className="px-5 py-3.5 font-semibold">Filtrado</th>
+                <th className="px-5 py-3.5 font-semibold">Órgão Regulamentador</th>
                 <th className="px-5 py-3.5 font-semibold">Ações</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando produtos...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum produto encontrado.
                   </td>
                 </tr>
@@ -372,6 +378,12 @@ export default function ProdutosTab() {
                           Não
                         </span>
                       )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <OrgaoRegulamentadorBadge
+                        controlado={p.controlado}
+                        orgao={p.orgao_regulamentador}
+                      />
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">

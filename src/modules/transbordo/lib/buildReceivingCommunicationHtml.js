@@ -57,6 +57,8 @@ export function buildReceivingCommunicationHtml(receiving) {
     entradaId = "-",
     dataEntrada = "-",
     lotes = [],
+    orgaoUnico = null,
+    mostrarOrgaoPorProduto = false,
     hasPesagem = false,
     pesoBruto = "-",
     pesoLiquido = "-",
@@ -70,19 +72,51 @@ export function buildReceivingCommunicationHtml(receiving) {
 
   const title = `Recebimento ${entradaId || "-"}`;
 
-  // Produtos: 80+250+100+90+60+100 = 680
-  const pCols = { cod: 80, prod: 250, nf: 100, qty: 90, und: 60, lote: 100 };
+  const controladoBanner = orgaoUnico
+    ? `
+  <tr>
+    <td style="padding:10px 0 0 0;">
+      <table width="680" cellpadding="0" cellspacing="0" border="0" style="width:680px;border-collapse:collapse;border:1px solid #f59e0b;background-color:#fffbeb;font-family:${FONT};">
+        <tr>
+          <td style="padding:10px 12px;font-family:${FONT};">
+            <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.06em;">Produto controlado</div>
+            <div style="font-size:13px;font-weight:700;color:#78350f;margin-top:2px;">Órgão regulamentador: ${esc(orgaoUnico)}</div>
+            <div style="font-size:11px;color:#92400e;margin-top:2px;">Todos os produtos desta entrada são controlados</div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>`
+    : "";
+
+  // Produtos: com ou sem coluna de órgão
+  const pCols = mostrarOrgaoPorProduto
+    ? { cod: 70, prod: 200, nf: 90, qty: 80, und: 55, lote: 90, orgao: 95 }
+    : { cod: 80, prod: 250, nf: 100, qty: 90, und: 60, lote: 100 };
+  const produtosTableWidth = mostrarOrgaoPorProduto ? 680 : 680;
   const produtosRows = (lotes.length ? lotes : [{}])
-    .map(
-      (l) => `<tr>
-        ${td(l.produto_codigo || "-", pCols.cod)}
-        ${td(l.produto_nome || "-", pCols.prod)}
-        ${td(l.nota_fiscal || "-", pCols.nf)}
-        ${td(l.quantidadeFmt || "-", pCols.qty, "right")}
-        ${td(l.unidade_medida || "-", pCols.und)}
-        ${td(l.lote || "-", pCols.lote)}
-      </tr>`
-    )
+    .map((l) => {
+      const cells = [
+        td(l.produto_codigo || "-", pCols.cod),
+        td(l.produto_nome || "-", pCols.prod),
+        td(l.nota_fiscal || "-", pCols.nf),
+        td(l.quantidadeFmt || "-", pCols.qty, "right"),
+        td(l.unidade_medida || "-", pCols.und),
+        td(l.lote || "-", pCols.lote),
+      ];
+      if (mostrarOrgaoPorProduto) {
+        const orgaoLabel =
+          l.controlado && l.orgao_regulamentador
+            ? l.orgao_regulamentador
+            : "-";
+        const orgaoExtra =
+          l.controlado && l.orgao_regulamentador
+            ? "font-weight:700;color:#78350f;background-color:#fffbeb;"
+            : "";
+        cells.push(td(orgaoLabel, pCols.orgao, "left", orgaoExtra));
+      }
+      return `<tr>${cells.join("")}</tr>`;
+    })
     .join("");
 
   // Qualidade: 120+90+90+80 = 380
@@ -202,10 +236,12 @@ export function buildReceivingCommunicationHtml(receiving) {
     </td>
   </tr>
 
+  ${controladoBanner}
+
   ${sectionLabel("Produtos Recebidos")}
   <tr>
     <td style="padding:0;">
-      <table width="680" cellpadding="0" cellspacing="0" border="0" style="width:680px;border-collapse:collapse;table-layout:fixed;border:1px solid ${C.border};font-family:${FONT};">
+      <table width="${produtosTableWidth}" cellpadding="0" cellspacing="0" border="0" style="width:${produtosTableWidth}px;border-collapse:collapse;table-layout:fixed;border:1px solid ${C.border};font-family:${FONT};">
         <thead>
           <tr>
             ${th("Cód", pCols.cod)}
@@ -214,6 +250,7 @@ export function buildReceivingCommunicationHtml(receiving) {
             ${th("Quantidade", pCols.qty, "right")}
             ${th("Unidade", pCols.und)}
             ${th("Lote", pCols.lote)}
+            ${mostrarOrgaoPorProduto ? th("Órgão", pCols.orgao) : ""}
           </tr>
         </thead>
         <tbody>
@@ -260,19 +297,35 @@ export function buildReceivingCommunicationHtml(receiving) {
     "",
     `ID de Entrada: ${entradaId || "-"}`,
     `Data de Entrada: ${dataEntrada || "-"}`,
+  ];
+
+  if (orgaoUnico) {
+    textLines.push(
+      "",
+      `PRODUTO CONTROLADO — Órgão regulamentador: ${orgaoUnico}`,
+      "Todos os produtos desta entrada são controlados"
+    );
+  }
+
+  textLines.push(
     "",
     "Produtos Recebidos",
-    ...(lotes.length ? lotes : [{}]).map(
-      (l) =>
-        `${l.produto_codigo || "-"} | ${l.produto_nome || "-"} | ${l.nota_fiscal || "-"} | ${l.quantidadeFmt || "-"} | ${l.unidade_medida || "-"} | ${l.lote || "-"}`
-    ),
+    ...(lotes.length ? lotes : [{}]).map((l) => {
+      const base = `${l.produto_codigo || "-"} | ${l.produto_nome || "-"} | ${l.nota_fiscal || "-"} | ${l.quantidadeFmt || "-"} | ${l.unidade_medida || "-"} | ${l.lote || "-"}`;
+      if (!mostrarOrgaoPorProduto) return base;
+      const orgao =
+        l.controlado && l.orgao_regulamentador
+          ? l.orgao_regulamentador
+          : "-";
+      return `${base} | Órgão: ${orgao}`;
+    }),
     "",
     "Controle de Qualidade",
     ...(lotes.length ? lotes : [{}]).map(
       (l) =>
         `${l.lote || "-"} | ${l.fabricacaoFmt || "-"} | ${l.validadeFmt || "-"} | ${l.densidadeFmt || "-"}`
-    ),
-  ];
+    )
+  );
 
   if (hasPesagem) {
     textLines.push(
@@ -300,7 +353,18 @@ export function buildReceivingCommunicationHtml(receiving) {
 }
 
 /** Helpers reutilizados pelo dialog ao montar o payload. */
-export function formatReceivingLoteRow(lote, { notaFiscal, densidade, formatDate, entrada, lotesCount = 1 }) {
+export function formatReceivingLoteRow(
+  lote,
+  {
+    notaFiscal,
+    densidade,
+    formatDate,
+    entrada,
+    lotesCount = 1,
+    controlado = false,
+    orgao_regulamentador = null,
+  }
+) {
   return {
     produto_codigo: lote.produto_codigo,
     produto_nome: lote.produto_nome,
@@ -314,6 +378,8 @@ export function formatReceivingLoteRow(lote, { notaFiscal, densidade, formatDate
     fabricacaoFmt: formatDate(lote.data_fabricacao),
     validadeFmt: formatDate(lote.data_validade),
     densidadeFmt: formatDensidade(densidade),
+    controlado: Boolean(controlado),
+    orgao_regulamentador: orgao_regulamentador || null,
   };
 }
 

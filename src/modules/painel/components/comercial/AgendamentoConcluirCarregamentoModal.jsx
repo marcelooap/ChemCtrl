@@ -11,13 +11,16 @@ import {
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
+import DateInputBr from '@shared/components/ui/DateInputBr';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
+  isCarregamentoAtrasado,
   normalizeBookings,
   nowBrasiliaHHMM,
   summarizeSlotBookings,
+  todayISO,
 } from '@painel/lib/agendamentosCarregamento';
 
 export default function AgendamentoConcluirCarregamentoModal({
@@ -26,9 +29,11 @@ export default function AgendamentoConcluirCarregamentoModal({
   bookings,
   permissionPrefix = 'painel_logistica_agendamentos',
   onConfirm,
+  onNeedsJustificativa,
 }) {
   const { t } = useTranslation();
   const [horaCarregamento, setHoraCarregamento] = useState('');
+  const [dataCarregamento, setDataCarregamento] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -40,6 +45,7 @@ export default function AgendamentoConcluirCarregamentoModal({
   useEffect(() => {
     if (!open || !booking) return;
     setHoraCarregamento(nowBrasiliaHHMM());
+    setDataCarregamento(todayISO());
     setError('');
     setSaving(false);
     savingRef.current = false;
@@ -59,7 +65,32 @@ export default function AgendamentoConcluirCarregamentoModal({
     setSaving(true);
     setError('');
     try {
-      await onConfirm({ horaCarregamento });
+      const dataIso = String(dataCarregamento || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) {
+        throw new Error(t('painel.comercial.agendamentos.errors.dataCarregamento'));
+      }
+
+      const atrasado = isCarregamentoAtrasado({
+        horarioAgendado: booking.horario,
+        horaCarregamento,
+        dataAgendada: String(booking.data).slice(0, 10),
+        dataCarregamento: dataIso,
+      });
+
+      if (atrasado) {
+        onNeedsJustificativa?.({
+          horaCarregamento,
+          dataCarregamento: dataIso,
+        });
+        onClose();
+        return;
+      }
+
+      await onConfirm({
+        horaCarregamento,
+        dataCarregamento: dataIso,
+        justificativa: null,
+      });
       onClose();
     } catch (err) {
       setError(
@@ -90,24 +121,36 @@ export default function AgendamentoConcluirCarregamentoModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ag-hora-carregamento">
-              {t('painel.comercial.agendamentos.concluir.horaLabel')}
-              <span className="text-destructive"> *</span>
-            </Label>
-            <Input
-              id="ag-hora-carregamento"
-              type="time"
-              step={60}
-              value={horaCarregamento}
-              onChange={(e) => setHoraCarregamento(e.target.value)}
-              required
-              className="tabular-nums"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('painel.comercial.agendamentos.concluir.horaHint')}
-            </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="ag-data-carregamento">
+                {t('painel.comercial.agendamentos.concluir.dataLabel')}
+                <span className="text-destructive"> *</span>
+              </Label>
+              <DateInputBr
+                value={dataCarregamento}
+                onChange={setDataCarregamento}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ag-hora-carregamento">
+                {t('painel.comercial.agendamentos.concluir.horaLabel')}
+                <span className="text-destructive"> *</span>
+              </Label>
+              <Input
+                id="ag-hora-carregamento"
+                type="time"
+                step={60}
+                value={horaCarregamento}
+                onChange={(e) => setHoraCarregamento(e.target.value)}
+                required
+                className="tabular-nums"
+              />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {t('painel.comercial.agendamentos.concluir.dataHoraHint')}
+          </p>
 
           {error ? (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

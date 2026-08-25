@@ -9,9 +9,20 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@shared/components/ui/select";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import ProdutoFdsSection from "@transbordo/components/cadastro/ProdutoFdsSection";
+import {
+  ORGAOS_REGULAMENTADORES,
+  OrgaoRegulamentadorLogo,
+} from "@transbordo/components/cadastro/OrgaoRegulamentadorBadge";
 
 function normKey(value) {
   return String(value ?? "")
@@ -41,6 +52,8 @@ export default function ProdutoModal({
   const [densidadeTabelada, setDensidadeTabelada] = useState(false);
   const [densidade, setDensidade] = useState("");
   const [filtrado, setFiltrado] = useState(false);
+  const [controlado, setControlado] = useState(false);
+  const [orgaoRegulamentador, setOrgaoRegulamentador] = useState("");
   const [error, setError] = useState("");
   const [clienteAutoFilled, setClienteAutoFilled] = useState(false);
   const [fdsMeta, setFdsMeta] = useState({
@@ -63,6 +76,8 @@ export default function ProdutoModal({
           : ""
       );
       setFiltrado(editingProduto.filtrado || false);
+      setControlado(Boolean(editingProduto.controlado));
+      setOrgaoRegulamentador(editingProduto.orgao_regulamentador || "");
       setClienteAutoFilled(false);
       setFdsMeta({
         fds_url: editingProduto.fds_url || null,
@@ -77,6 +92,8 @@ export default function ProdutoModal({
       setDensidadeTabelada(false);
       setDensidade("");
       setFiltrado(false);
+      setControlado(false);
+      setOrgaoRegulamentador("");
       setClienteAutoFilled(false);
       setFdsMeta({
         fds_url: null,
@@ -198,6 +215,10 @@ export default function ProdutoModal({
       );
       return;
     }
+    if (controlado && !orgaoRegulamentador) {
+      setError("Selecione o órgão regulamentador do produto controlado.");
+      return;
+    }
     onSave({
       codigo: codigo.trim(),
       produto: produto.trim(),
@@ -206,6 +227,8 @@ export default function ProdutoModal({
       densidade: densidadeTabelada ? densidade || "-" : "-",
       densidade_tabelada: densidadeTabelada,
       filtrado,
+      controlado,
+      orgao_regulamentador: controlado ? orgaoRegulamentador : null,
       data_cadastro:
         editingProduto?.data_cadastro ||
         new Date().toISOString().split("T")[0],
@@ -342,6 +365,55 @@ export default function ProdutoModal({
               disabled={readOnly}
             />
           </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
+            <div>
+              <Label>Produto Controlado?</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Indica se o produto é controlado por órgão regulamentador
+              </p>
+            </div>
+            <Switch
+              checked={controlado}
+              onCheckedChange={(checked) => {
+                setControlado(checked);
+                if (!checked) setOrgaoRegulamentador("");
+                setError("");
+              }}
+              disabled={readOnly}
+            />
+          </div>
+
+          {controlado && (
+            <div className="space-y-1.5">
+              <Label>Órgão Regulamentador *</Label>
+              <Select
+                value={orgaoRegulamentador || undefined}
+                onValueChange={(value) => {
+                  setOrgaoRegulamentador(value);
+                  setError("");
+                }}
+                disabled={readOnly}
+              >
+                <SelectTrigger className="h-10 bg-white">
+                  <SelectValue placeholder="Selecione o órgão" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORGAOS_REGULAMENTADORES.map((orgao) => (
+                    <SelectItem key={orgao.value} value={orgao.value}>
+                      <span className="inline-flex items-center gap-2">
+                        <OrgaoRegulamentadorLogo
+                          orgao={orgao.value}
+                          className="w-4 h-4"
+                        />
+                        {orgao.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {editingProduto?.id ? (
             <ProdutoFdsSection

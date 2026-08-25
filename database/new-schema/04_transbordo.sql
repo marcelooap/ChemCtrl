@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS produtos (
   densidade text,
   densidade_tabelada boolean NOT NULL DEFAULT false,
   filtrado boolean NOT NULL DEFAULT false,
+  controlado boolean NOT NULL DEFAULT false,
+  orgao_regulamentador text,
   data_cadastro date NOT NULL DEFAULT current_date,
   fds_url text,
   fds_filename text,

@@ -211,6 +211,51 @@ export function isChecklistValidado(bookings) {
   return list.every((row) => Boolean(row.checklist_validado_em));
 }
 
+/**
+ * Progresso parcial do checklist por item (não marca como validado
+ * a menos que todos os itens estejam aprovados).
+ */
+export async function saveCarregamentoChecklistProgress({
+  bookings,
+  payload,
+  user,
+  t,
+  markValidated = false,
+}) {
+  const list = normalizeBookings(bookings);
+  const ids = list.map((row) => row.id).filter(Boolean);
+  if (ids.length === 0) throw new Error('Agendamento inválido.');
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.checklist.submitError') ||
+        'Não foi possível salvar o checklist.'
+    );
+  }
+
+  const allApproved =
+    markValidated ||
+    (Array.isArray(payload.items) &&
+      payload.items.length > 0 &&
+      payload.items.every((it) => it.status === 'aprovado'));
+
+  const patch = {
+    checklist_respostas: payload,
+    checklist_operador_id: toUserIdText(user?.id),
+    checklist_operador_nome:
+      user?.nome || user?.full_name || user?.username || user?.email || '—',
+  };
+
+  if (allApproved) {
+    patch.checklist_validado_em = new Date().toISOString();
+  } else {
+    patch.checklist_validado_em = null;
+  }
+
+  await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
+  return { validated: allApproved };
+}
+
 export function normalizeBookings(bookings) {
   if (!bookings) return [];
   return Array.isArray(bookings) ? bookings.filter(Boolean) : [bookings];
@@ -549,7 +594,14 @@ function combineDateAndTime(isoDate, hhmm) {
  * Conclui o carregamento do(s) agendamento(s) do horário.
  * O horário permanece na grade como "carregado" (status = concluido).
  */
-export async function concluirCarregamento({ bookings, horaCarregamento, user, t }) {
+export async function concluirCarregamento({
+  bookings,
+  horaCarregamento,
+  dataCarregamento,
+  justificativa,
+  user,
+  t,
+}) {
   const list = normalizeBookings(bookings);
   const ids = list.map((row) => row.id).filter(Boolean);
   if (ids.length === 0) throw new Error('Agendamento inválido.');
@@ -569,6 +621,35 @@ export async function concluirCarregamento({ bookings, horaCarregamento, user, t
     );
   }
 
+  const dataIso = String(dataCarregamento || list[0]?.data || todayISO()).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.errors.dataCarregamento') ||
+        'Informe uma data de carregamento válida.'
+    );
+  }
+
+  const dataAgendada = String(list[0]?.data || '').slice(0, 10);
+  const atrasado = isCarregamentoAtrasado({
+    horarioAgendado: list[0]?.horario,
+    horaCarregamento: hora,
+    dataAgendada,
+    dataCarregamento: dataIso,
+  });
+
+  if (atrasado) {
+    const responsavel = String(justificativa?.responsavel || '').trim();
+    const motivo = String(justificativa?.motivo || '').trim();
+    const responsavelOk = JUSTIFICATIVA_ATRASO_RESPONSAVEIS.some((o) => o.value === responsavel);
+    const motivoOk = JUSTIFICATIVA_ATRASO_MOTIVOS.some((o) => o.value === motivo);
+    if (!responsavelOk || !motivoOk) {
+      throw new Error(
+        t?.('painel.comercial.agendamentos.justificativa.required') ||
+          'Informe a justificativa do atraso.'
+      );
+    }
+  }
+
   const grupoId =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
@@ -577,35 +658,42 @@ export async function concluirCarregamento({ bookings, horaCarregamento, user, t
   const patch = {
     status: 'concluido',
     hora_carregamento: hora,
+    data_carregamento: dataIso,
     operador_conclusao_id: toUserIdText(user?.id),
     operador_conclusao_nome:
       user?.nome || user?.full_name || user?.username || user?.email || '—',
+    justificativa_atraso_responsavel: atrasado
+      ? String(justificativa.responsavel).trim()
+      : null,
+    justificativa_atraso_motivo: atrasado ? String(justificativa.motivo).trim() : null,
     ...(grupoId ? { grupo_conclusao_id: grupoId } : {}),
   };
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
 
 export async function submitCarregamentoChecklist({ bookings, respostas, user, t }) {
-  const list = normalizeBookings(bookings);
-  const ids = list.map((row) => row.id).filter(Boolean);
-  if (ids.length === 0) throw new Error('Agendamento inválido.');
+  // Aceita payload v2 ({ version, items }) ou array legado
+  const payload =
+    respostas && typeof respostas === 'object' && !Array.isArray(respostas)
+      ? respostas
+      : Array.isArray(respostas) && respostas.length > 0
+        ? { version: 1, items: [], legacy_answers: respostas }
+        : null;
 
-  if (!Array.isArray(respostas) || respostas.length === 0) {
+  if (!payload) {
     throw new Error(
       t?.('painel.comercial.agendamentos.checklist.submitError') ||
         'Não foi possível salvar o checklist.'
     );
   }
 
-  const patch = {
-    checklist_respostas: respostas,
-    checklist_validado_em: new Date().toISOString(),
-    checklist_operador_id: toUserIdText(user?.id),
-    checklist_operador_nome:
-      user?.nome || user?.full_name || user?.username || user?.email || '—',
-  };
-
-  await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
+  return saveCarregamentoChecklistProgress({
+    bookings,
+    payload,
+    user,
+    t,
+    markValidated: payload.version === 1 || (payload.items || []).every((it) => it.status === 'aprovado'),
+  });
 }
 
 /**
@@ -620,6 +708,7 @@ export async function reverterCarregamento({ bookings }) {
   const patch = {
     status: 'agendado',
     hora_carregamento: null,
+    data_carregamento: null,
     operador_conclusao_id: null,
     operador_conclusao_nome: null,
     grupo_conclusao_id: null,
@@ -627,6 +716,8 @@ export async function reverterCarregamento({ bookings }) {
     checklist_validado_em: null,
     checklist_operador_id: null,
     checklist_operador_nome: null,
+    justificativa_atraso_responsavel: null,
+    justificativa_atraso_motivo: null,
   };
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
@@ -659,19 +750,28 @@ export {
 /**
  * Limite do agendamento = data + horário do slot (+29 min da janela).
  * Carregar antes ou dentro da janela = dentro; depois = fora.
- * Encaixe não tem janela fixa → considerado dentro.
+ * Encaixe: sem horário fixo — atraso só pela data (data carregamento > data agendada).
  */
 export function getStatusPontualidade(
   horarioAgendado,
   horaCarregamento,
   { dataAgendada, dataCarregamento } = {}
 ) {
-  if (!horaCarregamento) return 'fora';
-  if (horarioAgendado === ENCAIXE_HORARIO) return 'dentro';
+  const dataAgendadaIso = String(dataAgendada || '').slice(0, 10);
+  const dataCarregamentoIso = String(dataCarregamento || dataAgendada || '').slice(0, 10);
 
-  const scheduledStart = combineDateAndTime(dataAgendada, horarioAgendado);
+  if (horarioAgendado === ENCAIXE_HORARIO) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataAgendadaIso) || !/^\d{4}-\d{2}-\d{2}$/.test(dataCarregamentoIso)) {
+      return 'dentro';
+    }
+    return dataCarregamentoIso > dataAgendadaIso ? 'fora' : 'dentro';
+  }
+
+  if (!horaCarregamento) return 'fora';
+
+  const scheduledStart = combineDateAndTime(dataAgendadaIso, horarioAgendado);
   const actual = combineDateAndTime(
-    dataCarregamento || dataAgendada,
+    dataCarregamentoIso || dataAgendadaIso,
     horaCarregamento
   );
 
@@ -687,6 +787,39 @@ export function getStatusPontualidade(
   if (!Number.isFinite(actualMins)) return 'fora';
   return actualMins <= windowEnd ? 'dentro' : 'fora';
 }
+
+/** True quando o carregamento informado está em atraso em relação ao agendamento. */
+export function isCarregamentoAtrasado({
+  horarioAgendado,
+  horaCarregamento,
+  dataAgendada,
+  dataCarregamento,
+} = {}) {
+  return (
+    getStatusPontualidade(horarioAgendado, horaCarregamento, {
+      dataAgendada,
+      dataCarregamento,
+    }) === 'fora'
+  );
+}
+
+export const JUSTIFICATIVA_ATRASO_RESPONSAVEIS = [
+  { value: 'cliente', labelKey: 'painel.comercial.agendamentos.justificativa.responsaveis.cliente' },
+  { value: 'intertank', labelKey: 'painel.comercial.agendamentos.justificativa.responsaveis.intertank' },
+];
+
+export const JUSTIFICATIVA_ATRASO_MOTIVOS = [
+  { value: 'nota_fiscal', labelKey: 'painel.comercial.agendamentos.justificativa.motivos.notaFiscal' },
+  {
+    value: 'divergencias_conferencia',
+    labelKey: 'painel.comercial.agendamentos.justificativa.motivos.divergencias',
+  },
+  { value: 'empilhadeira', labelKey: 'painel.comercial.agendamentos.justificativa.motivos.empilhadeira' },
+  {
+    value: 'aguardando_carreta',
+    labelKey: 'painel.comercial.agendamentos.justificativa.motivos.aguardandoCarreta',
+  },
+];
 
 /** Contagem de produtos distintos: "01 produto", "02 produtos". */
 export function produtosCountLabel(saidas = [], t) {
@@ -755,7 +888,10 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
         data,
         horario: row.horario,
         hora_carregamento: row.hora_carregamento || null,
-        data_carregamento: isoDateInBrasilia(row.updated_at) || data,
+        data_carregamento:
+          (row.data_carregamento && String(row.data_carregamento).slice(0, 10)) ||
+          isoDateInBrasilia(row.updated_at) ||
+          data,
         transportadora: row.transportadora || null,
         motorista: row.motorista || null,
         placa: row.placa || null,
@@ -770,7 +906,12 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
     }
     if (row.updated_at && (!group.updated_at || row.updated_at > group.updated_at)) {
       group.updated_at = row.updated_at;
-      group.data_carregamento = isoDateInBrasilia(row.updated_at) || group.data_carregamento;
+      if (!row.data_carregamento) {
+        group.data_carregamento = isoDateInBrasilia(row.updated_at) || group.data_carregamento;
+      }
+    }
+    if (row.data_carregamento) {
+      group.data_carregamento = String(row.data_carregamento).slice(0, 10);
     }
   }
 
@@ -785,11 +926,18 @@ export function groupCarregamentosConcluidos(agendamentos = []) {
   }));
 
   rows.sort((a, b) => {
-    const dataCmp = String(b.data).localeCompare(String(a.data));
+    // Mais recente primeiro: data/hora reais do carregamento
+    const dataA = String(a.data_carregamento || a.data || '').slice(0, 10);
+    const dataB = String(b.data_carregamento || b.data || '').slice(0, 10);
+    const dataCmp = dataB.localeCompare(dataA);
     if (dataCmp !== 0) return dataCmp;
+
     const ha = timeToMinutes(a.hora_carregamento || '00:00');
     const hb = timeToMinutes(b.hora_carregamento || '00:00');
-    return hb - ha;
+    if (Number.isFinite(hb) && Number.isFinite(ha) && hb !== ha) return hb - ha;
+
+    // Desempate: conclusão mais recente no banco
+    return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
   });
 
   return rows;

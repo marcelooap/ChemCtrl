@@ -18,6 +18,9 @@ import {
   formatReceivingLoteRow,
   formatReceivingDestinoRow,
 } from "@transbordo/lib/buildReceivingCommunicationHtml";
+import OrgaoRegulamentadorBadge, {
+  OrgaoControladoBanner,
+} from "@transbordo/components/cadastro/OrgaoRegulamentadorBadge";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "-";
@@ -30,18 +33,35 @@ const formatDate = (dateStr) => {
 };
 
 function resolveDensidade(lote, produtosById) {
-  const produto =
-    (lote.produto_id && produtosById.get(lote.produto_id)) ||
-    [...produtosById.values()].find(
-      (p) =>
-        p.codigo === lote.produto_codigo ||
-        p.nome === lote.produto_nome
-    );
+  const produto = resolveProdutoCadastro(lote, produtosById);
 
   if (produto?.densidade_tabelada && produto.densidade != null && produto.densidade !== "") {
     return produto.densidade;
   }
   return lote.densidade;
+}
+
+function resolveProdutoCadastro(lote, produtosById) {
+  if (!lote) return null;
+  if (lote.produto_id && produtosById.has(lote.produto_id)) {
+    return produtosById.get(lote.produto_id);
+  }
+  const codigo = String(lote.produto_codigo || "").trim();
+  const nome = String(lote.produto_nome || "").trim();
+  return (
+    [...produtosById.values()].find((p) => {
+      if (codigo && String(p.codigo || "").trim() === codigo) return true;
+      if (nome && String(p.produto || "").trim() === nome) return true;
+      return false;
+    }) || null
+  );
+}
+
+function resolveControleProduto(lote, produtosById) {
+  const produto = resolveProdutoCadastro(lote, produtosById);
+  const controlado = Boolean(produto?.controlado);
+  const orgao = controlado ? produto?.orgao_regulamentador || null : null;
+  return { controlado: controlado && Boolean(orgao), orgao };
 }
 
 function formatDestino(d) {
@@ -115,6 +135,27 @@ export default function ComunicacaoRecebimentoDialog({
     ];
   }, [entrada]);
 
+  const lotesControle = useMemo(
+    () => lotes.map((l) => resolveControleProduto(l, produtosById)),
+    [lotes, produtosById]
+  );
+
+  const controleResumo = useMemo(() => {
+    const algumControlado = lotesControle.some((c) => c.controlado);
+    const todosControlados =
+      lotesControle.length > 0 && lotesControle.every((c) => c.controlado);
+    const orgaos = [
+      ...new Set(lotesControle.filter((c) => c.controlado).map((c) => c.orgao)),
+    ];
+    const orgaoUnico = todosControlados && orgaos.length === 1 ? orgaos[0] : null;
+    return {
+      algumControlado,
+      todosControlados,
+      orgaoUnico,
+      mostrarPorProduto: algumControlado && !orgaoUnico,
+    };
+  }, [lotesControle]);
+
   const origemIds = useMemo(() => {
     if (!entrada) return new Set();
     const ids = new Set([entrada.id]);
@@ -186,13 +227,15 @@ export default function ComunicacaoRecebimentoDialog({
 
   const handleCopy = async () => {
     try {
-      const lotesPayload = lotes.map((l) =>
+      const lotesPayload = lotes.map((l, i) =>
         formatReceivingLoteRow(l, {
           notaFiscal: entrada.nota_fiscal,
           densidade: resolveDensidade(l, produtosById),
           formatDate,
           entrada,
           lotesCount,
+          controlado: lotesControle[i]?.controlado,
+          orgao_regulamentador: lotesControle[i]?.orgao,
         })
       );
 
@@ -202,6 +245,8 @@ export default function ComunicacaoRecebimentoDialog({
           entrada.data || entrada.created_date || entrada.created_at
         ),
         lotes: lotesPayload,
+        orgaoUnico: controleResumo.orgaoUnico,
+        mostrarOrgaoPorProduto: controleResumo.mostrarPorProduto,
         hasPesagem,
         pesoBruto: formatMass(entrada.granel_peso_bruto, { empty: "-" }),
         pesoLiquido: formatMass(entrada.granel_peso_liquido, { empty: "-" }),
@@ -265,6 +310,10 @@ export default function ComunicacaoRecebimentoDialog({
             </div>
           </div>
 
+          {controleResumo.orgaoUnico ? (
+            <OrgaoControladoBanner orgao={controleResumo.orgaoUnico} />
+          ) : null}
+
           <CompactSection title="Produtos Recebidos">
             <table className="w-full border border-border rounded overflow-hidden">
               <thead>
@@ -275,26 +324,48 @@ export default function ComunicacaoRecebimentoDialog({
                   <th className={`${thClass} text-right`}>Quantidade</th>
                   <th className={thClass}>Unidade</th>
                   <th className={thClass}>Lote</th>
+                  {controleResumo.mostrarPorProduto ? (
+                    <th className={thClass}>Órgão</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
-                {lotes.map((l, i) => (
-                  <tr key={i}>
-                    <td className={tdClass}>{l.produto_codigo || "-"}</td>
-                    <td className={`${tdClass} max-w-[220px] truncate`} title={l.produto_nome || ""}>
-                      {l.produto_nome || "-"}
-                    </td>
-                    <td className={tdClass}>{l.nota_fiscal || entrada.nota_fiscal || "-"}</td>
-                    <td className={`${tdClass} text-right tabular-nums`}>
-                      {formatMass(
-                        getQuantidadeNotaFiscal(l, entrada, { lotesCount }),
-                        { empty: "-" }
-                      )}
-                    </td>
-                    <td className={tdClass}>{l.unidade_medida || "-"}</td>
-                    <td className={tdClass}>{l.lote || "-"}</td>
-                  </tr>
-                ))}
+                {lotes.map((l, i) => {
+                  const controle = lotesControle[i] || {};
+                  return (
+                    <tr
+                      key={i}
+                      className={
+                        controle.controlado && controleResumo.mostrarPorProduto
+                          ? "bg-amber-50/60"
+                          : undefined
+                      }
+                    >
+                      <td className={tdClass}>{l.produto_codigo || "-"}</td>
+                      <td className={`${tdClass} max-w-[220px] truncate`} title={l.produto_nome || ""}>
+                        {l.produto_nome || "-"}
+                      </td>
+                      <td className={tdClass}>{l.nota_fiscal || entrada.nota_fiscal || "-"}</td>
+                      <td className={`${tdClass} text-right tabular-nums`}>
+                        {formatMass(
+                          getQuantidadeNotaFiscal(l, entrada, { lotesCount }),
+                          { empty: "-" }
+                        )}
+                      </td>
+                      <td className={tdClass}>{l.unidade_medida || "-"}</td>
+                      <td className={tdClass}>{l.lote || "-"}</td>
+                      {controleResumo.mostrarPorProduto ? (
+                        <td className={tdClass}>
+                          <OrgaoRegulamentadorBadge
+                            controlado={controle.controlado}
+                            orgao={controle.orgao}
+                            compact
+                          />
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CompactSection>

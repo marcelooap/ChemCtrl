@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -7,7 +8,7 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { FileText, Printer } from "lucide-react";
+import { ClipboardList, FileText, Printer } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -21,10 +22,13 @@ import {
   TIPO_IND_VASILHAME,
   TIPO_IND_RETORNO_MP,
   tipoItemLabel,
-  formatSaidaItemInformacoes,
+  formatSaidaItemLote,
+  formatSaidaItemEmbalagem,
   resolveItemOrigem,
   isSaidaValidadaNoModulo,
 } from "@transbordo/lib/saidaOrigem";
+import { findChecklistItemForSaidaLinha } from "@painel/lib/carregamentoChecklistConfig";
+import SaidaChecklistItemViewDialog from "@painel/components/logistica/SaidaChecklistItemViewDialog";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -80,13 +84,18 @@ export default function SaidaViewDialog({
   variant = "default",
   showRelatorioFiscal = true,
   highlightModule = null,
+  checklistItems = null,
+  showPrintEtiqueta = true,
 }) {
   const { t } = useTranslation();
+  const [checklistItemView, setChecklistItemView] = useState(null);
+
   if (!saida) return null;
 
   const isAgendamento = variant === "agendamento";
+  const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
   const itens = saida.itens || [];
-  const colCount = isAgendamento ? 7 : 6;
+  const colCount = isAgendamento ? 8 : 7;
   const statusLabel = highlightModule
     ? isSaidaValidadaNoModulo(saida, highlightModule)
       ? "Validado"
@@ -113,7 +122,16 @@ export default function SaidaViewDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setChecklistItemView(null);
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="max-w-5xl overflow-hidden gap-4">
         <DialogHeader>
           <DialogTitle>
@@ -142,7 +160,8 @@ export default function SaidaViewDialog({
                 <th className="px-3 py-2.5 font-medium">Código</th>
                 <th className="px-3 py-2.5 font-medium">Produto</th>
                 <th className="px-3 py-2.5 font-medium">Tipo</th>
-                <th className="px-3 py-2.5 font-medium">Informações</th>
+                <th className="px-3 py-2.5 font-medium">Lote</th>
+                <th className="px-3 py-2.5 font-medium">Embalagem</th>
                 <th className="px-3 py-2.5 font-medium">Qtd. Solicitada</th>
                 <th className="px-3 py-2.5 font-medium">
                   {isAgendamento
@@ -170,6 +189,9 @@ export default function SaidaViewDialog({
                   const isForeignModule =
                     Boolean(highlightModule) &&
                     resolveItemOrigem(item) !== highlightModule;
+                  const checklistItem = hasChecklist
+                    ? findChecklistItemForSaidaLinha(checklistItems, saida, item, i)
+                    : null;
                   return (
                   <tr
                     key={i}
@@ -197,11 +219,10 @@ export default function SaidaViewDialog({
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-                      {formatSaidaItemInformacoes(item, {
-                        vasilhame,
-                        includeLote: true,
-                        context: isAgendamento ? "agendamento" : "default",
-                      })}
+                      {formatSaidaItemLote(item, { vasilhame })}
+                    </td>
+                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                      {formatSaidaItemEmbalagem(item, { vasilhame })}
                     </td>
                     <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
@@ -215,17 +236,30 @@ export default function SaidaViewDialog({
                     </td>
                     {isAgendamento ? (
                       <td className="px-2 py-2.5 text-right">
-                        {item.tipo === TIPO_CONVENCIONAL ? (
-                          <button
-                            type="button"
-                            className="p-1 rounded hover:bg-muted"
-                            title={t("painel.comercial.agendamentos.printLabel")}
-                            aria-label={t("painel.comercial.agendamentos.printLabel")}
-                            onClick={() => handlePrintEtiqueta(item)}
-                          >
-                            <Printer className="w-3.5 h-3.5 text-muted-foreground" />
-                          </button>
-                        ) : null}
+                        <div className="inline-flex items-center justify-end gap-0.5">
+                          {checklistItem ? (
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-muted"
+                              title={t("painel.logistica.carregamentos.viewChecklist")}
+                              aria-label={t("painel.logistica.carregamentos.viewChecklist")}
+                              onClick={() => setChecklistItemView(checklistItem)}
+                            >
+                              <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          ) : null}
+                          {showPrintEtiqueta && item.tipo === TIPO_CONVENCIONAL ? (
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-muted"
+                              title={t("painel.comercial.agendamentos.printLabel")}
+                              aria-label={t("painel.comercial.agendamentos.printLabel")}
+                              onClick={() => handlePrintEtiqueta(item)}
+                            >
+                              <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     ) : null}
                   </tr>
@@ -269,5 +303,13 @@ export default function SaidaViewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <SaidaChecklistItemViewDialog
+      open={!!checklistItemView}
+      item={checklistItemView}
+      saida={saida}
+      onClose={() => setChecklistItemView(null)}
+    />
+    </>
   );
 }

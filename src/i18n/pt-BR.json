@@ -1043,23 +1043,128 @@
           "saveSuccess": "Dados de transporte salvos"
         },
         "concluir": {
-          "title": "Concluir carregamento",
-          "button": "Concluir carregamento",
+          "title": "Liberar para Expedição",
+          "button": "Liberar para Expedição",
           "horaLabel": "Horário de carregamento",
+          "dataLabel": "Data de carregamento",
           "horaHint": "Preenchido com o horário atual de Brasília (editável).",
-          "confirm": "Concluir",
-          "saveSuccess": "Carregamento concluído"
+          "dataHoraHint": "Data e horário preenchidos com o momento atual de Brasília (editáveis).",
+          "confirm": "Liberar",
+          "saveSuccess": "Carregamento liberado para expedição"
+        },
+        "justificativa": {
+          "title": "Justificativa de atraso",
+          "subtitle": "O carregamento foi registrado fora do horário/data agendados. Informe a justificativa para concluir.",
+          "responsavelTitle": "Responsável",
+          "responsavelHint": "Quem originou o atraso",
+          "responsavelLabel": "Responsável pelo atraso",
+          "responsavelPlaceholder": "Selecione...",
+          "motivoTitle": "Motivo",
+          "motivoHint": "Causa principal do atraso",
+          "motivoLabel": "Motivo do atraso",
+          "motivoPlaceholder": "Selecione...",
+          "confirm": "Confirmar e liberar",
+          "required": "Selecione o responsável e o motivo do atraso.",
+          "responsaveis": {
+            "cliente": "Cliente",
+            "intertank": "Intertank"
+          },
+          "motivos": {
+            "notaFiscal": "Nota Fiscal",
+            "divergencias": "Divergências de conferência",
+            "empilhadeira": "Empilhadeira",
+            "aguardandoCarreta": "Aguardando carreta"
+          }
         },
         "checklist": {
           "button": "Checklist de carregamento",
-          "title": "Checklist de carregamento",
+          "title": "Checklist de liberação de carregamento",
           "confirm": "Validar checklist",
           "readOnlyBadge": "Checklist validado",
           "validatedAt": "Validado em {{date}} por {{operador}}",
           "editSoonHint": "A edição do checklist estará disponível em breve.",
-          "submitSuccess": "Checklist validado com sucesso",
+          "submitSuccess": "Checklist salvo com sucesso",
           "submitError": "Não foi possível salvar o checklist",
-          "concluirBlockedHint": "Preencha e valide o checklist antes de concluir o carregamento.",
+          "concluirBlockedHint": "Conclua a conferência de todos os itens antes de liberar para expedição.",
+          "liberarExpedicao": "Liberar para Expedição",
+          "liberarBlockedHint": "Todos os itens precisam estar conferidos e sem reprovação para liberar a expedição.",
+          "rejectedBlockedHint": "Existem itens reprovados. Revise a conferência antes de liberar.",
+          "rejectedBanner": "Existem itens reprovados nesta conferência. A liberação para expedição está bloqueada.",
+          "liberarError": "Não foi possível liberar para expedição",
+          "allApproved": "Todas as conferências foram aprovadas. Você pode liberar para expedição.",
+          "emptyItems": "Nenhum item encontrado nas saídas deste carregamento.",
+          "itemsList": "Itens da saída",
+          "saidaId": "ID da saída",
+          "selectItem": "Selecione um item para conferir",
+          "backToItems": "Voltar aos itens",
+          "progress": "{{done}} de {{total}} itens conferidos",
+          "checksProgress": "{{answered}}/{{total}} verificações respondidas",
+          "responsible": "Responsável pela conferência",
+          "itemValidatedAt": "Conferido em {{date}} por {{operador}}",
+          "approveItem": "Aprovar item",
+          "rejectItem": "Reprovar item",
+          "reopenItem": "Reabrir conferência",
+          "saveProgress": "Salvar progresso",
+          "attachPhotos": "Anexar fotos",
+          "answers": {
+            "aprovado": "Aprovado",
+            "reprovado": "Reprovado",
+            "naoSeAplica": "Não se aplica"
+          },
+          "photoAlt": "Foto da conferência",
+          "photoError": "Não foi possível anexar a foto",
+          "lacresCount": "{{count}} lacre(s) registrado(s) no envase",
+          "noLacres": "Nenhum lacre registrado no envase para este tanque.",
+          "status": {
+            "pendente": "Pendente",
+            "emConferencia": "Em conferência",
+            "aprovado": "Aprovado",
+            "reprovado": "Reprovado"
+          },
+          "fields": {
+            "produto": "Produto",
+            "tipo": "Tipo do material",
+            "quantidade": "Quantidade",
+            "lote": "Lote",
+            "tanque": "Tanque / Vasilhame",
+            "pesoLiquido": "Peso líquido",
+            "embalagens": "Qtd. embalagens",
+            "fabricacao": "Data de fabricação",
+            "validade": "Validade do produto",
+            "lacreLocal": "Local / ponto",
+            "lacreNumero": "Nº do lacre"
+          },
+          "sections": {
+            "identificacao": "Identificação do tanque",
+            "etiqueta": "Etiqueta do tanque",
+            "lacres": "Lacres",
+            "estado": "Estado físico do tanque",
+            "quantidade": "Quantidade",
+            "lote": "Lote",
+            "lacracao": "Lacração das embalagens",
+            "paletes": "Estado dos paletes",
+            "fotos": "Fotos"
+          },
+          "items": {
+            "convencional": {
+              "identificacaoConfere": "A numeração física do tanque confere com a numeração registrada no sistema.",
+              "etiquetaConfere": "A etiqueta física está de acordo com as informações apresentadas no sistema.",
+              "lacresNumeros": "Os números dos lacres físicos conferem com os números registrados no sistema.",
+              "tanqueLacrado": "O tanque está completamente lacrado nos pontos previstos.",
+              "estadoBom": "Tanque em bom estado físico.",
+              "semAmassados": "Não apresenta amassados que comprometam sua condição.",
+              "semCorrosao": "Não apresenta corrosão excessiva.",
+              "semVazamento": "Não apresenta sinais de vazamento.",
+              "semSujidade": "Não apresenta sujidades ou contaminações aparentes.",
+              "capValvula": "O cap da válvula de descarga está devidamente fixado."
+            },
+            "embalado": {
+              "quantidadeConfere": "A quantidade de embalagens por produto confere com a quantidade registrada no sistema.",
+              "loteConfere": "O lote das embalagens/produtos confere com o lote registrado no sistema.",
+              "embalagensLacradas": "Todos os produtos/embalagens estão devidamente lacrados e sem sinais de violação.",
+              "paletesOk": "Os paletes estão em bom estado e adequados para expedição."
+            }
+          },
           "questions": {
             "docConferida": "Documentação da carga conferida",
             "epiUtilizado": "EPI utilizado corretamente",
@@ -1068,7 +1173,8 @@
           },
           "errors": {
             "answerRequired": "Responda todas as perguntas",
-            "mustBeYes": "Esta verificação deve ser confirmada com \"Sim\""
+            "mustBeYes": "Esta verificação deve ser confirmada com \"Sim\"",
+            "allChecksRequired": "Marque todos os itens obrigatórios da conferência antes de aprovar."
           }
         },
         "columns": {
@@ -1106,6 +1212,7 @@
           "placa": "Informe a placa.",
           "transporteFailed": "Não foi possível salvar os dados de transporte.",
           "horaCarregamento": "Informe um horário de carregamento válido.",
+          "dataCarregamento": "Informe uma data de carregamento válida.",
           "concluirFailed": "Não foi possível concluir o carregamento."
         }
       },
@@ -1233,6 +1340,9 @@
         "tableTitle": "Carregamentos concluídos",
         "tableCount": "{{count}} registro(s)",
         "searchPlaceholder": "Buscar saída, cliente, motorista, placa...",
+        "dateFrom": "Finalizado de",
+        "dateTo": "até",
+        "clearDates": "Limpar período",
         "empty": "Nenhum carregamento concluído encontrado.",
         "view": "Visualizar saída",
         "revert": "Reverter expedição",
@@ -1246,6 +1356,12 @@
         "viewSaidaPickTitle": "Qual saída deseja visualizar?",
         "viewSaidaMissingTitle": "Saída não encontrada",
         "viewSaidaMissing": "A saída deste carregamento não está mais disponível.",
+        "viewChecklist": "Ver checklist e fotos",
+        "checklistItemTitle": "Checklist do item",
+        "checklistPrint": "Imprimir A4",
+        "checklistPrintTitle": "Checklist — {{saida}} — {{item}}",
+        "checklistNoPhotos": "Nenhuma foto registrada para este item.",
+        "checklistPrintError": "Não foi possível preparar a impressão.",
         "produtoCountOne": "{{count}} produto",
         "produtoCountMany": "{{count}} produtos",
         "loadErrorTitle": "Erro ao carregar carregamentos",

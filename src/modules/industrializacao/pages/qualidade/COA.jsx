@@ -1,21 +1,17 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
-// eslint-disable-next-line
-import { uploadFileToSupabase } from '@industrializacao/api/storage';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Pencil, FileText, Camera, Trash2, Loader2, Eye } from 'lucide-react';
+import { Search, Pencil, FileText, Camera, Eye } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { Input } from '@shared/components/ui/input';
-import { Button } from '@shared/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/components/ui/tooltip';
 import { useToast } from '@shared/components/ui/use-toast';
 import { generateCOAPDF } from '@industrializacao/lib/pdfReports';
-import SignedImage from '@industrializacao/components/SignedImage';
-import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { fmtDate } from '@/i18n/formatters';
 import COAViewDialog, { formatPackagingLabel } from '@industrializacao/components/qualidade/COAViewDialog';
+import QualityAnalysisDialog from '@industrializacao/components/qualidade/QualityAnalysisDialog';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
@@ -37,18 +33,16 @@ export default function COA() {
   const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: tests } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('all');
   const [showEdit, setShowEdit] = useState(false);
   const [showView, setShowView] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editingProd, setEditingProd] = useState(null);
   const [viewing, setViewing] = useState(null);
-  const [editForm, setEditForm] = useState({ analyst: '', observations: '', results: [] });
   const [generatingPDF, setGeneratingPDF] = useState(null);
   const { toast } = useToast();
-  const photoInputRef = useRef(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   const na = t('common.notAvailable');
 
@@ -57,11 +51,6 @@ export default function COA() {
     const key = QC_STATUS_KEYS[status];
     return key ? t(key) : status;
   }, [t]);
-
-  const fmt4 = useCallback((n) => {
-    if (n == null) return na;
-    return fmtNumber(n, { minimumFractionDigits: 4, maximumFractionDigits: 4 }, i18n.language);
-  }, [na, i18n.language]);
 
   const containersByOp = useMemo(() => {
     const map = new Map();
@@ -110,8 +99,29 @@ export default function COA() {
     return matchSearch && matchClient;
   });
 
-  const openEdit = (r) => { setEditing(r); setEditForm({ analyst: r.analyst, observations: r.observations || '', results: parseArr(r.results), sample_photo_url: r.sample_photo_url || '' }); setShowEdit(true); };
+  const openEdit = (r) => {
+    const prod =
+      (productions || []).find(p => p.id === r.production_id) ||
+      (productions || []).find(p => p.op_number === r.op_number) ||
+      null;
+    if (!prod) {
+      toast({
+        title: t('errors.saveFailed'),
+        description: t('quality.coaPage.productionNotFound', {
+          defaultValue: 'Produção vinculada não encontrada. Não é possível editar a análise.',
+        }),
+        variant: 'destructive',
+      });
+      return;
+    }
+    setEditing(r);
+    setEditingProd(prod);
+    setShowEdit(true);
+  };
+
   const openView = (r) => { setViewing(r); setShowView(true); };
+
+  const editingTest = editingProd ? (tests || []).find(item => item.product === editingProd.product) : null;
 
   const renderPackagingCell = (r) => {
     const list = containersByOp.get(r.op_number) || [];
@@ -131,32 +141,6 @@ export default function COA() {
         </TooltipContent>
       </Tooltip>
     );
-  };
-
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingPhoto(true);
-    try {
-      const url = await uploadFileToSupabase(file);
-      setEditForm(prev => ({ ...prev, sample_photo_url: url }));
-    } catch (e) {
-      toast({ title: t('quality.coaPage.photoUploadError'), description: e.message || t('quality.coaPage.photoBucketHint'), variant: 'destructive' });
-    }
-    finally { setUploadingPhoto(false); }
-  };
-
-  const saveEdit = async () => {
-    setSaving(true);
-    try {
-      await base44.entities.QualityResult.update(editing.id, { analyst: editForm.analyst, observations: editForm.observations, results: editForm.results, sample_photo_url: editForm.sample_photo_url || '' });
-      setShowEdit(false); load();
-      toast({ title: t('quality.coaPage.updated') });
-    } catch (err) {
-      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleGeneratePDF = async (r) => {
@@ -294,59 +278,23 @@ export default function COA() {
         containers={viewing ? (containersByOp.get(viewing.op_number) || []) : []}
       />
 
-      <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{t('quality.coaPage.editTitle', { product: editing?.product, lot: editing?.lot })}</DialogTitle></DialogHeader>
-          {editing && (
-            <div>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div><label className="text-xs font-medium text-muted-foreground">{t('quality.fields.analyst')}</label><Input value={editForm.analyst} onChange={e => setEditForm({ ...editForm, analyst: e.target.value })} /></div>
-                <div><label className="text-xs font-medium text-muted-foreground">{t('common.observations')}</label><Input value={editForm.observations} onChange={e => setEditForm({ ...editForm, observations: e.target.value })} /></div>
-              </div>
-              <div className="mb-4 flex items-center gap-3">
-                <span className="text-xs font-medium text-muted-foreground">{t('quality.sections.samplePhoto')}:</span>
-                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-                {editForm.sample_photo_url ? (
-                  <div className="flex items-center gap-2">
-                    <SignedImage url={editForm.sample_photo_url} alt={t('quality.producoesCq.sampleAlt')} className="w-16 h-16 object-cover rounded-lg border" />
-                    <button type="button" onClick={() => setEditForm(prev => ({ ...prev, sample_photo_url: '' }))} className="p-1 rounded hover:bg-red-50 text-red-500" title={t('quality.coaPage.removePhoto')}><Trash2 className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => photoInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-gray-500" title={t('quality.coaPage.replacePhoto')}><Camera className="w-4 h-4" /></button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg border border-dashed border-gray-300 hover:border-[#2575D1] hover:text-[#2575D1] text-gray-500 transition-colors disabled:opacity-50">
-                    <Camera className="w-4 h-4" /> {uploadingPhoto ? t('quality.coaPage.uploading') : t('quality.coaPage.addPhoto')}
-                  </button>
-                )}
-              </div>
-              <table className="w-full text-sm border rounded-lg overflow-hidden">
-                <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
-                  <th className="px-3 py-2 text-left">{t('quality.ensaios.table.analysis').toUpperCase()}</th><th className="px-3 py-2 text-left">{t('quality.producoesCq.table.method')}</th><th className="px-3 py-2 text-left">{t('quality.producoesCq.table.unitShort')}</th>
-                  <th className="px-3 py-2 text-right">{t('quality.fields.min').toUpperCase()}</th><th className="px-3 py-2 text-right">{t('quality.fields.max').toUpperCase()}</th><th className="px-3 py-2 text-left">{t('quality.producoesCq.table.result')}</th><th className="px-3 py-2 text-left">{t('common.status').toUpperCase()}</th>
-                </tr></thead>
-                <tbody>
-                  {editForm.results.map((r, idx) => (
-                    <tr key={idx} className="border-t">
-                      <td className="px-3 py-2 font-medium">{r.analysis_name}</td>
-                      <td className="px-3 py-2">{r.methodology}</td>
-                      <td className="px-3 py-2">{r.unit || na}</td>
-                      <td className="px-3 py-2 text-right">{r.min_limit != null ? fmt4(r.min_limit) : na}</td>
-                      <td className="px-3 py-2 text-right">{r.max_limit != null ? fmt4(r.max_limit) : na}</td>
-                      <td className="px-2 py-1"><Input value={r.result} onChange={e => { const rs = [...editForm.results]; rs[idx] = { ...rs[idx], result: e.target.value }; setEditForm({ ...editForm, results: rs }); }} className="h-8 text-xs" /></td>
-                      <td className="px-3 py-2 text-xs">{translateQcStatus(r.status) || na}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowEdit(false)} disabled={saving}>{t('buttons.cancel')}</Button>
-                <Button onClick={saveEdit} disabled={saving} style={{ background: '#2575D1', color: 'white' }}>
-                  {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : t('quality.coaPage.saveChanges')}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <QualityAnalysisDialog
+        open={showEdit}
+        onOpenChange={(open) => {
+          setShowEdit(open);
+          if (!open) {
+            setEditing(null);
+            setEditingProd(null);
+          }
+        }}
+        production={editingProd}
+        qualityTest={editingTest}
+        existingResult={editing}
+        onSaved={() => {
+          load();
+          toast({ title: t('quality.coaPage.updated') });
+        }}
+      />
     </div>
     </TooltipProvider>
   );

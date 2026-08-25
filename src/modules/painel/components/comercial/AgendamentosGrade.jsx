@@ -14,6 +14,7 @@ import AgendamentoSlotModal from '@painel/components/comercial/AgendamentoSlotMo
 import AgendamentoTransporteModal from '@painel/components/comercial/AgendamentoTransporteModal';
 import AgendamentoConcluirCarregamentoModal from '@painel/components/comercial/AgendamentoConcluirCarregamentoModal';
 import AgendamentoCarregamentoChecklistModal from '@painel/components/comercial/AgendamentoCarregamentoChecklistModal';
+import AgendamentoJustificativaAtrasoModal from '@painel/components/comercial/AgendamentoJustificativaAtrasoModal';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import {
   Dialog,
@@ -41,7 +42,7 @@ import {
   normalizeBookings,
   releaseSlotBookings,
   startOfWeekMonday,
-  submitCarregamentoChecklist,
+  saveCarregamentoChecklistProgress,
   summarizeSlotBookings,
   todayISO,
   toISODate,
@@ -94,6 +95,7 @@ export default function AgendamentosGrade({
   const [transporteBookings, setTransporteBookings] = useState(null);
   const [checklistBookings, setChecklistBookings] = useState(null);
   const [concluirBookings, setConcluirBookings] = useState(null);
+  const [justificativaState, setJustificativaState] = useState(null);
   const [bookingLocked, setBookingLocked] = useState(false);
   const [weekDir, setWeekDir] = useState(0);
   const reduceMotion = useReducedMotion();
@@ -103,6 +105,7 @@ export default function AgendamentosGrade({
   const canTransporte = showTransporte && !lockedSaida;
   const canConcluir = showConcluirCarregamento && !lockedSaida;
   const canChecklist = canConcluir;
+  const needVasilhames = canViewSaida || canChecklist;
 
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
   const today = todayISO();
@@ -127,8 +130,8 @@ export default function AgendamentosGrade({
         const [bookings, saidasList, vascs, ents, expedidas] = await Promise.all([
           listAgendamentosByRange(fromIso, toIso),
           entities.saidas.list('-created_date'),
-          canViewSaida ? entities.vasilhames.list() : Promise.resolve([]),
-          canViewSaida ? entities.estoque.list() : Promise.resolve([]),
+          needVasilhames ? entities.vasilhames.list() : Promise.resolve([]),
+          needVasilhames ? entities.estoque.list() : Promise.resolve([]),
           listSaidaIdsExpedidas(),
         ]);
         if (seq !== loadSeqRef.current) return;
@@ -154,7 +157,7 @@ export default function AgendamentosGrade({
         if (seq === loadSeqRef.current && !isSilent) setLoading(false);
       }
     },
-    [weekStart, t, toast, canViewSaida]
+    [weekStart, t, toast, needVasilhames]
   );
 
   useEffect(() => {
@@ -205,8 +208,15 @@ export default function AgendamentosGrade({
   const occupiedSlotCountByDay = useMemo(() => {
     const map = new Map();
     for (const [key, bookings] of bookingMap.entries()) {
+      const [day, horario] = key.split('|');
+      // Encaixe: cada cliente é um carregamento independente (como na grade).
+      if (horario === ENCAIXE_HORARIO) {
+        const groups = groupSlotCarregamentos(bookings, { splitByCliente: true });
+        const pending = groups.filter((g) => !isCarregado(g.bookings)).length;
+        if (pending > 0) map.set(day, (map.get(day) || 0) + pending);
+        continue;
+      }
       if (isCarregado(bookings)) continue;
-      const day = key.split('|')[0];
       map.set(day, (map.get(day) || 0) + 1);
     }
     return map;
@@ -366,30 +376,58 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
-  const handleConcluirCarregamento = async ({ horaCarregamento }) => {
-    const list = normalizeBookings(concluirBookings);
+  const handleConcluirCarregamento = async ({
+    horaCarregamento,
+    dataCarregamento,
+    justificativa,
+  }) => {
+    const list = normalizeBookings(
+      justificativaState?.bookings || concluirBookings
+    );
     if (list.length === 0) return;
     await concluirCarregamento({
       bookings: list,
       horaCarregamento,
+      dataCarregamento,
+      justificativa,
       user,
       t,
     });
+    setJustificativaState(null);
     toast({ title: t('painel.comercial.agendamentos.concluir.saveSuccess') });
     await loadData({ silent: true });
   };
 
-  const handleSubmitChecklist = async ({ respostas }) => {
+  const handleNeedsJustificativa = ({ horaCarregamento, dataCarregamento }) => {
+    const list = normalizeBookings(concluirBookings);
+    if (list.length === 0) return;
+    setJustificativaState({
+      bookings: list,
+      horaCarregamento,
+      dataCarregamento,
+    });
+  };
+
+  const handleSaveChecklistProgress = async ({ payload, markValidated }) => {
     const list = normalizeBookings(checklistBookings);
     if (list.length === 0) return;
-    await submitCarregamentoChecklist({
+    await saveCarregamentoChecklistProgress({
       bookings: list,
-      respostas,
+      payload,
       user,
       t,
+      markValidated,
     });
-    toast({ title: t('painel.comercial.agendamentos.checklist.submitSuccess') });
-    await loadData({ silent: true });
+    if (markValidated) {
+      await loadData({ silent: true });
+    }
+  };
+
+  const handleLiberarFromChecklist = (bookingsOverride) => {
+    const list = normalizeBookings(bookingsOverride || checklistBookings);
+    if (list.length === 0) return;
+    setChecklistBookings(null);
+    setConcluirBookings(list);
   };
 
   const locale = i18n.language || 'pt-BR';
@@ -553,7 +591,7 @@ export default function AgendamentosGrade({
                 onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                 onConcluir={canConcluir ? setConcluirBookings : undefined}
-                concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                concluirLabel={t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
                 onChecklist={canChecklist ? setChecklistBookings : undefined}
                 checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                 saidasCountLabel={(count) =>
@@ -591,7 +629,7 @@ export default function AgendamentosGrade({
                 onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                 transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                 onConcluir={canConcluir ? setConcluirBookings : undefined}
-                concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                concluirLabel={t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
                 onChecklist={canChecklist ? setChecklistBookings : undefined}
                 checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                 saidasCountLabel={(count) =>
@@ -634,7 +672,7 @@ export default function AgendamentosGrade({
                   onEditTransporte={canTransporte ? setTransporteBookings : undefined}
                   transporteLabel={t('painel.comercial.agendamentos.transporte.button')}
                   onConcluir={canConcluir ? setConcluirBookings : undefined}
-                  concluirLabel={t('painel.comercial.agendamentos.concluir.button')}
+                  concluirLabel={t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
                   onChecklist={canChecklist ? setChecklistBookings : undefined}
                   checklistLabel={t('painel.comercial.agendamentos.checklist.button')}
                   saidasCountLabel={(count) =>
@@ -693,6 +731,18 @@ export default function AgendamentosGrade({
           permissionPrefix={permissionPrefix}
           onClose={() => setConcluirBookings(null)}
           onConfirm={handleConcluirCarregamento}
+          onNeedsJustificativa={handleNeedsJustificativa}
+        />
+      ) : null}
+
+      {canConcluir ? (
+        <AgendamentoJustificativaAtrasoModal
+          open={!!justificativaState}
+          bookings={justificativaState?.bookings}
+          pendingPayload={justificativaState}
+          permissionPrefix={permissionPrefix}
+          onClose={() => setJustificativaState(null)}
+          onConfirm={handleConcluirCarregamento}
         />
       ) : null}
 
@@ -700,9 +750,13 @@ export default function AgendamentosGrade({
         <AgendamentoCarregamentoChecklistModal
           open={!!checklistBookings}
           bookings={checklistBookings}
+          saidas={saidas}
+          vasilhames={vasilhames}
+          entradas={entradas}
           permissionPrefix={permissionPrefix}
           onClose={() => setChecklistBookings(null)}
-          onConfirm={handleSubmitChecklist}
+          onSaveProgress={handleSaveChecklistProgress}
+          onLiberar={handleLiberarFromChecklist}
         />
       ) : null}
 

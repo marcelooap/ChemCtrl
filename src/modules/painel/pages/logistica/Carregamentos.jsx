@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, Search, Undo2 } from 'lucide-react';
+import { Eye, Search, Undo2, X } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
+import DateInputBr from '@shared/components/ui/DateInputBr';
 import { useToast } from '@shared/components/ui/use-toast';
 import {
   Dialog,
@@ -31,6 +33,7 @@ import {
   produtosCountLabel,
   reverterCarregamento,
 } from '@painel/lib/agendamentosCarregamento';
+import { checklistItemsFromBooking } from '@painel/lib/carregamentoChecklistConfig';
 
 export default function LogisticaCarregamentos() {
   const { t } = useTranslation();
@@ -42,7 +45,10 @@ export default function LogisticaCarregamentos() {
   const [vasilhames, setVasilhames] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [viewSaida, setViewSaida] = useState(null);
+  const [viewChecklistItems, setViewChecklistItems] = useState([]);
   const [viewPicker, setViewPicker] = useState(null);
   const [revertTarget, setRevertTarget] = useState(null);
   const [reverting, setReverting] = useState(false);
@@ -104,8 +110,16 @@ export default function LogisticaCarregamentos() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return displayRows;
+    const from = String(dateFrom || '').slice(0, 10);
+    const to = String(dateTo || '').slice(0, 10);
+
     return displayRows.filter((row) => {
+      const carregamentoDate = String(row.data_carregamento || row.data || '').slice(0, 10);
+
+      if (from && (!carregamentoDate || carregamentoDate < from)) return false;
+      if (to && (!carregamentoDate || carregamentoDate > to)) return false;
+
+      if (!q) return true;
       const hay = [
         row.codesLabel,
         row.clientesLabel,
@@ -117,13 +131,16 @@ export default function LogisticaCarregamentos() {
         row.horario,
         row.hora_carregamento,
         formatDateBR(row.data),
+        formatDateBR(row.data_carregamento),
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [displayRows, search]);
+  }, [displayRows, search, dateFrom, dateTo]);
+
+  const hasDateFilter = Boolean(dateFrom || dateTo);
 
   const resolveSaida = (booking) => saidasById.get(String(booking?.saida_id));
 
@@ -131,7 +148,8 @@ export default function LogisticaCarregamentos() {
     const list = normalizeBookings(row?.bookings);
     if (list.length === 0) return;
     if (list.length === 1) {
-      const saida = resolveSaida(list[0]);
+      const booking = list[0];
+      const saida = resolveSaida(booking);
       if (!saida) {
         toast({
           title: t('painel.logistica.carregamentos.viewSaidaMissingTitle'),
@@ -140,6 +158,7 @@ export default function LogisticaCarregamentos() {
         });
         return;
       }
+      setViewChecklistItems(checklistItemsFromBooking(booking, saida.id));
       setViewSaida(saida);
       return;
     }
@@ -193,8 +212,8 @@ export default function LogisticaCarregamentos() {
       </div>
 
       <div className="flex-1 min-h-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
-        <div className="shrink-0 px-5 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="shrink-0 px-5 py-4 border-b border-border flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-foreground">
               {t('painel.logistica.carregamentos.tableTitle')}
             </h2>
@@ -204,14 +223,51 @@ export default function LogisticaCarregamentos() {
               })}
             </p>
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('painel.logistica.carregamentos.searchPlaceholder')}
-              className="pl-9 h-9"
-            />
+          <div className="flex flex-wrap items-end gap-2 w-full lg:w-auto">
+            <div className="space-y-1">
+              <Label htmlFor="carreg-date-from" className="text-[11px] text-muted-foreground">
+                {t('painel.logistica.carregamentos.dateFrom')}
+              </Label>
+              <DateInputBr
+                value={dateFrom}
+                onChange={setDateFrom}
+                className="w-[148px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="carreg-date-to" className="text-[11px] text-muted-foreground">
+                {t('painel.logistica.carregamentos.dateTo')}
+              </Label>
+              <DateInputBr
+                value={dateTo}
+                onChange={setDateTo}
+                className="w-[148px]"
+              />
+            </div>
+            {hasDateFilter ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 px-2 text-muted-foreground"
+                onClick={() => {
+                  setDateFrom('');
+                  setDateTo('');
+                }}
+                title={t('painel.logistica.carregamentos.clearDates')}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('painel.logistica.carregamentos.searchPlaceholder')}
+                className="pl-9 h-9"
+              />
+            </div>
           </div>
         </div>
 
@@ -362,6 +418,7 @@ export default function LogisticaCarregamentos() {
                     });
                     return;
                   }
+                  setViewChecklistItems(checklistItemsFromBooking(row, saida.id));
                   setViewSaida(saida);
                 }}
               >
@@ -415,7 +472,12 @@ export default function LogisticaCarregamentos() {
         vasilhames={vasilhames}
         entradas={entradas}
         variant="agendamento"
-        onClose={() => setViewSaida(null)}
+        checklistItems={viewChecklistItems}
+        showPrintEtiqueta={false}
+        onClose={() => {
+          setViewSaida(null);
+          setViewChecklistItems([]);
+        }}
       />
     </div>
   );

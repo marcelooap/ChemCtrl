@@ -1046,20 +1046,125 @@
           "title": "Complete loading",
           "button": "Complete loading",
           "horaLabel": "Loading time",
+          "dataLabel": "Loading date",
           "horaHint": "Pre-filled with the current Brasília time (editable).",
+          "dataHoraHint": "Date and time pre-filled with the current Brasília moment (editable).",
           "confirm": "Complete",
           "saveSuccess": "Loading completed"
         },
+        "justificativa": {
+          "title": "Delay justification",
+          "subtitle": "The loading was recorded outside the scheduled time/date. Provide a justification to complete.",
+          "responsavelTitle": "Responsible party",
+          "responsavelHint": "Who caused the delay",
+          "responsavelLabel": "Delay responsible",
+          "responsavelPlaceholder": "Select...",
+          "motivoTitle": "Reason",
+          "motivoHint": "Main cause of the delay",
+          "motivoLabel": "Delay reason",
+          "motivoPlaceholder": "Select...",
+          "confirm": "Confirm and release",
+          "required": "Select the responsible party and the delay reason.",
+          "responsaveis": {
+            "cliente": "Customer",
+            "intertank": "Intertank"
+          },
+          "motivos": {
+            "notaFiscal": "Invoice",
+            "divergencias": "Inspection discrepancies",
+            "empilhadeira": "Forklift",
+            "aguardandoCarreta": "Waiting for trailer"
+          }
+        },
         "checklist": {
           "button": "Loading checklist",
-          "title": "Loading checklist",
+          "title": "Loading release checklist",
           "confirm": "Validate checklist",
           "readOnlyBadge": "Checklist validated",
           "validatedAt": "Validated on {{date}} by {{operador}}",
           "editSoonHint": "Checklist editing will be available soon.",
-          "submitSuccess": "Checklist validated successfully",
+          "submitSuccess": "Checklist saved successfully",
           "submitError": "Could not save the checklist",
-          "concluirBlockedHint": "Fill in and validate the checklist before completing the loading.",
+          "concluirBlockedHint": "Complete the inspection of all items before releasing for shipping.",
+          "liberarExpedicao": "Release for Shipping",
+          "liberarBlockedHint": "All items must be inspected with no rejections to release for shipping.",
+          "rejectedBlockedHint": "There are rejected items. Review the inspection before releasing.",
+          "rejectedBanner": "There are rejected items in this inspection. Release for shipping is blocked.",
+          "liberarError": "Could not release for shipping",
+          "allApproved": "All inspections were approved. You can release for shipping.",
+          "emptyItems": "No items found in the exits for this loading.",
+          "itemsList": "Exit items",
+          "saidaId": "Exit ID",
+          "selectItem": "Select an item to inspect",
+          "backToItems": "Back to items",
+          "progress": "{{done}} of {{total}} items inspected",
+          "checksProgress": "{{answered}}/{{total}} checks answered",
+          "responsible": "Inspection responsible",
+          "itemValidatedAt": "Inspected on {{date}} by {{operador}}",
+          "approveItem": "Approve item",
+          "rejectItem": "Reject item",
+          "reopenItem": "Reopen inspection",
+          "saveProgress": "Save progress",
+          "attachPhotos": "Attach photos",
+          "answers": {
+            "aprovado": "Approved",
+            "reprovado": "Rejected",
+            "naoSeAplica": "Not applicable"
+          },
+          "photoAlt": "Inspection photo",
+          "photoError": "Could not attach the photo",
+          "lacresCount": "{{count}} seal(s) registered during filling",
+          "noLacres": "No seals registered during filling for this tank.",
+          "status": {
+            "pendente": "Pending",
+            "emConferencia": "In progress",
+            "aprovado": "Approved",
+            "reprovado": "Rejected"
+          },
+          "fields": {
+            "produto": "Product",
+            "tipo": "Material type",
+            "quantidade": "Quantity",
+            "lote": "Lot",
+            "tanque": "Tank / IBC",
+            "pesoLiquido": "Net weight",
+            "embalagens": "Package qty",
+            "fabricacao": "Manufacture date",
+            "validade": "Product expiry",
+            "lacreLocal": "Location / point",
+            "lacreNumero": "Seal number"
+          },
+          "sections": {
+            "identificacao": "Tank identification",
+            "etiqueta": "Tank label",
+            "lacres": "Seals",
+            "estado": "Tank physical condition",
+            "quantidade": "Quantity",
+            "lote": "Lot",
+            "lacracao": "Package sealing",
+            "paletes": "Pallet condition",
+            "fotos": "Photos"
+          },
+          "items": {
+            "convencional": {
+              "identificacaoConfere": "Physical tank number matches the number registered in the system.",
+              "etiquetaConfere": "Physical label matches the information shown in the system.",
+              "lacresNumeros": "Physical seal numbers match the numbers registered in the system.",
+              "tanqueLacrado": "The tank is fully sealed at the expected points.",
+              "estadoBom": "Tank is in good physical condition.",
+              "semAmassados": "No dents that compromise its condition.",
+              "semCorrosao": "No excessive corrosion.",
+              "semVazamento": "No signs of leakage.",
+              "semSujidade": "No apparent dirt or contamination.",
+              "capValvula": "Discharge valve cap is properly secured."
+            },
+            "embalado": {
+              "quantidadeConfere": "Package quantity per product matches the quantity registered in the system.",
+              "loteConfere": "Package/product lot matches the lot registered in the system.",
+              "embalagensLacradas": "All products/packages are properly sealed with no signs of tampering.",
+              "paletesOk": "Pallets are in good condition and suitable for shipping."
+            }
+          },
           "questions": {
             "docConferida": "Load documentation verified",
             "epiUtilizado": "PPE used correctly",
@@ -1068,7 +1173,8 @@
           },
           "errors": {
             "answerRequired": "Answer all questions",
-            "mustBeYes": "This check must be confirmed with \"Yes\""
+            "mustBeYes": "This check must be confirmed with \"Yes\"",
+            "allChecksRequired": "Check all required inspection items before approving."
           }
         },
         "columns": {
@@ -1106,6 +1212,7 @@
           "placa": "Enter the plate.",
           "transporteFailed": "Could not save transport details.",
           "horaCarregamento": "Enter a valid loading time.",
+          "dataCarregamento": "Enter a valid loading date.",
           "concluirFailed": "Could not complete the loading."
         }
       },
@@ -1233,6 +1340,9 @@
         "tableTitle": "Completed loadings",
         "tableCount": "{{count}} record(s)",
         "searchPlaceholder": "Search outbound, client, driver, plate...",
+        "dateFrom": "Finalized from",
+        "dateTo": "to",
+        "clearDates": "Clear period",
         "empty": "No completed loadings found.",
         "view": "View outbound",
         "revert": "Revert shipment",
@@ -1246,6 +1356,12 @@
         "viewSaidaPickTitle": "Which outbound do you want to view?",
         "viewSaidaMissingTitle": "Outbound not found",
         "viewSaidaMissing": "The outbound for this loading is no longer available.",
+        "viewChecklist": "View checklist and photos",
+        "checklistItemTitle": "Item checklist",
+        "checklistPrint": "Print A4",
+        "checklistPrintTitle": "Checklist — {{saida}} — {{item}}",
+        "checklistNoPhotos": "No photos recorded for this item.",
+        "checklistPrintError": "Could not prepare the printout.",
         "produtoCountOne": "{{count}} product",
         "produtoCountMany": "{{count}} products",
         "loadErrorTitle": "Error loading loadings",

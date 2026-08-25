@@ -49,6 +49,8 @@ create table if not exists t_produtos (
   densidade text,
   densidade_tabelada boolean not null default false,
   filtrado boolean not null default false,
+  controlado boolean not null default false,
+  orgao_regulamentador text,
   data_cadastro date not null default current_date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
