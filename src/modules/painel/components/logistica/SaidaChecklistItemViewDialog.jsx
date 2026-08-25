@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, ClipboardList, Loader2, MinusCircle, Printer, XCircle } from 'lucide-react';
+import { FileText, CheckCircle2, ClipboardList, Loader2, MinusCircle, XCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   checksForKind,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
-import { printChecklistItemA4 } from '@painel/lib/printChecklistItem';
+import { generateChecklistItemPDF } from '@painel/lib/pdfChecklistItem';
 
 const STATUS_STYLE = {
   [CHECKLIST_STATUS.PENDENTE]: 'bg-muted text-muted-foreground',
@@ -106,7 +106,7 @@ export default function SaidaChecklistItemViewDialog({
           fotoUrls.push(path);
         }
       }
-      printChecklistItemA4({
+      await generateChecklistItemPDF({
         item,
         saida,
         fotoUrls,
@@ -282,7 +282,7 @@ export default function SaidaChecklistItemViewDialog({
             {printing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Printer className="h-4 w-4" />
+              <FileText className="h-4 w-4" />
             )}
             {t('painel.logistica.carregamentos.checklistPrint')}
           </Button>
