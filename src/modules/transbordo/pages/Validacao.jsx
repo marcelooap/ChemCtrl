@@ -66,6 +66,93 @@ function StatusPill({ status, t }) {
   );
 }
 
+function resolveOrigemBadge(v, t) {
+  const parseOrigemItem = (raw) => {
+    const key = String(raw || "").trim().toLowerCase();
+    if (!key) return null;
+    if (key === "granel" || key === "entrada") {
+      return {
+        key: "granel",
+        label: t
+          ? t("painel.operacional.ordemTransbordo.origem.granel", {
+              defaultValue: "GRANEL",
+            })
+          : "GRANEL",
+        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      };
+    }
+    if (key === "tanka") {
+      return {
+        key: "tanka",
+        label: t
+          ? t("painel.operacional.ordemTransbordo.origem.tanka", {
+              defaultValue: "TANKA",
+            })
+          : "TANKA",
+        badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+      };
+    }
+    if (key === "vasilhame") {
+      return {
+        key: "vasilhame",
+        label: t
+          ? t("painel.operacional.ordemTransbordo.origem.vasilhame", {
+              defaultValue: "VASILHAME",
+            })
+          : "VASILHAME",
+        badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
+      };
+    }
+    if (
+      key === "embalado" ||
+      key === "ibc" ||
+      key === "bombona" ||
+      key === "tambor"
+    ) {
+      return {
+        key: "embalado",
+        label: t
+          ? t("painel.operacional.ordemTransbordo.origem.embalado", {
+              defaultValue: "IBC / BOMBONA / TAMBOR",
+            })
+          : "IBC / BOMBONA / TAMBOR",
+        badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+      };
+    }
+    return {
+      key,
+      label: String(raw).toUpperCase(),
+      badgeClass: "bg-slate-50 text-slate-700 border-slate-200",
+    };
+  };
+
+  if (v?.origem_tipo) {
+    const item = parseOrigemItem(v.origem_tipo);
+    if (item) return [item];
+  }
+  if (
+    v?.tipo === "granel_transbordo" ||
+    v?.tipo === "entrada" ||
+    v?.granel_payload ||
+    v?.entrada_payload
+  ) {
+    const item = parseOrigemItem("granel");
+    if (item) return [item];
+  }
+  const origens = v?.transbordo_payload?.origens || [];
+  if (origens.length > 0) {
+    const uniqueMap = new Map();
+    origens.forEach((o) => {
+      const item = parseOrigemItem(o.tipo_origem);
+      if (item && !uniqueMap.has(item.key)) {
+        uniqueMap.set(item.key, item);
+      }
+    });
+    if (uniqueMap.size > 0) return Array.from(uniqueMap.values());
+  }
+  return [];
+}
+
 export default function Validacao() {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -359,6 +446,9 @@ export default function Validacao() {
                   {t("transbordo.validacao.table.operador")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
+                  {t("transbordo.validacao.table.origem", { defaultValue: "Origem" })}
+                </th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.produto")}
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -385,7 +475,7 @@ export default function Validacao() {
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-5 py-10 text-center text-muted-foreground"
                   >
                     {t("transbordo.validacao.empty")}
@@ -398,6 +488,7 @@ export default function Validacao() {
                     : v.produto_nome || "-";
                   const isPendente = v.status === "pendente";
                   const qtd = resumoQuantidadeValidacao(v);
+                  const origemBadges = resolveOrigemBadge(v, t);
                   return (
                     <tr
                       key={v.id}
@@ -422,6 +513,22 @@ export default function Validacao() {
                         >
                           {v.criado_por_nome || "-"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        {origemBadges.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {origemBadges.map((b) => (
+                              <span
+                                key={b.key}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${b.badgeClass}`}
+                              >
+                                {b.label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-foreground/50">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-middle text-foreground">
                         <span className="block truncate max-w-[280px]" title={produtoLabel}>

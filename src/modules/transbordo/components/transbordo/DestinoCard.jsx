@@ -14,10 +14,23 @@ import {
   TIPOS_EMBALAGEM_DESTINO,
   VOLUME_PADRAO_EMBALAGEM,
   isDestinoEstoqueEmbalado,
+  isVasilhameLegadoEmbalado,
   labelTipoEmbalagem,
 } from "@transbordo/lib/tiposEmbalagem";
 
 const INPUT_EDITABLE = "bg-white";
+
+function findVasilhameCadastro(placa, vasilhames = []) {
+  if (!placa) return null;
+  const key = String(placa).trim().toUpperCase();
+  if (!key) return null;
+  const matches = (vasilhames || []).filter(
+    (v) => String(v.placa || "").trim().toUpperCase() === key
+  );
+  if (matches.length === 0) return null;
+  const withTara = matches.find((v) => Number(v.tara) > 0);
+  return withTara || matches[0];
+}
 
 /**
  * Critérios alinhados à validação por destino em TransbordoModal.handleSubmit:
@@ -127,14 +140,50 @@ export default function DestinoCard({
     ) ||
     fracionadoVasilhames.find((v) => v.placa && v.placa === destino.placa);
 
-  // Lista suspensa: somente tanques fracionados no pátio do produto selecionado
-  const vasilhameCadastrados = (() => {
-    const unique = fracionadoVasilhames.filter(
-      (v, i, arr) =>
-        v.placa &&
-        arr.findIndex((x) => x.placa === v.placa && x.barril === v.barril) === i
-    );
-    return unique;
+  // Lista suspensa: tanques fracionados no pátio com prioridade + todos os tanques cadastrados
+  const vasilhameOpcoes = (() => {
+    const fracionadosKeys = new Set();
+    const result = [];
+
+    // 1. Tanques fracionados no pátio do produto
+    for (const v of fracionadoVasilhames) {
+      if (!v.placa) continue;
+      const key = `${String(v.placa).trim().toUpperCase()}|${String(v.barril || "").trim().toUpperCase()}`;
+      if (!fracionadosKeys.has(key)) {
+        fracionadosKeys.add(key);
+        result.push({
+          ...v,
+          _isFracionado: true,
+          displayLabel: `${v.placa}${v.barril ? ` - ${v.barril}` : ""} (Fracionado · ${formatVolume(v.volume)} L)`,
+        });
+      }
+    }
+
+    // 2. Todos os demais tanques cadastrados em Vasilhames
+    const allKeys = new Set(fracionadosKeys);
+    for (const v of vasilhames || []) {
+      if (!v.placa) continue;
+      if (
+        isDestinoEstoqueEmbalado(v.tipo) ||
+        isVasilhameLegadoEmbalado(v.tipo) ||
+        v.tipo === "Tankagem"
+      ) {
+        continue;
+      }
+      const key = `${String(v.placa).trim().toUpperCase()}|${String(v.barril || "").trim().toUpperCase()}`;
+      if (!allKeys.has(key)) {
+        allKeys.add(key);
+        result.push({
+          ...v,
+          _isFracionado: false,
+          displayLabel: `${v.placa}${v.barril ? ` - ${v.barril}` : ""}${
+            Number(v.tara) > 0 ? ` (Tara: ${formatMass(v.tara)} kg)` : ""
+          }`,
+        });
+      }
+    }
+
+    return result;
   })();
 
   const volumeEnvasado = roundVolume(destino.volume_total || destino.volume || 0);
@@ -204,12 +253,24 @@ export default function DestinoCard({
     }
   };
 
-  const selectedTanka = isotanques.find((i) => i.id === destino.tanka_id);
+  const selectedTanka =
+    isotanques.find((i) => i.id === destino.tanka_id) ||
+    isotanques.find(
+      (i) =>
+        (i.tanka && i.tanka === destino.tanka_codigo) ||
+        (i.codigo_itku && i.codigo_itku === destino.tanka_codigo)
+    );
   const tankaCapacidade = roundVolume(selectedTanka?.capacidade || 0);
+  const tankaSaldoAtual = roundVolume(selectedTanka?.saldo_atual || 0);
+  const tankaVolumeDisponivel =
+    selectedTanka?.volume_disponivel != null
+      ? roundVolume(selectedTanka.volume_disponivel)
+      : Math.max(0, tankaCapacidade - tankaSaldoAtual);
+
   const volumeExcedido =
     tipo === "Tankagem" &&
     tankaCapacidade > 0 &&
-    roundVolume(destino.volume || 0) > tankaCapacidade;
+    roundVolume(destino.volume || 0) > tankaVolumeDisponivel;
 
   const destinoPreenchido = isDestinoPreenchido(destino, volumeExcedido);
   const { title: destinoTitulo, subtitle: destinoSubtitulo } = buildDestinoResumo(
@@ -330,41 +391,54 @@ export default function DestinoCard({
               <SearchableSelect
                 value={destino.placa || ""}
                 onChange={(label, item) => {
-                  if (item) {
-                    const isFracionadoPatio =
-                      item.fracionado === true &&
-                      (item.status || "No Pátio") === "No Pátio";
-                    const sameTank = destino.vasilhame_existente_id === item.id;
-                    const updated = {
-                      ...destino,
-                      placa: item.placa,
-                      barril: item.barril || destino.barril || "",
-                      tara: item.tara != null ? roundMass(item.tara) : destino.tara,
-                      vasilhame_existente_id: isFracionadoPatio ? item.id : null,
-                      fracionado: isFracionadoPatio
-                        ? sameTank
-                          ? !!destino.fracionado
-                          : false
-                        : false,
-                    };
-                    recalc(updated);
-                    onChange(updated);
-                  } else {
-                    updateField("placa", label);
-                    onChange({
-                      ...destino,
-                      placa: label,
-                      vasilhame_existente_id: null,
-                    });
+                  const placaText = String(item?.placa || label || "").trim();
+                  const matched =
+                    item || findVasilhameCadastro(placaText, vasilhames);
+
+                  const isFracionadoPatio =
+                    matched?.fracionado === true &&
+                    (matched?.status || "No Pátio") === "No Pátio" &&
+                    (matched?.produto_id === produtoId ||
+                      (produtoNome &&
+                        matched?.produto_nome?.toLowerCase() ===
+                          produtoNome.toLowerCase()));
+
+                  const sameTank =
+                    destino.vasilhame_existente_id === matched?.id;
+
+                  // Se o tanque está cadastrado e possui tara definida, puxa automaticamente
+                  let novaTara = destino.tara;
+                  if (
+                    matched &&
+                    matched.tara != null &&
+                    matched.tara !== "" &&
+                    Number(matched.tara) >= 0
+                  ) {
+                    novaTara = roundMass(matched.tara);
                   }
+
+                  const updated = {
+                    ...destino,
+                    placa: placaText,
+                    barril: matched?.barril || destino.barril || "",
+                    tara: novaTara,
+                    vasilhame_existente_id: isFracionadoPatio ? matched.id : null,
+                    fracionado: isFracionadoPatio
+                      ? sameTank
+                        ? !!destino.fracionado
+                        : false
+                      : false,
+                  };
+                  recalc(updated);
+                  onChange(updated);
                 }}
-                options={vasilhameCadastrados}
-                getOptionLabel={(v) => {
-                  const base = `${v.placa || ""} - ${v.barril || ""}`;
-                  return `${base} (Fracionado · ${formatVolume(v.volume)} L)`;
-                }}
-                getOptionValue={(v) => v.id}
-                placeholder="Digite ou selecione fracionado..."
+                options={vasilhameOpcoes}
+                getOptionLabel={(v) =>
+                  v.displayLabel ||
+                  `${v.placa || ""}${v.barril ? ` - ${v.barril}` : ""}`
+                }
+                getOptionValue={(v) => v.id || v.placa}
+                placeholder="Digite ou selecione a placa..."
                 disabled={readOnly}
                 inputClassName={INPUT_EDITABLE}
               />
@@ -495,9 +569,14 @@ export default function DestinoCard({
               disabled={readOnly}
               className={INPUT_EDITABLE}
             />
+            {selectedTanka && tankaCapacidade > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Volume disponível: {formatVolume(tankaVolumeDisponivel)} L
+              </p>
+            )}
             {volumeExcedido && (
               <p className="text-xs text-red-600">
-                ⚠ Capacidade do tanka excedida!
+                ⚠ Capacidade disponível do tanka excedida!
               </p>
             )}
           </div>

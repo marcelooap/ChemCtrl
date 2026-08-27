@@ -332,6 +332,7 @@
         "id": "ID",
         "data": "Fecha",
         "operador": "Operador",
+        "origem": "Origen",
         "produto": "Producto",
         "cliente": "Cliente",
         "lote": "Lote",
@@ -1278,6 +1279,7 @@
         "fields": {
           "date": "Fecha",
           "destino": "Destino",
+          "operacao": "Operación",
           "client": "Cliente",
           "product": "Producto",
           "origin": "Origen",

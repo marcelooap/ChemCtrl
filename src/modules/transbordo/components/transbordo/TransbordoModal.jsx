@@ -541,16 +541,12 @@ export default function TransbordoModal({
       }`,
     }));
 
-  const filteredIsotanques = isotanques.filter(
-    (i) => i.produto_id === produtoId || i.produto_nome?.toLowerCase() === produtoNome?.toLowerCase()
-  );
-
   // Tankas com saldo > 0 (entrada Tankagem − saída como origem tanka)
   // Em edição, o OP atual é excluído do histórico para não subtrair em dobro.
   const editingIdForSaldo =
     resolvedEditIdRef.current || editingTransbordo?.id || null;
 
-  const tankasComSaldo = isotanques
+  const filteredIsotanques = isotanques
     .filter(
       (i) =>
         i.produto_id === produtoId ||
@@ -564,6 +560,19 @@ export default function TransbordoModal({
         transbordos,
         excludeTransbordoId: editingIdForSaldo,
       });
+      const capacidade = roundVolume(i.capacidade || 26000);
+      const volumeDisponivel = Math.max(0, capacidade - saldo);
+      return {
+        ...i,
+        capacidade,
+        saldo_atual: saldo,
+        volume_disponivel: volumeDisponivel,
+      };
+    });
+
+  const tankasComSaldo = filteredIsotanques
+    .map((i) => {
+      const tankaCodigo = i.tanka || i.codigo_itku || "";
       const lotesDisponiveis = computeTankaLotesDisponiveis({
         isotanqueId: i.id,
         tankaCodigo,
@@ -572,11 +581,10 @@ export default function TransbordoModal({
       });
       return {
         ...i,
-        saldo_atual: saldo,
         unidade_medida: "L",
         lote: lotesDisponiveis[0]?.lote || "",
         lotes_disponiveis: lotesDisponiveis,
-        display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(saldo)} L)`,
+        display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(i.saldo_atual || 0)} L)`,
       };
     })
     .filter((i) => (i.saldo_atual || 0) > 0);
@@ -779,8 +787,30 @@ export default function TransbordoModal({
 
   const tankaExcedido = destinos.some((d) => {
     if (d.tipo_embalagem !== "Tankagem" || !d.tanka_id) return false;
-    const tanka = isotanques.find((i) => i.id === d.tanka_id);
-    return tanka && tanka.capacidade > 0 && (d.volume || 0) > tanka.capacidade;
+    const tanka =
+      filteredIsotanques.find((i) => i.id === d.tanka_id) ||
+      isotanques.find((i) => i.id === d.tanka_id);
+    if (!tanka) return false;
+    const cap = roundVolume(tanka.capacidade || 26000);
+    const saldo =
+      tanka.saldo_atual != null
+        ? roundVolume(tanka.saldo_atual)
+        : computeTankaSaldo({
+            isotanqueId: tanka.id,
+            tankaCodigo: tanka.tanka || tanka.codigo_itku || "",
+            transbordos,
+            excludeTransbordoId: editingIdForSaldo,
+          });
+    const disp = Math.max(0, cap - saldo);
+    const totalDestinoTanka = destinos
+      .filter(
+        (other) =>
+          other.tipo_embalagem === "Tankagem" &&
+          (other.tanka_id === d.tanka_id ||
+            (d.tanka_codigo && other.tanka_codigo === d.tanka_codigo))
+      )
+      .reduce((sum, other) => sum + roundVolume(other.volume || 0), 0);
+    return roundVolume(totalDestinoTanka) > disp;
   });
 
   const allOrigemOptions = [
@@ -1174,7 +1204,7 @@ export default function TransbordoModal({
       return;
     }
     if (tankaExcedido) {
-      setError("Um ou mais destinos excedem a capacidade do tanka.");
+      setError("Um ou mais destinos excedem o volume disponível do tanka.");
       return;
     }
     // Cada origem: quantidade retirada = destinada (mesmo critério do Resumo da origem).

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,17 +7,15 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { Package, CheckCircle, AlertCircle, Copy, Check } from "lucide-react";
-import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
+import { Package, CheckCircle, AlertCircle, AlertTriangle } from "lucide-react";
+import { formatMass, formatVolume, formatDensidade, formatNum } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
-import { copyHtmlToClipboard } from "@transbordo/lib/clipboard";
-import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
 import {
-  buildReceivingCommunicationHtml,
-  formatReceivingLoteRow,
-  formatReceivingDestinoRow,
-} from "@transbordo/lib/buildReceivingCommunicationHtml";
+  getQuantidadeNotaFiscal,
+  loteToKg,
+  kgToLoteUnidade,
+} from "@transbordo/lib/conversao";
 import OrgaoRegulamentadorBadge, {
   OrgaoControladoBanner,
 } from "@transbordo/components/cadastro/OrgaoRegulamentadorBadge";
@@ -107,8 +105,6 @@ export default function ComunicacaoRecebimentoDialog({
   transbordos = [],
   estoque = [],
 }) {
-  const [copied, setCopied] = useState(false);
-
   const produtosById = useMemo(() => {
     const map = new Map();
     produtos.forEach((p) => map.set(p.id, p));
@@ -145,14 +141,26 @@ export default function ComunicacaoRecebimentoDialog({
     const todosControlados =
       lotesControle.length > 0 && lotesControle.every((c) => c.controlado);
     const orgaos = [
-      ...new Set(lotesControle.filter((c) => c.controlado).map((c) => c.orgao)),
+      ...new Set(
+        lotesControle
+          .filter((c) => c.controlado && c.orgao)
+          .map((c) => c.orgao)
+      ),
     ];
+    const orgaoTexto = orgaos.join(" / ");
     const orgaoUnico = todosControlados && orgaos.length === 1 ? orgaos[0] : null;
+    const bannerLabel = todosControlados
+      ? "Todos os produtos desta entrada são controlados"
+      : "Contém produto(s) controlado(s) nesta entrada";
+
     return {
       algumControlado,
       todosControlados,
+      orgaos,
+      orgaoTexto,
       orgaoUnico,
-      mostrarPorProduto: algumControlado && !orgaoUnico,
+      bannerLabel,
+      mostrarPorProduto: algumControlado && !todosControlados,
     };
   }, [lotesControle]);
 
@@ -202,85 +210,88 @@ export default function ComunicacaoRecebimentoDialog({
     [destinosList]
   );
 
-  if (!entrada) return null;
-
   const hasPesagem =
-    !!entrada.granel_pesagem ||
-    entrada.origem === "industrializacao" ||
-    entrada.granel_peso_bruto != null ||
-    entrada.granel_peso_liquido != null;
+    Boolean(entrada?.granel_pesagem) ||
+    entrada?.origem === "industrializacao" ||
+    entrada?.granel_peso_bruto != null ||
+    entrada?.granel_peso_liquido != null;
 
-  const pesoBruto = Number(entrada.granel_peso_bruto);
-  const pesoLiquido = Number(entrada.granel_peso_liquido);
+  const pesoBruto = Number(entrada?.granel_peso_bruto);
+  const pesoLiquido = Number(entrada?.granel_peso_liquido);
   const diferenca =
     Number.isFinite(pesoBruto) && Number.isFinite(pesoLiquido)
       ? pesoBruto - pesoLiquido
       : null;
-  const dentroMargem = entrada.granel_margem === "dentro";
-  const foraMargem = entrada.granel_margem === "fora";
+  const dentroMargem = entrada?.granel_margem === "dentro";
+  const foraMargem = entrada?.granel_margem === "fora";
   const lotesCount = lotes.length;
+
+  // ── Cálculo de diferença de pesagem vs nota fiscal e quantidade a faturar ──
+  const dadosDiferencaPesagem = useMemo(() => {
+    if (!entrada || !hasPesagem || !Number.isFinite(pesoLiquido) || pesoLiquido <= 0) {
+      return null;
+    }
+
+    const firstLote = lotes[0] || {};
+    const densidadeVal = resolveDensidade(firstLote, produtosById);
+    const dens = parseFloat(String(densidadeVal || "").replace(",", ".")) || 0;
+    const unidadeMedida = firstLote.unidade_medida || entrada.unidade_medida || "kg";
+
+    // Quantidade informada na Nota Fiscal (declarada)
+    const totalNfDeclarado = lotes.reduce((sum, l) => {
+      const qNf = getQuantidadeNotaFiscal(l, entrada, { lotesCount });
+      return sum + (parseFloat(String(qNf || "0").replace(",", ".")) || 0);
+    }, 0);
+
+    // kg declarados na NF
+    const totalNfKg = lotes.reduce((sum, l) => {
+      const qNf = getQuantidadeNotaFiscal(l, entrada, { lotesCount });
+      return sum + loteToKg({ ...l, quantidade: qNf });
+    }, 0);
+
+    // Quantidade convertida do peso líquido para a unidade da NF
+    const qtdRealUnidade =
+      lotesCount === 1
+        ? kgToLoteUnidade(pesoLiquido, unidadeMedida, dens)
+        : lotes.reduce((sum, l) => {
+            const lDens = resolveDensidade(l, produtosById);
+            const lDensNum = parseFloat(String(lDens || "").replace(",", ".")) || 0;
+            const lKg =
+              totalNfKg > 0
+                ? (pesoLiquido * loteToKg({ ...l, quantidade: getQuantidadeNotaFiscal(l, entrada, { lotesCount }) })) / totalNfKg
+                : pesoLiquido / lotesCount;
+            return sum + kgToLoteUnidade(lKg, l.unidade_medida || unidadeMedida, lDensNum);
+          }, 0);
+
+    const difKg = pesoLiquido - totalNfKg;
+    const difUnidade = qtdRealUnidade - totalNfDeclarado;
+    const temDiferenca = foraMargem && Math.abs(difKg) >= 1;
+
+    return {
+      unidadeMedida,
+      densidade: dens,
+      totalNfDeclarado,
+      totalNfKg,
+      pesoLiquido,
+      qtdRealUnidade,
+      difKg,
+      difUnidade,
+      temDiferenca,
+    };
+  }, [hasPesagem, pesoLiquido, lotes, entrada, lotesCount, produtosById, foraMargem]);
 
   const thClass =
     "px-2.5 py-1 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide border-b border-border bg-muted/50 whitespace-nowrap";
   const tdClass =
     "px-2.5 py-1 text-xs text-foreground/90 border-b border-border whitespace-nowrap";
 
-  const handleCopy = async () => {
-    try {
-      const lotesPayload = lotes.map((l, i) =>
-        formatReceivingLoteRow(l, {
-          notaFiscal: entrada.nota_fiscal,
-          densidade: resolveDensidade(l, produtosById),
-          formatDate,
-          entrada,
-          lotesCount,
-          controlado: lotesControle[i]?.controlado,
-          orgao_regulamentador: lotesControle[i]?.orgao,
-        })
-      );
-
-      const { html, text } = buildReceivingCommunicationHtml({
-        entradaId,
-        dataEntrada: formatDate(
-          entrada.data || entrada.created_date || entrada.created_at
-        ),
-        lotes: lotesPayload,
-        orgaoUnico: controleResumo.orgaoUnico,
-        mostrarOrgaoPorProduto: controleResumo.mostrarPorProduto,
-        hasPesagem,
-        pesoBruto: formatMass(entrada.granel_peso_bruto, { empty: "-" }),
-        pesoLiquido: formatMass(entrada.granel_peso_liquido, { empty: "-" }),
-        pesoLiquidoDestaque: foraMargem,
-        tara: diferenca == null ? "-" : formatMass(diferenca, { empty: "-" }),
-        margemLabel: entrada.granel_margem
-          ? dentroMargem
-            ? "Dentro da margem"
-            : "Fora da margem"
-          : null,
-        dentroMargem,
-        destinos: destinosList.map(formatReceivingDestinoRow),
-        totais: {
-          volumeFmt: formatVolume(transbordoTotais.volume, { empty: "-" }),
-          massaFmt: formatMass(transbordoTotais.massa, { empty: "-" }),
-        },
-      });
-
-      const ok = await copyHtmlToClipboard(html, text);
-      if (ok) {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2000);
-      }
-    } catch (err) {
-      console.error("[Transbordo] Falha ao copiar recebimento:", err);
-    }
-  };
-
   const handleOpenChange = (v) => {
     if (!v) {
-      setCopied(false);
       onClose();
     }
   };
+
+  if (!open || !entrada) return null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -310,8 +321,11 @@ export default function ComunicacaoRecebimentoDialog({
             </div>
           </div>
 
-          {controleResumo.orgaoUnico ? (
-            <OrgaoControladoBanner orgao={controleResumo.orgaoUnico} />
+          {controleResumo.algumControlado ? (
+            <OrgaoControladoBanner
+              orgao={controleResumo.orgaoTexto}
+              label={controleResumo.bannerLabel}
+            />
           ) : null}
 
           <CompactSection title="Produtos Recebidos">
@@ -403,6 +417,9 @@ export default function ComunicacaoRecebimentoDialog({
                     <th className={thClass}>Peso Bruto (kg)</th>
                     <th className={thClass}>Peso Líquido (kg)</th>
                     <th className={thClass}>Tara (kg)</th>
+                    {dadosDiferencaPesagem?.temDiferenca && (
+                      <th className={`${thClass} text-right`}>Diferença</th>
+                    )}
                     <th className={thClass}>Margem</th>
                   </tr>
                 </thead>
@@ -423,6 +440,20 @@ export default function ComunicacaoRecebimentoDialog({
                     <td className={`${tdClass} tabular-nums`}>
                       {diferenca == null ? "-" : formatMass(diferenca, { empty: "-" })}
                     </td>
+                    {dadosDiferencaPesagem?.temDiferenca && (
+                      <td
+                        className={`${tdClass} text-right tabular-nums font-semibold ${
+                          dadosDiferencaPesagem.difKg < 0
+                            ? "text-red-700"
+                            : "text-blue-700"
+                        }`}
+                      >
+                        {dadosDiferencaPesagem.difKg > 0 ? "+" : ""}
+                        {dadosDiferencaPesagem.unidadeMedida.toLowerCase() === "kg"
+                          ? `${formatMass(dadosDiferencaPesagem.difKg)} kg`
+                          : `${formatNum(dadosDiferencaPesagem.difUnidade, 0)} ${dadosDiferencaPesagem.unidadeMedida} (${dadosDiferencaPesagem.difKg > 0 ? "+" : ""}${formatMass(dadosDiferencaPesagem.difKg)} kg)`}
+                      </td>
+                    )}
                     <td className={tdClass}>
                       {entrada.granel_margem ? (
                         <span
@@ -446,6 +477,19 @@ export default function ComunicacaoRecebimentoDialog({
                   </tr>
                 </tbody>
               </table>
+
+              {dadosDiferencaPesagem?.temDiferenca && (
+                <div className="mt-2 p-2.5 rounded-md border border-amber-300 bg-amber-50/80 text-amber-900 flex items-center gap-2 text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="font-semibold text-amber-950">
+                    Quantidade a ser considerada na Nota Fiscal:{" "}
+                    <span className="font-bold text-amber-950 underline decoration-amber-500 underline-offset-2">
+                      {formatNum(dadosDiferencaPesagem.qtdRealUnidade, 0)}{" "}
+                      {dadosDiferencaPesagem.unidadeMedida}
+                    </span>
+                  </p>
+                </div>
+              )}
             </CompactSection>
           )}
 
@@ -493,27 +537,8 @@ export default function ComunicacaoRecebimentoDialog({
           )}
         </div>
 
-        <DialogFooter className="flex-shrink-0 px-5 py-3 border-t border-border gap-2 sm:justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="gap-2"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-green-600" />
-                Copiado!
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                Copiar
-              </>
-            )}
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+        <DialogFooter className="flex-shrink-0 px-5 py-3 border-t border-border justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
             Fechar
           </Button>
         </DialogFooter>

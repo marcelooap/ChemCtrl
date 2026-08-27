@@ -646,6 +646,26 @@ export default function OrigemCard({
     </div>
   );
 
+  const labelOrigemSource =
+    tipoOrigem === "tanka"
+      ? "Tanka *"
+      : tipoOrigem === "vasilhame"
+      ? "Vasilhame *"
+      : tipoOrigem === "embalado"
+      ? "Embalado *"
+      : "Origem *";
+
+  const placeholderOrigemSource =
+    tipoOrigem === "tanka"
+      ? "Selecionar tanka"
+      : tipoOrigem === "vasilhame"
+      ? "Selecionar vasilhame"
+      : tipoOrigem === "embalado"
+      ? "Selecionar embalado"
+      : tipoOrigem
+      ? "Selecionar origem"
+      : "Selecione um tipo primeiro";
+
   const fieldsNormal = !isEntradaLocked && (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -663,16 +683,14 @@ export default function OrigemCard({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Origem *</Label>
+          <Label>{labelOrigemSource}</Label>
           <SearchableSelect
             value={origem.entrada_codigo || ""}
             onChange={handleSourceChange}
             options={sourceOptions}
             getOptionLabel={(s) => s.display_label || ""}
             getOptionValue={(s) => s.id}
-            placeholder={
-              tipoOrigem ? "Selecionar origem" : "Selecione um tipo primeiro"
-            }
+            placeholder={placeholderOrigemSource}
             disabled={origemLocked || !tipoOrigem}
             inputClassName="bg-white"
           />

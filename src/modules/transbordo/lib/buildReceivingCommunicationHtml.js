@@ -57,6 +57,8 @@ export function buildReceivingCommunicationHtml(receiving) {
     entradaId = "-",
     dataEntrada = "-",
     lotes = [],
+    orgaoBanner = null,
+    orgaoBannerLabel = null,
     orgaoUnico = null,
     mostrarOrgaoPorProduto = false,
     hasPesagem = false,
@@ -66,13 +68,18 @@ export function buildReceivingCommunicationHtml(receiving) {
     tara = "-",
     margemLabel = null,
     dentroMargem = false,
+    diferencaPesagemInfo = null,
     destinos = [],
     totais = { volume: 0, massa: 0 },
   } = receiving || {};
 
   const title = `Recebimento ${entradaId || "-"}`;
 
-  const controladoBanner = orgaoUnico
+  const bannerOrgao = orgaoBanner || orgaoUnico;
+  const bannerLabelText =
+    orgaoBannerLabel || "Todos os produtos desta entrada são controlados";
+
+  const controladoBanner = bannerOrgao
     ? `
   <tr>
     <td style="padding:10px 0 0 0;">
@@ -80,8 +87,8 @@ export function buildReceivingCommunicationHtml(receiving) {
         <tr>
           <td style="padding:10px 12px;font-family:${FONT};">
             <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.06em;">Produto controlado</div>
-            <div style="font-size:13px;font-weight:700;color:#78350f;margin-top:2px;">Órgão regulamentador: ${esc(orgaoUnico)}</div>
-            <div style="font-size:11px;color:#92400e;margin-top:2px;">Todos os produtos desta entrada são controlados</div>
+            <div style="font-size:13px;font-weight:700;color:#78350f;margin-top:2px;">Órgão regulamentador: ${esc(bannerOrgao)}</div>
+            <div style="font-size:11px;color:#92400e;margin-top:2px;">${esc(bannerLabelText)}</div>
           </td>
         </tr>
       </table>
@@ -138,37 +145,72 @@ export function buildReceivingCommunicationHtml(receiving) {
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-family:${FONT};font-size:10px;font-weight:600;background-color:${dentroMargem ? C.greenBg : C.redBg};color:${dentroMargem ? C.greenText : C.redText};">${esc(margemLabel)}</span>`
       : "—";
 
+    const hasDif = Boolean(diferencaPesagemInfo?.difTexto);
+    const pTableWidth = hasDif ? 640 : 520;
+    const cols = hasDif
+      ? { pb: 110, pl: 110, tara: 90, dif: 180, margem: 150 }
+      : { pb: 130, pl: 130, tara: 110, margem: 150 };
+
+    const diferencaBanner = hasDif
+      ? `
+      <tr>
+        <td style="padding:6px 0 0 0;">
+          <table width="${pTableWidth}" cellpadding="0" cellspacing="0" border="0" style="width:${pTableWidth}px;border-collapse:collapse;border:1px solid #f59e0b;background-color:#fffbeb;font-family:${FONT};">
+            <tr>
+              <td style="padding:8px 10px;font-family:${FONT};font-size:12px;color:#78350f;">
+                <div style="font-weight:700;color:#78350f;">
+                  Quantidade a ser considerada na Nota Fiscal: <span style="text-decoration:underline;">${esc(diferencaPesagemInfo.qtdRealFmt)}</span>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`
+      : "";
+
     pesagemBlock = `
       ${sectionLabel("Pesagem")}
       <tr>
         <td style="padding:0;">
-          <table width="520" cellpadding="0" cellspacing="0" border="0" style="width:520px;border-collapse:collapse;table-layout:fixed;border:1px solid ${C.border};font-family:${FONT};">
+          <table width="${pTableWidth}" cellpadding="0" cellspacing="0" border="0" style="width:${pTableWidth}px;border-collapse:collapse;table-layout:fixed;border:1px solid ${C.border};font-family:${FONT};">
             <thead>
               <tr>
-                ${th("Peso Bruto (kg)", 130)}
-                ${th("Peso Líquido (kg)", 130)}
-                ${th("Tara (kg)", 110)}
-                ${th("Margem", 150)}
+                ${th("Peso Bruto (kg)", cols.pb)}
+                ${th("Peso Líquido (kg)", cols.pl)}
+                ${th("Tara (kg)", cols.tara)}
+                ${hasDif ? th("Diferença", cols.dif, "right") : ""}
+                ${th("Margem", cols.margem)}
               </tr>
             </thead>
             <tbody>
               <tr>
-                ${td(pesoBruto, 130)}
+                ${td(pesoBruto, cols.pb)}
                 ${td(
                   pesoLiquido,
-                  130,
+                  cols.pl,
                   "left",
                   pesoLiquidoDestaque
                     ? `font-weight:700;color:${C.redText};background-color:${C.redBg};`
                     : ""
                 )}
-                ${td(tara, 110)}
-                <td width="150" style="width:150px;font-family:${FONT};font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};padding:6px 8px;">${margemHtml}</td>
+                ${td(tara, cols.tara)}
+                ${
+                  hasDif
+                    ? td(
+                        diferencaPesagemInfo.difTexto,
+                        cols.dif,
+                        "right",
+                        "font-weight:700;color:#b91c1c;"
+                      )
+                    : ""
+                }
+                <td width="${cols.margem}" style="width:${cols.margem}px;font-family:${FONT};font-size:12px;color:${C.text};border-bottom:1px solid ${C.border};padding:6px 8px;">${margemHtml}</td>
               </tr>
             </tbody>
           </table>
         </td>
-      </tr>`;
+      </tr>
+      ${diferencaBanner}`;
   }
 
   let transbordoBlock = "";
@@ -299,11 +341,11 @@ export function buildReceivingCommunicationHtml(receiving) {
     `Data de Entrada: ${dataEntrada || "-"}`,
   ];
 
-  if (orgaoUnico) {
+  if (bannerOrgao) {
     textLines.push(
       "",
-      `PRODUTO CONTROLADO — Órgão regulamentador: ${orgaoUnico}`,
-      "Todos os produtos desta entrada são controlados"
+      `PRODUTO CONTROLADO — Órgão regulamentador: ${bannerOrgao}`,
+      bannerLabelText
     );
   }
 
@@ -331,8 +373,17 @@ export function buildReceivingCommunicationHtml(receiving) {
     textLines.push(
       "",
       "Pesagem",
-      `Bruto: ${pesoBruto} | Líquido: ${pesoLiquido} | Tara: ${tara} | Margem: ${margemLabel || "—"}`
+      `Bruto: ${pesoBruto} | Líquido: ${pesoLiquido} | Tara: ${tara}${
+        diferencaPesagemInfo?.difTexto
+          ? ` | Diferença: ${diferencaPesagemInfo.difTexto}`
+          : ""
+      } | Margem: ${margemLabel || "—"}`
     );
+    if (diferencaPesagemInfo) {
+      textLines.push(
+        `Quantidade a ser considerada na Nota Fiscal: ${diferencaPesagemInfo.qtdRealFmt}`
+      );
+    }
   }
 
   if (destinos.length > 0) {

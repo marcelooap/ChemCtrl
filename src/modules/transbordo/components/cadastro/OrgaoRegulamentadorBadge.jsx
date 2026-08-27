@@ -50,6 +50,14 @@ export const ORGAOS_REGULAMENTADORES = [
 export function OrgaoRegulamentadorLogo({ orgao, className = "w-4 h-4" }) {
   if (orgao === "Federal") return <LogoFederal className={className} />;
   if (orgao === "Exército") return <LogoExercito className={className} />;
+  if (typeof orgao === "string" && (orgao.includes("/") || orgao.includes(","))) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        {orgao.includes("Exército") && <LogoExercito className={className} />}
+        {orgao.includes("Federal") && <LogoFederal className={className} />}
+      </span>
+    );
+  }
   return null;
 }
 

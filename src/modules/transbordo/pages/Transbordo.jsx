@@ -45,6 +45,69 @@ function labelUnidadeEntrada(unidade) {
   return String(unidade || "").trim() || "";
 }
 
+function resolveOrigemBadge(transbordo) {
+  const parseOrigemItem = (raw) => {
+    const key = String(raw || "").trim().toLowerCase();
+    if (!key) return null;
+    if (key === "granel" || key === "entrada") {
+      return {
+        key: "granel",
+        label: "GRANEL",
+        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      };
+    }
+    if (key === "tanka") {
+      return {
+        key: "tanka",
+        label: "TANKA",
+        badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+      };
+    }
+    if (key === "vasilhame") {
+      return {
+        key: "vasilhame",
+        label: "VASILHAME",
+        badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
+      };
+    }
+    if (
+      key === "embalado" ||
+      key === "ibc" ||
+      key === "bombona" ||
+      key === "tambor"
+    ) {
+      return {
+        key: "embalado",
+        label: "IBC / BOMBONA / TAMBOR",
+        badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+      };
+    }
+    return {
+      key,
+      label: String(raw).toUpperCase(),
+      badgeClass: "bg-slate-50 text-slate-700 border-slate-200",
+    };
+  };
+
+  if (transbordo?.origem_tipo) {
+    const item = parseOrigemItem(transbordo.origem_tipo);
+    if (item) return [item];
+  }
+  const origens = Array.isArray(transbordo?.origens) ? transbordo.origens : [];
+  if (origens.length > 0) {
+    const uniqueMap = new Map();
+    origens.forEach((o) => {
+      const raw = o?.tipo_origem || (o?.embalado ? "embalado" : "");
+      const item = parseOrigemItem(raw);
+      if (item && !uniqueMap.has(item.key)) {
+        uniqueMap.set(item.key, item);
+      }
+    });
+    if (uniqueMap.size > 0) return Array.from(uniqueMap.values());
+  }
+  return [];
+}
+
 /** Embalado vs granel a partir das origens do OP. */
 function resolveTransbordoMedida(transbordo) {
   const origens = Array.isArray(transbordo?.origens) ? transbordo.origens : [];
@@ -440,6 +503,7 @@ export default function Transbordo() {
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">ID</th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Data</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">Origem</th>
                 <th
                   className="px-4 py-3 font-medium whitespace-nowrap"
                   style={{ width: `${produtoColCh}ch`, maxWidth: `${produtoColCh}ch` }}
@@ -456,13 +520,13 @@ export default function Transbordo() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando transbordos...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum transbordo encontrado.
                   </td>
                 </tr>
@@ -471,6 +535,7 @@ export default function Transbordo() {
                   const produtoLabel = `${t.produto_codigo ? `${t.produto_codigo} - ` : ""}${t.produto_nome || "-"}`;
                   const { volume: volumeCell, quantidade: quantidadeCell } =
                     renderTransbordoVolumeQuantidade(t);
+                  const origemBadges = resolveOrigemBadge(t);
                   return (
                   <tr
                     key={t.id}
@@ -483,6 +548,22 @@ export default function Transbordo() {
                     </td>
                     <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
                       {formatDate(t.data)}
+                    </td>
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      {origemBadges.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {origemBadges.map((b) => (
+                            <span
+                              key={b.key}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${b.badgeClass}`}
+                            >
+                              {b.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </td>
                     <td
                       className="px-4 py-3 align-middle text-foreground"

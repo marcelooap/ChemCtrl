@@ -1,4 +1,15 @@
 import { getRevisionNumber } from "@industrializacao/lib/recipeRevisions";
+import {
+  isDestinoEstoqueEmbalado,
+  isVasilhameLegadoEmbalado,
+} from "@transbordo/lib/tiposEmbalagem";
+import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
+import {
+  isEstoqueEmbalado,
+  computeDisponivelTransbordo,
+} from "@transbordo/lib/estoqueSaldo";
+import { computeTankaSaldo } from "@transbordo/lib/tankaVolume";
+import { mergeTankasUnificadas } from "@transbordo/lib/tankaUnificada";
 
 export function parseRecipeRawMaterials(recipe) {
   const raw = recipe?.raw_materials;
@@ -159,4 +170,221 @@ export function catalogProdutosByDestino({
   }
   if (destino === "convencional") return produtosTb || [];
   return [];
+}
+
+function norm(val) {
+  return String(val ?? "").trim().toLowerCase();
+}
+
+/**
+ * Verifica se o registro pertence ao cliente selecionado (por ID ou Nome).
+ */
+export function matchClienteRecord(clienteId, clienteNome, record) {
+  if (!record) return false;
+  const cId = record.cliente_id ? String(record.cliente_id).trim() : "";
+  const cNome = norm(record.cliente_nome || record.client);
+  const targetId = clienteId ? String(clienteId).trim() : "";
+  const targetNome = norm(clienteNome);
+
+  if (targetId && cId && targetId === cId) return true;
+  if (targetNome && cNome && targetNome === cNome) return true;
+  if (!targetId && !targetNome) return true;
+  return false;
+}
+
+/**
+ * Verifica se um registro de estoque/vasilhame/tanka corresponde ao produto de catálogo.
+ */
+export function matchProdutoRecord(produto, record) {
+  if (!produto || !record) return false;
+  const pId = produto.id ? String(produto.id).trim() : "";
+  const rProdId = record.produto_id ? String(record.produto_id).trim() : "";
+  if (pId && rProdId && pId === rProdId) return true;
+
+  const pNome = norm(produto.produto || produto.nome);
+  const rNome = norm(record.produto_nome || record.produto || record.product);
+  if (pNome && rNome && pNome === rNome) return true;
+
+  const pCod = norm(produto.codigo || produto.code);
+  const rCod = norm(record.produto_codigo || record.product_code || record.codigo);
+  if (pCod && rCod && pCod === rCod) return true;
+
+  return false;
+}
+
+/**
+ * Filtra a lista de produtos de um cliente de acordo com o tipo de origem selecionado.
+ *
+ * Regras:
+ * - vasilhame: somente produtos desse cliente que possuem vasilhame (tanque) em estoque no pátio.
+ * - embalado (IBC / Bombona / Tambor): somente produtos desse cliente com estoque do tipo embalado.
+ * - granel: todos os produtos desse cliente.
+ * - tanka: produtos desse cliente que possuem tanka (isotanque) com saldo disponível.
+ */
+export function filterProdutosByOrigem({
+  produtos = [],
+  origemTipo = "",
+  clienteId = "",
+  clienteNome = "",
+  vasilhames = [],
+  estoque = [],
+  isotanques = [],
+  transbordos = [],
+  containers = [],
+  indTanks = [],
+  indStock = [],
+}) {
+  if (!origemTipo || origemTipo === "granel") {
+    return produtos;
+  }
+
+  if (origemTipo === "vasilhame") {
+    const vasilhamesTanqueNoPatio = (vasilhames || []).filter((v) => {
+      if (!v) return false;
+      if (!matchClienteRecord(clienteId, clienteNome, v)) return false;
+      const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
+      if (status !== "No Pátio") return false;
+      const vol =
+        Number(v.volume) ||
+        Number(v.peso_liquido) ||
+        Number(v.saldo_atual) ||
+        0;
+      if (vol <= 0) return false;
+      if (
+        isDestinoEstoqueEmbalado(v.tipo) ||
+        isVasilhameLegadoEmbalado(v.tipo)
+      ) {
+        return false;
+      }
+      if ((v.tipo || "") === "Tankagem") return false;
+      return true;
+    });
+
+    const containersNoPatio = (containers || []).filter((c) => {
+      if (!c) return false;
+      const cClient = norm(c.client);
+      const targetNome = norm(clienteNome);
+      if (targetNome && cClient && cClient !== targetNome) return false;
+      const status = c.status || "No Pátio";
+      if (status !== "No Pátio") return false;
+      const type = norm(c.type);
+      if (type.includes("tank")) return false;
+      return true;
+    });
+
+    return produtos.filter((p) => {
+      const hasVasilhame = vasilhamesTanqueNoPatio.some((v) =>
+        matchProdutoRecord(p, v)
+      );
+      if (hasVasilhame) return true;
+      const hasContainer = containersNoPatio.some((c) =>
+        matchProdutoRecord(p, c)
+      );
+      return hasContainer;
+    });
+  }
+
+  if (origemTipo === "embalado") {
+    const estoqueEmbaladoComSaldo = (estoque || []).filter((e) => {
+      if (!e) return false;
+      if (!matchClienteRecord(clienteId, clienteNome, e)) return false;
+      const isEmb =
+        resolveTipoRecebimentoEstoque(e) === "embalado" ||
+        isEstoqueEmbalado(e) ||
+        isDestinoEstoqueEmbalado(e.tipo_embalagem) ||
+        isDestinoEstoqueEmbalado(e.lotes?.[0]?.tipo_embalagem);
+      if (!isEmb) return false;
+      const disponivel = computeDisponivelTransbordo(e, transbordos);
+      const saldoAtual = Number(e.saldo_atual) || 0;
+      const qtd = Number(e.quantidade) || 0;
+      return disponivel > 0 || saldoAtual > 0 || qtd > 0;
+    });
+
+    const vasilhamesEmbaladosNoPatio = (vasilhames || []).filter((v) => {
+      if (!v) return false;
+      if (!matchClienteRecord(clienteId, clienteNome, v)) return false;
+      const isEmb =
+        isDestinoEstoqueEmbalado(v.tipo) ||
+        isVasilhameLegadoEmbalado(v.tipo);
+      if (!isEmb) return false;
+      const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
+      if (status !== "No Pátio") return false;
+      const vol =
+        Number(v.volume) ||
+        Number(v.peso_liquido) ||
+        Number(v.saldo_atual) ||
+        0;
+      return vol > 0;
+    });
+
+    return produtos.filter((p) => {
+      const hasEstoqueEmb = estoqueEmbaladoComSaldo.some((e) =>
+        matchProdutoRecord(p, e)
+      );
+      if (hasEstoqueEmb) return true;
+      const hasVasilhameEmb = vasilhamesEmbaladosNoPatio.some((v) =>
+        matchProdutoRecord(p, v)
+      );
+      return hasVasilhameEmb;
+    });
+  }
+
+  if (origemTipo === "tanka") {
+    const unified = mergeTankasUnificadas({
+      isotanques,
+      transbordos,
+      indTanks,
+      indContainers: containers,
+      indStock,
+    });
+
+    const tankasComSaldo = unified.filter((t) => {
+      const vol = Number(t.volumeAtual ?? t.volume ?? t.volumeTb) || 0;
+      if (vol <= 0) return false;
+
+      const iso = t.isotanque;
+      const ind = t.indTank;
+      const cNome = t.cliente_nome || iso?.cliente_nome || ind?.client || "";
+      const cId = iso?.cliente_id || null;
+
+      const matchClient =
+        matchClienteRecord(clienteId, clienteNome, {
+          cliente_id: cId,
+          cliente_nome: cNome,
+          client: cNome,
+        }) ||
+        (iso && matchClienteRecord(clienteId, clienteNome, iso));
+
+      return matchClient;
+    });
+
+    return produtos.filter((p) =>
+      tankasComSaldo.some((t) => {
+        const iso = t.isotanque;
+        const ind = t.indTank;
+        const pNome =
+          t.produto ||
+          t.produto_nome ||
+          iso?.produto_nome ||
+          ind?.product ||
+          "";
+        const pCod = iso?.produto_codigo || t.codigo || "";
+        const pId = iso?.produto_id || null;
+
+        const matched =
+          matchProdutoRecord(p, {
+            produto_id: pId,
+            produto_nome: pNome,
+            produto_codigo: pCod,
+            produto: pNome,
+            product: pNome,
+          }) ||
+          (iso && matchProdutoRecord(p, iso));
+
+        return matched;
+      })
+    );
+  }
+
+  return produtos;
 }

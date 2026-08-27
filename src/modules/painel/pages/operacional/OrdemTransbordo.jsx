@@ -32,6 +32,7 @@ import {
   buildPaProdutos,
   catalogProdutosByDestino,
   clientsFromProdutos,
+  filterProdutosByOrigem,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
 
@@ -120,6 +121,9 @@ export default function OrdemTransbordo() {
   const [entradas, setEntradas] = useState([]);
   const [isotanques, setIsotanques] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [containers, setContainers] = useState([]);
+  const [indTanks, setIndTanks] = useState([]);
+  const [indStock, setIndStock] = useState([]);
   const [validacoesPendentes, setValidacoesPendentes] = useState([]);
   const [pendingGranelPayload, setPendingGranelPayload] = useState(null);
 
@@ -144,25 +148,42 @@ export default function OrdemTransbordo() {
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [trans, prods, cliens, ents, isos, vascs, vals, recipes, stocks, valsInd] =
-        await Promise.all([
-          entities.transbordos.list("-created_date"),
-          entities.produtos.list(),
-          entities.clientes.list(),
-          entities.estoque.list(),
-          entities.isotanques.list(),
-          entities.vasilhames.list(),
-          entities.transbordoValidacoes.list("-created_at"),
-          base44.entities.Recipe.list("-created_date", 2000),
-          base44.entities.RawMaterialStock.list("-created_date", 2000),
-          base44.entities.IndValidacao.list("-created_date", 500).catch(() => []),
-        ]);
+      const [
+        trans,
+        prods,
+        cliens,
+        ents,
+        isos,
+        vascs,
+        vals,
+        recipes,
+        stocks,
+        valsInd,
+        conts,
+        tanks,
+      ] = await Promise.all([
+        entities.transbordos.list("-created_date"),
+        entities.produtos.list(),
+        entities.clientes.list(),
+        entities.estoque.list(),
+        entities.isotanques.list(),
+        entities.vasilhames.list(),
+        entities.transbordoValidacoes.list("-created_at"),
+        base44.entities.Recipe.list("-created_date", 2000),
+        base44.entities.RawMaterialStock.list("-created_date", 2000),
+        base44.entities.IndValidacao.list("-created_date", 500).catch(() => []),
+        base44.entities.Container.list("-created_date", 500).catch(() => []),
+        base44.entities.Tank.list("-created_date", 500).catch(() => []),
+      ]);
       setTransbordos(trans || []);
       setProdutosTb(prods || []);
       setClientesTb(cliens || []);
       setEntradas(ents || []);
       setIsotanques(isos || []);
       setVasilhames(vascs || []);
+      setContainers(conts || []);
+      setIndTanks(tanks || []);
+      setIndStock(stocks || []);
       setProdutosMp(buildMpProdutos(recipes || [], stocks || []));
       setProdutosPa(buildPaProdutos(recipes || []));
       setValidacoesPendentes(
@@ -225,14 +246,40 @@ export default function OrdemTransbordo() {
 
   const produtosDoCliente = useMemo(() => {
     if (!clienteNome && !clienteId) return [];
-    return catalogProdutos.filter((p) => {
+    const baseList = catalogProdutos.filter((p) => {
       if (clienteId && p.cliente_id && p.cliente_id === clienteId) return true;
       return (
         !!clienteNome &&
         p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
       );
     });
-  }, [catalogProdutos, clienteId, clienteNome]);
+
+    return filterProdutosByOrigem({
+      produtos: baseList,
+      origemTipo,
+      clienteId,
+      clienteNome,
+      vasilhames,
+      estoque: entradas,
+      isotanques,
+      transbordos,
+      containers,
+      indTanks,
+      indStock,
+    });
+  }, [
+    catalogProdutos,
+    clienteId,
+    clienteNome,
+    origemTipo,
+    vasilhames,
+    entradas,
+    isotanques,
+    transbordos,
+    containers,
+    indTanks,
+    indStock,
+  ]);
 
   const produtoSelecionado = useMemo(
     () => catalogProdutos.find((p) => p.id === produtoId) || null,
@@ -242,6 +289,18 @@ export default function OrdemTransbordo() {
   const produtoDisplay = produtoCodigo
     ? `${produtoCodigo} - ${produtoNome}`
     : produtoNome;
+
+  useEffect(() => {
+    if (produtoId && produtosDoCliente.length > 0) {
+      const exists = produtosDoCliente.some((p) => p.id === produtoId);
+      if (!exists) {
+        setProdutoId("");
+        setProdutoNome("");
+        setProdutoCodigo("");
+        setGranel((prev) => ({ ...prev, densidade: "" }));
+      }
+    }
+  }, [produtosDoCliente, produtoId]);
 
   // Prioriza o valor do formulário (populado a partir do produto no
   // handleProdutoChange). Fallback: densidade cadastrada no produto.
@@ -308,6 +367,10 @@ export default function OrdemTransbordo() {
   const handleOrigemChange = (_label, item) => {
     const next = item?.value || "";
     setOrigemTipo(next);
+    setProdutoId("");
+    setProdutoNome("");
+    setProdutoCodigo("");
+    setGranel((prev) => ({ ...prev, densidade: "" }));
     if (destino === "industrializacao") {
       clearClienteProduto();
     }
@@ -920,6 +983,88 @@ function PendentesCard({ validacoes, t }) {
     };
   };
 
+  const resolveOrigemBadge = (v) => {
+    const parseOrigemItem = (raw) => {
+      const key = String(raw || "").trim().toLowerCase();
+      if (!key) return null;
+      if (key === "granel" || key === "entrada") {
+        return {
+          key: "granel",
+          label: t
+            ? t("painel.operacional.ordemTransbordo.origem.granel", {
+                defaultValue: "GRANEL",
+              })
+            : "GRANEL",
+          badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        };
+      }
+      if (key === "tanka") {
+        return {
+          key: "tanka",
+          label: t
+            ? t("painel.operacional.ordemTransbordo.origem.tanka", {
+                defaultValue: "TANKA",
+              })
+            : "TANKA",
+          badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+        };
+      }
+      if (key === "vasilhame") {
+        return {
+          key: "vasilhame",
+          label: t
+            ? t("painel.operacional.ordemTransbordo.origem.vasilhame", {
+                defaultValue: "VASILHAME",
+              })
+            : "VASILHAME",
+          badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
+        };
+      }
+      if (
+        key === "embalado" ||
+        key === "ibc" ||
+        key === "bombona" ||
+        key === "tambor"
+      ) {
+        return {
+          key: "embalado",
+          label: t
+            ? t("painel.operacional.ordemTransbordo.origem.embalado", {
+                defaultValue: "IBC / BOMBONA / TAMBOR",
+              })
+            : "IBC / BOMBONA / TAMBOR",
+          badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+        };
+      }
+      return {
+        key,
+        label: String(raw).toUpperCase(),
+        badgeClass: "bg-slate-50 text-slate-700 border-slate-200",
+      };
+    };
+
+    if (v.origem_tipo) {
+      const item = parseOrigemItem(v.origem_tipo);
+      if (item) return [item];
+    }
+    if (v.tipo === "granel_transbordo" || v.granel_payload || v.entrada_payload) {
+      const item = parseOrigemItem("granel");
+      if (item) return [item];
+    }
+    const origens = v.transbordo_payload?.origens || [];
+    if (origens.length > 0) {
+      const uniqueMap = new Map();
+      origens.forEach((o) => {
+        const item = parseOrigemItem(o.tipo_origem);
+        if (item && !uniqueMap.has(item.key)) {
+          uniqueMap.set(item.key, item);
+        }
+      });
+      if (uniqueMap.size > 0) return Array.from(uniqueMap.values());
+    }
+    return [];
+  };
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -945,7 +1090,14 @@ function PendentesCard({ validacoes, t }) {
                   {t("transbordo.validacao.table.data", { defaultValue: "Data" })}
                 </th>
                 <th className="px-4 py-2 font-medium">
-                  {t("painel.operacional.ordemTransbordo.fields.destino")}
+                  {t("painel.operacional.ordemTransbordo.fields.operacao", {
+                    defaultValue: "Operação",
+                  })}
+                </th>
+                <th className="px-4 py-2 font-medium">
+                  {t("painel.operacional.ordemTransbordo.fields.origin", {
+                    defaultValue: "Origem",
+                  })}
                 </th>
                 <th className="px-4 py-2 font-medium">
                   {t("transbordo.validacao.table.operador", { defaultValue: "Operador" })}
@@ -970,6 +1122,7 @@ function PendentesCard({ validacoes, t }) {
             <tbody>
               {validacoes.map((v) => {
                 const qtd = formatQty(v);
+                const origemBadges = resolveOrigemBadge(v);
                 return (
                 <tr
                   key={`${v.destino}-${v.id}`}
@@ -991,6 +1144,22 @@ function PendentesCard({ validacoes, t }) {
                     >
                       {t(`painel.logistica.recebimento.destino.${v.destino}`)}
                     </span>
+                  </td>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {origemBadges.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {origemBadges.map((b) => (
+                          <span
+                            key={b.key}
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${b.badgeClass}`}
+                          >
+                            {b.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-foreground/50">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-foreground/80">
                     {v.criado_por_nome || "-"}

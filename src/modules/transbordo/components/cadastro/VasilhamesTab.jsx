@@ -23,16 +23,25 @@ function isTipoVasilhame(v) {
 }
 
 function resolveCapacidade(v, allByPlaca = []) {
-  if (v?.capacidade != null && Number(v.capacidade) > 0) {
-    return Number(v.capacidade);
+  const items = [v, ...allByPlaca];
+  for (const item of items) {
+    if (item?.capacidade != null && Number(item.capacidade) > 0) {
+      return Number(item.capacidade);
+    }
   }
-  // Legado / fallback: maior volume positivo da mesma placa (capacidade cadastrada)
-  const candidates = [v, ...allByPlaca]
+  // Legado / fallback: maior volume positivo da mesma placa ou do histórico de composição
+  const candidates = items
     .map((item) => {
       if (item?.capacidade != null && Number(item.capacidade) > 0) {
         return Number(item.capacidade);
       }
-      return Number(item?.volume) || 0;
+      const vol = Number(item?.volume) || 0;
+      if (vol > 0) return vol;
+      const compVol = (item?.composicao || []).reduce(
+        (sum, c) => sum + (Number(c?.quantidade_l) || 0),
+        0
+      );
+      return compVol > 0 ? compVol : 0;
     })
     .filter((n) => n > 0);
   return candidates.length ? Math.max(...candidates) : null;
@@ -118,11 +127,7 @@ export default function VasilhamesTab() {
       if (editingVasilhame) {
         // Atualiza cadastro sem zerar volume operacional (capacidade ≠ volume)
         await entities.vasilhames.update(editingVasilhame.id, data);
-        setVasilhames((prev) =>
-          prev.map((v) =>
-            v.id === editingVasilhame.id ? { ...v, ...data } : v
-          )
-        );
+        await loadData({ silent: true });
       } else {
         await entities.vasilhames.create({
           ...data,
