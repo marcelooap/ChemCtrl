@@ -11,6 +11,8 @@ import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { AlertTriangle } from 'lucide-react';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { STOCK_DESTINATION_KEYS, translateStockDestination } from '@/i18n/domainMaps';
+import { deductStock } from '@industrializacao/lib/stockRpc';
+import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 
 const DESTINATION_VALUES = Object.keys(STOCK_DESTINATION_KEYS);
 
@@ -28,6 +30,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
   const [observations, setObservations] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const mpOptions = useMemo(() => {
     const map = new Map();
@@ -126,7 +129,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
     onOpenChange(val);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => runSubmit(async () => {
     setError('');
     const qty = parseFloat(quantity);
     if (!selectedStockId) { setError(t('rawMaterialStock.movementDialog.errors.selectEntry')); return; }
@@ -145,7 +148,9 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
 
     setSaving(true);
     try {
-      const newBalance = available - qty;
+      const adjusted = await deductStock(stock.id, qty);
+      const newBalance = Number(adjusted?.balance_after ?? available - qty);
+      const balanceBefore = Number(adjusted?.balance_before ?? available);
 
       await base44.entities.StockMovement.create({
         stock_id: stock.id,
@@ -160,12 +165,8 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         observations: observations || '',
         operator: user?.nome_completo || user?.usuario || '',
         movement_date: new Date().toISOString(),
-        balance_before: available,
+        balance_before: balanceBefore,
         balance_after: newBalance,
-      });
-
-      await base44.entities.RawMaterialStock.update(stock.id, {
-        current_stock: newBalance,
       });
 
       toast({ title: t('rawMaterialStock.movementDialog.success') });
@@ -179,7 +180,7 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
     } finally {
       setSaving(false);
     }
-  };
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -297,11 +298,11 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
           <Button variant="outline" onClick={() => handleClose(false)}>{t('buttons.cancel')}</Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !selectedStockId || !destination || !quantity}
+            disabled={saving || submitBusy || !selectedStockId || !destination || !quantity}
             style={{ background: '#2575D1' }}
             className="text-white"
           >
-            {saving ? t('rawMaterialStock.movementDialog.registering') : t('rawMaterialStock.movementDialog.registerMovement')}
+            {saving || submitBusy ? t('rawMaterialStock.movementDialog.registering') : t('rawMaterialStock.movementDialog.registerMovement')}
           </Button>
         </div>
       </DialogContent>

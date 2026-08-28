@@ -89,7 +89,7 @@ export function statusElementoBadgeClass(status) {
   return "bg-slate-100 text-slate-700";
 }
 
-/** Próximos códigos F00N a partir da lista existente. */
+/** Próximos códigos F00N — síncrono só para preview UI. */
 export function generateProximosCodigosFiltro(existentes, quantidade) {
   const nums = (existentes || [])
     .map((e) => e.codigo)
@@ -104,6 +104,12 @@ export function generateProximosCodigosFiltro(existentes, quantidade) {
     codigos.push(`F${String(max).padStart(3, "0")}`);
   }
   return codigos;
+}
+
+/** Alocação atômica via sequence (preferida na criação). */
+export async function allocateProximosCodigosFiltro(existentes, quantidade) {
+  const { allocateFiltroCodigos } = await import("@transbordo/lib/allocateBusinessCodes");
+  return allocateFiltroCodigos(quantidade, existentes);
 }
 
 /** Soma volumes das filtrações vinculadas a cada cartucho. */

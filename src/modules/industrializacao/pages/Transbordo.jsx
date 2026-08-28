@@ -25,6 +25,7 @@ import {
 import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
+import { allocateTbNumber } from '@transbordo/lib/allocateBusinessCodes';
 
 const emptyDest = () => ({
   type: 'Transbordo', placa: '', barril: '', volume: 0, mass: 0,
@@ -285,7 +286,7 @@ export default function Transbordo() {
           }
         }
 
-        const transferNumber = `TB${String(transfers.length + 1).padStart(2, '0')}`;
+        const transferNumber = await allocateTbNumber(transfers.length);
 
         const data = {
           ...form,

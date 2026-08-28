@@ -29,6 +29,7 @@ import {
   findAllLinkedTransbordos,
   multipleTransbordosMessage,
 } from "@transbordo/lib/findLinkedTransbordo";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 function mapLoteFromEntrada(l, entrada = {}) {
   const embalado =
@@ -139,6 +140,7 @@ export default function EntradaModal({
   const [transbordoBlockMessage, setTransbordoBlockMessage] = useState("");
   const [checkingTransbordos, setCheckingTransbordos] = useState(false);
   const [vasilhames, setVasilhames] = useState([]);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -622,7 +624,7 @@ export default function EntradaModal({
     }
   };
 
-  const handleSaveAndTransbordo = async () => {
+  const handleSaveAndTransbordo = () => runSubmit(async () => {
     const data = validateAndBuildData();
     if (!data) return;
 
@@ -694,7 +696,7 @@ export default function EntradaModal({
         },
       });
     }
-  };
+  });
 
   const title = readOnly
     ? "Visualizar Entrada"
@@ -948,7 +950,8 @@ export default function EntradaModal({
                     disabled={
                       !allSameProduct ||
                       !!transbordoBlockMessage ||
-                      checkingTransbordos
+                      checkingTransbordos ||
+                      submitBusy
                     }
                     className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     title={

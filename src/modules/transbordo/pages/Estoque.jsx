@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
@@ -31,10 +31,11 @@ import {
   isUnidadeVolumeEntrada,
   hydrateEstoqueFiscal,
 } from "@transbordo/lib/estoqueSaldo";
-import { migrateEstoqueEmbaladoParaVasilhames, isEstoqueEmbalagemUnitaria, normalizeBarrilEmbalagensUnitarias } from "@transbordo/lib/transbordoEmbalado";
+import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
   resolveTipoRecebimentoEstoque,
 } from "@transbordo/lib/tipoRecebimento";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -128,21 +129,13 @@ export default function Estoque() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedLocais, setExpandedLocais] = useState({});
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      try {
-        const mig = await migrateEstoqueEmbaladoParaVasilhames();
-        if (mig.deletedEstoque > 0) {
-          console.info(
-            `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) unitária(s) do Estoque → Vasilhames; removidos ${mig.deletedEstoque} do estoque.`
-          );
-        }
-        await normalizeBarrilEmbalagensUnitarias();
-      } catch (migErr) {
-        console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
-      }
+      // Migrações one-shot removidas do mount (Onda 1): rodar via script SQL/scripts,
+      // não a cada abertura de tela com N usuários concorrentes.
 
       const [ests, prods, cliens, trans, saics, ents, vascs] = await Promise.all([
         entities.estoque.list(),
@@ -174,29 +167,8 @@ export default function Estoque() {
         };
       });
 
-      const toUpdate = estoqueWithSaldo
-        .filter((e) => {
-          const original = ests.find((o) => o.id === e.id);
-          const saldoChanged =
-            Math.abs((original?.saldo_atual || 0) - e.saldo_atual) > 0.001;
-          const qtdChanged =
-            Math.abs((original?.quantidade || 0) - e.quantidade) > 0.001;
-          const unidChanged = original?.unidade_medida !== e.unidade_medida;
-          return saldoChanged || qtdChanged || unidChanged;
-        })
-        .map((e) => ({
-          id: e.id,
-          saldo_atual: e.saldo_atual,
-          quantidade: e.quantidade,
-          unidade_medida: e.unidade_medida,
-        }));
-      if (toUpdate.length > 0) {
-        try {
-          await entities.estoque.bulkUpdate(toUpdate);
-        } catch {
-          // Sync de saldo não deve derrubar a listagem
-        }
-      }
+      // Sync de saldo: apenas em memória na listagem.
+      // Persistência de saldo_atual fica a cargo das RPCs/fluxos de escrita (não no mount).
 
       setEstoque(estoqueWithSaldo);
       setProdutos(prods);
@@ -217,7 +189,7 @@ export default function Estoque() {
   }, []);
 
   /** Código da entrada (E001…), para rastrear a origem. */
-  const entradaIdMap = buildEntradaCodigoById(entradas);
+  const entradaIdMap = useMemo(() => buildEntradaCodigoById(entradas), [entradas]);
 
   const getEstoqueEntradaLabel = (e) => {
     if (e?.entrada_id && entradaIdMap[e.entrada_id]) {
@@ -226,46 +198,52 @@ export default function Estoque() {
     return e?.entrada_codigo || "-";
   };
 
-  const filtered = estoque
-    .filter((e) => {
-      const tipo = resolveTipoRecebimentoEstoque(e);
-      if (tipoFilter === "granel" && tipo !== "granel") return false;
-      if (tipoFilter === "embalado" && tipo !== "embalado") return false;
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return estoque
+      .filter((e) => {
+        const tipo = resolveTipoRecebimentoEstoque(e);
+        if (tipoFilter === "granel" && tipo !== "granel") return false;
+        if (tipoFilter === "embalado" && tipo !== "embalado") return false;
 
-      const q = search.toLowerCase().trim();
-      const entradaLabel = getEstoqueEntradaLabel(e).toLowerCase();
-      const codigoEstoque = formatEstoqueCodigo(e.codigo_estoque).toLowerCase();
-      const matchSearch =
-        !q ||
-        codigoEstoque.includes(q) ||
-        entradaLabel.includes(q) ||
-        e.entrada_codigo?.toLowerCase().includes(q) ||
-        e.produto_codigo?.toLowerCase().includes(q) ||
-        e.produto_nome?.toLowerCase().includes(q) ||
-        e.cliente_nome?.toLowerCase().includes(q) ||
-        e.lote?.toLowerCase().includes(q) ||
-        e.nota_fiscal?.toLowerCase().includes(q) ||
-        e.nota_fiscal_troca?.toLowerCase().includes(q);
+        const entradaLabel = (
+          e?.entrada_id && entradaIdMap[e.entrada_id]
+            ? entradaIdMap[e.entrada_id]
+            : e?.entrada_codigo || "-"
+        ).toLowerCase();
+        const codigoEstoque = formatEstoqueCodigo(e.codigo_estoque).toLowerCase();
+        const matchSearch =
+          !q ||
+          codigoEstoque.includes(q) ||
+          entradaLabel.includes(q) ||
+          e.entrada_codigo?.toLowerCase().includes(q) ||
+          e.produto_codigo?.toLowerCase().includes(q) ||
+          e.produto_nome?.toLowerCase().includes(q) ||
+          e.cliente_nome?.toLowerCase().includes(q) ||
+          e.lote?.toLowerCase().includes(q) ||
+          e.nota_fiscal?.toLowerCase().includes(q) ||
+          e.nota_fiscal_troca?.toLowerCase().includes(q);
 
-      const matchStatus =
-        !statusFilter ||
-        statusFilter === "Todos" ||
-        (statusFilter === "OK" && e.status_wms) ||
-        (statusFilter === "NOK" && !e.status_wms);
+        const matchStatus =
+          !statusFilter ||
+          statusFilter === "Todos" ||
+          (statusFilter === "OK" && e.status_wms) ||
+          (statusFilter === "NOK" && !e.status_wms);
 
-      const matchCliente =
-        !clienteFilter ||
-        clienteFilter === "Todos os clientes" ||
-        e.cliente_nome === clienteFilter;
+        const matchCliente =
+          !clienteFilter ||
+          clienteFilter === "Todos os clientes" ||
+          e.cliente_nome === clienteFilter;
 
-      return matchSearch && matchStatus && matchCliente;
-    })
-    .sort((a, b) => {
-      const ca = Number(a.codigo_estoque) || 0;
-      const cb = Number(b.codigo_estoque) || 0;
-      if (ca !== cb) return cb - ca; // mais novo (maior ID) no topo
-      return String(b.id || "").localeCompare(String(a.id || ""));
-    });
+        return matchSearch && matchStatus && matchCliente;
+      })
+      .sort((a, b) => {
+        const ca = Number(a.codigo_estoque) || 0;
+        const cb = Number(b.codigo_estoque) || 0;
+        if (ca !== cb) return cb - ca; // mais novo (maior ID) no topo
+        return String(b.id || "").localeCompare(String(a.id || ""));
+      });
+  }, [estoque, search, statusFilter, clienteFilter, tipoFilter, entradaIdMap]);
 
   const totalSaldo = filtered.reduce((sum, e) => sum + (e.saldo_atual || 0), 0);
   const totalCusto = filtered.reduce(
@@ -391,7 +369,7 @@ export default function Estoque() {
     await loadData({ silent: true });
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => runSubmit(async () => {
     try {
       await entities.estoque.delete(deleteId);
       await loadData();
@@ -399,7 +377,7 @@ export default function Estoque() {
       // ignore
     }
     setDeleteId(null);
-  };
+  });
 
   const handleToggleWms = async (item, newValue) => {
     setEstoque((prev) =>
@@ -782,6 +760,7 @@ export default function Estoque() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={submitBusy}
               className="bg-red-600 hover:bg-red-700"
             >
               Excluir

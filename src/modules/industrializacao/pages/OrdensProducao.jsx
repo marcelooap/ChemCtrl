@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
@@ -17,6 +17,7 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import { CHECKLIST_ETAPAS } from '@industrializacao/lib/checklists/operationalChecklistConfig';
 import { loadRecipeForProduction } from '@industrializacao/lib/checklists/loadRecipeForProduction';
 import { useToast } from '@shared/components/ui/use-toast';
+import VirtualList from '@shared/components/VirtualList';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -50,10 +51,21 @@ export default function OrdensProducao() {
 
   const canAnalyze = user && (user.nivel === 'administrador' || user.nivel === 'supervisor');
 
-  const activeProds = productions.filter(p => !['Finalizado', 'Cancelado'].includes(p.status));
-  const opNumeric = (op) => { const m = String(op || '').match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; };
-  const sortedProds = [...activeProds].sort((a, b) => opNumeric(a.op_number) - opNumeric(b.op_number));
-  const filtered = filter === 'all' ? sortedProds : sortedProds.filter(p => p.status === filter);
+  const filtered = useMemo(() => {
+    const opNumeric = (op) => {
+      const m = String(op || '').match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    const activeProds = (productions || []).filter(
+      (p) => !['Finalizado', 'Cancelado'].includes(p.status)
+    );
+    const sortedProds = [...activeProds].sort(
+      (a, b) => opNumeric(a.op_number) - opNumeric(b.op_number)
+    );
+    return filter === 'all' ? sortedProds : sortedProds.filter((p) => p.status === filter);
+  }, [productions, filter]);
+
+  const useVirtual = filtered.length > 60;
 
   const openChecklist = async (prod, etapa, onCompleted) => {
     try {
@@ -169,13 +181,29 @@ export default function OrdensProducao() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map(prod => (
-          <ProductionCard key={prod.id} prod={prod} onView={openView}>
-            {renderActionButton(prod)}
-          </ProductionCard>
-        ))}
-      </div>
+      {useVirtual ? (
+        <VirtualList
+          items={filtered}
+          rowHeight={220}
+          height={Math.min(720, Math.max(320, filtered.length * 220))}
+          className="rounded-lg border border-border"
+          renderRow={(prod) => (
+            <div className="p-2">
+              <ProductionCard prod={prod} onView={openView}>
+                {renderActionButton(prod)}
+              </ProductionCard>
+            </div>
+          )}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((prod) => (
+            <ProductionCard key={prod.id} prod={prod} onView={openView}>
+              {renderActionButton(prod)}
+            </ProductionCard>
+          ))}
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div className="text-center py-16 text-muted-foreground">

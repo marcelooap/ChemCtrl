@@ -27,6 +27,7 @@ import {
   getModulosRelevantesSaida,
 } from "@transbordo/lib/saidaOrigem";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
+import { deductStock, restoreStock } from "@industrializacao/lib/stockRpc";
 
 function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
@@ -368,7 +369,9 @@ export async function applySaidaFiscalToggle(
     const available = stock.current_stock || 0;
 
     if (checked) {
-      const newBalance = Math.max(0, available - qtd);
+      const adjusted = qtd > 0 ? await deductStock(stock.id, qtd) : null;
+      const newBalance = Number(adjusted?.balance_after ?? Math.max(0, available - qtd));
+      const balanceBefore = Number(adjusted?.balance_before ?? available);
       const obsTag = `[saida:${saida.id}] Saída comercial ${saida.codigo || ""}`.trim();
       await base44.entities.StockMovement.create({
         stock_id: stock.id,
@@ -383,11 +386,8 @@ export async function applySaidaFiscalToggle(
         observations: obsTag,
         operator: userNome || "",
         movement_date: new Date().toISOString(),
-        balance_before: available,
+        balance_before: balanceBefore,
         balance_after: newBalance,
-      });
-      await base44.entities.RawMaterialStock.update(stock.id, {
-        current_stock: newBalance,
       });
       stockById.set(stock.id, { ...stock, current_stock: newBalance });
     } else {
@@ -406,10 +406,8 @@ export async function applySaidaFiscalToggle(
       } catch {
         // segue com restore mesmo se a limpeza da movimentação falhar
       }
-      const newBalance = available + qtd;
-      await base44.entities.RawMaterialStock.update(stock.id, {
-        current_stock: newBalance,
-      });
+      const adjusted = qtd > 0 ? await restoreStock(stock.id, qtd) : null;
+      const newBalance = Number(adjusted?.balance_after ?? available + qtd);
       stockById.set(stock.id, { ...stock, current_stock: newBalance });
     }
   }

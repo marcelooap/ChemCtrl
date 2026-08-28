@@ -15,6 +15,7 @@ import {
   markSaidaLida,
   normalizeSaidaModulo,
   subscribeChemflowTable,
+  getChemflowChannelStatus,
   POLL_INTERVAL_MS,
 } from '@transbordo/lib/saidaNovas';
 
@@ -153,7 +154,15 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
       { channelKey }
     );
 
-    const poll = setInterval(refreshUnread, POLL_INTERVAL_MS);
+    const poll = setInterval(() => {
+      const saidasCh = `chemflow-saida-novas-${channelKey}-t_saidas`;
+      const leiturasCh = `chemflow-saida-novas-${channelKey}-t_saida_leituras`;
+      const s1 = getChemflowChannelStatus(saidasCh);
+      const s2 = getChemflowChannelStatus(leiturasCh);
+      // Só polla se algum canal não estiver saudável (igual useRealtimeEntity)
+      if (s1 === 'connected' && s2 === 'connected') return;
+      refreshUnread();
+    }, POLL_INTERVAL_MS);
 
     return () => {
       unsubSaidas();

@@ -25,6 +25,7 @@ import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
@@ -86,6 +87,7 @@ export default function Entrada() {
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const loadData = async () => {
     setLoading(true);
@@ -356,7 +358,7 @@ export default function Entrada() {
     };
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => runSubmit(async () => {
     try {
       await entities.estoque.deleteMany({ entrada_id: deleteId });
       await entities.entradas.delete(deleteId);
@@ -365,7 +367,7 @@ export default function Entrada() {
       // ignore
     }
     setDeleteId(null);
-  };
+  });
 
   const handleDialogClose = () => {
     setViewOpen(false);
@@ -664,6 +666,7 @@ export default function Entrada() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={submitBusy}
               className="bg-red-600 hover:bg-red-700"
             >
               Excluir

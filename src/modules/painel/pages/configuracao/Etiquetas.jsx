@@ -20,6 +20,7 @@ import {
   saveEtiquetaConfig,
 } from '@transbordo/lib/etiquetaConfig';
 import etiquetaSql from '@transbordo/sql/026_t_etiqueta_configs.sql?raw';
+import { useSubmitGuard } from '@/shared/hooks/useSubmitGuard';
 
 const CONTEXTO_TAB_TRIGGER_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
@@ -40,6 +41,7 @@ export default function Etiquetas() {
   const [dateFormat, setDateFormat] = useState('dmy');
   const [orientation, setOrientation] = useState('horizontal');
   const [tableMissing, setTableMissing] = useState(false);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -211,7 +213,7 @@ export default function Etiquetas() {
     setSelectedKey(key);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => runSubmit(async () => {
     if (!selected) return;
     setSaving(true);
     try {
@@ -226,7 +228,7 @@ export default function Etiquetas() {
     } finally {
       setSaving(false);
     }
-  };
+  });
 
   const previewValues = useMemo(
     () => ({
@@ -250,10 +252,10 @@ export default function Etiquetas() {
         </div>
         <Button
           onClick={handleSave}
-          disabled={!selected || !dirty || saving}
+          disabled={!selected || !dirty || saving || submitBusy}
           className="bg-primary hover:bg-primary/90"
         >
-          {saving ? t('common.saving') : t('buttons.save')}
+          {saving || submitBusy ? t('common.saving') : t('buttons.save')}
         </Button>
       </div>
 

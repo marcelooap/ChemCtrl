@@ -5,6 +5,11 @@ import { AlertTriangle, ArrowLeft } from 'lucide-react';
 /**
  * Captura falhas de carregamento do módulo (lazy import / runtime)
  * para evitar tela em branco no React.
+ *
+ * Props:
+ * - title?: string
+ * - homeTo?: string  (rota de recuperação)
+ * - onError?: (error, info) => void
  */
 export default class ModuleErrorBoundary extends Component {
   constructor(props) {
@@ -16,27 +21,62 @@ export default class ModuleErrorBoundary extends Component {
     return { error };
   }
 
+  componentDidCatch(error, info) {
+    const payload = {
+      message: error?.message || String(error),
+      stack: error?.stack,
+      componentStack: info?.componentStack,
+      title: this.props.title || null,
+      ts: new Date().toISOString(),
+      href: typeof window !== 'undefined' ? window.location.href : null,
+    };
+
+    try {
+      // Telemetria leve: console estruturado (substitui por Sentry/etc. depois)
+      console.error('[ChemCtrl ErrorBoundary]', payload);
+      if (typeof window !== 'undefined') {
+        const key = 'chemctrl_error_log';
+        const prev = JSON.parse(sessionStorage.getItem(key) || '[]');
+        prev.push(payload);
+        sessionStorage.setItem(key, JSON.stringify(prev.slice(-30)));
+      }
+    } catch {
+      // ignore telemetry failures
+    }
+
+    if (typeof this.props.onError === 'function') {
+      try {
+        this.props.onError(error, info);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
 
-    const message =
-      error?.message ||
-      'Ocorreu um erro inesperado ao carregar o módulo.';
-
+    const rawMessage = error?.message || '';
     const isDynamicImportFailure =
       /Failed to fetch dynamically imported module|Loading chunk|Importing a module script failed/i.test(
-        message
+        rawMessage
       );
 
+    // Nunca expor detalhes internos (tabelas, PostgREST, stacks) ao usuário
+    const safeMessage = isDynamicImportFailure
+      ? 'Falha ao carregar um módulo atualizado. Recarregue a página.'
+      : 'Ocorreu um erro inesperado. Você pode tentar novamente ou voltar ao início.';
+
     const handleRetry = () => {
-      // Lazy imports rejeitados ficam em cache no React; reload limpa o estado.
       if (isDynamicImportFailure) {
         window.location.reload();
         return;
       }
       this.setState({ error: null });
     };
+
+    const homeTo = this.props.homeTo || '/painel/home';
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
@@ -49,12 +89,11 @@ export default class ModuleErrorBoundary extends Component {
               <h1 className="text-lg font-semibold text-foreground">
                 {this.props.title || 'Não foi possível carregar o módulo'}
               </h1>
-              <p className="mt-2 text-sm text-muted-foreground break-words">{message}</p>
+              <p className="mt-2 text-sm text-muted-foreground break-words">{safeMessage}</p>
               {isDynamicImportFailure && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Isso costuma acontecer se o servidor de desenvolvimento reiniciou.
-                  Confirme que o <code className="text-foreground">npm run dev</code> está
-                  ativo e recarregue a página.
+                  Isso costuma acontecer após um deploy. Confirme a conexão e
+                  recarregue a página.
                 </p>
               )}
               <div className="mt-6 flex flex-wrap gap-3">
@@ -66,11 +105,11 @@ export default class ModuleErrorBoundary extends Component {
                   Tentar novamente
                 </button>
                 <Link
-                  to="/"
+                  to={homeTo}
                   className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50"
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  Voltar ao ChemCtrl
+                  Voltar
                 </Link>
               </div>
             </div>

@@ -17,6 +17,7 @@ import ElementoEditModal from "@transbordo/components/filtracao/ElementoEditModa
 import { formatVolume } from "@transbordo/lib/format";
 import {
   generateProximosCodigosFiltro,
+  allocateProximosCodigosFiltro,
   volumeTotalPorFiltro,
   promoverFiltroEmUso,
   statusElementoBadgeClass,
@@ -70,7 +71,7 @@ export default function InsumosTab() {
   const handleEntrada = async ({ data_compra, tipo, marca, quantidade }) => {
     setSaving(true);
     try {
-      const codigos = generateProximosCodigosFiltro(elementos, quantidade);
+      const codigos = await allocateProximosCodigosFiltro(elementos, quantidade);
       if (codigos.length === 0) return;
       await entities.elementos_filtrantes.bulkCreate(
         codigos.map((codigo) => ({

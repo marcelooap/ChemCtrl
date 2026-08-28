@@ -165,10 +165,16 @@ export async function rateLimitedFetch(
       if (!shouldRetry) return resp;
 
       const retryAfterSec = parseRetryAfterHeader(resp);
-      const backoffMs = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** attempt);
+      const rawBackoff = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** attempt);
+      // Jitter ±25% para evitar thundering herd
+      const jitter = rawBackoff * (0.75 + Math.random() * 0.5);
+      // Cap Retry-After em 60s (servidor hostil / misconfig)
+      const retryAfterMs = retryAfterSec
+        ? Math.min(60_000, retryAfterSec * 1000)
+        : null;
       attempt += 1;
       // eslint-disable-next-line no-await-in-loop
-      await delay(retryAfterSec ? retryAfterSec * 1000 : backoffMs);
+      await delay(retryAfterMs ?? jitter);
     }
   });
 }

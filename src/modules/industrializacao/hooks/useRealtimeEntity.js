@@ -1,62 +1,77 @@
 /**
  * useRealtimeEntity — hook centralizado de dados em tempo real
  *
- * - Fetch inicial ao montar.
+ * - Fetch inicial ao montar (com AbortController + guarda de montagem).
  * - Subscreve Supabase Realtime (WebSocket) via subscribeToTable.
  * - Subscreve event bus local (entityEvents) para updates imediatos do próprio dispositivo.
  * - Aplica INSERTs/UPDATEs/DELETEs diretamente no estado local (sem refetch completo).
  * - Em caso de REFRESH (payload incompleto ou reconexão), faz refetch pontual.
  * - Polling leve (30s) como failsafe final, somente quando realtime está com erro/desconectado.
  * - Re-dispara fetch quando deps mudam.
- *
- * @param {string}   entityName  - Nome da entidade (ex: 'Production')
- * @param {Function} fetchFn     - () => Promise<Array> — busca os dados
- * @param {Array}    deps        - Dependências que re-triggeram o fetch
- * @param {Function} transform   - Transforma cada registro antes de colocar no estado
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { subscribeToTable, getRealtimeStatus } from '@industrializacao/lib/realtime';
 import { onEntityChange } from '@industrializacao/lib/entityEvents';
 
-/** Intervalo do failsafe: só dispara refetch quando o canal realtime não está saudável. */
 const POLL_INTERVAL_MS = 30000;
 const HEALTHY_STATUS = 'connected';
 
 export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x) => x) {
-  const [data, setData]       = useState([]);
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
+  const [error, setError] = useState(null);
 
-  const fetchFnRef    = useRef(fetchFn);
-  fetchFnRef.current  = fetchFn;
-  const transformRef  = useRef(transform);
+  const fetchFnRef = useRef(fetchFn);
+  fetchFnRef.current = fetchFn;
+  const transformRef = useRef(transform);
   transformRef.current = transform;
-  // Evita silentReload() concorrentes (poll de fallback + REFRESH chegando juntos).
-  const inFlightRef   = useRef(null);
+  const inFlightRef = useRef(null);
+  const mountedRef = useRef(true);
+  const abortRef = useRef(null);
 
-  // ── fetch completo ──────────────────────────────────────────────────────────
   const reload = useCallback(() => {
-    setLoading(true);
-    return fetchFnRef.current()
-      .then((result) => { setData((result || []).map(transformRef.current)); setError(null); })
-      .catch((err) => setError(err))
-      .finally(() => setLoading(false));
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch { /* ignore */ }
+    }
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    abortRef.current = controller;
+
+    if (mountedRef.current) setLoading(true);
+    return fetchFnRef.current({ signal: controller?.signal })
+      .then((result) => {
+        if (!mountedRef.current || controller?.signal?.aborted) return;
+        setData((result || []).map(transformRef.current));
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mountedRef.current || err?.name === 'AbortError' || controller?.signal?.aborted) return;
+        setError(err);
+      })
+      .finally(() => {
+        if (mountedRef.current) setLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  // ── fetch silencioso (sem loading=true) — usado pelo REFRESH ───────────────
   const silentReload = useCallback(() => {
     if (inFlightRef.current) return inFlightRef.current;
     const request = fetchFnRef.current()
-      .then((result) => { setData((result || []).map(transformRef.current)); setError(null); })
-      .catch((err) => setError(err))
+      .then((result) => {
+        if (!mountedRef.current) return;
+        setData((result || []).map(transformRef.current));
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mountedRef.current || err?.name === 'AbortError') return;
+        setError(err);
+      })
       .finally(() => { inFlightRef.current = null; });
     inFlightRef.current = request;
     return request;
-  }, []); // intencionalmente sem deps — sempre usa ref atual
+  }, []);
 
-  // ── handler incremental de eventos ─────────────────────────────────────────
   const handleChange = useCallback((payload) => {
+    if (!mountedRef.current) return;
     const { eventType, new: newRecord, old: oldRecord } = payload;
 
     if (eventType === 'REFRESH') {
@@ -69,10 +84,8 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
         case 'INSERT': {
           if (!newRecord?.id) return prev;
           const record = transformRef.current(newRecord);
-          // Evita duplicata
           if (prev.some((item) => item.id === record.id)) {
-            // Atualiza se já existia (pode ter chegado pelo event bus local antes do WS)
-            return prev.map((item) => item.id === record.id ? { ...item, ...record } : item);
+            return prev.map((item) => (item.id === record.id ? { ...item, ...record } : item));
           }
           return [record, ...prev];
         }
@@ -96,28 +109,27 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
     });
   }, [silentReload]);
 
-  // ── efeito principal ────────────────────────────────────────────────────────
   useEffect(() => {
+    mountedRef.current = true;
     reload();
 
-    // Supabase WebSocket (eventos de outros dispositivos/sessões)
-    const unsubWS    = subscribeToTable(entityName, handleChange);
-    // Event bus local (eventos do próprio dispositivo — feedback imediato)
+    const unsubWS = subscribeToTable(entityName, handleChange);
     const unsubLocal = onEntityChange(entityName, handleChange);
 
-    // Failsafe: um único timer supervisiona a saúde do canal. Enquanto o realtime
-    // estiver conectado o tick apenas lê o status em memória e não gera requisição.
-    // Se o canal cair, o refetch passa a ocorrer a cada tick; quando reconectar,
-    // o polling volta a ficar inativo sozinho — sem recriar o interval.
     const pollTimer = setInterval(() => {
+      if (!mountedRef.current) return;
       if (getRealtimeStatus(entityName) === HEALTHY_STATUS) return;
       silentReload();
     }, POLL_INTERVAL_MS);
 
     return () => {
+      mountedRef.current = false;
       unsubWS();
       unsubLocal();
       clearInterval(pollTimer);
+      if (abortRef.current) {
+        try { abortRef.current.abort(); } catch { /* ignore */ }
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityName, reload]);

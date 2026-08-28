@@ -21,6 +21,7 @@ import { formatDensidade } from "@transbordo/lib/format";
 import { generatePublicToken } from "@industrializacao/lib/publicToken";
 import { deleteProdutoDocument } from "@transbordo/api/storage";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 function buildProdutoEstoqueKey(produtoId, codigo, clienteId, clienteNome) {
   if (produtoId) return `id:${String(produtoId)}`;
@@ -47,6 +48,7 @@ export default function ProdutosTab() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState("");
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -230,7 +232,7 @@ export default function ProdutosTab() {
     );
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => runSubmit(async () => {
     const idToDelete = deleteId;
     const target = produtos.find((p) => p.id === idToDelete);
     setDeleteId(null);
@@ -243,7 +245,7 @@ export default function ProdutosTab() {
     } catch (err) {
       console.error("[Transbordo] Erro ao excluir produto:", err);
     }
-  };
+  });
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
@@ -460,6 +462,7 @@ export default function ProdutosTab() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={submitBusy}
               className="bg-red-600 hover:bg-red-700"
             >
               Excluir

@@ -23,14 +23,12 @@ import Login from '@/pages/Login';
 import PlaceholderPage from '@/pages/PlaceholderPage';
 import PlatformLayout from '@/layouts/PlatformLayout';
 
-// ChemCtrl — app principal (industrialização)
-import ChemCtrlRoutes from '@industrializacao/routes';
-import ConsultaPublica from '@industrializacao/pages/ConsultaPublica';
-import ConsultaPublicaProduto from '@transbordo/pages/ConsultaPublicaProduto';
-
-// Módulos (lazy)
+// Módulos (lazy) — industrialização também lazy (Onda 3 / bundle)
+const ChemCtrlRoutes = lazy(() => import('@industrializacao/routes'));
 const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
 const PainelRoutes = lazy(() => import('@painel/routes'));
+const ConsultaPublica = lazy(() => import('@industrializacao/pages/ConsultaPublica'));
+const ConsultaPublicaProduto = lazy(() => import('@transbordo/pages/ConsultaPublicaProduto'));
 
 /** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
 function LegacyChemblendPrefixRedirect() {
@@ -67,13 +65,38 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       {/* Público: consulta por token (industrialização) */}
-      <Route path="/consulta/:token" element={<ConsultaPublica />} />
+      <Route
+        path="/consulta/:token"
+        element={
+          <ModuleErrorBoundary title="Consulta pública" homeTo="/login">
+            <Suspense fallback={<ModuleLoadingFallback />}>
+              <ConsultaPublica />
+            </Suspense>
+          </ModuleErrorBoundary>
+        }
+      />
       {/* Público: FDS do produto transbordo (etiqueta convencional) */}
-      <Route path="/consulta-produto/:token" element={<ConsultaPublicaProduto />} />
+      <Route
+        path="/consulta-produto/:token"
+        element={
+          <ModuleErrorBoundary title="Consulta de produto" homeTo="/login">
+            <Suspense fallback={<ModuleLoadingFallback />}>
+              <ConsultaPublicaProduto />
+            </Suspense>
+          </ModuleErrorBoundary>
+        }
+      />
 
       {/* Público: Login — se já autenticado, vai para seleção / módulo */}
       <Route element={<GuestRoute />}>
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={
+            <ModuleErrorBoundary title="Login" homeTo="/login">
+              <Login />
+            </ModuleErrorBoundary>
+          }
+        />
       </Route>
 
       {/* Protegido: exige sessão válida */}
@@ -87,7 +110,7 @@ const AuthenticatedApp = () => {
           <Route
             path="/chemflow/*"
             element={
-              <ModuleErrorBoundary title="Não foi possível abrir o Transbordo">
+              <ModuleErrorBoundary title="Não foi possível abrir o Transbordo" homeTo="/painel/home">
                 <Suspense fallback={<ModuleLoadingFallback />}>
                   <ChemFlowRoutes />
                 </Suspense>
@@ -100,7 +123,7 @@ const AuthenticatedApp = () => {
         <Route
           path="/painel/*"
           element={
-            <ModuleErrorBoundary title="Não foi possível abrir o Painel">
+            <ModuleErrorBoundary title="Não foi possível abrir o Painel" homeTo="/painel/home">
               <Suspense fallback={<ModuleLoadingFallback />}>
                 <PainelRoutes />
               </Suspense>
@@ -119,7 +142,16 @@ const AuthenticatedApp = () => {
 
         {/* Industrialização — acesso por módulo do perfil */}
         <Route element={<ModuleAccessRoute moduleId={MODULE_IDS.INDUSTRIALIZACAO} />}>
-          <Route path="/*" element={<ChemCtrlRoutes />} />
+          <Route
+            path="/*"
+            element={
+              <ModuleErrorBoundary title="Não foi possível abrir a Industrialização" homeTo="/painel/home">
+                <Suspense fallback={<ModuleLoadingFallback />}>
+                  <ChemCtrlRoutes />
+                </Suspense>
+              </ModuleErrorBoundary>
+            }
+          />
         </Route>
       </Route>
 
@@ -134,15 +166,17 @@ function App() {
       <ThemeProvider>
         <TooltipProvider delayDuration={300}>
           <QueryClientProvider client={queryClientInstance}>
-            <Router>
-              <ScrollToTop />
-              <UpdateProvider>
+            <ModuleErrorBoundary title="ChemCtrl" homeTo="/login">
+              <Router>
+                <ScrollToTop />
                 <InternalAuthProvider>
-                  <AuthenticatedApp />
-                  <UpdateModal />
+                  <UpdateProvider>
+                    <AuthenticatedApp />
+                    <UpdateModal />
+                  </UpdateProvider>
                 </InternalAuthProvider>
-              </UpdateProvider>
-            </Router>
+              </Router>
+            </ModuleErrorBoundary>
             <Toaster />
           </QueryClientProvider>
         </TooltipProvider>

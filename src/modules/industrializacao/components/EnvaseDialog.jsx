@@ -33,6 +33,7 @@ import {
   productionHasRegisteredEnvase,
   finalizeProductionAfterEnvase,
 } from '@industrializacao/lib/envaseCompletion';
+import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 
 const supabase = createSupabaseEntities();
 
@@ -89,6 +90,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
   const [loadingExisting, setLoadingExisting] = useState(false);
   const { user: internalUser } = useInternalAuth();
   const { toast } = useToast();
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   useEffect(() => {
     if (!open) return;
@@ -488,7 +490,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     setFinishChecklistOpen(true);
   };
 
-  const persistEnvase = async () => {
+  const persistEnvase = () => runSubmit(async () => {
     setSaving(true);
     try {
       const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
@@ -508,7 +510,7 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
     } finally {
       setSaving(false);
     }
-  };
+  });
 
   const targetLabel = complementTarget
     ? `${complementTarget.container_number || ''}${complementTarget.barril_number ? ` - ${complementTarget.barril_number}` : ''}`
@@ -848,8 +850,8 @@ export default function EnvaseDialog({ open, onOpenChange, production, recipe: r
           </div>
           <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('buttons.cancel')}</Button>
-            <Button onClick={handleSave} disabled={saving || loadingTarget || loadingExisting || !allContainersValid || volumeExceeded || (!alreadyRegistered && totalVolumeEntered === 0)} className="text-white" style={{ background: '#1E40AF' }}>
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : alreadyRegistered ? t('production.envase.finalizeExisting') : t('production.envase.registerPackaging')}
+            <Button onClick={handleSave} disabled={saving || submitBusy || loadingTarget || loadingExisting || !allContainersValid || volumeExceeded || (!alreadyRegistered && totalVolumeEntered === 0)} className="text-white" style={{ background: '#1E40AF' }}>
+              {saving || submitBusy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.envase.saving')}</> : alreadyRegistered ? t('production.envase.finalizeExisting') : t('production.envase.registerPackaging')}
             </Button>
           </div>
           </>

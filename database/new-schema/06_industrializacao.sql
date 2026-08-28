@@ -105,6 +105,12 @@ CREATE INDEX IF NOT EXISTS idx_producoes_recipe_id ON producoes (recipe_id);
 CREATE INDEX IF NOT EXISTS idx_producoes_order_id ON producoes (order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_producoes_public_token
   ON producoes (public_token) WHERE public_token IS NOT NULL;
+-- Onda 1: unicidade de OP (exceto TB*)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_producoes_op_number
+  ON producoes (op_number)
+  WHERE op_number IS NOT NULL
+    AND btrim(op_number) <> ''
+    AND op_number NOT LIKE 'TB%';
 
 -- Cascade client_order pedido → produções
 CREATE OR REPLACE FUNCTION sync_order_client_order_to_productions()
@@ -162,6 +168,9 @@ CREATE TABLE IF NOT EXISTS estoque_mp (
 CREATE INDEX IF NOT EXISTS idx_estoque_mp_status_wms ON estoque_mp (status_wms);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_mp_public_token
   ON estoque_mp (public_token) WHERE public_token IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_mp_entry_id
+  ON estoque_mp (entry_id)
+  WHERE entry_id IS NOT NULL AND btrim(entry_id) <> '';
 CREATE INDEX IF NOT EXISTS idx_estoque_mp_mp_code ON estoque_mp (mp_code);
 CREATE INDEX IF NOT EXISTS idx_estoque_mp_entry_date ON estoque_mp (entry_date DESC);
 CREATE INDEX IF NOT EXISTS idx_estoque_mp_expiry_date ON estoque_mp (expiry_date);

@@ -23,6 +23,7 @@ import {
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
 import { isComplementPending } from '@industrializacao/lib/fractionalSupply';
 import { packagingRowsForProduction, originShareKey } from '@industrializacao/lib/containerOrigins';
+import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -71,6 +72,7 @@ export default function ProductionViewDialog({
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [editingMp, setEditingMp] = useState(false);
   const [draftMps, setDraftMps] = useState([]);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const packagingRows = packagingRowsProp
     || packagingRowsForProduction(containers, origins, production);
@@ -164,7 +166,7 @@ export default function ProductionViewDialog({
     });
   };
 
-  const handleSaveMp = async () => {
+  const handleSaveMp = () => runSubmit(async () => {
     if (!onSaveMp) return;
     try {
       await onSaveMp(draftMps);
@@ -173,7 +175,7 @@ export default function ProductionViewDialog({
     } catch (_err) {
       // Parent already toasted; keep edit mode so the user can adjust
     }
-  };
+  });
 
   const toggleSelect = (key) => {
     setSelectedIds((prev) => {
@@ -276,7 +278,7 @@ export default function ProductionViewDialog({
                       size="sm"
                       variant="outline"
                       onClick={cancelEditMp}
-                      disabled={savingMp}
+                      disabled={savingMp || submitBusy}
                       className="h-7 text-xs"
                     >
                       {t('buttons.cancel')}
@@ -285,11 +287,11 @@ export default function ProductionViewDialog({
                       type="button"
                       size="sm"
                       onClick={handleSaveMp}
-                      disabled={savingMp}
+                      disabled={savingMp || submitBusy}
                       className="h-7 text-xs text-white hover:opacity-90"
                       style={{ background: '#2575D1' }}
                     >
-                      {savingMp
+                      {savingMp || submitBusy
                         ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> {t('common.saving')}</>
                         : t('buttons.save')}
                     </Button>

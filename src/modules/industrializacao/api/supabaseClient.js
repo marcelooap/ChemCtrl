@@ -161,17 +161,44 @@ const createEntity = (entityName, tableName) => {
   const cacheTtl = getCacheTtlForEntity(entityName);
 
   return {
-  list: async (sort, limit) => {
+  list: async (sort, limit, options = {}) => {
     const params = new URLSearchParams();
-    params.set('select', '*');
+    const select = options.select || '*';
+    params.set('select', select);
     const sortInfo = parseSort(sort);
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     if (limit) params.set('limit', String(limit));
-    const cacheKey = `${entityName}:list:${sort || ''}:${limit || ''}`;
+    if (Number.isFinite(options.offset) && options.offset > 0) {
+      params.set('offset', String(options.offset));
+    }
+    const cacheKey = `${entityName}:list:${sort || ''}:${limit || ''}:${options.offset || 0}:${select}`;
     return withCache(cacheKey, cacheTtl, async () => {
       const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
       return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
     });
+  },
+  /** Listagem paginada (from/to inclusivo PostgREST via Range header). */
+  listPage: async ({ sort, page = 1, pageSize = 50, select = '*' } = {}) => {
+    const size = Math.min(200, Math.max(1, Number(pageSize) || 50));
+    const p = Math.max(1, Number(page) || 1);
+    const from = (p - 1) * size;
+    const to = from + size - 1;
+    const params = new URLSearchParams();
+    params.set('select', select);
+    const sortInfo = parseSort(sort);
+    if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
+    const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
+      headers: getHeaders({
+        Range: `${from}-${to}`,
+        Prefer: 'count=exact',
+      }),
+      ...noCacheFetch,
+    }, { kind: 'read' });
+    const rows = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    const contentRange = resp.headers.get('content-range') || '';
+    const totalMatch = contentRange.match(/\/(\d+|\*)/);
+    const total = totalMatch && totalMatch[1] !== '*' ? Number(totalMatch[1]) : null;
+    return { rows: rows || [], page: p, pageSize: size, total };
   },
   filter: async (queryObj, sort, limit) => {
     const params = new URLSearchParams();

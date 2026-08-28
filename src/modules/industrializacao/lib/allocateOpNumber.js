@@ -1,6 +1,8 @@
 /**
- * Alocação de número de OP único (nunca reutiliza rótulos existentes).
+ * Alocação de número de OP único via sequence no PostgreSQL.
+ * Fallback local apenas se a RPC ainda não estiver aplicada.
  */
+import { callRPC } from '@industrializacao/api/rpcClient';
 
 const OP_RE = /^OP(\d+)$/i;
 
@@ -15,11 +17,6 @@ export function formatOpNumber(n) {
   return `OP${String(Math.max(1, n)).padStart(2, '0')}`;
 }
 
-/**
- * Calcula o próximo número livre a partir de uma lista de produções.
- * @param {Array<{ op_number?: string }>} productions
- * @returns {string} ex.: "OP123"
- */
 export function nextOpNumberFromList(productions = []) {
   const used = new Set();
   let max = 0;
@@ -38,11 +35,22 @@ export function nextOpNumberFromList(productions = []) {
 }
 
 /**
- * Busca produções e devolve um op_number garantidamente livre.
- * Em corrida rara, tenta de novo até 5 vezes.
+ * Aloca OP via RPC atômica (sequence). Fallback: lista + retry com unique index.
  * @param {{ list: Function, filter?: Function }} ProductionEntity
  */
 export async function allocateUniqueOpNumber(ProductionEntity, { pageSize = 1000, attempts = 5 } = {}) {
+  try {
+    const fromRpc = await callRPC('allocate_op_number', {});
+    if (typeof fromRpc === 'string' && fromRpc.trim()) {
+      return fromRpc.trim();
+    }
+    if (fromRpc && typeof fromRpc === 'object' && fromRpc.allocate_op_number) {
+      return String(fromRpc.allocate_op_number).trim();
+    }
+  } catch {
+    // RPC ainda não aplicada — fallback abaixo
+  }
+
   if (!ProductionEntity?.list) {
     throw new Error('Production entity indisponível para alocar OP');
   }

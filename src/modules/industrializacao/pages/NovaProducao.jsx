@@ -34,6 +34,8 @@ import {
 } from '@industrializacao/lib/fractionalSupply';
 import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
 import { allocateUniqueOpNumber, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
+import { deductStockBatch } from '@industrializacao/lib/stockRpc';
+import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 
 const convertToKg = (value, unit, density) => {
   const d = density || 1;
@@ -130,6 +132,7 @@ export default function NovaProducao() {
   const [complementPackaging, setComplementPackaging] = useState(false);
   const [complementContainerId, setComplementContainerId] = useState('');
   const [saving, setSaving] = useState(false);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);
 
@@ -529,13 +532,12 @@ export default function NovaProducao() {
         }
       }
     }
-    for (const [stockId, totalDeduction] of Object.entries(stockDeductions)) {
-      const stock = stocks.find(s => s.id === stockId);
-      if (stock) {
-        const newStock = parseFloat(((stock.current_stock || 0) - totalDeduction).toFixed(3));
-        await base44.entities.RawMaterialStock.update(stockId, { current_stock: newStock });
-      }
-    }
+    const items = Object.entries(stockDeductions).map(([stock_id, qty]) => ({
+      stock_id,
+      qty: Number(qty),
+    }));
+    if (items.length === 0) return;
+    await deductStockBatch(items);
   };
 
   const save = async () => {
@@ -787,7 +789,7 @@ export default function NovaProducao() {
   const canSave = isComplementMode
     ? complementCanSave
     : massOk && (!complementPackaging || !!complementContainerId);
-  const saveHandler = isComplementMode ? saveComplement : save;
+  const saveHandler = () => runSubmit(isComplementMode ? saveComplement : save);
   const saveLabel = isComplementMode
     ? t('production.fractional.finalizeComplement')
     : t('production.newProduction.registerOrder');
@@ -808,7 +810,7 @@ export default function NovaProducao() {
       </div>
 
       <div className="bg-card rounded-xl shadow-sm border border-border p-6 relative">
-        <LoadingOverlay visible={saving} label={overlayLabel} />
+        <LoadingOverlay visible={saving || submitBusy} label={overlayLabel} />
         <h3 className="text-sm font-semibold mb-4">
           {isComplementMode ? t('production.fractional.lockedFields') : t('production.newProduction.dataSection')}
         </h3>
@@ -1005,13 +1007,13 @@ export default function NovaProducao() {
 
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
           {!isComplementMode && (
-            <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); setFractionalSupply(false); }} disabled={saving}>{t('buttons.clear')}</Button>
+            <Button variant="outline" onClick={() => { setForm({ ...form, product: '', client: '', volume: 0, mass: 0 }); setMpList([]); setFractionalSupply(false); }} disabled={saving || submitBusy}>{t('buttons.clear')}</Button>
           )}
           {isComplementMode && (
-            <Button variant="outline" onClick={() => navigate('/producoes')} disabled={saving}>{t('buttons.cancel')}</Button>
+            <Button variant="outline" onClick={() => navigate('/producoes')} disabled={saving || submitBusy}>{t('buttons.cancel')}</Button>
           )}
-          <Button onClick={saveHandler} disabled={!canSave || saving} style={{ background: canSave ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.newProduction.registering')}</> : saveLabel}
+          <Button onClick={saveHandler} disabled={!canSave || saving || submitBusy} style={{ background: canSave ? '#2575D1' : '#94a3b8' }} className="text-white hover:opacity-90">
+            {saving || submitBusy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('production.newProduction.registering')}</> : saveLabel}
           </Button>
         </div>
       </div>

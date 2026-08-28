@@ -16,6 +16,7 @@ import {
   aggregateComposicaoByLote,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
+import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
 import {
   buildFiltracaoFromVasilhame,
   getFiltroEmUso,
@@ -311,6 +312,11 @@ export function generateTransbordoCodigo(transbordos = []) {
   return `T${String(max + 1).padStart(3, "0")}`;
 }
 
+/** Preferir sequence no banco; fallback síncrono só para preview. */
+export async function allocateNextTransbordoCodigo(transbordos = []) {
+  return allocateTransbordoCodigo(transbordos);
+}
+
 /**
  * Persiste transbordo + vasilhames/FIFO/estoque (mesma regra da tela Transbordo).
  * @returns {Promise<object>} transbordo salvo
@@ -470,7 +476,7 @@ export async function persistTransbordo({
         await entities.filtracoes.deleteMany({ transbordo_id: editingId });
         await deleteEstoqueDoTransbordo(editingId);
       } else {
-        codigo = generateTransbordoCodigo(transbordos);
+        codigo = await allocateTransbordoCodigo(transbordos);
         savedTransbordo = await entities.transbordos.create({
           ...payload,
           codigo_transbordo: codigo,

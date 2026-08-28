@@ -1,8 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import {
-  supabaseUrl as chemblendSupabaseUrl,
-  supabaseAnonKey as chemblendSupabaseAnonKey,
-} from '@industrializacao/api/supabaseClient';
+  supabase as sharedSupabase,
+  supabaseUrl as sharedUrl,
+  supabaseAnonKey as sharedKey,
+} from '@/lib/supabaseShared';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * Normaliza a URL do projeto Supabase.
@@ -13,21 +14,19 @@ function normalizeSupabaseUrl(raw) {
   return raw.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
 }
 
-// BANCO UNIFICADO: tabelas do módulo ChemFlow no mesmo projeto Supabase do ChemCtrl.
-// Por padrão este cliente reutiliza as credenciais principais. As variáveis
-// VITE_CHEMFLOW_* têm prioridade e permitem apontar para outro projeto (ex.: staging).
+// BANCO UNIFICADO: por padrão reutiliza o cliente compartilhado (evita 2× GoTrue).
+// VITE_CHEMFLOW_* permite apontar para outro projeto (staging).
 const chemflowSupabaseUrl = normalizeSupabaseUrl(
-  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || chemblendSupabaseUrl
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_URL || sharedUrl
 );
 const chemflowSupabaseAnonKey = (
-  import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || chemblendSupabaseAnonKey
+  import.meta.env.VITE_CHEMFLOW_SUPABASE_ANON_KEY || sharedKey
 ).trim();
 
-/**
- * True quando as credenciais do Supabase do ChemFlow estão definidas.
- * Não lançamos erro no import: isso derrubava o lazy load de /chemflow
- * e deixava a tela em branco.
- */
+const sameProject =
+  normalizeSupabaseUrl(chemflowSupabaseUrl) === normalizeSupabaseUrl(sharedUrl) &&
+  chemflowSupabaseAnonKey === sharedKey;
+
 export const isChemFlowConfigured = Boolean(
   chemflowSupabaseUrl && chemflowSupabaseAnonKey
 );
@@ -37,10 +36,24 @@ export const CHEMFLOW_CONFIG_ERROR =
   'do ChemCtrl; para apontar para outro projeto, defina VITE_CHEMFLOW_SUPABASE_URL ' +
   'e VITE_CHEMFLOW_SUPABASE_ANON_KEY no arquivo .env (veja .env.example).';
 
-// Cliente Supabase do módulo ChemFlow (mesmo projeto do ChemCtrl por padrão).
-// Instância separada para isolamento da camada de dados do módulo.
-export const chemflowSupabase = isChemFlowConfigured
-  ? createClient(chemflowSupabaseUrl, chemflowSupabaseAnonKey)
-  : null;
+/**
+ * Se for o mesmo projeto do ChemCtrl, reutiliza a instância compartilhada.
+ * Só cria um segundo cliente quando VITE_CHEMFLOW_* aponta para outro projeto.
+ */
+export const chemflowSupabase = !isChemFlowConfigured
+  ? null
+  : sameProject
+    ? sharedSupabase
+    : createClient(chemflowSupabaseUrl, chemflowSupabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+          storageKey: 'chemflow-auth',
+        },
+        realtime: {
+          params: { eventsPerSecond: 0 },
+        },
+      });
 
 export { chemflowSupabaseUrl, chemflowSupabaseAnonKey };

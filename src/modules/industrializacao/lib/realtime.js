@@ -381,77 +381,54 @@ function scheduleReconnect(tableName){
 
 
 // ─────────────────────────────────────────────
-// Visibility refresh
+// Visibility refresh (gated — Onda 2)
+// Evita REFRESH duplicado de focus+visibility e
+// só força refetch quando canal está degradado
+// ou stale (> STALE_REFRESH_MS desde último evento).
 // ─────────────────────────────────────────────
 
-if(typeof document !== 'undefined'){
+const STALE_REFRESH_MS = 60_000;
+const lastRefreshAt = new Map(); // tableName → timestamp
+let lastFocusRefreshAt = 0;
 
+function shouldRefreshTable(tableName) {
+  const status = tableStatus.get(tableName);
+  if (status === 'error' || status === 'disconnected') return true;
+  const last = lastRefreshAt.get(tableName) || 0;
+  return Date.now() - last > STALE_REFRESH_MS;
+}
 
-  document.addEventListener(
-    'visibilitychange',
-    ()=>{
+function refreshVisibleTables({ reason } = {}) {
+  const now = Date.now();
+  // Debounce focus+visibility no mesmo tick / poucos ms
+  if (now - lastFocusRefreshAt < 1500) return;
+  lastFocusRefreshAt = now;
 
-
-      if(document.visibilityState === 'visible'){
-
-
-        tableStatus.forEach(
-          (status, tableName)=>{
-
-
-            if(
-              status === 'error' ||
-              status === 'disconnected'
-            ){
-
-              scheduleReconnect(tableName);
-
-            }
-
-
-            dispatchToCallbacks(
-              tableName,
-              {
-                eventType:'REFRESH'
-              }
-            );
-
-
-          }
-        );
-
-      }
-
-
+  tableStatus.forEach((status, tableName) => {
+    if (status === 'error' || status === 'disconnected') {
+      scheduleReconnect(tableName);
     }
-  );
+    if (!shouldRefreshTable(tableName)) return;
+    lastRefreshAt.set(tableName, now);
+    dispatchToCallbacks(tableName, {
+      eventType: 'REFRESH',
+      reason: reason || 'visibility',
+    });
+  });
+}
 
-
-
-  window.addEventListener(
-    'focus',
-    ()=>{
-
-
-      tableStatus.forEach(
-        (_,tableName)=>{
-
-
-          dispatchToCallbacks(
-            tableName,
-            {
-              eventType:'REFRESH'
-            }
-          );
-
-
-        }
-      );
-
-
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refreshVisibleTables({ reason: 'visibilitychange' });
     }
-  );
+  });
 
+  // focus: só se visibility já não cobriu (ex.: janela sem change de aba)
+  window.addEventListener('focus', () => {
+    if (document.visibilityState !== 'visible') return;
+    refreshVisibleTables({ reason: 'focus' });
+  });
 }
 
 

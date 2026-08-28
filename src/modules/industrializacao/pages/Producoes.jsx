@@ -24,6 +24,7 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { RBAC_ADMIN_SLUG } from '@industrializacao/lib/rbac/permissionCatalog';
+import { deductStock, restoreStock } from '@industrializacao/lib/stockRpc';
 import {
   healProductionsCanceledByCqReject,
   syncOrderFromProductions,
@@ -202,17 +203,30 @@ export default function Producoes() {
           ).catch(() => {});
         }
         const allQR = await base44.entities.QualityResult.filter({ production_id: editingPkg.id });
-        for (const qr of allQR) {
-          await base44.entities.QualityResult.update(qr.id, { op_number: opNum }).catch(() => {});
-        }
-        const allC = containers.filter(c => c.op_number === opNum);
-        for (const c of allC) {
-          await base44.entities.Container.update(c.id, { op_number: opNum }).catch(() => {});
-        }
+        await Promise.all(
+          allQR.map((qr) =>
+            base44.entities.QualityResult.update(qr.id, { op_number: opNum }).catch(() => {})
+          )
+        );
+        const allC = containers.filter((c) => c.op_number === opNum);
+        await Promise.all(
+          allC.map((c) =>
+            base44.entities.Container.update(c.id, { op_number: opNum }).catch(() => {})
+          )
+        );
       }
 
+      const syncedClientOrder = clientOrder.trim() || null;
+      setProductions((prev) =>
+        prev.map((p) => {
+          if (p.id === editingPkg.id) return { ...p, ...updates };
+          if (syncedClientOrder && editingPkg.order_id && p.order_id === editingPkg.order_id) {
+            return { ...p, client_order: syncedClientOrder };
+          }
+          return p;
+        })
+      );
       setShowEditPkg(false);
-      load();
       toast({ title: t('production.messages.updated') });
     } catch (err) {
       toast({ title: t('production.messages.updateError'), description: err.message, variant: 'destructive' });
@@ -285,10 +299,11 @@ export default function Producoes() {
         const stock = stocks.find((s) => s.id === stockId);
         if (!stock) continue;
 
-        const nextStock = parseFloat(((stock.current_stock || 0) - delta).toFixed(3));
-        await base44.entities.RawMaterialStock.update(stockId, {
-          current_stock: nextStock,
-        });
+        if (delta > 0) {
+          await deductStock(stockId, delta);
+        } else {
+          await restoreStock(stockId, Math.abs(delta));
+        }
       }
 
       const normalized = updatedMps.map((m) => {
@@ -336,10 +351,8 @@ export default function Producoes() {
         }
       }
       for (const [stockId, returnQty] of Object.entries(stockReturns)) {
-        const stock = stocks.find(s => s.id === stockId);
-        if (stock) {
-          const newStock = parseFloat(((stock.current_stock || 0) + returnQty).toFixed(3));
-          await base44.entities.RawMaterialStock.update(stockId, { current_stock: newStock });
+        if (returnQty > 0) {
+          await restoreStock(stockId, returnQty);
         }
       }
 

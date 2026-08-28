@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@industrializacao/api/base44Client';
+import { callRPC } from '@industrializacao/api/rpcClient';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useOutletContext } from 'react-router-dom';
 import { BarChart3, DollarSign, Trophy, Scale } from 'lucide-react';
@@ -61,12 +62,28 @@ export default function Dashboard() {
   const today = useMemo(() => moment(), []);
   const [selectedMonth, setSelectedMonth] = useState(today.month());
   const [selectedYear, setSelectedYear] = useState(today.year());
+  const [rpcKpis, setRpcKpis] = useState(null);
 
   const referenceDate = useMemo(() => {
     const isCurrentPeriod = selectedMonth === today.month() && selectedYear === today.year();
     if (isCurrentPeriod) return today.clone().toDate();
     return moment({ year: selectedYear, month: selectedMonth, day: 15 }).toDate();
   }, [selectedMonth, selectedYear, today]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRpcKpis(null);
+    const from = moment({ year: selectedYear, month: selectedMonth, day: 1 }).startOf('month').toISOString();
+    const to = moment({ year: selectedYear, month: selectedMonth, day: 1 }).endOf('month').toISOString();
+    callRPC('dashboard_production_kpis', { p_from: from, p_to: to })
+      .then((data) => {
+        if (!cancelled) setRpcKpis(data && typeof data === 'object' ? data : null);
+      })
+      .catch(() => {
+        if (!cancelled) setRpcKpis(null);
+      });
+    return () => { cancelled = true; };
+  }, [selectedYear, selectedMonth]);
 
   const yearOptions = useMemo(() => {
     const years = new Set([today.year(), selectedYear]);
@@ -82,7 +99,26 @@ export default function Dashboard() {
 
   const fmtVol = (n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
 
-  const kpis = useMemo(() => computeExecutiveKpis(productions, referenceDate), [productions, referenceDate]);
+  const kpis = useMemo(() => {
+    const client = computeExecutiveKpis(productions, referenceDate);
+    if (!rpcKpis) return client;
+
+    const volume = Number(rpcKpis.volume) || 0;
+    const byProduct = Array.isArray(rpcKpis.by_product) ? rpcKpis.by_product : [];
+    const top = byProduct[0];
+    return {
+      ...client,
+      volumeCurrent: volume,
+      hasCurrentData: volume > 0 || Number(rpcKpis.finalizadas) > 0 || client.hasCurrentData,
+      topProduct: top
+        ? {
+            name: top.product || '—',
+            volume: Number(top.volume) || 0,
+            percent: volume > 0 ? ((Number(top.volume) || 0) / volume) * 100 : 0,
+          }
+        : client.topProduct,
+    };
+  }, [productions, referenceDate, rpcKpis]);
   const monthlyData = useMemo(
     () => buildMonthlySeries(productions, selectedYear, referenceDate, i18n.language),
     [productions, selectedYear, referenceDate, i18n.language],

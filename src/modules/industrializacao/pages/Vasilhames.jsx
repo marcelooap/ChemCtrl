@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
@@ -149,7 +149,7 @@ export default function Vasilhames() {
 
   const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
 
-  const filtered = containers.filter(c => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     const fractionalKeywords = new Set([
       'fracionado',
@@ -158,20 +158,39 @@ export default function Vasilhames() {
       (t('production.fractional.badgeContainer') || '').toLowerCase().trim(),
       (t('production.fractional.badge') || '').toLowerCase().trim(),
     ].filter(Boolean));
-    const isFractionalKeyword = q && fractionalKeywords.has(q);
-    let matchSearch;
-    if (!q) {
-      matchSearch = true;
-    } else if (isFractionalKeyword) {
-      const prod = productionOfContainer(c, productions || []);
-      matchSearch = isContainerFractional(c, prod, transfers || []) && c.status === 'No Pátio';
-    } else {
-      matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot].some(v => (v || '').toLowerCase().includes(q));
+    const isFractionalKeyword = Boolean(q && fractionalKeywords.has(q));
+
+    const productionsList = productions || [];
+    const transfersList = transfers || [];
+    const byId = new Map();
+    const byOp = new Map();
+    for (const p of productionsList) {
+      if (p?.id) byId.set(p.id, p);
+      if (p?.op_number) byOp.set(p.op_number, p);
     }
-    const matchStatus = statusFilter === 'all' || c.status === statusFilter;
-    const matchClient = clientFilter === 'all' || c.client === clientFilter;
-    return matchSearch && matchStatus && matchClient;
-  });
+    const productionOf = (c) => {
+      if (!c) return null;
+      if (c.production_id) return byId.get(c.production_id) || null;
+      if (c.op_number) return byOp.get(c.op_number) || null;
+      return null;
+    };
+
+    return containers.filter((c) => {
+      let matchSearch;
+      if (!q) {
+        matchSearch = true;
+      } else if (isFractionalKeyword) {
+        const prod = productionOf(c);
+        matchSearch = isContainerFractional(c, prod, transfersList) && c.status === 'No Pátio';
+      } else {
+        matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot]
+          .some((v) => (v || '').toLowerCase().includes(q));
+      }
+      const matchStatus = statusFilter === 'all' || c.status === statusFilter;
+      const matchClient = clientFilter === 'all' || c.client === clientFilter;
+      return matchSearch && matchStatus && matchClient;
+    });
+  }, [containers, search, productions, transfers, t, statusFilter, clientFilter]);
 
   const productCodeOf = (c) => {
     const production = productionOfContainer(c, productions || []);

@@ -36,15 +36,36 @@ function assertConfigured(context) {
 
 function createEntity(table) {
   return {
-    async list(sort) {
+    async list(sort, options = {}) {
       assertConfigured(`${table}.list`);
       const { column, ascending } = normalizeOrder(sort);
-      const { data, error } = await chemflowSupabase
+      let builder = chemflowSupabase
         .from(table)
-        .select('*')
+        .select(options.select || '*')
         .order(column, { ascending });
+      if (Number.isFinite(options.limit) && options.limit > 0) {
+        const from = Number.isFinite(options.offset) ? options.offset : 0;
+        builder = builder.range(from, from + options.limit - 1);
+      }
+      const { data, error } = await builder;
       throwIfError(error, `${table}.list`);
       return data || [];
+    },
+
+    async listPage({ sort, page = 1, pageSize = 50, select = '*' } = {}) {
+      assertConfigured(`${table}.listPage`);
+      const { column, ascending } = normalizeOrder(sort);
+      const size = Math.min(200, Math.max(1, Number(pageSize) || 50));
+      const p = Math.max(1, Number(page) || 1);
+      const from = (p - 1) * size;
+      const to = from + size - 1;
+      const { data, error, count } = await chemflowSupabase
+        .from(table)
+        .select(select, { count: 'exact' })
+        .order(column, { ascending })
+        .range(from, to);
+      throwIfError(error, `${table}.listPage`);
+      return { rows: data || [], page: p, pageSize: size, total: count };
     },
 
     async get(id) {

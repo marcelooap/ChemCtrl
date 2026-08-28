@@ -125,6 +125,20 @@ export const RPC_WRITE = new Set<string>([
   'update_user_language',
   'submit_operational_checklist',
   'reconcile_stuck_envase_productions',
+  'deduct_raw_material_stock',
+  'restore_raw_material_stock',
+  'deduct_raw_material_stock_batch',
+  'adjust_raw_material_stock',
+  'persist_transbordo_create',
+  'optimistic_update_estoque_mp',
+  'optimistic_update_row',
+  'allocate_op_number',
+  'allocate_mp_entry_id',
+  'allocate_tb_number',
+  'allocate_transbordo_codigo',
+  'allocate_entrada_codigo',
+  'allocate_saida_codigo',
+  'allocate_filtro_codigos',
 ]);
 
 export function classifyRpc(functionName: string): RateLimitKind {

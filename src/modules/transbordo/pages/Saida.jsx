@@ -43,6 +43,7 @@ import {
   formatSlotRef,
 } from "@painel/lib/agendamentosCarregamento";
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
@@ -100,6 +101,7 @@ export default function Saida({
   const [fiscalBusyId, setFiscalBusyId] = useState(null);
   const [fiscalError, setFiscalError] = useState("");
   const [loading, setLoading] = useState(true);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   const tableColSpan = isExpedicao ? 11 : 10;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -227,7 +229,7 @@ export default function Saida({
     return `${text} Produtos`;
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => runSubmit(async () => {
     const saida = saidas.find((s) => s.id === deleteId);
     if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
       setDeleteId(null);
@@ -288,7 +290,7 @@ export default function Saida({
       // ignore
     }
     setDeleteId(null);
-  };
+  });
 
   const requestFiscalToggle = (saida) => {
     if (fiscalBusyId) return;
@@ -657,6 +659,7 @@ export default function Saida({
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={submitBusy}
               className="bg-red-600 hover:bg-red-700"
             >
               Excluir

@@ -2,6 +2,7 @@ import { entities } from "@transbordo/services/entities";
 import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
+import { allocateEntradaCodigo } from "@transbordo/lib/allocateBusinessCodes";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -33,7 +34,7 @@ export async function createEntradaCompleta({ data, produtos = [] }) {
 
   const entradaRows = await entities.entradas.list();
   const savedEntrada = await entities.entradas.create(entradaPayload);
-  const entradaCodigo = `E${String((entradaRows?.length || 0) + 1).padStart(3, "0")}`;
+  const entradaCodigo = await allocateEntradaCodigo(entradaRows?.length || 0);
   const grupoId = data.grupo_entrada || `GRP-${Date.now()}`;
 
   const estoqueRecords = (entradaPayload.lotes || []).map((lote) => {

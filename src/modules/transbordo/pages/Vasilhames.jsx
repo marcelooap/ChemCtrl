@@ -17,13 +17,10 @@ import VasilhameModal from "@transbordo/components/vasilhame/VasilhameModal";
 import VasilhameViewDialog from "@transbordo/components/vasilhame/VasilhameViewDialog";
 import { formatVolume, formatMass, roundVolume, roundMass } from "@transbordo/lib/format";
 import {
-  unifyDuplicateVasilhames,
   normalizeVasilhameLote,
   getDominantLote,
-  repairVasilhameComposicao,
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
-import { migrateEstoqueEmbaladoParaVasilhames, normalizeBarrilEmbalagensUnitarias, normalizeCodigoVasilhamesEntrada } from "@transbordo/lib/transbordoEmbalado";
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromVasilhame,
@@ -41,11 +38,6 @@ import {
   getVolumePorEmbalagemFromVasilhame,
   buildPlacaEmbalagens,
 } from "@transbordo/lib/tiposEmbalagem";
-import {
-  buildVasilhameYardRestorePatch,
-  collectConvencionalItemsForVasilhame,
-  needsVasilhameYardVolumeHeal,
-} from "@transbordo/lib/vasilhamePatio";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicToken";
@@ -245,18 +237,9 @@ export default function Vasilhames() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      try {
-        const mig = await migrateEstoqueEmbaladoParaVasilhames();
-        if (mig.deletedEstoque > 0) {
-          console.info(
-            `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) do Estoque → Vasilhames.`
-          );
-        }
-        await normalizeBarrilEmbalagensUnitarias();
-        await normalizeCodigoVasilhamesEntrada();
-      } catch (migErr) {
-        console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
-      }
+      // Migrações/reparos one-shot removidos do mount (Onda 1).
+      // unifyDuplicateVasilhames / repairVasilhameComposicao / heal de volume
+      // devem rodar via script administrativo, não a cada abertura da tela.
 
       const [vas, prods, cliens, trans, ests] = await Promise.all([
         entities.vasilhames.list("-created_date"),
@@ -270,94 +253,9 @@ export default function Vasilhames() {
         new Map((ests || []).filter((e) => e?.id).map((e) => [e.id, e]))
       );
 
-      const { kept, deletedIds } = await unifyDuplicateVasilhames(vas, entities);
-      let list =
-        deletedIds.length > 0
-          ? kept
-          : vas.map((v) => normalizeVasilhameLote(v));
+      const list = (vas || []).map((v) => normalizeVasilhameLote(v));
 
-      // Repara composição incompleta (ex.: só lote final após completar)
-      const repaired = [];
-      for (const v of list) {
-        if (
-          (v.status || "No Pátio") === "No Pátio" &&
-          v.placa &&
-          (v.origem === "transbordo" || v.origem === "manual" || v.fracionado)
-        ) {
-          repaired.push(await repairVasilhameComposicao(v, trans, entities));
-        } else {
-          repaired.push(normalizeVasilhameLote(v));
-        }
-      }
-      list = repaired;
-
-      const loteFixes = list
-        .map((v) => {
-          const dominant = getDominantLote(v.composicao);
-          if (dominant && dominant !== (v.lote || "")) {
-            return { id: v.id, lote: dominant };
-          }
-          return null;
-        })
-        .filter(Boolean);
-      if (loteFixes.length > 0) {
-        entities.vasilhames.bulkUpdate(loteFixes).catch(() => {});
-      }
-
-      // Corrige tanques no pátio com volume/peso zerados após reverter saída
-      const zeroPatioCandidates = list.filter((v) => {
-        if ((v.tipo || "") === "Tankagem") return false;
-        const expedido =
-          (v.status || "") === "Expedido" ||
-          (v.data_saida != null && String(v.data_saida).trim() !== "");
-        if (expedido) return false;
-        return (
-          (Number(v.volume) || 0) <= 0 && (Number(v.peso_liquido) || 0) <= 0
-        );
-      });
-      if (zeroPatioCandidates.length > 0) {
-        let saidasList = [];
-        try {
-          saidasList = await entities.saidas.list("-created_date");
-        } catch {
-          saidasList = [];
-        }
-
-        const healed = [];
-        for (let i = 0; i < list.length; i++) {
-          const v = list[i];
-          const linked = collectConvencionalItemsForVasilhame(saidasList, v.id);
-          if (!needsVasilhameYardVolumeHeal(v, linked)) {
-            healed.push(v);
-            continue;
-          }
-          const restore = buildVasilhameYardRestorePatch(v, {
-            linkedItems: linked,
-            transbordos: trans,
-          });
-          if (!restore || ((restore.volume || 0) <= 0 && (restore.peso_liquido || 0) <= 0)) {
-            healed.push(v);
-            continue;
-          }
-          const volumePatch = {
-            volume: restore.volume,
-            peso_liquido: restore.peso_liquido,
-            peso_bruto: restore.peso_bruto,
-            ...(restore.placa != null ? { placa: restore.placa } : {}),
-            ...(restore.composicao ? { composicao: restore.composicao } : {}),
-          };
-          try {
-            await entities.vasilhames.update(v.id, volumePatch);
-            healed.push({ ...v, ...volumePatch });
-          } catch (healErr) {
-            console.warn("[ChemFlow] Heal volume pátio:", v.placa || v.id, healErr);
-            healed.push(v);
-          }
-        }
-        list = healed;
-      }
-
-      setVasilhames(list.map((v) => normalizeVasilhameLote(v)));
+      setVasilhames(list);
       setProdutos(prods);
       setClientes(cliens);
     } catch {

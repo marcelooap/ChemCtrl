@@ -13,6 +13,7 @@ import SaidaItemRow from "@transbordo/components/saida/SaidaItemRow";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { todayDateInputValue } from "@/i18n/formatters";
 import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
+import { allocateSaidaCodigo } from "@transbordo/lib/allocateBusinessCodes";
 import {
   ORIGEM_TRANSBORDO,
   ORIGEM_INDUSTRIALIZACAO,
@@ -24,6 +25,7 @@ import {
   emptySaidaItem,
   resolveItemOrigem,
 } from "@transbordo/lib/saidaOrigem";
+import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 /** Data local de hoje em yyyy-mm-dd (evita deslocamento UTC). */
 const todayStr = () => {
@@ -63,6 +65,7 @@ export default function SaidaForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   const [entradas, setEntradas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
   const [containersInd, setContainersInd] = useState([]);
@@ -282,17 +285,9 @@ export default function SaidaForm({
     });
   };
 
-  const generateCodigo = () => {
-    const existing = saidas
-      .map((s) => s.codigo)
-      .filter(Boolean)
-      .map((c) => parseInt(c.replace(/\D/g, "")))
-      .filter((n) => !isNaN(n));
-    const max = existing.length > 0 ? Math.max(...existing) : 0;
-    return `S${String(max + 1).padStart(3, "0")}`;
-  };
+  const generateCodigo = async () => allocateSaidaCodigo(saidas);
 
-  const handleSave = async () => {
+  const handleSave = () => runSubmit(async () => {
     setError("");
 
     if (!formData.cliente_id) {
@@ -559,7 +554,7 @@ export default function SaidaForm({
         0
       );
 
-      const codigo = editingSaida?.codigo || generateCodigo();
+      const codigo = editingSaida?.codigo || (await generateCodigo());
 
       const data = {
         cliente_id: formData.cliente_id,
@@ -633,7 +628,7 @@ export default function SaidaForm({
       setError("Erro ao salvar saída. Tente novamente.");
     }
     setSaving(false);
-  };
+  });
 
   if (loading) {
     return (
@@ -675,7 +670,7 @@ export default function SaidaForm({
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !formData.data_programada}
+            disabled={saving || submitBusy || !formData.data_programada}
             className="bg-primary hover:bg-primary/90 gap-2"
             title={
               !formData.data_programada
@@ -684,7 +679,7 @@ export default function SaidaForm({
             }
           >
             <Save className="w-4 h-4" />
-            {saving ? "Salvando..." : "Salvar"}
+            {saving || submitBusy ? "Salvando..." : "Salvar"}
           </Button>
         </div>
       </div>

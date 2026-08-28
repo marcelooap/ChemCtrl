@@ -38,7 +38,25 @@ export default defineConfig(({ mode }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(getAppVersion(mode)),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts'
+          if (id.includes('jspdf')) return 'pdf'
+          if (id.includes('exceljs')) return 'excel'
+          if (id.includes('@supabase')) return 'supabase'
+          if (id.includes('framer-motion')) return 'motion'
+          if (id.includes('date-fns') || id.includes('moment')) return 'dates'
+          if (id.includes('@radix-ui') || id.includes('lucide-react')) return 'ui'
+          return undefined
+        },
+      },
+    },
+    chunkSizeWarningLimit: 900,
+  },
   optimizeDeps: {
-    force: true
-  }
+    // force:true removido — rebundle a cada start era custo permanente
+  },
 }));

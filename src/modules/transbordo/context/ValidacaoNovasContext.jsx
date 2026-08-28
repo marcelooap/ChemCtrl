@@ -18,6 +18,7 @@ import {
   MODULO_INDUSTRIALIZACAO,
   MODULO_TRANSBORDO,
 } from "@transbordo/lib/validacaoNovas";
+import { getChemflowChannelStatus } from "@transbordo/lib/saidaNovas";
 
 const EMPTY_SET = new Set();
 
@@ -145,7 +146,12 @@ export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false 
       { channelKey }
     );
 
-    const poll = setInterval(refreshUnread, POLL_INTERVAL_MS);
+    const poll = setInterval(() => {
+      const s1 = getChemflowChannelStatus(`chemflow-saida-novas-${channelKey}-${sourceTable}`);
+      const s2 = getChemflowChannelStatus(`chemflow-saida-novas-${channelKey}-t_validacao_leituras`);
+      if (s1 === 'connected' && s2 === 'connected') return;
+      refreshUnread();
+    }, POLL_INTERVAL_MS);
 
     return () => {
       unsubSource();

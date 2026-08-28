@@ -109,6 +109,13 @@ export async function loadUnreadSaidaIds(usuarioId, options = {}) {
   return pendentes.map((s) => s.id).filter((id) => id && !lidasSet.has(id));
 }
 
+/** Canal status tracker para gatear polling de badges. */
+const channelHealth = new Map(); // channelName → 'connected' | 'error' | ...
+
+export function getChemflowChannelStatus(channelName) {
+  return channelHealth.get(channelName) || 'unknown';
+}
+
 /**
  * Subscreve postgres_changes de uma tabela ChemFlow.
  * @returns {() => void} unsubscribe
@@ -116,8 +123,9 @@ export async function loadUnreadSaidaIds(usuarioId, options = {}) {
 export function subscribeChemflowTable(tableName, onPayload, { channelKey = 'tb' } = {}) {
   if (emptyClient()) return () => {};
 
+  const name = `chemflow-saida-novas-${channelKey}-${tableName}`;
   const channel = chemflowSupabase
-    .channel(`chemflow-saida-novas-${channelKey}-${tableName}`)
+    .channel(name)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: tableName },
@@ -125,9 +133,15 @@ export function subscribeChemflowTable(tableName, onPayload, { channelKey = 'tb'
         onPayload?.(payload);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') channelHealth.set(name, 'connected');
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') channelHealth.set(name, 'error');
+      else if (status === 'CLOSED') channelHealth.set(name, 'disconnected');
+      else channelHealth.set(name, String(status || 'unknown').toLowerCase());
+    });
 
   return () => {
+    channelHealth.delete(name);
     chemflowSupabase.removeChannel(channel);
   };
 }
