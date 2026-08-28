@@ -71,9 +71,27 @@ const applyFilters = (params, queryObj) => {
 };
 
 const tableColumnsCache = {};
+// Descoberta de colunas é resolvida sob demanda. Este mapa garante que chamadas
+// concorrentes para a mesma tabela compartilhem uma única requisição.
+const tableColumnsInFlight = new Map();
 
 const getTableColumns = async (tableName) => {
   if (tableColumnsCache[tableName]) return tableColumnsCache[tableName];
+  const pending = tableColumnsInFlight.get(tableName);
+  if (pending) return pending;
+  const request = fetchTableColumns(tableName).finally(() => {
+    tableColumnsInFlight.delete(tableName);
+  });
+  tableColumnsInFlight.set(tableName, request);
+  return request;
+};
+
+const invalidateTableColumns = (tableName) => {
+  delete tableColumnsCache[tableName];
+  tableColumnsInFlight.delete(tableName);
+};
+
+const fetchTableColumns = async (tableName) => {
   try {
     const rowResp = await rateLimitedFetch(`${restUrl}/${tableName}?select=*&limit=1`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
     if (rowResp.ok) {
@@ -181,7 +199,7 @@ const createEntity = (entityName, tableName) => {
     });
   },
   create: async (itemData) => {
-    delete tableColumnsCache[tableName];
+    invalidateTableColumns(tableName);
     const cols = await getTableColumns(tableName);
     const body = cleanData(filterKnownColumns(itemData, cols));
     const resp = await rateLimitedFetch(`${restUrl}/${tableName}`, {
@@ -217,7 +235,7 @@ const createEntity = (entityName, tableName) => {
     const hasComplex = Object.values(itemData).some(v => Array.isArray(v) || (typeof v === 'object' && v !== null));
     let body;
     if (hasComplex) {
-      delete tableColumnsCache[tableName];
+      invalidateTableColumns(tableName);
       const cols = await getTableColumns(tableName);
       body = cleanData(filterKnownColumns(itemData, cols));
     } else {
@@ -348,8 +366,9 @@ const createEntity = (entityName, tableName) => {
 export const createSupabaseEntities = () => {
   const entities = {};
   Object.entries(entityTableMap).forEach(([entityName, tableName]) => {
+    // As colunas são descobertas na primeira escrita que precisar delas (getTableColumns),
+    // e não no boot — evita 22 requisições antes do primeiro render.
     entities[entityName] = createEntity(entityName, tableName);
-    getTableColumns(tableName);
   });
   return entities;
 };

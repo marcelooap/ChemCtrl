@@ -41,7 +41,7 @@ export default function AppShell({
     <div className="h-screen overflow-hidden bg-background">
       {sidebarNode}
       <main
-        className={`flex flex-col h-screen min-h-0 transition-all duration-300 ${
+        className={`flex flex-col h-screen min-h-0 transition-[margin-left] duration-200 ease-out ${
           collapsed ? 'ml-16' : 'ml-64'
         }`}
       >

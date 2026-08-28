@@ -16,6 +16,13 @@ const SKIP_REALTIME = new Set([
 ]);
 const REALTIME_ENTITIES = Object.keys(entityTableMap).filter((k) => !SKIP_REALTIME.has(k));
 
+/** Evita commit de estado quando nenhum canal mudou de status. */
+const sameStatusMap = (a, b) => {
+  const keys = Object.keys(b);
+  if (Object.keys(a).length !== keys.length) return false;
+  return keys.every((key) => a[key] === b[key]);
+};
+
 export default function RealtimeProvider({ children }) {
   const { t } = useTranslation();
   const { user } = useInternalAuth();
@@ -23,7 +30,7 @@ export default function RealtimeProvider({ children }) {
 
   useEffect(() => {
     if (!user) {
-      setStatusMap({});
+      setStatusMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return undefined;
     }
 
@@ -32,7 +39,7 @@ export default function RealtimeProvider({ children }) {
       REALTIME_ENTITIES.forEach((entityName) => {
         map[entityName] = getRealtimeStatus(entityName);
       });
-      setStatusMap(map);
+      setStatusMap((prev) => (sameStatusMap(prev, map) ? prev : map));
     }, 2000);
 
     const unsubAll = subscribeAllTables();
@@ -40,7 +47,7 @@ export default function RealtimeProvider({ children }) {
     return () => {
       clearInterval(statusTimer);
       unsubAll();
-      setStatusMap({});
+      setStatusMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
     };
   }, [!!user]);
 

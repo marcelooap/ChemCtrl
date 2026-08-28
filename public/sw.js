@@ -1,6 +1,6 @@
 /* ChemCtrl Service Worker — versão gerada no build */
 
-const CACHE_VERSION = 'chemctrl-d1740aa';
+const CACHE_VERSION = 'chemctrl-83f94d5';
 const APP_VERSION = '1.00.24';
 
 // ── Install: cache shell assets ───────────────────────────────────────────────

@@ -16,7 +16,7 @@ const SIDEBAR_BG = 'hsl(230, 25%, 12%)';
 
 const labelClass = (collapsed) =>
   cn(
-    'truncate transition-all duration-300 overflow-hidden whitespace-nowrap',
+    'truncate transition-[max-width,opacity] duration-200 ease-out overflow-hidden whitespace-nowrap',
     collapsed ? 'max-w-0 opacity-0' : 'max-w-[12rem] opacity-100'
   );
 
@@ -195,7 +195,7 @@ export default function ModuleSidebar({
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen z-40 flex flex-col transition-all duration-300 ${
+      className={`fixed left-0 top-0 h-screen z-40 flex flex-col transition-[width] duration-200 ease-out ${
         collapsed ? 'w-16' : 'w-64'
       }`}
       style={{ background: SIDEBAR_BG }}
@@ -214,7 +214,7 @@ export default function ModuleSidebar({
         />
         <div
           className={cn(
-            'overflow-hidden text-left transition-all duration-300',
+            'overflow-hidden text-left transition-[max-width,opacity] duration-200 ease-out',
             collapsed ? 'max-w-0 opacity-0' : 'max-w-[10rem] opacity-100'
           )}
         >

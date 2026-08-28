@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { callRPC, setSessionId, clearSessionId, getSessionId } from '@industrializacao/api/rpcClient';
 import { resetRealtimeClient } from '@industrializacao/lib/realtime';
 import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
@@ -131,7 +131,7 @@ export const InternalAuthProvider = ({ children }) => {
     init();
   }, []);
 
-  const login = async (username, password) => {
+  const login = useCallback(async (username, password) => {
     try {
       let result;
       try {
@@ -212,9 +212,9 @@ export const InternalAuthProvider = ({ children }) => {
     } catch (_e) {
       return { success: false, error: i18n.t('login.errors.network') };
     }
-  };
+  }, []);
 
-  const updateLanguage = async (locale) => {
+  const updateLanguage = useCallback(async (locale) => {
     if (!isSupportedLocale(locale)) return { success: false };
     const sessionId = getSessionId();
 
@@ -243,9 +243,9 @@ export const InternalAuthProvider = ({ children }) => {
     }
 
     return { success: true };
-  };
+  }, [user]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     const sessionId = getSessionId();
     if (sessionId) {
       try { await callRPC('destroy_session', { p_session_id: sessionId }); } catch (err) {
@@ -257,12 +257,15 @@ export const InternalAuthProvider = ({ children }) => {
     clearAllCache(); // evita que dados da sessão anterior "vazem" para o próximo usuário no mesmo navegador
     setUser(null);
     window.location.href = '/login';
-  };
+  }, []);
 
-  const isAuthenticated = !!user;
+  const value = useMemo(
+    () => ({ user, isAuthenticated: !!user, loading, login, logout, updateLanguage }),
+    [user, loading, login, logout, updateLanguage]
+  );
 
   return (
-    <InternalAuthContext.Provider value={{ user, isAuthenticated, loading, login, logout, updateLanguage }}>
+    <InternalAuthContext.Provider value={value}>
       {children}
     </InternalAuthContext.Provider>
   );
