@@ -1566,7 +1566,43 @@
           "saveTransbordo": "Could not register the transshipment. Check the destinations and try again."
         },
         "pendentes": {
-          "title": "Pending validation"
+          "title": "Pending validation",
+          "print": "Print report"
+        },
+        "relatorio": {
+          "organization": "Offshore Tanks Comércio e Serviços em Unidades de Carga Ltda",
+          "title": "TRANSSHIPMENT ORDER",
+          "subtitle": "Issued on {{data}}",
+          "footerDoc": "Document {{numero}} • Created on {{data}}",
+          "print": "Print",
+          "back": "Back to Transshipment Orders",
+          "viewerHint": "Read-only preview — A4 format",
+          "notFound": "Transshipment order not found.",
+          "loadError": "Could not load the transshipment order.",
+          "margem": {
+            "dentro": "Within",
+            "fora": "Outside"
+          },
+          "sections": {
+            "geral": "1. General information",
+            "granel": "2. Bulk receipt",
+            "origens": "3. Origin data",
+            "destinos": "4. Destination data",
+            "observacoes": "5. Notes"
+          },
+          "columns": {
+            "item": "Item",
+            "tipo": "Type",
+            "identificacao": "Identification",
+            "volume": "Quantity",
+            "placa": "Plate",
+            "barril": "Barrel",
+            "quantidadeEmbalagens": "Pkg. qty",
+            "pesoLiquido": "Net weight"
+          },
+          "signatures": {
+            "emitente": "Issued by"
+          }
         }
       },
       "estoque": {

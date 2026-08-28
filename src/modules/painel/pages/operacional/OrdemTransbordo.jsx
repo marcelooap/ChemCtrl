@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, ArrowRight, CheckCircle, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, ArrowRight, CheckCircle, Clock, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
 import { Input } from "@shared/components/ui/input";
@@ -110,6 +111,7 @@ function mergeOrdemPendentes(valsTb, valsInd) {
 export default function OrdemTransbordo() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { user } = useInternalAuth();
 
   const [loading, setLoading] = useState(true);
@@ -601,6 +603,15 @@ export default function OrdemTransbordo() {
     }
   };
 
+  const handlePrintRelatorio = useCallback(
+    (validacao) => {
+      navigate(
+        `/painel/operacional/ordem-transbordo/relatorio/${validacao.destino}/${validacao.id}`
+      );
+    },
+    [navigate]
+  );
+
   const clientEnabled = Boolean(
     destino === "convencional" || (isIndustrializacao && origemTipo)
   );
@@ -930,6 +941,7 @@ export default function OrdemTransbordo() {
         <PendentesCard
           validacoes={validacoesPendentes}
           t={t}
+          onPrint={handlePrintRelatorio}
         />
       </div>
 
@@ -961,8 +973,12 @@ export default function OrdemTransbordo() {
   );
 }
 
-function PendentesCard({ validacoes, t }) {
+function PendentesCard({ validacoes, t, onPrint }) {
   if (!validacoes || validacoes.length === 0) return null;
+
+  const printLabel = t("painel.operacional.ordemTransbordo.pendentes.print", {
+    defaultValue: "Imprimir relatório",
+  });
 
   const formatDateBR = (iso) => {
     if (!iso) return "-";
@@ -1117,6 +1133,9 @@ function PendentesCard({ validacoes, t }) {
                 <th className="px-4 py-2 font-medium">
                   {t("transbordo.validacao.table.unidade", { defaultValue: "Un." })}
                 </th>
+                <th className="px-4 py-2 font-medium text-right">
+                  {t("common.actions", { defaultValue: "Ações" })}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1178,6 +1197,21 @@ function PendentesCard({ validacoes, t }) {
                   </td>
                   <td className="px-4 py-2 uppercase text-foreground/60 text-xs">
                     {qtd.unidade}
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      <Can permission={`${PERM}.view`}>
+                        <button
+                          type="button"
+                          onClick={() => onPrint?.(v)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title={printLabel}
+                          aria-label={printLabel}
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                      </Can>
+                    </div>
                   </td>
                 </tr>
                 );

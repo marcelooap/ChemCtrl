@@ -1,0 +1,428 @@
+/**
+ * Folha A4 para relatórios impressos.
+ *
+ * A linguagem visual (azul #1C355B / #2563C3, rótulos cinza em caixa alta,
+ * barra de destaque nas seções, tabelas zebradas com cabeçalho azul) espelha
+ * os PDFs gerados via jsPDF em `pdfReports.js` / `pdfFiscal.js`, para que os
+ * documentos HTML e os PDFs pertençam à mesma família.
+ *
+ * Medidas em mm: o mesmo markup serve para tela e para impressão.
+ */
+
+.a4-viewer {
+  min-height: 100vh;
+  background: #eef1f5;
+  padding: 24px 16px 48px;
+  overflow: auto;
+}
+
+.a4-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 210mm;
+  margin: 0 auto 20px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e6ec;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+.a4-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 14mm;
+  background: #ffffff;
+  color: #1e1e1e;
+  font-family: Inter, Helvetica, Arial, sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.35;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.14);
+  box-sizing: border-box;
+}
+
+/* ---------- Cabeçalho ---------- */
+
+.a4-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12mm;
+}
+
+.a4-header__title {
+  margin: 0;
+  font-size: 19pt;
+  font-weight: 700;
+  color: #1c355b;
+  letter-spacing: -0.01em;
+}
+
+.a4-header__subtitle {
+  margin: 2mm 0 0;
+  font-size: 8.5pt;
+  color: #828c9b;
+}
+
+.a4-header__org {
+  margin: 0 0 1.5mm;
+  font-size: 8pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #828c9b;
+}
+
+.a4-header__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2.5mm;
+  text-align: right;
+}
+
+.a4-header__logo {
+  height: 14mm;
+  width: auto;
+  object-fit: contain;
+}
+
+.a4-header__rule {
+  height: 0.6mm;
+  margin: 3mm 0 6mm;
+  background: #2563c3;
+}
+
+/* ---------- Selos ---------- */
+
+.a4-badge {
+  display: inline-block;
+  padding: 0.6mm 2.4mm;
+  border-radius: 999px;
+  border: 0.25mm solid;
+  font-size: 7.5pt;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.a4-badge--success {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.a4-badge--danger {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.a4-badge--neutral {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* ---------- Seções ---------- */
+
+.a4-section {
+  margin-top: 6mm;
+}
+
+.a4-section__title {
+  display: flex;
+  align-items: center;
+  gap: 2.5mm;
+  margin: 0 0 3mm;
+  font-size: 10.5pt;
+  font-weight: 700;
+  color: #1c355b;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.a4-section__title::before {
+  content: '';
+  display: block;
+  width: 2.5mm;
+  height: 6mm;
+  border-radius: 0.5mm;
+  background: #2563c3;
+  flex: none;
+}
+
+/* ---------- Grade de informações ---------- */
+
+.a4-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 0.25mm solid #dce0e6;
+  border-radius: 1mm;
+  overflow: hidden;
+}
+
+.a4-grid__cell {
+  padding: 2.5mm 3mm;
+  border-top: 0.25mm solid #dce0e6;
+  border-left: 0.25mm solid #dce0e6;
+  min-width: 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.a4-grid__cell--first-col { border-left: 0; }
+.a4-grid__cell--first-row { border-top: 0; }
+
+.a4-grid__label {
+  font-size: 6.8pt;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #828c9b;
+}
+
+.a4-grid__value {
+  margin-top: 0.8mm;
+  font-size: 9pt;
+  font-weight: 600;
+  color: #1e1e1e;
+  overflow-wrap: anywhere;
+}
+
+/* Muitas colunas na mesma linha: reduz o respiro para os rótulos caberem. */
+.a4-grid--compact .a4-grid__cell {
+  padding: 2mm 2.2mm;
+}
+
+.a4-grid--compact .a4-grid__label {
+  font-size: 6.2pt;
+  letter-spacing: 0.04em;
+}
+
+.a4-grid--compact .a4-grid__value {
+  font-size: 8.5pt;
+}
+
+.a4-grid--centered .a4-grid__cell {
+  text-align: center;
+}
+
+/* ---------- Tabelas ---------- */
+
+.a4-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8pt;
+}
+
+.a4-table thead {
+  display: table-header-group;
+}
+
+.a4-table th {
+  padding: 2.2mm 2.5mm;
+  background: #1c355b;
+  color: #ffffff;
+  font-size: 7.2pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.a4-table td {
+  padding: 2mm 2.5mm;
+  border-bottom: 0.2mm solid #dce0e6;
+  color: #1e1e1e;
+  overflow-wrap: break-word;
+}
+
+/* Colunas curtas nunca devem quebrar no meio da palavra. */
+.a4-table .a4-nowrap {
+  white-space: nowrap;
+}
+
+.a4-table tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.a4-table tbody tr:nth-child(even) td {
+  background: #f8f9fb;
+}
+
+.a4-table .a4-align-right { text-align: right; font-variant-numeric: tabular-nums; }
+.a4-table .a4-align-center { text-align: center; }
+
+/**
+ * Isolamento do tema global.
+ * `index.css` aplica `background-color: ... !important` a `table thead th`,
+ * a `tbody tr:hover` e às variantes de dark mode. O documento impresso é
+ * sempre claro e precisa manter as cores do padrão de relatórios.
+ */
+.a4-sheet .a4-table thead tr,
+.a4-sheet .a4-table thead th {
+  background-color: #1c355b !important;
+  color: #ffffff !important;
+}
+
+.a4-sheet .a4-table tbody tr,
+.a4-sheet .a4-table tbody tr:hover {
+  background-color: transparent !important;
+}
+
+.a4-sheet .a4-table tbody td {
+  background-color: #ffffff !important;
+  color: #1e1e1e !important;
+}
+
+.a4-sheet .a4-table tbody tr:nth-child(even) td {
+  background-color: #f8f9fb !important;
+}
+
+/* ---------- Texto livre ---------- */
+
+.a4-note {
+  padding: 3mm;
+  border: 0.25mm solid #dce0e6;
+  border-radius: 1mm;
+  background: #f8f9fb;
+  font-size: 8.5pt;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Assinaturas ---------- */
+
+.a4-signatures {
+  display: grid;
+  gap: 8mm;
+  margin-top: 12mm;
+  justify-content: center;
+  text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* Espaço acima do nome para acomodar a rubrica manuscrita. */
+.a4-signature__name {
+  min-height: 10mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 1mm;
+  font-size: 9pt;
+  color: #1e1e1e;
+}
+
+.a4-signature__line {
+  border-top: 0.3mm solid #6b7280;
+  padding-top: 1.5mm;
+}
+
+.a4-signature__role {
+  font-size: 8pt;
+  font-weight: 600;
+  color: #1e1e1e;
+}
+
+.a4-signature__hint {
+  margin-top: 0.5mm;
+  font-size: 7pt;
+  color: #828c9b;
+}
+
+/* ---------- Rodapé ---------- */
+
+.a4-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6mm;
+  margin-top: 10mm;
+  padding-top: 2mm;
+  border-top: 0.3mm solid #dce0e6;
+  font-size: 7pt;
+  color: #828c9b;
+}
+
+/* ---------- Impressão ---------- */
+
+/**
+ * Margem em duas camadas, de propósito.
+ *
+ * O `@page` garante um recuo mínimo maior que a área não imprimível física da
+ * impressora (~4-6mm), e o padding da folha completa o restante. Se o
+ * navegador ignorar uma das duas — o que varia entre motores e entre as opções
+ * do diálogo de impressão —, a outra continua protegendo o conteúdo. Era essa
+ * dependência de uma única camada que recortava o título, o logo e o rodapé.
+ */
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+@media print {
+  html,
+  body {
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .a4-no-print {
+    display: none !important;
+  }
+
+  .a4-viewer {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    overflow: visible;
+  }
+
+  .a4-sheet {
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 6mm;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  /* Compacta o fim do documento para não empurrar o rodapé a uma segunda
+     folha quando o conteúdo ocupa quase toda a página. */
+  .a4-signatures {
+    margin-top: 10mm;
+  }
+
+  .a4-footer {
+    margin-top: 8mm;
+  }
+}
+
+@media screen and (max-width: 240mm) {
+  .a4-viewer {
+    padding: 16px 12px 32px;
+  }
+
+  .a4-toolbar {
+    max-width: 210mm;
+    width: 210mm;
+  }
+}

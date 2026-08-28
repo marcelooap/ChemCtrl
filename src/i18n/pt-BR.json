@@ -1566,7 +1566,43 @@
           "saveTransbordo": "Não foi possível registrar o transbordo. Verifique os destinos e tente novamente."
         },
         "pendentes": {
-          "title": "Pendentes de validação"
+          "title": "Pendentes de validação",
+          "print": "Imprimir relatório"
+        },
+        "relatorio": {
+          "organization": "Offshore Tanks Comércio e Serviços em Unidades de Carga Ltda",
+          "title": "ORDEM DE TRANSBORDO",
+          "subtitle": "Emitido em {{data}}",
+          "footerDoc": "Documento {{numero}} • Lançado em {{data}}",
+          "print": "Imprimir",
+          "back": "Voltar para Ordens de Transbordo",
+          "viewerHint": "Visualização somente leitura — formato A4",
+          "notFound": "Ordem de transbordo não encontrada.",
+          "loadError": "Não foi possível carregar a ordem de transbordo.",
+          "margem": {
+            "dentro": "Dentro",
+            "fora": "Fora"
+          },
+          "sections": {
+            "geral": "1. Informações gerais",
+            "granel": "2. Recebimento granel",
+            "origens": "3. Dados de origem",
+            "destinos": "4. Dados de destino",
+            "observacoes": "5. Observações"
+          },
+          "columns": {
+            "item": "Item",
+            "tipo": "Tipo",
+            "identificacao": "Identificação",
+            "volume": "Quantidade",
+            "placa": "Placa",
+            "barril": "Barril",
+            "quantidadeEmbalagens": "Qtd. emb.",
+            "pesoLiquido": "Peso líquido"
+          },
+          "signatures": {
+            "emitente": "Emitente"
+          }
         }
       },
       "estoque": {

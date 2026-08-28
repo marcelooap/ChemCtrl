@@ -11,6 +11,7 @@ import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
 import LogisticaRecebimento from '@painel/pages/logistica/Recebimento';
 import OrdemTransbordo from '@painel/pages/operacional/OrdemTransbordo';
+import OrdemTransbordoRelatorio from '@painel/pages/operacional/OrdemTransbordoRelatorio';
 import OperacionalEstoque from '@painel/pages/operacional/Estoque';
 import ReservarMaterial from '@painel/pages/comercial/ReservarMaterial';
 import SolicitacoesSaida from '@painel/pages/comercial/SolicitacoesSaida';
@@ -89,6 +90,16 @@ export default function PainelRoutes() {
               <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
             </Route>
           </Route>
+
+          {/* Visualização de documento: fora do MainLayout para que a impressão
+              contenha apenas a folha A4, sem sidebar nem cabeçalho do sistema. */}
+          <Route element={<ScreenAccessRoute />}>
+            <Route
+              path="operacional/ordem-transbordo/relatorio/:destino/:id"
+              element={<OrdemTransbordoRelatorio />}
+            />
+          </Route>
+
           <Route path="*" element={<Navigate to="/painel/home" replace />} />
         </Routes>
       </RealtimeProvider>

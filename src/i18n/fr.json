@@ -1334,7 +1334,43 @@
           "saveTransbordo": "Impossible d'enregistrer le transbordement. Vérifiez les destinations et réessayez."
         },
         "pendentes": {
-          "title": "En attente de validation"
+          "title": "En attente de validation",
+          "print": "Imprimer le rapport"
+        },
+        "relatorio": {
+          "organization": "Offshore Tanks Comércio e Serviços em Unidades de Carga Ltda",
+          "title": "ORDRE DE TRANSBORDEMENT",
+          "subtitle": "Émis le {{data}}",
+          "footerDoc": "Document {{numero}} • Enregistré le {{data}}",
+          "print": "Imprimer",
+          "back": "Retour aux Ordres de Transbordement",
+          "viewerHint": "Aperçu en lecture seule — format A4",
+          "notFound": "Ordre de transbordement introuvable.",
+          "loadError": "Impossible de charger l'ordre de transbordement.",
+          "margem": {
+            "dentro": "Dans",
+            "fora": "Hors"
+          },
+          "sections": {
+            "geral": "1. Informations générales",
+            "granel": "2. Réception en vrac",
+            "origens": "3. Données d'origine",
+            "destinos": "4. Données de destination",
+            "observacoes": "5. Observations"
+          },
+          "columns": {
+            "item": "Article",
+            "tipo": "Type",
+            "identificacao": "Identification",
+            "volume": "Quantité",
+            "placa": "Plaque",
+            "barril": "Fût",
+            "quantidadeEmbalagens": "Qté cond.",
+            "pesoLiquido": "Poids net"
+          },
+          "signatures": {
+            "emitente": "Émetteur"
+          }
         }
       },
       "estoque": {
