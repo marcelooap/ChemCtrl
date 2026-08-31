@@ -1,6 +1,32 @@
 import { Component } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { safeSessionStorage } from '@/lib/safeStorage';
+
+const SELF_HEAL_KEY = 'chemctrl_module_reload';
+
+/** Mensagens de falha de import dinâmico variam por navegador (Chrome/Safari/Firefox/WebView). */
+const DYNAMIC_IMPORT_FAILURE =
+  /Failed to fetch dynamically imported module|error loading dynamically imported module|Loading chunk|Loading CSS chunk|Importing a module script failed|expected a JavaScript(-or-Wasm)? module/i;
+
+/**
+ * Um deploy novo invalida os nomes com hash dos chunks. Em dispositivos com o
+ * PWA instalado, o Service Worker pode servir um index.html antigo que aponta
+ * para chunks inexistentes. Limpamos os caches e recarregamos uma única vez.
+ */
+async function selfHealStaleCache() {
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(regs.map((reg) => reg.unregister().catch(() => {})));
+  } catch {
+    /* segue para o reload mesmo assim */
+  }
+  window.location.reload();
+}
 
 /**
  * Captura falhas de carregamento do módulo (lazy import / runtime)
@@ -16,6 +42,17 @@ export default class ModuleErrorBoundary extends Component {
     return { error };
   }
 
+  componentDidCatch(error, info) {
+    // Sem log, falhas exclusivas de mobile/tablet ficam impossíveis de diagnosticar.
+    console.error('[ModuleErrorBoundary]', this.props.title || 'módulo', error, info?.componentStack);
+
+    if (!DYNAMIC_IMPORT_FAILURE.test(String(error?.message || ''))) return;
+    if (safeSessionStorage.getItem(SELF_HEAL_KEY) === '1') return;
+
+    safeSessionStorage.setItem(SELF_HEAL_KEY, '1');
+    selfHealStaleCache();
+  }
+
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
@@ -24,15 +61,13 @@ export default class ModuleErrorBoundary extends Component {
       error?.message ||
       'Ocorreu um erro inesperado ao carregar o módulo.';
 
-    const isDynamicImportFailure =
-      /Failed to fetch dynamically imported module|Loading chunk|Importing a module script failed/i.test(
-        message
-      );
+    const isDynamicImportFailure = DYNAMIC_IMPORT_FAILURE.test(message);
 
     const handleRetry = () => {
       // Lazy imports rejeitados ficam em cache no React; reload limpa o estado.
       if (isDynamicImportFailure) {
-        window.location.reload();
+        safeSessionStorage.removeItem(SELF_HEAL_KEY);
+        selfHealStaleCache();
         return;
       }
       this.setState({ error: null });

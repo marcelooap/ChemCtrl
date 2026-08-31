@@ -9,6 +9,7 @@ import { SystemManualMenu } from '@industrializacao/components/user/SystemManual
 import { reconcileStuckEnvaseProductions } from '@industrializacao/lib/envaseCompletion';
 import { createSupabaseEntities } from '@industrializacao/api/supabaseClient';
 import { SaidaNovasProvider } from '@transbordo/context/SaidaNovasContext';
+import { safeSessionStorage } from '@/lib/safeStorage';
 
 export default function AppLayout() {
   const { user } = useInternalAuth();
@@ -16,8 +17,8 @@ export default function AppLayout() {
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    if (user && sessionStorage.getItem('chemctrl_welcome') === '1') {
-      sessionStorage.removeItem('chemctrl_welcome');
+    if (user && safeSessionStorage.getItem('chemctrl_welcome') === '1') {
+      safeSessionStorage.removeItem('chemctrl_welcome');
       setShowWelcome(true);
     }
   }, [user]);

@@ -116,7 +116,16 @@ const AuthenticatedApp = () => {
 
         {/* Industrialização — acesso por módulo do perfil */}
         <Route element={<ModuleAccessRoute moduleId={MODULE_IDS.INDUSTRIALIZACAO} />}>
-          <Route path="/*" element={<ChemCtrlRoutes />} />
+          <Route
+            path="/*"
+            element={
+              <ModuleErrorBoundary title="Não foi possível abrir a Industrialização">
+                <Suspense fallback={<ModuleLoadingFallback />}>
+                  <ChemCtrlRoutes />
+                </Suspense>
+              </ModuleErrorBoundary>
+            }
+          />
         </Route>
       </Route>
 

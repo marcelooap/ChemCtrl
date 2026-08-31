@@ -5,6 +5,7 @@ import { applyLanguage, isSupportedLocale, DEFAULT_LOCALE } from '@/i18n';
 import i18n from '@/i18n';
 import { isHttpError } from '@industrializacao/lib/HttpError';
 import { clearAllCache } from '@industrializacao/lib/queryCache';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/safeStorage';
 
 const InternalAuthContext = createContext();
 const SESSION_KEY = 'chemctrl_session';
@@ -71,7 +72,7 @@ function mapUser(u) {
 }
 
 function persistUserSession(userData) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(userData));
+  safeLocalStorage.setItem(SESSION_KEY, JSON.stringify(userData));
 }
 
 async function syncUserLanguage(userData) {
@@ -81,7 +82,7 @@ async function syncUserLanguage(userData) {
 
 function clearLocalAuth() {
   clearSessionId();
-  localStorage.removeItem(SESSION_KEY);
+  safeLocalStorage.removeItem(SESSION_KEY);
 }
 
 export const InternalAuthProvider = ({ children }) => {
@@ -91,7 +92,7 @@ export const InternalAuthProvider = ({ children }) => {
   useEffect(() => {
     const init = async () => {
       const sessionId = getSessionId();
-      const rawSession = localStorage.getItem(SESSION_KEY);
+      const rawSession = safeLocalStorage.getItem(SESSION_KEY);
 
       if (!sessionId || !rawSession) {
         setLoading(false);
@@ -199,7 +200,7 @@ export const InternalAuthProvider = ({ children }) => {
       };
       setSessionId(result.session_id);
       persistUserSession(userData);
-      sessionStorage.setItem('chemctrl_welcome', '1');
+      safeSessionStorage.setItem('chemctrl_welcome', '1');
       // Recria o cliente Realtime com o novo x-session-id (headers são fixados no createClient)
       resetRealtimeClient();
 
@@ -234,7 +235,7 @@ export const InternalAuthProvider = ({ children }) => {
 
     if (user) {
       const updated = { ...user, preferred_language: locale };
-      const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+      const stored = JSON.parse(safeLocalStorage.getItem(SESSION_KEY) || '{}');
       const merged = { ...stored, preferred_language: locale };
       persistUserSession(merged);
       setUser(mapUser(updated));
