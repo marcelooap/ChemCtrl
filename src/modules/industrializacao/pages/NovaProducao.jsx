@@ -33,7 +33,7 @@ import {
   containerDisplayVolume,
 } from '@industrializacao/lib/fractionalSupply';
 import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
-import { allocateUniqueOpNumber, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
+import { createProductionWithUniqueOp, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
 import { deductStockBatch } from '@industrializacao/lib/stockRpc';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 
@@ -559,53 +559,58 @@ export default function NovaProducao() {
         }
       }
 
-      const opNumber = await allocateUniqueOpNumber(base44.entities.Production, { pageSize: 1000 });
-      const nextNum = parseOpNumber(opNumber);
-      const lotNumber = `${moment().format('YYMMDD')}-${String(nextNum).padStart(3, '0')}`;
       const allocatedLots = flattenAllocatedLots(mpList);
       const metrics = calcVolumeMetrics(volNum, totalOperationQty, totalNeeded);
 
       const { volume_pending, order_id, client_order, ...productionFields } = form;
-      const data = {
-        ...productionFields,
-        date: new Date(form.date).toISOString(),
-        volume: volNum,
-        density: densityNum,
-        op_number: opNumber,
-        lot: lotNumber,
-        public_token: generatePublicToken(),
-        status: 'Aguardando Início',
-        operator: operatorName,
-        order_id: form.order_id,
-        client_order: form.client_order,
-        unit_price: recipes.find(r => r.id === form.recipe_id)?.price || 0,
-        total_value: (volNum * densityNum) * (recipes.find(r => r.id === form.recipe_id)?.price || 0),
-        raw_materials_used: mpList.flatMap(m =>
-          m.lots.filter(l => l.stock_id).map(l => ({
-            mp_code: m.mp_code, mp_name: m.mp_name, stock_id: l.stock_id,
-            lot: l.lot, qty_fiscal: l.qty_fiscal, qty_operational: l.qty_operational, checked: false
-          }))
-        ),
+      // O lote deriva do número da OP, então o payload é remontado a cada
+      // tentativa de realocação (ver createProductionWithUniqueOp).
+      const buildProductionData = (opNumber) => {
+        const data = {
+          ...productionFields,
+          date: new Date(form.date).toISOString(),
+          volume: volNum,
+          density: densityNum,
+          op_number: opNumber,
+          lot: `${moment().format('YYMMDD')}-${String(parseOpNumber(opNumber)).padStart(3, '0')}`,
+          public_token: generatePublicToken(),
+          status: 'Aguardando Início',
+          operator: operatorName,
+          order_id: form.order_id,
+          client_order: form.client_order,
+          unit_price: recipes.find(r => r.id === form.recipe_id)?.price || 0,
+          total_value: (volNum * densityNum) * (recipes.find(r => r.id === form.recipe_id)?.price || 0),
+          raw_materials_used: mpList.flatMap(m =>
+            m.lots.filter(l => l.stock_id).map(l => ({
+              mp_code: m.mp_code, mp_name: m.mp_name, stock_id: l.stock_id,
+              lot: l.lot, qty_fiscal: l.qty_fiscal, qty_operational: l.qty_operational, checked: false
+            }))
+          ),
+        };
+
+        if (complementPackaging && complementContainerId) {
+          data.complement_packaging = true;
+          data.complement_container_id = complementContainerId;
+          const target = selectedComplementContainer;
+          if (target) {
+            data.packaging_type = containerLabel(target);
+          }
+        }
+
+        if (fractionalSupply) {
+          data.fractional_supply = true;
+          data.volume_apontado = metrics.volume_apontado;
+          data.volume_pendente = metrics.volume_pendente;
+          data.complement_status = metrics.volume_pendente > 0.001 ? 'Pendente' : 'Completa';
+          data.supply_complements = [buildSupplyHistoryEntry('initial', operatorName, allocatedLots)];
+        }
+
+        return data;
       };
 
-      if (complementPackaging && complementContainerId) {
-        data.complement_packaging = true;
-        data.complement_container_id = complementContainerId;
-        const target = selectedComplementContainer;
-        if (target) {
-          data.packaging_type = containerLabel(target);
-        }
-      }
-
-      if (fractionalSupply) {
-        data.fractional_supply = true;
-        data.volume_apontado = metrics.volume_apontado;
-        data.volume_pendente = metrics.volume_pendente;
-        data.complement_status = metrics.volume_pendente > 0.001 ? 'Pendente' : 'Completa';
-        data.supply_complements = [buildSupplyHistoryEntry('initial', operatorName, allocatedLots)];
-      }
-
-      await base44.entities.Production.create(data);
+      await createProductionWithUniqueOp(base44.entities.Production, buildProductionData, {
+        pageSize: 1000,
+      });
 
       if (form.order_id) {
         await base44.entities.Order.update(form.order_id, { status: 'Em produção' });

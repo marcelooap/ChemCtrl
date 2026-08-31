@@ -34,21 +34,51 @@ export function nextOpNumberFromList(productions = []) {
   return formatOpNumber(next);
 }
 
+const OP_NUMBER_CONFLICT =
+  /23505|duplicate key value|uq_ind_lista_producoes_op_number/i;
+
+/** Identifica violação do índice único de op_number vinda do PostgREST. */
+export function isOpNumberConflict(error) {
+  return OP_NUMBER_CONFLICT.test(String(error?.message || ''));
+}
+
+function normalizeRpcOpNumber(value) {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object' && value.allocate_op_number) {
+    return String(value.allocate_op_number).trim();
+  }
+  return '';
+}
+
+async function isOpNumberTaken(ProductionEntity, candidate) {
+  if (!ProductionEntity?.filter) return false;
+  const rows = await ProductionEntity.filter({ op_number: candidate }, '-created_date', 1)
+    .catch(() => []);
+  return (rows || []).length > 0;
+}
+
 /**
  * Aloca OP via RPC atômica (sequence). Fallback: lista + retry com unique index.
+ *
+ * A sequence do banco pode ficar atrás dos dados (import/restore), fazendo a
+ * RPC devolver um número já usado. Por isso o candidato é conferido antes de
+ * ser devolvido, em vez de confiar cegamente na sequence.
+ *
  * @param {{ list: Function, filter?: Function }} ProductionEntity
  */
-export async function allocateUniqueOpNumber(ProductionEntity, { pageSize = 1000, attempts = 5 } = {}) {
-  try {
-    const fromRpc = await callRPC('allocate_op_number', {});
-    if (typeof fromRpc === 'string' && fromRpc.trim()) {
-      return fromRpc.trim();
+export async function allocateUniqueOpNumber(
+  ProductionEntity,
+  { pageSize = 1000, attempts = 5, rpcAttempts = 25 } = {}
+) {
+  for (let i = 0; i < rpcAttempts; i += 1) {
+    let candidate = '';
+    try {
+      candidate = normalizeRpcOpNumber(await callRPC('allocate_op_number', {}));
+    } catch {
+      break; // RPC ainda não aplicada — fallback abaixo
     }
-    if (fromRpc && typeof fromRpc === 'object' && fromRpc.allocate_op_number) {
-      return String(fromRpc.allocate_op_number).trim();
-    }
-  } catch {
-    // RPC ainda não aplicada — fallback abaixo
+    if (!candidate) break;
+    if (!(await isOpNumberTaken(ProductionEntity, candidate))) return candidate;
   }
 
   if (!ProductionEntity?.list) {
@@ -59,13 +89,38 @@ export async function allocateUniqueOpNumber(ProductionEntity, { pageSize = 1000
     const rows = await ProductionEntity.list('-created_date', pageSize);
     const candidate = nextOpNumberFromList(rows || []);
 
-    if (ProductionEntity.filter) {
-      const clash = await ProductionEntity.filter({ op_number: candidate }, '-created_date', 1).catch(() => []);
-      if ((clash || []).length === 0) return candidate;
-      continue;
-    }
-    return candidate;
+    if (!ProductionEntity.filter) return candidate;
+    if (!(await isOpNumberTaken(ProductionEntity, candidate))) return candidate;
   }
 
   throw new Error('Não foi possível alocar um número de OP único. Tente novamente.');
+}
+
+/**
+ * Cria a produção realocando o número da OP caso outro usuário tenha gravado
+ * o mesmo número entre a alocação e o insert (corrida real, não erro de dados).
+ *
+ * @param {{ list: Function, filter?: Function, create: Function }} ProductionEntity
+ * @param {(opNumber: string) => object} buildData monta o payload a partir da OP
+ * @returns {Promise<{ record: object, opNumber: string }>}
+ */
+export async function createProductionWithUniqueOp(
+  ProductionEntity,
+  buildData,
+  { attempts = 3, pageSize = 1000 } = {}
+) {
+  let lastError;
+
+  for (let i = 0; i < attempts; i += 1) {
+    const opNumber = await allocateUniqueOpNumber(ProductionEntity, { pageSize });
+    try {
+      const record = await ProductionEntity.create(buildData(opNumber));
+      return { record, opNumber };
+    } catch (err) {
+      if (!isOpNumberConflict(err)) throw err;
+      lastError = err;
+    }
+  }
+
+  throw lastError;
 }
