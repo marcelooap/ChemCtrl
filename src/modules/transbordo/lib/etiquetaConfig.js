@@ -1,5 +1,6 @@
 import { entities } from '@transbordo/services/entities';
 import { clientsMatch, normalizeClientName } from '@transbordo/lib/saidaOrigem';
+import { safeLocalStorage } from '@/lib/safeStorage';
 
 export const ETIQUETA_CONTEXTOS = [
   { value: 'industrializacao', labelKey: 'painel.configuracao.etiquetas.industrializacao' },
@@ -367,7 +368,7 @@ function clientKey(nome) {
 
 function readLocalStore() {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = safeLocalStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return { configs: [], responsaveis: {} };
     const parsed = JSON.parse(raw);
     return {
@@ -382,7 +383,7 @@ function readLocalStore() {
 }
 
 function writeLocalStore(store) {
-  localStorage.setItem(
+  safeLocalStorage.setItem(
     LOCAL_STORAGE_KEY,
     JSON.stringify({
       configs: store.configs || [],

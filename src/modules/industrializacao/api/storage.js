@@ -2,8 +2,9 @@
 import { openProtectedPdf } from '@industrializacao/lib/protectedDocument';
 import { rateLimitedFetch } from '@industrializacao/lib/rateLimitedFetch';
 import { HttpError, parseRetryAfterHeader } from '@industrializacao/lib/HttpError';
+import { safeLocalStorage } from '@/lib/safeStorage';
 
-const getSessionId = () => localStorage.getItem('chemctrl_session_id') || '';
+const getSessionId = () => safeLocalStorage.getItem('chemctrl_session_id') || '';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';

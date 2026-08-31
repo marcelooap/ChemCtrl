@@ -1,6 +1,6 @@
 /* ChemCtrl Service Worker — versão gerada no build */
 
-const CACHE_VERSION = 'chemctrl-83f94d5';
+const CACHE_VERSION = 'chemctrl-56ef7d9';
 const APP_VERSION = '1.00.24';
 
 // ── Install: cache shell assets ───────────────────────────────────────────────
@@ -58,8 +58,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+          // Nunca guardar HTML de erro: serviria um index.html inválido depois.
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(request))
@@ -94,8 +97,10 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(
       fetch(request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(request, clone));
+        }
         return response;
       }).catch(() => caches.match(request))
     );

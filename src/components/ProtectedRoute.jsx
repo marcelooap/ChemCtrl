@@ -3,13 +3,10 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInternalAuth, WELCOME_SESSION_KEY } from '@/lib/InternalAuthContext';
 import WelcomeModal from '@/components/WelcomeModal';
+import { safeSessionStorage } from '@/lib/safeStorage';
 
 function isWelcomePending() {
-  try {
-    return sessionStorage.getItem(WELCOME_SESSION_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return safeSessionStorage.getItem(WELCOME_SESSION_KEY) === '1';
 }
 
 const DefaultFallback = () => {
@@ -39,11 +36,7 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
   }, [user]);
 
   const closeWelcome = () => {
-    try {
-      sessionStorage.removeItem(WELCOME_SESSION_KEY);
-    } catch {
-      // ignore quota / private-mode failures
-    }
+    safeSessionStorage.removeItem(WELCOME_SESSION_KEY);
     setShowWelcome(false);
   };
 

@@ -13,7 +13,6 @@ import { ValidacaoNovasProvider } from '@transbordo/context/ValidacaoNovasContex
 export default function AppLayout() {
   const { user } = useInternalAuth();
   const location = useLocation();
-
   useEffect(() => {
     if (!user) return;
     reconcileStuckEnvaseProductions(createSupabaseEntities());

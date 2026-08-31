@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { safeLocalStorage } from '@/lib/safeStorage';
 
 export const STORAGE_KEY = 'chemctrl-locale';
 export const DEFAULT_LOCALE = 'pt-BR';
@@ -45,12 +46,12 @@ export async function applyLanguage(locale: SupportedLocale): Promise<void> {
   await loadLocale(locale);
   await i18n.changeLanguage(locale);
   document.documentElement.lang = locale;
-  localStorage.setItem(STORAGE_KEY, locale);
+  safeLocalStorage.setItem(STORAGE_KEY, locale);
 }
 
 export function resolveInitialLocale(storedPreference?: string | null): SupportedLocale {
   if (isSupportedLocale(storedPreference)) return storedPreference;
-  const fromStorage = localStorage.getItem(STORAGE_KEY);
+  const fromStorage = safeLocalStorage.getItem(STORAGE_KEY);
   if (isSupportedLocale(fromStorage)) return fromStorage;
   return DEFAULT_LOCALE;
 }
