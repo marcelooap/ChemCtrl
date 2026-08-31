@@ -51,19 +51,21 @@ export default function OrdensProducao() {
 
   const canAnalyze = user && (user.nivel === 'administrador' || user.nivel === 'supervisor');
 
+  const activeProds = useMemo(
+    () => (productions || []).filter((p) => !['Finalizado', 'Cancelado'].includes(p.status)),
+    [productions]
+  );
+
   const filtered = useMemo(() => {
     const opNumeric = (op) => {
       const m = String(op || '').match(/(\d+)/);
       return m ? parseInt(m[1], 10) : 0;
     };
-    const activeProds = (productions || []).filter(
-      (p) => !['Finalizado', 'Cancelado'].includes(p.status)
-    );
     const sortedProds = [...activeProds].sort(
       (a, b) => opNumeric(a.op_number) - opNumeric(b.op_number)
     );
     return filter === 'all' ? sortedProds : sortedProds.filter((p) => p.status === filter);
-  }, [productions, filter]);
+  }, [activeProds, filter]);
 
   const useVirtual = filtered.length > 60;
 

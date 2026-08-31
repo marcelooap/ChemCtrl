@@ -41,6 +41,10 @@ import {
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicToken";
+import {
+  collectConvencionalItemsForVasilhame,
+  buildVasilhameYardRestorePatch,
+} from "@transbordo/lib/vasilhamePatio";
 
 function labelUnidadeEntrada(unidade) {
   const u = normalizeUnidadeEntrada(unidade);

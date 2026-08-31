@@ -31,6 +31,7 @@ import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
 import { allocateMpEntryIdsFromList, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
+import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
 
 const VIEW_TAB_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';

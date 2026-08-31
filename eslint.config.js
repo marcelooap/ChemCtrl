@@ -57,5 +57,31 @@ export default [
       "react-hooks/rules-of-hooks": "error",
     },
   },
+  // Rede de segurança em todo o src: pega ReferenceError (variável fora de
+  // escopo, import faltando) antes do runtime. Mantido enxuto de propósito
+  // para não exigir uma limpeza ampla de estilo nos módulos existentes.
+  {
+    files: ["src/**/*.{js,mjs,cjs,jsx}"],
+    ignores: ["src/**/*.d.ts"],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    settings: { react: { version: "detect" } },
+    plugins: {
+      react: pluginReact,
+      "react-hooks": pluginReactHooks,
+    },
+    rules: {
+      "no-undef": "error",
+      "react/jsx-uses-vars": "error",
+      "react/jsx-uses-react": "error",
+      "react-hooks/rules-of-hooks": "error",
+    },
+  },
 ];
 
