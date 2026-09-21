@@ -280,10 +280,10 @@ function MpEntryFormFields({
                   <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.volume')}</label>
                   <Input
                     type="number"
-                    step="0.001"
+                    step="1"
                     value={entry.volume || ''}
                     onChange={(e) => {
-                      const vol = parseFloat(e.target.value) || 0;
+                      const vol = Math.round(parseFloat(e.target.value) || 0);
                       const mass = Math.round((parseFloat(form.density) || 0) * vol);
                       updateTankEntry(idx, { volume: e.target.value === '' ? '' : vol, mass });
                     }}

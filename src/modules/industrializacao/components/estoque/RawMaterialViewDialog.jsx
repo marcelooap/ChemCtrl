@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
@@ -59,6 +59,18 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
   }, [item?.id, open]);
 
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 3 }, i18n.language);
+  const fmtVol = (n) => fmtNumber(Math.round(parseFloat(n) || 0), { maximumFractionDigits: 0 }, i18n.language);
+
+  const tankEntries = useMemo(() => {
+    if (!item) return [];
+    let entries = item.tank_entries;
+    if (typeof entries === 'string') { try { entries = JSON.parse(entries); } catch { entries = []; } }
+    if (!Array.isArray(entries)) entries = [];
+    if (entries.length === 0 && item.tank_name) {
+      entries = [{ tank_name: item.tank_name, volume: item.tank_volume, mass: item.tank_mass }];
+    }
+    return entries.filter((e) => (e?.tank_name || '').trim());
+  }, [item]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,6 +111,35 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
               <p className="text-xs text-muted-foreground">{t('rawMaterialStock.form.observations')}</p>
               <p className="font-medium text-sm whitespace-pre-wrap">{item.observations?.trim() || '—'}</p>
             </div>
+
+            {tankEntries.length > 0 && (
+              <div className="mb-5">
+                <h4 className="text-sm font-bold mb-2 text-foreground">{t('rawMaterialStock.viewDialog.tanksSection')}</h4>
+                <table className="w-full text-sm border rounded-lg overflow-hidden">
+                  <thead><tr className="text-xs font-semibold text-muted-foreground bg-muted/50">
+                    <th className="px-3 py-2 text-left">{t('rawMaterialStock.viewDialog.tank')}</th>
+                    <th className="px-3 py-2 text-right">{t('rawMaterialStock.viewDialog.tankVolume')}</th>
+                    <th className="px-3 py-2 text-right">{t('rawMaterialStock.viewDialog.tankMass')}</th>
+                  </tr></thead>
+                  <tbody>
+                    {tankEntries.map((te, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-2 font-medium" style={{ color: '#2563eb' }}>{te.tank_name}</td>
+                        <td className="px-3 py-2 text-right">{fmtVol(te.volume)} L</td>
+                        <td className="px-3 py-2 text-right">{fmt(parseFloat(te.mass) || 0)} kg</td>
+                      </tr>
+                    ))}
+                    {tankEntries.length > 1 && (
+                      <tr className="border-t-2 bg-muted/50 font-bold">
+                        <td className="px-3 py-2" style={{ color: '#2563eb' }}>{t('rawMaterialStock.viewDialog.tanksTotal')}</td>
+                        <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmtVol(tankEntries.reduce((s, te) => s + (parseFloat(te.volume) || 0), 0))} L</td>
+                        <td className="px-3 py-2 text-right" style={{ color: '#2563eb' }}>{fmt(tankEntries.reduce((s, te) => s + (parseFloat(te.mass) || 0), 0))} kg</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <h4 className="text-sm font-bold mb-2 text-foreground">{t('rawMaterialStock.viewDialog.opsSection')}</h4>
             {loadingConsumption ? (

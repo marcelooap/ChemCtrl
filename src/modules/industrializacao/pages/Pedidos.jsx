@@ -193,16 +193,22 @@ export default function Pedidos() {
   }), [orders, search, statusFilters, clientFilter]);
 
   // Agrupa por status exibido, na ordem fixa dos blocos; dentro de cada bloco
-  // preserva a ordenação vinda da API (-created_date, mais recente no topo).
+  // ordena pela data do pedido (mais recente no topo). Empates preservam a
+  // ordem vinda da API (-created_date) — sort estável.
   const groupedOrders = useMemo(() => {
+    // Mesma normalização de calendário usada na exibição da coluna Data
+    // (YYYY-MM-DD) — comparação lexicográfica; datas inválidas vão ao fim.
+    const orderDateKey = (o) => toDateInputValue(o.date);
     const buckets = new Map(STATUS_GROUP_SEQUENCE.map((s) => [s, []]));
     for (const o of filtered) {
       const status = getOrderDisplayStatus(o);
       if (!buckets.has(status)) buckets.set(status, []);
       buckets.get(status).push(o);
     }
-    return Array.from(buckets, ([status, items]) => ({ status, orders: items }))
-      .filter((g) => g.orders.length > 0);
+    return Array.from(buckets, ([status, items]) => ({
+      status,
+      orders: items.sort((a, b) => orderDateKey(b).localeCompare(orderDateKey(a))),
+    })).filter((g) => g.orders.length > 0);
   }, [filtered]);
 
   const statusFilterLabel = useMemo(() => {
