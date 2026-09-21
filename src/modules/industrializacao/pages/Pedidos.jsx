@@ -383,7 +383,7 @@ export default function Pedidos() {
       Finalizado: 'bg-green-100 text-green-700',
       Atrasado: 'bg-red-100 text-red-700',
     };
-    return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{translateOrderStatus(status)}</span>;
+    return <span className={`inline-block whitespace-nowrap text-xs font-semibold px-2.5 py-0.5 rounded-full ${c[status] || 'bg-muted text-foreground'}`}>{translateOrderStatus(status)}</span>;
   };
 
   return (
