@@ -60,6 +60,17 @@ const ORDER_STATUS_OPTIONS = [
   { value: 'Finalizado', labelKey: 'orders.status.finished' },
 ];
 
+/** Ordem fixa dos blocos de status na listagem. */
+const STATUS_GROUP_SEQUENCE = ['Atrasado', 'Pendente', 'Em produção', 'Finalizado'];
+
+/** Cor do indicador do bloco — mesma paleta dos badges de status. */
+const STATUS_GROUP_DOT = {
+  Atrasado: 'bg-red-500',
+  Pendente: 'bg-amber-500',
+  'Em produção': 'bg-blue-500',
+  Finalizado: 'bg-green-500',
+};
+
 /** Volume do rodapé: "Em produção" usa volume em OP aberta; demais usam pendente. */
 const getFooterVolumeForOrder = (order, statusFilters) => {
   const displayStatus = getOrderDisplayStatus(order);
@@ -180,6 +191,19 @@ export default function Pedidos() {
     const matchClient = !clientFilter || matchesClient(o, clientFilter);
     return matchSearch && matchStatus && matchClient;
   }), [orders, search, statusFilters, clientFilter]);
+
+  // Agrupa por status exibido, na ordem fixa dos blocos; dentro de cada bloco
+  // preserva a ordenação vinda da API (-created_date, mais recente no topo).
+  const groupedOrders = useMemo(() => {
+    const buckets = new Map(STATUS_GROUP_SEQUENCE.map((s) => [s, []]));
+    for (const o of filtered) {
+      const status = getOrderDisplayStatus(o);
+      if (!buckets.has(status)) buckets.set(status, []);
+      buckets.get(status).push(o);
+    }
+    return Array.from(buckets, ([status, items]) => ({ status, orders: items }))
+      .filter((g) => g.orders.length > 0);
+  }, [filtered]);
 
   const statusFilterLabel = useMemo(() => {
     if (statusFilters.length === 0) return t('orders.allStatuses');
@@ -451,69 +475,84 @@ export default function Pedidos() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(o => {
-                  const pastDue = isPastExpectedDate(o)
-                    && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
-                    && o.status !== 'Finalizado';
-                  const displayStatus = getDisplayStatus(o);
-                  const daysUntil = o.status === 'Finalizado' ? null : getDaysUntilExpected(o);
-                  const daysColor = daysUntil == null
-                    ? 'text-muted-foreground'
-                    : daysUntil > 0
-                      ? 'text-green-600'
-                      : daysUntil === 0
-                        ? 'text-blue-600'
-                        : 'text-red-600';
-                  return (
-                    <tr key={o.id} className="border-b border-border hover:bg-accent/30">
-                      <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
-                      <td className="px-4 py-2.5 text-sm">{o.date ? fmtDate(o.date) : t('common.notAvailable')}</td>
-                      <td className="px-4 py-2.5 text-sm">{o.requester}</td>
-                      <td className="px-4 py-2.5 font-medium text-sm">{o.product}</td>
-                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{o.client}</td>
-                      <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
-                      <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
-                      <td className="px-4 py-2.5 text-center font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
-                      <td className="px-4 py-2.5 text-center text-sm">
-                        <div className="inline-flex items-center justify-center gap-2">
-                          {toNum(o.volume_in_production) > VOLUME_EPS && (
-                            <span
-                              className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
-                              title={t('orders.table.volumeInProduction')}
-                            >
-                              <ArrowDown className="w-3 h-3 shrink-0" aria-hidden />
-                              {fmtNumber(o.volume_in_production)} L
-                            </span>
-                          )}
-                          <span className="font-bold text-amber-600">{fmtNumber(o.volume_pending)} L</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-sm">
-                        <span className={pastDue ? 'text-red-600 font-medium' : ''}>
-                          {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                          {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
-                        </span>
-                      </td>
-                      <td className={`px-4 py-2.5 text-center text-sm font-semibold ${daysColor}`}>
-                        {o.status === 'Finalizado' || daysUntil == null ? '-' : daysUntil}
-                      </td>
-                      <td className="px-4 py-2.5 text-center"><StatusBadge status={displayStatus} /></td>
-                      <td className="px-4 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
-                            <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                          </button>
-                          {canEdit && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
-                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                          </button>}
-                          {canDelete && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                          </button>}
+                {groupedOrders.map((group) => (
+                  <React.Fragment key={group.status}>
+                    <tr className="border-b border-border bg-muted/50">
+                      <td colSpan={13} className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_GROUP_DOT[group.status] || 'bg-muted-foreground'}`} aria-hidden="true" />
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {translateOrderStatus(group.status)}
+                          </span>
+                          <span className="text-xs text-muted-foreground/70">({group.orders.length})</span>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
+                    {group.orders.map(o => {
+                      const pastDue = isPastExpectedDate(o)
+                        && !isOrderFullyProduced(o.volume_ordered, o.volume_produced, o.volume_pending)
+                        && o.status !== 'Finalizado';
+                      const displayStatus = getDisplayStatus(o);
+                      const daysUntil = o.status === 'Finalizado' ? null : getDaysUntilExpected(o);
+                      const daysColor = daysUntil == null
+                        ? 'text-muted-foreground'
+                        : daysUntil > 0
+                          ? 'text-green-600'
+                          : daysUntil === 0
+                            ? 'text-blue-600'
+                            : 'text-red-600';
+                      return (
+                        <tr key={o.id} className="border-b border-border hover:bg-accent/30">
+                          <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{o.order_number}</td>
+                          <td className="px-4 py-2.5 text-sm">{o.date ? fmtDate(o.date) : t('common.notAvailable')}</td>
+                          <td className="px-4 py-2.5 text-sm">{o.requester}</td>
+                          <td className="px-4 py-2.5 font-medium text-sm">{o.product}</td>
+                          <td className="px-4 py-2.5 text-sm text-muted-foreground">{o.client}</td>
+                          <td className="px-4 py-2.5 text-sm">{o.client_order || t('common.notAvailable')}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-sm">{fmtNumber(o.volume_ordered)} L</td>
+                          <td className="px-4 py-2.5 text-center font-bold text-sm text-green-600">{fmtNumber(o.volume_produced)} L</td>
+                          <td className="px-4 py-2.5 text-center text-sm">
+                            <div className="inline-flex items-center justify-center gap-2">
+                              {toNum(o.volume_in_production) > VOLUME_EPS && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 font-semibold text-blue-700"
+                                  title={t('orders.table.volumeInProduction')}
+                                >
+                                  <ArrowDown className="w-3 h-3 shrink-0" aria-hidden />
+                                  {fmtNumber(o.volume_in_production)} L
+                                </span>
+                              )}
+                              <span className="font-bold text-amber-600">{fmtNumber(o.volume_pending)} L</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm">
+                            <span className={pastDue ? 'text-red-600 font-medium' : ''}>
+                              {pastDue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                              {o.expected_date ? fmtDate(o.expected_date) : t('common.notAvailable')}
+                            </span>
+                          </td>
+                          <td className={`px-4 py-2.5 text-center text-sm font-semibold ${daysColor}`}>
+                            {o.status === 'Finalizado' || daysUntil == null ? '-' : daysUntil}
+                          </td>
+                          <td className="px-4 py-2.5 text-center"><StatusBadge status={displayStatus} /></td>
+                          <td className="px-4 py-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => openDetails(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.view')}>
+                                <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                              </button>
+                              {canEdit && <button onClick={() => openEdit(o)} className="p-1 rounded hover:bg-muted" title={t('buttons.edit')}>
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                              </button>}
+                              {canDelete && <button onClick={() => setDeleteTarget(o)} className="p-1 rounded hover:bg-red-50" title={t('buttons.delete')}>
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              </button>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
           )}
