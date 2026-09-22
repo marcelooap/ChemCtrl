@@ -110,7 +110,7 @@ export default function Estoque() {
           };
         });
 
-      setRows(aggregateEstoqueByLote(estoqueWithSaldo, reservasList || []));
+      setRows(aggregateEstoqueByLote(estoqueWithSaldo, reservasList || [], saics || []));
       setVasilhameRows(
         buildVasilhameReservaRows({
           vasilhames: vascs || [],

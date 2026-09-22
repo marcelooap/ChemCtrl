@@ -176,6 +176,18 @@ export default function ValidacaoViewDialog({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 rounded-lg border border-border p-4 bg-muted/30">
                 <InfoField label={t("transbordo.validacao.fields.notaFiscal")} value={granel.nota_fiscal} />
                 <InfoField
+                  label={t("painel.operacional.ordemTransbordo.fields.supplier")}
+                  value={granel.fornecedor || granel.lotes?.[0]?.fornecedor || "-"}
+                />
+                <InfoField
+                  label={t("painel.operacional.ordemTransbordo.fields.manufacture")}
+                  value={fmtDate(granel.data_fabricacao || granel.lotes?.[0]?.data_fabricacao)}
+                />
+                <InfoField
+                  label={t("painel.operacional.ordemTransbordo.fields.expiry")}
+                  value={fmtDate(granel.data_validade || granel.lotes?.[0]?.data_validade)}
+                />
+                <InfoField
                   label={t("transbordo.validacao.fields.quantidadeGranel")}
                   value={
                     granel.lotes?.[0]?.quantidade

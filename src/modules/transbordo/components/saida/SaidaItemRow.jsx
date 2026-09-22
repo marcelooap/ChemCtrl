@@ -27,20 +27,39 @@ import {
   clientsMatch,
   filterContainersIndForSaida,
 } from "@transbordo/lib/saidaOrigem";
+import { buildReservaChave } from "@painel/lib/materialReservas";
+import {
+  SEM_RESERVA_ID,
+  formatQtyReserva,
+  opcoesReservaEmbalado,
+  reservadoAtivoChave,
+  saldoDisponivelReserva,
+  saldoExcepcionalDisponivel,
+  sumBloqueioPendenteChave,
+  sumExcepcionalNoForm,
+  isSaidaPendenteBaixa,
+} from "@painel/lib/saidaReservas";
+import {
+  buildVasilhameReservaChave,
+  isVasilhameReservado,
+} from "@painel/lib/vasilhameReservas";
 import {
   getContainerPackageQty,
   isUnitPackagingType,
   getUnitPackagingCapacity,
 } from "@industrializacao/lib/packagingTypes";
 
-const ORIGEM_OPTIONS = [
-  { value: ORIGEM_TRANSBORDO, label: "Transbordo" },
-  { value: ORIGEM_INDUSTRIALIZACAO, label: "Industrialização" },
+const TIPO_UI_VASILHAME = "vasilhame";
+
+const TIPO_SAIDA_OPTIONS = [
+  { value: TIPO_EMBALADO, label: "Embalado" },
+  { value: TIPO_UI_VASILHAME, label: "Vasilhame" },
+  { value: TIPO_IND_RETORNO_MP, label: "Retorno de MP" },
 ];
 
 const TIPO_TRANSBORDO_OPTIONS = [
   { value: TIPO_EMBALADO, label: "Embalado" },
-  { value: TIPO_CONVENCIONAL, label: "Convencional" },
+  { value: TIPO_CONVENCIONAL, label: "Vasilhame" },
 ];
 
 const TIPO_IND_OPTIONS = [
@@ -48,15 +67,23 @@ const TIPO_IND_OPTIONS = [
   { value: TIPO_IND_RETORNO_MP, label: DESTINO_RETORNO_MP },
 ];
 
-/** Rótulo e texto de busca: n placa - n barril - produto (ou n placa - produto). */
+/** Rótulo: n placa - n barril. Reserva aparece como badge, não no texto. */
 function vasilhameLabel(v) {
   if (!v) return "—";
   const placa = String(v.placa || "").trim();
   const barril = String(v.barril || "").trim();
-  const produto = String(v.produto_nome || "").trim() || "—";
   const tanque = placa || v.tipo || "—";
-  if (barril) return `${tanque} - ${barril} - ${produto}`;
-  return `${tanque} - ${produto}`;
+  const hasBarril = Boolean(barril) && barril !== "—" && barril !== "-";
+  if (hasBarril) return `${tanque} - ${barril}`;
+  return tanque;
+}
+
+function ReservadoBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium leading-4 text-emerald-800">
+      Reservado
+    </span>
+  );
 }
 
 function isUnidadeVolumeMedida(unidade) {
@@ -82,7 +109,9 @@ function TipoButtons({ options, value, onChange }) {
           onClick={() => onChange(opt.value)}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             value === opt.value
-              ? "bg-primary text-white"
+              ? opt.value === TIPO_IND_RETORNO_MP
+                ? "bg-orange-500 text-white"
+                : "bg-primary text-white"
               : "bg-card border border-border text-muted-foreground hover:bg-muted/40"
           }`}
         >
@@ -102,6 +131,9 @@ export default function SaidaItemRow({
   containersInd = [],
   stocksInd = [],
   movementsInd = [],
+  reservas = [],
+  saidas = [],
+  saidaId = null,
   clienteId,
   clienteNome = "",
   enableMultiOrigem = false,
@@ -119,14 +151,25 @@ export default function SaidaItemRow({
   const origem = resolveItemOrigem(item) || lockedOrigem || ORIGEM_TRANSBORDO;
   const showOrigemSelector = enableMultiOrigem && !lockedOrigem;
 
-  const handleOrigemChange = (newOrigem) => {
-    onChange(emptySaidaItem(newOrigem));
-  };
-
   const handleTipoChange = (newTipo) => {
     onChange({
       ...emptySaidaItem(origem),
       tipo: newTipo,
+    });
+  };
+
+  const handleTipoUnificadoChange = (newTipo) => {
+    if (newTipo === TIPO_EMBALADO) {
+      onChange({ ...emptySaidaItem(ORIGEM_TRANSBORDO), tipo: TIPO_EMBALADO });
+      return;
+    }
+    if (newTipo === TIPO_UI_VASILHAME) {
+      onChange({ ...emptySaidaItem(ORIGEM_TRANSBORDO), tipo: TIPO_CONVENCIONAL });
+      return;
+    }
+    onChange({
+      ...emptySaidaItem(ORIGEM_INDUSTRIALIZACAO),
+      tipo: TIPO_IND_RETORNO_MP,
     });
   };
 
@@ -176,14 +219,60 @@ export default function SaidaItemRow({
       .map((it) => it.vasilhame_id)
   );
 
+  const vasilhamesEmOutraSaida = new Set();
+  for (const saida of saidas || []) {
+    if (saidaId && String(saida.id) === String(saidaId)) continue;
+    if (!isSaidaPendenteBaixa(saida)) continue;
+    for (const it of saida.itens || []) {
+      if (it?.tipo === TIPO_CONVENCIONAL && it.vasilhame_id) {
+        vasilhamesEmOutraSaida.add(it.vasilhame_id);
+      }
+    }
+  }
+
   const vasilhamesDisponiveis = hasCliente
     ? vasilhames.filter(
         (v) =>
           v.cliente_id === clienteId &&
           (v.status || "No Pátio") === "No Pátio" &&
           (v.volume || 0) > 0 &&
-          (!vasilhamesUsados.has(v.id) || v.id === item.vasilhame_id)
+          (!vasilhamesUsados.has(v.id) || v.id === item.vasilhame_id) &&
+          (!vasilhamesEmOutraSaida.has(v.id) || v.id === item.vasilhame_id)
       )
+    : [];
+
+  const produtosVasilhame = [];
+  const produtosVistos = new Set();
+  vasilhamesDisponiveis.forEach((v) => {
+    const key = v.produto_id || v.produto_nome;
+    if (!key || produtosVistos.has(key)) return;
+    produtosVistos.add(key);
+    produtosVasilhame.push({
+      id: v.produto_id || key,
+      produto_id: v.produto_id || "",
+      nome: v.produto_nome || "—",
+      codigo: v.produto_codigo || "",
+    });
+  });
+
+  const mesmoProdutoVasilhame = (v) => {
+    if (item.produto_id && v.produto_id) return v.produto_id === item.produto_id;
+    return (
+      String(v.produto_nome || "").trim().toUpperCase() ===
+      String(item.produto_nome || "").trim().toUpperCase()
+    );
+  };
+  const produtoVasilhameSelecionado = Boolean(item.produto_id || item.produto_nome);
+  const vasilhamesDoProduto = produtoVasilhameSelecionado
+    ? vasilhamesDisponiveis
+        .filter((v) => v.id === item.vasilhame_id || mesmoProdutoVasilhame(v))
+        .map((v) => ({
+          ...v,
+          reservado: isVasilhameReservado(
+            reservas,
+            buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id)
+          ),
+        }))
     : [];
 
   // ── Industrialização: vasilhames (containers) ──
@@ -205,6 +294,48 @@ export default function SaidaItemRow({
         keepId: item.container_id,
       })
     : [];
+
+  const containersEmOutraSaida = new Set();
+  for (const saida of saidas || []) {
+    if (saidaId && String(saida.id) === String(saidaId)) continue;
+    if (!isSaidaPendenteBaixa(saida)) continue;
+    for (const it of saida.itens || []) {
+      if (it?.tipo === TIPO_IND_VASILHAME && it.container_id) {
+        containersEmOutraSaida.add(it.container_id);
+      }
+    }
+  }
+
+  const vasilhamesUnificados = [
+    ...vasilhamesDisponiveis.map((v) => ({
+      source: ORIGEM_TRANSBORDO,
+      id: `tb:${v.id}`,
+      raw: v,
+      reservado: isVasilhameReservado(
+        reservas,
+        buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id)
+      ),
+      label: `${vasilhameLabel(v)}${v.produto_nome ? ` - ${v.produto_nome}` : ""} · Transbordo`,
+    })),
+    ...containersDisponiveis
+      .filter((c) => !containersEmOutraSaida.has(c.id) || c.id === item.container_id)
+      .map((c) => ({
+        source: ORIGEM_INDUSTRIALIZACAO,
+        id: `ind:${c.id}`,
+        raw: c,
+        reservado: isVasilhameReservado(
+          reservas,
+          buildVasilhameReservaChave(ORIGEM_INDUSTRIALIZACAO, c.id)
+        ),
+        label: `${containerLabel(c)} · Industrialização`,
+      })),
+  ];
+  const vasilhameUnificadoSelecionado =
+    vasilhamesUnificados.find((o) =>
+      o.source === ORIGEM_TRANSBORDO
+        ? item.tipo === TIPO_CONVENCIONAL && o.raw.id === item.vasilhame_id
+        : item.tipo === TIPO_IND_VASILHAME && o.raw.id === item.container_id
+    ) || null;
 
   // ── Industrialização: retorno MP (movimentações fiscais + estoque) ──
   const movementsUsados = new Set(
@@ -228,57 +359,13 @@ export default function SaidaItemRow({
       )
     : [];
 
-  const stocksUsados = new Set(
-    (itens || [])
-      .filter(
-        (it, i) =>
-          i !== index &&
-          it.tipo === TIPO_IND_RETORNO_MP &&
-          it.stock_id &&
-          !it.movement_id
-      )
-      .map((it) => it.stock_id)
-  );
-
-  const retornosEstoque = hasCliente
-    ? stocksInd.filter(
-        (s) =>
-          clientsMatch(s.client, clienteNome) &&
-          (s.current_stock || 0) > 0 &&
-          (getAvailableStockSaldo?.(s.id, index) ?? s.current_stock) > 0 &&
-          (!stocksUsados.has(s.id) || (s.id === item.stock_id && !item.movement_id))
-      )
-    : [];
-
-  /** Opções unificadas: movimentos fiscais existentes + estoque disponível para novo retorno */
-  const retornoMpOptions = [
-    ...retornosMovimento.map((m) => ({
-      ...m,
-      _kind: "movement",
-      _label: `Mov. fiscal — ${retornoMpLabel(m)}`,
-    })),
-    ...retornosEstoque.map((s) => ({
-      ...s,
-      _kind: "stock",
-      quantity: getAvailableStockSaldo?.(s.id, index) ?? s.current_stock,
-      _label: `Estoque MP — ${retornoMpLabel({
-        ...s,
-        quantity: getAvailableStockSaldo?.(s.id, index) ?? s.current_stock,
-      })}`,
-    })),
-  ];
+  const retornoMpOptions = retornosMovimento.map((m) => ({
+    ...m,
+    _kind: "movement",
+    _label: retornoMpLabel(m),
+  }));
 
   // ── Valores dinâmicos ──
-  const displayEstoqueAtual =
-    item.entrada_id && item.tipo === TIPO_EMBALADO
-      ? getAvailableSaldo(item.entrada_id, index)
-      : 0;
-  const displayEstoqueFinal = displayEstoqueAtual - (item.quantidade_solicitada || 0);
-  const estoqueInsuficiente =
-    item.tipo === TIPO_EMBALADO &&
-    item.entrada_id &&
-    (item.quantidade_solicitada || 0) > displayEstoqueAtual;
-
   const selectedEntrada =
     item.entrada_id && item.tipo === TIPO_EMBALADO
       ? entradas.find((e) => e.id === item.entrada_id) || null
@@ -290,6 +377,77 @@ export default function SaidaItemRow({
     "kg";
   const isUnidadeVolume = isUnidadeVolumeMedida(unidadeEmbalado);
   const formatQtdEmbalado = (n) => formatQtdPorUnidade(n, unidadeEmbalado);
+
+  const chaveEmbalado =
+    item.tipo === TIPO_EMBALADO && item.entrada_id
+      ? buildReservaChave({
+          clienteId,
+          clienteNome,
+          produtoCodigo: item.produto_codigo || selectedEntrada?.produto_codigo,
+          lote: item.lote || selectedEntrada?.lote,
+          unidade: unidadeEmbalado,
+        })
+      : "";
+  const opcoesReserva = chaveEmbalado
+    ? opcoesReservaEmbalado({
+        reservas,
+        saidas,
+        itens,
+        index,
+        chave: chaveEmbalado,
+        unidade: unidadeEmbalado,
+        excludeSaidaId: saidaId,
+        reservaIdAtual: item.reserva_id,
+      })
+    : [];
+  const reservaSelecionada = item.reserva_id
+    ? (reservas || []).find((r) => r.id === item.reserva_id && r.status === "ativa")
+    : null;
+  const dispReserva = reservaSelecionada
+    ? saldoDisponivelReserva(reservaSelecionada, saidas, itens, index, saidaId)
+    : 0;
+  const fisicoChave = chaveEmbalado
+    ? embaladoEntradas.reduce((sum, entrada) => {
+        const chave = buildReservaChave({
+          clienteId: entrada.cliente_id,
+          clienteNome: entrada.cliente_nome,
+          produtoCodigo: entrada.produto_codigo,
+          lote: entrada.lote,
+          unidade: entrada.unidade_medida || unidadeEmbalado,
+        });
+        if (chave !== chaveEmbalado) return sum;
+        return sum + (Number(entrada.saldo_atual) || 0);
+      }, 0)
+    : 0;
+  const tetoExcepcional = chaveEmbalado
+    ? saldoExcepcionalDisponivel({
+        saldoFisico: fisicoChave,
+        reservadoAtivo: reservadoAtivoChave(reservas, chaveEmbalado),
+        bloqueioPendente:
+          sumBloqueioPendenteChave(saidas, chaveEmbalado, { excludeSaidaId: saidaId }) +
+          sumExcepcionalNoForm(itens, index, chaveEmbalado),
+      })
+    : 0;
+  const semReservaAtivo = item.tipo === TIPO_EMBALADO && item.entrada_id && !item.reserva_id;
+  const reservaInsuficiente =
+    item.tipo === TIPO_EMBALADO &&
+    item.reserva_id &&
+    (item.quantidade_solicitada || 0) > dispReserva;
+  const saldoAtualLote = Math.round(Number(selectedEntrada?.saldo_atual) || 0);
+  const saldoDisponivelSemReserva = Math.max(0, Math.min(saldoAtualLote, tetoExcepcional));
+  const displayEstoqueFinal =
+    saldoDisponivelSemReserva - (item.reserva_id ? 0 : item.quantidade_solicitada || 0);
+  const estoqueInsuficiente =
+    semReservaAtivo && (item.quantidade_solicitada || 0) > saldoDisponivelSemReserva;
+  const maxQuantidadeSolicitada = item.reserva_id ? dispReserva : saldoDisponivelSemReserva;
+  const reservaSelectValue = !item.entrada_id
+    ? ""
+    : item.reserva_id
+      ? opcoesReserva.find((o) => o.id === item.reserva_id)?.label ||
+        (item.reserva_solicitante
+          ? `${item.reserva_solicitante} - ${formatQtyReserva(dispReserva, unidadeEmbalado)} ${unidadeEmbalado}`
+          : "")
+      : "Sem reserva";
 
   const displayVolumeDisponivel =
     item.vasilhame_id && item.tipo === TIPO_CONVENCIONAL
@@ -340,6 +498,10 @@ export default function SaidaItemRow({
       unidade: "kg",
       quantidade_solicitada: 0,
       quantidade_embalagens: 0,
+      reserva_id: "",
+      sem_reserva: false,
+      reserva_solicitante: "",
+      reserva_chave: "",
     });
   };
 
@@ -354,17 +516,64 @@ export default function SaidaItemRow({
       unidade,
       peso_liquido_embalagem:
         option.peso_liquido || item.peso_liquido_embalagem || 0,
+      reserva_id: "",
+      sem_reserva: true,
+      reserva_solicitante: "",
+      reserva_chave: buildReservaChave({
+        clienteId,
+        clienteNome,
+        produtoCodigo: item.produto_codigo,
+        lote: option.lote,
+        unidade,
+      }),
+      quantidade_solicitada: 0,
+      quantidade_embalagens: 0,
     });
   };
 
-  const handleQuantidadeChange = (v) => {
-    const qtd = v || 0;
+  const aplicarQuantidade = (qtdInformada) => {
+    let qtd = Math.round(Number(qtdInformada) || 0);
+    if (qtd < 0) qtd = 0;
+    if (item.entrada_id && qtd > maxQuantidadeSolicitada) qtd = maxQuantidadeSolicitada;
     const pesoLiq = item.peso_liquido_embalagem || 0;
     const qtdEmbalagens = pesoLiq > 0 ? qtd / pesoLiq : 0;
     onChange({
       ...item,
       quantidade_solicitada: qtd,
       quantidade_embalagens: qtdEmbalagens,
+    });
+  };
+
+  const handleQuantidadeChange = (v) => {
+    aplicarQuantidade(v === "" ? 0 : v);
+  };
+
+  const handleReservaChange = (_label, option) => {
+    if (!option) return;
+    if (option.semReserva || option.id === SEM_RESERVA_ID) {
+      const qtd = Math.min(Math.round(Number(item.quantidade_solicitada) || 0), saldoDisponivelSemReserva);
+      const pesoLiq = item.peso_liquido_embalagem || 0;
+      onChange({
+        ...item,
+        reserva_id: "",
+        sem_reserva: true,
+        reserva_solicitante: "",
+        reserva_chave: chaveEmbalado,
+        quantidade_solicitada: Math.max(0, qtd),
+        quantidade_embalagens: pesoLiq > 0 ? Math.max(0, qtd) / pesoLiq : 0,
+      });
+      return;
+    }
+    const qtd = option.disponivel || 0;
+    const pesoLiq = item.peso_liquido_embalagem || 0;
+    onChange({
+      ...item,
+      reserva_id: option.id,
+      sem_reserva: false,
+      reserva_solicitante: option.solicitante || "",
+      reserva_chave: chaveEmbalado,
+      quantidade_solicitada: qtd,
+      quantidade_embalagens: pesoLiq > 0 ? qtd / pesoLiq : 0,
     });
   };
 
@@ -377,6 +586,25 @@ export default function SaidaItemRow({
   const qtdEmbDisponivel = selectedVasilhame
     ? getQuantidadeEmbalagensFromVasilhame(selectedVasilhame)
     : 0;
+
+  const handleProdutoVasilhameChange = (_label, option) => {
+    if (!option) return;
+    onChange({
+      ...item,
+      produto_id: option.produto_id || option.id || "",
+      produto_nome: option.nome || "",
+      produto_codigo: option.codigo || "",
+      vasilhame_id: "",
+      vasilhame_placa: "",
+      vasilhame_barril: "",
+      lote: "",
+      volume_solicitado: 0,
+      peso_liquido: 0,
+      peso_bruto: 0,
+      tipo_embalagem: "",
+      quantidade_embalagens: 0,
+    });
+  };
 
   const handleVasilhameChange = (_label, option) => {
     if (!option) return;
@@ -505,6 +733,59 @@ export default function SaidaItemRow({
     });
   };
 
+  const handleVasilhameUnificadoChange = (_label, option) => {
+    if (!option) return;
+    if (option.source === ORIGEM_TRANSBORDO) {
+      const v = option.raw;
+      const volumeAtual = v.volume || 0;
+      const unitario = isDestinoEmbalagemUnitaria(v.tipo);
+      const qtdEmb = getQuantidadeEmbalagensFromVasilhame(v);
+      onChange({
+        ...emptySaidaItem(ORIGEM_TRANSBORDO),
+        tipo: TIPO_CONVENCIONAL,
+        origem: ORIGEM_TRANSBORDO,
+        vasilhame_id: v.id,
+        vasilhame_placa: v.placa || "",
+        vasilhame_barril: v.barril || "",
+        produto_id: v.produto_id || "",
+        produto_nome: v.produto_nome || "",
+        produto_codigo: v.produto_codigo || "",
+        lote: v.lote || "",
+        peso_liquido: v.peso_liquido || 0,
+        peso_bruto: v.peso_bruto || 0,
+        volume_solicitado: volumeAtual,
+        tipo_embalagem: v.tipo || "",
+        quantidade_embalagens: unitario ? qtdEmb : 0,
+        volume_por_embalagem: unitario ? getVolumePorEmbalagemFromVasilhame(v) : 0,
+      });
+      return;
+    }
+    const c = option.raw;
+    const volumeAtual = c.volume || 0;
+    const dens = parseFloat(String(c.density || "0").replace(",", ".")) || 0;
+    const pesoLiq = c.net_weight || (dens > 0 ? roundMass(volumeAtual * dens) : 0);
+    const tara = c.tare || 0;
+    const unitario = isUnitPackagingType(c.type);
+    const qtdEmb = getContainerPackageQty(c);
+    onChange({
+      ...emptySaidaItem(ORIGEM_INDUSTRIALIZACAO),
+      tipo: TIPO_IND_VASILHAME,
+      origem: ORIGEM_INDUSTRIALIZACAO,
+      container_id: c.id,
+      container_type: c.type || "",
+      vasilhame_placa: c.container_number || "",
+      vasilhame_barril: c.barril_number || "",
+      produto_nome: c.product || "",
+      lote: c.lot || "",
+      peso_liquido: pesoLiq,
+      peso_bruto: c.gross_weight || roundMass(tara + pesoLiq),
+      volume_solicitado: volumeAtual,
+      quantidade_embalagens: unitario ? qtdEmb : 0,
+      volume_por_embalagem: unitario ? getUnitPackagingCapacity(c.type) || 0 : 0,
+      quantidade_solicitada: pesoLiq,
+    });
+  };
+
   const handleRetornoMpChange = (_label, option) => {
     if (!option) return;
     if (option._kind === "movement") {
@@ -575,16 +856,16 @@ export default function SaidaItemRow({
     : "";
 
   const retornoSelectValue = (() => {
-    if (item.movement_id || item.stock_id) {
-      return retornoMpLabel({
-        mp_code: item.produto_codigo,
-        mp_name: item.produto_nome,
-        lot: item.lote,
-        quantity: item.quantidade_solicitada,
-        unit: item.unidade,
-      });
-    }
-    return "";
+    if (!item.movement_id) return "";
+    const mov = (movementsInd || []).find((m) => m.id === item.movement_id);
+    if (mov) return retornoMpLabel(mov);
+    return retornoMpLabel({
+      mp_code: item.produto_codigo,
+      mp_name: item.produto_nome,
+      lot: item.lote,
+      quantity: item.quantidade_solicitada,
+      unit: item.unidade,
+    });
   })();
 
   const resumoProduto =
@@ -622,11 +903,6 @@ export default function SaidaItemRow({
           </span>
           {collapsed && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-w-0">
-              {showOrigemSelector && (
-                <span className="inline-flex items-center rounded-md bg-slate-100 text-slate-700 px-2 py-0.5 font-medium">
-                  {origemLabel(origem)}
-                </span>
-              )}
               {lockedOrigem && (
                 <span className="inline-flex items-center rounded-md bg-slate-100 text-slate-700 px-2 py-0.5 font-medium">
                   {origemLabel(origem)}
@@ -672,29 +948,33 @@ export default function SaidaItemRow({
 
       {!collapsed && (
         <>
-          {showOrigemSelector && (
+          {showOrigemSelector ? (
             <div className="space-y-1.5">
-              <Label>Módulo *</Label>
+              <Label>Tipo *</Label>
               <TipoButtons
-                options={ORIGEM_OPTIONS}
-                value={origem}
-                onChange={handleOrigemChange}
+                options={TIPO_SAIDA_OPTIONS}
+                value={
+                  item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+                    ? TIPO_UI_VASILHAME
+                    : item.tipo
+                }
+                onChange={handleTipoUnificadoChange}
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Tipo *</Label>
+              <TipoButtons
+                options={
+                  origem === ORIGEM_INDUSTRIALIZACAO
+                    ? TIPO_IND_OPTIONS
+                    : TIPO_TRANSBORDO_OPTIONS
+                }
+                value={item.tipo}
+                onChange={handleTipoChange}
               />
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <Label>Tipo *</Label>
-            <TipoButtons
-              options={
-                origem === ORIGEM_INDUSTRIALIZACAO
-                  ? TIPO_IND_OPTIONS
-                  : TIPO_TRANSBORDO_OPTIONS
-              }
-              value={item.tipo}
-              onChange={handleTipoChange}
-            />
-          </div>
 
           {/* ── EMBALADO (Transbordo) ── */}
           {item.tipo === TIPO_EMBALADO && (
@@ -733,12 +1013,27 @@ export default function SaidaItemRow({
                   disabled={!hasCliente || !item.produto_id}
                 />
               </div>
+              {item.entrada_id && (
+                <div className="space-y-1.5 col-span-3 sm:col-span-2">
+                  <Label>Reserva *</Label>
+                  <SearchableSelect
+                    selectOnly
+                    value={reservaSelectValue}
+                    onChange={handleReservaChange}
+                    options={opcoesReserva}
+                    getOptionLabel={(o) => o.label || ""}
+                    getOptionValue={(o) => o.id}
+                    placeholder="Selecione a reserva..."
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Quantidade Solicitada ({unidadeEmbalado}) *</Label>
                 <NumberInputBr
                   decimals={0}
                   value={item.quantidade_solicitada || ""}
                   onChange={(v) => handleQuantidadeChange(v === "" ? 0 : v)}
+                  max={item.entrada_id ? maxQuantidadeSolicitada : undefined}
                   placeholder="0"
                   disabled={!item.entrada_id}
                 />
@@ -764,9 +1059,9 @@ export default function SaidaItemRow({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Estoque Atual ({unidadeEmbalado})</Label>
+                <Label>Saldo disponível ({unidadeEmbalado})</Label>
                 <Input
-                  value={formatQtdEmbalado(displayEstoqueAtual)}
+                  value={formatQtdEmbalado(saldoDisponivelSemReserva)}
                   disabled
                   className="bg-card font-medium"
                 />
@@ -782,30 +1077,130 @@ export default function SaidaItemRow({
               {estoqueInsuficiente && (
                 <p className="col-span-3 text-xs text-red-600 font-medium">
                   ⚠ Quantidade solicitada maior que o saldo disponível (
-                  {formatQtdEmbalado(displayEstoqueAtual)} {unidadeEmbalado})!
+                  {formatQtdEmbalado(saldoDisponivelSemReserva)} {unidadeEmbalado})!
+                </p>
+              )}
+              {reservaInsuficiente && (
+                <p className="col-span-3 text-xs text-red-600 font-medium">
+                  ⚠ Quantidade solicitada maior que o saldo da reserva (
+                  {formatQtdEmbalado(dispReserva)} {unidadeEmbalado}).
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── VASILHAME (Transbordo + Industrialização) ── */}
+          {showOrigemSelector &&
+            (item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME) && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5 col-span-3 sm:col-span-2">
+                <Label>Produto *</Label>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <SearchableSelect
+                      value={vasilhameUnificadoSelecionado?.label || ""}
+                      onChange={handleVasilhameUnificadoChange}
+                      options={vasilhamesUnificados}
+                      getOptionLabel={(o) => o.label || ""}
+                      getOptionValue={(o) => o.id}
+                      renderOption={(o, label) => (
+                        <span className="inline-flex items-center gap-2">
+                          <span>{label}</span>
+                          {o.reservado ? <ReservadoBadge /> : null}
+                        </span>
+                      )}
+                      placeholder={
+                        hasCliente
+                          ? "Selecione o vasilhame..."
+                          : "Selecione o cliente primeiro..."
+                      }
+                      disabled={!hasCliente}
+                    />
+                  </div>
+                  {vasilhameUnificadoSelecionado?.reservado ? <ReservadoBadge /> : null}
+                </div>
+              </div>
+              {(item.vasilhame_id || item.container_id) && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Volume Disponível (L)</Label>
+                    <Input
+                      value={formatVolume(
+                        item.tipo === TIPO_IND_VASILHAME
+                          ? displayContainerVol
+                          : displayVolumeDisponivel
+                      )}
+                      disabled
+                      className="bg-card font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Lote</Label>
+                    <Input
+                      value={item.lote || ""}
+                      disabled
+                      className="bg-card font-medium"
+                    />
+                  </div>
+                </>
+              )}
+              {hasCliente && vasilhamesUnificados.length === 0 && (
+                <p className="col-span-3 text-xs text-muted-foreground">
+                  Nenhum vasilhame disponível no pátio para este cliente.
                 </p>
               )}
             </div>
           )}
 
           {/* ── CONVENCIONAL (Transbordo) ── */}
-          {item.tipo === TIPO_CONVENCIONAL && (
+          {!showOrigemSelector && item.tipo === TIPO_CONVENCIONAL && (
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-3 sm:col-span-2">
-                <Label>Vasilhame *</Label>
+                <Label>Produto *</Label>
                 <SearchableSelect
-                  value={vasilhameSelectValue}
-                  onChange={handleVasilhameChange}
-                  options={vasilhamesDisponiveis}
-                  getOptionLabel={vasilhameLabel}
-                  getOptionValue={(v) => v.id}
+                  value={item.produto_nome || ""}
+                  onChange={handleProdutoVasilhameChange}
+                  options={produtosVasilhame}
+                  getOptionLabel={(o) => o.nome || ""}
+                  getOptionValue={(o) => o.id}
                   placeholder={
                     hasCliente
-                      ? "Buscar por placa, barril ou produto..."
+                      ? "Selecione um produto com tanque no pátio..."
                       : "Selecione o cliente primeiro..."
                   }
                   disabled={!hasCliente}
                 />
+              </div>
+              <div className="space-y-1.5 col-span-3 sm:col-span-2">
+                <Label>Vasilhame *</Label>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <SearchableSelect
+                      value={vasilhameSelectValue}
+                      onChange={handleVasilhameChange}
+                      options={vasilhamesDoProduto}
+                      getOptionLabel={vasilhameLabel}
+                      getOptionValue={(v) => v.id}
+                      renderOption={(v, label) => (
+                        <span className="inline-flex items-center gap-2">
+                          <span>{label}</span>
+                          {v.reservado ? <ReservadoBadge /> : null}
+                        </span>
+                      )}
+                      placeholder={
+                        !hasCliente
+                          ? "Selecione o cliente primeiro..."
+                          : produtoVasilhameSelecionado
+                            ? "Buscar por placa ou barril..."
+                            : "Selecione o produto primeiro..."
+                      }
+                      disabled={!hasCliente || !produtoVasilhameSelecionado}
+                    />
+                  </div>
+                  {vasilhamesDoProduto.find((v) => v.id === item.vasilhame_id)?.reservado ? (
+                    <ReservadoBadge />
+                  ) : null}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Volume Disponível (L)</Label>
@@ -823,11 +1218,16 @@ export default function SaidaItemRow({
                   className="bg-card font-medium"
                 />
               </div>
+              {hasCliente && produtosVasilhame.length === 0 && (
+                <p className="col-span-3 text-xs text-muted-foreground">
+                  Nenhum produto com tanque disponível no pátio para este cliente.
+                </p>
+              )}
             </div>
           )}
 
           {/* ── VASILHAME (Industrialização) ── */}
-          {item.tipo === TIPO_IND_VASILHAME && (
+          {!showOrigemSelector && item.tipo === TIPO_IND_VASILHAME && (
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-3 sm:col-span-2">
                 <Label>Vasilhame *</Label>
@@ -894,7 +1294,7 @@ export default function SaidaItemRow({
                   getOptionValue={(o) => `${o._kind}:${o.id}`}
                   placeholder={
                     hasCliente
-                      ? "Selecione movimentação fiscal ou estoque de MP..."
+                      ? "Selecione a movimentação fiscal..."
                       : "Selecione o cliente primeiro..."
                   }
                   disabled={!hasCliente}
@@ -936,7 +1336,7 @@ export default function SaidaItemRow({
                   disabled={!item.stock_id && !item.movement_id}
                 />
               </div>
-              {!item.movement_id && (
+              {item.stock_id && !item.movement_id && (
                 <>
                   <div className="space-y-1.5">
                     <Label>Saldo Disponível</Label>
@@ -974,8 +1374,7 @@ export default function SaidaItemRow({
               )}
               {hasCliente && retornoMpOptions.length === 0 && (
                 <p className="col-span-3 text-xs text-muted-foreground">
-                  Nenhuma movimentação fiscal de retorno nem estoque de MP disponível
-                  para este cliente.
+                  Nenhuma movimentação fiscal de Retorno de MP Não Aplicada para este cliente.
                 </p>
               )}
             </div>

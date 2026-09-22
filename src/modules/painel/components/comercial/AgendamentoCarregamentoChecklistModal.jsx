@@ -557,11 +557,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                 ) : (
                   <InfoChip
                     label={t('painel.comercial.agendamentos.checklist.fields.embalagens')}
-                    value={
-                      active.quantidade_embalagens != null
-                        ? String(active.quantidade_embalagens)
-                        : '—'
-                    }
+                    value={formatEmbalagens(active.quantidade_embalagens)}
                   />
                 )}
                 <InfoChip
@@ -836,6 +832,16 @@ export default function AgendamentoCarregamentoChecklistModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatEmbalagens(n) {
+  if (n == null || n === '') return '—';
+  const value = Number(n);
+  if (!Number.isFinite(value)) return '—';
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatMassSafe(n) {

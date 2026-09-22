@@ -821,10 +821,13 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
       (saida.itens || []).reduce((s, item) => {
         if (item.tipo !== "embalado" || item.entrada_id !== id) return s;
         const qtd = emLitros
-          ? Number(item.volume_solicitado) ||
+          ? Number(item.quantidade_carregada) ||
+            Number(item.volume_solicitado) ||
             Number(item.quantidade_solicitada) ||
             0
-          : Number(item.quantidade_solicitada) || 0;
+          : item.quantidade_carregada != null && item.quantidade_carregada !== ""
+            ? Number(item.quantidade_carregada) || 0
+            : Number(item.quantidade_solicitada) || 0;
         return s + qtd;
       }, 0)
     );

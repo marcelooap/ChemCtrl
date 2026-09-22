@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowRight, CheckCircle, Clock, Printer } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle, Clock, Plus, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
 import { Input } from "@shared/components/ui/input";
@@ -21,7 +21,7 @@ import {
   resumoQuantidadeValidacao,
 } from "@transbordo/lib/validacaoTransbordo";
 import { criarValidacaoIndustrializacao } from "@industrializacao/lib/validacaoIndustrializacao";
-import { useInternalAuth } from "@/lib/InternalAuthContext";
+import OperadorOrdemAuthDialog from "@painel/components/operacional/OperadorOrdemAuthDialog";
 import {
   applyPesoLiquidoForaMargem,
   getLoteQuantidadeDeclarada,
@@ -32,8 +32,11 @@ import {
   buildMpProdutos,
   buildPaProdutos,
   catalogProdutosByDestino,
+  catalogProdutosGranel,
   clientsFromProdutos,
   filterProdutosByOrigem,
+  isProdutoIndustrializacao,
+  mergeClientesByNome,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
 
@@ -45,11 +48,6 @@ const ORIGEM_VALUES = [
   { value: "tanka", tipoOrigem: "tanka" },
   { value: "vasilhame", tipoOrigem: "vasilhame" },
   { value: "embalado", tipoOrigem: "embalado" },
-];
-
-const DESTINO_VALUES = [
-  { value: "convencional" },
-  { value: "industrializacao" },
 ];
 
 function todayISO() {
@@ -64,6 +62,9 @@ function emptyGranel() {
     quantidade: "",
     unidade: "kg",
     lote: "",
+    fornecedor: "",
+    fabricacao: "",
+    validade: "",
     densidade: "",
     precoUnitario: "",
     ticket: "",
@@ -112,9 +113,9 @@ export default function OrdemTransbordo() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user } = useInternalAuth();
-
   const [loading, setLoading] = useState(true);
+  const [orderOperator, setOrderOperator] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
   const [clientesTb, setClientesTb] = useState([]);
   const [produtosTb, setProdutosTb] = useState([]);
   const [produtosMp, setProdutosMp] = useState([]);
@@ -124,18 +125,17 @@ export default function OrdemTransbordo() {
   const [isotanques, setIsotanques] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
   const [containers, setContainers] = useState([]);
-  const [indTanks, setIndTanks] = useState([]);
-  const [indStock, setIndStock] = useState([]);
   const [validacoesPendentes, setValidacoesPendentes] = useState([]);
   const [pendingGranelPayload, setPendingGranelPayload] = useState(null);
 
   const [dataOp, setDataOp] = useState(todayISO);
-  const [destino, setDestino] = useState("");
   const [clienteId, setClienteId] = useState("");
   const [clienteNome, setClienteNome] = useState("");
   const [produtoId, setProdutoId] = useState("");
   const [produtoNome, setProdutoNome] = useState("");
   const [produtoCodigo, setProdutoCodigo] = useState("");
+  const [produtoFonte, setProdutoFonte] = useState("");
+  const moduloValidacaoRef = useRef("convencional");
   const [origemTipo, setOrigemTipo] = useState("");
   const [granel, setGranel] = useState(emptyGranel);
   const [formError, setFormError] = useState("");
@@ -162,7 +162,6 @@ export default function OrdemTransbordo() {
         stocks,
         valsInd,
         conts,
-        tanks,
       ] = await Promise.all([
         entities.transbordos.list("-created_date"),
         entities.produtos.list(),
@@ -175,7 +174,6 @@ export default function OrdemTransbordo() {
         base44.entities.RawMaterialStock.list("-created_date", 2000),
         base44.entities.IndValidacao.list("-created_date", 500).catch(() => []),
         base44.entities.Container.list("-created_date", 500).catch(() => []),
-        base44.entities.Tank.list("-created_date", 500).catch(() => []),
       ]);
       setTransbordos(trans || []);
       setProdutosTb(prods || []);
@@ -184,8 +182,6 @@ export default function OrdemTransbordo() {
       setIsotanques(isos || []);
       setVasilhames(vascs || []);
       setContainers(conts || []);
-      setIndTanks(tanks || []);
-      setIndStock(stocks || []);
       setProdutosMp(buildMpProdutos(recipes || [], stocks || []));
       setProdutosPa(buildPaProdutos(recipes || []));
       setValidacoesPendentes(
@@ -215,36 +211,27 @@ export default function OrdemTransbordo() {
     [t]
   );
 
-  const destinoOptions = useMemo(
-    () =>
-      DESTINO_VALUES.map((o) => ({
-        ...o,
-        label: t(`painel.logistica.recebimento.destino.${o.value}`),
-      })),
-    [t]
-  );
-
-  const isIndustrializacao = destino === "industrializacao";
-
-  const catalogProdutos = useMemo(
-    () =>
-      catalogProdutosByDestino({
-        destino,
-        tipoOrOrigem: origemTipo,
-        produtosTb,
-        produtosMp,
-        produtosPa,
-      }),
-    [destino, origemTipo, produtosTb, produtosMp, produtosPa]
-  );
+  const catalogProdutos = useMemo(() => {
+    if (origemTipo === "granel") {
+      return catalogProdutosGranel(produtosTb, produtosMp);
+    }
+    if (!origemTipo) return [];
+    return catalogProdutosByDestino({
+      destino: "convencional",
+      tipoOrOrigem: origemTipo,
+      produtosTb,
+      produtosMp,
+      produtosPa,
+    });
+  }, [origemTipo, produtosTb, produtosMp, produtosPa]);
 
   const clientes = useMemo(() => {
-    if (destino === "industrializacao") {
-      return clientsFromProdutos(catalogProdutos);
+    if (origemTipo === "granel") {
+      return mergeClientesByNome(clientesTb, clientsFromProdutos(produtosMp));
     }
-    if (destino === "convencional") return uniqueClientesByNome(clientesTb);
+    if (origemTipo) return uniqueClientesByNome(clientesTb);
     return [];
-  }, [destino, catalogProdutos, clientesTb]);
+  }, [origemTipo, clientesTb, produtosMp]);
 
   const produtosDoCliente = useMemo(() => {
     if (!clienteNome && !clienteId) return [];
@@ -266,8 +253,6 @@ export default function OrdemTransbordo() {
       isotanques,
       transbordos,
       containers,
-      indTanks,
-      indStock,
     });
   }, [
     catalogProdutos,
@@ -279,8 +264,6 @@ export default function OrdemTransbordo() {
     isotanques,
     transbordos,
     containers,
-    indTanks,
-    indStock,
   ]);
 
   const produtoSelecionado = useMemo(
@@ -288,21 +271,46 @@ export default function OrdemTransbordo() {
     [catalogProdutos, produtoId]
   );
   const densidadeTabelada = Boolean(produtoSelecionado?.densidade_tabelada);
-  const produtoDisplay = produtoCodigo
-    ? `${produtoCodigo} - ${produtoNome}`
-    : produtoNome;
+  const produtoIndustrializacao = isProdutoIndustrializacao({
+    id: produtoId,
+    fonte: produtoFonte || produtoSelecionado?.fonte,
+  });
+  const destinoEfetivo = produtoIndustrializacao
+    ? "industrializacao"
+    : "convencional";
+
+  const produtoOptionLabel = (p) => {
+    const nome = p?.produto || p?.nome || "";
+    const base = p?.codigo ? `${p.codigo} - ${nome}` : nome;
+    if (origemTipo !== "granel" || !p?.fonte) return base;
+    const source = t(
+      p.fonte === "industrializacao"
+        ? "painel.operacional.ordemTransbordo.productSource.mp"
+        : "painel.operacional.ordemTransbordo.productSource.transbordo"
+    );
+    return `${base} · ${source}`;
+  };
+
+  const produtoDisplay = produtoSelecionado
+    ? produtoOptionLabel(produtoSelecionado)
+    : produtoCodigo
+      ? `${produtoCodigo} - ${produtoNome}`
+      : produtoNome;
 
   useEffect(() => {
+    if (modalOpen) return;
     if (produtoId && produtosDoCliente.length > 0) {
       const exists = produtosDoCliente.some((p) => p.id === produtoId);
       if (!exists) {
         setProdutoId("");
         setProdutoNome("");
         setProdutoCodigo("");
+        setProdutoFonte("");
+        moduloValidacaoRef.current = "convencional";
         setGranel((prev) => ({ ...prev, densidade: "" }));
       }
     }
-  }, [produtosDoCliente, produtoId]);
+  }, [produtosDoCliente, produtoId, modalOpen]);
 
   // Prioriza o valor do formulário (populado a partir do produto no
   // handleProdutoChange). Fallback: densidade cadastrada no produto.
@@ -335,14 +343,25 @@ export default function OrdemTransbordo() {
     setProdutoId("");
     setProdutoNome("");
     setProdutoCodigo("");
+    setProdutoFonte("");
+    moduloValidacaoRef.current = "convencional";
     setGranel((prev) => ({ ...prev, densidade: "" }));
     setFormError("");
   };
 
   const handleProdutoChange = (_label, item) => {
-    setProdutoId(item?.id || "");
+    const nextId = item?.id || "";
+    const nextFonte = item?.fonte || "";
+    setProdutoId(nextId);
     setProdutoNome(item?.produto || item?.nome || "");
     setProdutoCodigo(item?.codigo || "");
+    setProdutoFonte(nextFonte);
+    moduloValidacaoRef.current = isProdutoIndustrializacao({
+      id: nextId,
+      fonte: nextFonte,
+    })
+      ? "industrializacao"
+      : "convencional";
     setGranel((prev) => ({
       ...prev,
       densidade: item?.densidade_tabelada ? item.densidade || "" : "",
@@ -350,31 +369,20 @@ export default function OrdemTransbordo() {
     setFormError("");
   };
 
-  const clearClienteProduto = () => {
-    setClienteId("");
-    setClienteNome("");
-    setProdutoId("");
-    setProdutoNome("");
-    setProdutoCodigo("");
-    setGranel((prev) => ({ ...prev, densidade: "" }));
-  };
-
-  const handleDestinoChange = (_label, item) => {
-    setDestino(item?.value || "");
-    setOrigemTipo("");
-    clearClienteProduto();
-    setFormError("");
-  };
-
   const handleOrigemChange = (_label, item) => {
     const next = item?.value || "";
+    const crossesGranel =
+      origemTipo !== next && (origemTipo === "granel" || next === "granel");
     setOrigemTipo(next);
     setProdutoId("");
     setProdutoNome("");
     setProdutoCodigo("");
+    setProdutoFonte("");
+    moduloValidacaoRef.current = "convencional";
     setGranel((prev) => ({ ...prev, densidade: "" }));
-    if (destino === "industrializacao") {
-      clearClienteProduto();
+    if (crossesGranel) {
+      setClienteId("");
+      setClienteNome("");
     }
     setFormError("");
   };
@@ -396,7 +404,6 @@ export default function OrdemTransbordo() {
 
   const validateHeader = () => {
     if (!dataOp) return t("painel.operacional.ordemTransbordo.errors.date");
-    if (!destino) return t("painel.operacional.ordemTransbordo.errors.destino");
     if (!origemTipo) return t("painel.operacional.ordemTransbordo.errors.origin");
     if (!clienteNome) return t("painel.operacional.ordemTransbordo.errors.client");
     if (!produtoId) return t("painel.operacional.ordemTransbordo.errors.product");
@@ -434,6 +441,9 @@ export default function OrdemTransbordo() {
       produto_codigo: produtoCodigo,
       nota_fiscal: granel.notaFiscal.trim(),
       lote: granel.lote.trim(),
+      fornecedor: (granel.fornecedor || "").trim(),
+      data_fabricacao: granel.fabricacao || null,
+      data_validade: granel.validade || null,
       densidade: densidadeEfetiva,
       quantidade: Number(granel.quantidade) || 0,
       quantidade_nf: Number(granel.quantidade) || 0,
@@ -458,6 +468,9 @@ export default function OrdemTransbordo() {
       produto_codigo: produtoCodigo,
       nota_fiscal: first.nota_fiscal,
       lote: first.lote,
+      fornecedor: first.fornecedor || null,
+      data_fabricacao: first.data_fabricacao || null,
+      data_validade: first.data_validade || null,
       densidade: first.densidade,
       quantidade: qtdKgEfetiva,
       unidade_medida: "kg",
@@ -466,7 +479,7 @@ export default function OrdemTransbordo() {
       saldo_atual: qtdKgEfetiva,
       embalado: false,
       status_wms: false,
-      origem: destino === "industrializacao" ? "industrializacao" : "convencional",
+      origem: destinoEfetivo,
       granel_pesagem: true,
       granel_ticket: granel.ticket || null,
       granel_peso_bruto: gPb,
@@ -496,11 +509,19 @@ export default function OrdemTransbordo() {
   };
 
   const handleIrParaTransbordo = async () => {
+    if (!orderOperator?.id) {
+      setAuthOpen(true);
+      return;
+    }
     const headerErr = validateHeader();
     if (headerErr) {
       setFormError(headerErr);
       return;
     }
+
+    moduloValidacaoRef.current = produtoIndustrializacao
+      ? "industrializacao"
+      : "convencional";
 
     if (origemTipo !== "granel") {
       const mapped = ORIGEM_VALUES.find((o) => o.value === origemTipo);
@@ -515,8 +536,8 @@ export default function OrdemTransbordo() {
       return;
     }
 
-    // Fluxo Granel: NÃO grava Entrada aqui. A Entrada só será criada quando o
-    // responsável validar a operação em Transbordo → Validação.
+    // Fluxo Granel: não grava entrada aqui. A entrada só é criada quando a
+    // operação for validada — na Industrialização, se o produto for matéria-prima.
     setGoingToTransbordo(true);
     setFormError("");
     try {
@@ -541,59 +562,98 @@ export default function OrdemTransbordo() {
     setPendingGranelPayload(null);
     setGranel(emptyGranel());
     setOrigemTipo("");
-    setDestino("");
     setDataOp(todayISO());
     setClienteId("");
     setClienteNome("");
     setProdutoId("");
     setProdutoNome("");
     setProdutoCodigo("");
+    setProdutoFonte("");
+    moduloValidacaoRef.current = "convencional";
+  };
+
+  const submitOrdem = async ({ granelPayload = null, transbordoPayload = null } = {}) => {
+    const isGranel = origemTipo === "granel" && Boolean(granelPayload);
+    const tipo = isGranel ? "granel_transbordo" : "transbordo";
+    const origemTipoSave = isGranel
+      ? "granel"
+      : ORIGEM_VALUES.find((o) => o.value === origemTipo)?.tipoOrigem ||
+        origemTipo;
+    const header = {
+      data: dataOp,
+      cliente_id: transbordoFkId(clienteId),
+      cliente_nome: clienteNome,
+      produto_id: transbordoFkId(produtoId),
+      produto_nome: produtoNome,
+      produto_codigo: produtoCodigo,
+    };
+    const criadoPor = orderOperator?.id
+      ? { id: orderOperator.id, nome: orderOperator.nome || null }
+      : null;
+    if (!criadoPor) {
+      throw new Error(t("painel.operacional.ordemTransbordo.operatorAuth.missingOperator"));
+    }
+    const payload = {
+      tipo,
+      origemTipo: origemTipoSave,
+      header,
+      granelPayload: isGranel ? granelPayload : null,
+      transbordoPayload,
+      criadoPor,
+    };
+
+    const destinoSave =
+      moduloValidacaoRef.current === "industrializacao" ||
+      produtoIndustrializacao ||
+      granelPayload?.origem === "industrializacao" ||
+      String(produtoId).startsWith("ind-")
+        ? "industrializacao"
+        : "convencional";
+    if (destinoSave === "industrializacao") {
+      await criarValidacaoIndustrializacao(payload);
+    } else {
+      await criarValidacao(payload);
+    }
+    await loadData({ silent: true });
+    setModalOpen(false);
+    resetForm();
+    setOrderOperator(null);
+    toast({
+      title: t("painel.operacional.ordemTransbordo.saveSuccessTitle"),
+      description: t(
+        destinoSave === "industrializacao"
+          ? "painel.operacional.ordemTransbordo.saveSuccessValidacaoIndDescription"
+          : "painel.operacional.ordemTransbordo.saveSuccessValidacaoDescription"
+      ),
+    });
+  };
+
+  const abandonOrder = () => {
+    setModalOpen(false);
+    setPrefillEntrada(null);
+    setHeaderPrefill(null);
+    setPrefillOrigemTipo("");
+    setPendingGranelPayload(null);
+    setSaveError("");
+    setFormError("");
+    resetForm();
+    setOrderOperator(null);
   };
 
   const handleSaveTransbordo = async (data) => {
     setSaveError("");
+    if (!orderOperator?.id) {
+      setSaveError(t("painel.operacional.ordemTransbordo.operatorAuth.missingOperator"));
+      return;
+    }
     try {
-      const isGranel = origemTipo === "granel" && Boolean(pendingGranelPayload);
-      const tipo = isGranel ? "granel_transbordo" : "transbordo";
-      const origemTipoSave = isGranel
-        ? "granel"
-        : ORIGEM_VALUES.find((o) => o.value === origemTipo)?.tipoOrigem ||
-          origemTipo;
-      const header = {
-        data: dataOp,
-        cliente_id: transbordoFkId(clienteId),
-        cliente_nome: clienteNome,
-        produto_id: transbordoFkId(produtoId),
-        produto_nome: produtoNome,
-        produto_codigo: produtoCodigo,
-      };
-      const criadoPor = user
-        ? { id: user.id, nome: user.nome || user.email || null }
-        : null;
-      const payload = {
-        tipo,
-        origemTipo: origemTipoSave,
-        header,
-        granelPayload: isGranel ? pendingGranelPayload : null,
-        transbordoPayload: data,
-        criadoPor,
-      };
-
-      if (destino === "industrializacao") {
-        await criarValidacaoIndustrializacao(payload);
-      } else {
-        await criarValidacao(payload);
-      }
-      await loadData({ silent: true });
-      setModalOpen(false);
-      resetForm();
-      toast({
-        title: t("painel.operacional.ordemTransbordo.saveSuccessTitle"),
-        description: t(
-          destino === "industrializacao"
-            ? "painel.operacional.ordemTransbordo.saveSuccessValidacaoIndDescription"
-            : "painel.operacional.ordemTransbordo.saveSuccessValidacaoDescription"
-        ),
+      await submitOrdem({
+        granelPayload: pendingGranelPayload,
+        transbordoPayload: {
+          ...data,
+          operadores: orderOperator.nome ? [orderOperator.nome] : [],
+          operador_usuario_id: String(orderOperator.id),
+        },
       });
     } catch (err) {
       console.error("[OrdemTransbordo] save:", err);
@@ -612,28 +672,26 @@ export default function OrdemTransbordo() {
     [navigate]
   );
 
-  const clientEnabled = Boolean(
-    destino === "convencional" || (isIndustrializacao && origemTipo)
+  const fixedOperador = useMemo(
+    () =>
+      orderOperator?.id
+        ? { id: String(orderOperator.id), nome: orderOperator.nome || "" }
+        : null,
+    [orderOperator]
   );
+
+  const clientEnabled = Boolean(origemTipo);
   const productEnabled = Boolean(clientEnabled && clienteNome);
 
-  const clientPlaceholder = !destino
-    ? t("painel.operacional.ordemTransbordo.placeholders.destFirst")
-    : isIndustrializacao && !origemTipo
-      ? t("painel.operacional.ordemTransbordo.placeholders.originFirst")
-      : t("painel.operacional.ordemTransbordo.placeholders.client");
+  const clientPlaceholder = !origemTipo
+    ? t("painel.operacional.ordemTransbordo.placeholders.originFirst")
+    : t("painel.operacional.ordemTransbordo.placeholders.client");
 
   const productPlaceholder = !productEnabled
-    ? !destino
-      ? t("painel.operacional.ordemTransbordo.placeholders.destFirst")
-      : isIndustrializacao && !origemTipo
-        ? t("painel.operacional.ordemTransbordo.placeholders.originFirst")
-        : t("painel.operacional.ordemTransbordo.placeholders.productDisabled")
-    : isIndustrializacao && origemTipo === "vasilhame"
-      ? t("painel.logistica.recebimento.placeholders.productPa")
-      : isIndustrializacao
-        ? t("painel.logistica.recebimento.placeholders.productMp")
-        : t("painel.operacional.ordemTransbordo.placeholders.product");
+    ? !origemTipo
+      ? t("painel.operacional.ordemTransbordo.placeholders.originFirst")
+      : t("painel.operacional.ordemTransbordo.placeholders.productDisabled")
+    : t("painel.operacional.ordemTransbordo.placeholders.product");
 
   if (loading) {
     return (
@@ -662,6 +720,33 @@ export default function OrdemTransbordo() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {!orderOperator ? (
+              <div className="flex flex-col items-start gap-3 py-2">
+                <p className="text-sm text-muted-foreground">
+                  {t("painel.operacional.ordemTransbordo.operatorAuth.hint")}
+                </p>
+                <Button
+                  type="button"
+                  onClick={() => setAuthOpen(true)}
+                  className="bg-primary hover:bg-primary/90 gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  {t("painel.operacional.ordemTransbordo.operatorAuth.newOrder")}
+                </Button>
+              </div>
+            ) : (
+            <>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <p className="text-sm text-foreground">
+                <span className="text-muted-foreground">
+                  {t("painel.operacional.ordemTransbordo.operatorAuth.responsible")}
+                </span>{" "}
+                <span className="font-medium">{orderOperator.nome}</span>
+              </p>
+              <Button type="button" variant="ghost" onClick={abandonOrder}>
+                {t("painel.operacional.ordemTransbordo.operatorAuth.cancelOrder")}
+              </Button>
+            </div>
             {formError && (
               <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -679,20 +764,6 @@ export default function OrdemTransbordo() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>{t("painel.operacional.ordemTransbordo.fields.destino")} *</Label>
-                <SearchableSelect
-                  value={
-                    destinoOptions.find((o) => o.value === destino)?.label || ""
-                  }
-                  onChange={handleDestinoChange}
-                  options={destinoOptions}
-                  getOptionLabel={(o) => o.label}
-                  getOptionValue={(o) => o.value}
-                  placeholder={t("painel.operacional.ordemTransbordo.placeholders.destino")}
-                  inputClassName={INPUT_EDITABLE}
-                />
-              </div>
-              <div className="space-y-1.5">
                 <Label>{t("painel.operacional.ordemTransbordo.fields.origin")} *</Label>
                 <SearchableSelect
                   value={
@@ -702,12 +773,7 @@ export default function OrdemTransbordo() {
                   options={origemOptions}
                   getOptionLabel={(o) => o.label}
                   getOptionValue={(o) => o.value}
-                  placeholder={
-                    destino
-                      ? t("painel.operacional.ordemTransbordo.placeholders.origin")
-                      : t("painel.operacional.ordemTransbordo.placeholders.destFirst")
-                  }
-                  disabled={!destino}
+                  placeholder={t("painel.operacional.ordemTransbordo.placeholders.origin")}
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
@@ -724,17 +790,13 @@ export default function OrdemTransbordo() {
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
                 <Label>{t("painel.operacional.ordemTransbordo.fields.product")} *</Label>
                 <SearchableSelect
                   value={produtoDisplay}
                   onChange={handleProdutoChange}
                   options={produtosDoCliente}
-                  getOptionLabel={(p) =>
-                    p.codigo
-                      ? `${p.codigo} - ${p.produto || p.nome || ""}`
-                      : p.produto || p.nome || ""
-                  }
+                  getOptionLabel={produtoOptionLabel}
                   getOptionValue={(p) => p.id}
                   placeholder={productPlaceholder}
                   disabled={!productEnabled}
@@ -820,6 +882,31 @@ export default function OrdemTransbordo() {
                       value={granel.precoUnitario}
                       onChange={(v) => patchGranel("precoUnitario", v === "" ? "" : v)}
                       placeholder="0"
+                      className={INPUT_EDITABLE}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("painel.operacional.ordemTransbordo.fields.supplier")}</Label>
+                    <Input
+                      value={granel.fornecedor || ""}
+                      onChange={(e) => patchGranel("fornecedor", e.target.value)}
+                      placeholder={t("painel.operacional.ordemTransbordo.placeholders.supplier")}
+                      className={INPUT_EDITABLE}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("painel.operacional.ordemTransbordo.fields.manufacture")}</Label>
+                    <DateInputBr
+                      value={granel.fabricacao || ""}
+                      onChange={(v) => patchGranel("fabricacao", v || "")}
+                      className={INPUT_EDITABLE}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("painel.operacional.ordemTransbordo.fields.expiry")}</Label>
+                    <DateInputBr
+                      value={granel.validade || ""}
+                      onChange={(v) => patchGranel("validade", v || "")}
                       className={INPUT_EDITABLE}
                     />
                   </div>
@@ -921,20 +1008,20 @@ export default function OrdemTransbordo() {
             )}
 
             <div className="flex justify-end">
-              <Can permission={`${PERM}.create`}>
-                <Button
-                  type="button"
-                  onClick={handleIrParaTransbordo}
-                  disabled={goingToTransbordo || !destino || !origemTipo || !clienteNome || !produtoId}
-                  className="bg-primary hover:bg-primary/90 gap-2"
-                >
-                  {goingToTransbordo
-                    ? t("common.processing")
-                    : t("painel.operacional.ordemTransbordo.goToTransbordo")}
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Can>
+              <Button
+                type="button"
+                onClick={handleIrParaTransbordo}
+                disabled={goingToTransbordo || !origemTipo || !clienteNome || !produtoId}
+                className="bg-primary hover:bg-primary/90 gap-2"
+              >
+                {goingToTransbordo
+                  ? t("common.processing")
+                  : t("painel.operacional.ordemTransbordo.goToTransbordo")}
+                <ArrowRight className="w-4 h-4" />
+              </Button>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
 
@@ -968,6 +1055,17 @@ export default function OrdemTransbordo() {
         destinosOnly
         lockHeader
         externalError={saveError}
+        fixedOperador={fixedOperador}
+      />
+
+      <OperadorOrdemAuthDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        onAuthenticated={(operator) => {
+          setOrderOperator(operator);
+          setAuthOpen(false);
+          setFormError("");
+        }}
       />
     </div>
   );

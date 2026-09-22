@@ -10,6 +10,8 @@ export default function SearchableSelect({
   placeholder = "Selecione uma opção",
   disabled = false,
   inputClassName = "",
+  renderOption = null,
+  selectOnly = false,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -40,15 +42,23 @@ export default function SearchableSelect({
   };
 
   const handleInputChange = (e) => {
+    if (selectOnly) return;
     setSearch(e.target.value);
     onChange(e.target.value, null);
     if (!open) setOpen(true);
   };
 
   const handleFocus = () => {
-    if (disabled) return;
+    if (disabled || selectOnly) return;
     setOpen(true);
     setSearch("");
+  };
+
+  const handleToggle = (e) => {
+    if (disabled || !selectOnly) return;
+    e.preventDefault();
+    setSearch("");
+    setOpen((current) => !current);
   };
 
   return (
@@ -56,18 +66,21 @@ export default function SearchableSelect({
       <div className="relative">
         <input
           type="text"
-          value={search || value}
+          value={selectOnly ? value : search || value}
           onChange={handleInputChange}
           onFocus={handleFocus}
+          onMouseDown={selectOnly ? handleToggle : undefined}
+          readOnly={selectOnly}
           placeholder={placeholder}
           disabled={disabled}
+          aria-readonly={selectOnly || undefined}
           className={`w-full px-3 py-2 pr-9 rounded-md border bg-card text-sm transition-colors focus:outline-none ${
             disabled
               ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed"
               : open
               ? "border-blue-500 ring-1 ring-blue-500"
               : "border-border hover:border-slate-400"
-          } ${!disabled && inputClassName ? inputClassName : ""}`}
+          } ${selectOnly ? "cursor-pointer caret-transparent" : ""} ${!disabled && inputClassName ? inputClassName : ""}`}
         />
         <ChevronDown
           className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none transition-transform ${
@@ -96,7 +109,7 @@ export default function SearchableSelect({
                         : "text-foreground/80 hover:bg-muted/40"
                     }`}
                   >
-                    {label}
+                    {renderOption ? renderOption(option, label) : label}
                   </div>
                 );
               })

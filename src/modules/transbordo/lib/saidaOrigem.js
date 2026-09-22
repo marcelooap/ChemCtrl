@@ -198,6 +198,14 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
     stock_id: "",
     movement_id: "",
     unidade: "kg",
+    reserva_id: "",
+    sem_reserva: false,
+    reserva_solicitante: "",
+    reserva_chave: "",
+    quantidade_carregada: null,
+    reserva_abatida: false,
+    quantidade_abatida: null,
+    abatimento_origem: "",
   };
   return base;
 }
@@ -287,7 +295,7 @@ export function formatSaidaItemInformacoes(
 export function tipoItemLabel(item) {
   const tipo = item?.tipo;
   if (tipo === TIPO_EMBALADO) return "Embalado";
-  if (tipo === TIPO_CONVENCIONAL) return "Convencional";
+  if (tipo === TIPO_CONVENCIONAL) return "Vasilhame";
   if (tipo === TIPO_IND_VASILHAME) return "Vasilhame";
   if (tipo === TIPO_IND_RETORNO_MP) return DESTINO_RETORNO_MP;
   return tipo || "—";
@@ -312,11 +320,14 @@ export function containerLabel(c) {
 
 export function retornoMpLabel(row) {
   if (!row) return "—";
-  const code = row.mp_code || row.produto_codigo || "";
+  const reg = row.entry_id || "—";
+  const code = row.mp_code || row.produto_codigo || "—";
   const name = row.mp_name || row.produto_nome || "—";
   const lot = row.lot || row.lote || "—";
-  const qty = row.quantity ?? row.current_stock ?? row.quantidade_solicitada ?? 0;
+  const qty = Number(row.quantity ?? row.quantidade_solicitada ?? 0);
+  const qtd = Number.isFinite(qty)
+    ? qty.toLocaleString("pt-BR", { maximumFractionDigits: 3 })
+    : "0";
   const unit = row.unit || row.unidade || "kg";
-  const codePart = code ? `${code} — ` : "";
-  return `${codePart}${name} | Lote ${lot} | ${qty} ${unit}`;
+  return `${reg} - ${code} - ${name} - ${lot} - ${qtd} ${unit}`;
 }

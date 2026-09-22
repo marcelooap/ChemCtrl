@@ -34,6 +34,8 @@ create table if not exists t_material_reservas (
   -- Auditoria de criação (ID do usuário da plataforma ChemCtrl)
   usuario_id text,
   usuario_nome text,
+  -- Nome de quem solicitou a reserva (informado no Painel Comercial)
+  solicitante text,
   observacao text,
   -- Auditoria de remoção / redução
   removido_em timestamptz,

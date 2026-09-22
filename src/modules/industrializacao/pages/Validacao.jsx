@@ -397,7 +397,11 @@ export default function ValidacaoIndustrializacao() {
                               <Eye className="w-4 h-4" />
                             </button>
                           </Can>
-                          {isPendente && (
+                          {isPendente &&
+                            !(
+                              parseEntradaPayload(v.entrada_payload)?.origem ===
+                                "industrializacao" && !isValidacaoIndEntrada(v)
+                            ) && (
                             <Can permission={`${PERM}.edit`}>
                               <button
                                 type="button"

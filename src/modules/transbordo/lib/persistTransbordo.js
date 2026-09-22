@@ -35,6 +35,31 @@ import {
 /** Vasilhame + embalagens unitárias (bombona/tambor/IBC) na tela de Vasilhames. */
 const TIPOS_VASILHAME = new Set(["Vasilhame", ...TIPOS_EMBALAGEM_ESTOQUE]);
 
+function isMissingOperadorUsuarioColumn(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("operador_usuario_id") &&
+    (msg.includes("schema cache") ||
+      msg.includes("could not find") ||
+      msg.includes("column") ||
+      msg.includes("pgrst204"))
+  );
+}
+
+async function saveTransbordoRow(payload, editingId) {
+  try {
+    if (editingId) return await entities.transbordos.update(editingId, payload);
+    return await entities.transbordos.create(payload);
+  } catch (err) {
+    if (!payload.operador_usuario_id || !isMissingOperadorUsuarioColumn(err)) {
+      throw err;
+    }
+    const { operador_usuario_id: _ignored, ...fallback } = payload;
+    if (editingId) return await entities.transbordos.update(editingId, fallback);
+    return await entities.transbordos.create(fallback);
+  }
+}
+
 /** Converte string vazia em null (evita erro de UUID/date no Postgres). */
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -438,6 +463,11 @@ export async function persistTransbordo({
         origens,
         destinos,
       };
+      if (payload.operador_usuario_id) {
+        payload.operador_usuario_id = String(payload.operador_usuario_id);
+      } else {
+        delete payload.operador_usuario_id;
+      }
 
       // FIFO opera sobre uma origem por lote (ordem informada na UI)
       const origensFifo = expandOrigensForFifo(origens, dens);
@@ -469,7 +499,7 @@ export async function persistTransbordo({
           filtroExtras,
         });
 
-        savedTransbordo = await entities.transbordos.update(editingId, payload);
+        savedTransbordo = await saveTransbordoRow(payload, editingId);
         // Remove apenas registros CRIADOS por este transbordo (não os top-ups)
         // Filtrações ligadas caem via ON DELETE CASCADE em vasilhame_id
         await entities.vasilhames.deleteMany({ transbordo_id: editingId });
@@ -477,10 +507,13 @@ export async function persistTransbordo({
         await deleteEstoqueDoTransbordo(editingId);
       } else {
         codigo = await allocateTransbordoCodigo(transbordos);
-        savedTransbordo = await entities.transbordos.create({
-          ...payload,
-          codigo_transbordo: codigo,
-        });
+        savedTransbordo = await saveTransbordoRow(
+          {
+            ...payload,
+            codigo_transbordo: codigo,
+          },
+          null
+        );
       }
 
       // FIFO: composição por destino → cria ou atualiza vasilhames / estoque embalado

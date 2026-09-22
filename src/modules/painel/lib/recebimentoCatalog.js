@@ -8,8 +8,10 @@ import {
   isEstoqueEmbalado,
   computeDisponivelTransbordo,
 } from "@transbordo/lib/estoqueSaldo";
-import { computeTankaSaldo } from "@transbordo/lib/tankaVolume";
-import { mergeTankasUnificadas } from "@transbordo/lib/tankaUnificada";
+import {
+  computeTankaSaldo,
+  matchesTanka,
+} from "@transbordo/lib/tankaVolume";
 
 export function parseRecipeRawMaterials(recipe) {
   const raw = recipe?.raw_materials;
@@ -153,6 +155,59 @@ export function clientsFromProdutos(produtos) {
 }
 
 /**
+ * Une clientes do Transbordo com clientes extras (ex.: Industrialização),
+ * preservando o cadastro do Transbordo quando o nome coincide.
+ */
+export function mergeClientesByNome(clientesTb, extraClientes) {
+  const map = new Map();
+  uniqueClientesByNome(clientesTb).forEach((c) => {
+    map.set(String(c.nome).toLowerCase(), c);
+  });
+  (extraClientes || []).forEach((c) => {
+    const nome = String(c?.nome || "").trim();
+    if (!nome) return;
+    const key = nome.toLowerCase();
+    if (!map.has(key)) map.set(key, { ...c, nome });
+  });
+  return Array.from(map.values()).sort((a, b) =>
+    a.nome.localeCompare(b.nome, "pt-BR")
+  );
+}
+
+function sortProdutosByNome(produtos) {
+  return [...(produtos || [])].sort((a, b) => {
+    const byName = String(a.produto || a.nome || "").localeCompare(
+      String(b.produto || b.nome || ""),
+      "pt-BR"
+    );
+    if (byName !== 0) return byName;
+    return String(a.codigo || "").localeCompare(String(b.codigo || ""), "pt-BR");
+  });
+}
+
+/**
+ * Matéria-prima (ou produto acabado) vinda do cadastro da Industrialização.
+ * Esses itens devem ir para a validação da Industrialização, nunca do Transbordo.
+ */
+export function isProdutoIndustrializacao(produto) {
+  if (!produto) return false;
+  if (produto.fonte === "industrializacao") return true;
+  const id = String(produto.id || produto.produto_id || "");
+  return id.startsWith("ind-");
+}
+
+/**
+ * Granel na Ordem de Transbordo: produtos cadastrados no Transbordo
+ * e matérias-primas cadastradas na Industrialização.
+ */
+export function catalogProdutosGranel(produtosTb, produtosMp) {
+  return sortProdutosByNome([
+    ...(produtosTb || []).map((p) => ({ ...p, fonte: "transbordo" })),
+    ...(produtosMp || []).map((p) => ({ ...p, fonte: "industrializacao" })),
+  ]);
+}
+
+/**
  * Catálogo de produtos por destino (Recebimento / Ordem de Transbordo).
  * Industrialização + vasilhame → produto acabado; demais origens/tipos → MP.
  */
@@ -219,7 +274,8 @@ export function matchProdutoRecord(produto, record) {
  * - vasilhame: somente produtos desse cliente que possuem vasilhame (tanque) em estoque no pátio.
  * - embalado (IBC / Bombona / Tambor): somente produtos desse cliente com estoque do tipo embalado.
  * - granel: todos os produtos desse cliente.
- * - tanka: produtos desse cliente que possuem tanka (isotanque) com saldo disponível.
+ * - tanka: produtos desse cliente com saldo em tanka do Transbordo
+ *   (entradas e saídas de OP). Volume e produto da Industrialização não entram.
  */
 export function filterProdutosByOrigem({
   produtos = [],
@@ -231,8 +287,6 @@ export function filterProdutosByOrigem({
   isotanques = [],
   transbordos = [],
   containers = [],
-  indTanks = [],
-  indStock = [],
 }) {
   if (!origemTipo || origemTipo === "granel") {
     return produtos;
@@ -330,60 +384,48 @@ export function filterProdutosByOrigem({
   }
 
   if (origemTipo === "tanka") {
-    const unified = mergeTankasUnificadas({
-      isotanques,
-      transbordos,
-      indTanks,
-      indContainers: containers,
-      indStock,
-    });
+    const tankasComSaldo = (isotanques || [])
+      .map((iso) => {
+        if (!iso) return null;
+        const tankaCodigo = iso.tanka || iso.codigo_itku || "";
+        const volume = computeTankaSaldo({
+          isotanqueId: iso.id,
+          tankaCodigo,
+          transbordos,
+        });
+        if (!(volume > 0)) return null;
 
-    const tankasComSaldo = unified.filter((t) => {
-      const vol = Number(t.volumeAtual ?? t.volume ?? t.volumeTb) || 0;
-      if (vol <= 0) return false;
+        const latest = [...(transbordos || [])]
+          .filter((t) =>
+            (t.destinos || []).some(
+              (d) =>
+                d.tipo_embalagem === "Tankagem" &&
+                matchesTanka(d, iso.id, tankaCodigo)
+            )
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.created_at || b.created_date || b.data || 0) -
+              new Date(a.created_at || a.created_date || a.data || 0)
+          )[0];
 
-      const iso = t.isotanque;
-      const ind = t.indTank;
-      const cNome = t.cliente_nome || iso?.cliente_nome || ind?.client || "";
-      const cId = iso?.cliente_id || null;
-
-      const matchClient =
-        matchClienteRecord(clienteId, clienteNome, {
-          cliente_id: cId,
-          cliente_nome: cNome,
-          client: cNome,
-        }) ||
-        (iso && matchClienteRecord(clienteId, clienteNome, iso));
-
-      return matchClient;
-    });
-
-    return produtos.filter((p) =>
-      tankasComSaldo.some((t) => {
-        const iso = t.isotanque;
-        const ind = t.indTank;
-        const pNome =
-          t.produto ||
-          t.produto_nome ||
-          iso?.produto_nome ||
-          ind?.product ||
-          "";
-        const pCod = iso?.produto_codigo || t.codigo || "";
-        const pId = iso?.produto_id || null;
-
-        const matched =
-          matchProdutoRecord(p, {
-            produto_id: pId,
-            produto_nome: pNome,
-            produto_codigo: pCod,
-            produto: pNome,
-            product: pNome,
-          }) ||
-          (iso && matchProdutoRecord(p, iso));
-
-        return matched;
+        return {
+          produto_id: iso.produto_id || latest?.produto_id || null,
+          produto_nome: iso.produto_nome || latest?.produto_nome || "",
+          produto_codigo: iso.produto_codigo || latest?.produto_codigo || "",
+          produto: iso.produto_nome || latest?.produto_nome || "",
+          cliente_id: iso.cliente_id || latest?.cliente_id || null,
+          cliente_nome: iso.cliente_nome || latest?.cliente_nome || "",
+        };
       })
-    );
+      .filter(
+        (t) => t && matchClienteRecord(clienteId, clienteNome, t)
+      );
+
+    return produtos.filter((p) => {
+      if (isProdutoIndustrializacao(p)) return false;
+      return tankasComSaldo.some((t) => matchProdutoRecord(p, t));
+    });
   }
 
   return produtos;

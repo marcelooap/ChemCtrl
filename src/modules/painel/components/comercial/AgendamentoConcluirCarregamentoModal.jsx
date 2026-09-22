@@ -41,15 +41,16 @@ export default function AgendamentoConcluirCarregamentoModal({
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
   const booking = summary.first;
+  const cargaKey = list.map((row) => row.saida_id).filter(Boolean).join('|');
 
   useEffect(() => {
-    if (!open || !booking) return;
+    if (!open) return;
     setHoraCarregamento(nowBrasiliaHHMM());
     setDataCarregamento(todayISO());
     setError('');
     setSaving(false);
     savingRef.current = false;
-  }, [open, booking]);
+  }, [open, cargaKey]);
 
   if (!booking) return null;
 
@@ -104,7 +105,7 @@ export default function AgendamentoConcluirCarregamentoModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {t('painel.comercial.agendamentos.concluir.title')}

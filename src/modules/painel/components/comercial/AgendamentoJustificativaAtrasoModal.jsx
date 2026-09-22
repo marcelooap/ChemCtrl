@@ -78,6 +78,7 @@ export default function AgendamentoJustificativaAtrasoModal({
         horaCarregamento: pendingPayload.horaCarregamento,
         dataCarregamento: pendingPayload.dataCarregamento,
         justificativa: { responsavel, motivo },
+        quantidadesCarregadas: pendingPayload.quantidadesCarregadas || null,
       });
       onClose();
     } catch (err) {

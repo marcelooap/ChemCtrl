@@ -24,17 +24,18 @@ import { Can } from '@industrializacao/lib/rbac/Can';
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
+import { prepareEntradaView } from "@industrializacao/lib/syncMpEntradaTransbordo";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
   { value: "convencional", label: "Transbordo" },
-  { value: "industrializacao", label: "ChemCtrl" },
+  { value: "industrializacao", label: "Industrialização" },
 ];
 
 function getSistemaOrigem(entrada) {
-  return entrada?.origem === "industrializacao" ? "ChemCtrl" : "Transbordo";
+  return entrada?.origem === "industrializacao" ? "Industrialização" : "Transbordo";
 }
 
 function getEntradaLotes(entrada) {
@@ -84,6 +85,7 @@ export default function Entrada() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntrada, setEditingEntrada] = useState(null);
   const [viewEntrada, setViewEntrada] = useState(null);
+  const [viewDestinos, setViewDestinos] = useState([]);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -202,8 +204,25 @@ export default function Entrada() {
     setModalOpen(true);
   };
 
-  const handleView = (entrada) => {
-    setViewEntrada(entrada);
+  const handleView = async (entrada) => {
+    let current = entrada;
+    let destinos = [];
+    try {
+      const prepared = await prepareEntradaView(entrada);
+      current = prepared.entrada;
+      destinos = prepared.destinosInformados || [];
+      if (current !== entrada) {
+        setEntradas((prev) =>
+          prev.map((item) =>
+            item.id === current.id ? { ...item, ...current } : item
+          )
+        );
+      }
+    } catch (err) {
+      console.error("[Entrada] visualização:", err);
+    }
+    setViewEntrada(current);
+    setViewDestinos(destinos);
     setViewOpen(true);
   };
 
@@ -470,7 +489,7 @@ export default function Entrada() {
                 filtered.map((e, i) => {
                   const lotes = getEntradaLotes(e);
                   const sistema = getSistemaOrigem(e);
-                  const isChemCtrl = sistema === "ChemCtrl";
+                  const isIndustrializacao = sistema === "Industrialização";
                   const unidades = lotes.map((l) => l.unidade_medida || "-");
                   const unidadesDistintas = [...new Set(unidades.filter((u) => u && u !== "-"))];
                   const showUnidadesStacked = unidadesDistintas.length > 1;
@@ -488,7 +507,7 @@ export default function Entrada() {
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                            isChemCtrl
+                            isIndustrializacao
                               ? "bg-orange-100 text-orange-800"
                               : "bg-primary/10 text-primary"
                           }`}
@@ -647,6 +666,7 @@ export default function Entrada() {
         onClose={handleDialogClose}
         entrada={viewEntrada}
         entradaId={viewEntrada ? idMap[viewEntrada.id] || "-" : "-"}
+        destinosInformados={viewDestinos}
         produtos={produtos}
         transbordos={transbordos}
         estoque={estoque}

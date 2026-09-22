@@ -266,6 +266,18 @@ export default function OrdemTransbordoRelatorio() {
           value: orDash(granel.nota_fiscal),
         },
         {
+          label: t("painel.operacional.ordemTransbordo.fields.supplier"),
+          value: orDash(granel.fornecedor || granel.lotes?.[0]?.fornecedor),
+        },
+        {
+          label: t("painel.operacional.ordemTransbordo.fields.manufacture"),
+          value: fmtDate(granel.data_fabricacao || granel.lotes?.[0]?.data_fabricacao),
+        },
+        {
+          label: t("painel.operacional.ordemTransbordo.fields.expiry"),
+          value: fmtDate(granel.data_validade || granel.lotes?.[0]?.data_validade),
+        },
+        {
           label: t("painel.operacional.ordemTransbordo.fields.ticket"),
           value: orDash(granel.granel_ticket),
         },

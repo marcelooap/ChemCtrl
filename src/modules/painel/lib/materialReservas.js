@@ -6,6 +6,7 @@ import {
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
 import { isVasilhameReservaChave } from '@painel/lib/vasilhameReservas';
+import { sumBloqueioPendenteChave, rpcCriarMaterialReserva, rpcAtualizarMaterialReserva } from '@painel/lib/saidaReservas';
 import { entities } from '@transbordo/services/entities';
 
 const UUID_RE =
@@ -72,8 +73,9 @@ export function formatQty(value, unidade) {
  * Agrega estoque do Transbordo por lote (cliente + produto + lote + unidade).
  * @param {Array} estoqueRows - registros já com saldo_atual recalculado
  * @param {Array} reservas - registros de t_material_reservas
+ * @param {Array} saidas - saídas usadas no bloqueio de saída sem reserva pendente
  */
-export function aggregateEstoqueByLote(estoqueRows = [], reservas = []) {
+export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas = []) {
   const map = new Map();
 
   for (const raw of estoqueRows) {
@@ -155,12 +157,14 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = []) {
     .map((row) => {
       const saldoReservado = Math.round(reservadoByChave.get(row.chave) || 0);
       const saldoAtual = Math.round(row.saldoAtual || 0);
-      const saldoFinal = Math.max(0, saldoAtual - saldoReservado);
+      const bloqueioPendente = sumBloqueioPendenteChave(saidas, row.chave);
+      const saldoFinal = Math.max(0, saldoAtual - saldoReservado - bloqueioPendente);
       return {
         ...row,
         saldoAtual,
         saldoReservado,
         saldoFinal,
+        bloqueioPendente,
       };
     })
     .filter((row) => row.saldoAtual > 0 || row.saldoReservado > 0)
@@ -241,102 +245,122 @@ export function listReservasForChave(reservas = [], chave) {
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
-/**
- * Ajusta o saldo reservado total da chave para `novaQuantidade`.
- * Aumentos criam nova reserva; reduções marcam registros como removidos (com auditoria).
- */
-export async function setSaldoReservado({
-  row,
-  novaQuantidade,
-  user,
-  observacao = '',
-  motivoRemocao = '',
-}) {
-  if (!row?.chave) throw new Error('Linha de estoque inválida.');
+function normalizeSolicitante(value) {
+  const name = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!name) return null;
+  return name.slice(0, 120);
+}
 
-  const target = Math.max(0, Math.round(Number(novaQuantidade) || 0));
-  const saldoAtual = Math.round(Number(row.saldoAtual) || 0);
-  if (target > saldoAtual) {
+function reservaActor(user) {
+  return {
+    usuarioId: toUserIdText(user?.id),
+    usuarioNome: user?.nome || user?.full_name || user?.username || user?.email || '—',
+  };
+}
+
+function sumAtivas(reservas = []) {
+  return (reservas || [])
+    .filter((r) => r?.status === 'ativa')
+    .reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
+}
+
+function assertWithinStock(total, saldoAtual, unidade) {
+  const reserved = Math.round(total);
+  const stock = Math.round(saldoAtual);
+  if (reserved > stock) {
     throw new Error(
-      `Quantidade reservada (${target}) não pode exceder o saldo atual (${saldoAtual} ${row.unidade}).`
+      `Quantidade reservada (${reserved}) não pode exceder o saldo disponível para reserva (${stock} ${unidade}).`
     );
   }
+}
+
+/**
+ * Inclui uma reserva ativa para o solicitante informado.
+ * Não altera as demais reservas do mesmo produto/lote.
+ */
+export async function createMaterialReserva({ row, quantidade, solicitante, user }) {
+  if (!row?.chave) throw new Error('Linha de estoque inválida.');
+
+  const qtd = Math.round(Number(quantidade) || 0);
+  if (qtd <= 0) throw new Error('Informe uma quantidade maior que zero.');
+
+  const solicitanteNome = normalizeSolicitante(solicitante);
+  if (!solicitanteNome) throw new Error('Informe o solicitante da reserva.');
 
   const all = await entities.materialReservas.filter({ chave: row.chave });
-  const ativas = (all || [])
-    .filter((r) => r.status === 'ativa')
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const saldoAtual = Math.round(Number(row.saldoAtual) || 0);
+  const bloqueio = Math.round(Number(row.bloqueioPendente) || 0);
+  assertWithinStock(sumAtivas(all) + qtd, saldoAtual - bloqueio, row.unidade);
 
-  const atual = ativas.reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
-  const usuarioNome =
-    user?.nome || user?.full_name || user?.username || user?.email || '—';
-  const usuarioId = toUserIdText(user?.id);
+  const { usuarioId, usuarioNome } = reservaActor(user);
+  const criado = await rpcCriarMaterialReserva({
+    p_chave: row.chave,
+    p_cliente_id: toUuidOrNull(row.clienteId),
+    p_cliente_nome: row.clienteNome || null,
+    p_produto_id: toUuidOrNull(row.produtoId),
+    p_produto_codigo: row.codigo === '—' ? '' : row.codigo,
+    p_produto_nome: row.produto === '—' ? null : row.produto,
+    p_lote: row.lote === '—' ? '' : row.lote,
+    p_unidade: row.unidade || 'kg',
+    p_quantidade: qtd,
+    p_solicitante: solicitanteNome,
+    p_usuario_id: usuarioId,
+    p_usuario_nome: usuarioNome,
+  });
+  if (criado.missing) {
+    throw new Error(
+      'Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para reservar com controle de saldo.'
+    );
+  }
+  return { changed: true };
+}
 
-  const basePayload = {
-    chave: row.chave,
-    cliente_id: toUuidOrNull(row.clienteId),
-    cliente_nome: row.clienteNome || null,
-    produto_id: toUuidOrNull(row.produtoId),
-    produto_codigo: row.codigo === '—' ? '' : row.codigo,
-    produto_nome: row.produto === '—' ? null : row.produto,
-    lote: row.lote === '—' ? '' : row.lote,
-    unidade_medida: row.unidade || 'kg',
-  };
+/**
+ * Altera quantidade e solicitante de uma reserva ativa.
+ * Aumento atualiza o mesmo registro. Redução parcial registra a parcela removida.
+ * Quantidade 0 marca a reserva como removida.
+ */
+export async function updateMaterialReservaQuantidade({
+  row,
+  reservaId,
+  novaQuantidade,
+  solicitante,
+  user,
+}) {
+  if (!row?.chave) throw new Error('Linha de estoque inválida.');
+  if (!reservaId) throw new Error('Reserva não encontrada.');
 
-  if (target === atual) return { changed: false, saldoReservado: atual };
+  const target = Math.max(0, Math.round(Number(novaQuantidade) || 0));
+  const solicitanteNome = normalizeSolicitante(solicitante);
+  if (target !== 0 && !solicitanteNome) throw new Error('Informe o solicitante da reserva.');
+  const all = await entities.materialReservas.filter({ chave: row.chave });
+  const reserva = (all || []).find((r) => r.id === reservaId && r.status === 'ativa');
+  if (!reserva) throw new Error('Reserva não encontrada.');
 
-  if (target > atual) {
-    const delta = target - atual;
-    await entities.materialReservas.create({
-      ...basePayload,
-      quantidade: delta,
-      status: 'ativa',
-      usuario_id: usuarioId,
-      usuario_nome: usuarioNome,
-      observacao: observacao || null,
-    });
-    return { changed: true, saldoReservado: target };
+  const atual = Math.round(Number(reserva.quantidade) || 0);
+  const sameRequester =
+    !!solicitanteNome && String(reserva.solicitante || '').trim() === solicitanteNome;
+  if (target === atual && sameRequester) return { changed: false, removed: false };
+
+  if (target !== atual) {
+    const outras = (all || [])
+      .filter((r) => r.status === 'ativa' && r.id !== reservaId)
+      .reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
+    const saldoAtual = Math.round(Number(row.saldoAtual) || 0);
+    const bloqueio = Math.round(Number(row.bloqueioPendente) || 0);
+    assertWithinStock(outras + target, saldoAtual - bloqueio, row.unidade);
   }
 
-  // Redução: remove das reservas mais recentes
-  let remaining = atual - target;
-  const now = new Date().toISOString();
-
-  for (const reserva of ativas) {
-    if (remaining <= 0) break;
-    const qtd = Number(reserva.quantidade) || 0;
-    if (qtd <= 0) continue;
-
-    if (qtd <= remaining) {
-      await entities.materialReservas.update(reserva.id, {
-        status: 'removida',
-        removido_em: now,
-        removido_por_id: usuarioId,
-        removido_por_nome: usuarioNome,
-        motivo_remocao: motivoRemocao || observacao || 'Ajuste de saldo reservado',
-      });
-      remaining -= qtd;
-    } else {
-      // Parcial: reduz a ativa e registra a parcela removida
-      await entities.materialReservas.update(reserva.id, {
-        quantidade: qtd - remaining,
-      });
-      await entities.materialReservas.create({
-        ...basePayload,
-        quantidade: remaining,
-        status: 'removida',
-        usuario_id: toUserIdText(reserva.usuario_id),
-        usuario_nome: reserva.usuario_nome || '—',
-        observacao: reserva.observacao || null,
-        removido_em: now,
-        removido_por_id: usuarioId,
-        removido_por_nome: usuarioNome,
-        motivo_remocao: motivoRemocao || observacao || 'Ajuste parcial de saldo reservado',
-        created_at: reserva.created_at || now,
-      });
-      remaining = 0;
-    }
-  }
-
-  return { changed: true, saldoReservado: target };
+  const { usuarioId, usuarioNome } = reservaActor(user);
+  const ajustada = await rpcAtualizarMaterialReserva({
+    p_reserva_id: reservaId,
+    p_quantidade: target,
+    p_solicitante: solicitanteNome,
+    p_usuario_id: usuarioId,
+    p_usuario_nome: usuarioNome,
+  });
+  if (!ajustada.missing) return { changed: true, removed: target === 0 };
+  throw new Error(
+    'Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para ajustar a reserva com controle de saldo.'
+  );
 }

@@ -29,7 +29,6 @@ export default function AgendamentoSlotModal({
   scheduledSaidaIds = new Set(),
   permissionPrefix = 'painel_comercial_agendamentos',
   onBook,
-  onRelease,
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
@@ -69,13 +68,16 @@ export default function AgendamentoSlotModal({
   }, [saidas, scheduledSaidaIds, slotSaidaIds]);
 
   const filteredSaidas = useMemo(() => {
+    const base = occupied
+      ? availableSaidas.filter((s) => slotSaidaIds.has(String(s.id)))
+      : availableSaidas;
     const q = search.trim().toLowerCase();
-    if (!q) return availableSaidas;
-    return availableSaidas.filter((s) => {
+    if (!q) return base;
+    return base.filter((s) => {
       const hay = `${s.codigo || ''} ${s.cliente_nome || ''} ${produtosLabel(s)}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [availableSaidas, search]);
+  }, [availableSaidas, search, occupied, slotSaidaIds]);
 
   if (!slot) return null;
 
@@ -115,22 +117,6 @@ export default function AgendamentoSlotModal({
     }
   };
 
-  const handleRelease = async () => {
-    if (savingRef.current || slotBookings.length === 0) return;
-    savingRef.current = true;
-    setSaving(true);
-    setError('');
-    try {
-      await onRelease(slotBookings);
-      onClose();
-    } catch (err) {
-      setError(err?.message || t('painel.comercial.agendamentos.errors.releaseFailed'));
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !saving && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -160,6 +146,7 @@ export default function AgendamentoSlotModal({
           </div>
         ) : null}
 
+        {occupied ? null : (
         <p className="text-xs text-muted-foreground">
           {slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO
             ? t('painel.comercial.agendamentos.modal.encaixeMultiHint', {
@@ -169,6 +156,7 @@ export default function AgendamentoSlotModal({
                 count: selectedIds.size,
               })}
         </p>
+        )}
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -186,7 +174,7 @@ export default function AgendamentoSlotModal({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0">
-                  <th className="w-10 px-3 py-2" />
+                  {occupied ? null : <th className="w-10 px-3 py-2" />}
                   <th className="px-3 py-2 font-medium">
                     {t('painel.comercial.agendamentos.columns.codigo')}
                   </th>
@@ -207,7 +195,7 @@ export default function AgendamentoSlotModal({
               <tbody>
                 {filteredSaidas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                    <td colSpan={occupied ? 5 : 6} className="px-3 py-8 text-center text-muted-foreground">
                       {t('painel.comercial.agendamentos.modal.emptySaidas')}
                     </td>
                   </tr>
@@ -217,21 +205,27 @@ export default function AgendamentoSlotModal({
                     return (
                       <tr
                         key={s.id}
-                        onClick={() => toggleSaida(s.id)}
-                        className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                          checked ? 'bg-primary/5' : 'hover:bg-muted/40'
+                        onClick={occupied ? undefined : () => toggleSaida(s.id)}
+                        className={`border-b border-border last:border-0 transition-colors ${
+                          occupied
+                            ? ''
+                            : checked
+                              ? 'cursor-pointer bg-primary/5'
+                              : 'cursor-pointer hover:bg-muted/40'
                         }`}
                       >
-                        <td className="px-3 py-2.5">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleSaida(s.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="accent-primary"
-                            aria-label={s.codigo || s.id}
-                          />
-                        </td>
+                        {occupied ? null : (
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSaida(s.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="accent-primary"
+                              aria-label={s.codigo || s.id}
+                            />
+                          </td>
+                        )}
                         <td className="px-3 py-2.5 font-medium text-primary">{s.codigo || '—'}</td>
                         <td className="px-3 py-2.5 text-foreground">{s.cliente_nome || '—'}</td>
                         <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
@@ -257,42 +251,14 @@ export default function AgendamentoSlotModal({
           </div>
         ) : null}
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <div>
-            {occupied ? (
-              <Can
-                anyOf={[
-                  `${permissionPrefix}.delete`,
-                  `${permissionPrefix}.view`,
-                ]}
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="text-red-700 border-red-200 hover:bg-red-50"
-                  onClick={handleRelease}
-                  disabled={saving}
-                >
-                  {t(
-                    occupied &&
-                      (slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO)
-                      ? 'painel.comercial.agendamentos.modal.releaseCarregamento'
-                      : 'painel.comercial.agendamentos.modal.release'
-                  )}
-                </Button>
-              </Can>
-            ) : null}
-          </div>
+        {occupied ? null : (
+        <DialogFooter className="gap-2 sm:justify-end">
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               {t('buttons.cancel')}
             </Button>
             <Can
-              anyOf={
-                occupied
-                  ? [`${permissionPrefix}.edit`, `${permissionPrefix}.view`]
-                  : [`${permissionPrefix}.create`, `${permissionPrefix}.view`]
-              }
+              anyOf={[`${permissionPrefix}.create`, `${permissionPrefix}.view`]}
             >
               <Button type="button" onClick={handleBook} disabled={saving || selectedIds.size === 0}>
                 {saving
@@ -302,6 +268,7 @@ export default function AgendamentoSlotModal({
             </Can>
           </div>
         </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

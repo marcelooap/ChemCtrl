@@ -1051,6 +1051,12 @@
           "dataLabel": "Loading date",
           "horaHint": "Pre-filled with the current Brasília time (editable).",
           "dataHoraHint": "Date and time pre-filled with the current Brasília moment (editable).",
+          "qtdTitle": "Loaded quantity",
+          "qtdHint": "The reservation is reduced by the quantity actually loaded. It starts as the requested quantity.",
+          "qtdSolicitada": "Requested: {{qty}}",
+          "qtdSemReserva": "No reservation",
+          "qtdReserva": "Reservation: {{name}}",
+          "qtdInvalid": "The loaded quantity must be between 0 and the requested quantity.",
           "confirm": "Complete",
           "saveSuccess": "Loading completed"
         },
@@ -1204,6 +1210,15 @@
           "title": "Schedule loading — {{codigo}}",
           "subtitle": "Select the day and a time slot for {{cliente}}. This step is required."
         },
+        "reschedule": {
+          "button": "Schedule",
+          "title": "Change schedule — {{codigo}}",
+          "subtitle": "Select the new day and time. The planned date changes when you confirm.",
+          "confirmTitle": "Confirm change",
+          "confirmDescription": "The planned date will become {{date}} at {{time}}. The change is saved when you save the request.",
+          "confirm": "Confirm",
+          "back": "Back"
+        },
         "errors": {
           "selectSaida": "Select at least one outbound request to schedule.",
           "saidaAssigned": "Outbound {{codigo}} is already scheduled at {{slot}}.",
@@ -1274,6 +1289,21 @@
           "fracionado": "Fractional"
         },
         "editTitle": "Edit reserved balance",
+        "manageTitle": "Product reservations",
+        "newReservation": "New reservation",
+        "newReservationTitle": "New reservation",
+        "editReservationTitle": "Edit reservation",
+        "activeReservations": "Active reservations",
+        "noActiveReservations": "No active reservations. Use New reservation to add one.",
+        "availableShort": "Available",
+        "pendingExitBlock": "Unreserved exits not yet posted block {{qty}} for new reservations.",
+        "availableToReserve": "Available: {{value}} {{unidade}}",
+        "editQtyHint": "Increase or decrease the quantity. Enter 0 to remove this reservation.",
+        "cardEdit": "Edit reservation for {{name}}",
+        "deleteReservation": "Delete reservation for {{name}}",
+        "deleteTitle": "Delete reservation",
+        "deleteMessage": "Delete the reservation for {{name}} ({{qty}} {{unidade}})?",
+        "deleteAction": "Delete",
         "viewTitle": "Balance and reservation details",
         "productSummary": "Product summary",
         "reservationsList": "Reservation history",
@@ -1282,8 +1312,14 @@
         "finalPreview": "Expected final balance: {{value}} {{unidade}}",
         "observation": "Note",
         "observationPlaceholder": "Reason for reservation or adjustment (optional)",
+        "requester": "Requester",
+        "requesterPlaceholder": "Name of the person who requested the reservation",
+        "requesterHint": "Name of the person who requested this reservation.",
         "saving": "Saving...",
         "saveSuccess": "Reserved balance updated",
+        "createSuccess": "Reservation added",
+        "updateSuccess": "Reservation updated",
+        "removeSuccess": "Reservation removed",
         "loadErrorTitle": "Failed to load stock",
         "loadErrorDescription": "Check ChemFlow connectivity and whether t_material_reservas was created.",
         "columns": {
@@ -1298,6 +1334,7 @@
         },
         "history": {
           "date": "Date",
+          "requester": "Requester",
           "user": "Reserved by",
           "qty": "Quantity",
           "status": "Status",
@@ -1311,6 +1348,9 @@
         "errors": {
           "negative": "Quantity cannot be negative.",
           "exceedsBalance": "Cannot reserve more than {{max}} {{unidade}}.",
+          "requesterRequired": "Enter the person who requested the reservation.",
+          "qtyRequired": "Enter a quantity greater than zero.",
+          "notFound": "Reservation not found.",
           "saveFailed": "Could not save the reservation."
         }
       }
@@ -1486,9 +1526,36 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Enter destination, date, client, product and origin to register the transshipment",
+        "subtitle": "Enter date, origin, client and product to register the transshipment",
         "formTitle": "New order",
+        "operatorAuth": {
+          "hint": "Identify the operator to start filling in the order. Each order requires a new confirmation.",
+          "newOrder": "New order",
+          "cancelOrder": "Cancel order",
+          "responsible": "Responsible operator:",
+          "title": "Operator identification",
+          "description": "Enter the username and password of the person registering this order. The computer login will not change.",
+          "user": "User",
+          "userPlaceholder": "Select or type the user",
+          "loadingUsers": "Loading users...",
+          "password": "Password",
+          "passwordPlaceholder": "Enter the password",
+          "submit": "Sign in",
+          "cancel": "Cancel",
+          "invalidCredentials": "Invalid username or password.",
+          "inactive": "Inactive user. Contact the system administrator.",
+          "forbidden": "This user does not have the Operational profile.",
+          "session": "The computer session expired. Sign in to ChemCtrl again.",
+          "unavailable": "Operator identification is not available in this environment yet.",
+          "rateLimited": "Too many attempts. Wait a few minutes and try again.",
+          "network": "Could not validate the credentials. Try again.",
+          "loadError": "Could not load the enabled users.",
+          "emptyUsers": "No active user with the Operational profile.",
+          "required": "Select the user and enter the password.",
+          "missingOperator": "Identify the operator before saving the order."
+        },
         "goToTransbordo": "Go to transshipment",
+        "submitValidation": "Send for validation",
         "search": "Search by code, product or client...",
         "records": "{{count}} record(s)",
         "empty": "No transshipments found.",
@@ -1509,6 +1576,10 @@
           "vasilhame": "IBC / TOTE",
           "embalado": "IBC / JERRYCAN / DRUM"
         },
+        "productSource": {
+          "transbordo": "Transshipment",
+          "mp": "Raw material"
+        },
         "fields": {
           "date": "Date",
           "destino": "Destination",
@@ -1520,6 +1591,9 @@
           "qty": "Quantity",
           "unit": "Unit",
           "lot": "Lot",
+          "supplier": "Supplier",
+          "manufacture": "Manufacture",
+          "expiry": "Expiry",
           "density": "Density",
           "unitPrice": "Unit price",
           "ticket": "Ticket",
@@ -1537,6 +1611,7 @@
           "nf": "Invoice no.",
           "unit": "Unit",
           "lot": "Lot",
+          "supplier": "Supplier name",
           "ticket": "Ticket no."
         },
         "granel": {

@@ -189,6 +189,7 @@ export default function TransbordoModal({
   destinosOnly = false,
   lockHeader = false,
   externalError = "",
+  fixedOperador = null,
 }) {
   const [data, setData] = useState("");
   const [clienteId, setClienteId] = useState("");
@@ -460,7 +461,10 @@ export default function TransbordoModal({
     setConfirmOpen(false);
     setConfirmMessage("");
     setPendingPayload(null);
-  }, [editingTransbordo, open, prefillEntrada, prefillOrigemTipo, headerPrefill, entradas, transbordos, vasilhames]);
+    if (fixedOperador?.nome) {
+      setOperadores([String(fixedOperador.nome)]);
+    }
+  }, [editingTransbordo, open, prefillEntrada, prefillOrigemTipo, headerPrefill, entradas, transbordos, vasilhames, fixedOperador]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -473,7 +477,7 @@ export default function TransbordoModal({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || fixedOperador?.nome) return undefined;
     let cancelled = false;
     listOperadoresAtivosNomes()
       .then((ativos) => {
@@ -485,7 +489,7 @@ export default function TransbordoModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, fixedOperador]);
 
   const operadoresOpcoes = useMemo(
     () => mergeOperadoresDropdown(operadoresAtivos, operadores),
@@ -1101,7 +1105,12 @@ export default function TransbordoModal({
       densidade: String(densidade),
       volume_total: volumeOrigens,
       massa_total: massaTotal,
-      operadores,
+      operadores: fixedOperador?.nome
+        ? [String(fixedOperador.nome)]
+        : operadores,
+      ...(fixedOperador?.id
+        ? { operador_usuario_id: String(fixedOperador.id) }
+        : {}),
       observacoes,
       origens: origensNorm,
       destinos: destinosNorm,
@@ -1145,7 +1154,7 @@ export default function TransbordoModal({
       setError("Produto é obrigatório.");
       return;
     }
-    if (operadores.length === 0) {
+    if (operadores.length === 0 && !fixedOperador?.nome) {
       setError("Selecione ao menos um operador.");
       return;
     }
@@ -1491,9 +1500,18 @@ export default function TransbordoModal({
             </div>
           </section>
 
-          {/* Operadores + Observações (final) */}
+          {/* Operador identificado na ordem, ou seleção manual nas demais telas */}
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             <div className="space-y-1.5">
+              {fixedOperador?.nome ? (
+                <>
+                  <Label>Operador</Label>
+                  <div className="px-3 py-2 rounded-md border border-border bg-muted/40 text-sm text-foreground">
+                    {fixedOperador.nome}
+                  </div>
+                </>
+              ) : (
+              <>
               <Label>Operadores *</Label>
               <div className="relative" ref={operadoresRef}>
                 <button
@@ -1569,6 +1587,8 @@ export default function TransbordoModal({
                   ))}
                 </div>
               )}
+              </>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1591,7 +1611,7 @@ export default function TransbordoModal({
                 </p>
               )}
               <Button type="button" variant="ghost" onClick={onClose}>
-                Cancelar
+                {fixedOperador?.nome ? "Voltar" : "Cancelar"}
               </Button>
               <Button
                 type="submit"

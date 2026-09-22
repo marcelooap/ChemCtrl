@@ -103,7 +103,10 @@ export const RATE_LIMIT_MESSAGES = {
 /** RPCs que nunca podem ser bloqueadas pelo cliente (logout precisa sempre funcionar). */
 export const RPC_BYPASS = new Set<string>(['destroy_session']);
 
-export const RPC_LOGIN = new Set<string>(['login_user']);
+export const RPC_LOGIN = new Set<string>([
+  'login_user',
+  'confirm_ordem_transbordo_operator',
+]);
 
 export const RPC_PUBLIC = new Set<string>([
   'get_public_lot_info',

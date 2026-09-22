@@ -96,6 +96,8 @@ export default function Saida({
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
   const [deleteId, setDeleteId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
+  const listScrollRef = useRef(null);
   const [viewSaida, setViewSaida] = useState(null);
   const [fiscalConfirm, setFiscalConfirm] = useState(null); // { saida, enviar: boolean }
   const [fiscalBusyId, setFiscalBusyId] = useState(null);
@@ -229,9 +231,35 @@ export default function Saida({
     return `${text} Produtos`;
   };
 
+  const rememberScroll = () => {
+    const list = listScrollRef.current;
+    const page = list?.closest(".overflow-y-auto") ?? null;
+    return {
+      list,
+      listTop: list?.scrollTop ?? 0,
+      page: page && page !== list ? page : null,
+      pageTop: page && page !== list ? page.scrollTop : 0,
+    };
+  };
+
+  const restoreScroll = (snap) => {
+    if (!snap) return;
+    const apply = () => {
+      if (snap.list) snap.list.scrollTop = snap.listTop;
+      if (snap.page) snap.page.scrollTop = snap.pageTop;
+    };
+    apply();
+    requestAnimationFrame(apply);
+  };
+
   const handleDelete = () => runSubmit(async () => {
-    const saida = saidas.find((s) => s.id === deleteId);
+    const id = deleteId;
+    const saida = saidas.find((s) => s.id === id);
     if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
+      setDeleteId(null);
+      return;
+    }
+    if (isExpedicao && isSaidaExpedida(id, expedidasIds)) {
       setDeleteId(null);
       return;
     }
@@ -249,7 +277,15 @@ export default function Saida({
     }
 
     try {
-      await entities.saidas.delete(deleteId);
+      await entities.saidas.delete(id);
+      const snap = rememberScroll();
+      setRemovingId(id);
+      setDeleteId(null);
+      restoreScroll(snap);
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      setSaidas((prev) => prev.filter((s) => s.id !== id));
+      setRemovingId(null);
+      restoreScroll(snap);
 
       // Garante saldo Transbordo (embalado + convencional) após exclusão.
       // Industrialização não é recalculada aqui.
@@ -285,9 +321,10 @@ export default function Saida({
         }
       }
 
-      await loadData();
+      await loadData({ silent: true });
+      restoreScroll(snap);
     } catch {
-      // ignore
+      setRemovingId(null);
     }
     setDeleteId(null);
   });
@@ -392,7 +429,7 @@ export default function Saida({
 
       {/* Table */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="overflow-auto flex-1 min-h-0">
+        <div ref={listScrollRef} className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
@@ -444,9 +481,9 @@ export default function Saida({
                   return (
                   <tr
                     key={s.id}
-                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
-                      i % 2 === 1 ? "bg-muted/40/30" : ""
-                    }`}
+                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-opacity duration-150 ${
+                      removingId === s.id ? "opacity-0" : ""
+                    } ${i % 2 === 1 ? "bg-muted/40/30" : ""}`}
                   >
                     <td className="px-5 py-3 font-medium text-primary">
                       <span className="inline-flex items-center gap-1.5">
@@ -556,7 +593,8 @@ export default function Saida({
                           </button>
                         ) : null}
                         {(!isModuloOperacional ||
-                          canExcluirSaidaNoModuloOperacional(s)) ? (
+                          canExcluirSaidaNoModuloOperacional(s)) &&
+                        !(isExpedicao && expedicaoStatus === "expedido") ? (
                           <button
                             onClick={() => setDeleteId(s.id)}
                             className="text-red-400 hover:text-red-600 transition-colors"
@@ -647,7 +685,9 @@ export default function Saida({
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>

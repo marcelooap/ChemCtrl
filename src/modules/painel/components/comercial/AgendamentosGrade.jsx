@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
+import { Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, Eye, Truck, UtensilsCrossed } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
 import { entities } from '@transbordo/services/entities';
@@ -26,6 +26,16 @@ import {
   DialogTitle,
 } from '@shared/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@shared/components/ui/alert-dialog';
+import {
   ENCAIXE_HORARIO,
   addDays,
   bookSlotSaidas,
@@ -44,7 +54,6 @@ import {
   isSameISODate,
   listAgendamentosByRange,
   normalizeBookings,
-  releaseSlotBookings,
   startOfWeekMonday,
   saveCarregamentoChecklistProgress,
   summarizeSlotBookings,
@@ -52,6 +61,7 @@ import {
   toISODate,
   parseISODate,
   updateTransporte,
+  formatDateBR,
 } from '@painel/lib/agendamentosCarregamento';
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -72,6 +82,7 @@ export default function AgendamentosGrade({
   hideHeader = false,
   lockedSaida = null,
   onBooked,
+  deferBooking = false,
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -101,6 +112,12 @@ export default function AgendamentosGrade({
   const [concluirBookings, setConcluirBookings] = useState(null);
   const [justificativaState, setJustificativaState] = useState(null);
   const [bookingLocked, setBookingLocked] = useState(false);
+  const [pendingMove, setPendingMove] = useState(null);
+  const pendingMoveRef = useRef(null);
+  const queuePendingMove = (move) => {
+    pendingMoveRef.current = move;
+    setPendingMove(move);
+  };
   const [weekDir, setWeekDir] = useState(0);
   const reduceMotion = useReducedMotion();
 
@@ -301,6 +318,10 @@ export default function AgendamentosGrade({
         bookingMap.get(`${selectedIso}|${horario}`)
       );
       if (isCarregado(existing)) return;
+      if (deferBooking) {
+        queuePendingMove({ dateIso: selectedIso, horario, tipo });
+        return;
+      }
       bookLockedSaida(horario, tipo);
       return;
     }
@@ -370,12 +391,6 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
-  const handleRelease = async (bookings) => {
-    await releaseSlotBookings(bookings);
-    toast({ title: t('painel.comercial.agendamentos.releaseSuccess') });
-    await loadData({ silent: true });
-  };
-
   const handleSaveTransporte = async ({ transportadora, motorista, placa }) => {
     const list = normalizeBookings(transporteBookings);
     if (list.length === 0) return;
@@ -394,6 +409,7 @@ export default function AgendamentosGrade({
     horaCarregamento,
     dataCarregamento,
     justificativa,
+    quantidadesCarregadas,
   }) => {
     const list = normalizeBookings(
       justificativaState?.bookings || concluirBookings
@@ -404,6 +420,7 @@ export default function AgendamentosGrade({
       horaCarregamento,
       dataCarregamento,
       justificativa,
+      quantidadesCarregadas,
       user,
       t,
     });
@@ -412,13 +429,14 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
-  const handleNeedsJustificativa = ({ horaCarregamento, dataCarregamento }) => {
+  const handleNeedsJustificativa = ({ horaCarregamento, dataCarregamento, quantidadesCarregadas }) => {
     const list = normalizeBookings(concluirBookings);
     if (list.length === 0) return;
     setJustificativaState({
       bookings: list,
       horaCarregamento,
       dataCarregamento,
+      quantidadesCarregadas,
     });
   };
 
@@ -733,7 +751,6 @@ export default function AgendamentosGrade({
           permissionPrefix={permissionPrefix}
           onClose={() => setActiveSlot(null)}
           onBook={handleBook}
-          onRelease={handleRelease}
         />
       ) : null}
 
@@ -751,6 +768,7 @@ export default function AgendamentosGrade({
         <AgendamentoConcluirCarregamentoModal
           open={!!concluirBookings}
           bookings={concluirBookings}
+          saidas={saidas}
           permissionPrefix={permissionPrefix}
           onClose={() => setConcluirBookings(null)}
           onConfirm={handleConcluirCarregamento}
@@ -815,6 +833,46 @@ export default function AgendamentosGrade({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!pendingMove}
+        onOpenChange={(open) => {
+          if (!open) queuePendingMove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('painel.comercial.agendamentos.reschedule.confirmTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('painel.comercial.agendamentos.reschedule.confirmDescription', {
+                date: formatDateBR(pendingMove?.dateIso),
+                time:
+                  pendingMove?.horario === ENCAIXE_HORARIO
+                    ? t('painel.comercial.agendamentos.encaixe')
+                    : pendingMove?.horario,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {t('painel.comercial.agendamentos.reschedule.back')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const move = pendingMoveRef.current;
+                queuePendingMove(null);
+                if (move && typeof onBooked === 'function') {
+                  onBooked({ ...move, saida: lockedSaida });
+                }
+              }}
+            >
+              {t('painel.comercial.agendamentos.reschedule.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {canViewSaida ? (
         <SaidaViewDialog
@@ -926,7 +984,7 @@ function TimeSlotButton({
         onClick={interactive ? onClick : undefined}
         disabled={!interactive}
         className={`w-full h-full ${minH} text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          hasSideActions ? 'pr-10' : ''
+          showTruck && filled ? 'pr-14' : hasSideActions ? 'pr-10' : ''
         } ${interactive ? '' : 'cursor-default'}`}
       >
         <span className="flex items-center gap-1.5">
@@ -954,21 +1012,25 @@ function TimeSlotButton({
                 {saidasCountLabel?.(summary.count) || `${summary.count} saídas`}
               </span>
             ) : null}
-            <span className={`block text-xs font-semibold truncate ${tone.meta}`}>
-              {summary.codesLabel}
+            <span className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+              <span className={`shrink-0 text-xs font-semibold ${tone.meta}`}>
+                {summary.codesLabel}
+              </span>
+              <span className={`min-w-0 truncate text-[13px] font-medium ${tone.metaMuted}`}>
+                {[
+                  summary.clientesLabel && summary.clientesLabel !== '—'
+                    ? summary.clientesLabel
+                    : null,
+                  filled ? summary.motorista : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
             </span>
-            <span className={`block text-[11px] truncate ${tone.metaMuted}`}>
-              {summary.clientesLabel}
-            </span>
-            {filled ? (
-              <>
-                <span className={`block text-[11px] truncate ${tone.meta}`}>
-                  {summary.motorista}
-                </span>
-                <span className={`block text-[11px] font-mono truncate ${tone.metaMuted}`}>
-                  {[summary.placa, summary.transportadora].filter(Boolean).join(' · ')}
-                </span>
-              </>
+            {filled && (summary.placa || summary.transportadora) ? (
+              <span className={`block truncate text-[13px] font-medium ${tone.meta}`}>
+                {[summary.placa, summary.transportadora].filter(Boolean).join(' · ')}
+              </span>
             ) : null}
           </span>
         ) : (
@@ -981,24 +1043,35 @@ function TimeSlotButton({
       {hasSideActions ? (
         <div className="absolute top-1.5 right-1.5 flex flex-col gap-0.5">
           {showTruck ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={`h-7 w-7 ${
-                filled
-                  ? 'text-red-800 hover:text-red-950 hover:bg-red-200/70'
-                  : 'text-red-600 hover:text-red-800 hover:bg-red-200/70'
-              }`}
-              title={transporteLabel}
-              aria-label={transporteLabel}
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditTransporte?.(list);
-              }}
-            >
-              <Truck className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              {filled ? (
+                <span
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+                  title="Transportadora informada"
+                  aria-label="Transportadora informada"
+                >
+                  <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                </span>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`h-7 w-7 ${
+                  filled
+                    ? 'text-red-800 hover:text-red-950 hover:bg-red-200/70'
+                    : 'text-red-600 hover:text-red-800 hover:bg-red-200/70'
+                }`}
+                title={transporteLabel}
+                aria-label={transporteLabel}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditTransporte?.(list);
+                }}
+              >
+                <Truck className="w-4 h-4" />
+              </Button>
+            </div>
           ) : null}
           {showChecklistBtn ? (
             <Button

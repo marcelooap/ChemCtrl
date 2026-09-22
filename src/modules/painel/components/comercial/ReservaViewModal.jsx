@@ -25,7 +25,7 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('painel.comercial.reservarMaterial.viewTitle')}</DialogTitle>
         </DialogHeader>
@@ -96,6 +96,9 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
                         {t('painel.comercial.reservarMaterial.history.date')}
                       </th>
                       <th className="px-3 py-2.5 font-medium">
+                        {t('painel.comercial.reservarMaterial.history.requester')}
+                      </th>
+                      <th className="px-3 py-2.5 font-medium">
                         {t('painel.comercial.reservarMaterial.history.user')}
                       </th>
                       <th className="px-3 py-2.5 font-medium text-right">
@@ -122,6 +125,9 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
                         >
                           <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
                             {brasiliaDateTime(r.created_at)}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium">
+                            {r.solicitante || '—'}
                           </td>
                           <td className="px-3 py-2.5 font-medium">
                             {r.usuario_nome || '—'}

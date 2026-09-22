@@ -32,6 +32,10 @@ import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
 import { allocateMpEntryIdsFromList, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
 import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
+import {
+  deleteEntradaLinkedToMp,
+  upsertEntradaFromMp,
+} from '@industrializacao/lib/syncMpEntradaTransbordo';
 
 const VIEW_TAB_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
@@ -226,6 +230,7 @@ export default function Estoque() {
         const form = forms[0];
         const data = buildMpStockPayload(form, { isEditing: true });
         await base44.entities.RawMaterialStock.update(editing.id, data);
+        await upsertEntradaFromMp({ ...editing, ...data, id: editing.id });
         const newLot = (form.lot || '').trim();
         const oldLot = (editing.lot || '').trim();
         if (newLot !== oldLot) {
@@ -256,10 +261,22 @@ export default function Estoque() {
         rows.forEach((data, i) => {
           data.entry_id = entryIds[i];
         });
-        if (rows.length === 1) {
-          await base44.entities.RawMaterialStock.create(rows[0]);
-        } else {
-          await base44.entities.RawMaterialStock.bulkCreate(rows);
+        const created = rows.length === 1
+          ? [await base44.entities.RawMaterialStock.create(rows[0])]
+          : await base44.entities.RawMaterialStock.bulkCreate(rows);
+        try {
+          for (let i = 0; i < (created || []).length; i += 1) {
+            const row = created[i];
+            if (!row?.id) continue;
+            await upsertEntradaFromMp({ ...rows[i], ...row, id: row.id });
+          }
+        } catch (syncErr) {
+          for (const row of created || []) {
+            if (!row?.id) continue;
+            try { await deleteEntradaLinkedToMp(row.id); } catch { /* entrada pode não ter sido criada */ }
+            try { await base44.entities.RawMaterialStock.delete(row.id); } catch { /* segue o erro original */ }
+          }
+          throw syncErr;
         }
       }
       setShowForm(false);
@@ -275,10 +292,15 @@ export default function Estoque() {
   const remove = (item) => { setDeleteTarget(item); };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    await base44.entities.RawMaterialStock.delete(deleteTarget.id);
-    setDeleteTarget(null);
-    load();
-    toast({ title: t('success.deleted') });
+    try {
+      await deleteEntradaLinkedToMp(deleteTarget.id);
+      await base44.entities.RawMaterialStock.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      load();
+      toast({ title: t('success.deleted') });
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err?.message, variant: 'destructive' });
+    }
   };
 
   const openMovementView = (movement) => setViewingMovement(movement);
@@ -341,10 +363,14 @@ export default function Estoque() {
     );
     try {
       await base44.entities.RawMaterialStock.update(item.id, { status_wms: newValue });
+      await upsertEntradaFromMp({ ...item, status_wms: newValue });
     } catch (err) {
       setItems((prev) =>
         prev.map((e) => (e.id === item.id ? { ...e, status_wms: item.status_wms } : e))
       );
+      try {
+        await base44.entities.RawMaterialStock.update(item.id, { status_wms: item.status_wms });
+      } catch { /* mantém o erro original na tela */ }
       toast({ title: t('errors.saveFailed'), description: err?.message, variant: 'destructive' });
     }
   };

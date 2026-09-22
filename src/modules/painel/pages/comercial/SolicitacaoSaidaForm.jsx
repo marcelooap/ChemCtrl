@@ -50,6 +50,7 @@ export default function SolicitacaoSaidaForm() {
         enableMultiOrigem
         moduloOrigem={MODULO_SAIDA_PAINEL}
         onCreateSuccess={setSaidaParaAgendar}
+        enableAgendamentoEdit={!!id}
       />
       <AgendamentoPosSaidaModal
         open={!!saidaParaAgendar}

@@ -3,6 +3,10 @@ import {
   isChemFlowConfigured,
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
+import {
+  rpcAbaterReservasSaida,
+  rpcEstornarReservasSaida,
+} from '@painel/lib/saidaReservas';
 import { entities } from '@transbordo/services/entities';
 
 export const ENCAIXE_HORARIO = 'encaixe';
@@ -482,6 +486,58 @@ export async function bookSlotSaidas({
   }
 }
 
+export async function rescheduleSaidaAgendamento({
+  saida,
+  dateIso,
+  horario,
+  tipo = 'regular',
+  user,
+  t,
+}) {
+  if (!saida?.id || !dateIso || !horario) throw new Error('Agendamento inválido.');
+
+  const ativos = (await entities.agendamentosCarregamento.filter({ status: 'agendado' })) || [];
+  const current = ativos.find((row) => String(row.saida_id) === String(saida.id));
+  const sameSlot =
+    current &&
+    String(current.data).slice(0, 10) === dateIso &&
+    current.horario === horario;
+  if (sameSlot) return current;
+
+  const concluidos = (
+    (await entities.agendamentosCarregamento.filter({
+      status: 'concluido',
+      data: dateIso,
+      horario,
+    })) || []
+  ).filter((row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario);
+
+  if (concluidos.length > 0 && horario !== ENCAIXE_HORARIO) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.errors.slotCarregado') ||
+        'Este horário já foi carregado e não pode ser reagendado.'
+    );
+  }
+
+  if (current) {
+    await entities.agendamentosCarregamento.update(current.id, {
+      data: dateIso,
+      horario,
+      tipo: tipo === 'encaixe' ? 'encaixe' : 'regular',
+    });
+    return;
+  }
+
+  await bookSlotSaidas({
+    dateIso,
+    horario,
+    tipo,
+    saidas: [saida],
+    user,
+    t,
+  });
+}
+
 export async function releaseSlotBookings(bookings) {
   const list = normalizeBookings(bookings);
   if (list.length === 0) throw new Error('Agendamento inválido.');
@@ -599,6 +655,7 @@ export async function concluirCarregamento({
   horaCarregamento,
   dataCarregamento,
   justificativa,
+  quantidadesCarregadas,
   user,
   t,
 }) {
@@ -655,6 +712,14 @@ export async function concluirCarregamento({
       ? crypto.randomUUID()
       : null;
 
+  const saidaIds = [
+    ...new Set(list.map((row) => row.saida_id).filter(Boolean)),
+  ];
+  for (const saidaId of saidaIds) {
+    const qtds = quantidadesCarregadas?.[saidaId] || null;
+    await rpcAbaterReservasSaida(saidaId, qtds, 'carregamento');
+  }
+
   const patch = {
     status: 'concluido',
     hora_carregamento: hora,
@@ -704,6 +769,11 @@ export async function reverterCarregamento({ bookings }) {
   const list = normalizeBookings(bookings);
   const ids = list.map((row) => row.id).filter(Boolean);
   if (ids.length === 0) throw new Error('Agendamento inválido.');
+
+  const saidaIds = [...new Set(list.map((row) => row.saida_id).filter(Boolean))];
+  for (const saidaId of saidaIds) {
+    await rpcEstornarReservasSaida(saidaId, 'carregamento');
+  }
 
   const patch = {
     status: 'agendado',

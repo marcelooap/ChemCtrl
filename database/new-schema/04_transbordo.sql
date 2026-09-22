@@ -303,6 +303,7 @@ CREATE TABLE IF NOT EXISTS material_reservas (
   status text NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa', 'removida')),
   usuario_id text,
   usuario_nome text,
+  solicitante text,
   observacao text,
   removido_em timestamptz,
   removido_por_id text,
@@ -311,6 +312,9 @@ CREATE TABLE IF NOT EXISTS material_reservas (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE material_reservas
+  ADD COLUMN IF NOT EXISTS solicitante text;
 
 CREATE INDEX IF NOT EXISTS idx_material_reservas_chave ON material_reservas (chave);
 CREATE INDEX IF NOT EXISTS idx_material_reservas_status ON material_reservas (status);

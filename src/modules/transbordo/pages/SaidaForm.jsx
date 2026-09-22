@@ -3,10 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { entities } from "@transbordo/services/entities";
 import { base44 } from "@industrializacao/api/base44Client";
 import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
-import { ArrowLeft, Plus, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Plus, Save } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Label } from "@shared/components/ui/label";
-import { Textarea } from "@shared/components/ui/textarea";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import SaidaItemRow from "@transbordo/components/saida/SaidaItemRow";
@@ -14,6 +13,13 @@ import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { todayDateInputValue } from "@/i18n/formatters";
 import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
 import { allocateSaidaCodigo } from "@transbordo/lib/allocateBusinessCodes";
+import { buildReservaChave } from "@painel/lib/materialReservas";
+import {
+  rpcSalvarSaidaComReserva,
+  validarItensEmbalado,
+} from "@painel/lib/saidaReservas";
+import { rescheduleSaidaAgendamento, ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
+import AgendamentoPosSaidaModal from "@painel/components/comercial/AgendamentoPosSaidaModal";
 import {
   ORIGEM_TRANSBORDO,
   ORIGEM_INDUSTRIALIZACAO,
@@ -45,6 +51,7 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * `lockedOrigem` força um módulo (esconde seletor) e carrega as fontes correspondentes.
  * `moduloOrigem` grava em `t_saidas.modulo_origem` (chemflow | painel | industrializacao).
  * `onCreateSuccess` (opcional) é chamado após criar uma nova saída, em vez de navegar.
+ * `enableAgendamentoEdit` mostra o botão Agendamento na edição (Painel Comercial).
  */
 export default function SaidaForm({
   basePath = DEFAULT_BASE_PATH,
@@ -52,6 +59,7 @@ export default function SaidaForm({
   lockedOrigem = null,
   moduloOrigem = MODULO_SAIDA_CHEMFLOW,
   onCreateSuccess = null,
+  enableAgendamentoEdit = false,
 } = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -73,7 +81,10 @@ export default function SaidaForm({
   const [movementsInd, setMovementsInd] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [saidas, setSaidas] = useState([]);
+  const [reservas, setReservas] = useState([]);
   const [editingSaida, setEditingSaida] = useState(null);
+  const [agendamentoOpen, setAgendamentoOpen] = useState(false);
+  const [agendamentoPendente, setAgendamentoPendente] = useState(null);
   const [collapsedByIndex, setCollapsedByIndex] = useState({});
   const [formData, setFormData] = useState({
     cliente_id: "",
@@ -87,19 +98,19 @@ export default function SaidaForm({
   useEffect(() => {
     const load = async () => {
       try {
-        const core = Promise.all([
+        const [ents, vascs, cliens, saics, reservasList] = await Promise.all([
           entities.estoque.list(),
           entities.vasilhames.list(),
           entities.clientes.list(),
           entities.saidas.list("-created_date"),
+          entities.materialReservas.list("-created_at").catch(() => []),
         ]);
-
-        const [ents, vascs, cliens, saics] = await core;
 
         setEntradas(ents);
         setVasilhames(vascs);
         setClientes(cliens);
         setSaidas(saics);
+        setReservas(reservasList || []);
 
         if (loadIndData) {
           try {
@@ -344,6 +355,10 @@ export default function SaidaForm({
           return;
         }
       } else if (item.tipo === TIPO_CONVENCIONAL) {
+        if (!item.produto_id && !item.produto_nome) {
+          setError(`Produto ${i + 1}: selecione o produto.`);
+          return;
+        }
         if (!item.vasilhame_id) {
           setError(`Produto ${i + 1}: selecione um vasilhame.`);
           return;
@@ -459,21 +474,30 @@ export default function SaidaForm({
       }
 
       const itensWithStock = formData.itens.map((item) => {
-        const origem = resolveItemOrigem(item);
-
         if (item.tipo === TIPO_EMBALADO) {
           const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;
           if (isFiscal) {
             entradaSaldos[item.entrada_id] = estoqueAntes - qtd;
           }
+          const unidade =
+            entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
+            item.unidade ||
+            "kg";
           return {
             ...item,
             origem: ORIGEM_TRANSBORDO,
-            unidade:
-              entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
-              item.unidade ||
-              "kg",
+            unidade,
+            sem_reserva: !item.reserva_id,
+            reserva_id: item.reserva_id || null,
+            reserva_solicitante: item.reserva_id ? item.reserva_solicitante || null : null,
+            reserva_chave: buildReservaChave({
+              clienteId: formData.cliente_id,
+              clienteNome: formData.cliente_nome,
+              produtoCodigo: item.produto_codigo,
+              lote: item.lote,
+              unidade,
+            }),
             estoque_atual: estoqueAntes,
             estoque_final: estoqueAntes - qtd,
           };
@@ -560,24 +584,45 @@ export default function SaidaForm({
         cliente_id: formData.cliente_id,
         cliente_nome: formData.cliente_nome,
         data_solicitacao: formData.data_solicitacao,
-        data_programada: formData.data_programada,
+        data_programada: agendamentoPendente?.dateIso || formData.data_programada,
         observacoes: formData.observacoes,
         itens: itensWithStock,
         quantidade_total: quantidadeTotal,
         usuario_criador: editingSaida?.usuario_criador || user?.nome || "",
         usuario_responsavel: user?.nome || "",
+        codigo,
+        modulo_origem: editingSaida?.modulo_origem || moduloOrigem || MODULO_SAIDA_CHEMFLOW,
       };
 
+      validarItensEmbalado({
+        itens: itensWithStock,
+        reservas,
+        saidas,
+        entradas,
+        clienteId: formData.cliente_id,
+        clienteNome: formData.cliente_nome,
+        excludeSaidaId: editingSaida?.id || null,
+        buildChave: buildReservaChave,
+      });
+
       let createdSaida = null;
-      if (editingSaida) {
+      const salvo = await rpcSalvarSaidaComReserva({
+        p_id: editingSaida?.id || null,
+        p_data: data,
+      });
+      if (!salvo.missing && salvo.data) {
+        createdSaida = salvo.data;
+      } else if (itensWithStock.some((item) => item.tipo === TIPO_EMBALADO)) {
+        throw new Error(
+          "Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para gravar a saída com controle de reserva."
+        );
+      } else if (editingSaida) {
         await entities.saidas.update(editingSaida.id, data);
       } else {
         createdSaida = await entities.saidas.create({
           ...data,
-          codigo,
           status: "aguardando",
           enviado_ao_fiscal: false,
-          modulo_origem: moduloOrigem || MODULO_SAIDA_CHEMFLOW,
         });
       }
 
@@ -623,9 +668,24 @@ export default function SaidaForm({
         return;
       }
 
+      if (isEdit && agendamentoPendente && editingSaida?.id) {
+        await rescheduleSaidaAgendamento({
+          saida: {
+            id: editingSaida.id,
+            codigo: editingSaida.codigo,
+            cliente_id: formData.cliente_id,
+            cliente_nome: formData.cliente_nome,
+          },
+          dateIso: agendamentoPendente.dateIso,
+          horario: agendamentoPendente.horario,
+          tipo: agendamentoPendente.tipo,
+          user,
+        });
+      }
+
       navigate(basePath);
-    } catch {
-      setError("Erro ao salvar saída. Tente novamente.");
+    } catch (err) {
+      setError(err?.message || "Erro ao salvar saída. Tente novamente.");
     }
     setSaving(false);
   });
@@ -664,10 +724,21 @@ export default function SaidaForm({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <Button variant="outline" onClick={() => navigate(basePath)}>
             Cancelar
           </Button>
+          {isEdit && enableAgendamentoEdit ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => setAgendamentoOpen(true)}
+            >
+              <Calendar className="w-4 h-4" />
+              Agendamento
+            </Button>
+          ) : null}
           <Button
             onClick={handleSave}
             disabled={saving || submitBusy || !formData.data_programada}
@@ -740,24 +811,24 @@ export default function SaidaForm({
             <Label>Data Programada *</Label>
             <DateInputBr
               value={formData.data_programada}
-              onChange={(iso) =>
+              onChange={(iso) => {
                 setFormData((prev) => ({
                   ...prev,
                   data_programada: iso,
-                }))
-              }
+                }));
+                setAgendamentoPendente((prev) =>
+                  prev && prev.dateIso === iso ? prev : null
+                );
+              }}
             />
-          </div>
-          <div className="space-y-1.5 col-span-3">
-            <Label>Observações</Label>
-            <Textarea
-              value={formData.observacoes}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, observacoes: e.target.value }))
-              }
-              placeholder="Observações da solicitação..."
-              rows={2}
-            />
+            {agendamentoPendente ? (
+              <p className="text-xs text-emerald-700">
+                Horário:{" "}
+                {agendamentoPendente.horario === ENCAIXE_HORARIO
+                  ? "Encaixe"
+                  : agendamentoPendente.horario}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -786,6 +857,9 @@ export default function SaidaForm({
               itens={formData.itens}
               entradas={entradas}
               vasilhames={vasilhames}
+              reservas={reservas}
+              saidas={saidas}
+              saidaId={id || null}
               containersInd={containersInd}
               stocksInd={stocksInd}
               movementsInd={movementsInd}
@@ -815,6 +889,33 @@ export default function SaidaForm({
           </p>
         )}
       </div>
+      {isEdit && enableAgendamentoEdit ? (
+        <AgendamentoPosSaidaModal
+          open={agendamentoOpen}
+          deferBooking
+          saida={{
+            id: editingSaida?.id,
+            codigo: editingSaida?.codigo,
+            cliente_id: formData.cliente_id,
+            cliente_nome: formData.cliente_nome,
+            data_programada: formData.data_programada,
+          }}
+          onClose={() => setAgendamentoOpen(false)}
+          onScheduled={(payload) => {
+            if (!payload?.dateIso) return;
+            setFormData((prev) => ({
+              ...prev,
+              data_programada: payload.dateIso,
+            }));
+            setAgendamentoPendente({
+              dateIso: payload.dateIso,
+              horario: payload.horario,
+              tipo: payload.tipo,
+            });
+            setAgendamentoOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

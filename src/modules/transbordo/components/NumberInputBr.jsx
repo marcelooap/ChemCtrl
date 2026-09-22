@@ -32,12 +32,21 @@ export default function NumberInputBr({
 
   const handleChange = (e) => {
     const next = sanitizeTyping(e.target.value, decimals);
-    setText(next);
     if (next.trim() === '' || next === '-' || next === ',') {
+      setText(next);
       onChange?.('');
       return;
     }
-    onChange?.(parseNumero(next));
+    let n = parseNumero(next);
+    if (typeof max === 'number' && Number.isFinite(max) && n > max) {
+      n = max;
+      const capped = decimals <= 0 ? String(Math.round(n)) : String(n).replace('.', ',');
+      setText(capped);
+      onChange?.(n);
+      return;
+    }
+    setText(next);
+    onChange?.(n);
   };
 
   const handleFocus = () => {

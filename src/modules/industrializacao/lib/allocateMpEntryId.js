@@ -1,8 +1,7 @@
 /**
- * Alocação de ID de registro do Estoque de MP (entry_id) via sequence.
+ * Alocação de ID de registro do Estoque de MP (entry_id).
+ * O próximo código sai do maior MP### já gravado, não da sequence.
  */
-import { callRPC } from '@industrializacao/api/rpcClient';
-
 const MP_RE = /^MP(\d+)$/i;
 
 export function parseMpEntryNumber(entryId) {
@@ -50,27 +49,23 @@ export function allocateMpEntryIdsFromList(stocks = [], count = 1) {
 }
 
 /**
- * Aloca N entry_ids via RPC (sequence). Fallback local se RPC indisponível.
+ * Aloca N entry_ids ainda não usados em ind_estoque_mp.
+ *
+ * A sequence `ind_mp_entry_id_seq` fica atrás quando o estoque grava MP###
+ * pelo maior código já carregado. Usar o nextval nesse caso repete um
+ * entry_id e estoura uq_ind_estoque_mp_entry_id.
  */
 export async function allocateMpEntryIds(
   RawMaterialStockEntity,
   count = 1,
-  { pageSize = 2000 } = {}
+  { pageSize = 5000, offset = 0 } = {}
 ) {
   const qty = Math.max(1, Number(count) || 1);
-
-  try {
-    const fromRpc = await callRPC('allocate_mp_entry_id', { p_count: qty });
-    if (Array.isArray(fromRpc) && fromRpc.length > 0) {
-      return fromRpc.map(String);
-    }
-  } catch {
-    // fallback
-  }
-
+  const skip = Math.max(0, Number(offset) || 0);
   if (!RawMaterialStockEntity?.list) {
     throw new Error('RawMaterialStock indisponível para alocar ID');
   }
   const rows = await RawMaterialStockEntity.list('-created_date', pageSize);
-  return allocateMpEntryIdsFromList(rows || [], qty);
+  const ids = allocateMpEntryIdsFromList(rows || [], qty + skip);
+  return ids.slice(skip);
 }

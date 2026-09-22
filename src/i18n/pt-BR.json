@@ -1051,6 +1051,12 @@
           "dataLabel": "Data de carregamento",
           "horaHint": "Preenchido com o horário atual de Brasília (editável).",
           "dataHoraHint": "Data e horário preenchidos com o momento atual de Brasília (editáveis).",
+          "qtdTitle": "Quantidade carregada",
+          "qtdHint": "A reserva é abatida pela quantidade efetivamente carregada. O valor inicial é a quantidade solicitada.",
+          "qtdSolicitada": "Solicitada: {{qty}}",
+          "qtdSemReserva": "Sem reserva",
+          "qtdReserva": "Reserva: {{name}}",
+          "qtdInvalid": "A quantidade carregada deve estar entre 0 e a quantidade solicitada.",
           "confirm": "Liberar",
           "saveSuccess": "Carregamento liberado para expedição"
         },
@@ -1204,6 +1210,15 @@
           "title": "Agendar carregamento — {{codigo}}",
           "subtitle": "Selecione o dia e um horário para a saída de {{cliente}}. Esta etapa é obrigatória."
         },
+        "reschedule": {
+          "button": "Agendamento",
+          "title": "Alterar agendamento — {{codigo}}",
+          "subtitle": "Selecione o novo dia e horário. A data programada muda ao confirmar.",
+          "confirmTitle": "Confirmar alteração",
+          "confirmDescription": "A data programada passará a ser {{date}} às {{time}}. A alteração é gravada ao salvar a solicitação.",
+          "confirm": "Confirmar",
+          "back": "Voltar"
+        },
         "errors": {
           "selectSaida": "Selecione ao menos uma saída para agendar.",
           "saidaAssigned": "A saída {{codigo}} já está agendada em {{slot}}.",
@@ -1274,6 +1289,21 @@
           "fracionado": "Fracionado"
         },
         "editTitle": "Editar saldo reservado",
+        "manageTitle": "Reservas do produto",
+        "newReservation": "Nova reserva",
+        "newReservationTitle": "Nova reserva",
+        "editReservationTitle": "Editar reserva",
+        "activeReservations": "Reservas ativas",
+        "noActiveReservations": "Nenhuma reserva ativa. Use Nova reserva para incluir.",
+        "availableShort": "Disponível",
+        "pendingExitBlock": "Saídas sem reserva ainda não baixadas bloqueiam {{qty}} para novas reservas.",
+        "availableToReserve": "Disponível: {{value}} {{unidade}}",
+        "editQtyHint": "Aumente ou diminua a quantidade. Informe 0 para remover esta reserva.",
+        "cardEdit": "Editar reserva de {{name}}",
+        "deleteReservation": "Excluir reserva de {{name}}",
+        "deleteTitle": "Excluir reserva",
+        "deleteMessage": "Excluir a reserva de {{name}} ({{qty}} {{unidade}})?",
+        "deleteAction": "Excluir",
         "viewTitle": "Detalhes do saldo e reservas",
         "productSummary": "Resumo do produto",
         "reservationsList": "Histórico de reservas",
@@ -1282,8 +1312,14 @@
         "finalPreview": "Saldo final previsto: {{value}} {{unidade}}",
         "observation": "Observação",
         "observationPlaceholder": "Motivo da reserva ou do ajuste (opcional)",
+        "requester": "Solicitante",
+        "requesterPlaceholder": "Nome de quem solicitou a reserva",
+        "requesterHint": "Nome de quem solicitou esta reserva.",
         "saving": "Salvando...",
         "saveSuccess": "Saldo reservado atualizado",
+        "createSuccess": "Reserva incluída",
+        "updateSuccess": "Reserva atualizada",
+        "removeSuccess": "Reserva removida",
         "loadErrorTitle": "Erro ao carregar estoque",
         "loadErrorDescription": "Verifique a conexão com o ChemFlow e se a tabela t_material_reservas foi criada.",
         "columns": {
@@ -1298,6 +1334,7 @@
         },
         "history": {
           "date": "Data",
+          "requester": "Solicitante",
           "user": "Reservado por",
           "qty": "Quantidade",
           "status": "Status",
@@ -1311,6 +1348,9 @@
         "errors": {
           "negative": "A quantidade não pode ser negativa.",
           "exceedsBalance": "Não é possível reservar mais que {{max}} {{unidade}}.",
+          "requesterRequired": "Informe o solicitante da reserva.",
+          "qtyRequired": "Informe uma quantidade maior que zero.",
+          "notFound": "Reserva não encontrada.",
           "saveFailed": "Não foi possível salvar a reserva."
         }
       }
@@ -1486,9 +1526,36 @@
         }
       },
       "ordemTransbordo": {
-        "subtitle": "Informe destino, data, cliente, produto e origem para registrar o transbordo",
+        "subtitle": "Informe data, origem, cliente e produto para registrar o transbordo",
         "formTitle": "Nova ordem",
+        "operatorAuth": {
+          "hint": "Identifique o operador para iniciar o preenchimento. Cada ordem exige uma nova confirmação.",
+          "newOrder": "Nova Ordem",
+          "cancelOrder": "Cancelar ordem",
+          "responsible": "Operador responsável:",
+          "title": "Identificação do operador",
+          "description": "Informe o usuário e a senha de quem está registrando esta ordem. O login do computador não será alterado.",
+          "user": "Usuário",
+          "userPlaceholder": "Selecione ou digite o usuário",
+          "loadingUsers": "Carregando usuários...",
+          "password": "Senha",
+          "passwordPlaceholder": "Digite a senha",
+          "submit": "Entrar",
+          "cancel": "Cancelar",
+          "invalidCredentials": "Usuário ou senha inválidos.",
+          "inactive": "Usuário inativo. Contate o administrador do sistema.",
+          "forbidden": "Este usuário não possui o perfil Operacional.",
+          "session": "A sessão do computador expirou. Entre novamente no ChemCtrl.",
+          "unavailable": "A identificação do operador ainda não está disponível neste ambiente.",
+          "rateLimited": "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+          "network": "Não foi possível validar as credenciais. Tente novamente.",
+          "loadError": "Não foi possível carregar os usuários habilitados.",
+          "emptyUsers": "Nenhum usuário ativo com o perfil Operacional.",
+          "required": "Selecione o usuário e informe a senha.",
+          "missingOperator": "Identifique o operador antes de salvar a ordem."
+        },
         "goToTransbordo": "Ir para transbordo",
+        "submitValidation": "Enviar para validação",
         "search": "Buscar por código, produto ou cliente...",
         "records": "{{count}} registro(s)",
         "empty": "Nenhum transbordo encontrado.",
@@ -1509,6 +1576,10 @@
           "vasilhame": "VASILHAME",
           "embalado": "IBC / BOMBONA / TAMBOR"
         },
+        "productSource": {
+          "transbordo": "Transbordo",
+          "mp": "Matéria-prima"
+        },
         "fields": {
           "date": "Data",
           "destino": "Destino",
@@ -1520,6 +1591,9 @@
           "qty": "Quantidade",
           "unit": "Unidade",
           "lot": "Lote",
+          "supplier": "Fornecedor",
+          "manufacture": "Fabricação",
+          "expiry": "Validade",
           "density": "Densidade",
           "unitPrice": "Preço unitário",
           "ticket": "Ticket",
@@ -1537,6 +1611,7 @@
           "nf": "Nº da NF",
           "unit": "Unidade",
           "lot": "Lote",
+          "supplier": "Nome do fornecedor",
           "ticket": "Nº do ticket"
         },
         "granel": {

@@ -64,7 +64,7 @@ function resolveControleProduto(lote, produtosById) {
 
 function formatDestino(d) {
   if (d.tipo_embalagem === "Tankagem") {
-    return d.tanka_codigo || "Tankagem";
+    return d.tanka_codigo ? `Tanka ${d.tanka_codigo}` : "Tankagem";
   }
 
   const isVasilhame =
@@ -78,7 +78,8 @@ function formatDestino(d) {
   }
 
   if (isDestinoEstoqueEmbalado(d.tipo_embalagem)) {
-    return d.tipo_embalagem;
+    const qtd = Number(d.quantidade_embalagens) || 0;
+    return qtd > 0 ? `${d.tipo_embalagem} (${qtd})` : d.tipo_embalagem;
   }
 
   return d.tipo_embalagem || d.tanka_codigo || "-";
@@ -104,6 +105,7 @@ export default function ComunicacaoRecebimentoDialog({
   produtos = [],
   transbordos = [],
   estoque = [],
+  destinosInformados = [],
 }) {
   const produtosById = useMemo(() => {
     const map = new Map();
@@ -184,7 +186,7 @@ export default function ComunicacaoRecebimentoDialog({
       )
     );
 
-    return relacionados.flatMap((t) =>
+    const fromOperacao = relacionados.flatMap((t) =>
       (t.destinos || []).map((d) => {
         const volume = destinoVolume(d);
         const massa = destinoMassa(d, t.densidade);
@@ -196,7 +198,15 @@ export default function ComunicacaoRecebimentoDialog({
         };
       })
     );
-  }, [entrada, entradaId, transbordos, origemIds]);
+    if (fromOperacao.length > 0) return fromOperacao;
+
+    return (destinosInformados || []).map((d) => ({
+      codigo: "—",
+      destino: formatDestino(d),
+      volume: destinoVolume(d),
+      massa: destinoMassa(d, entrada?.densidade),
+    }));
+  }, [entrada, entradaId, transbordos, origemIds, destinosInformados]);
 
   const transbordoTotais = useMemo(
     () =>
@@ -212,14 +222,18 @@ export default function ComunicacaoRecebimentoDialog({
 
   const hasPesagem =
     Boolean(entrada?.granel_pesagem) ||
-    entrada?.origem === "industrializacao" ||
     entrada?.granel_peso_bruto != null ||
     entrada?.granel_peso_liquido != null;
 
   const pesoBruto = Number(entrada?.granel_peso_bruto);
   const pesoLiquido = Number(entrada?.granel_peso_liquido);
+  const pesosInformados =
+    entrada?.granel_peso_bruto != null &&
+    entrada?.granel_peso_bruto !== "" &&
+    entrada?.granel_peso_liquido != null &&
+    entrada?.granel_peso_liquido !== "";
   const diferenca =
-    Number.isFinite(pesoBruto) && Number.isFinite(pesoLiquido)
+    pesosInformados && Number.isFinite(pesoBruto) && Number.isFinite(pesoLiquido)
       ? pesoBruto - pesoLiquido
       : null;
   const dentroMargem = entrada?.granel_margem === "dentro";

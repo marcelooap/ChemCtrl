@@ -28,6 +28,10 @@ import {
 } from "@transbordo/lib/saidaOrigem";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
 import { deductStock, restoreStock } from "@industrializacao/lib/stockRpc";
+import {
+  rpcAbaterReservasSaida,
+  rpcEstornarReservasSaida,
+} from "@painel/lib/saidaReservas";
 
 function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
@@ -165,13 +169,14 @@ export async function applySaidaFiscalToggle(
     if (item.tipo === "embalado" && item.entrada_id) {
       const e = estoqueById.get(item.entrada_id);
       const estoqueAtual = e?.saldo_atual || 0;
+      const qtdBaixa =
+        item.quantidade_carregada != null && item.quantidade_carregada !== ""
+          ? Number(item.quantidade_carregada) || 0
+          : item.quantidade_solicitada || 0;
       return {
         ...item,
         estoque_atual: estoqueAtual,
-        estoque_final: Math.max(
-          0,
-          estoqueAtual - (checked ? item.quantidade_solicitada || 0 : 0)
-        ),
+        estoque_final: Math.max(0, estoqueAtual - (checked ? qtdBaixa : 0)),
       };
     }
     if (item.tipo === "convencional" && item.vasilhame_id) {
@@ -410,6 +415,16 @@ export async function applySaidaFiscalToggle(
       const newBalance = Number(adjusted?.balance_after ?? available + qtd);
       stockById.set(stock.id, { ...stock, current_stock: newBalance });
     }
+  }
+
+  const controlaReserva = (updatedItens || []).some(
+    (item) =>
+      item?.tipo === "embalado" &&
+      (item.reserva_id || item.sem_reserva === true || item.reserva_abatida)
+  );
+  if ((scope === "all" || scope === ORIGEM_TRANSBORDO) && controlaReserva) {
+    if (checked) await rpcAbaterReservasSaida(saida.id, null, "fiscal");
+    else await rpcEstornarReservasSaida(saida.id, "fiscal");
   }
 
   return {

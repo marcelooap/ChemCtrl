@@ -22,8 +22,9 @@ import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import VasilhamesReservaTable from '@painel/components/comercial/VasilhamesReservaTable';
 import {
   aggregateEstoqueByLote,
+  createMaterialReserva,
   formatQty,
-  setSaldoReservado,
+  updateMaterialReservaQuantidade,
 } from '@painel/lib/materialReservas';
 import {
   buildVasilhameReservaRows,
@@ -99,7 +100,7 @@ export default function ReservarMaterial() {
           };
         });
 
-      const aggregated = aggregateEstoqueByLote(estoqueWithSaldo, reservasList || []);
+      const aggregated = aggregateEstoqueByLote(estoqueWithSaldo, reservasList || [], saics || []);
       setRows(aggregated);
       setVasilhameRows(
         buildVasilhameReservaRows({
@@ -115,6 +116,7 @@ export default function ReservarMaterial() {
       setIndRecipes(indPack.recipes);
       setReservas(reservasList || []);
       setClientes(cliens || []);
+      return { rows: aggregated, reservas: reservasList || [] };
     } catch (err) {
       console.error('[ReservarMaterial] loadData:', err);
       toast({
@@ -126,6 +128,7 @@ export default function ReservarMaterial() {
       setRows([]);
       setVasilhameRows([]);
       setReservas([]);
+      return { rows: [], reservas: [] };
     } finally {
       if (!silent) setLoading(false);
     }
@@ -211,20 +214,44 @@ export default function ReservarMaterial() {
     [t]
   );
 
-  const handleSaveReserva = async ({ quantidade, observacao }) => {
+  const syncEditRow = (data, chave) => {
+    if (!chave) return;
+    const next = (data?.rows || []).find((item) => item.chave === chave);
+    if (next) setEditRow(next);
+    else if ((data?.rows || []).length > 0) setEditRow(null);
+  };
+
+  const handleCreateReserva = async ({ quantidade, solicitante }) => {
     if (!editRow) return;
-    await setSaldoReservado({
+    const chave = editRow.chave;
+    await createMaterialReserva({
       row: editRow,
-      novaQuantidade: quantidade,
+      quantidade,
+      solicitante,
       user,
-      observacao,
-      motivoRemocao: observacao,
+    });
+    toast({ title: t('painel.comercial.reservarMaterial.createSuccess') });
+    const data = await loadData({ silent: true });
+    syncEditRow(data, chave);
+  };
+
+  const handleUpdateReserva = async ({ reservaId, quantidade, solicitante }) => {
+    if (!editRow) return;
+    const chave = editRow.chave;
+    const result = await updateMaterialReservaQuantidade({
+      row: editRow,
+      reservaId,
+      novaQuantidade: quantidade,
+      solicitante,
+      user,
     });
     toast({
-      title: t('painel.comercial.reservarMaterial.saveSuccess'),
+      title: result?.removed
+        ? t('painel.comercial.reservarMaterial.removeSuccess')
+        : t('painel.comercial.reservarMaterial.updateSuccess'),
     });
-    setEditRow(null);
-    await loadData({ silent: true });
+    const data = await loadData({ silent: true });
+    syncEditRow(data, chave);
   };
 
   if (loading) {
@@ -434,8 +461,10 @@ export default function ReservarMaterial() {
       <ReservaEditModal
         open={!!editRow}
         row={editRow}
+        reservas={reservas}
         onClose={() => setEditRow(null)}
-        onSave={handleSaveReserva}
+        onCreate={handleCreateReserva}
+        onUpdate={handleUpdateReserva}
       />
 
       <ReservaViewModal
