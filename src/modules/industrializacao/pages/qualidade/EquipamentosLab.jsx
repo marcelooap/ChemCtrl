@@ -8,7 +8,7 @@ import { Input } from '@shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { EQUIPMENT_TYPES, getEquipmentStatus } from '@industrializacao/lib/equipmentUtils';
 import KpiCards from '@industrializacao/components/equipamentos/KpiCards';
-import EquipmentCard from '@industrializacao/components/equipamentos/EquipmentCard';
+import EquipmentTable from '@industrializacao/components/equipamentos/EquipmentTable';
 import EquipmentFormDialog from '@industrializacao/components/equipamentos/EquipmentFormDialog';
 import CalibrationDialog from '@industrializacao/components/equipamentos/CalibrationDialog';
 import EquipmentViewDialog from '@industrializacao/components/equipamentos/EquipmentViewDialog';
@@ -85,10 +85,10 @@ export default function EquipamentosLab() {
         <div className="flex flex-wrap gap-3 mb-4">
           <div className="flex-1 min-w-48 relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-            <Input placeholder={t('quality.equipmentLab.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={t('quality.equipmentLab.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-card" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36 bg-card"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('quality.equipmentLab.statusAll')}</SelectItem>
               <SelectItem value="conforme">{t('quality.equipmentLab.statusConforme')}</SelectItem>
@@ -97,7 +97,7 @@ export default function EquipamentosLab() {
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36 bg-card"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('quality.equipmentLab.typeAll')}</SelectItem>
               {EQUIPMENT_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
@@ -117,18 +117,13 @@ export default function EquipamentosLab() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((eq) => (
-              <EquipmentCard
-                key={eq.id}
-                equipment={eq}
-                onView={(e) => setViewing(e)}
-                onEdit={(e) => { setEditing(e); setFormOpen(true); }}
-                onCalibrate={(e) => setCalibrating(e)}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+          <EquipmentTable
+            equipments={filtered}
+            onView={(e) => setViewing(e)}
+            onEdit={(e) => { setEditing(e); setFormOpen(true); }}
+            onCalibrate={(e) => setCalibrating(e)}
+            onDelete={handleDelete}
+          />
         )}
       </div>
 

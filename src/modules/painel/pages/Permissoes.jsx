@@ -29,6 +29,7 @@ import {
   getScreenViewKeys,
 } from '@industrializacao/lib/rbac/permissionCatalog';
 import { getUserPermissions, saveUserPermissions } from '@industrializacao/lib/rbac/rbacApi';
+import { getRpcErrorMessage } from '@industrializacao/lib/HttpError';
 import { base44 } from '@industrializacao/api/base44Client';
 import { cn } from '@shared/lib/utils';
 
@@ -79,7 +80,10 @@ export default function Permissoes() {
       const list = Array.isArray(rows) ? rows : [];
       setUsers(list);
     } catch (err) {
-      toast({ title: err.message || t('userPermissions.messages.loadUsersError'), variant: 'destructive' });
+      toast({
+        title: getRpcErrorMessage(err, t('userPermissions.messages.loadUsersError')),
+        variant: 'destructive',
+      });
     } finally {
       setLoadingUsers(false);
     }
@@ -114,7 +118,10 @@ export default function Permissoes() {
         setSavedPermSet(new Set(next));
       } catch (err) {
         if (!cancelled) {
-          toast({ title: err.message || t('userPermissions.messages.loadPermsError'), variant: 'destructive' });
+          toast({
+            title: getRpcErrorMessage(err, t('userPermissions.messages.loadPermsError')),
+            variant: 'destructive',
+          });
         }
       } finally {
         if (!cancelled) setLoadingPerms(false);
@@ -257,7 +264,10 @@ export default function Permissoes() {
       setSavedPermSet(new Set(saved));
       toast({ title: t('userPermissions.messages.saved') });
     } catch (err) {
-      toast({ title: err.message || t('userPermissions.messages.saveError'), variant: 'destructive' });
+      toast({
+        title: getRpcErrorMessage(err, t('userPermissions.messages.saveError')),
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }

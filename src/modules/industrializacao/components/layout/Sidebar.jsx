@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Truck,
-  Users, Building2, Warehouse, ClipboardCheck, CalendarDays, ShieldCheck,
+  Users, Building2, Warehouse, ClipboardCheck, CalendarDays, ShieldCheck, Microscope,
 } from 'lucide-react';
 import { canAccessRoute, getUserClient } from '@industrializacao/lib/permissions';
 import { getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
@@ -36,6 +36,7 @@ const ICONS = {
   ClipboardCheck,
   CalendarDays,
   ShieldCheck,
+  Microscope,
 };
 
 function resolveIcon(name) {

@@ -1,14 +1,18 @@
--- ============================================================================
--- Onda 1 — Autorização real nas RPCs de RBAC
--- Restaura _rbac_require_profiles_edit e remove grant anônimo perigoso.
--- Assinaturas alinhadas ao schema vivo (ind_lista_usuarios + jsonb).
+-- =============================================================================
+-- Hotfix: replace_user_permissions / has_permission
+-- =============================================================================
+-- Causa: migration_concurrency_wave1_rbac_authz.sql reescreveu as RPCs com
+-- assinatura do schema "usuarios(uuid)" e has_permission lendo session->>'id'
+-- (inexistente; o correto é user_id). No banco vivo a tabela é
+-- ind_lista_usuarios (id text) e a UI de Permissões usa profiles.edit.
 --
--- NOTA: se esta migration já tiver sido aplicada com a versão quebrada
--- (has_permission via session->>'id' / replace simplificado), rode também
--- migration_replace_user_permissions_hotfix.sql
--- ============================================================================
+-- Sintoma: ao salvar permissões no Painel → P0001 / mensagem genérica.
+--
+-- Idempotente: pode rodar várias vezes no SQL Editor do Supabase.
+-- =============================================================================
 
--- Helpers (idempotentes)
+-- 1) has_permission: prioriza sessão (permissions JSON + Administrador),
+--    depois grants individuais e do perfil. Usa user_id (não id).
 CREATE OR REPLACE FUNCTION has_permission(p_key text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -32,6 +36,7 @@ BEGIN
     RETURN true;
   END IF;
 
+  -- Sessão já carrega o array de permissões no login
   IF (v_session -> 'permissions') ? p_key THEN
     RETURN true;
   END IF;
@@ -74,6 +79,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- 2) Autorização alinhada à UI (Can permission="profiles.edit")
 CREATE OR REPLACE FUNCTION _rbac_require_profiles_edit()
 RETURNS void
 LANGUAGE plpgsql
@@ -118,41 +124,7 @@ BEGIN
 END;
 $$;
 
--- create_profile: mesma assinatura do schema vivo (p_nome, p_descricao, p_status)
--- DROP necessário: CREATE OR REPLACE não pode remover/alterar defaults de parâmetros
-DROP FUNCTION IF EXISTS create_profile(text, text, text);
-CREATE OR REPLACE FUNCTION create_profile(
-  p_nome text,
-  p_descricao text DEFAULT '',
-  p_status text DEFAULT 'Ativo'
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_id text := gen_random_uuid()::text;
-BEGIN
-  PERFORM _rbac_require_profiles_edit();
-
-  IF p_nome IS NULL OR length(trim(p_nome)) = 0 THEN
-    RAISE EXCEPTION 'Nome obrigatório';
-  END IF;
-
-  INSERT INTO perfis (id, nome, descricao, status, is_system)
-  VALUES (v_id, trim(p_nome), COALESCE(p_descricao, ''), COALESCE(p_status, 'Ativo'), false);
-
-  RETURN jsonb_build_object('success', true, 'id', v_id);
-EXCEPTION
-  WHEN unique_violation THEN
-    RAISE EXCEPTION 'Já existe um perfil com este nome';
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION create_profile(text, text, text) TO anon, authenticated;
-
--- replace_user_permissions: schema vivo (ind_lista_usuarios, códigos, sync sessão)
+-- 3) replace_user_permissions: lógica completa do schema vivo
 DROP FUNCTION IF EXISTS replace_user_permissions(text, jsonb);
 CREATE OR REPLACE FUNCTION replace_user_permissions(p_user_id text, p_codes jsonb)
 RETURNS jsonb
@@ -200,6 +172,7 @@ BEGIN
   DELETE FROM usuario_permissoes WHERE usuario_id::text = p_user_id;
   PERFORM _grant_codes_to_user(p_user_id, v_codes);
 
+  -- Evita FK quebrada em perfil_auditoria quando perfil_id está nulo/órfão
   v_audit_perfil := NULL;
   IF v_user.perfil_id IS NOT NULL AND EXISTS (
     SELECT 1 FROM perfis WHERE id::text = v_user.perfil_id::text
@@ -214,7 +187,7 @@ BEGIN
       'permissions', to_jsonb(COALESCE(v_codes, ARRAY[]::text[]))
     ));
   EXCEPTION WHEN OTHERS THEN
-    NULL;
+    NULL; -- auditoria não deve impedir o save
   END;
 
   BEGIN
@@ -232,80 +205,35 @@ BEGIN
   );
 END;
 $$;
+
 GRANT EXECUTE ON FUNCTION replace_user_permissions(text, jsonb) TO anon, authenticated;
 
--- grant_default_user_permissions: RETURNS jsonb; revoga anon
-DROP FUNCTION IF EXISTS grant_default_user_permissions(text);
-CREATE OR REPLACE FUNCTION grant_default_user_permissions(p_user_id text)
-RETURNS jsonb
+-- 4) _grant_codes_to_user: robusto a usuario_id text|uuid
+CREATE OR REPLACE FUNCTION _grant_codes_to_user(p_user_id text, p_codes text[])
+RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_user record;
+  k text;
 BEGIN
-  IF p_user_id IS NULL OR btrim(p_user_id) = '' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'user_id obrigatório');
-  END IF;
-
-  SELECT * INTO v_user FROM ind_lista_usuarios WHERE id::text = p_user_id;
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Usuário não encontrado');
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM usuario_permissoes WHERE usuario_id::text = p_user_id) THEN
-    RETURN jsonb_build_object('success', true, 'skipped', true);
-  END IF;
-
-  IF COALESCE(v_user.tipo, 'interno') = 'externo' THEN
-    PERFORM _grant_codes_to_user(p_user_id, ARRAY['client_portal.view']);
-  ELSE
-    PERFORM _grant_codes_to_user(p_user_id, ARRAY['module.painel', 'painel_home.view']);
-  END IF;
-
-  BEGIN
-    PERFORM _sync_user_sessions_permissions(p_user_id);
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-
-  RETURN jsonb_build_object('success', true, 'skipped', false);
+  FOREACH k IN ARRAY COALESCE(p_codes, ARRAY[]::text[]) LOOP
+    BEGIN
+      INSERT INTO usuario_permissoes (usuario_id, permissao_id)
+      SELECT p_user_id::uuid, p.id
+      FROM permissoes p
+      WHERE p.codigo = k OR p.id::text = k
+      ON CONFLICT DO NOTHING;
+    EXCEPTION WHEN invalid_text_representation OR datatype_mismatch THEN
+      INSERT INTO usuario_permissoes (usuario_id, permissao_id)
+      SELECT p_user_id, p.id
+      FROM permissoes p
+      WHERE p.codigo = k OR p.id::text = k
+      ON CONFLICT DO NOTHING;
+    END;
+  END LOOP;
 END;
 $$;
-
-REVOKE ALL ON FUNCTION grant_default_user_permissions(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION grant_default_user_permissions(text) FROM anon;
-GRANT EXECUTE ON FUNCTION grant_default_user_permissions(text) TO authenticated;
-
--- delete_profile: assinatura viva RETURNS jsonb (não void)
-DROP FUNCTION IF EXISTS delete_profile(text);
-CREATE OR REPLACE FUNCTION delete_profile(p_perfil_id text)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_is_system boolean;
-BEGIN
-  PERFORM _rbac_require_profiles_edit();
-
-  SELECT is_system INTO v_is_system FROM perfis WHERE id = p_perfil_id;
-  IF v_is_system THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Perfil de sistema não pode ser excluído');
-  END IF;
-  IF EXISTS (SELECT 1 FROM ind_lista_usuarios WHERE perfil_id::text = p_perfil_id) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Existem usuários vinculados a este perfil');
-  END IF;
-
-  DELETE FROM perfil_permissoes WHERE perfil_id::text = p_perfil_id;
-  DELETE FROM perfil_modulos WHERE perfil_id::text = p_perfil_id;
-  DELETE FROM perfis WHERE id::text = p_perfil_id;
-
-  RETURN jsonb_build_object('success', true);
-END;
-$$;
-GRANT EXECUTE ON FUNCTION delete_profile(text) TO anon, authenticated;
 
 SELECT pg_notify('pgrst', 'reload schema');

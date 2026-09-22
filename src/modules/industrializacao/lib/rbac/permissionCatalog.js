@@ -378,9 +378,16 @@ export const permissionModules = [
       {
         id: 'lab_equipment',
         labelKey: 'rbac.resources.labEquipment',
-        icon: 'FlaskConical',
+        icon: 'Microscope',
         route: '/qualidade/equipamentos',
-        nav: { showInSidebar: false },
+        nav: {
+          showInSidebar: true,
+          order: 5,
+          groupId: 'qualityControl',
+          groupLabelKey: 'sidebar.qualityControl',
+          groupIcon: 'Shield',
+          groupOrder: 10,
+        },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
           { key: 'create', labelKey: 'rbac.actions.create' },
@@ -1012,6 +1019,7 @@ function mapResourceToSidebarLabel(resourceId) {
     quality_analyses: 'sidebar.analysesList',
     quality_pending: 'sidebar.pendingAnalysis',
     quality_coa: 'sidebar.coa',
+    lab_equipment: 'sidebar.labEquipment',
     containers: 'sidebar.containers',
     saida: 'sidebar.saida',
     tankage: 'sidebar.tankage',

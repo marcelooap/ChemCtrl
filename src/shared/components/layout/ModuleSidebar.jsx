@@ -142,11 +142,11 @@ export default function ModuleSidebar({
         <Link
           key={item.path}
           to={item.path}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px] transition-colors ${
             active ? 'text-white bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/5'
           }`}
         >
-          <Icon className="w-3.5 h-3.5 shrink-0" />
+          <Icon className="w-4 h-4 shrink-0" />
           <span className="truncate">{label}</span>
           {badgeText ? (
             <span className="ml-auto shrink-0 text-[10px] font-semibold tabular-nums text-sky-300">

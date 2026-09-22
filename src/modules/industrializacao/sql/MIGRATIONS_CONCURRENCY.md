@@ -9,6 +9,7 @@ Ordem de aplicação no **SQL Editor do Supabase** (não pular etapas):
 3. `src/modules/industrializacao/sql/migration_concurrency_wave1_stock_rpc.sql`
 4. `src/modules/industrializacao/sql/migration_concurrency_wave1_persist_transbordo.sql`
 5. `src/modules/industrializacao/sql/migration_concurrency_wave1_rbac_authz.sql`
+6. `src/modules/industrializacao/sql/migration_replace_user_permissions_hotfix.sql` — **obrigatório** se a etapa 5 já tiver sido aplicada antes desta correção (erro P0001 ao salvar Permissões)
 
 ## Onda 2
 

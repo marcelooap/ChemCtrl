@@ -54,3 +54,28 @@ export function parseRetryAfterFromBody(bodyText: string): number | undefined {
     return undefined;
   }
 }
+
+/**
+ * Extrai mensagem legível de erros PostgREST/Postgres
+ * (`{ message, code, details, hint }` ou texto puro).
+ */
+export function getRpcErrorMessage(err: unknown, fallback = 'Erro inesperado'): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  if (!raw) return fallback;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.message) return String(parsed.message);
+    if (parsed?.error) return String(parsed.error);
+    if (typeof parsed === 'string' && parsed.trim()) return parsed;
+  } catch {
+    // not JSON
+  }
+
+  const messageMatch = raw.match(/"message"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (messageMatch?.[1]) {
+    return messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, ' ');
+  }
+
+  return raw || fallback;
+}

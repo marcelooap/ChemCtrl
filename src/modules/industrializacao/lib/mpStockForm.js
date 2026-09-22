@@ -2,6 +2,23 @@ import { calcPackagingQty } from '@industrializacao/lib/stockUtils';
 
 export const CONFERENCE_TOLERANCE = 0.01;
 
+/** Aceita número ou texto com vírgula decimal (ex.: "12,5" ou "1.234,5"). */
+export function parseLocaleNumber(raw) {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (raw == null) return null;
+  const trimmed = String(raw).trim().replace(/\s/g, '');
+  if (!trimmed || trimmed === ',' || trimmed === '.') return null;
+  const normalized = trimmed.includes(',')
+    ? trimmed.replace(/\./g, '').replace(',', '.')
+    : trimmed;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function round3(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
+}
+
 export function createEmptyMpItem() {
   return {
     mp_name: '',
@@ -45,7 +62,7 @@ function pendingTankVolume(tankName, pendingItems) {
   (pendingItems || []).forEach((s) => {
     if (!s.tank_storage) return;
     parseJsonArray(s.tank_entries).forEach((te) => {
-      if (te.tank_name === tankName && te.volume) volume += parseFloat(te.volume) || 0;
+      if (te.tank_name === tankName && te.volume) volume += parseLocaleNumber(te.volume) || 0;
     });
   });
   return volume;
@@ -97,11 +114,15 @@ export function buildMpStockPayload(form, { isEditing } = {}) {
     packaging_quantity: calcPackagingQty(stockForPackaging, packagingCapacity),
     status_wms: isEditing ? !!form.status_wms : false,
     tank_entries: form.tank_storage
-      ? (form.tank_entries || []).filter((te) => te.tank_name).map((te) => ({
-          tank_name: te.tank_name,
-          volume: parseFloat(te.volume) || 0,
-          mass: te.mass || 0,
-        }))
+      ? (form.tank_entries || []).filter((te) => te.tank_name).map((te) => {
+          const volume = parseLocaleNumber(te.volume) || 0;
+          const density = parseLocaleNumber(form.density);
+          return {
+            tank_name: te.tank_name,
+            volume,
+            mass: density ? round3(density * volume) : (parseLocaleNumber(te.mass) || 0),
+          };
+        })
       : [],
   };
 }
@@ -111,8 +132,8 @@ export function getTankConference(form) {
   const conferenceUnit = usesVolume ? 'L' : 'kg';
   const initialStockQty = parseFloat(form.initial_stock) || 0;
   const tankConferenceTotal = (form.tank_entries || []).reduce((sum, entry) => {
-    if (usesVolume) return sum + (parseFloat(entry.volume) || 0);
-    return sum + (parseFloat(entry.mass) || 0);
+    if (usesVolume) return sum + (parseLocaleNumber(entry.volume) || 0);
+    return sum + (parseLocaleNumber(entry.mass) || 0);
   }, 0);
   const tankConferenceDiff = tankConferenceTotal - initialStockQty;
   const tankConferenceStatus =

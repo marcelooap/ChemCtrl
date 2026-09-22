@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -6,12 +6,87 @@ import { Input } from '@shared/components/ui/input';
 import Combobox from '@shared/components/ui/combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { Switch } from '@shared/components/ui/switch';
-import { fmtNumber, fmtMass } from '@/i18n/formatters';
+import { fmtNumber, fmtMass, getIntlLocale } from '@/i18n/formatters';
 import { calcPackagingQty } from '@industrializacao/lib/stockUtils';
 import {
   computeTankCurrentVolume,
   getTankConference,
+  parseLocaleNumber,
+  round3,
 } from '@industrializacao/lib/mpStockForm';
+
+function formatVolumeInput(value, language) {
+  if (value == null || value === '') return '';
+  const n = typeof value === 'number' ? value : parseLocaleNumber(value);
+  if (n == null) return '';
+  return n.toLocaleString(getIntlLocale(language), {
+    maximumFractionDigits: 3,
+    useGrouping: false,
+  });
+}
+
+/** Mantém a vírgula (ou o ponto) enquanto o usuário digita, com até 3 casas. */
+function sanitizeVolumeDraft(raw) {
+  const cleaned = String(raw).replace(/[^\d.,]/g, '');
+  if (!cleaned) return '';
+
+  const commaAt = cleaned.indexOf(',');
+  if (commaAt !== -1) {
+    const intPart = cleaned.slice(0, commaAt).replace(/[.,]/g, '');
+    const decPart = cleaned.slice(commaAt + 1).replace(/[.,]/g, '').slice(0, 3);
+    return `${intPart},${decPart}`;
+  }
+
+  const dotAt = cleaned.indexOf('.');
+  if (dotAt !== -1) {
+    const intPart = cleaned.slice(0, dotAt).replace(/\./g, '');
+    const decPart = cleaned.slice(dotAt + 1).replace(/\./g, '').slice(0, 3);
+    return `${intPart}.${decPart}`;
+  }
+
+  return cleaned;
+}
+
+function TankVolumeInput({ value, onValueChange, ariaLabel }) {
+  const { i18n } = useTranslation();
+  const [text, setText] = useState(() => formatVolumeInput(value, i18n.language));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(formatVolumeInput(value, i18n.language));
+  }, [value, focused, i18n.language]);
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      value={text}
+      aria-label={ariaLabel}
+      className="text-right tabular-nums"
+      placeholder={(0).toLocaleString(getIntlLocale(i18n.language), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      })}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        setText(formatVolumeInput(value, i18n.language));
+      }}
+      onChange={(e) => {
+        const next = sanitizeVolumeDraft(e.target.value);
+        setText(next);
+        if (!next || next === ',' || next === '.') {
+          onValueChange('');
+          return;
+        }
+        const parsed = parseLocaleNumber(next);
+        onValueChange(parsed == null ? '' : round3(parsed));
+      }}
+    />
+  );
+}
 
 function SummaryItem({ label, value }) {
   return (
@@ -67,11 +142,11 @@ function MpEntryFormFields({
       client: nextClient,
       density: nextDensity,
       tank_entries: (form.tank_entries || []).map((entry) => {
-        const vol = parseFloat(entry.volume) || 0;
+        const vol = parseLocaleNumber(entry.volume) || 0;
         return {
           ...entry,
           tank_name: clientChanged ? '' : entry.tank_name,
-          mass: Math.round((parseFloat(nextDensity) || 0) * vol),
+          mass: round3((parseLocaleNumber(nextDensity) || 0) * vol),
         };
       }),
     });
@@ -247,7 +322,7 @@ function MpEntryFormFields({
         <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900 space-y-3">
           {(form.tank_entries || []).map((entry, idx) => {
             const currentVolume = computeTankCurrentVolume(entry.tank_name, stockItems, containers, editingId, pendingItems);
-            const entryVolume = parseFloat(entry.volume) || 0;
+            const entryVolume = parseLocaleNumber(entry.volume) || 0;
             const finalVolume = currentVolume + entryVolume;
             return (
               <div key={idx} className="grid grid-cols-2 gap-3 pb-3 border-b border-blue-100 dark:border-blue-900 last:border-0 last:pb-0">
@@ -278,14 +353,12 @@ function MpEntryFormFields({
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">{t('rawMaterialStock.form.volume')}</label>
-                  <Input
-                    type="number"
-                    step="1"
-                    value={entry.volume || ''}
-                    onChange={(e) => {
-                      const vol = Math.round(parseFloat(e.target.value) || 0);
-                      const mass = Math.round((parseFloat(form.density) || 0) * vol);
-                      updateTankEntry(idx, { volume: e.target.value === '' ? '' : vol, mass });
+                  <TankVolumeInput
+                    value={entry.volume}
+                    ariaLabel={t('rawMaterialStock.form.volume')}
+                    onValueChange={(vol) => {
+                      const mass = round3((parseLocaleNumber(form.density) || 0) * (parseLocaleNumber(vol) || 0));
+                      updateTankEntry(idx, { volume: vol, mass });
                     }}
                   />
                   {entry.tank_name && (
@@ -303,7 +376,7 @@ function MpEntryFormFields({
                     {t('rawMaterialStock.form.massCalc', {
                       mass: fmtMass(entry.mass || 0),
                       density: form.density || 0,
-                      volume: entry.volume || 0,
+                      volume: fmtNumber(parseLocaleNumber(entry.volume) || 0),
                     })}
                   </span>
                   <button type="button" onClick={() => removeTankEntry(idx)} className="text-red-500 hover:text-red-700 font-medium">{t('buttons.remove')}</button>
