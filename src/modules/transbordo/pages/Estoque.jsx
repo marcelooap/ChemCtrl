@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Switch } from "@shared/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import {
@@ -36,6 +37,7 @@ import {
   resolveTipoRecebimentoEstoque,
 } from "@transbordo/lib/tipoRecebimento";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
+import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Todos" },
@@ -44,7 +46,7 @@ const STATUS_OPTIONS = [
 ];
 
 const TIPO_TAB_TRIGGER_CLASS =
-  "gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
+  "gap-2 px-5 py-2.5 text-sm font-semibold bg-white text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -370,13 +372,17 @@ export default function Estoque() {
   };
 
   const handleDelete = () => runSubmit(async () => {
-    try {
-      await entities.estoque.delete(deleteId);
-      await loadData();
-    } catch {
-      // ignore
-    }
+    const id = deleteId;
+    const snap = peekScrollAnchor();
     setDeleteId(null);
+    setEstoque((prev) => prev.filter((e) => e.id !== id));
+    try {
+      await entities.estoque.delete(id);
+      await loadData({ silent: true });
+    } catch {
+      await loadData({ silent: true });
+    }
+    scheduleScrollRestore(snap);
   });
 
   const handleToggleWms = async (item, newValue) => {
@@ -589,20 +595,15 @@ export default function Estoque() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
+                      <div className="flex items-center gap-1">
+                        <RowActionButton
                           onClick={() =>
                             setExpandedLocais((prev) => ({
                               ...prev,
                               [e.id]: !prev[e.id],
                             }))
                           }
-                          className={`transition-colors ${
-                            isExpanded
-                              ? "text-primary"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
+                          className={isExpanded ? "text-primary" : undefined}
                           title={
                             isExpanded
                               ? "Ocultar locais de armazenamento"
@@ -610,29 +611,17 @@ export default function Estoque() {
                           }
                           aria-expanded={isExpanded}
                         >
-                          <MapPin className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleView(e)}
-                          className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                          title="Visualizar"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(e)}
-                          className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(e.id)}
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <MapPin />
+                        </RowActionButton>
+                        <RowActionButton onClick={() => handleView(e)} title="Visualizar">
+                          <Eye />
+                        </RowActionButton>
+                        <RowActionButton onClick={() => handleEdit(e)} title="Editar">
+                          <Pencil />
+                        </RowActionButton>
+                        <RowActionButton tone="danger" onClick={() => setDeleteId(e.id)} title="Excluir">
+                          <Trash2 />
+                        </RowActionButton>
                       </div>
                     </td>
                   </tr>

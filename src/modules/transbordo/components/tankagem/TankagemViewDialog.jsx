@@ -105,6 +105,13 @@ export default function TankagemViewDialog({ open, onClose, detalhe }) {
               value={`${formatVolume(detalhe.capacidade, { empty: "—" })} L`}
               nowrap
             />
+            {detalhe.origem_volume ? (
+              <InfoItem
+                label="Origem do volume"
+                value={detalhe.origem_volume}
+                nowrap
+              />
+            ) : null}
           </Section>
 
           <div className="space-y-3">

@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from "@transbordo/services/entities";
+import { base44 } from "@industrializacao/api/base44Client";
 import { Search, X } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import TankSilo from "@transbordo/components/tankagem/TankSilo";
 import TankagemViewDialog from "@transbordo/components/tankagem/TankagemViewDialog";
-import { formatVolume, roundVolume } from "@transbordo/lib/format";
+import { formatVolume } from "@transbordo/lib/format";
+import { buildTankaDetalhe } from "@transbordo/lib/tankaVolume";
 import {
-  computeTankaSaldo,
-  buildTankaDetalhe,
-} from "@transbordo/lib/tankaVolume";
+  mergeTankasUnificadas,
+  buildIndTankaDetalhe,
+} from "@transbordo/lib/tankaUnificada";
 import { listTankaIdsLinkedToEstoque } from "@transbordo/lib/estoqueSaldo";
 
 const PRODUCT_COLORS = [
@@ -19,12 +21,31 @@ const PRODUCT_COLORS = [
   "#BA68C8", "#7986CB", "#4DB6AC", "#F06292", "#81C784",
 ];
 
+/** Mesmas cores da Tankagem da Industrialização. */
+function tankProductColor(product) {
+  if (!product) return null;
+  const p = String(product)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (p.includes("sisbrax") && p.includes("ace") && p.includes("75")) {
+    return "#86EFAC";
+  }
+  if (p.includes("acido") && p.includes("acet") && p.includes("glacial")) {
+    return "#15803D";
+  }
+  return null;
+}
+
 export default function Tankagem() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isotanques, setIsotanques] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [indTanks, setIndTanks] = useState([]);
+  const [indContainers, setIndContainers] = useState([]);
+  const [indStock, setIndStock] = useState([]);
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -50,10 +71,56 @@ export default function Tankagem() {
         setIsotanques(isot);
         setTransbordos(trans);
         setVasilhames(vas);
+
+        try {
+          const loadIndList = async (fn) => {
+            try {
+              const rows = await fn();
+              return Array.isArray(rows) ? rows : [];
+            } catch {
+              return [];
+            }
+          };
+
+          const [tanksInd, containersInd, stockInd] = await Promise.all([
+            loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
+            loadIndList(async () => {
+              const tanksOnly = await base44.entities.Container.filter(
+                { type: "Tankagem" },
+                "-created_date",
+                1000
+              );
+              if (Array.isArray(tanksOnly) && tanksOnly.length > 0) return tanksOnly;
+              return base44.entities.Container.list("-created_date", 2000);
+            }),
+            loadIndList(() =>
+              base44.entities.RawMaterialStock.list("-created_date", 1000)
+            ),
+          ]);
+
+          let tanksFinal = tanksInd;
+          if (tanksFinal.length === 0) {
+            tanksFinal = await loadIndList(() =>
+              base44.entities.Tank.list(undefined, 500)
+            );
+          }
+
+          setIndTanks(tanksFinal);
+          setIndContainers(containersInd);
+          setIndStock(stockInd);
+        } catch (indErr) {
+          console.warn("[Tankagem] Industrialização:", indErr);
+          setIndTanks([]);
+          setIndContainers([]);
+          setIndStock([]);
+        }
       } catch {
         setIsotanques([]);
         setTransbordos([]);
         setVasilhames([]);
+        setIndTanks([]);
+        setIndContainers([]);
+        setIndStock([]);
       }
       setLoading(false);
     };
@@ -85,38 +152,14 @@ export default function Tankagem() {
   }, [estoqueFilterId]);
 
   const tanksWithVolume = useMemo(() => {
-    return isotanques.map((iso) => {
-      const tankaCodigo = iso.tanka || iso.codigo_itku || "";
-      const volume = computeTankaSaldo({
-        isotanqueId: iso.id,
-        tankaCodigo,
-        transbordos,
-      });
-
-      const fillings = transbordos
-        .filter((t) =>
-          (t.destinos || []).some(
-            (d) =>
-              d.tipo_embalagem === "Tankagem" &&
-              (d.tanka_id === iso.id || d.tanka_codigo === tankaCodigo)
-          )
-        )
-        .sort(
-          (a, b) =>
-            new Date(b.created_at || b.created_date || b.data || 0) -
-            new Date(a.created_at || a.created_date || a.data || 0)
-        );
-
-      const latestFilling = fillings[0];
-
-      return {
-        ...iso,
-        volumeAtual: roundVolume(volume),
-        produto: iso.produto_nome || latestFilling?.produto_nome || "",
-        cliente_nome: iso.cliente_nome || latestFilling?.cliente_nome || "",
-      };
-    });
-  }, [isotanques, transbordos]);
+    return mergeTankasUnificadas({
+      isotanques,
+      transbordos,
+      indTanks,
+      indContainers,
+      indStock,
+    }).filter((tank) => tank.hasTransbordo);
+  }, [isotanques, transbordos, indTanks, indContainers, indStock]);
 
   const sortedTanks = useMemo(() => {
     return [...tanksWithVolume].sort((a, b) => {
@@ -169,8 +212,13 @@ export default function Tankagem() {
     filteredTanks.forEach((tank) => {
       const prod = tank.produto || "";
       if (prod && !(prod in map)) {
-        map[prod] = PRODUCT_COLORS[colorIndex % PRODUCT_COLORS.length];
-        colorIndex++;
+        const fixed = tankProductColor(prod);
+        if (fixed) {
+          map[prod] = fixed;
+        } else {
+          map[prod] = PRODUCT_COLORS[colorIndex % PRODUCT_COLORS.length];
+          colorIndex++;
+        }
       }
     });
     return map;
@@ -186,11 +234,25 @@ export default function Tankagem() {
   }, [filteredTanks]);
 
   const handleView = (tank) => {
-    const detalhe = buildTankaDetalhe({
-      isotanque: tank,
-      transbordos,
-    });
-    setViewDetalhe(detalhe);
+    const fromIndustrializacao =
+      tank.volumeSource === "ind_container" ||
+      tank.volumeSource === "ind_stock";
+
+    if (fromIndustrializacao) {
+      setViewDetalhe(buildIndTankaDetalhe(tank));
+    } else {
+      setViewDetalhe(
+        buildTankaDetalhe({
+          isotanque: {
+            ...(tank.isotanque || tank),
+            produto_nome: tank.produto || tank.isotanque?.produto_nome,
+            cliente_nome: tank.cliente_nome || tank.isotanque?.cliente_nome,
+            capacidade: tank.isotanque?.capacidade || tank.capacidade,
+          },
+          transbordos,
+        })
+      );
+    }
     setViewOpen(true);
   };
 
@@ -267,7 +329,12 @@ export default function Tankagem() {
                   <TankSilo
                     key={tank.id}
                     tanka={tank.tanka || tank.codigo_itku}
-                    capacidade={tank.capacidade || 0}
+                    capacidade={
+                      Number(tank.isotanque?.capacidade) ||
+                      Number(tank.indTank?.capacity) ||
+                      Number(tank.capacidade) ||
+                      0
+                    }
                     volume={tank.volumeAtual}
                     produto={tank.produto}
                     fillColor={

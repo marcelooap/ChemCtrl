@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, Power, Search, HardHat, Copy } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
+import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { useToast } from '@shared/components/ui/use-toast';
@@ -246,33 +247,24 @@ export default function Operadores() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
+                        <div className="flex items-center justify-end gap-1">
+                          <RowActionButton
                             onClick={() => openEdit(row)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
                             title={t('painel.configuracao.operadores.edit')}
-                            aria-label={t('painel.configuracao.operadores.edit')}
                           >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
+                            <Pencil />
+                          </RowActionButton>
+                          <RowActionButton
+                            tone={ativo ? 'danger' : 'success'}
                             onClick={() => setToggleTarget(row)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
                             title={
                               ativo
                                 ? t('painel.configuracao.operadores.inactivate')
                                 : t('painel.configuracao.operadores.activate')
                             }
-                            aria-label={
-                              ativo
-                                ? t('painel.configuracao.operadores.inactivate')
-                                : t('painel.configuracao.operadores.activate')
-                            }
                           >
-                            <Power className="w-4 h-4" />
-                          </button>
+                            <Power />
+                          </RowActionButton>
                         </div>
                       </td>
                     </tr>

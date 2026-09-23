@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, Search, Undo2, X } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
+import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import DateInputBr from '@shared/components/ui/DateInputBr';
@@ -435,29 +436,19 @@ export default function LogisticaCarregamentos() {
                       {row.operador_nome || '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center justify-end gap-0.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                      <div className="inline-flex items-center justify-end gap-1">
+                        <RowActionButton
                           title={t('painel.logistica.carregamentos.view')}
-                          aria-label={t('painel.logistica.carregamentos.view')}
                           onClick={() => openView(row)}
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                          <Eye />
+                        </RowActionButton>
+                        <RowActionButton
                           title={t('painel.logistica.carregamentos.revert')}
-                          aria-label={t('painel.logistica.carregamentos.revert')}
                           onClick={() => setRevertTarget(row)}
                         >
-                          <Undo2 className="w-4 h-4" />
-                        </Button>
+                          <Undo2 />
+                        </RowActionButton>
                       </div>
                     </td>
                   </tr>

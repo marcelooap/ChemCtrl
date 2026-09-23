@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookmarkMinus, BookmarkPlus, Eye } from 'lucide-react';
 import ConfirmDialog from '@shared/components/ConfirmDialog';
-import { Button } from '@shared/components/ui/button';
+import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import ContainerViewDialog from '@industrializacao/components/vasilhames/ContainerViewDialog';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
@@ -146,40 +146,28 @@ export default function VasilhamesReservaTable({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                        <RowActionButton
                           title={t('painel.comercial.reservarMaterial.vasilhames.actions.view')}
                           onClick={() => setViewRow(row)}
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                          <Eye />
+                        </RowActionButton>
                         {!readOnly && (
                           <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
                             {row.reservado ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
+                              <RowActionButton
                                 title={t('painel.comercial.reservarMaterial.vasilhames.actions.remover')}
                                 onClick={() => setPendingAction({ type: 'liberar', row })}
                               >
-                                <BookmarkMinus className="w-4 h-4" />
-                              </Button>
+                                <BookmarkMinus />
+                              </RowActionButton>
                             ) : (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
+                              <RowActionButton
                                 title={t('painel.comercial.reservarMaterial.vasilhames.actions.reservar')}
                                 onClick={() => setPendingAction({ type: 'reservar', row })}
                               >
-                                <BookmarkPlus className="w-4 h-4" />
-                              </Button>
+                                <BookmarkPlus />
+                              </RowActionButton>
                             )}
                           </Can>
                         )}

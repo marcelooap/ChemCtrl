@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Plus, Search, Eye, Pencil, Truck, X, Printer } from "lucide-react";
+import { Search, Eye, Pencil, Truck, X, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import {
@@ -317,12 +318,6 @@ export default function Vasilhames() {
     return date.toLocaleDateString("pt-BR");
   };
 
-  const handleNew = () => {
-    setEditingVasilhame(null);
-    setReadOnly(false);
-    setModalOpen(true);
-  };
-
   const handleEdit = (v) => {
     setEditingVasilhame(v);
     setReadOnly(false);
@@ -491,11 +486,7 @@ export default function Vasilhames() {
       await entities.vasilhames.update(editingVasilhame.id, payload);
       saved = { ...editingVasilhame, ...payload };
     } else {
-      saved = await entities.vasilhames.create({
-        ...data,
-        codigo: "Manual",
-        origem: "manual",
-      });
+      return;
     }
 
     if (prevExpedido !== nextExpedido || nextExpedido) {
@@ -665,15 +656,9 @@ export default function Vasilhames() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
       <div className="shrink-0 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Vasilhames / Envase</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
-          </div>
-          <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-            <Plus className="w-4 h-4" />
-            Adicionar Tanque
-          </Button>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Vasilhames / Envase</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
         </div>
 
         {/* Filters */}
@@ -821,24 +806,19 @@ export default function Vasilhames() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(v.data_saida)}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => handleView(v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Visualizar">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePrintLabel(v)}
-                            className="text-muted-foreground hover:text-primary transition-colors"
-                            title="Imprimir etiqueta"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleEdit(v)} className="text-muted-foreground hover:text-foreground transition-colors" title="Editar">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleSaida(v)} className="text-muted-foreground hover:text-primary transition-colors" title="Lançar Saída">
-                            <Truck className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-1">
+                          <RowActionButton onClick={() => handleView(v)} title="Visualizar">
+                            <Eye />
+                          </RowActionButton>
+                          <RowActionButton onClick={() => handlePrintLabel(v)} title="Imprimir etiqueta">
+                            <Printer />
+                          </RowActionButton>
+                          <RowActionButton onClick={() => handleEdit(v)} title="Editar">
+                            <Pencil />
+                          </RowActionButton>
+                          <RowActionButton tone="success" onClick={() => handleSaida(v)} title="Lançar Saída">
+                            <Truck />
+                          </RowActionButton>
                         </div>
                       </td>
                     </tr>

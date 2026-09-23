@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -27,6 +28,7 @@ import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { prepareEntradaView } from "@industrializacao/lib/syncMpEntradaTransbordo";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
+import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
@@ -91,8 +93,8 @@ export default function Entrada() {
   const [loading, setLoading] = useState(true);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [ents, prods, cliens, transbs, ests] = await Promise.all([
         entities.entradas.list("-created_date"),
@@ -131,11 +133,13 @@ export default function Entrada() {
       setEstoque(ests);
     } catch (err) {
       console.error("[Transbordo] Erro ao carregar Entrada:", err);
-      setEntradas([]);
-      setProdutos([]);
-      setClientes([]);
+      if (!silent) {
+        setEntradas([]);
+        setProdutos([]);
+        setClientes([]);
+      }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -378,14 +382,19 @@ export default function Entrada() {
   };
 
   const handleDelete = () => runSubmit(async () => {
-    try {
-      await entities.estoque.deleteMany({ entrada_id: deleteId });
-      await entities.entradas.delete(deleteId);
-      await loadData();
-    } catch {
-      // ignore
-    }
+    const id = deleteId;
+    const snap = peekScrollAnchor();
     setDeleteId(null);
+    setEntradas((prev) => prev.filter((e) => e.id !== id));
+    setEstoque((prev) => prev.filter((e) => e.entrada_id !== id));
+    try {
+      await entities.estoque.deleteMany({ entrada_id: id });
+      await entities.entradas.delete(id);
+      await loadData({ silent: true });
+    } catch {
+      await loadData({ silent: true });
+    }
+    scheduleScrollRestore(snap);
   });
 
   const handleDialogClose = () => {
@@ -584,31 +593,19 @@ export default function Entrada() {
                         </button>
                       </td>
                       <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleView(e)}
-                            className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                            title="Visualizar"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-1">
+                          <RowActionButton onClick={() => handleView(e)} title="Visualizar">
+                            <Eye />
+                          </RowActionButton>
                           <Can permission="tb_entrada.edit">
-                            <button
-                              onClick={() => handleEdit(e)}
-                              className="text-muted-foreground hover:text-muted-foreground transition-colors"
-                              title="Editar"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                            <RowActionButton onClick={() => handleEdit(e)} title="Editar">
+                              <Pencil />
+                            </RowActionButton>
                           </Can>
                           <Can permission="tb_entrada.delete">
-                            <button
-                              onClick={() => setDeleteId(e.id)}
-                              className="text-red-400 hover:text-red-600 transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <RowActionButton tone="danger" onClick={() => setDeleteId(e.id)} title="Excluir">
+                              <Trash2 />
+                            </RowActionButton>
                           </Can>
                         </div>
                       </td>

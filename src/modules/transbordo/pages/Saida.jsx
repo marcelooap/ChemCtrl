@@ -4,6 +4,7 @@ import { entities } from '@transbordo/services/entities';
 import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -570,38 +571,36 @@ export default function Saida({
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
+                      <div className="flex items-center gap-1">
+                        <RowActionButton
                           onClick={() => {
                             setViewSaida(s);
                             if (trackNewFromPainel && isNew(s.id)) {
                               markAsRead(s.id);
                             }
                           }}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
                           title="Visualizar"
                         >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                          <Eye />
+                        </RowActionButton>
                         {!(isExpedicao && expedicaoStatus === "expedido") ? (
-                          <button
+                          <RowActionButton
                             onClick={() => navigate(`${basePath}/editar/${s.id}`)}
-                            className="text-muted-foreground hover:text-muted-foreground transition-colors"
                             title="Editar"
                           >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                            <Pencil />
+                          </RowActionButton>
                         ) : null}
                         {(!isModuloOperacional ||
                           canExcluirSaidaNoModuloOperacional(s)) &&
                         !(isExpedicao && expedicaoStatus === "expedido") ? (
-                          <button
+                          <RowActionButton
+                            tone="danger"
                             onClick={() => setDeleteId(s.id)}
-                            className="text-red-400 hover:text-red-600 transition-colors"
                             title="Excluir"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <Trash2 />
+                          </RowActionButton>
                         ) : null}
                       </div>
                     </td>

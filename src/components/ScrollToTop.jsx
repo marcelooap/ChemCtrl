@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
+import { installScrollAnchor } from "@shared/lib/preserveScroll";
 
 const getHashId = (hash) => {
   const rawId = hash.slice(1);
@@ -14,6 +15,10 @@ const getHashId = (hash) => {
 export default function ScrollToTop() {
   const { pathname, hash } = useLocation();
   const navigationType = useNavigationType();
+
+  useEffect(() => {
+    installScrollAnchor();
+  }, []);
 
   useEffect(() => {
     if (navigationType === "POP") return;

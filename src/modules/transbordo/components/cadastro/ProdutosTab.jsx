@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { entities } from '@transbordo/services/entities';
 import { Plus, Search, Pencil, Trash2, Check, FileText } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -388,21 +389,13 @@ export default function ProdutosTab() {
                       />
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEdit(p)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center gap-1">
+                        <RowActionButton onClick={() => handleEdit(p)} title="Editar">
+                          <Pencil />
+                        </RowActionButton>
+                        <RowActionButton tone="danger" onClick={() => setDeleteId(p.id)} title="Excluir">
+                          <Trash2 />
+                        </RowActionButton>
                       </div>
                     </td>
                   </tr>

@@ -26,15 +26,68 @@ const formatDate = (d) => {
   return date.toLocaleDateString("pt-BR");
 };
 
+const LABEL_ORIGEM_EMBALADO = "IBC / BOMBONA / TAMBOR";
+
+function isOrigemEmbalado(origem, entradas = []) {
+  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
+  if (
+    tipo === "embalado" ||
+    tipo === "ibc" ||
+    tipo === "bombona" ||
+    tipo === "tambor" ||
+    origem?.embalado
+  ) {
+    return true;
+  }
+  if (!origem?.entrada_id) return false;
+  return isEstoqueEmbalado(entradas.find((e) => e.id === origem.entrada_id));
+}
+
+/** Rótulo da origem: código da tanka, Granel ou IBC / Bombona / Tambor. */
+function labelOrigemLinha(origem, isotanques = [], entradas = []) {
+  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
+  if (tipo === "tanka") return origemTankaCodigo(origem, isotanques) || "-";
+  if (isOrigemEmbalado(origem, entradas)) return LABEL_ORIGEM_EMBALADO;
+  if (tipo === "vasilhame") return "Vasilhame";
+  return "Granel";
+}
+
+/** Código da tanka em rótulos como "TANKA 46 - PRODUTO (1.234 L)". */
+function origemTankaCodigo(origem, isotanques = []) {
+  if (origem?.tanka_codigo) return String(origem.tanka_codigo).trim();
+  const byId = (isotanques || []).find((i) => i.id && i.id === origem?.entrada_id);
+  const fromCadastro = byId?.tanka || byId?.codigo_itku || "";
+  if (fromCadastro) return String(fromCadastro).trim();
+  const codigo = String(origem?.entrada_codigo || "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+  const sep = codigo.indexOf(" - ");
+  if (sep > 0) return codigo.slice(0, sep).trim();
+  return codigo;
+}
+
+/** Remove o lote do rótulo; a coluna Lote já exibe esse dado. */
+function stripLoteDoRotulo(nome) {
+  return String(nome || "")
+    .replace(/\s*[—–-]\s*Lote\s+.+$/i, "")
+    .replace(/\s*\(\s*Lote\s+[^)]*\)\s*$/i, "")
+    .trim();
+}
+
 /** Extrai só o nome do produto de rótulos como "TANKA 46 - PRODUTO (1.234 L)". */
 function origemProdutoNome(origem, fallbackProduto) {
+  const granel = !origem?.tipo_origem || origem.tipo_origem === "entrada";
   const codigo = origem?.entrada_codigo || "";
   if (codigo) {
     const withoutVol = codigo.replace(/\s*\([^)]*\)\s*$/, "").trim();
     const sep = withoutVol.indexOf(" - ");
     if (sep >= 0) {
       const nome = withoutVol.slice(sep + 3).trim();
-      if (nome) return nome;
+      if (nome) return granel ? stripLoteDoRotulo(nome) || nome : nome;
+    }
+    if (granel) {
+      const semLote = stripLoteDoRotulo(withoutVol);
+      if (semLote && semLote !== withoutVol) return semLote;
     }
   }
   return fallbackProduto || "-";
@@ -132,6 +185,7 @@ export default function TransbordoViewDialog({
   transbordo,
   produtos = [],
   entradas = [],
+  isotanques = [],
 }) {
   if (!transbordo) return null;
 
@@ -142,6 +196,7 @@ export default function TransbordoViewDialog({
   const isVolume = isUnidadeVolumeEntrada(unidade);
   const densDisplay = resolveDensidadeDisplay(transbordo, produtos, entradas);
 
+  const origens = transbordo.origens || [];
   const destinos = transbordo.destinos || [];
   const showPlacaBarril = destinos.some((d) =>
     isDestinoTanquePatio(d.tipo_embalagem)
@@ -157,7 +212,7 @@ export default function TransbordoViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             Transbordo {transbordo.codigo_transbordo || ""}
@@ -211,17 +266,18 @@ export default function TransbordoViewDialog({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-center text-xs text-muted-foreground border-b border-border bg-muted/40/50 uppercase">
-                    <th className="px-3 py-2 font-medium align-middle">Produto</th>
-                    <th className="px-3 py-2 font-medium align-middle">Lote</th>
-                    <th className="px-3 py-2 font-medium align-middle">Vol. Retirado (L)</th>
-                    <th className="px-3 py-2 font-medium align-middle">Massa (kg)</th>
-                    <th className="px-3 py-2 font-medium align-middle">
-                      Saldo Restante ({unidadeLabel})
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">
+                      Origem
                     </th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Produto</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Lote</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Vol. Retirado (L)</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Massa (kg)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(transbordo.origens || []).flatMap((o, i) => {
+                  {origens.flatMap((o, i) => {
+                    const origemLabel = labelOrigemLinha(o, isotanques, entradas);
                     const lotes = (o.lotes_retirados || []).filter(
                       (l) => (l.volume_retirado || 0) > 0
                     );
@@ -240,33 +296,27 @@ export default function TransbordoViewDialog({
                           : dens > 0
                             ? vol * dens
                             : o.massa_retirada;
-                        const saldo = Math.max(
-                          0,
-                          (l.saldo_disponivel || 0) - vol
-                        );
                         return (
                           <tr
                             key={`${i}-${li}`}
                             className="border-b border-border last:border-0"
                           >
-                            <td className="px-3 py-2 text-center align-middle text-foreground">
+                            <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
+                              {origemLabel}
+                            </td>
+                            <td className="px-3 py-2 text-center align-middle text-foreground whitespace-nowrap">
                               {produtoOrigem}
                             </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                               {l.lote || "-"}
                             </td>
-                            <td className="px-3 py-2 text-center align-middle text-foreground font-medium">
+                            <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
                               {origemEmMassa
                                 ? "-"
                                 : formatVolume(vol, { empty: "-" })}
                             </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                               {formatMass(massa, { empty: "-" })}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-green-700 font-medium">
-                              {origemEmMassa
-                                ? formatMass(saldo, { empty: "-" })
-                                : formatVolume(saldo, { empty: "-" })}
                             </td>
                           </tr>
                         );
@@ -277,31 +327,28 @@ export default function TransbordoViewDialog({
                     const massa = origemEmMassa
                       ? o.massa_retirada ?? vol
                       : o.massa_retirada;
-                    const saldo = o.saldo_restante;
 
                     return [
                       <tr
                         key={i}
                         className="border-b border-border last:border-0"
                       >
-                        <td className="px-3 py-2 text-center align-middle text-foreground">
+                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
+                          {origemLabel}
+                        </td>
+                        <td className="px-3 py-2 text-center align-middle text-foreground whitespace-nowrap">
                           {produtoOrigem}
                         </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                           {o.lote || "-"}
                         </td>
-                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium">
+                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
                           {origemEmMassa
                             ? "-"
                             : formatVolume(vol, { empty: "-" })}
                         </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                           {formatMass(massa, { empty: "-" })}
-                        </td>
-                        <td className="px-3 py-2 text-center align-middle text-green-700 font-medium">
-                          {origemEmMassa
-                            ? formatMass(saldo, { empty: "-" })
-                            : formatVolume(saldo, { empty: "-" })}
                         </td>
                       </tr>,
                     ];
@@ -320,18 +367,18 @@ export default function TransbordoViewDialog({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-center text-xs text-muted-foreground border-b border-border bg-muted/40/50 uppercase">
-                    <th className="px-3 py-2 font-medium align-middle">Tipo</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Tipo</th>
                     {showPlacaBarril && (
                       <>
-                        <th className="px-3 py-2 font-medium align-middle">Nº Placa</th>
-                        <th className="px-3 py-2 font-medium align-middle">Nº Barril</th>
+                        <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Nº Placa</th>
+                        <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Nº Barril</th>
                       </>
                     )}
                     {showQtdEmbalagens && (
-                      <th className="px-3 py-2 font-medium align-middle">Qtd. Embalagens</th>
+                      <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Qtd. Embalagens</th>
                     )}
-                    <th className="px-3 py-2 font-medium align-middle">Volume (L)</th>
-                    <th className="px-3 py-2 font-medium align-middle">Massa (kg)</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Volume (L)</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Massa (kg)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -365,21 +412,21 @@ export default function TransbordoViewDialog({
                         key={i}
                         className="border-b border-border last:border-0"
                       >
-                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium">
+                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
                           {tipo || "-"}
                         </td>
                         {showPlacaBarril && (
                           <>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                               {tanque ? placa : "-"}
                             </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                               {tanque && tipo === "Vasilhame" ? barril : "-"}
                             </td>
                           </>
                         )}
                         {showQtdEmbalagens && (
-                          <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                          <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                             {embalado
                               ? qtdEmb != null
                                 ? String(qtdEmb)
@@ -387,12 +434,12 @@ export default function TransbordoViewDialog({
                               : "-"}
                           </td>
                         )}
-                        <td className="px-3 py-2 text-center align-middle text-primary font-medium">
+                        <td className="px-3 py-2 text-center align-middle text-primary font-medium whitespace-nowrap">
                           {isVolume
                             ? formatVolume(volume, { empty: "-" })
                             : "-"}
                         </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground">
+                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
                           {formatMass(massa, { empty: "-" })}
                         </td>
                       </tr>

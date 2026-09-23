@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from "@transbordo/services/entities";
 import { Plus, Trash2, CirclePlay, Pencil } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,7 @@ import {
   promoverFiltroEmUso,
   statusElementoBadgeClass,
 } from "@transbordo/lib/filtracao";
+import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -39,8 +41,8 @@ export default function InsumosTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [elems, filtracoes] = await Promise.all([
         entities.elementos_filtrantes.list("-created_date"),
@@ -49,10 +51,12 @@ export default function InsumosTab() {
       setElementos(elems);
       setVolumeMap(volumeTotalPorFiltro(filtracoes));
     } catch {
-      setElementos([]);
-      setVolumeMap(new Map());
+      if (!silent) {
+        setElementos([]);
+        setVolumeMap(new Map());
+      }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -127,13 +131,17 @@ export default function InsumosTab() {
   };
 
   const handleDelete = async () => {
-    try {
-      await entities.elementos_filtrantes.delete(deleteId);
-      await loadData();
-    } catch {
-      // ignore
-    }
+    const id = deleteId;
+    const snap = peekScrollAnchor();
     setDeleteId(null);
+    setElementos((prev) => prev.filter((el) => el.id !== id));
+    try {
+      await entities.elementos_filtrantes.delete(id);
+      await loadData({ silent: true });
+    } catch {
+      await loadData({ silent: true });
+    }
+    scheduleScrollRestore(snap);
   };
 
   const emUsoCount = elementos.filter((e) => e.status === "Em uso").length;
@@ -221,30 +229,22 @@ export default function InsumosTab() {
                         {formatVolume(vol, { empty: "0" })}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           {!emUso && !descartado && (
-                            <button
+                            <RowActionButton
+                              tone="success"
                               onClick={() => handleColocarEmUso(el)}
-                              className="text-muted-foreground hover:text-green-700 transition-colors"
                               title="Colocar em uso"
                             >
-                              <CirclePlay className="w-4 h-4" />
-                            </button>
+                              <CirclePlay />
+                            </RowActionButton>
                           )}
-                          <button
-                            onClick={() => handleEdit(el)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            title="Editar"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(el.id)}
-                            className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <RowActionButton onClick={() => handleEdit(el)} title="Editar">
+                            <Pencil />
+                          </RowActionButton>
+                          <RowActionButton tone="danger" onClick={() => setDeleteId(el.id)} title="Excluir">
+                            <Trash2 />
+                          </RowActionButton>
                         </div>
                       </td>
                     </tr>

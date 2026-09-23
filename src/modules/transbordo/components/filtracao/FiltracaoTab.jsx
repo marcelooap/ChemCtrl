@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from "@transbordo/services/entities";
 import { Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +22,7 @@ import {
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
 import { PARTICULA_TAMANHOS, formatParticulaCount } from "@transbordo/lib/filtracao";
+import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
 export default function FiltracaoTab() {
   const [filtracoes, setFiltracoes] = useState([]);
@@ -35,8 +37,8 @@ export default function FiltracaoTab() {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [list, cliens, elems] = await Promise.all([
         entities.filtracoes.list("-created_date"),
@@ -47,10 +49,12 @@ export default function FiltracaoTab() {
       setClientes(cliens);
       setElementos(elems);
     } catch {
-      setFiltracoes([]);
-      setElementos([]);
+      if (!silent) {
+        setFiltracoes([]);
+        setElementos([]);
+      }
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -97,13 +101,17 @@ export default function FiltracaoTab() {
   };
 
   const handleDelete = async () => {
-    try {
-      await entities.filtracoes.delete(deleteId);
-      await loadData();
-    } catch {
-      // ignore
-    }
+    const id = deleteId;
+    const snap = peekScrollAnchor();
     setDeleteId(null);
+    setFiltracoes((prev) => prev.filter((f) => f.id !== id));
+    try {
+      await entities.filtracoes.delete(id);
+      await loadData({ silent: true });
+    } catch {
+      await loadData({ silent: true });
+    }
+    scheduleScrollRestore(snap);
   };
 
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
@@ -245,28 +253,19 @@ export default function FiltracaoTab() {
                         </td>
                       ))}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleView(f)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            title="Visualizar"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
+                        <div className="flex items-center gap-1">
+                          <RowActionButton onClick={() => handleView(f)} title="Visualizar">
+                            <Eye />
+                          </RowActionButton>
+                          <RowActionButton
                             onClick={() => handleEdit(f)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
                             title="Editar SAE / partículas / filtro"
                           >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(f.id)}
-                            className="text-red-400 hover:text-red-600 transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <Pencil />
+                          </RowActionButton>
+                          <RowActionButton tone="danger" onClick={() => setDeleteId(f.id)} title="Excluir">
+                            <Trash2 />
+                          </RowActionButton>
                         </div>
                       </td>
                     </tr>

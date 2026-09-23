@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cylinder, Eye, Package, Pencil, Search } from 'lucide-react';
-import { Button } from '@shared/components/ui/button';
+import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
@@ -412,27 +412,13 @@ export default function ReservarMaterial() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title={t('buttons.edit')}
-                                onClick={() => setEditRow(row)}
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
+                              <RowActionButton title={t('buttons.edit')} onClick={() => setEditRow(row)}>
+                                <Pencil />
+                              </RowActionButton>
                             </Can>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title={t('common.view')}
-                              onClick={() => setViewRow(row)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                            <RowActionButton title={t('common.view')} onClick={() => setViewRow(row)}>
+                              <Eye />
+                            </RowActionButton>
                           </div>
                         </td>
                       </tr>

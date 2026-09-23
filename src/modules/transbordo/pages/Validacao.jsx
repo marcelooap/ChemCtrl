@@ -8,6 +8,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -551,39 +552,34 @@ export default function Validacao() {
                         <StatusPill status={v.status} t={t} />
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1 whitespace-nowrap">
                           <Can permission={`${PERM}.view`}>
-                            <button
-                              type="button"
+                            <RowActionButton
                               onClick={() => handleView(v)}
-                              className="text-muted-foreground hover:text-foreground transition-colors"
                               title={t("transbordo.validacao.actions.view")}
                             >
-                              <Eye className="w-4 h-4" />
-                            </button>
+                              <Eye />
+                            </RowActionButton>
                           </Can>
                           {isPendente && (
                             <Can permission={`${PERM}.edit`}>
-                              <button
-                                type="button"
+                              <RowActionButton
                                 onClick={() => handleEdit(v)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
                                 title={t("transbordo.validacao.actions.edit")}
                               >
-                                <Pencil className="w-4 h-4" />
-                              </button>
+                                <Pencil />
+                              </RowActionButton>
                             </Can>
                           )}
                           {isPendente && (
                             <Can permission={`${PERM}.delete`}>
-                              <button
-                                type="button"
+                              <RowActionButton
+                                tone="danger"
                                 onClick={() => setDeleteId(v.id)}
-                                className="text-red-400 hover:text-red-600 transition-colors"
                                 title={t("transbordo.validacao.actions.delete")}
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                                <Trash2 />
+                              </RowActionButton>
                             </Can>
                           )}
                           {isPendente && (

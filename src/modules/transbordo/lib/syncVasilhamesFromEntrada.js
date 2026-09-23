@@ -176,44 +176,8 @@ export async function syncVasilhamesFromEntradaLotes({
       continue;
     }
 
-    const composicao = mergeComposicao([], [compItem], {
-      data: savedEntrada.data || null,
-    });
-    const created = await entities.vasilhames.create({
-      codigo: entradaCodigo,
-      origem: "manual",
-      placa: lote.placa || "",
-      barril: lote.barril || "",
-      tipo: "Vasilhame",
-      produto_id: lote.produto_id || null,
-      produto_nome: lote.produto_nome || "",
-      produto_codigo: lote.produto_codigo || "",
-      cliente_id: clienteId || null,
-      cliente_nome: clienteNome || "",
-      lote: lote.lote || getDominantLote(composicao),
-      densidade: lote.densidade || "",
-      volume,
-      tara,
-      peso_liquido: pesoLiquido,
-      peso_bruto: pesoBruto,
-      lacres: lote.lacres || "",
-      eslinga: lote.eslinga || "",
-      gps: lote.gps || "",
-      menor_teste: lote.menor_teste || null,
-      status: "No Pátio",
-      fracionado: lote.fracionado || false,
-      composicao,
-    });
-
-    if (created?.id) {
-      vasilhamesAtuais.push(created);
-      updatedLotes[i] = { ...lote, vasilhame_id: created.id };
-      if (produtoFiltrado && isFiltracaoElegivel(created)) {
-        await upsertFiltracaoForVasilhame(entities, created, {
-          codigo: entradaCodigo,
-        });
-      }
-    }
+    // Cadastro de vasilhame foi descontinuado: placa nova não gera registro.
+    continue;
   }
 
   const changed = updatedLotes.some(

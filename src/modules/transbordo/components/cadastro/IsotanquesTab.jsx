@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
 import { Plus, Search, Eye, Pencil, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -18,6 +19,10 @@ import IsotanqueViewDialog from "@transbordo/components/cadastro/IsotanqueViewDi
 import DescontaminacaoModal from "@transbordo/components/cadastro/DescontaminacaoModal";
 import { formatVolume } from "@transbordo/lib/format";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
+import {
+  buildDescontaminacaoPayload,
+  isMissingSnapshotColumnError,
+} from "@transbordo/lib/descontaminacao";
 
 export default function IsotanquesTab() {
   const [isotanques, setIsotanques] = useState([]);
@@ -130,13 +135,25 @@ export default function IsotanquesTab() {
   };
 
   const handleDescontaminacao = async (data) => {
+    const payload = buildDescontaminacaoPayload(isotanques, data);
     try {
-      await entities.descontaminacoes.create(data);
-      await loadData({ silent: true });
-      setDescontamOpen(false);
+      await entities.descontaminacoes.create(payload);
     } catch (err) {
-      console.error("[Transbordo] Erro ao registrar descontaminação:", err);
+      if (!isMissingSnapshotColumnError(err)) {
+        console.error("[Transbordo] Erro ao registrar descontaminação:", err);
+        throw err;
+      }
+      try {
+        await entities.descontaminacoes.create({
+          tanka: payload.tanka,
+          data_descontaminacao: payload.data_descontaminacao,
+        });
+      } catch (fallbackErr) {
+        console.error("[Transbordo] Erro ao registrar descontaminação:", fallbackErr);
+        throw fallbackErr;
+      }
     }
+    await loadData({ silent: true });
   };
 
   const formatDate = (dateStr) => {
@@ -255,28 +272,16 @@ export default function IsotanquesTab() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleView(it)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Visualizar"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(it)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                          title="Editar"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(it.id)}
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center gap-1">
+                        <RowActionButton onClick={() => handleView(it)} title="Visualizar">
+                          <Eye />
+                        </RowActionButton>
+                        <RowActionButton onClick={() => handleEdit(it)} title="Editar">
+                          <Pencil />
+                        </RowActionButton>
+                        <RowActionButton tone="danger" onClick={() => setDeleteId(it.id)} title="Excluir">
+                          <Trash2 />
+                        </RowActionButton>
                       </div>
                     </td>
                   </tr>
@@ -357,6 +362,7 @@ export default function IsotanquesTab() {
         onClose={() => setDescontamOpen(false)}
         onSave={handleDescontaminacao}
         isotanques={isotanques}
+        descontaminacoes={descontaminacoes}
       />
     </div>
   );

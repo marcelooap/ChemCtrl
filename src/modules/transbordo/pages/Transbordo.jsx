@@ -5,6 +5,7 @@ import { syncEstoqueSaldos, isUnidadeMassaEntrada, isUnidadeVolumeEntrada, norma
 import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -600,16 +601,16 @@ export default function Transbordo() {
                       </div>
                     </td>
                     <td className="px-4 py-3 align-middle">
-                      <div className="flex items-center gap-2 whitespace-nowrap">
-                        <button onClick={() => handleView(t)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Visualizar">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleEdit(t)} className="text-muted-foreground hover:text-muted-foreground transition-colors" title="Editar">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteId(t.id)} className="text-red-400 hover:text-red-600 transition-colors" title="Excluir">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <RowActionButton onClick={() => handleView(t)} title="Visualizar">
+                          <Eye />
+                        </RowActionButton>
+                        <RowActionButton onClick={() => handleEdit(t)} title="Editar">
+                          <Pencil />
+                        </RowActionButton>
+                        <RowActionButton tone="danger" onClick={() => setDeleteId(t.id)} title="Excluir">
+                          <Trash2 />
+                        </RowActionButton>
                       </div>
                     </td>
                   </tr>
@@ -668,6 +669,7 @@ export default function Transbordo() {
         transbordo={viewTransbordo}
         produtos={produtos}
         entradas={entradas}
+        isotanques={isotanques}
       />
 
       {/* Delete Confirmation */}

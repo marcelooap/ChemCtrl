@@ -9,8 +9,41 @@ import { computeTankaSaldo } from "@transbordo/lib/tankaVolume";
 function normName(value) {
   return String(value || "")
     .trim()
+    .replace(/\s+/g, " ")
     .toUpperCase();
 }
+
+function nameSet(tankName) {
+  return new Set(
+    (Array.isArray(tankName) ? tankName : [tankName])
+      .map(normName)
+      .filter(Boolean)
+  );
+}
+
+function parseDensity(value) {
+  const n = parseFloat(String(value ?? "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function containerDensity(container) {
+  const direct = parseDensity(container?.density);
+  if (direct > 0) return direct;
+  const volume = Number(container?.volume) || 0;
+  const net = Number(container?.net_weight) || 0;
+  if (volume > 0 && net > 0) return net / volume;
+  return 0;
+}
+
+const EMPTY_IND_STATE = {
+  volume: 0,
+  produto: "",
+  cliente: "",
+  lote: "",
+  densidade: "",
+  lotes: [],
+  source: null,
+};
 
 function parseArr(v) {
   if (Array.isArray(v)) return v;
@@ -31,18 +64,32 @@ function isTankContainer(c) {
     .includes("tank");
 }
 
+function isNoPatio(status) {
+  const folded = normName(status)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return folded === "NO PATIO";
+}
+
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 /**
- * Volume/produto atuais da tanka no módulo Industrialização
- * (mesma regra da tela Tankagem / Estoque).
+ * Volume/produto atuais da tanka no módulo Industrialização.
+ * Vasilhame tipo Tankagem "No Pátio" (container_number = nome da tanka)
+ * tem prioridade sobre o estoque de MP armazenado em tanka.
+ * `tankName` pode ser string ou lista (tanka e código ITKU).
  */
 export function computeIndTankState(tankName, stockEntries = [], containers = []) {
-  if (!tankName) {
-    return { volume: 0, produto: "", cliente: "", lote: "", source: null };
-  }
+  const names = nameSet(tankName);
+  if (names.size === 0) return { ...EMPTY_IND_STATE };
+
+  const matches = (value) => names.has(normName(value));
 
   const tankContainers = (containers || []).filter((c) => {
-    if (!isTankContainer(c) || c.status !== "No Pátio") return false;
-    return normName(c.container_number) === normName(tankName);
+    if (!isTankContainer(c) || !isNoPatio(c.status)) return false;
+    return matches(c.container_number);
   });
 
   if (tankContainers.length > 0) {
@@ -51,23 +98,52 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
     let produto = "";
     let cliente = "";
     let lote = "";
+    let densidade = 0;
+    const produtos = [];
+    const lotes = [];
+
+    const rememberProduto = (value) => {
+      const name = cleanText(value);
+      if (name && !produtos.includes(name)) produtos.push(name);
+    };
 
     for (const c of tankContainers) {
-      volume += Number(c.volume) || 0;
+      const itemVolume = Number(c.volume) || 0;
+      volume += itemVolume;
       const d = new Date(c.created_date || c.created_at || 0).getTime();
-      if (d >= latestDate) {
+      const isLatest = d >= latestDate;
+      if (isLatest) {
         latestDate = d;
-        if (c.product) produto = c.product;
-        if (c.client) cliente = c.client;
-        if (c.lot) lote = c.lot;
+        const productName = cleanText(c.product);
+        const clientName = cleanText(c.client);
+        const lotName = cleanText(c.lot);
+        if (productName) produto = productName;
+        if (clientName) cliente = clientName;
+        if (lotName) lote = lotName;
+        const dens = containerDensity(c);
+        if (dens > 0) densidade = dens;
+      }
+      rememberProduto(c.product);
+      if (itemVolume > 0) {
+        lotes.push({
+          lote: cleanText(c.lot) || "—",
+          volume: roundVolume(itemVolume),
+          produto: cleanText(c.product),
+          data_envase: c.created_date || c.created_at || null,
+          operadores: c.operator ? [cleanText(c.operator)] : [],
+        });
       }
     }
+
+    if (produtos.length > 1) produto = produtos.join(", ");
 
     return {
       volume: roundVolume(volume),
       produto,
       cliente,
       lote,
+      densidade: densidade > 0 ? densidade : "",
+      lotes,
       source: "ind_container",
     };
   }
@@ -83,7 +159,7 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
     const entries = parseArr(s.tank_entries);
     if (entries.length) {
       for (const te of entries) {
-        if (normName(te.tank_name) !== normName(tankName) || !te.volume) continue;
+        if (!matches(te.tank_name) || !te.volume) continue;
         volume += Number(te.volume) || 0;
         const d = new Date(s.created_date || s.entry_date || 0).getTime();
         if (d >= latestDate) {
@@ -93,7 +169,7 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
           if (s.lot) lote = s.lot;
         }
       }
-    } else if (normName(s.tank_name) === normName(tankName) && s.tank_volume) {
+    } else if (matches(s.tank_name) && s.tank_volume) {
       volume += Number(s.tank_volume) || 0;
       const d = new Date(s.created_date || s.entry_date || 0).getTime();
       if (d >= latestDate) {
@@ -105,15 +181,23 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
     }
   }
 
-  if (volume <= 0) {
-    return { volume: 0, produto: "", cliente: "", lote: "", source: null };
-  }
+  if (volume <= 0) return { ...EMPTY_IND_STATE };
 
   return {
     volume: roundVolume(volume),
     produto,
     cliente,
     lote,
+    densidade: "",
+    lotes: [
+      {
+        lote: lote || "—",
+        volume: roundVolume(volume),
+        produto,
+        data_envase: null,
+        operadores: [],
+      },
+    ],
     source: "ind_stock",
   };
 }
@@ -159,7 +243,8 @@ function resolveTransbordoCliente(iso, tankaCodigo, transbordos) {
  * Escolhe um único volume/produto atual (sem somar os dois módulos).
  *
  * Precedência do estado real:
- * 1) Containers Tankagem "No Pátio" (Industrialização)
+ * 1) Vasilhame Tankagem "No Pátio" da Industrialização com volume > 0
+ *    (mesmo nome da tanka / código ITKU em container_number)
  * 2) Saldo por OPs de Transbordo (quando > 0)
  * 3) Fallback de estoque MP em tanka (Industrialização)
  * 4) Metadados de cadastro (volume 0)
@@ -240,9 +325,11 @@ export function mergeTankasUnificadas({
 
   return [...byName.values()]
     .map((row) => {
-      const indState = row.hasIndustrializacao
-        ? computeIndTankState(row.tankaCodigo, indStock, indContainers)
-        : { volume: 0, produto: "", cliente: "", lote: "", source: null };
+      const indState = computeIndTankState(
+        [row.tankaCodigo, row.codigo_itku],
+        indStock,
+        indContainers
+      );
 
       // Cadastro Ind sem containers/stock ativos ainda pode ter product/client no registro
       const indCadastroProduto = row.indTank?.product || "";
@@ -254,13 +341,16 @@ export function mergeTankasUnificadas({
       let cliente_nome = "";
       let lote = "";
       let volumeSource = "none";
+      let densidade = row.densidade || "";
 
-      if (indState.source === "ind_container") {
+      // Vasilhame vazio não apaga saldo já movimentado no Transbordo.
+      if (indState.source === "ind_container" && indState.volume > 0) {
         volumeAtual = indState.volume;
         produto = indState.produto || indCadastroProduto || row.produtoTb || "";
         cliente_nome =
           indState.cliente || indCadastroCliente || row.clienteTb || "";
         lote = indState.lote || indCadastroLote || "";
+        if (indState.densidade) densidade = indState.densidade;
         volumeSource = "ind_container";
       } else if (row.volumeTb > 0) {
         volumeAtual = row.volumeTb;
@@ -276,19 +366,27 @@ export function mergeTankasUnificadas({
         lote = indState.lote || indCadastroLote || "";
         volumeSource = "ind_stock";
       } else {
-        // Vazia: mantém cadastro (Ind ou TB) para aparecer mesmo sem volume
+        // Sem volume ativo: tanka do Transbordo mantém o próprio cadastro.
+        // Cadastro da Industrialização só preenche o que estiver vazio,
+        // ou define a tanka que existe só lá.
         volumeAtual = 0;
-        produto =
-          indCadastroProduto ||
-          row.produtoTb ||
-          indState.produto ||
-          "";
-        cliente_nome =
-          indCadastroCliente ||
-          row.clienteTb ||
-          indState.cliente ||
-          "";
-        lote = indCadastroLote || "";
+        if (row.hasTransbordo) {
+          produto = row.produtoTb || indState.produto || indCadastroProduto || "";
+          cliente_nome =
+            row.clienteTb || indState.cliente || indCadastroCliente || "";
+        } else {
+          produto =
+            indCadastroProduto ||
+            row.produtoTb ||
+            indState.produto ||
+            "";
+          cliente_nome =
+            indCadastroCliente ||
+            row.clienteTb ||
+            indState.cliente ||
+            "";
+        }
+        lote = indCadastroLote || indState.lote || "";
         volumeSource = row.hasIndustrializacao
           ? "ind_cadastro"
           : row.hasTransbordo
@@ -302,11 +400,15 @@ export function mergeTankasUnificadas({
         tankaCodigo: row.tankaCodigo,
         codigo_itku: row.codigo_itku,
         capacidade: row.capacidade || 26000,
-        densidade: row.densidade,
+        densidade,
         volumeAtual: roundVolume(volumeAtual),
         produto,
         cliente_nome,
         lote,
+        lotesFonte:
+          volumeSource === "ind_container" || volumeSource === "ind_stock"
+            ? indState.lotes
+            : [],
         volumeSource,
         hasTransbordo: row.hasTransbordo,
         hasIndustrializacao: row.hasIndustrializacao,
@@ -335,6 +437,45 @@ export function buildIndTankaDetalhe(tank) {
     parseFloat(String(tank.densidade || tank.indTank?.density || "0").replace(",", ".")) ||
     0;
   const lote = tank.lote || tank.indTank?.lot || "";
+  const fonte = (Array.isArray(tank.lotesFonte) ? tank.lotesFonte : []).filter(
+    (item) => (Number(item?.volume) || 0) > 0
+  );
+
+  const lotes =
+    fonte.length > 0
+      ? fonte.map((item) => {
+          const itemVolume = roundVolume(item.volume || 0);
+          const label = [item.lote || "—", item.produto].filter(Boolean).join(" · ");
+          return {
+            lote: fonte.length > 1 && item.produto ? label : item.lote || "—",
+            volume: itemVolume,
+            massa: dens > 0 ? roundMass(itemVolume * dens) : 0,
+            data_envase: item.data_envase || null,
+            operadores: item.operadores || [],
+            transbordo_codigo: "",
+          };
+        })
+      : volume > 0
+        ? [
+            {
+              lote: lote || "—",
+              volume,
+              massa: dens > 0 ? roundMass(volume * dens) : 0,
+              data_envase: null,
+              operadores: [],
+              transbordo_codigo: "",
+            },
+          ]
+        : [];
+
+  const origem =
+    tank.volumeSource === "ind_container"
+      ? "Industrialização — vasilhame"
+      : tank.volumeSource === "ind_stock"
+        ? "Industrialização — estoque"
+        : tank.volumeSource === "ind_cadastro"
+          ? "Industrialização — cadastro"
+          : "";
 
   return {
     id: tank.id,
@@ -347,19 +488,8 @@ export function buildIndTankaDetalhe(tank) {
     capacidade: roundVolume(tank.capacidade || 0),
     volume_atual: volume,
     massa_atual: dens > 0 ? roundMass(volume * dens) : 0,
-    lotes:
-      volume > 0
-        ? [
-            {
-              lote: lote || "—",
-              volume,
-              massa: dens > 0 ? roundMass(volume * dens) : 0,
-              data_envase: null,
-              operadores: [],
-              transbordo_codigo: "",
-            },
-          ]
-        : [],
+    origem_volume: origem,
+    lotes,
     historico: [],
   };
 }

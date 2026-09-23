@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowRight, CheckCircle, Clock, Plus, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
@@ -1297,17 +1298,15 @@ function PendentesCard({ validacoes, t, onPrint }) {
                     {qtd.unidade}
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                       <Can permission={`${PERM}.view`}>
-                        <button
-                          type="button"
+                        <RowActionButton
                           onClick={() => onPrint?.(v)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
                           title={printLabel}
                           aria-label={printLabel}
                         >
-                          <Printer className="w-4 h-4" />
-                        </button>
+                          <Printer />
+                        </RowActionButton>
                       </Can>
                     </div>
                   </td>
