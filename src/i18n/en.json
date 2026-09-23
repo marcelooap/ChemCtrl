@@ -806,7 +806,7 @@
       },
       "etiquetas": {
         "title": "Labels",
-        "subtitle": "Configure each customer's label layout by context",
+        "subtitle": "Configure each customer's conventional label layout",
         "industrializacao": "Industrialization",
         "convencional": "Conventional",
         "granel": "Bulk",

@@ -13,7 +13,7 @@ import {
   stockUnitPriceOf,
   formatContainerPackagingForProduction,
 } from '@industrializacao/lib/productionViewUtils';
-import { getLatestRecipeForProduct, resolveProductCode } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, resolveProductCode, resolveRecipeForContainer } from '@industrializacao/lib/recipeRevisions';
 import {
   allocateMpQuantitiesByNetWeight,
   aggregateAllocatedMaterials,
@@ -23,6 +23,7 @@ import {
   containerDisplayVolume,
   containerDisplayNetWeight,
   containerDisplayGrossWeight,
+  productionOfContainer,
 } from '@industrializacao/lib/fractionalSupply';
 import { calcPriceWithoutTax } from '@industrializacao/lib/recipePricing';
 // eslint-disable-next-line
@@ -1749,7 +1750,7 @@ export function generateInventoryPDF(inventory) {
   doc.save('inventario-' + (inventory.inventory_number || t('pdf.common.report')) + '.pdf');
 }
 
-export function generateVasilhamesReportPDF(containers, recipe, recipes = []) {
+export function generateVasilhamesReportPDF(containers, recipe, recipes = [], productions = []) {
   const { lang, t } = getPdfLabels();
   const { fmtDateTime, fmtNum } = makePdfFormatters(lang);
   const doc = new jsPDF({ format: 'a4' });
@@ -1760,8 +1761,22 @@ export function generateVasilhamesReportPDF(containers, recipe, recipes = []) {
   // resolveProductCode faz fallback case-insensitive e prioriza código preenchido.
   const resolvedCode = resolveProductCode(recipes, first, null, recipe);
   const productCode = resolvedCode || (recipe && String(recipe.code || '').trim()) || '-';
-  const totalVolume = containers.reduce(function(s, c) { return s + (c.volume || 0); }, 0);
-  const totalMass = containers.reduce(function(s, c) { return s + (c.net_weight || 0); }, 0);
+  // Massa = volume atual × densidade da OP ou da receita.
+  // net_weight gravado pode ficar pela metade ou pelo dobro depois de transbordo.
+  const volumeOf = (c) => containerDisplayVolume(c, productions);
+  const massOf = (c) => {
+    const volume = volumeOf(c);
+    if (volume <= 0) return 0;
+    const production = productionOfContainer(c, productions);
+    const fromProd = parseFloat(production?.density);
+    if (Number.isFinite(fromProd) && fromProd > 0) return Math.round(volume * fromProd);
+    const linked = resolveRecipeForContainer(recipes, c, production) || recipe;
+    const fromRecipe = parseFloat(linked?.density);
+    if (Number.isFinite(fromRecipe) && fromRecipe > 0) return Math.round(volume * fromRecipe);
+    return containerDisplayNetWeight(c, productions, recipes);
+  };
+  const totalVolume = containers.reduce(function(s, c) { return s + volumeOf(c); }, 0);
+  const totalMass = containers.reduce(function(s, c) { return s + massOf(c); }, 0);
   const emissionDate = fmtDateTime(new Date());
 
   let y = addPageTitle(doc, product, t('pdf.vasilhames.subtitle'));
@@ -1786,7 +1801,7 @@ export function generateVasilhamesReportPDF(containers, recipe, recipes = []) {
     t('pdf.vasilhames.columns.mass'),
   ];
   const rows = containers.map(function(c) {
-    return [c.container_number || '-', c.barril_number || '-', c.sling || '-', c.lot || '-', fmtNum(c.volume, 0), fmtNum(c.net_weight, 0)];
+    return [c.container_number || '-', c.barril_number || '-', c.sling || '-', c.lot || '-', fmtNum(volumeOf(c), 0), fmtNum(massOf(c), 0)];
   });
   const widths = [30, 28, 30, 28, 26, 26];
   const totalsRow = ['', '', '', t('pdf.common.total').toUpperCase(), fmtNum(totalVolume, 0) + ' L', fmtNum(totalMass, 0) + ' kg'];

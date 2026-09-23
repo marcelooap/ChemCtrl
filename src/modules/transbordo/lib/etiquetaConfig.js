@@ -301,6 +301,15 @@ export function formatEtiquetaDate(value, dateFormat = 'dmy', language = 'pt-BR'
   return date.toLocaleDateString(locale);
 }
 
+/** Etiqueta convencional: nº placa, ou nº placa (nº barril) quando houver barril. */
+export function formatEtiquetaEmbalagemPlaca(placa, barril) {
+  const plate = String(placa || '').trim();
+  const barrel = String(barril || '').trim();
+  const hasBarril = Boolean(barrel) && barrel !== '—' && !/^[-–—]+$/.test(barrel);
+  if (plate && hasBarril) return `${plate} (${barrel})`;
+  return plate || (hasBarril ? barrel : '');
+}
+
 export const ETIQUETA_PREVIEW_MOCK = {
   product: 'ÁCIDO ACÉTICO GLACIAL',
   client: 'Cliente Exemplo',
@@ -315,7 +324,7 @@ export const ETIQUETA_PREVIEW_MOCK = {
   barril_number: '12',
   packaging_type: 'IBC 1000 L',
   publicToken: 'preview-token',
-  responsavel_tecnico: 'Eng. Ana Souza',
+  responsavel_tecnico: 'Bernardo de Oliveira Braune CRQ III-033021600',
 };
 
 const LOCAL_STORAGE_KEY = 'chemctrl.etiquetaConfigs.v1';

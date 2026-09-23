@@ -208,6 +208,8 @@ export default function PrintContainerLabelDialog({
     gross_weight: volumeOk ? weights.grossWeight : 0,
     volume: volumeOk ? Math.round(weights.volume) : null,
     embalagem,
+    container_number: container?.container_number,
+    barril_number: container?.barril_number,
     publicToken: meta?.publicToken,
     responsavel_tecnico: meta?.responsavelTecnico,
   };
@@ -236,6 +238,7 @@ export default function PrintContainerLabelDialog({
                   dateFormat={meta?.printConfig?.dateFormat}
                   orientation={meta?.printConfig?.orientation}
                   consultaPath={contexto === 'convencional' ? '/consulta-produto' : '/consulta'}
+                  convencional={contexto === 'convencional'}
                   values={previewValues}
                 />
               )}

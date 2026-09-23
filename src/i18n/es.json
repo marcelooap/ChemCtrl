@@ -753,7 +753,7 @@
       },
       "etiquetas": {
         "title": "Etiquetas",
-        "subtitle": "Configure el modelo de etiqueta de cada cliente, por contexto",
+        "subtitle": "Configure el modelo de etiqueta convencional de cada cliente",
         "industrializacao": "Industrialización",
         "convencional": "Convencional",
         "granel": "Granel",

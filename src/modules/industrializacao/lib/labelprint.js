@@ -10,6 +10,7 @@ import i18n from '@/i18n';
 import { fmtNumber, toDateInputValue } from '@/i18n/formatters';
 import {
   formatEtiquetaDate,
+  formatEtiquetaEmbalagemPlaca,
   extractDateFormat,
   extractOrientation,
   getVerticalEtiquetaLayout,
@@ -256,6 +257,56 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     word-break: break-word;
     overflow-wrap: anywhere;
   }
+  .label.vertical:not(.ind) .field-row.flow {
+    display: block;
+    width: 100%;
+    text-align: left;
+  }
+  .label.vertical:not(.ind) .field-row.flow .lbl,
+  .label.vertical:not(.ind) .field-row.flow .sep,
+  .label.vertical:not(.ind) .field-row.flow .val {
+    display: inline;
+    flex: none;
+    width: auto;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+  .label.vertical:not(.ind) .field-row.center-only {
+    display: block;
+    width: 100%;
+    text-align: center;
+  }
+  .label.vertical:not(.ind) .field-row.center-only .val {
+    display: block;
+    width: 100%;
+    flex: none;
+    text-align: center;
+    font-weight: 800;
+    text-transform: uppercase;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+  .label.vertical:not(.ind) .footer.center-only {
+    display: block;
+    width: 100%;
+    margin-top: 0.4mm;
+    text-align: center;
+    text-transform: none;
+  }
+  .label.vertical:not(.ind) .footer.center-only .emb {
+    display: block;
+    width: 100%;
+    flex: none;
+    text-align: center;
+    font-size: 12.5pt;
+    font-weight: 800;
+    text-transform: none;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
   .label.ind .field-row { font-size: 9pt; line-height: 1.18; flex-shrink: 0; }
   .label.ind .fields-left {
     justify-content: space-between;
@@ -331,8 +382,15 @@ async function buildConfiguredLabelBody({
   };
 
   const wrapKeys = new Set(['responsavel_tecnico', 'cliente']);
+  const convencionalVertical = vertical && contexto === 'convencional';
   const fieldRowHtml = (row, { forceWrap = false } = {}) => {
     const val = dataValues[row.key] ?? '—';
+    if (convencionalVertical && row.key === 'cliente') {
+      return `<div class="field-row center-only"><span class="val">${escapeHtml(val)}</span></div>`;
+    }
+    if (convencionalVertical && row.key === 'responsavel_tecnico') {
+      return `<div class="field-row flow"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep"> • </span><span class="val">${escapeHtml(val)}</span></div>`;
+    }
     const wrap = forceWrap || wrapKeys.has(row.key) ? ' wrap' : '';
     return `<div class="field-row${wrap}"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep">•</span><span class="val">${escapeHtml(val)}</span></div>`;
   };
@@ -405,8 +463,11 @@ async function buildConfiguredLabelBody({
         .join('')
     : '';
 
-  const footer = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem)
-    ? `<div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${escapeHtml(embalagem)}</span></div>`
+  const showEmbalagem = vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem;
+  const footer = showEmbalagem
+    ? (convencionalVertical
+      ? `<div class="footer center-only"><span class="emb">${escapeHtml(embalagem)}</span></div>`
+      : `<div class="footer"><span>${t('pdf.label.packaging')}</span><span class="sep">•</span><span class="emb">${escapeHtml(embalagem)}</span></div>`)
     : '';
 
   const labelClass = `label${dense ? ' dense' : ''}${vertical ? ' vertical' : ''}${contexto !== 'convencional' ? ' ind' : ''}`;
@@ -502,7 +563,14 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
   const volumeRaw = options?.volume ?? container.volume;
   const netWeight = options?.netWeight ?? container.net_weight ?? 0;
   const grossWeight = options?.grossWeight ?? container.gross_weight ?? 0;
-  const embalagem = options?.embalagem || formatLabelEmbalagem(container);
+  const contexto = options?.contexto || 'industrializacao';
+  const embalagemPlaca = formatEtiquetaEmbalagemPlaca(
+    container.container_number || container.placa,
+    container.barril_number || container.barril,
+  );
+  const embalagem = contexto === 'convencional'
+    ? (embalagemPlaca || options?.embalagem || formatLabelEmbalagem(container))
+    : (options?.embalagem || formatLabelEmbalagem(container));
 
   const opNum = container.op_number || '—';
   const fabDateStr = options?.manufactureDate || container.created_date;
@@ -557,8 +625,8 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     t,
     responsavelTecnico,
     orientation: printConfig.orientation || 'horizontal',
-    consultaPath: options?.contexto === 'convencional' ? '/consulta-produto' : '/consulta',
-    contexto: options?.contexto || 'industrializacao',
+    consultaPath: contexto === 'convencional' ? '/consulta-produto' : '/consulta',
+    contexto,
     copies,
   };
 

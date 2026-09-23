@@ -2,11 +2,30 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import {
   formatEtiquetaDate,
+  formatEtiquetaEmbalagemPlaca,
   getVerticalEtiquetaLayout,
   partitionEtiquetaCampos,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false, fill = false, emphasis = false }) {
+function FieldRow({ label, value, wrap = false, stacked = false, fill = false, emphasis = false, flow = false, center = false }) {
+  if (center) {
+    return (
+      <div className={`w-full text-center font-extrabold uppercase leading-snug ${emphasis ? 'text-[15px]' : 'text-[13px]'}`}>
+        {value}
+      </div>
+    );
+  }
+
+  if (flow) {
+    return (
+      <p className={`w-full min-w-0 text-left font-extrabold leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}`}>
+        <span className="uppercase">{label}</span>
+        <span className="font-bold text-black/80"> • </span>
+        <span className="font-bold">{value}</span>
+      </p>
+    );
+  }
+
   if (stacked) {
     return (
       <div className="min-w-0">
@@ -83,6 +102,7 @@ export default function EtiquetaPreview({
   chrome = true,
   weightDecimals = 3,
   emphasis = false,
+  convencional = false,
 }) {
   const { t, i18n } = useTranslation();
   const layout = partitionEtiquetaCampos(campos);
@@ -90,6 +110,7 @@ export default function EtiquetaPreview({
   const dataLayout = layout.dataLayout || { mode: 'stack', left: layout.dataRows || [], right: [] };
   const v = values || {};
   const vertical = orientation === 'vertical';
+  const convencionalVertical = vertical && convencional;
   const split = dataLayout.mode === 'split';
   const dense = split || dataLayout.left.length >= 4;
 
@@ -137,24 +158,36 @@ export default function EtiquetaPreview({
         fill={vertical}
         wrap={wrapKey(row.key)}
         emphasis={emphasis}
+        center={convencionalVertical && row.key === 'cliente'}
+        flow={convencionalVertical && row.key === 'responsavel_tecnico'}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />
     ));
 
-  const embalagem = v.embalagem
-    || (v.barril_number
-      ? `${v.container_number || ''} (${v.barril_number})`
-      : v.container_number || v.packaging_type || '—');
+  const placaBarril = formatEtiquetaEmbalagemPlaca(v.container_number, v.barril_number);
+  const embalagem = convencionalVertical
+    ? (placaBarril || String(v.embalagem || '').trim() || '—')
+    : (v.embalagem
+      || (v.barril_number
+        ? `${v.container_number || ''} (${v.barril_number})`
+        : v.container_number || v.packaging_type || '—'));
 
   const qrUrl = `${(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '')}${consultaPath}/${v.publicToken || 'preview'}`;
 
-  const packaging = (vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem) && (
-    <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? `w-full items-start leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}` : `${emphasis ? 'text-[12px]' : 'text-[10px]'} mt-0.5 items-baseline`}`}>
-      <span className="shrink-0">{t('pdf.label.packaging')}</span>
-      <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words' : 'truncate text-[11px]'}`}>{embalagem}</span>
-    </div>
+  const showEmbalagem = vertical ? verticalLayout.showEmbalagem : layout.showEmbalagem;
+  const packaging = showEmbalagem && (
+    convencionalVertical ? (
+      <div className="w-full shrink-0 text-center font-extrabold leading-tight text-[16px] tracking-wide">
+        {embalagem}
+      </div>
+    ) : (
+      <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? `w-full items-start leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}` : `${emphasis ? 'text-[12px]' : 'text-[10px]'} mt-0.5 items-baseline`}`}>
+        <span className="shrink-0">{t('pdf.label.packaging')}</span>
+        <span className="font-bold text-black/80 shrink-0">•</span>
+        <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words' : 'truncate text-[11px]'}`}>{embalagem}</span>
+      </div>
+    )
   );
 
   const qrBlock = (vertical ? verticalLayout.showQr : layout.showQr) && (

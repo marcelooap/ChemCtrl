@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, Factory, Search, Tag, Truck } from 'lucide-react';
+import { Copy, Search, Tag } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import EtiquetaCamposEditor from '@painel/components/configuracao/EtiquetaCamposEditor';
 import EtiquetaPreview from '@painel/components/configuracao/EtiquetaPreview';
@@ -22,17 +21,15 @@ import {
 import etiquetaSql from '@transbordo/sql/026_t_etiqueta_configs.sql?raw';
 import { useSubmitGuard } from '@/shared/hooks/useSubmitGuard';
 
-const CONTEXTO_TAB_TRIGGER_CLASS =
-  'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
+const CONTEXTO = 'convencional';
 
 export default function Etiquetas() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [contexto, setContexto] = useState('industrializacao');
   const [clientes, setClientes] = useState([]);
   const [configs, setConfigs] = useState([]);
   const [selectedKey, setSelectedKey] = useState(null);
-  const [campos, setCampos] = useState(() => getDefaultCampos('industrializacao'));
+  const [campos, setCampos] = useState(() => getDefaultCampos(CONTEXTO));
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,7 +80,7 @@ export default function Etiquetas() {
   );
 
   const stateRef = useRef({});
-  stateRef.current = { selected, contexto, campos, dirty, responsavelTecnico, dateFormat, orientation };
+  stateRef.current = { selected, campos, dirty, responsavelTecnico, dateFormat, orientation };
 
   const persistCurrent = useCallback(async () => {
     const s = stateRef.current;
@@ -91,7 +88,7 @@ export default function Etiquetas() {
     const saved = await saveEtiquetaConfig({
       clienteId: s.selected.id,
       clienteNome: s.selected.nome,
-      contexto: s.contexto,
+      contexto: CONTEXTO,
       campos: s.campos,
       dateFormat: s.dateFormat,
       orientation: s.orientation,
@@ -125,7 +122,7 @@ export default function Etiquetas() {
 
   useEffect(() => {
     if (!selected) {
-      setCampos(getDefaultCampos(contexto));
+      setCampos(getDefaultCampos(CONTEXTO));
       setResponsavelTecnico('');
       setDateFormat('dmy');
       setOrientation('horizontal');
@@ -135,14 +132,14 @@ export default function Etiquetas() {
     const saved = findConfigInList(configs, {
       clienteId: selected.id,
       clienteNome: selected.nome,
-      contexto,
+      contexto: CONTEXTO,
     });
-    setCampos(normalizeCampos(saved?.campos, contexto));
+    setCampos(normalizeCampos(saved?.campos, CONTEXTO));
     setResponsavelTecnico(String(selected.responsavel_tecnico || '').trim());
     setDateFormat(extractDateFormat(saved));
     setOrientation(extractOrientation(saved));
     setDirty(false);
-  }, [selected, contexto, configs]);
+  }, [selected, configs]);
 
   const handleCamposChange = (next) => {
     setCampos(next);
@@ -181,21 +178,6 @@ export default function Etiquetas() {
         variant: 'destructive',
       });
     }
-  };
-
-  const switchContext = async (next) => {
-    if (next === contexto) return;
-    try {
-      await persistCurrent();
-    } catch (err) {
-      toast({
-        title: t('painel.configuracao.etiquetas.saveError'),
-        description: saveErrorDescription(err),
-        variant: 'destructive',
-      });
-      return;
-    }
-    setContexto(next);
   };
 
   const selectClient = async (key) => {
@@ -274,21 +256,6 @@ export default function Etiquetas() {
         </div>
       )}
 
-      <div className="shrink-0 flex flex-wrap items-center gap-3">
-        <Tabs value={contexto} onValueChange={switchContext}>
-          <TabsList className="bg-muted/60 h-auto p-1">
-            <TabsTrigger value="industrializacao" className={CONTEXTO_TAB_TRIGGER_CLASS}>
-              <Factory className="w-4 h-4" />
-              {t('painel.configuracao.etiquetas.industrializacao')}
-            </TabsTrigger>
-            <TabsTrigger value="convencional" className={CONTEXTO_TAB_TRIGGER_CLASS}>
-              <Truck className="w-4 h-4" />
-              {t('painel.configuracao.etiquetas.convencional')}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4">
         <aside className="bg-card rounded-xl border border-border shadow-sm flex flex-col min-h-0 overflow-hidden">
           <div className="p-3 border-b border-border space-y-2 shrink-0">
@@ -322,7 +289,7 @@ export default function Etiquetas() {
                     findConfigInList(configs, {
                       clienteId: c.id,
                       clienteNome: c.nome,
-                      contexto,
+                      contexto: CONTEXTO,
                     })
                   );
                   return (
@@ -379,8 +346,8 @@ export default function Etiquetas() {
                   values={previewValues}
                   dateFormat={dateFormat}
                   orientation={orientation}
-                  consultaPath={contexto === 'convencional' ? '/consulta-produto' : '/consulta'}
-                  emphasis={contexto === 'industrializacao'}
+                  consultaPath="/consulta-produto"
+                  convencional
                 />
               </div>
             </div>

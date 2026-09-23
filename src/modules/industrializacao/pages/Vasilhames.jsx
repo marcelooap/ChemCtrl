@@ -243,7 +243,7 @@ export default function Vasilhames() {
       const first = selectedContainers[0];
       const production = productionOfContainer(first, productions || []);
       const recipe = resolveRecipeFromList(recipes || [], first, production);
-      generateVasilhamesReportPDF(selectedContainers, recipe, recipes || []);
+      generateVasilhamesReportPDF(selectedContainers, recipe, recipes || [], productions || []);
       toast({ title: t('containers.messages.reportGenerated'), description: t('containers.messages.reportExported', { count: selectedContainers.length }) });
     } catch (err) {
       toast({ title: t('containers.vasilhames.reportError'), description: err.message, variant: 'destructive' });
