@@ -26,3 +26,13 @@ export async function ensureRawMaterialStockPublicToken(stockItem) {
   await base44.entities.RawMaterialStock.update(stockItem.id, { public_token: token });
   return token;
 }
+
+/** Garante o token do QR da etiqueta de equipamento de laboratório. */
+export async function ensureEquipmentPublicToken(equipment) {
+  if (!equipment?.id) return null;
+  if (equipment.public_token) return equipment.public_token;
+
+  const token = generatePublicToken();
+  await base44.entities.LabEquipment.update(equipment.id, { public_token: token });
+  return token;
+}

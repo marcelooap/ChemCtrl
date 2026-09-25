@@ -260,7 +260,7 @@
     "analysesList": "Lista de Ensaios",
     "pendingAnalysis": "Pendente de Análise",
     "coa": "Cert. de Análise (COA)",
-    "labEquipment": "Equipamentos Laboratório",
+    "labEquipment": "Equipamentos",
     "containers": "Vasilhames",
     "saida": "Saída",
     "tankage": "Tankagem",
@@ -2462,7 +2462,28 @@
         "registerCalibration": "Registrar calibração",
         "attachments": "Anexos",
         "history": "Histórico",
-        "delete": "Excluir"
+        "delete": "Excluir",
+        "printLabel": "Imprimir etiqueta"
+      },
+      "label": {
+        "title": "Etiqueta {{name}}",
+        "type": "TIPO",
+        "manufacturer": "FABRICANTE",
+        "model": "MODELO",
+        "serial": "SÉRIE",
+        "patrimony": "PATRIMÔNIO",
+        "certificate": "CERTIFICADO",
+        "responsible": "RESP. REGISTRO",
+        "lastCalibration": "ÚLT. CALIB.",
+        "nextCalibration": "PRÓX. CALIB.",
+        "status": "STATUS",
+        "location": "LOCAL",
+        "qrHint": "LEIA PARA DETALHES",
+        "qty": "Quantidade de etiquetas",
+        "confirm": "Imprimir",
+        "printing": "Imprimindo...",
+        "qtyRequired": "Informe a quantidade de etiquetas.",
+        "printFailed": "Não foi possível imprimir a etiqueta. {{message}}"
       },
       "viewDialog": {
         "type": "Tipo",
@@ -2482,6 +2503,9 @@
         "obs": "Obs",
         "noHistory": "Nenhum histórico registrado.",
         "viewCertificate": "Ver certificado",
+        "currentCertificate": "Certificado atual",
+        "certificateAttached": "Certificado de calibração anexado",
+        "openFailed": "Não foi possível abrir o arquivo.",
         "certificateLabel": "Certificado",
         "company": "Empresa",
         "next": "Próxima",
@@ -3480,6 +3504,23 @@
       "noMovements": "Nenhuma movimentação registrada.",
       "totalConsumed": "TOTAL CONSUMIDO",
       "totalMoved": "TOTAL MOVIMENTADO"
+    },
+    "equipment": {
+      "subtitle": "Equipamento",
+      "verified": "Equipamento verificado",
+      "footerSub": "Consulta pública de equipamento de laboratório",
+      "registeredBy": "Resp. Registro",
+      "notFound": "Equipamento não encontrado. Verifique o código da etiqueta.",
+      "noCertificate": "Nenhum certificado anexado.",
+      "noHistory": "Nenhum histórico de calibração.",
+      "view": "Visualizar",
+      "download": "Baixar",
+      "openFailed": "Não foi possível abrir o certificado.",
+      "sections": {
+        "info": "Dados do equipamento",
+        "certificate": "Certificado de calibração",
+        "history": "Histórico de calibração"
+      }
     },
     "footer": "ChemCtrl · Sistema de Controle de Produção Química",
     "footerSub": "Consulta pública de rastreabilidade de lote"

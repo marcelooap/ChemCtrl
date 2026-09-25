@@ -12,6 +12,9 @@ import EquipmentTable from '@industrializacao/components/equipamentos/EquipmentT
 import EquipmentFormDialog from '@industrializacao/components/equipamentos/EquipmentFormDialog';
 import CalibrationDialog from '@industrializacao/components/equipamentos/CalibrationDialog';
 import EquipmentViewDialog from '@industrializacao/components/equipamentos/EquipmentViewDialog';
+import EquipmentFilePreview, { useEquipmentFile } from '@industrializacao/components/equipamentos/EquipmentFilePreview';
+import PrintEquipmentLabelDialog from '@industrializacao/components/equipamentos/PrintEquipmentLabelDialog';
+import { parseJsonArray } from '@industrializacao/lib/equipmentFiles';
 
 export default function EquipamentosLab() {
   const { t } = useTranslation();
@@ -23,6 +26,8 @@ export default function EquipamentosLab() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [calibrating, setCalibrating] = useState(null);
+  const [labelTarget, setLabelTarget] = useState(null);
+  const equipmentFile = useEquipmentFile();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -49,7 +54,7 @@ export default function EquipamentosLab() {
 
   const handleCalibration = async (cal) => {
     const eq = calibrating;
-    const history = [...(eq.calibration_history || []), cal];
+    const history = [...parseJsonArray(eq.calibration_history), cal];
     await base44.entities.LabEquipment.update(eq.id, {
       last_calibration_date: cal.date,
       next_calibration_date: cal.next_calibration_date,
@@ -57,6 +62,7 @@ export default function EquipamentosLab() {
       calibration_company: cal.company || eq.calibration_company,
       calibration_responsible: cal.responsible || eq.calibration_responsible,
       calibration_history: history,
+      ...(cal.certificate_url ? { certificate_url: cal.certificate_url } : {}),
     });
   };
 
@@ -123,13 +129,38 @@ export default function EquipamentosLab() {
             onEdit={(e) => { setEditing(e); setFormOpen(true); }}
             onCalibrate={(e) => setCalibrating(e)}
             onDelete={handleDelete}
+            onOpenCertificate={(equipment, path) => {
+              const label = equipment.certificate_number
+                ? `${t('quality.equipment.viewDialog.certificateLabel')} ${equipment.certificate_number}`
+                : equipment.name;
+              equipmentFile.viewFile(path, label);
+            }}
+            onPrintLabel={setLabelTarget}
           />
         )}
       </div>
 
       <EquipmentFormDialog open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} equipment={editing} />
       <CalibrationDialog open={!!calibrating} onClose={() => setCalibrating(null)} onSave={handleCalibration} equipment={calibrating} />
-      <EquipmentViewDialog open={!!viewing} onClose={() => setViewing(null)} equipment={viewing} />
+      <EquipmentViewDialog
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        equipment={viewing}
+        onViewFile={equipmentFile.viewFile}
+        onDownloadFile={equipmentFile.downloadFile}
+        fileLoadingKey={equipmentFile.loadingKey}
+      />
+      <PrintEquipmentLabelDialog
+        open={!!labelTarget}
+        onOpenChange={(open) => { if (!open) setLabelTarget(null); }}
+        equipment={labelTarget}
+      />
+      <EquipmentFilePreview
+        preview={equipmentFile.preview}
+        onClose={equipmentFile.closePreview}
+        onDownload={equipmentFile.downloadFile}
+        loadingKey={equipmentFile.loadingKey}
+      />
     </div>
   );
 }

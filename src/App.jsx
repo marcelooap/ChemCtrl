@@ -29,6 +29,7 @@ const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
 const PainelRoutes = lazy(() => import('@painel/routes'));
 const ConsultaPublica = lazy(() => import('@industrializacao/pages/ConsultaPublica'));
 const ConsultaPublicaProduto = lazy(() => import('@transbordo/pages/ConsultaPublicaProduto'));
+const ConsultaEquipamento = lazy(() => import('@industrializacao/pages/ConsultaEquipamento'));
 
 /** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
 function LegacyChemblendPrefixRedirect() {
@@ -71,6 +72,16 @@ const AuthenticatedApp = () => {
           <ModuleErrorBoundary title="Consulta pública" homeTo="/login">
             <Suspense fallback={<ModuleLoadingFallback />}>
               <ConsultaPublica />
+            </Suspense>
+          </ModuleErrorBoundary>
+        }
+      />
+      <Route
+        path="/consulta-equipamento/:token"
+        element={
+          <ModuleErrorBoundary title="Consulta de equipamento" homeTo="/login">
+            <Suspense fallback={<ModuleLoadingFallback />}>
+              <ConsultaEquipamento />
             </Suspense>
           </ModuleErrorBoundary>
         }

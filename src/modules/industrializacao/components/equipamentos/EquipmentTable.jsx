@@ -1,18 +1,20 @@
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, Calendar, FileText } from 'lucide-react';
+import { MoreVertical, Calendar, FileText, Printer } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@shared/components/ui/dropdown-menu';
 import SignedImage from '@industrializacao/components/SignedImage';
 import EquipmentIcon from './EquipmentIcon';
 import { getEquipmentStatus, getCalibrationColor, getDaysUntil } from '@industrializacao/lib/equipmentUtils';
+import { getEquipmentCertificatePath } from '@industrializacao/lib/equipmentFiles';
 import { fmtDate } from '@/i18n/formatters';
 import { translateEquipmentCalibrationStatus, translateCalibrationDueLabel } from '@/i18n/domainMaps';
 
-function EquipmentRow({ equipment, onEdit, onDelete, onView, onCalibrate }) {
+function EquipmentRow({ equipment, onEdit, onDelete, onView, onCalibrate, onOpenCertificate, onPrintLabel }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const status = getEquipmentStatus(equipment.next_calibration_date);
   const calColor = getCalibrationColor(equipment.next_calibration_date);
   const calDueLabel = translateCalibrationDueLabel(getDaysUntil(equipment.next_calibration_date));
+  const certificatePath = getEquipmentCertificatePath(equipment);
 
   return (
     <tr
@@ -29,7 +31,23 @@ function EquipmentRow({ equipment, onEdit, onDelete, onView, onCalibrate }) {
             )}
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-sm text-foreground truncate">{equipment.name}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="font-semibold text-sm text-foreground truncate">{equipment.name}</p>
+              {certificatePath && (
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 border-0 bg-transparent p-0 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title={t('quality.equipment.viewDialog.certificateAttached')}
+                  aria-label={t('quality.equipment.viewDialog.certificateAttached')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenCertificate(equipment, certificatePath);
+                  }}
+                >
+                  <FileText className="w-3.5 h-3.5 shrink-0" />
+                </button>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground truncate">{equipment.type || '—'}</p>
           </div>
         </div>
@@ -66,7 +84,17 @@ function EquipmentRow({ equipment, onEdit, onDelete, onView, onCalibrate }) {
         </span>
       </td>
       <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
+        <div className="inline-flex items-center justify-end gap-1">
+          <button
+            type="button"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted border border-transparent hover:border-border transition-colors"
+            title={t('quality.equipment.card.printLabel')}
+            aria-label={t('quality.equipment.card.printLabel')}
+            onClick={() => onPrintLabel(equipment)}
+          >
+            <Printer className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted border border-transparent hover:border-border transition-colors"
@@ -84,12 +112,13 @@ function EquipmentRow({ equipment, onEdit, onDelete, onView, onCalibrate }) {
             <DropdownMenuItem className="text-red-600" onClick={() => onDelete(equipment)}>{t('quality.equipment.card.delete')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </td>
     </tr>
   );
 }
 
-export default function EquipmentTable({ equipments, onEdit, onDelete, onView, onCalibrate }) {
+export default function EquipmentTable({ equipments, onEdit, onDelete, onView, onCalibrate, onOpenCertificate, onPrintLabel }) {
   const { t } = useTranslation();
 
   return (
@@ -116,6 +145,8 @@ export default function EquipmentTable({ equipments, onEdit, onDelete, onView, o
               onEdit={onEdit}
               onCalibrate={onCalibrate}
               onDelete={onDelete}
+              onOpenCertificate={onOpenCertificate}
+              onPrintLabel={onPrintLabel}
             />
           ))}
         </tbody>

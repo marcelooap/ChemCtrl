@@ -25,6 +25,13 @@ export const fetchPublicCoaData = (publicToken) =>
 export const fetchPublicRawMaterialInfo = (publicToken) =>
   callRPC('get_public_raw_material_info', { p_token: publicToken });
 
+/** Consulta pública de equipamento de laboratório (etiqueta QR). */
+export const fetchPublicEquipmentInfo = (publicToken) =>
+  callRPC('get_public_equipment_info', { p_token: publicToken });
+
+export const fetchPublicEquipmentFileUrl = (storagePath) =>
+  signPublicStoragePath(storagePath);
+
 const signPublicStoragePath = async (storagePath, expiresIn = 3600) => {
   if (!storagePath) return null;
   const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${storagePath}`, {

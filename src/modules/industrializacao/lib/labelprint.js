@@ -7,7 +7,10 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { QRCodeSVG } from 'qrcode.react';
 import i18n from '@/i18n';
-import { fmtNumber, toDateInputValue } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, toDateInputValue } from '@/i18n/formatters';
+import { translateEquipmentCalibrationStatus, translateEquipmentType } from '@/i18n/domainMaps';
+import { getEquipmentStatus } from '@industrializacao/lib/equipmentUtils';
+import { ensureEquipmentPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import {
   formatEtiquetaDate,
   formatEtiquetaEmbalagemPlaca,
@@ -85,14 +88,18 @@ function tryFlushSync(publicUrl) {
   return '';
 }
 
+async function renderQrMarkup(value) {
+  if (!value) return '';
+  let markup = await tryServerRender(value);
+  if (!markup) markup = tryFlushSync(value);
+  return markup;
+}
+
 async function buildQrSvgMarkup(publicToken, consultaPath = '/consulta') {
   if (!publicToken) return '';
   const baseUrl = (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/+$/, '');
   const prefix = consultaPath.startsWith('/') ? consultaPath : `/${consultaPath}`;
-  const publicUrl = `${baseUrl}${prefix}/${publicToken}`;
-  let markup = await tryServerRender(publicUrl);
-  if (!markup) markup = tryFlushSync(publicUrl);
-  return markup;
+  return renderQrMarkup(`${baseUrl}${prefix}/${publicToken}`);
 }
 
 function dataRowLabel(key, t) {
@@ -713,5 +720,118 @@ export const printRawMaterialLabel = async (stockItem, publicToken, options) => 
     t,
     responsavelTecnico,
     orientation: printConfig.orientation || 'horizontal',
+  });
+};
+
+export const EQUIPMENT_PUBLIC_PATH = '/consulta-equipamento';
+
+export function equipmentConsultaUrl(token) {
+  if (!token) return '';
+  const base = (import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/+$/, '');
+  return `${base}${EQUIPMENT_PUBLIC_PATH}/${token}`;
+}
+
+function equipmentText(value) {
+  const text = value == null ? '' : String(value).trim();
+  return text || '—';
+}
+
+function equipmentFieldRow(label, value) {
+  return `<div class="field-row"><span class="lbl">${escapeHtml(label)}</span><span class="sep">•</span><span class="val">${escapeHtml(equipmentText(value))}</span></div>`;
+}
+
+export function buildEquipmentLabelData(equipment, { lang, t, publicToken } = {}) {
+  const type = equipmentText(translateEquipmentType(equipment?.type) || equipment?.type);
+  const lastCalibration = fmtDate(equipment?.last_calibration_date, undefined, lang);
+  const nextCalibration = fmtDate(equipment?.next_calibration_date, undefined, lang);
+  const name = equipmentText(equipment?.name);
+  const token = publicToken || equipment?.public_token || '';
+  const labels = {
+    type: t('quality.equipment.label.type'),
+    manufacturer: t('quality.equipment.label.manufacturer'),
+    model: t('quality.equipment.label.model'),
+    serial: t('quality.equipment.label.serial'),
+    certificate: t('quality.equipment.label.certificate'),
+    responsible: t('quality.equipment.label.responsible'),
+    lastCalibration: t('quality.equipment.label.lastCalibration'),
+    nextCalibration: t('quality.equipment.label.nextCalibration'),
+    status: t('quality.equipment.label.status'),
+    location: t('quality.equipment.label.location'),
+    qrHint: t('quality.equipment.label.qrHint'),
+  };
+  return {
+    name,
+    type,
+    manufacturer: equipmentText(equipment?.manufacturer),
+    model: equipmentText(equipment?.model),
+    serial: equipmentText(equipment?.serial_number),
+    certificate: equipmentText(equipment?.certificate_number),
+    responsible: equipmentText(equipment?.lab_responsible || equipment?.responsible),
+    lastCalibration,
+    nextCalibration,
+    status: equipmentText(translateEquipmentCalibrationStatus(getEquipmentStatus(equipment?.next_calibration_date).key)),
+    location: equipmentText(equipment?.location),
+    labels,
+    qrText: equipmentConsultaUrl(token),
+  };
+}
+
+/** Etiqueta de equipamento de laboratório (105mm × 50mm), no mesmo padrão das etiquetas de produto. */
+export const printEquipmentLabel = async (equipment, options) => {
+  if (!equipment) return;
+
+  const { lang, t } = getLabelLabels(options?.locale);
+  const token = options?.publicToken || equipment.public_token || await ensureEquipmentPublicToken(equipment);
+  const data = buildEquipmentLabelData(equipment, { lang, t, publicToken: token });
+  if (!data.qrText) throw new Error(t('quality.equipment.label.printFailed', { message: '' }));
+  const copies = Math.max(1, Math.round(Number(options?.copies) || 1));
+
+  const leftRows = [
+    equipmentFieldRow(data.labels.type, data.type),
+    equipmentFieldRow(data.labels.manufacturer, data.manufacturer),
+    equipmentFieldRow(data.labels.model, data.model),
+    equipmentFieldRow(data.labels.serial, data.serial),
+    equipmentFieldRow(data.labels.certificate, data.certificate),
+    equipmentFieldRow(data.labels.responsible, data.responsible),
+  ].join('');
+
+  const rightRows = [
+    equipmentFieldRow(data.labels.lastCalibration, data.lastCalibration),
+    equipmentFieldRow(data.labels.nextCalibration, data.nextCalibration),
+    equipmentFieldRow(data.labels.status, data.status),
+  ].join('');
+
+  const qrSvgMarkup = await renderQrMarkup(data.qrText);
+  const qrHtml = qrColumnHtml({
+    publicToken: data.qrText,
+    qrSvgMarkup,
+    refId: '',
+    showId: false,
+    qrHint: data.labels.qrHint,
+    t,
+  });
+
+  const page = `<div class="label ind dense">
+  <div class="top-section">
+    <div class="left-col">
+      <div class="product" style="font-size:17pt;line-height:1.08;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(data.name)}</div>
+      <div class="data-block">
+        <div class="fields">
+          <div class="fields-left">${leftRows}</div>
+          <div class="fields-right">${rightRows}</div>
+        </div>
+      </div>
+    </div>
+    ${qrHtml}
+  </div>
+  <div class="footer"><span>${data.labels.location}</span><span class="sep">•</span><span class="emb">${escapeHtml(data.location)}</span></div>
+</div>`;
+
+  printLabelPages({
+    title: t('quality.equipment.label.title', { name: data.name }),
+    lang,
+    t,
+    orientation: 'horizontal',
+    pages: Array.from({ length: copies }, () => page),
   });
 };
