@@ -333,6 +333,22 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .label.ind.vertical .product { font-size: 14.5pt; }
   .label.ind.vertical .footer,
   .label.ind.vertical .footer .emb { font-size: 11pt; }
+  .label.ind.dense.label-equipment .product {
+    font-size: 14pt;
+    line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .label-equipment .qr-col { width: 22mm; padding-left: 1.5mm; }
+  .label-equipment .qr-code svg { width: 16mm; height: 16mm; }
+  .label-equipment .equipment-person { margin-top: 0.4mm; flex-shrink: 0; }
+  .label-equipment .equipment-person .val {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: nowrap;
+  }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }`;
@@ -792,7 +808,6 @@ export const printEquipmentLabel = async (equipment, options) => {
     equipmentFieldRow(data.labels.model, data.model),
     equipmentFieldRow(data.labels.serial, data.serial),
     equipmentFieldRow(data.labels.certificate, data.certificate),
-    equipmentFieldRow(data.labels.responsible, data.responsible),
   ].join('');
 
   const rightRows = [
@@ -811,16 +826,17 @@ export const printEquipmentLabel = async (equipment, options) => {
     t,
   });
 
-  const page = `<div class="label ind dense">
+  const page = `<div class="label ind dense label-equipment">
   <div class="top-section">
     <div class="left-col">
-      <div class="product" style="font-size:17pt;line-height:1.08;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(data.name)}</div>
+      <div class="product">${escapeHtml(data.name)}</div>
       <div class="data-block">
         <div class="fields">
           <div class="fields-left">${leftRows}</div>
           <div class="fields-right">${rightRows}</div>
         </div>
       </div>
+      <div class="field-row equipment-person"><span class="lbl">${escapeHtml(data.labels.responsible)}</span><span class="sep">•</span><span class="val">${escapeHtml(data.responsible)}</span></div>
     </div>
     ${qrHtml}
   </div>

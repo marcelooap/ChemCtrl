@@ -43,7 +43,6 @@ function EquipmentLabelPreview({ equipment, publicToken }) {
     ['model', data.model],
     ['serial', data.serial],
     ['certificate', data.certificate],
-    ['responsible', data.responsible],
   ];
   const right = [
     ['lastCalibration', data.lastCalibration],
@@ -59,7 +58,7 @@ function EquipmentLabelPreview({ equipment, publicToken }) {
       >
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="flex min-w-0 flex-1 flex-col pr-2">
-            <div className="line-clamp-2 shrink-0 text-[20px] font-extrabold leading-tight">{data.name}</div>
+            <div className="truncate text-[18px] font-extrabold leading-none">{data.name}</div>
             <div className="flex min-h-0 flex-1 gap-2 pt-1">
               <div className="flex min-w-0 flex-1 flex-col justify-between pb-0.5">
                 {left.map(([key, value]) => (
@@ -71,6 +70,11 @@ function EquipmentLabelPreview({ equipment, publicToken }) {
                   <PreviewRow key={key} stacked label={data.labels[key]} value={value} />
                 ))}
               </div>
+            </div>
+            <div className="flex min-w-0 items-baseline gap-1 text-[11px] leading-tight">
+              <span className="shrink-0 font-extrabold uppercase">{data.labels.responsible}</span>
+              <span className="shrink-0 font-bold text-black/80">•</span>
+              <span className="min-w-0 font-bold">{data.responsible}</span>
             </div>
           </div>
           <div className="flex w-[88px] shrink-0 flex-col items-center border-l border-black pl-2">
