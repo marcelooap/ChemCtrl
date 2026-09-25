@@ -334,12 +334,13 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .label.ind.vertical .footer,
   .label.ind.vertical .footer .emb { font-size: 11pt; }
   .label.ind.dense.label-equipment .product {
-    font-size: 14pt;
+    font-size: 15pt;
     line-height: 1.05;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: unset;
     display: block;
+    margin-bottom: 0.6mm;
   }
   .label-equipment .qr-col { width: 22mm; padding-left: 1.5mm; }
   .label-equipment .qr-code svg { width: 16mm; height: 16mm; }
@@ -827,9 +828,9 @@ export const printEquipmentLabel = async (equipment, options) => {
   });
 
   const page = `<div class="label ind dense label-equipment">
+  <div class="product">${escapeHtml(data.name)}</div>
   <div class="top-section">
     <div class="left-col">
-      <div class="product">${escapeHtml(data.name)}</div>
       <div class="data-block">
         <div class="fields">
           <div class="fields-left">${leftRows}</div>

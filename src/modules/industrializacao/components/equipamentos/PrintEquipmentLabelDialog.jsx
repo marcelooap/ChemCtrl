@@ -56,10 +56,10 @@ function EquipmentLabelPreview({ equipment, publicToken }) {
         className="flex flex-col overflow-hidden border border-black bg-white text-black shadow-lg"
         style={{ width: 420, height: 200, padding: '5px 12px' }}
       >
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="shrink-0 whitespace-nowrap text-[17px] font-extrabold leading-none">{data.name}</div>
+        <div className="flex min-h-0 flex-1 overflow-hidden pt-1">
           <div className="flex min-w-0 flex-1 flex-col pr-2">
-            <div className="truncate text-[18px] font-extrabold leading-none">{data.name}</div>
-            <div className="flex min-h-0 flex-1 gap-2 pt-1">
+            <div className="flex min-h-0 flex-1 gap-2">
               <div className="flex min-w-0 flex-1 flex-col justify-between pb-0.5">
                 {left.map(([key, value]) => (
                   <PreviewRow key={key} label={data.labels[key]} value={value} />
