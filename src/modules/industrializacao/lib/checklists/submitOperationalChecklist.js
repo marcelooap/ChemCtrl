@@ -29,17 +29,42 @@ export function getChecklistErrorMessage(err) {
  * Persiste checklist operacional via RPC (validação no backend).
  * @param {{ productionId: string, etapa: string, answers: Array<object> }} params
  */
+const EXPIRED_SESSION_MESSAGE = 'Sessão expirada. Faça login novamente.';
+
+function isInvalidSessionMessage(message) {
+  return /sess[aã]o inv[aá]lida/i.test(String(message || ''));
+}
+
 export async function submitOperationalChecklist({ productionId, etapa, answers }) {
-  const sessionId = getSessionId();
+  const sessionId = String(getSessionId() || '').trim();
   if (!sessionId) {
-    throw new Error('Sessão expirada. Faça login novamente.');
+    throw new Error(EXPIRED_SESSION_MESSAGE);
   }
 
-  const result = await callRPC('submit_operational_checklist', {
-    p_production_id: productionId,
-    p_etapa: etapa,
-    p_answers: answers,
-    p_session_id: sessionId,
-  });
-  return result;
+  // O gate de login usa validate_session. Se ela não reconhece o id,
+  // o checklist também não vai gravar — evita o P0001 genérico.
+  const session = await callRPC('validate_session', { p_session_id: sessionId });
+  const confirmedSessionId = String(session?.session_id || '').trim();
+  if (!confirmedSessionId) {
+    throw new Error(EXPIRED_SESSION_MESSAGE);
+  }
+
+  try {
+    const result = await callRPC('submit_operational_checklist', {
+      p_production_id: productionId,
+      p_etapa: etapa,
+      p_answers: answers,
+      p_session_id: confirmedSessionId,
+    });
+    return result;
+  } catch (err) {
+    const message = getChecklistErrorMessage(err);
+    if (isInvalidSessionMessage(message)) {
+      const retry = await callRPC('validate_session', { p_session_id: confirmedSessionId }).catch(() => null);
+      if (!retry?.session_id) {
+        throw new Error(EXPIRED_SESSION_MESSAGE);
+      }
+    }
+    throw err;
+  }
 }
