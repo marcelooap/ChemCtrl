@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { addValidityDays } from '@industrializacao/lib/qualityValidity';
 
 const QC_STATUS_KEYS = {
   Aprovado: 'quality.fields.approved',
@@ -17,7 +18,14 @@ export const formatPackagingLabel = (c) => {
   return barril ? `${plate} - ${barril}` : plate;
 };
 
-export default function COAViewDialog({ open, onOpenChange, result, containers = [] }) {
+export default function COAViewDialog({
+  open,
+  onOpenChange,
+  result,
+  containers = [],
+  manufactureDate = null,
+  validityDays = null,
+}) {
   const { t, i18n } = useTranslation();
   const na = t('common.notAvailable');
 
@@ -39,6 +47,7 @@ export default function COAViewDialog({ open, onOpenChange, result, containers =
 
   const results = Array.isArray(result?.results) ? result.results : [];
   const packagingLabels = containers.map(formatPackagingLabel).filter(Boolean);
+  const expiryDate = addValidityDays(manufactureDate, validityDays);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -57,6 +66,8 @@ export default function COAViewDialog({ open, onOpenChange, result, containers =
                 <div><p className="text-xs text-muted-foreground">{t('quality.fields.client')}</p><p className="font-medium">{result.client || na}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('quality.coaPage.analysisDate')}</p><p className="font-medium">{result.date ? fmtDate(result.date, undefined, i18n.language) : na}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('quality.fields.analyst')}</p><p className="font-medium">{result.analyst || na}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('pdf.coa.fields.mfgDate')}</p><p className="font-medium">{manufactureDate ? fmtDate(manufactureDate, undefined, i18n.language) : na}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('pdf.coa.fields.expiryDate')}</p><p className="font-medium">{expiryDate ? fmtDate(expiryDate, undefined, i18n.language) : na}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('quality.coaPage.qcStatus')}</p><div className="mt-0.5">{statusBadge(result.status)}</div></div>
               </div>
             </section>

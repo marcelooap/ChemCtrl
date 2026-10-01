@@ -15,6 +15,7 @@ import { generateEnsaioPDF } from '@industrializacao/lib/pdfReports';
 import { fmtDate, fmtNumber } from '@/i18n/formatters';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 import { getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import { parseValidityDays } from '@industrializacao/lib/qualityValidity';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
 const DEFAULT_CREATED_BY = 'Marcelo Amaral';
@@ -61,7 +62,7 @@ export default function Ensaios() {
   const [showView, setShowView] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
-  const [form, setForm] = useState({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], analyses: [{ ...emptyAnalysis }] });
+  const [form, setForm] = useState({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], validity_days: '', analyses: [{ ...emptyAnalysis }] });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -118,8 +119,18 @@ export default function Ensaios() {
     return !q || [item.product, item.client, item.created_by].some((v) => (v || '').toLowerCase().includes(q));
   });
 
-  const openNew = () => { setEditing(null); setForm({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], analyses: [{ ...emptyAnalysis }] }); setShowForm(true); };
-  const openEdit = (item) => { setEditing(item); const a = parseArr(item.analyses); setForm({ ...item, analyses: a.length ? a : [{ ...emptyAnalysis }] }); setShowForm(true); };
+  const emptyForm = () => ({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], validity_days: '', analyses: [{ ...emptyAnalysis }] });
+  const openNew = () => { setEditing(null); setForm(emptyForm()); setShowForm(true); };
+  const openEdit = (item) => {
+    setEditing(item);
+    const a = parseArr(item.analyses);
+    setForm({
+      ...item,
+      validity_days: item.validity_days ?? '',
+      analyses: a.length ? a : [{ ...emptyAnalysis }],
+    });
+    setShowForm(true);
+  };
 
   const addAnalysis = () => setForm(prev => ({ ...prev, analyses: [...prev.analyses, { ...emptyAnalysis }] }));
   const removeAnalysis = (idx) => setForm(prev => ({ ...prev, analyses: prev.analyses.filter((_, i) => i !== idx) }));
@@ -178,16 +189,23 @@ export default function Ensaios() {
 
   const save = async () => {
     if (!form.product) { toast({ title: t('quality.ensaios.messages.productRequired'), variant: 'destructive' }); return; }
+    const validityDays = parseValidityDays(form.validity_days);
+    if (validityDays == null) {
+      toast({ title: t('quality.ensaios.messages.validityRequired'), variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
         await base44.entities.QualityTest.update(editing.id, {
           ...form,
+          validity_days: validityDays,
           created_by: editing.created_by || DEFAULT_CREATED_BY,
         });
       } else {
         await base44.entities.QualityTest.create({
           ...form,
+          validity_days: validityDays,
           created_by: currentUserName || DEFAULT_CREATED_BY,
           created_by_id: user?.id || null,
         });
@@ -233,7 +251,7 @@ export default function Ensaios() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
-                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th>
+                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.validity')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th>
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.createdBy')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
@@ -244,6 +262,7 @@ export default function Ensaios() {
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>
                     <td className="px-4 py-2.5 text-sm">{item.revision}</td>
                     <td className="px-4 py-2.5 text-sm">{item.revision_date ? fmtDate(item.revision_date, undefined, i18n.language) : t('common.notAvailable')}</td>
+                    <td className="px-4 py-2.5 text-right text-sm tabular-nums">{parseValidityDays(item.validity_days) ?? t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(item.analyses || []).length}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(item)}</td>
                     <td className="px-4 py-2.5 text-center">
@@ -277,9 +296,21 @@ export default function Ensaios() {
               </div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('quality.ensaios.form.clientAuto')}</label><Input value={form.client} readOnly className="bg-muted/50" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('quality.ensaios.table.revision')}</label><Input value={form.revision} onChange={e => setForm({ ...form, revision: e.target.value })} /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('quality.ensaios.form.revisionDate')}</label><Input type="date" value={form.revision_date} onChange={e => setForm({ ...form, revision_date: e.target.value })} /></div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">{t('quality.ensaios.form.validityDays')} *</label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={form.validity_days ?? ''}
+                  onChange={e => setForm({ ...form, validity_days: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t('quality.ensaios.form.validityHint')}</p>
+              </div>
             </div>
             <div className="flex items-center justify-between"><h4 className="text-sm font-semibold">{t('quality.sections.analyses')}</h4><Button variant="outline" size="sm" onClick={addAnalysis}><Plus className="w-3 h-3 mr-1" /> {t('quality.ensaios.form.addAnalysis')}</Button></div>
             <div className="border rounded-lg overflow-hidden">
@@ -342,6 +373,7 @@ export default function Ensaios() {
                 <div><p className="text-xs text-muted-foreground">{t('quality.ensaios.table.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('common.date')}</p><p className="font-medium">{viewing.revision_date ? fmtDate(viewing.revision_date, undefined, i18n.language) : t('common.notAvailable')}</p></div>
                 <div><p className="text-xs text-muted-foreground">{t('quality.ensaios.table.createdBy')}</p><p className="font-medium">{resolveCreatedBy(viewing)}</p></div>
+                <div><p className="text-xs text-muted-foreground">{t('quality.ensaios.form.validityDays')}</p><p className="font-medium">{parseValidityDays(viewing.validity_days) != null ? `${parseValidityDays(viewing.validity_days)} ${t('common.days')}` : t('common.notAvailable')}</p></div>
               </div>
               <table className="w-full text-sm border rounded-lg overflow-hidden">
                 <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">

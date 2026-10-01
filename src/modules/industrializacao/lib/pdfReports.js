@@ -26,6 +26,7 @@ import {
   productionOfContainer,
 } from '@industrializacao/lib/fractionalSupply';
 import { calcPriceWithoutTax } from '@industrializacao/lib/recipePricing';
+import { addValidityDays } from '@industrializacao/lib/qualityValidity';
 // eslint-disable-next-line
 import { getSignedFileUrl } from '@industrializacao/api/storage'; // storage module (split from supabaseClient)
 
@@ -455,7 +456,6 @@ export function generateRecipePDF(recipe, options) {
     [t('pdf.recipe.fields.revision'), recipe.revision || '-'],
     [t('pdf.fields.revisionDate'), recipe.revision_date || '-'],
     [t('pdf.fields.densityPA'), (recipe.density || '-') + ' ' + t('pdf.common.densityUnit')],
-    [t('pdf.fields.validity'), recipe.validity_days ? t('pdf.common.days', { count: recipe.validity_days }) : '-'],
   ], 3);
   y = addSectionTitle(doc, y, t('pdf.recipe.sectionRawMaterials'));
   const headers = [
@@ -1117,6 +1117,7 @@ export function generateEnsaioPDF(test) {
     [t('pdf.common.client'), test.client || '-'],
     [t('pdf.recipe.fields.revision'), test.revision || '-'],
     [t('pdf.fields.revisionDate'), test.revision_date || '-'],
+    [t('pdf.fields.validity'), test.validity_days ? t('pdf.common.days', { count: test.validity_days }) : '-'],
     [t('pdf.ensaio.fields.analysisCount'), String((test.analyses || []).length)],
   ], 3);
   y = addSectionTitle(doc, y, t('pdf.ensaio.sectionAnalyses'));
@@ -1163,12 +1164,13 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
   let y = 42;
   y = addSectionTitle(doc, y, t('pdf.coa.sectionProduct'));
   const mfgDate = production && production.end_time ? fmtDate(production.end_time) : '-';
-  let expDate = '-';
-  if (production && production.end_time && recipe && recipe.validity_days) {
-    const d = new Date(production.end_time);
-    d.setDate(d.getDate() + Number(recipe.validity_days));
-    expDate = fmtDate(d);
-  }
+  const validityDays = Object.prototype.hasOwnProperty.call(opts, 'validityDays')
+    ? opts.validityDays
+    : (recipe && recipe.validity_days);
+  const exp = production && production.end_time
+    ? addValidityDays(production.end_time, validityDays)
+    : null;
+  const expDate = exp ? fmtDate(exp) : '-';
   const massKg = production && production.mass ? fmtNum(production.mass, 3) + ' kg' : '-';
   y = addInfoGrid(doc, y, [
     [t('pdf.coa.fields.manufacturer'), 'OFFSHORE TANKS COMERCIO E SERVICOS EM UNIDADES DE CARGA LTDA', 2],

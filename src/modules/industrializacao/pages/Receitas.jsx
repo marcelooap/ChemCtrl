@@ -53,7 +53,6 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.priceWithTax')}</p><p className="font-bold">{hideMpNames ? '*****' : fmtCurrency(viewing.price || 0, 'BRL', undefined, priceFmt)}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.priceWithoutTax')}</p><p className="font-bold">{hideMpNames ? '*****' : fmtCurrency(calcPriceWithoutTax(viewing.price), 'BRL', undefined, priceFmt)}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productDensity')}</p><p className="font-medium">{viewing.density} g/mL</p></div>
-        <div><p className="text-xs text-muted-foreground">{t('recipes.view.validity')}</p><p className="font-medium">{viewing.validity_days} {t('common.days')}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revisionDate')}</p><p className="font-medium">{viewing.revision_date}</p></div>
         <div>
@@ -145,7 +144,6 @@ const emptyRecipe = () => ({
   code: '',
   price: 0,
   density: '',
-  validity_days: 365,
   revision_number: 1,
   revision: 'Revisão 01',
   revision_date: new Date().toISOString().split('T')[0],
@@ -473,7 +471,7 @@ export default function Receitas() {
     const mps = stripMpRowKeys(
       form.raw_materials.map((m) => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }))
     );
-    const { id: _formId, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, revision, revision_date, revision_number, ...recipeData } = form;
+    const { id: _formId, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, revision, revision_date, revision_number, validity_days: _validityDays, ...recipeData } = form;
 
     let revisionMeta;
     if (!editing) {
@@ -779,8 +777,7 @@ export default function Receitas() {
     setForm({ ...form, density: raw === '' ? '' : newDensity, raw_materials: form.raw_materials.map(m => ({ ...m, quantity_kg: 5000 * (newDensity || 1) * ((m.percentage || 0) / 100) })) });
   }} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.validityDays')}</label><Input type="number" value={form.validity_days} onChange={e => setForm({ ...form, validity_days: parseInt(e.target.value) || 0 })} /></div>
+            <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revision')}</label><Input value={displayRevisionLabel} readOnly tabIndex={-1} className="bg-muted/50" /></div>
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.revisionDate')}</label><Input type="date" value={displayRevisionDate} readOnly tabIndex={-1} className="bg-muted/50" /></div>
             </div>

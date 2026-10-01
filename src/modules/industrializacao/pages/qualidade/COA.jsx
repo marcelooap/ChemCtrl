@@ -9,6 +9,7 @@ import { Input } from '@shared/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/components/ui/tooltip';
 import { useToast } from '@shared/components/ui/use-toast';
 import { generateCOAPDF } from '@industrializacao/lib/pdfReports';
+import { parseValidityDays, resolveQualityValidityDays } from '@industrializacao/lib/qualityValidity';
 import { fmtDate } from '@/i18n/formatters';
 import COAViewDialog, { formatPackagingLabel } from '@industrializacao/components/qualidade/COAViewDialog';
 import QualityAnalysisDialog from '@industrializacao/components/qualidade/QualityAnalysisDialog';
@@ -119,7 +120,27 @@ export default function COA() {
     setShowEdit(true);
   };
 
+  const resolveCoaShelfLife = (result, production) => {
+    let recipe = null;
+    if (production?.recipe_id) {
+      recipe = (recipes || []).find((rc) => rc.id === production.recipe_id) || null;
+    }
+    if (!recipe && result?.product) {
+      recipe = (recipes || []).find((rc) => rc.product_name === result.product) || null;
+    }
+    const validityDays = resolveQualityValidityDays(tests, result?.product, result?.client)
+      ?? parseValidityDays(recipe?.validity_days);
+    return { recipe, validityDays };
+  };
+
   const openView = (r) => { setViewing(r); setShowView(true); };
+
+  const viewingProduction = viewing
+    ? ((productions || []).find((p) => p.op_number === viewing.op_number) || null)
+    : null;
+  const viewingValidityDays = viewing
+    ? resolveCoaShelfLife(viewing, viewingProduction).validityDays
+    : null;
 
   const editingTest = editingProd ? (tests || []).find(item => item.product === editingProd.product) : null;
 
@@ -148,17 +169,18 @@ export default function COA() {
     try {
       const production = (productions || []).find(p => p.op_number === r.op_number) || null;
       const opContainers = containersByOp.get(r.op_number) || [];
-      let recipe = null;
-      if (production?.recipe_id) {
-        recipe = (recipes || []).find(rc => rc.id === production.recipe_id) || null;
-        if (!recipe) {
-          try { recipe = await base44.entities.Recipe.get(production.recipe_id); } catch { /* keep null */ }
-        }
+      let { recipe, validityDays } = resolveCoaShelfLife(r, production);
+      if (!recipe && production?.recipe_id) {
+        try { recipe = await base44.entities.Recipe.get(production.recipe_id); } catch { /* keep null */ }
+        if (validityDays == null) validityDays = parseValidityDays(recipe?.validity_days);
       }
-      if (!recipe) {
-        recipe = (recipes || []).find(rc => rc.product_name === r.product) || null;
-      }
-      await generateCOAPDF({ ...r, results: parseArr(r.results) }, production, opContainers, recipe);
+      await generateCOAPDF(
+        { ...r, results: parseArr(r.results) },
+        production,
+        opContainers,
+        recipe,
+        { validityDays },
+      );
     } catch (_e) {
       toast({ title: t('errors.pdfFailed'), variant: 'destructive' });
     } finally {
@@ -276,6 +298,8 @@ export default function COA() {
         onOpenChange={setShowView}
         result={viewing}
         containers={viewing ? (containersByOp.get(viewing.op_number) || []) : []}
+        manufactureDate={viewingProduction?.end_time || null}
+        validityDays={viewingValidityDays}
       />
 
       <QualityAnalysisDialog

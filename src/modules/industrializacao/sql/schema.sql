@@ -392,6 +392,7 @@ create table if not exists ind_cq_esp_tec (
   client text,
   revision text,
   revision_date date,
+  validity_days numeric,
   analyses jsonb
 );
 alter table ind_cq_esp_tec enable row level security;

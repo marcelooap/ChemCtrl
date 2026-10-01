@@ -25,6 +25,7 @@ import {
   containerDensity,
 } from '@industrializacao/lib/fractionalSupply';
 import { resolveValidityDays } from '@industrializacao/lib/recipeRevisions';
+import { resolveQualityValidityDays } from '@industrializacao/lib/qualityValidity';
 import {
   calcLabelWeightsFromVolume,
   formatLabelEmbalagem,
@@ -44,6 +45,14 @@ function defaultVolumeForContainer(container, productions) {
 }
 
 async function resolveValidityDaysForContainer(container, production, recipes) {
+  const cqProduct = container?.product || production?.product;
+  const cqClient = container?.client || production?.client;
+  try {
+    const tests = await base44.entities.QualityTest.list('-updated_date', 500);
+    const fromCq = resolveQualityValidityDays(tests || [], cqProduct, cqClient);
+    if (fromCq != null) return fromCq;
+  } catch { /* Cadastro CQ indisponível: usa a receita como fallback */ }
+
   let validityDays = resolveValidityDays(recipes || [], container, production);
 
   if (validityDays == null && production?.recipe_id) {

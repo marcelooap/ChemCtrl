@@ -127,9 +127,8 @@ export const resolveRecipeForContainer = (recipes, container, production = null)
 };
 
 /**
- * Dias de validade do produto para etiqueta/COA/PDF.
- * Usa a receita da OP quando tiver validity_days; senão varre revisões do produto
- * (mesma lógica de cliente da resolução principal) para não imprimir Fab = Val.
+ * Dias de validade ainda gravados na receita (legado).
+ * A origem atual é o Cadastro CQ; isto só cobre lotes anteriores à migração.
  */
 export const resolveValidityDays = (recipes, container, production = null) => {
   const primary = resolveRecipeForContainer(recipes, container, production);
