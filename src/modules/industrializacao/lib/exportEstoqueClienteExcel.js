@@ -1,12 +1,14 @@
 import ExcelJS from 'exceljs';
 import i18n from '@/i18n';
 import { getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import { containerDisplayVolume } from '@industrializacao/lib/fractionalSupply';
 
 export async function exportEstoqueClienteExcel({
   client,
   stocks,
   containers,
   recipes = [],
+  productions = [],
 }) {
   const codeByProduct = {};
 
@@ -77,21 +79,25 @@ export async function exportEstoqueClienteExcel({
     ]);
   });
 
-  // Produtos acabados
+  // Produtos acabados — mesmo volume da tela (apontado no fracionado), sem casas decimais
   containers.forEach((container) => {
     const embalagem = container.barril_number
       ? `${container.container_number || ""} (${container.barril_number})`
       : container.container_number || "—";
 
-    ws.addRow([
+    const volume = Math.round(containerDisplayVolume(container, productions) || 0);
+
+    const row = ws.addRow([
       codeByProduct[container.product] || "—",
       container.product || "—",
       container.lot || "—",
-      container.volume || 0,
+      volume,
       "L",
       embalagem,
       "Produto Acabado",
     ]);
+
+    row.getCell(4).numFmt = "0";
   });
 
   for (let i = 2; i <= ws.rowCount; i++) {

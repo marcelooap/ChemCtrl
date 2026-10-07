@@ -174,6 +174,8 @@ export default function EstoqueCliente() {
         client: effectiveClient || t('clients.stock.allClientsLabel'),
         stocks: filteredStocks,
         containers: filteredContainers,
+        recipes,
+        productions,
       });
       toast({ title: t('clients.stock.excelSuccess') });
     } catch (e) {
