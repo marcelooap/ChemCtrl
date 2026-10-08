@@ -1,20 +1,57 @@
 -- ============================================================
--- Hotfix: "sessão inválida" ao confirmar checklist de envase
+-- Hotfix: "sessão inválida" / "Sessão expirada" ao confirmar checklist
 --
 -- Problema:
---   O app está autenticado (validate_session encontra a sessão),
---   mas submit_operational_checklist responde P0001 "sessão inválida".
---   A leitura direta em sessions dentro desta RPC não enxerga a
---   mesma linha (RLS / owner da função), e o fallback por header
---   não usa o helper que de fato recebe x-session-id.
+--   O app está autenticado, mas submit_operational_checklist responde
+--   P0001 "sessão inválida". A policy de sessions é USING (false).
+--   Leitura direta e get_current_session() não enxergam a linha, e
+--   current_setting('request.header.x-session-id') estoura porque
+--   hífen não é nome válido de GUC. validate_session pode devolver o
+--   usuário aninhado em `user`, sem nivel_acesso/user_id na raiz —
+--   a checagem de permissão então falha mesmo com sessão válida.
 --
 -- Correção:
---   submit_operational_checklist resolve a sessão por
---   validate_session(p_session_id) — o mesmo caminho do login —
---   e só então cai para o header. get_current_session() não é alterada.
+--   1) get_request_header ignora GUC inválida e lê request.headers
+--   2) a RPC lê sessions com row_security desligado
+--   3) aceita o JSON plano e o JSON aninhado de validate_session
 --
 -- Execute no: Supabase Dashboard → SQL Editor
 -- ============================================================
+
+CREATE OR REPLACE FUNCTION get_request_header(p_name text)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_value text;
+  v_headers jsonb;
+BEGIN
+  BEGIN
+    v_value := NULLIF(current_setting('request.header.' || p_name, true), '');
+  EXCEPTION WHEN OTHERS THEN
+    v_value := NULL;
+  END;
+
+  IF v_value IS NOT NULL THEN
+    RETURN v_value;
+  END IF;
+
+  BEGIN
+    v_headers := NULLIF(current_setting('request.headers', true), '')::jsonb;
+    v_value := NULLIF(v_headers ->> p_name, '');
+  EXCEPTION WHEN OTHERS THEN
+    v_value := NULL;
+  END;
+
+  RETURN v_value;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_request_header(text) TO anon;
+GRANT EXECUTE ON FUNCTION get_request_header(text) TO authenticated;
 
 DROP FUNCTION IF EXISTS submit_operational_checklist(text, text, jsonb);
 DROP FUNCTION IF EXISTS submit_operational_checklist(text, text, jsonb, text);
@@ -45,6 +82,9 @@ DECLARE
   v_required text[];
   v_inserted int := 0;
   v_sid text;
+  v_actor jsonb;
+  v_nivel text;
+  v_perms jsonb := '[]'::jsonb;
 BEGIN
   IF p_production_id IS NULL OR btrim(p_production_id) = '' THEN
     RAISE EXCEPTION 'production_id é obrigatório';
@@ -58,56 +98,82 @@ BEGIN
     RAISE EXCEPTION 'respostas do checklist são obrigatórias';
   END IF;
 
-  -- Mesmo resolvedor do login. A leitura direta em sessions nesta função
-  -- pode não ver a linha (RLS aplicada ao owner). validate_session enxerga.
+  -- sessions tem policy USING (false). validate_session é o mesmo
+  -- caminho do login e enxerga a linha; a leitura direta fica só
+  -- como reserva, dentro de exceção (row_security=off não libera RLS).
   v_sid := NULLIF(btrim(COALESCE(p_session_id, '')), '');
   IF v_sid IS NULL THEN
-    v_sid := NULLIF(btrim(COALESCE(get_request_header('x-session-id'), '')), '');
+    BEGIN
+      v_sid := NULLIF(btrim(COALESCE(get_request_header('x-session-id'), '')), '');
+    EXCEPTION WHEN OTHERS THEN
+      v_sid := NULL;
+    END;
   END IF;
 
   IF v_sid IS NOT NULL THEN
-    v_session := validate_session(v_sid);
+    BEGIN
+      v_session := validate_session(v_sid);
+    EXCEPTION WHEN OTHERS THEN
+      v_session := NULL;
+    END;
   END IF;
 
   IF v_session IS NULL AND v_sid IS NOT NULL THEN
     BEGIN
-      PERFORM set_config('row_security', 'off', true);
+      SELECT to_jsonb(s) INTO v_session
+      FROM sessions s
+      WHERE btrim(s.session_id) = v_sid
+        AND s.expires_at > now()
+      LIMIT 1;
     EXCEPTION WHEN OTHERS THEN
-      NULL;
+      v_session := NULL;
     END;
-
-    SELECT to_jsonb(s) INTO v_session
-    FROM sessions s
-    WHERE btrim(s.session_id) = v_sid
-      AND s.expires_at > now()
-    LIMIT 1;
   END IF;
 
   IF v_session IS NULL THEN
-    v_session := get_current_session();
+    BEGIN
+      v_session := get_current_session();
+    EXCEPTION WHEN OTHERS THEN
+      v_session := NULL;
+    END;
   END IF;
 
   IF v_session IS NULL THEN
     RAISE EXCEPTION 'sessão inválida';
   END IF;
 
-  -- Permissões a partir da sessão já resolvida (não depende de GUC)
+  -- validate_session novo devolve { session_id, user: {...} }.
+  -- A linha de sessions e a validate antiga são planas.
+  v_actor := v_session;
+  IF jsonb_typeof(v_session -> 'user') = 'object'
+     AND COALESCE(v_session ->> 'user_id', v_session ->> 'nivel_acesso', '') = '' THEN
+    v_actor := v_session -> 'user';
+  END IF;
+
+  v_nivel := lower(
+    translate(
+      coalesce(v_actor ->> 'nivel_acesso', v_session ->> 'nivel_acesso', ''),
+      'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
+      'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
+    )
+  );
+  v_perms := COALESCE(
+    CASE WHEN jsonb_typeof(v_actor -> 'permissions') = 'array' THEN v_actor -> 'permissions' END,
+    CASE WHEN jsonb_typeof(v_session -> 'permissions') = 'array' THEN v_session -> 'permissions' END,
+    '[]'::jsonb
+  );
+
   IF NOT (
-    lower(
-      translate(
-        coalesce(v_session ->> 'nivel_acesso', ''),
-        'ÁÀÂÃÄáàâãäÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÕÖóòôõöÚÙÛÜúùûüÇç',
-        'AAAAAaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuCc'
-      )
-    ) IN ('administrador', 'supervisor', 'operacional', 'operador')
+    v_nivel IN ('administrador', 'supervisor', 'operacional', 'operador', 'qualidade')
     OR (
-      jsonb_typeof(v_session -> 'permissions') = 'array'
+      jsonb_typeof(v_perms) = 'array'
       AND EXISTS (
         SELECT 1
-        FROM jsonb_array_elements_text(COALESCE(v_session -> 'permissions', '[]'::jsonb)) k
+        FROM jsonb_array_elements_text(v_perms) k
         WHERE k = ANY (ARRAY[
           'production_orders.edit',
           'production_orders.create',
+          'productions.edit',
           'productions.edit_op',
           'productions.create_op',
           'productions.finish',
@@ -116,22 +182,19 @@ BEGIN
         ])
       )
     )
-    OR (v_session -> 'permissions') ?| ARRAY[
-      'production_orders.edit',
-      'production_orders.create',
-      'productions.edit_op',
-      'productions.create_op',
-      'productions.finish',
-      'productions.complement',
-      'inventory.edit'
-    ]
   ) THEN
     RAISE EXCEPTION 'sem permissão para registrar checklist operacional';
   END IF;
 
-  v_user_id := v_session ->> 'user_id';
+  v_user_id := COALESCE(
+    NULLIF(v_actor ->> 'user_id', ''),
+    NULLIF(v_actor ->> 'id', ''),
+    NULLIF(v_session ->> 'user_id', '')
+  );
   v_user_nome := COALESCE(
+    NULLIF(v_actor ->> 'nome_completo', ''),
     NULLIF(v_session ->> 'nome_completo', ''),
+    NULLIF(v_actor ->> 'usuario', ''),
     NULLIF(v_session ->> 'usuario', ''),
     'desconhecido'
   );

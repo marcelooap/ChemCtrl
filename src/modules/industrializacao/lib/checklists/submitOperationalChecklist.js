@@ -35,36 +35,65 @@ function isInvalidSessionMessage(message) {
   return /sess[aã]o inv[aá]lida/i.test(String(message || ''));
 }
 
+/**
+ * validate_session devolve o id na raiz ou, em versões mais novas, só dentro
+ * de `user`. Um payload sem `session_id` não significa sessão expirada: o id
+ * local (o mesmo do login) continua válido e a RPC resolve a linha.
+ * @param {unknown} payload
+ * @returns {string}
+ */
+function extractSessionId(payload) {
+  if (payload == null) return '';
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed || trimmed === 'null') return '';
+    try {
+      return extractSessionId(JSON.parse(trimmed));
+    } catch {
+      return '';
+    }
+  }
+  if (Array.isArray(payload)) return extractSessionId(payload[0]);
+  if (typeof payload !== 'object') return '';
+  const record = /** @type {Record<string, unknown>} */ (payload);
+  const direct = record.session_id || record.sessionId;
+  return String(direct || '').trim();
+}
+
+function assertChecklistSaved(result) {
+  if (!result || typeof result !== 'object') return result;
+  const failed = result.success === false || result.ok === false;
+  if (!failed) return result;
+  const message = String(result.error || result.message || '').trim();
+  throw new Error(message || 'Não foi possível salvar o checklist');
+}
+
 export async function submitOperationalChecklist({ productionId, etapa, answers }) {
   const sessionId = String(getSessionId() || '').trim();
   if (!sessionId) {
     throw new Error(EXPIRED_SESSION_MESSAGE);
   }
 
-  // O gate de login usa validate_session. Se ela não reconhece o id,
-  // o checklist também não vai gravar — evita o P0001 genérico.
-  const session = await callRPC('validate_session', { p_session_id: sessionId });
-  const confirmedSessionId = String(session?.session_id || '').trim();
-  if (!confirmedSessionId) {
-    throw new Error(EXPIRED_SESSION_MESSAGE);
-  }
-
+  // Confirma o id quando o servidor o devolve, mas não bloqueia a gravação
+  // se o payload vier aninhado ou vazio: a RPC lê a sessão pelo id local.
+  let confirmedSessionId = sessionId;
   try {
-    const result = await callRPC('submit_operational_checklist', {
-      p_production_id: productionId,
-      p_etapa: etapa,
-      p_answers: answers,
-      p_session_id: confirmedSessionId,
-    });
-    return result;
+    const session = await callRPC('validate_session', { p_session_id: sessionId });
+    const fromServer = extractSessionId(session);
+    if (fromServer) confirmedSessionId = fromServer;
   } catch (err) {
     const message = getChecklistErrorMessage(err);
     if (isInvalidSessionMessage(message)) {
-      const retry = await callRPC('validate_session', { p_session_id: confirmedSessionId }).catch(() => null);
-      if (!retry?.session_id) {
-        throw new Error(EXPIRED_SESSION_MESSAGE);
-      }
+      throw new Error(EXPIRED_SESSION_MESSAGE);
     }
-    throw err;
+    // Falha transitória de rede não invalida o id já usado no restante do app.
   }
+
+  const result = await callRPC('submit_operational_checklist', {
+    p_production_id: productionId,
+    p_etapa: etapa,
+    p_answers: answers,
+    p_session_id: confirmedSessionId,
+  });
+  return assertChecklistSaved(result);
 }
