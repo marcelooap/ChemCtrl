@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
 import ProdutoModal from "@transbordo/components/cadastro/ProdutoModal";
+import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import OrgaoRegulamentadorBadge from "@transbordo/components/cadastro/OrgaoRegulamentadorBadge";
 import { cascadeProdutoIdentity } from "@transbordo/lib/cascadeProdutoUpdate";
 import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente";
@@ -23,6 +24,58 @@ import { generatePublicToken } from "@industrializacao/lib/publicToken";
 import { deleteProdutoDocument } from "@transbordo/api/storage";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
+
+const ALL_CLIENTS_LABEL = "Todos os clientes";
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function matchesFiltradoTerm(filtrado, query) {
+  const q = normalizeText(query);
+  if (q === "sim" || q === "filtrado") return Boolean(filtrado);
+  if (q === "nao" || q === "nao filtrado") return !filtrado;
+  return false;
+}
+
+function produtoMatchesSearch(produto, query, displayId) {
+  const q = normalizeText(query);
+  if (!q) return true;
+
+  const hasDensidade =
+    produto?.densidade != null &&
+    produto.densidade !== "" &&
+    produto.densidade !== "-";
+  const densidadeFmt = hasDensidade ? formatDensidade(produto.densidade) : "";
+  const fields = [
+    displayId,
+    produto?.codigo,
+    produto?.produto,
+    produto?.cliente_nome,
+    densidadeFmt,
+    densidadeFmt.replace(/,/g, "."),
+    hasDensidade ? produto.densidade : "",
+  ];
+
+  if (fields.some((field) => normalizeText(field).includes(q))) return true;
+  return matchesFiltradoTerm(produto?.filtrado, q);
+}
+
+function produtoMatchesCliente(produto, filter, filterId) {
+  const q = normalizeText(filter);
+  if (!q || q === normalizeText(ALL_CLIENTS_LABEL)) return true;
+  const nome = normalizeText(produto?.cliente_nome);
+  if (filterId) {
+    if (produto?.cliente_id && String(produto.cliente_id) === String(filterId)) return true;
+    return nome === q;
+  }
+  return nome.includes(q);
+}
 
 function buildProdutoEstoqueKey(produtoId, codigo, clienteId, clienteNome) {
   if (produtoId) return `id:${String(produtoId)}`;
@@ -43,6 +96,8 @@ export default function ProdutosTab() {
   const [estoque, setEstoque] = useState([]);
   const [estoqueComSaldoKeys, setEstoqueComSaldoKeys] = useState(() => new Set());
   const [search, setSearch] = useState("");
+  const [clienteFilter, setClienteFilter] = useState("");
+  const [clienteFilterId, setClienteFilterId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduto, setEditingProduto] = useState(null);
   const [readOnly, setReadOnly] = useState(false);
@@ -56,7 +111,7 @@ export default function ProdutosTab() {
     try {
       const [prods, cliens, ests] = await Promise.all([
         entities.produtos.list(),
-        entities.clientes.list(),
+        entities.clientes.list("nome"),
         entities.estoque.list().catch(() => []),
       ]);
 
@@ -134,26 +189,72 @@ export default function ProdutosTab() {
     };
   }, [estoqueComSaldoKeys]);
 
-  const sortedAll = [...produtos].sort((a, b) => {
-    const da = new Date(a.created_date || a.data_cadastro);
-    const db = new Date(b.created_date || b.data_cadastro);
-    return da - db;
-  });
-  const idMap = {};
-  sortedAll.forEach((p, i) => {
-    idMap[p.id] = String(i + 1).padStart(2, "0");
-  });
+  const idMap = useMemo(() => {
+    const sortedAll = [...produtos].sort((a, b) => {
+      const da = new Date(a.created_date || a.data_cadastro);
+      const db = new Date(b.created_date || b.data_cadastro);
+      return da - db;
+    });
+    const map = {};
+    sortedAll.forEach((p, i) => {
+      map[p.id] = String(i + 1).padStart(2, "0");
+    });
+    return map;
+  }, [produtos]);
 
-  const filtered = produtos
-    .filter((p) => {
-      const q = search.toLowerCase();
-      return (
-        p.codigo?.toLowerCase().includes(q) ||
-        p.produto?.toLowerCase().includes(q) ||
-        p.cliente_nome?.toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => Number(idMap[b.id] || 0) - Number(idMap[a.id] || 0));
+  const mergedClientes = useMemo(() => {
+    const clientesFromProdutos = produtos
+      .map((p) => p.cliente_nome)
+      .filter(Boolean);
+    const uniqueClienteNomes = [...new Set(clientesFromProdutos)];
+    return [
+      ...clientes,
+      ...uniqueClienteNomes
+        .filter(
+          (nome) =>
+            !clientes.some(
+              (c) => c.nome?.toLowerCase() === nome.toLowerCase()
+            )
+        )
+        .map((nome) => ({ id: nome, nome })),
+    ];
+  }, [clientes, produtos]);
+
+  const clienteFilterOptions = useMemo(() => {
+    const byName = new Map();
+    for (const cliente of clientes) {
+      const nome = String(cliente?.nome || "").trim();
+      if (!nome) continue;
+      const key = normalizeText(nome);
+      if (!byName.has(key)) byName.set(key, { id: cliente.id || nome, nome });
+    }
+    const sorted = [...byName.values()].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
+    return [{ id: "all", nome: ALL_CLIENTS_LABEL }, ...sorted];
+  }, [clientes]);
+
+  const filtered = useMemo(
+    () =>
+      produtos
+        .filter(
+          (p) =>
+            produtoMatchesCliente(p, clienteFilter, clienteFilterId) &&
+            produtoMatchesSearch(p, search, idMap[p.id])
+        )
+        .sort((a, b) => Number(idMap[b.id] || 0) - Number(idMap[a.id] || 0)),
+    [produtos, clienteFilter, clienteFilterId, search, idMap]
+  );
+
+  const handleClienteFilterChange = (label, option) => {
+    const next = label || "";
+    setClienteFilter(next);
+    if (!next || normalizeText(next) === normalizeText(ALL_CLIENTS_LABEL)) {
+      setClienteFilterId(null);
+      return;
+    }
+    setClienteFilterId(option?.id && option.id !== "all" ? option.id : null);
+  };
 
   const handleNew = () => {
     setEditingProduto(null);
@@ -255,36 +356,32 @@ export default function ProdutosTab() {
     return d.toLocaleDateString("pt-BR");
   };
 
-  const clientesFromProdutos = produtos
-    .map((p) => p.cliente_nome)
-    .filter(Boolean);
-  const uniqueClienteNomes = [...new Set(clientesFromProdutos)];
-  const mergedClientes = [
-    ...clientes,
-    ...uniqueClienteNomes
-      .filter(
-        (nome) =>
-          !clientes.some(
-            (c) => c.nome?.toLowerCase() === nome.toLowerCase()
-          )
-      )
-      .map((nome) => ({ id: nome, nome })),
-  ];
-
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
-      {/* Search + Button */}
-      <div className="shrink-0 flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="relative z-20 shrink-0 flex flex-wrap items-center gap-3">
+        <div className="relative w-full shrink-0 sm:w-[28rem]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por ID, produto ou cliente..."
+            placeholder="Buscar por ID, código, produto, cliente, densidade ou filtrado..."
             className="pl-10 bg-white h-9"
+            aria-label="Buscar produtos"
           />
         </div>
-        <Button onClick={handleNew} className="gap-2 h-9">
+        <div className="w-full shrink-0 sm:w-64">
+          <SearchableSelect
+            value={clienteFilter}
+            onChange={handleClienteFilterChange}
+            options={clienteFilterOptions}
+            getOptionLabel={(c) => c.nome}
+            getOptionValue={(c) => c.id}
+            placeholder="Todos os clientes"
+            ariaLabel="Filtrar por cliente"
+            inputClassName="h-9 py-0 bg-white"
+          />
+        </div>
+        <Button onClick={handleNew} className="gap-2 h-9 shrink-0 ml-auto">
           <Plus className="w-4 h-4" />
           Novo Produto
         </Button>

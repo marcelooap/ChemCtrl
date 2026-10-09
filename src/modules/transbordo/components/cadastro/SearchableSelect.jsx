@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
+import { cn } from "@shared/lib/utils";
 
 export default function SearchableSelect({
   options = [],
@@ -12,6 +13,7 @@ export default function SearchableSelect({
   inputClassName = "",
   renderOption = null,
   selectOnly = false,
+  ariaLabel,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -66,6 +68,7 @@ export default function SearchableSelect({
       <div className="relative">
         <input
           type="text"
+          role="combobox"
           value={selectOnly ? value : search || value}
           onChange={handleInputChange}
           onFocus={handleFocus}
@@ -73,14 +76,20 @@ export default function SearchableSelect({
           readOnly={selectOnly}
           placeholder={placeholder}
           disabled={disabled}
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-autocomplete="list"
           aria-readonly={selectOnly || undefined}
-          className={`w-full px-3 py-2 pr-9 rounded-md border bg-card text-sm transition-colors focus:outline-none ${
+          className={cn(
+            "w-full px-3 py-2 pr-9 rounded-md border bg-card text-sm transition-colors focus:outline-none",
             disabled
               ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed"
               : open
               ? "border-blue-500 ring-1 ring-blue-500"
-              : "border-border hover:border-slate-400"
-          } ${selectOnly ? "cursor-pointer caret-transparent" : ""} ${!disabled && inputClassName ? inputClassName : ""}`}
+              : "border-border hover:border-slate-400",
+            selectOnly && "cursor-pointer caret-transparent",
+            !disabled && inputClassName
+          )}
         />
         <ChevronDown
           className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none transition-transform ${
