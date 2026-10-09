@@ -56,6 +56,25 @@ export function clientsMatch(a, b) {
   return na.includes(nb) || nb.includes(na);
 }
 
+/** Chave de deduplicação da lista de clientes (nome exato, sem diferenciar maiúsculas). */
+export function clienteNomeKey(nome) {
+  return String(nome || "").trim().toLowerCase();
+}
+
+/**
+ * Estoque/vasilhame do Transbordo pode estar ligado a um id duplicado do mesmo nome.
+ * Aceita o id selecionado ou o mesmo nome.
+ */
+export function sameClienteRecord(record, clienteId, clienteNome) {
+  if (!record) return false;
+  const recordId = record.cliente_id ? String(record.cliente_id) : "";
+  const selectedId = clienteId ? String(clienteId) : "";
+  if (selectedId && recordId && selectedId === recordId) return true;
+  const left = clienteNomeKey(record.cliente_nome || record.client);
+  const right = clienteNomeKey(clienteNome);
+  return Boolean(left && right && left === right);
+}
+
 /** Status de pátio igual à tela de Vasilhames da Industrialização. */
 export function isContainerNoPatio(container) {
   const status = String(container?.status || "No Pátio")

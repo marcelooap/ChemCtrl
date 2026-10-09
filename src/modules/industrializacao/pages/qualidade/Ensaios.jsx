@@ -12,7 +12,9 @@ import { useToast } from '@shared/components/ui/use-toast';
 import Combobox from '@shared/components/ui/combobox';
 import PtBRInput from '@shared/components/ui/pt-br-input';
 import { generateEnsaioPDF } from '@industrializacao/lib/pdfReports';
-import { fmtDate, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtNumber, todayDateInputValue } from '@/i18n/formatters';
+import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
+import RevisionExpiryCell from '@industrializacao/components/RevisionExpiryCell';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
 import { getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
 import { parseValidityDays } from '@industrializacao/lib/qualityValidity';
@@ -64,6 +66,7 @@ export default function Ensaios() {
   const [viewing, setViewing] = useState(null);
   const [form, setForm] = useState({ product: '', client: '', revision: 'Rev.01', revision_date: new Date().toISOString().split('T')[0], validity_days: '', analyses: [{ ...emptyAnalysis }] });
   const [saving, setSaving] = useState(false);
+  const [renewTarget, setRenewTarget] = useState(null);
   const { toast } = useToast();
 
   /** One-time backfill: Resp. Cadastro = Marcelo Amaral for existing tests */
@@ -219,6 +222,20 @@ export default function Ensaios() {
     }
   };
 
+  const confirmRenewRevision = async () => {
+    if (!renewTarget?.id) return;
+    const revision_date = todayDateInputValue();
+    await base44.entities.QualityTest.update(renewTarget.id, { revision_date });
+    if (editing?.id === renewTarget.id) {
+      setEditing((prev) => (prev ? { ...prev, revision_date } : prev));
+      setForm((prev) => ({ ...prev, revision_date }));
+    }
+    if (viewing?.id === renewTarget.id) {
+      setViewing((prev) => (prev ? { ...prev, revision_date } : prev));
+    }
+    toast({ title: t('common.revisionExpiry.renewed') });
+  };
+
   const remove = async (item) => {
     if (!confirm(t('quality.ensaios.messages.deleteConfirm'))) return;
     try {
@@ -251,7 +268,7 @@ export default function Ensaios() {
             <table className="w-full chemctrl-table">
               <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th><th className="px-4 py-3 text-left">{t('quality.fields.product')}</th><th className="px-4 py-3 text-left">{t('quality.fields.client')}</th>
-                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.validity')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th>
+                <th className="px-4 py-3 text-left">{t('quality.ensaios.table.revision')}</th><th className="px-4 py-3 text-left whitespace-nowrap">{t('quality.ensaios.table.revisionDate')}</th><th className="px-4 py-3 text-left whitespace-nowrap">{t('common.revisionExpiry.column')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.validity')}</th><th className="px-4 py-3 text-right">{t('quality.ensaios.table.analyses')}</th>
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.createdBy')}</th><th className="px-4 py-3 text-center">{t('common.actions')}</th>
               </tr></thead>
               <tbody>
@@ -261,7 +278,13 @@ export default function Ensaios() {
                     <td className="px-4 py-2.5 font-medium text-sm">{item.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>
                     <td className="px-4 py-2.5 text-sm">{item.revision}</td>
-                    <td className="px-4 py-2.5 text-sm">{item.revision_date ? fmtDate(item.revision_date, undefined, i18n.language) : t('common.notAvailable')}</td>
+                    <td className="px-4 py-2.5 text-sm whitespace-nowrap">{item.revision_date ? fmtDate(item.revision_date, undefined, i18n.language) : t('common.notAvailable')}</td>
+                    <td className="px-4 py-2.5">
+                      <RevisionExpiryCell
+                        revisionDate={item.revision_date}
+                        onRenew={() => setRenewTarget(item)}
+                      />
+                    </td>
                     <td className="px-4 py-2.5 text-right text-sm tabular-nums">{parseValidityDays(item.validity_days) ?? t('common.notAvailable')}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(item.analyses || []).length}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(item)}</td>
@@ -284,6 +307,14 @@ export default function Ensaios() {
           <span>{t('quality.ensaios.footer.displayed')}: {filtered.length}</span>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!renewTarget}
+        onOpenChange={(open) => { if (!open) setRenewTarget(null); }}
+        title={t('common.revisionExpiry.confirmQuality.title')}
+        message={t('common.revisionExpiry.confirmQuality.message')}
+        onConfirm={confirmRenewRevision}
+      />
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

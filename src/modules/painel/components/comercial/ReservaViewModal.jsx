@@ -8,10 +8,15 @@ import {
 } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { brasiliaDateTime } from '@industrializacao/lib/brasilTime';
+import { formatMass, formatVolume } from '@transbordo/lib/format';
 import {
   formatQty,
   listReservasForChave,
 } from '@painel/lib/materialReservas';
+import {
+  ORIGEM_INDUSTRIALIZACAO,
+  isVasilhameReservaChave,
+} from '@painel/lib/vasilhameReservas';
 
 export default function ReservaViewModal({ open, onClose, row, reservas = [] }) {
   const { t } = useTranslation();
@@ -22,6 +27,8 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
   }, [row, reservas]);
 
   if (!row) return null;
+
+  const isVasilhame = isVasilhameReservaChave(row.chave);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -36,40 +43,104 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
               {t('painel.comercial.reservarMaterial.productSummary')}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.cliente')}
-                value={row.clienteNome}
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.cod')}
-                value={row.codigo}
-                mono
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.produto')}
-                value={row.produto}
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.lote')}
-                value={row.lote}
-                mono
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.unidade')}
-                value={row.unidade}
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.saldoAtual')}
-                value={`${formatQty(row.saldoAtual, row.unidade)} ${row.unidade}`}
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.saldoReservado')}
-                value={`${formatQty(row.saldoReservado, row.unidade)} ${row.unidade}`}
-              />
-              <SummaryItem
-                label={t('painel.comercial.reservarMaterial.columns.saldoFinal')}
-                value={`${formatQty(row.saldoFinal, row.unidade)} ${row.unidade}`}
-              />
+              {isVasilhame ? (
+                <>
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.id')}
+                    value={row.displayId}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}
+                    value={
+                      row.origem === ORIGEM_INDUSTRIALIZACAO
+                        ? t('painel.comercial.reservarMaterial.vasilhames.origem.industrializacao')
+                        : t('painel.comercial.reservarMaterial.vasilhames.origem.transbordo')
+                    }
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.placa')}
+                    value={row.placa}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.barril')}
+                    value={row.barril}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.cliente')}
+                    value={row.clienteNome}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.cod')}
+                    value={row.codigo}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.produto')}
+                    value={row.produto}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.lote')}
+                    value={row.lote}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.volume')}
+                    value={`${formatVolume(row.volume, { empty: '—' })} L`}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
+                    value={`${formatMass(row.massa, { empty: '—' })} kg`}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.status')}
+                    value={
+                      row.reservado
+                        ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
+                        : t('painel.comercial.reservarMaterial.vasilhames.status.livre')
+                    }
+                  />
+                </>
+              ) : (
+                <>
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.cliente')}
+                    value={row.clienteNome}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.cod')}
+                    value={row.codigo}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.produto')}
+                    value={row.produto}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.lote')}
+                    value={row.lote}
+                    mono
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.unidade')}
+                    value={row.unidade}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.saldoAtual')}
+                    value={`${formatQty(row.saldoAtual, row.unidade)} ${row.unidade}`}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.saldoReservado')}
+                    value={`${formatQty(row.saldoReservado, row.unidade)} ${row.unidade}`}
+                  />
+                  <SummaryItem
+                    label={t('painel.comercial.reservarMaterial.columns.saldoFinal')}
+                    value={`${formatQty(row.saldoFinal, row.unidade)} ${row.unidade}`}
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -133,7 +204,8 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
                             {r.usuario_nome || '—'}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums font-semibold">
-                            {formatQty(r.quantidade, row.unidade)} {row.unidade}
+                            {formatQty(r.quantidade, r.unidade_medida || row.unidade)}{' '}
+                            {r.unidade_medida || row.unidade}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <span

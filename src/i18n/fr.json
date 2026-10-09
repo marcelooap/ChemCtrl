@@ -170,6 +170,21 @@
     "comboboxNoRawMaterial": "Aucune matière première enregistrée",
     "comboboxNoResult": "Aucun résultat — utilisez le texte saisi",
     "days": "jours",
+    "revisionExpiry": {
+      "column": "Échéance",
+      "days": "{{days}} jours",
+      "expired": "Expiré",
+      "renew": "Enregistrer la vérification",
+      "renewed": "Révision confirmée. Un nouveau délai de 6 mois a commencé.",
+      "confirmRecipe": {
+        "title": "Confirmer la vérification de la recette ?",
+        "message": "À partir de cette confirmation, un nouveau délai de 6 mois commencera."
+      },
+      "confirmQuality": {
+        "title": "Confirmer la vérification de l'enregistrement CQ ?",
+        "message": "À partir de cette confirmation, un nouveau délai de 6 mois commencera."
+      }
+    },
     "totals": "Totaux",
     "duration": {
       "hoursMinutes": "{{hours}}h {{minutes}}min",
@@ -3933,6 +3948,8 @@
       "minTest": "Test Minimum",
       "sling": "Élingue",
       "gps": "GPS",
+      "fillDate": "DATE",
+      "fillDateHint": "Date de conditionnement",
       "departureDate": "Date de Départ",
       "originPackaging": "Emballages d'Origine",
       "destinations": "Destination(s)",

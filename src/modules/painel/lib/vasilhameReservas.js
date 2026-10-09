@@ -280,14 +280,23 @@ export function sumReservadoVasilhamesConteudo(
   }, 0);
 }
 
+function normalizeSolicitante(value) {
+  const name = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!name) return null;
+  return name.slice(0, 120);
+}
+
 /**
  * Reserva comercial unitária do vasilhame (Livre → Reservado).
  * Persistida em t_material_reservas com chave própria, sem alterar o estoque.
  */
-export async function reservarVasilhame({ row, user, observacao = '' }) {
+export async function reservarVasilhame({ row, user, observacao = '', solicitante }) {
   if (!row?.chave || !row?.origemId) {
     throw new Error('Vasilhame inválido.');
   }
+
+  const solicitanteNome = normalizeSolicitante(solicitante);
+  if (!solicitanteNome) throw new Error('Informe o solicitante da reserva.');
 
   const existing = await entities.materialReservas.filter({ chave: row.chave });
   const ativa = (existing || []).find((r) => r.status === 'ativa');
@@ -309,6 +318,7 @@ export async function reservarVasilhame({ row, user, observacao = '' }) {
     status: 'ativa',
     usuario_id: toUserIdText(user?.id),
     usuario_nome: usuarioNome,
+    solicitante: solicitanteNome,
     observacao: observacao || null,
   });
 

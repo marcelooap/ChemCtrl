@@ -170,6 +170,21 @@
     "comboboxNoRawMaterial": "No raw materials registered",
     "comboboxNoResult": "No results — use the typed text",
     "days": "days",
+    "revisionExpiry": {
+      "column": "Due",
+      "days": "{{days}} days",
+      "expired": "Expired",
+      "renew": "Record verification",
+      "renewed": "Revision confirmed. A new 6-month period has started.",
+      "confirmRecipe": {
+        "title": "Confirm recipe verification?",
+        "message": "From this confirmation, a new 6-month period will start."
+      },
+      "confirmQuality": {
+        "title": "Confirm QC registration verification?",
+        "message": "From this confirmation, a new 6-month period will start."
+      }
+    },
     "totals": "Totals",
     "duration": {
       "hoursMinutes": "{{hours}}h {{minutes}}min",
@@ -4235,6 +4250,8 @@
       "minTest": "Minimum Test",
       "sling": "Sling",
       "gps": "GPS",
+      "fillDate": "DATE",
+      "fillDateHint": "Filling date",
       "departureDate": "Departure Date",
       "originPackaging": "Origin Packaging",
       "destinations": "Destination(s)",

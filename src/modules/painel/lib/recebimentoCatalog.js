@@ -174,6 +174,24 @@ export function mergeClientesByNome(clientesTb, extraClientes) {
   );
 }
 
+/**
+ * Lista da solicitação de saída: cadastro do Transbordo + nomes da
+ * Industrialização (e de estoque/produto). Um nome, um item.
+ * O id do Transbordo prevalece; nome só da Industrialização fica com id temporário.
+ */
+export function buildSaidaClienteOptions(clientesTransbordo, nomesExtras) {
+  const extras = [];
+  const seen = new Set();
+  for (const raw of nomesExtras || []) {
+    const nome = String(raw || "").trim();
+    const key = nome.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    extras.push({ id: `ind-cli:${key}`, nome });
+  }
+  return mergeClientesByNome(clientesTransbordo, extras);
+}
+
 function sortProdutosByNome(produtos) {
   return [...(produtos || [])].sort((a, b) => {
     const byName = String(a.produto || a.nome || "").localeCompare(

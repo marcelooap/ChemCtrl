@@ -32,6 +32,14 @@ import {
   resolveItemOrigem,
 } from "@transbordo/lib/saidaOrigem";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
+import {
+  buildSaidaClienteOptions,
+  uniqueClientesByNome,
+} from "@painel/lib/recebimentoCatalog";
+import {
+  listNomesClientesIndustrializacao,
+  persistClienteSelecionado,
+} from "@painel/lib/saidaClientes";
 
 /** Data local de hoje em yyyy-mm-dd (evita deslocamento UTC). */
 const todayStr = () => {
@@ -108,9 +116,9 @@ export default function SaidaForm({
 
         setEntradas(ents);
         setVasilhames(vascs);
-        setClientes(cliens);
         setSaidas(saics);
         setReservas(reservasList || []);
+        setClientes(uniqueClientesByNome(cliens));
 
         if (loadIndData) {
           try {
@@ -129,6 +137,29 @@ export default function SaidaForm({
             setError(
               "Dados da Industrialização não carregaram. Recarregue a página ou verifique a conexão."
             );
+          }
+
+          try {
+            const [nomesInd, produtos, isotanques] = await Promise.all([
+              listNomesClientesIndustrializacao(),
+              entities.produtos
+                .list("produto", { select: "cliente_nome" })
+                .catch(() => []),
+              entities.isotanques
+                .list("codigo_itku", { select: "cliente_nome" })
+                .catch(() => []),
+            ]);
+            setClientes(
+              buildSaidaClienteOptions(cliens, [
+                ...(nomesInd || []),
+                ...(produtos || []).map((p) => p.cliente_nome),
+                ...(isotanques || []).map((iso) => iso.cliente_nome),
+                ...(ents || []).map((e) => e.cliente_nome),
+                ...(vascs || []).map((v) => v.cliente_nome),
+              ])
+            );
+          } catch (err) {
+            console.error("[SaidaForm] Falha ao unir clientes:", err);
           }
         }
 
@@ -360,7 +391,11 @@ export default function SaidaForm({
           return;
         }
         if (!item.vasilhame_id) {
-          setError(`Produto ${i + 1}: selecione um vasilhame.`);
+          setError(
+            showOrigemSelector
+              ? `Produto ${i + 1}: selecione a embalagem.`
+              : `Produto ${i + 1}: selecione um vasilhame.`
+          );
           return;
         }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
@@ -376,7 +411,11 @@ export default function SaidaForm({
         }
       } else if (item.tipo === TIPO_IND_VASILHAME) {
         if (!item.container_id) {
-          setError(`Produto ${i + 1}: selecione um vasilhame da Industrialização.`);
+          setError(
+            showOrigemSelector
+              ? `Produto ${i + 1}: selecione a embalagem.`
+              : `Produto ${i + 1}: selecione um vasilhame da Industrialização.`
+          );
           return;
         }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
@@ -419,6 +458,18 @@ export default function SaidaForm({
     setSaving(true);
 
     try {
+      const clientePersistido = await persistClienteSelecionado(
+        formData.cliente_id,
+        formData.cliente_nome
+      );
+      if (!clientePersistido.id) {
+        setError("Selecione um cliente.");
+        setSaving(false);
+        return;
+      }
+      const clienteIdSalvo = clientePersistido.id;
+      const clienteNomeSalvo = clientePersistido.nome || formData.cliente_nome;
+
       const entradaSaldos = {};
       entradas.forEach((e) => {
         entradaSaldos[e.id] = e.saldo_atual || 0;
@@ -492,8 +543,8 @@ export default function SaidaForm({
             reserva_id: item.reserva_id || null,
             reserva_solicitante: item.reserva_id ? item.reserva_solicitante || null : null,
             reserva_chave: buildReservaChave({
-              clienteId: formData.cliente_id,
-              clienteNome: formData.cliente_nome,
+              clienteId: clienteIdSalvo,
+              clienteNome: clienteNomeSalvo,
               produtoCodigo: item.produto_codigo,
               lote: item.lote,
               unidade,
@@ -581,8 +632,8 @@ export default function SaidaForm({
       const codigo = editingSaida?.codigo || (await generateCodigo());
 
       const data = {
-        cliente_id: formData.cliente_id,
-        cliente_nome: formData.cliente_nome,
+        cliente_id: clienteIdSalvo,
+        cliente_nome: clienteNomeSalvo,
         data_solicitacao: formData.data_solicitacao,
         data_programada: agendamentoPendente?.dateIso || formData.data_programada,
         observacoes: formData.observacoes,
@@ -599,8 +650,8 @@ export default function SaidaForm({
         reservas,
         saidas,
         entradas,
-        clienteId: formData.cliente_id,
-        clienteNome: formData.cliente_nome,
+        clienteId: clienteIdSalvo,
+        clienteNome: clienteNomeSalvo,
         excludeSaidaId: editingSaida?.id || null,
         buildChave: buildReservaChave,
       });
@@ -673,8 +724,8 @@ export default function SaidaForm({
           saida: {
             id: editingSaida.id,
             codigo: editingSaida.codigo,
-            cliente_id: formData.cliente_id,
-            cliente_nome: formData.cliente_nome,
+            cliente_id: clienteIdSalvo,
+            cliente_nome: clienteNomeSalvo,
           },
           dateIso: agendamentoPendente.dateIso,
           horario: agendamentoPendente.horario,

@@ -552,6 +552,7 @@ export default function Vasilhames() {
               <thead className="sticky top-0 z-10"><tr className="border-b border-border bg-muted/50/50">
                 <th className="px-3 py-3 text-center w-10"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label={t('containers.vasilhames.selectAll')} /></th>
                 <th className="px-4 py-3 text-left">{t('quality.ensaios.table.id')}</th>
+                <th className="px-4 py-3 text-left whitespace-nowrap" title={t('containers.vasilhames.fillDateHint')}>{t('containers.vasilhames.fillDate')}</th>
                 <th className="px-4 py-3 text-left">{t('production.opNumber')}</th>
                 <th className="px-4 py-3 text-left">{t('containers.fields.plateNumber')}</th>
                 <th className="px-4 py-3 text-left">{t('containers.fields.barrelNumber')}</th>
@@ -575,6 +576,7 @@ export default function Vasilhames() {
                   >
                     <td className="px-3 py-2.5 text-center"><Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleSelect(c.id)} aria-label={t('containers.vasilhames.selectItem', { label: c.container_number || c.id })} /></td>
                     <td className="px-4 py-2.5 text-sm font-bold text-muted-foreground">{fmtRegId(c.registration_id)}</td>
+                    <td className="px-4 py-2.5 text-sm whitespace-nowrap">{c.created_date ? fmtDate(c.created_date, undefined, i18n.language) : na}</td>
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>
                       {c.op_number ? (
                         <span className="inline-flex items-center gap-1">

@@ -170,6 +170,21 @@
     "comboboxNoRawMaterial": "Nenhuma matéria prima cadastrada",
     "comboboxNoResult": "Nenhum resultado — use o texto digitado",
     "days": "dias",
+    "revisionExpiry": {
+      "column": "Vencimento",
+      "days": "{{days}} dias",
+      "expired": "Vencido",
+      "renew": "Registrar verificação",
+      "renewed": "Revisão confirmada. Novo prazo de 6 meses iniciado.",
+      "confirmRecipe": {
+        "title": "Confirmar verificação da receita?",
+        "message": "A partir desta confirmação, um novo prazo de 6 meses será iniciado."
+      },
+      "confirmQuality": {
+        "title": "Confirmar verificação do cadastro CQ?",
+        "message": "A partir desta confirmação, um novo prazo de 6 meses será iniciado."
+      }
+    },
     "totals": "Totais",
     "duration": {
       "hoursMinutes": "{{hours}}h {{minutes}}min",
@@ -4140,6 +4155,8 @@
       "minTest": "Menor Teste",
       "sling": "Eslinga",
       "gps": "GPS",
+      "fillDate": "DATA",
+      "fillDateHint": "Data de envase",
       "departureDate": "Data Saída",
       "originPackaging": "Embalagens de Origem",
       "destinations": "Destino(s)",

@@ -26,6 +26,7 @@ import {
   retornoMpLabel,
   clientsMatch,
   filterContainersIndForSaida,
+  sameClienteRecord,
 } from "@transbordo/lib/saidaOrigem";
 import { buildReservaChave } from "@painel/lib/materialReservas";
 import {
@@ -76,6 +77,30 @@ function vasilhameLabel(v) {
   const hasBarril = Boolean(barril) && barril !== "—" && barril !== "-";
   if (hasBarril) return `${tanque} - ${barril}`;
   return tanque;
+}
+
+function produtoNomeKey(nome) {
+  return String(nome || "").trim().toUpperCase();
+}
+
+/** N placa - N barril - volume. "reservado" só entra quando houver reserva. */
+function embalagemSaidaLabel(source, raw, reservado) {
+  const placa = String(
+    source === ORIGEM_TRANSBORDO
+      ? raw?.placa
+      : raw?.container_number || raw?.placa || ""
+  ).trim();
+  const barril = String(
+    source === ORIGEM_TRANSBORDO
+      ? raw?.barril
+      : raw?.barril_number || raw?.barril || ""
+  ).trim();
+  const barrilOk = Boolean(barril) && barril !== "—" && barril !== "-";
+  const volume = `${formatVolume(raw?.volume)} L`;
+  const base = barrilOk
+    ? `${placa || "—"} - ${barril} - ${volume}`
+    : `${placa || "—"} - ${volume}`;
+  return reservado ? `${base} - reservado` : base;
 }
 
 function ReservadoBadge() {
@@ -175,7 +200,9 @@ export default function SaidaItemRow({
 
   // ── Embalado: produtos do cliente com saldo disponível (após outras linhas) ──
   const embaladoEntradas = hasCliente
-    ? entradas.filter((e) => e.embalado && e.cliente_id === clienteId)
+    ? entradas.filter(
+        (e) => e.embalado && sameClienteRecord(e, clienteId, clienteNome)
+      )
     : [];
 
   const uniqueProdutos = [];
@@ -233,7 +260,7 @@ export default function SaidaItemRow({
   const vasilhamesDisponiveis = hasCliente
     ? vasilhames.filter(
         (v) =>
-          v.cliente_id === clienteId &&
+          sameClienteRecord(v, clienteId, clienteNome) &&
           (v.status || "No Pátio") === "No Pátio" &&
           (v.volume || 0) > 0 &&
           (!vasilhamesUsados.has(v.id) || v.id === item.vasilhame_id) &&
@@ -307,28 +334,36 @@ export default function SaidaItemRow({
   }
 
   const vasilhamesUnificados = [
-    ...vasilhamesDisponiveis.map((v) => ({
-      source: ORIGEM_TRANSBORDO,
-      id: `tb:${v.id}`,
-      raw: v,
-      reservado: isVasilhameReservado(
+    ...vasilhamesDisponiveis.map((v) => {
+      const reservado = isVasilhameReservado(
         reservas,
         buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id)
-      ),
-      label: `${vasilhameLabel(v)}${v.produto_nome ? ` - ${v.produto_nome}` : ""} · Transbordo`,
-    })),
+      );
+      return {
+        source: ORIGEM_TRANSBORDO,
+        id: `tb:${v.id}`,
+        raw: v,
+        reservado,
+        produtoNome: v.produto_nome || "",
+        embalagemLabel: embalagemSaidaLabel(ORIGEM_TRANSBORDO, v, reservado),
+      };
+    }),
     ...containersDisponiveis
       .filter((c) => !containersEmOutraSaida.has(c.id) || c.id === item.container_id)
-      .map((c) => ({
-        source: ORIGEM_INDUSTRIALIZACAO,
-        id: `ind:${c.id}`,
-        raw: c,
-        reservado: isVasilhameReservado(
+      .map((c) => {
+        const reservado = isVasilhameReservado(
           reservas,
           buildVasilhameReservaChave(ORIGEM_INDUSTRIALIZACAO, c.id)
-        ),
-        label: `${containerLabel(c)} · Industrialização`,
-      })),
+        );
+        return {
+          source: ORIGEM_INDUSTRIALIZACAO,
+          id: `ind:${c.id}`,
+          raw: c,
+          reservado,
+          produtoNome: c.product || "",
+          embalagemLabel: embalagemSaidaLabel(ORIGEM_INDUSTRIALIZACAO, c, reservado),
+        };
+      }),
   ];
   const vasilhameUnificadoSelecionado =
     vasilhamesUnificados.find((o) =>
@@ -336,6 +371,38 @@ export default function SaidaItemRow({
         ? item.tipo === TIPO_CONVENCIONAL && o.raw.id === item.vasilhame_id
         : item.tipo === TIPO_IND_VASILHAME && o.raw.id === item.container_id
     ) || null;
+
+  const produtosVasilhameUnificados = [];
+  const produtosUnificadosVistos = new Set();
+  for (const option of vasilhamesUnificados) {
+    const nome = String(option.produtoNome || "").trim();
+    const key = produtoNomeKey(nome);
+    if (!key || produtosUnificadosVistos.has(key)) continue;
+    produtosUnificadosVistos.add(key);
+    const raw = option.raw;
+    produtosVasilhameUnificados.push({
+      id: key,
+      nome,
+      produto_id: option.source === ORIGEM_TRANSBORDO ? raw.produto_id || "" : "",
+      codigo: option.source === ORIGEM_TRANSBORDO ? raw.produto_codigo || "" : "",
+    });
+  }
+  produtosVasilhameUnificados.sort((a, b) =>
+    a.nome.localeCompare(b.nome, "pt-BR")
+  );
+
+  const produtoUnificadoKey = produtoNomeKey(item.produto_nome);
+  const produtoUnificadoSelecionado = Boolean(produtoUnificadoKey);
+  const embalagensDoProduto = produtoUnificadoSelecionado
+    ? vasilhamesUnificados.filter((option) => {
+        const selecionada =
+          option.source === ORIGEM_TRANSBORDO
+            ? item.tipo === TIPO_CONVENCIONAL && option.raw.id === item.vasilhame_id
+            : item.tipo === TIPO_IND_VASILHAME && option.raw.id === item.container_id;
+        if (selecionada) return true;
+        return produtoNomeKey(option.produtoNome) === produtoUnificadoKey;
+      })
+    : [];
 
   // ── Industrialização: retorno MP (movimentações fiscais + estoque) ──
   const movementsUsados = new Set(
@@ -733,6 +800,19 @@ export default function SaidaItemRow({
     });
   };
 
+  const handleProdutoVasilhameUnificadoChange = (_label, option) => {
+    if (!option) return;
+    if (produtoNomeKey(item.produto_nome) === produtoNomeKey(option.nome)) return;
+    onChange({
+      ...emptySaidaItem(ORIGEM_TRANSBORDO),
+      tipo: TIPO_CONVENCIONAL,
+      origem: ORIGEM_TRANSBORDO,
+      produto_id: option.produto_id || "",
+      produto_nome: option.nome || "",
+      produto_codigo: option.codigo || "",
+    });
+  };
+
   const handleVasilhameUnificadoChange = (_label, option) => {
     if (!option) return;
     if (option.source === ORIGEM_TRANSBORDO) {
@@ -1095,31 +1175,38 @@ export default function SaidaItemRow({
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-3 sm:col-span-2">
                 <Label>Produto *</Label>
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <SearchableSelect
-                      value={vasilhameUnificadoSelecionado?.label || ""}
-                      onChange={handleVasilhameUnificadoChange}
-                      options={vasilhamesUnificados}
-                      getOptionLabel={(o) => o.label || ""}
-                      getOptionValue={(o) => o.id}
-                      renderOption={(o, label) => (
-                        <span className="inline-flex items-center gap-2">
-                          <span>{label}</span>
-                          {o.reservado ? <ReservadoBadge /> : null}
-                        </span>
-                      )}
-                      placeholder={
-                        hasCliente
-                          ? "Selecione o vasilhame..."
-                          : "Selecione o cliente primeiro..."
-                      }
-                      disabled={!hasCliente}
-                    />
-                  </div>
-                  {vasilhameUnificadoSelecionado?.reservado ? <ReservadoBadge /> : null}
-                </div>
+                <SearchableSelect
+                  value={item.produto_nome || ""}
+                  onChange={handleProdutoVasilhameUnificadoChange}
+                  options={produtosVasilhameUnificados}
+                  getOptionLabel={(o) => o.nome || ""}
+                  getOptionValue={(o) => o.id}
+                  placeholder={
+                    hasCliente
+                      ? "Selecione o produto..."
+                      : "Selecione o cliente primeiro..."
+                  }
+                  disabled={!hasCliente}
+                />
               </div>
+              {produtoUnificadoSelecionado && (
+                <div className="space-y-1.5 col-span-3 sm:col-span-2">
+                  <Label>Embalagem *</Label>
+                  <SearchableSelect
+                    value={vasilhameUnificadoSelecionado?.embalagemLabel || ""}
+                    onChange={handleVasilhameUnificadoChange}
+                    options={embalagensDoProduto}
+                    getOptionLabel={(o) => o.embalagemLabel || ""}
+                    getOptionValue={(o) => o.id}
+                    placeholder={
+                      embalagensDoProduto.length
+                        ? "Selecione a embalagem..."
+                        : "Nenhuma embalagem para este produto"
+                    }
+                    disabled={embalagensDoProduto.length === 0}
+                  />
+                </div>
+              )}
               {(item.vasilhame_id || item.container_id) && (
                 <>
                   <div className="space-y-1.5">
@@ -1144,9 +1231,9 @@ export default function SaidaItemRow({
                   </div>
                 </>
               )}
-              {hasCliente && vasilhamesUnificados.length === 0 && (
+              {hasCliente && produtosVasilhameUnificados.length === 0 && (
                 <p className="col-span-3 text-xs text-muted-foreground">
-                  Nenhum vasilhame disponível no pátio para este cliente.
+                  Nenhum produto com vasilhame em estoque para este cliente.
                 </p>
               )}
             </div>

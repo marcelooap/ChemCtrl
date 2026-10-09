@@ -16,7 +16,8 @@ import Combobox from '@shared/components/ui/combobox';
 import SimuladorReceita from '@industrializacao/components/receitas/SimuladorReceita';
 import RecipeFdsSection, { RecipeFdsViewSection } from '@industrializacao/components/receitas/RecipeFdsSection';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
-import { fmtNumber, fmtCurrency, fmtVolume } from '@/i18n/formatters';
+import RevisionExpiryCell from '@industrializacao/components/RevisionExpiryCell';
+import { fmtNumber, fmtCurrency, fmtVolume, fmtDate, todayDateInputValue } from '@/i18n/formatters';
 import { canManageRecipeFds, canRemoveRecipeFds, canViewRecipeFds, hasPermission } from '@industrializacao/lib/permissions';
 import { calcPriceWithoutTax } from '@industrializacao/lib/recipePricing';
 import { uploadRecipeDocument, deleteRecipeDocument, copyRecipeDocument, getRecipeDocStorageUrl, validatePdfFile, DOC_TYPES } from '@industrializacao/api/storage';
@@ -54,7 +55,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.priceWithoutTax')}</p><p className="font-bold">{hideMpNames ? '*****' : fmtCurrency(calcPriceWithoutTax(viewing.price), 'BRL', undefined, priceFmt)}</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.productDensity')}</p><p className="font-medium">{viewing.density} g/mL</p></div>
         <div><p className="text-xs text-muted-foreground">{t('recipes.view.revision')}</p><p className="font-medium">{viewing.revision}</p></div>
-        <div><p className="text-xs text-muted-foreground">{t('recipes.view.revisionDate')}</p><p className="font-medium">{viewing.revision_date}</p></div>
+        <div><p className="text-xs text-muted-foreground">{t('recipes.view.revisionDate')}</p><p className="font-medium">{viewing.revision_date ? fmtDate(viewing.revision_date) : t('common.notAvailable')}</p></div>
         <div>
           <p className="text-xs text-muted-foreground">{t('recipes.view.needsN2')}</p>
           <p className="font-medium inline-flex items-center gap-1.5">
@@ -310,6 +311,7 @@ export default function Receitas() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteRevisionTarget, setDeleteRevisionTarget] = useState(null);
+  const [renewTarget, setRenewTarget] = useState(null);
   const [isNewRevision, setIsNewRevision] = useState(false);
   const [pendingFdsFile, setPendingFdsFile] = useState(null);
   const { toast } = useToast();
@@ -563,6 +565,17 @@ export default function Receitas() {
     setDeleteRevisionTarget(editing);
   };
 
+  const confirmRenewRevision = async () => {
+    if (!renewTarget?.id) return;
+    const revision_date = todayDateInputValue();
+    await base44.entities.Recipe.update(renewTarget.id, { revision_date });
+    setEditing((prev) => (
+      prev?.id === renewTarget.id && !isNewRevision ? { ...prev, revision_date } : prev
+    ));
+    setViewing((prev) => (prev?.id === renewTarget.id ? { ...prev, revision_date } : prev));
+    toast({ title: t('common.revisionExpiry.renewed') });
+  };
+
   const confirmDeleteRevision = async () => {
     if (!deleteRevisionTarget) return;
     const inUse = productions.some((p) => p.recipe_id === deleteRevisionTarget.id);
@@ -646,7 +659,8 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithTax')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithoutTax')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
-                  <th className="px-4 py-3 text-left">{t('recipes.table.revisionDate')}</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">{t('recipes.table.revisionDate')}</th>
+                  <th className="px-4 py-3 text-left whitespace-nowrap">{t('common.revisionExpiry.column')}</th>
                   <th className="px-4 py-3 text-right">{t('recipes.table.mpCount')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.createdBy')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.actions')}</th>
@@ -687,7 +701,13 @@ export default function Receitas() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm">{r.revision}</td>
-                    <td className="px-4 py-2.5 text-sm">{r.revision_date || t('common.notAvailable')}</td>
+                    <td className="px-4 py-2.5 text-sm whitespace-nowrap">{r.revision_date ? fmtDate(r.revision_date) : t('common.notAvailable')}</td>
+                    <td className="px-4 py-2.5">
+                      <RevisionExpiryCell
+                        revisionDate={r.revision_date}
+                        onRenew={canEdit ? () => setRenewTarget(r) : undefined}
+                      />
+                    </td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(r)}</td>
                     <td className="px-4 py-2.5 text-center">
@@ -746,7 +766,7 @@ export default function Receitas() {
                     <SelectContent>
                       {editRevisions.map((rev) => (
                         <SelectItem key={rev.id} value={rev.id}>
-                          {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date || t('common.notAvailable')}
+                          {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date ? fmtDate(rev.revision_date) : t('common.notAvailable')}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1014,7 +1034,7 @@ export default function Receitas() {
                 <SelectContent>
                   {viewRevisions.map((rev) => (
                     <SelectItem key={rev.id} value={rev.id}>
-                      {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date || t('common.notAvailable')}
+                      {formatRevisionLabel(getRevisionNumber(rev))} · {rev.revision_date ? fmtDate(rev.revision_date) : t('common.notAvailable')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1034,6 +1054,14 @@ export default function Receitas() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!renewTarget}
+        onOpenChange={(open) => { if (!open) setRenewTarget(null); }}
+        title={t('common.revisionExpiry.confirmRecipe.title')}
+        message={t('common.revisionExpiry.confirmRecipe.message')}
+        onConfirm={confirmRenewRevision}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

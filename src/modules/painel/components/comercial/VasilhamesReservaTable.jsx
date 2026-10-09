@@ -1,13 +1,22 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookmarkMinus, BookmarkPlus, Eye } from 'lucide-react';
+import { AlertCircle, BookmarkMinus, BookmarkPlus, Eye } from 'lucide-react';
 import ConfirmDialog from '@shared/components/ConfirmDialog';
+import { Button } from '@shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@shared/components/ui/dialog';
+import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Can } from '@industrializacao/lib/rbac/Can';
-import ContainerViewDialog from '@industrializacao/components/vasilhames/ContainerViewDialog';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
-import VasilhameViewDialog from '@transbordo/components/vasilhame/VasilhameViewDialog';
 import { useToast } from '@shared/components/ui/use-toast';
+import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import {
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
@@ -17,8 +26,7 @@ import {
 
 export default function VasilhamesReservaTable({
   rows = [],
-  productions = [],
-  recipes = [],
+  reservas = [],
   user,
   onReload,
   readOnly = false,
@@ -27,26 +35,62 @@ export default function VasilhamesReservaTable({
   const { toast } = useToast();
   const [viewRow, setViewRow] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
+  const [solicitante, setSolicitante] = useState('');
+  const [reserveError, setReserveError] = useState('');
+  const [reserving, setReserving] = useState(false);
 
   const isLiberar = pendingAction?.type === 'liberar';
+  const reserveRow = pendingAction?.type === 'reservar' ? pendingAction.row : null;
 
-  const handleConfirmAction = async () => {
+  const openReserve = (row) => {
+    setSolicitante('');
+    setReserveError('');
+    setPendingAction({ type: 'reservar', row });
+  };
+
+  const closeReserve = () => {
+    if (reserving) return;
+    setPendingAction(null);
+    setSolicitante('');
+    setReserveError('');
+  };
+
+  const handleConfirmRelease = async () => {
     const row = pendingAction?.row;
     if (!row) return;
+    await liberarVasilhame({ row, user });
+    toast({
+      title: t('painel.comercial.reservarMaterial.vasilhames.releaseSuccess'),
+    });
+    await onReload?.({ silent: true });
+  };
 
-    if (isLiberar) {
-      await liberarVasilhame({ row, user });
-      toast({
-        title: t('painel.comercial.reservarMaterial.vasilhames.releaseSuccess'),
-      });
-    } else {
-      await reservarVasilhame({ row, user });
+  const handleConfirmReserve = async (event) => {
+    event.preventDefault();
+    const row = reserveRow;
+    if (!row || reserving) return;
+
+    const nome = solicitante.replace(/\s+/g, ' ').trim();
+    if (!nome) {
+      setReserveError(t('painel.comercial.reservarMaterial.errors.requesterRequired'));
+      return;
+    }
+
+    setReserving(true);
+    setReserveError('');
+    try {
+      await reservarVasilhame({ row, user, solicitante: nome });
       toast({
         title: t('painel.comercial.reservarMaterial.vasilhames.reserveSuccess'),
       });
+      setPendingAction(null);
+      setSolicitante('');
+      await onReload?.({ silent: true });
+    } catch (err) {
+      setReserveError(err?.message || t('painel.comercial.reservarMaterial.errors.saveFailed'));
+    } finally {
+      setReserving(false);
     }
-
-    await onReload?.({ silent: true });
   };
 
   return (
@@ -164,7 +208,7 @@ export default function VasilhamesReservaTable({
                             ) : (
                               <RowActionButton
                                 title={t('painel.comercial.reservarMaterial.vasilhames.actions.reservar')}
-                                onClick={() => setPendingAction({ type: 'reservar', row })}
+                                onClick={() => openReserve(row)}
                               >
                                 <BookmarkPlus />
                               </RowActionButton>
@@ -181,50 +225,95 @@ export default function VasilhamesReservaTable({
         )}
       </div>
 
-      <VasilhameViewDialog
-        open={viewRow?.origem === ORIGEM_TRANSBORDO}
-        vasilhame={viewRow?.origem === ORIGEM_TRANSBORDO ? viewRow.source : null}
+      <ReservaViewModal
+        open={!!viewRow}
+        row={viewRow}
+        reservas={reservas}
         onClose={() => setViewRow(null)}
-      />
-
-      <ContainerViewDialog
-        open={viewRow?.origem === ORIGEM_INDUSTRIALIZACAO}
-        container={viewRow?.origem === ORIGEM_INDUSTRIALIZACAO ? viewRow.source : null}
-        productions={productions}
-        recipes={recipes}
-        onOpenChange={(open) => {
-          if (!open) setViewRow(null);
-        }}
       />
 
       {!readOnly && (
       <ConfirmDialog
-        open={!!pendingAction}
+        open={isLiberar}
         onOpenChange={(open) => {
           if (!open) setPendingAction(null);
         }}
-        title={
-          isLiberar
-            ? t('painel.comercial.reservarMaterial.vasilhames.releaseTitle')
-            : t('painel.comercial.reservarMaterial.vasilhames.confirmTitle')
-        }
-        message={t(
-          isLiberar
-            ? 'painel.comercial.reservarMaterial.vasilhames.releaseMessage'
-            : 'painel.comercial.reservarMaterial.vasilhames.confirmMessage',
-          {
-            id: pendingAction?.row?.displayId || '—',
-            produto: pendingAction?.row?.produto || '—',
-            cliente: pendingAction?.row?.clienteNome || '—',
-          }
-        )}
-        confirmLabel={
-          isLiberar
-            ? t('painel.comercial.reservarMaterial.vasilhames.releaseAction')
-            : t('painel.comercial.reservarMaterial.vasilhames.confirmAction')
-        }
-        onConfirm={handleConfirmAction}
+        title={t('painel.comercial.reservarMaterial.vasilhames.releaseTitle')}
+        message={t('painel.comercial.reservarMaterial.vasilhames.releaseMessage', {
+          id: pendingAction?.row?.displayId || '—',
+          produto: pendingAction?.row?.produto || '—',
+          cliente: pendingAction?.row?.clienteNome || '—',
+        })}
+        confirmLabel={t('painel.comercial.reservarMaterial.vasilhames.releaseAction')}
+        onConfirm={handleConfirmRelease}
       />
+      )}
+
+      {!readOnly && (
+        <Dialog
+          open={!!reserveRow}
+          onOpenChange={(open) => {
+            if (!open) closeReserve();
+          }}
+        >
+          <DialogContent
+            className="max-w-md"
+            onInteractOutside={(event) => reserving && event.preventDefault()}
+            onEscapeKeyDown={(event) => reserving && event.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                {t('painel.comercial.reservarMaterial.vasilhames.confirmTitle')}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleConfirmReserve} className="space-y-4">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('painel.comercial.reservarMaterial.vasilhames.confirmMessage', {
+                  id: reserveRow?.displayId || '—',
+                  produto: reserveRow?.produto || '—',
+                  cliente: reserveRow?.clienteNome || '—',
+                })}
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="vasilhame-reserva-solicitante">
+                  {t('painel.comercial.reservarMaterial.requester')}
+                  <span className="text-destructive"> *</span>
+                </Label>
+                <Input
+                  id="vasilhame-reserva-solicitante"
+                  value={solicitante}
+                  onChange={(event) => {
+                    setSolicitante(event.target.value);
+                    if (reserveError) setReserveError('');
+                  }}
+                  maxLength={120}
+                  autoComplete="off"
+                  autoFocus
+                  disabled={reserving}
+                  placeholder={t('painel.comercial.reservarMaterial.requesterPlaceholder')}
+                  aria-required
+                  aria-invalid={reserveError ? true : undefined}
+                />
+              </div>
+              {reserveError ? (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{reserveError}</span>
+                </div>
+              ) : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeReserve} disabled={reserving}>
+                  {t('buttons.cancel')}
+                </Button>
+                <Button type="submit" disabled={reserving}>
+                  {reserving
+                    ? t('painel.comercial.reservarMaterial.saving')
+                    : t('painel.comercial.reservarMaterial.vasilhames.confirmAction')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );

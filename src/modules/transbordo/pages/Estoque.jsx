@@ -49,6 +49,33 @@ const TIPO_TAB_TRIGGER_CLASS =
   "gap-2 px-5 py-2.5 text-sm font-semibold bg-white text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+const IND_MP_GRUPO_PREFIX = "INDMP:";
+
+function entradaByIdMap(entradas) {
+  const map = new Map();
+  for (const entrada of entradas || []) {
+    if (entrada?.id != null) map.set(String(entrada.id), entrada);
+  }
+  return map;
+}
+
+/** Espelho de ind_estoque_mp em t_estoque. Não pertence à tela de estoque do Transbordo. */
+function isMateriaPrimaIndustrializacao(item, entrada) {
+  if (item?.origem === "industrializacao" || entrada?.origem === "industrializacao") {
+    return true;
+  }
+  if (
+    String(item?.grupo_entrada || "").startsWith(IND_MP_GRUPO_PREFIX) ||
+    String(entrada?.grupo_entrada || "").startsWith(IND_MP_GRUPO_PREFIX)
+  ) {
+    return true;
+  }
+  const lotes = [
+    ...(Array.isArray(item?.lotes) ? item.lotes : []),
+    ...(Array.isArray(entrada?.lotes) ? entrada.lotes : []),
+  ];
+  return lotes.some((lote) => lote?.ind_mp_id);
+}
 
 function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
   const valor = Number(valorEntrada) || 0;
@@ -150,9 +177,18 @@ export default function Estoque() {
       ]);
 
       // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
-      // Bombonas/tambores/IBC de OP ficam só em Vasilhames
+      // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
+      // Matéria-prima da Industrialização fica só no módulo Industrialização.
+      const entradasPorId = entradaByIdMap(ents);
       const estoqueWithSaldo = ests
         .filter((e) => !isEstoqueEmbalagemUnitaria(e))
+        .filter(
+          (e) =>
+            !isMateriaPrimaIndustrializacao(
+              e,
+              entradasPorId.get(String(e?.entrada_id))
+            )
+        )
         .map((e) => {
         const hydrated = hydrateEstoqueFiscal(e);
         const quantidade = getEstoqueQuantidade(hydrated);

@@ -170,6 +170,21 @@
     "comboboxNoRawMaterial": "Ninguna materia prima registrada",
     "comboboxNoResult": "Sin resultados — use el texto escrito",
     "days": "días",
+    "revisionExpiry": {
+      "column": "Vencimiento",
+      "days": "{{days}} días",
+      "expired": "Vencido",
+      "renew": "Registrar verificación",
+      "renewed": "Revisión confirmada. Se inició un nuevo plazo de 6 meses.",
+      "confirmRecipe": {
+        "title": "¿Confirmar verificación de la receta?",
+        "message": "A partir de esta confirmación, se iniciará un nuevo plazo de 6 meses."
+      },
+      "confirmQuality": {
+        "title": "¿Confirmar verificación del registro CQ?",
+        "message": "A partir de esta confirmación, se iniciará un nuevo plazo de 6 meses."
+      }
+    },
     "totals": "Totales",
     "duration": {
       "hoursMinutes": "{{hours}}h {{minutes}}min",
@@ -3939,6 +3954,8 @@
       "minTest": "Prueba Mínima",
       "sling": "Eslinga",
       "gps": "GPS",
+      "fillDate": "FECHA",
+      "fillDateHint": "Fecha de envasado",
       "departureDate": "Fecha Salida",
       "originPackaging": "Embalajes de Origen",
       "destinations": "Destino(s)",

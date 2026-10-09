@@ -52,8 +52,6 @@ export default function Estoque() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [vasilhameRows, setVasilhameRows] = useState([]);
-  const [indProductions, setIndProductions] = useState([]);
-  const [indRecipes, setIndRecipes] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
@@ -121,8 +119,6 @@ export default function Estoque() {
           transfers: indPack.transfers,
         })
       );
-      setIndProductions(indPack.productions);
-      setIndRecipes(indPack.recipes);
       setReservas(reservasList || []);
       setClientes(cliens || []);
       setTransbordos(trans || []);
@@ -355,8 +351,7 @@ export default function Estoque() {
         >
           <VasilhamesReservaTable
             rows={filteredVasilhames}
-            productions={indProductions}
-            recipes={indRecipes}
+            reservas={reservas}
             readOnly
           />
         </TabsContent>
