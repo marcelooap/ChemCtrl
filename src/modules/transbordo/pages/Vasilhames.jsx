@@ -21,7 +21,9 @@ import {
   normalizeVasilhameLote,
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
+  collapsedPlacaHealPatch,
 } from "@transbordo/lib/vasilhameComposicao";
+import { upsertFiltracaoForVasilhame } from "@transbordo/lib/filtracao";
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromVasilhame,
@@ -258,7 +260,35 @@ export default function Vasilhames() {
         new Map((ests || []).filter((e) => e?.id).map((e) => [e.id, e]))
       );
 
-      const list = (vas || []).map((v) => normalizeVasilhameLote(v));
+      const produtoFiltrado = new Set(
+        (prods || []).filter((p) => p.filtrado).map((p) => p.id)
+      );
+      const list = [];
+      for (const raw of vas || []) {
+        const patch = collapsedPlacaHealPatch(raw, trans);
+        if (!patch) {
+          list.push(normalizeVasilhameLote(raw));
+          continue;
+        }
+        try {
+          const updated = await entities.vasilhames.update(raw.id, patch);
+          const row = normalizeVasilhameLote({
+            ...raw,
+            ...(updated || {}),
+            ...patch,
+          });
+          if (produtoFiltrado.has(row.produto_id)) {
+            await upsertFiltracaoForVasilhame(entities, row, {
+              codigo: row.codigo,
+              transbordo_id: row.transbordo_id,
+            });
+          }
+          list.push(row);
+        } catch (err) {
+          console.error("[Transbordo] Falha ao restaurar composição do vasilhame:", err);
+          list.push(normalizeVasilhameLote(raw));
+        }
+      }
 
       setVasilhames(list);
       setProdutos(prods);

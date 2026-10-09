@@ -6,6 +6,8 @@ import {
   mergeComposicao,
   seedComposicaoFromVasilhame,
   getDominantLote,
+  placaKey,
+  applyAdditionalDestino,
 } from "@transbordo/lib/vasilhameComposicao";
 import {
   upsertFiltracaoForVasilhame,
@@ -37,6 +39,8 @@ export async function syncVasilhamesFromEntradaLotes({
   let vasilhamesAtuais = [...allVasilhames];
   const updatedLotes = [...(lotes || [])];
   const estoqueByIndex = [...savedEstoques];
+  // Lotes da mesma entrada na mesma placa acumulam no mesmo tanque.
+  const touchedByPlaca = new Map();
 
   for (let i = 0; i < updatedLotes.length; i++) {
     const lote = updatedLotes[i];
@@ -69,18 +73,61 @@ export async function syncVasilhamesFromEntradaLotes({
     };
 
     const linkedId = lote.vasilhame_id;
-    const existingById = linkedId
-      ? vasilhamesAtuais.find((v) => v.id === linkedId)
-      : null;
-    const fracionadoPatio = findFracionadoNoPatio(vasilhamesAtuais, {
-      placa: lote.placa,
-      barril: lote.barril,
-      id: lote.vasilhame_existente_id,
-    });
+    const plateKey = placaKey(lote.placa, lote.barril);
+    const touched = touchedByPlaca.get(plateKey) || null;
+    const existingById = touched
+      ? vasilhamesAtuais.find((v) => v.id === touched.id) || touched
+      : linkedId
+        ? vasilhamesAtuais.find((v) => v.id === linkedId)
+        : null;
+    const fracionadoPatio = existingById
+      ? null
+      : findFracionadoNoPatio(vasilhamesAtuais, {
+          placa: lote.placa,
+          barril: lote.barril,
+          id: lote.vasilhame_existente_id,
+        });
 
     const produtoFiltrado = produtos.find(
       (p) => p.id === (lote.produto_id || savedEntrada.produto_id)
     )?.filtrado;
+
+    if (existingById && touched) {
+      const next = applyAdditionalDestino(existingById, {
+        addVolume: volume,
+        comp: [compItem],
+        tara: lote.tara,
+        fracionado: lote.fracionado,
+        data: savedEntrada.data || null,
+        dens: lote.densidade,
+      });
+      const updated = await entities.vasilhames.update(existingById.id, {
+        ...next,
+        lacres: lote.lacres || existingById.lacres || "",
+        eslinga: lote.eslinga || existingById.eslinga || "",
+        gps: lote.gps || existingById.gps || "",
+        menor_teste: lote.menor_teste || existingById.menor_teste || null,
+        produto_id: lote.produto_id || existingById.produto_id,
+        produto_nome: lote.produto_nome || existingById.produto_nome,
+        produto_codigo: lote.produto_codigo || existingById.produto_codigo,
+        cliente_id: clienteId || existingById.cliente_id,
+        cliente_nome: clienteNome || existingById.cliente_nome,
+        densidade: lote.densidade || existingById.densidade,
+        status: "No Pátio",
+      });
+      const row = { ...existingById, ...next, ...(updated || {}) };
+      vasilhamesAtuais = vasilhamesAtuais.map((v) =>
+        v.id === existingById.id ? row : v
+      );
+      touchedByPlaca.set(plateKey, row);
+      updatedLotes[i] = { ...lote, vasilhame_id: existingById.id };
+      if (produtoFiltrado && isFiltracaoElegivel(updated || row)) {
+        await upsertFiltracaoForVasilhame(entities, updated || row, {
+          codigo: entradaCodigo,
+        });
+      }
+      continue;
+    }
 
     if (existingById) {
       const composicao = mergeComposicao([], [compItem], {
@@ -109,9 +156,11 @@ export async function syncVasilhamesFromEntradaLotes({
         composicao,
         status: "No Pátio",
       });
+      const row = { ...existingById, ...updated, composicao, volume };
       vasilhamesAtuais = vasilhamesAtuais.map((v) =>
-        v.id === existingById.id ? { ...v, ...updated } : v
+        v.id === existingById.id ? row : v
       );
+      touchedByPlaca.set(plateKey, row);
       updatedLotes[i] = { ...lote, vasilhame_id: existingById.id };
       if (produtoFiltrado && isFiltracaoElegivel(updated || existingById)) {
         await upsertFiltracaoForVasilhame(entities, updated || existingById, {
@@ -163,9 +212,17 @@ export async function syncVasilhamesFromEntradaLotes({
         status: "No Pátio",
       });
 
+      const row = {
+        ...fracionadoPatio,
+        ...(updated || {}),
+        volume: newVol,
+        composicao: merged,
+        fracionado: aindaFracionado,
+      };
       vasilhamesAtuais = vasilhamesAtuais.map((v) =>
-        v.id === fracionadoPatio.id ? { ...v, ...updated } : v
+        v.id === fracionadoPatio.id ? row : v
       );
+      touchedByPlaca.set(plateKey, row);
       updatedLotes[i] = { ...lote, vasilhame_id: fracionadoPatio.id };
 
       if (produtoFiltrado && isFiltracaoElegivel(updated || fracionadoPatio)) {

@@ -2,7 +2,15 @@
  * Utilitários de composição de lotes em vasilhames (fracionamento / top-up).
  */
 
-import { roundVolume, roundMass } from "@transbordo/lib/format";
+import {
+  parseDensidade,
+  roundVolume,
+  roundMass,
+} from "@transbordo/lib/format";
+import {
+  calculateFIFOAllocation,
+  expandOrigensForFifo,
+} from "@transbordo/lib/fifo";
 import {
   TIPOS_NAO_VASILHAME,
   isDestinoEmbalagemUnitaria,
@@ -311,6 +319,190 @@ export function getDominantLote(composicao = []) {
   return agg[0].lote || "";
 }
 
+/**
+ * Soma um destino (mesmo OP, mesma placa) a um vasilhame já calculado.
+ * Usado quando vários destinos do transbordo apontam para o mesmo tanque.
+ */
+export function applyAdditionalDestino(
+  base,
+  {
+    addVolume = 0,
+    comp = [],
+    tara,
+    fracionado = false,
+    codigo = null,
+    data = null,
+    dens = 0,
+  } = {}
+) {
+  if (!base) return base;
+  const addVol = roundVolume(addVolume || 0);
+  const baseComp = seedComposicaoFromVasilhame(base);
+  const baseVol = Math.max(
+    roundVolume(base.volume || 0),
+    roundVolume(baseComp.reduce((s, c) => s + (c.quantidade_l || 0), 0))
+  );
+  const newVol = roundVolume(baseVol + addVol);
+  const merged = mergeComposicao(baseComp, comp, {
+    transbordo_codigo: codigo,
+    data,
+  });
+  const densV = parseDensidade(base.densidade) || parseDensidade(dens) || 0;
+  const addedKg = (comp || []).reduce((s, c) => s + (c.quantidade_kg || 0), 0);
+  const peso =
+    densV > 0
+      ? roundMass(newVol * densV)
+      : roundMass((base.peso_liquido || 0) + addedKg);
+  const taraFinal =
+    tara != null && tara !== ""
+      ? roundMass(tara)
+      : roundMass(base.tara || 0);
+  const lotesPosMerge = new Set(
+    merged.map((c) => (c.lote || "").trim()).filter(Boolean)
+  );
+  return {
+    volume: newVol,
+    composicao: merged,
+    lote: getDominantLote(merged) || base.lote || "",
+    peso_liquido: peso,
+    peso_bruto: roundMass(taraFinal + peso),
+    tara: taraFinal,
+    fracionado: !!fracionado && lotesPosMerge.size <= 1,
+  };
+}
+
+function destinoNaPlaca(destino, placa, barril) {
+  if (!destino) return false;
+  if (destino.tipo_embalagem && destino.tipo_embalagem !== "Vasilhame") {
+    return false;
+  }
+  const dPlaca = String(destino.placa || "").trim().toUpperCase();
+  const p = String(placa || "").trim().toUpperCase();
+  if (!p || dPlaca !== p) return false;
+  const dBarril = String(destino.barril || "").trim().toUpperCase();
+  const b = String(barril || "").trim().toUpperCase();
+  if (b && dBarril && b !== dBarril) return false;
+  return true;
+}
+
+/** Fatias FIFO de um transbordo que caíram nesta placa. */
+export function composicaoFifoNaPlaca(transbordo, placa, barril) {
+  if (!transbordo) return [];
+  const dens = parseDensidade(transbordo.densidade);
+  const origensFifo = expandOrigensForFifo(transbordo.origens || [], dens);
+  const destinos = transbordo.destinos || [];
+  const { destinoCompositions } = calculateFIFOAllocation(
+    origensFifo,
+    destinos,
+    dens
+  );
+  const entries = [];
+  destinos.forEach((d, destinoIndex) => {
+    if (!destinoNaPlaca(d, placa, barril)) return;
+    for (const c of destinoCompositions[destinoIndex] || []) {
+      const qL = roundVolume(c.quantidade_l || 0);
+      if (qL <= 0) continue;
+      const o = origensFifo[c.origem_index];
+      const estoqueId = o?.estoque_id || o?.entrada_id || null;
+      entries.push({
+        lote: c.lote || "",
+        origem_index: c.origem_index,
+        quantidade_l: qL,
+        quantidade_kg:
+          dens > 0 ? roundMass(qL * dens) : roundMass(c.quantidade_kg || 0),
+        estoque_id: estoqueId,
+        entrada_id: estoqueId,
+        transbordo_codigo: transbordo.codigo_transbordo || null,
+        data: transbordo.data || null,
+        destino_index: destinoIndex,
+      });
+    }
+  });
+  return entries;
+}
+
+/**
+ * Restaura volume e composição quando vários destinos da mesma placa/OP
+ * foram gravados como um único lote (o de maior volume).
+ * Retorna null quando o registro já está coerente.
+ */
+export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
+  if (!vasilhame?.placa) return null;
+  if ((vasilhame.tipo || "Vasilhame") !== "Vasilhame") return null;
+  if ((vasilhame.status || "No Pátio") !== "No Pátio") return null;
+  if (vasilhame.data_saida) return null;
+
+  const codigo = String(vasilhame.numero_op || vasilhame.codigo || "").trim();
+  const op = (transbordos || []).find((t) => {
+    if (vasilhame.transbordo_id && t.id === vasilhame.transbordo_id) return true;
+    return codigo && String(t.codigo_transbordo || "").trim() === codigo;
+  });
+  if (!op) return null;
+
+  const opCode = String(op.codigo_transbordo || "").trim();
+  const codes = new Set(
+    (vasilhame.composicao || [])
+      .map((c) => String(c.transbordo_codigo || "").trim())
+      .filter((c) => c && c.toLowerCase() !== "manual")
+  );
+  if (codes.size > 1) return null;
+  if (codes.size === 1 && opCode && !codes.has(opCode)) return null;
+
+  const entries = composicaoFifoNaPlaca(op, vasilhame.placa, vasilhame.barril);
+  const fifoLotes = new Set(
+    entries.map((e) => (e.lote || "").trim()).filter(isLoteReal)
+  );
+  if (fifoLotes.size < 2) return null;
+
+  const storedLotes = new Set(
+    (Array.isArray(vasilhame.composicao) ? vasilhame.composicao : [])
+      .map((c) => (c.lote || "").trim())
+      .filter(isLoteReal)
+  );
+  if (storedLotes.size >= fifoLotes.size) return null;
+  if (
+    storedLotes.size > 0 &&
+    ![...storedLotes].every((l) => fifoLotes.has(l))
+  ) {
+    return null;
+  }
+
+  const fifoVol = roundVolume(entries.reduce((s, e) => s + e.quantidade_l, 0));
+  const storedVol = roundVolume(vasilhame.volume || 0);
+  if (fifoVol <= storedVol) return null;
+
+  const destinoVols = (op.destinos || [])
+    .filter((d) => destinoNaPlaca(d, vasilhame.placa, vasilhame.barril))
+    .map((d) => roundVolume(d.volume_total || d.volume || 0));
+  const explained =
+    storedVol === 0 ||
+    destinoVols.some((v) => v === storedVol) ||
+    entries.some((e) => e.quantidade_l === storedVol);
+  if (!explained) return null;
+
+  const dens =
+    parseDensidade(vasilhame.densidade) || parseDensidade(op.densidade);
+  const composicao = entries.map((e) => ({
+    ...e,
+    quantidade_kg:
+      dens > 0 ? roundMass(e.quantidade_l * dens) : e.quantidade_kg,
+  }));
+  const peso =
+    dens > 0
+      ? roundMass(fifoVol * dens)
+      : roundMass(composicao.reduce((s, c) => s + (c.quantidade_kg || 0), 0));
+  const tara = roundMass(vasilhame.tara || 0);
+
+  return {
+    volume: fifoVol,
+    composicao,
+    lote: getDominantLote(composicao) || vasilhame.lote || "",
+    peso_liquido: peso,
+    peso_bruto: roundMass(tara + peso),
+    fracionado: false,
+  };
+}
+
 /** Mescla composição existente com novas entradas (mantém histórico). */
 export function mergeComposicao(existing = [], incoming = [], meta = {}) {
   const base = Array.isArray(existing) ? [...existing] : [];
@@ -442,22 +634,41 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
         .trim()
         .toUpperCase();
 
+    // Mesma fatia do OP (mesmo destino, ou composição idêntica) = regravação.
+    // Fatias diferentes na mesma placa = lotes reais que precisam ser somados.
+    const sliceKeyOf = (v) => {
+      if (
+        v?.destino_index !== undefined &&
+        v?.destino_index !== null &&
+        v?.destino_index !== ""
+      ) {
+        return `idx:${v.destino_index}`;
+      }
+      const parts = seedComposicaoFromVasilhame(v)
+        .map(
+          (c) =>
+            `${(c.lote || "").trim()}|${roundVolume(c.quantidade_l || 0)}`
+        )
+        .sort();
+      return `comp:${parts.join(";")}`;
+    };
+
     let composicao = seedComposicaoFromVasilhame(primary);
     let volume = roundVolume(primary.volume || 0);
-    const seenOps = new Set();
+    const seenSlices = new Set();
     const primaryOp = opKeyOf(primary);
-    if (primaryOp) seenOps.add(primaryOp);
+    if (primaryOp) seenSlices.add(`${primaryOp}::${sliceKeyOf(primary)}`);
 
     for (const o of others) {
       const ok = opKeyOf(o);
-      // Mesmo OP gravado 2x (ex.: regravação) — NÃO soma volume
-      if (ok && seenOps.has(ok)) {
+      const slice = ok ? `${ok}::${sliceKeyOf(o)}` : "";
+      if (ok && seenSlices.has(slice)) {
         volume = Math.max(volume, roundVolume(o.volume || 0));
         const otherComp = seedComposicaoFromVasilhame(o);
         if (otherComp.length > composicao.length) composicao = otherComp;
         continue;
       }
-      if (ok) seenOps.add(ok);
+      if (slice) seenSlices.add(slice);
       volume += roundVolume(o.volume || 0);
       composicao = mergeComposicao(composicao, seedComposicaoFromVasilhame(o));
     }

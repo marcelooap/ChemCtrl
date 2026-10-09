@@ -14,6 +14,8 @@ import {
   unifyDuplicateVasilhames,
   seedComposicaoFromVasilhame,
   aggregateComposicaoByLote,
+  applyAdditionalDestino,
+  placaKey,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
 import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
@@ -545,6 +547,8 @@ export async function persistTransbordo({
       const vasilhamesAtuais = await entities.vasilhames.list();
 
       const vasilhameRecords = [];
+      // Destinos do mesmo OP na mesma placa acumulam no mesmo tanque.
+      const sessionByPlaca = new Map();
       for (let destinoIndex = 0; destinoIndex < destinos.length; destinoIndex++) {
         const d = destinos[destinoIndex];
         const comp = destinoCompositions[destinoIndex] || [];
@@ -566,49 +570,49 @@ export async function persistTransbordo({
 
         if (!TIPOS_VASILHAME.has(d.tipo_embalagem)) continue;
 
-        // Top-up: vasilhame fracionado já no pátio → atualiza (não cria)
+        // Vários destinos na mesma placa deste OP entram no mesmo tanque.
         if (d.tipo_embalagem === "Vasilhame" && d.placa) {
-          const existing = findFracionadoNoPatio(vasilhamesAtuais, {
-            placa: d.placa,
-            barril: d.barril,
-            id: d.vasilhame_existente_id,
-          });
+          const key = placaKey(d.placa, d.barril);
+          const session = sessionByPlaca.get(key);
+
+          if (session?.kind === "new") {
+            const rec = vasilhameRecords[session.index];
+            vasilhameRecords[session.index] = {
+              ...rec,
+              ...applyAdditionalDestino(rec, {
+                addVolume: d.volume_total || d.volume || 0,
+                comp,
+                tara: d.tara,
+                fracionado: d.fracionado,
+                codigo,
+                data: payload.data || null,
+                dens,
+              }),
+            };
+            continue;
+          }
+
+          const existing =
+            session?.kind === "existing"
+              ? session.row
+              : findFracionadoNoPatio(vasilhamesAtuais, {
+                  placa: d.placa,
+                  barril: d.barril,
+                  id: d.vasilhame_existente_id,
+                });
 
           if (existing) {
-            const addVol = roundVolume(d.volume_total || d.volume || 0);
-            const baseComp = seedComposicaoFromVasilhame(existing);
-            const baseVol = Math.max(
-              roundVolume(existing.volume || 0),
-              roundVolume(
-                baseComp.reduce((s, c) => s + (c.quantidade_l || 0), 0)
-              )
-            );
-            const newVol = roundVolume(baseVol + addVol);
-            const merged = mergeComposicao(baseComp, comp, {
-              transbordo_codigo: codigo,
+            const next = applyAdditionalDestino(existing, {
+              addVolume: d.volume_total || d.volume || 0,
+              comp,
+              tara: d.tara,
+              fracionado: d.fracionado,
+              codigo,
               data: payload.data || null,
+              dens,
             });
-            const densV =
-              parseDensidade(existing.densidade) || dens;
-            const peso = densV > 0 ? roundMass(newVol * densV) : roundMass(
-              (existing.peso_liquido || 0) + (d.peso_liquido || addVol * densV)
-            );
-            const tara = roundMass(d.tara != null && d.tara !== "" ? d.tara : existing.tara || 0);
-            // Top-up: se o usuário não marcou fracionado, ou já há múltiplos lotes → completado
-            const lotesPosMerge = new Set(
-              merged.map((c) => (c.lote || "").trim()).filter(Boolean)
-            );
-            const aindaFracionado =
-              !!d.fracionado && lotesPosMerge.size <= 1;
-
             const updatedTopUp = await entities.vasilhames.update(existing.id, {
-              volume: newVol,
-              peso_liquido: peso,
-              peso_bruto: roundMass(tara + peso),
-              tara,
-              composicao: merged,
-              lote: getDominantLote(merged),
-              fracionado: aindaFracionado,
+              ...next,
               numero_op: codigo,
               produto_id: nullIfEmpty(payload.produto_id) || existing.produto_id,
               produto_nome: payload.produto_nome || existing.produto_nome,
@@ -624,19 +628,19 @@ export async function persistTransbordo({
                 (payload.operadores || []).join(", ") || existing.responsavel,
               status: "No Pátio",
             });
+            const row = {
+              ...existing,
+              ...next,
+              ...(updatedTopUp || {}),
+            };
+            sessionByPlaca.set(key, { kind: "existing", row });
+            const idxAtual = vasilhamesAtuais.findIndex((v) => v.id === existing.id);
+            if (idxAtual >= 0) vasilhamesAtuais[idxAtual] = row;
             if (produtoFiltrado) {
               await upsertFiltracaoForVasilhame(
                 entities,
                 updatedTopUp || {
-                  ...existing,
-                  volume: newVol,
-                  composicao: merged,
-                  lote: getDominantLote(merged),
-                  produto_id: nullIfEmpty(payload.produto_id) || existing.produto_id,
-                  produto_nome: payload.produto_nome || existing.produto_nome,
-                  produto_codigo: payload.produto_codigo || existing.produto_codigo,
-                  cliente_id: nullIfEmpty(payload.cliente_id) || existing.cliente_id,
-                  cliente_nome: payload.cliente_nome || existing.cliente_nome,
+                  ...row,
                   codigo: existing.codigo || codigo,
                   transbordo_id: existing.transbordo_id || savedTransbordo.id,
                 },
@@ -647,16 +651,21 @@ export async function persistTransbordo({
           }
         }
 
-        vasilhameRecords.push(
-          buildVasilhameBase(
-            payload,
-            codigo,
-            savedTransbordo,
-            d,
-            destinoIndex,
-            comp
-          )
+        const createdBase = buildVasilhameBase(
+          payload,
+          codigo,
+          savedTransbordo,
+          d,
+          destinoIndex,
+          comp
         );
+        vasilhameRecords.push(createdBase);
+        if (d.tipo_embalagem === "Vasilhame" && d.placa) {
+          sessionByPlaca.set(placaKey(d.placa, d.barril), {
+            kind: "new",
+            index: vasilhameRecords.length - 1,
+          });
+        }
       }
 
       if (vasilhameRecords.length > 0) {
