@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { formatNum } from "@transbordo/lib/format";
+import { formatNum, formatVolume } from "@transbordo/lib/format";
 
 const BLUE_DARK = [28, 53, 91];
 const BLUE_MID = [37, 99, 195];
@@ -28,6 +28,10 @@ function fmtDate(d) {
 function fmtNum(n, decimals = 0) {
   if (n == null || n === "") return formatNum(0, decimals);
   return formatNum(n, decimals);
+}
+
+function fmtVolume(n) {
+  return formatVolume(n, { empty: "0" });
 }
 
 /**
@@ -227,7 +231,7 @@ export function generateBoletaPDF(vasilhame) {
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
     setColor(doc, BLACK);
-    doc.text(fmtNum(volume, 0) + " L", bM + bW - 4, y + (isFracionado ? 11 : 13), {
+    doc.text(fmtVolume(volume) + " L", bM + bW - 4, y + (isFracionado ? 11 : 13), {
       align: "right",
     });
     if (isFracionado) {

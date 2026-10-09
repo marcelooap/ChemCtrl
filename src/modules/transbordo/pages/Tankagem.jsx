@@ -7,6 +7,10 @@ import { Input } from "@shared/components/ui/input";
 import TankSilo from "@transbordo/components/tankagem/TankSilo";
 import TankagemViewDialog from "@transbordo/components/tankagem/TankagemViewDialog";
 import { formatVolume } from "@transbordo/lib/format";
+import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
 import { buildTankaDetalhe } from "@transbordo/lib/tankaVolume";
 import {
   mergeTankasUnificadas,
@@ -63,14 +67,23 @@ export default function Tankagem() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [isot, trans, vas] = await Promise.all([
+        const [isot, trans, vas, ests, ents] = await Promise.all([
           entities.isotanques.list(),
           entities.transbordos.list(),
           entities.vasilhames.list(),
+          entities.estoque.list(),
+          entities.entradas.list(),
         ]);
+        const volumes = applyDeclaredVolumeDecimals({
+          estoque: ests,
+          entradas: ents,
+          transbordos: trans,
+          vasilhames: vas,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
         setIsotanques(isot);
-        setTransbordos(trans);
-        setVasilhames(vas);
+        setTransbordos(volumes.transbordos);
+        setVasilhames(volumes.vasilhames);
 
         try {
           const loadIndList = async (fn) => {

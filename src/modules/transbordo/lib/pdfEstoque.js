@@ -1,6 +1,8 @@
 import { jsPDF } from "jspdf";
 import {
   formatNum,
+  formatVolume,
+  formatQuantidade,
   formatCurrency,
   formatDensidade,
   roundVolume,
@@ -51,6 +53,10 @@ function fmtDate(d) {
 function fmtNum(n, decimals = 0) {
   if (n == null || n === "") return formatNum(0, decimals);
   return formatNum(n, decimals);
+}
+
+function fmtVolume(n) {
+  return formatVolume(n, { empty: "0" });
 }
 
 function safePdfFilenamePart(value) {
@@ -496,8 +502,8 @@ export function generateRelatorioEstoquePDF({
   );
 
   const estoquePairs = [
-    ["Quantidade", `${fmtNum(item.quantidade, 0)} ${unidade}`],
-    ["Saldo Atual", `${fmtNum(item.saldo_atual, 0)} ${unidade}`],
+    ["Quantidade", `${formatQuantidade(item.quantidade, { empty: "0" })} ${unidade}`],
+    ["Saldo Atual", `${formatQuantidade(item.saldo_atual, { empty: "0" })} ${unidade}`],
     ["Unidade", unidade],
     ["Preço Unitário", formatCurrency(item.preco_unitario)],
     ["Custo Total", formatCurrency(custoTotal)],
@@ -561,7 +567,7 @@ export function generateRelatorioEstoquePDF({
       fmtDate(d.data),
       d.destino || "-",
       d.tipo || "-",
-      fmtNum(roundVolume(d.volume || 0), 0),
+      fmtVolume(roundVolume(d.volume || 0)),
       fmtNum(roundMass(d.pesoLiq || 0), 0),
     ]),
     [30, 24, 42, 28, 30, 28],
@@ -571,7 +577,7 @@ export function generateRelatorioEstoquePDF({
           "",
           "",
           "",
-          `${fmtNum(roundVolume(totalVol), 0)} L`,
+          `${fmtVolume(roundVolume(totalVol))} L`,
           `${fmtNum(roundMass(totalMass), 0)} kg`,
         ]
       : null
@@ -598,7 +604,7 @@ export function generateRelatorioEstoquePDF({
       d.origem || "-",
       d.destino || "-",
       d.tipo || "-",
-      fmtNum(roundVolume(d.volume || 0), 0),
+      fmtVolume(roundVolume(d.volume || 0)),
       fmtNum(roundMass(d.pesoLiq || 0), 0),
     ]),
     [26, 20, 32, 32, 24, 24, 24],
@@ -609,7 +615,7 @@ export function generateRelatorioEstoquePDF({
           "",
           "",
           "",
-          `${fmtNum(roundVolume(totalVolHist), 0)} L`,
+          `${fmtVolume(roundVolume(totalVolHist))} L`,
           `${fmtNum(roundMass(totalMassHist), 0)} kg`,
         ]
       : null
@@ -847,7 +853,7 @@ export function generateEstoqueEnvioPDF({
         c.barril || "-",
         c.produto_nome || "-",
         c.lote || "-",
-        fmtNum(c.volume, 0),
+        fmtVolume(c.volume),
         fmtNum(c.peso_liquido, 0),
         c.statusReserva || (c.reservado ? "Reservado" : "Livre"),
       ]),
@@ -857,7 +863,7 @@ export function generateEstoqueEnvioPDF({
         "",
         "",
         "",
-        `${fmtNum(totalContainerVolume, 0)} L`,
+        `${fmtVolume(totalContainerVolume)} L`,
         `${fmtNum(totalContainerMass, 0)} kg`,
         "",
       ],
@@ -920,11 +926,11 @@ export function generateEstoqueEnvioPDF({
       tankaVolume += vol;
       totalTankVolume += vol;
       loteLines.push(l.lote || "-");
-      volumeLines.push(fmtNum(vol, 0));
+      volumeLines.push(fmtVolume(vol));
     }
 
     if (lotes.length > 1) {
-      volumeLines.push(`Total ${fmtNum(tankaVolume, 0)}`);
+      volumeLines.push(`Total ${fmtVolume(tankaVolume)}`);
     }
 
     const ocupacaoPct = cap > 0 ? Math.min(100, (tankaVolume / cap) * 100) : 0;
@@ -949,7 +955,7 @@ export function generateEstoqueEnvioPDF({
       ["TANKA", "PRODUTO", "LOTE", "VOLUME ATUAL", "OCUPAÇÃO"],
       tankRows,
       [28, 66, 30, 34, 24],
-      ["TOTAL", "", "", `${fmtNum(totalTankVolume, 0)} L`, ""],
+      ["TOTAL", "", "", `${fmtVolume(totalTankVolume)} L`, ""],
       [4], // coluna ocupação com badge verde (apenas PDF)
       {
         align: ["center", "left", "center", "center", "center"],

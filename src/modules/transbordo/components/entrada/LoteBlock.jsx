@@ -657,7 +657,8 @@ export default function LoteBlock({
           <div className="space-y-1.5">
             <Label>Volume (L) *</Label>
             <NumberInputBr
-              decimals={0}
+              decimals={3}
+              trimTrailingZeros
               value={lote.volume || ""}
               onChange={(v) =>
                 updateVasilhameField(

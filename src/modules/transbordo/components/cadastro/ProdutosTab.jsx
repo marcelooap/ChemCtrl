@@ -203,21 +203,19 @@ export default function ProdutosTab() {
   }, [produtos]);
 
   const mergedClientes = useMemo(() => {
-    const clientesFromProdutos = produtos
-      .map((p) => p.cliente_nome)
-      .filter(Boolean);
-    const uniqueClienteNomes = [...new Set(clientesFromProdutos)];
-    return [
-      ...clientes,
-      ...uniqueClienteNomes
-        .filter(
-          (nome) =>
-            !clientes.some(
-              (c) => c.nome?.toLowerCase() === nome.toLowerCase()
-            )
-        )
-        .map((nome) => ({ id: nome, nome })),
-    ];
+    const byName = new Map();
+    const push = (cliente) => {
+      const nome = String(cliente?.nome || "").trim();
+      if (!nome) return;
+      const key = normalizeText(nome);
+      if (byName.has(key)) return;
+      byName.set(key, { id: cliente.id || nome, nome });
+    };
+    for (const cliente of clientes) push(cliente);
+    for (const nome of produtos.map((p) => p.cliente_nome)) push({ nome });
+    return [...byName.values()].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
+    );
   }, [clientes, produtos]);
 
   const clienteFilterOptions = useMemo(() => {

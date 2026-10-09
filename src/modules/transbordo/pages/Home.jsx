@@ -12,6 +12,10 @@ import {
   getEstoqueUnidade,
 } from "@transbordo/lib/estoqueSaldo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
 
 const isSameMonth = (dateStr) => {
   if (!dateStr) return false;
@@ -74,15 +78,23 @@ export default function Home() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [trans, ests, saics, vas] = await Promise.all([
+        const [trans, ests, saics, vas, ents] = await Promise.all([
           entities.transbordos.list(),
           entities.estoque.list(),
           entities.saidas.list(),
           entities.vasilhames.list("-created_date"),
+          entities.entradas.list(),
         ]);
+        const volumes = applyDeclaredVolumeDecimals({
+          estoque: ests,
+          entradas: ents,
+          transbordos: trans,
+          vasilhames: vas,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
 
         // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
-        const estoqueWithSaldo = ests.map((e) => {
+        const estoqueWithSaldo = volumes.estoque.map((e) => {
           const quantidade = getEstoqueQuantidade(e);
           const unidade_medida = getEstoqueUnidade(e);
           return {
@@ -91,16 +103,16 @@ export default function Home() {
             unidade_medida,
             saldo_atual: computeEstoqueSaldo(
               { ...e, quantidade },
-              trans,
+              volumes.transbordos,
               saics,
-              vas
+              volumes.vasilhames
             ),
           };
         });
 
-        setTransbordos(trans);
+        setTransbordos(volumes.transbordos);
         setEstoque(estoqueWithSaldo);
-        setVasilhames(vas);
+        setVasilhames(volumes.vasilhames);
       } catch {
         // ignore
       }

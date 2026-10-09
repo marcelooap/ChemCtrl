@@ -19,6 +19,10 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import SaidaViewDialog from "@transbordo/components/saida/SaidaViewDialog";
 import { formatMass } from "@transbordo/lib/format";
+import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
 import { applySaidaFiscalToggle } from "@transbordo/lib/saidaFiscal";
 import {
   syncEstoqueSaldos,
@@ -110,7 +114,8 @@ export default function Saida({
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [saics, cliens, ents, vascs, expedidas, agends] = await Promise.all([
+      const [saics, cliens, ents, vascs, expedidas, agends, trans, entradasDoc] =
+        await Promise.all([
         entities.saidas.list("-created_date"),
         entities.clientes.list(),
         entities.estoque.list(),
@@ -119,7 +124,16 @@ export default function Saida({
         isExpedicao
           ? entities.agendamentosCarregamento.list("-created_at").catch(() => [])
           : Promise.resolve([]),
+        entities.transbordos.list(),
+        entities.entradas.list(),
       ]);
+      const volumes = applyDeclaredVolumeDecimals({
+        estoque: ents,
+        entradas: entradasDoc,
+        transbordos: trans,
+        vasilhames: vascs,
+      });
+      void persistDeclaredVolumeDecimals(volumes);
       let list = saics || [];
       if (onlyIndustrializacao) {
         list = list.filter(saidaHasIndustrializacaoItems);
@@ -129,8 +143,8 @@ export default function Saida({
       }
       setSaidas(list);
       setClientes(cliens);
-      setEntradas(ents);
-      setVasilhames(vascs);
+      setEntradas(volumes.estoque);
+      setVasilhames(volumes.vasilhames);
       setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
       setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {

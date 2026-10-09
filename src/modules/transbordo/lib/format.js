@@ -1,9 +1,11 @@
 /**
  * Formatação e arredondamento numérico do ChemFlow (padrão PT-BR).
  *
- * Volumes e massas operacionais: inteiros (sem casas decimais), milhar com ".".
+ * Volumes operacionais: até 3 casas. Inteiros continuam sem decimal (19.849);
+ * frações da entrada são preservadas (19.848,5).
+ * Massas operacionais: inteiros (sem casas decimais), milhar com ".".
  * Densidade / valores com decimal: milhar "." e decimal ",".
- * Fracionamentos: distributeInteger / distributeByWeights garantem
+ * Fracionamentos inteiros: distributeInteger / distributeByWeights garantem
  * que a soma das partes = total de entrada (método do maior resto).
  */
 
@@ -31,9 +33,14 @@ export function parseDensidade(d) {
   return parseNumero(d);
 }
 
-/** Arredonda para litros/kg inteiros (sem casas decimais). */
+/**
+ * Volume operacional em litros: até 3 casas decimais.
+ * Inteiros permanecem inteiros; 19.848,5 não vira 19.849.
+ */
 export function roundVolume(v) {
-  return Math.round(parseNumero(v));
+  const n = parseNumero(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 1000) / 1000;
 }
 
 /** Alias semântico para massas operacionais. */
@@ -101,9 +108,12 @@ export function formatNum(v, decimals = 0, opts = {}) {
   });
 }
 
-/** Volume em litros — sempre inteiro PT-BR (ex.: 16.737). */
+/**
+ * Volume em litros. Inteiro sem casas (19.849); com fração, até 3 casas
+ * sem zeros à direita (19.848,5).
+ */
 export function formatVolume(v, opts = {}) {
-  return formatNum(v, 0, { empty: opts.empty ?? "0" });
+  return formatQuantidade(v, opts);
 }
 
 /** Massa em kg — sempre inteiro PT-BR. */

@@ -66,21 +66,21 @@ export const loteToLitros = (lote) => {
     case "lt":
     case "litro":
     case "litros":
-      return Math.round(lQtd);
+      return roundQuantidade(lQtd);
     case "gal":
     case "gallon":
     case "gallons":
-      return Math.round(lQtd * GAL_TO_L);
+      return roundQuantidade(lQtd * GAL_TO_L);
     case "kg":
     case "kgs":
-      return lDens > 0 ? Math.round(lQtd / lDens) : 0;
+      return lDens > 0 ? roundQuantidade(lQtd / lDens) : 0;
     case "lb":
     case "lbs": {
-      const kg = Math.round(lQtd * LB_TO_KG);
-      return lDens > 0 ? Math.round(kg / lDens) : 0;
+      const kg = roundQuantidade(lQtd * LB_TO_KG);
+      return lDens > 0 ? roundQuantidade(kg / lDens) : 0;
     }
     default:
-      return Math.round(lQtd);
+      return roundQuantidade(lQtd);
   }
 };
 
@@ -107,17 +107,17 @@ export const saldoKgToLitros = (saldoKg, densidade, estoqueItem) => {
     });
     const originalKg =
       (Number(estoqueItem?.quantidade) || 0) > 0
-        ? Math.round(Number(estoqueItem.quantidade))
+        ? roundQuantidade(Number(estoqueItem.quantidade))
         : loteToKg(lote);
     if (declaredL > 0 && originalKg > 0) {
-      // Saldo integral → volume declarado exato (ex.: 42.000 L)
+      // Saldo integral → volume declarado exato (ex.: 19.848,5 L)
       if (Math.abs(saldo - originalKg) < 0.5) return declaredL;
-      return Math.round((declaredL * saldo) / originalKg);
+      return roundQuantidade((declaredL * saldo) / originalKg);
     }
   }
 
   const dens = Number(densidade) || 0;
-  return dens > 0 ? Math.round(saldo / dens) : Math.round(saldo);
+  return dens > 0 ? roundQuantidade(saldo / dens) : roundQuantidade(saldo);
 };
 
 /** Unidade a gravar no estoque a partir do lote. */

@@ -562,7 +562,8 @@ export default function DestinoCard({
           <div className="space-y-1.5">
             <Label>Volume (L) *</Label>
             <NumberInputBr
-              decimals={0}
+              decimals={3}
+              trimTrailingZeros
               value={destino.volume || ""}
               onChange={(v) => updateField("volume", v === "" ? "" : roundVolume(v))}
               placeholder="0"
@@ -600,6 +601,7 @@ export default function DestinoCard({
             value={destino.volume_por_embalagem}
             onChange={(v) => updateField("volume_por_embalagem", v)}
             readOnly={readOnly}
+            decimals={3}
           />
           <div className="space-y-1.5">
             <Label>
@@ -651,12 +653,13 @@ function Field({ label, value, onChange, placeholder, readOnly }) {
   );
 }
 
-function IntegerField({ label, value, onChange, readOnly }) {
+function IntegerField({ label, value, onChange, readOnly, decimals = 0 }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <NumberInputBr
-        decimals={0}
+        decimals={decimals}
+        trimTrailingZeros={decimals > 0}
         value={value ?? ""}
         onChange={(v) => onChange(v === "" ? "" : roundVolume(v))}
         placeholder="0"

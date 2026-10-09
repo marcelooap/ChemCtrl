@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { formatNum, roundVolume, roundMass } from "@transbordo/lib/format";
+import { formatNum, formatVolume, roundVolume, roundMass } from "@transbordo/lib/format";
 import {
   aggregateComposicaoByLote,
   getDominantLote,
@@ -45,6 +45,10 @@ function fmtDate(d) {
 function fmtNum(n, decimals = 0) {
   if (n == null || n === "") return formatNum(0, decimals);
   return formatNum(n, decimals);
+}
+
+function fmtVolume(n) {
+  return formatVolume(n, { empty: "0" });
 }
 
 function safePdfFilenamePart(value) {
@@ -412,7 +416,7 @@ export function generateRelatorioFiscalPDF(vasilhame) {
       ["Nº OP", vasilhame.numero_op || "-"],
       ["Lote", lote],
       ["Eslinga", vasilhame.eslinga || "-"],
-      ["Volume", fmtNum(vasilhame.volume, 0) + " L"],
+      ["Volume", fmtVolume(vasilhame.volume) + " L"],
       ["Peso Líquido", fmtNum(vasilhame.peso_liquido, 0) + " kg"],
       ["Peso Bruto", fmtNum(vasilhame.peso_bruto, 0) + " kg"],
       ["Tara", fmtNum(vasilhame.tara, 0) + " kg"],
@@ -437,13 +441,13 @@ export function generateRelatorioFiscalPDF(vasilhame) {
   const headers = ["LOTE", "VOLUME (L)", "MASSA (KG)", "DATA DE ENVASE"];
   const rows = composicao.map((c) => [
     c.lote || "-",
-    fmtNum(c.volume, 0),
+    fmtVolume(c.volume),
     fmtNum(c.massa, 0),
     fmtDate(c.data),
   ]);
   const totalsRow = [
     "TOTAL",
-    fmtNum(totalVol, 0) + " L",
+    fmtVolume(totalVol) + " L",
     fmtNum(totalMass, 0) + " kg",
     "",
   ];
@@ -682,7 +686,7 @@ export function generateRelatorioFiscalSaidaPDF(
       r.produto || "-",
       r.informacoes || r.embalagem || "-",
       r.lote || "-",
-      fmtNum(r.volume, 0),
+      fmtVolume(r.volume),
       fmtNum(r.massa, 0),
       fmtNum(r.tara, 0),
     ]);
@@ -693,7 +697,7 @@ export function generateRelatorioFiscalSaidaPDF(
       "",
       "",
       "",
-      fmtNum(totalVol, 0) + " L",
+      fmtVolume(totalVol) + " L",
       fmtNum(totalMass, 0) + " kg",
       "",
     ];

@@ -3,7 +3,7 @@ import { Label } from "@shared/components/ui/label";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { formatVolume, formatMass, formatNum, roundVolume, roundMass } from "@transbordo/lib/format";
+import { formatVolume, formatMass, formatNum, roundVolume, roundMass, roundQuantidade } from "@transbordo/lib/format";
 import { getEstoqueUnidade } from "@transbordo/lib/estoqueSaldo";
 import {
   isDestinoEmbalagemUnitaria,
@@ -500,7 +500,7 @@ export default function SaidaItemRow({
     item.tipo === TIPO_EMBALADO &&
     item.reserva_id &&
     (item.quantidade_solicitada || 0) > dispReserva;
-  const saldoAtualLote = Math.round(Number(selectedEntrada?.saldo_atual) || 0);
+  const saldoAtualLote = roundQuantidade(Number(selectedEntrada?.saldo_atual) || 0);
   const saldoDisponivelSemReserva = Math.max(0, Math.min(saldoAtualLote, tetoExcepcional));
   const displayEstoqueFinal =
     saldoDisponivelSemReserva - (item.reserva_id ? 0 : item.quantidade_solicitada || 0);
@@ -599,7 +599,7 @@ export default function SaidaItemRow({
   };
 
   const aplicarQuantidade = (qtdInformada) => {
-    let qtd = Math.round(Number(qtdInformada) || 0);
+    let qtd = roundQuantidade(qtdInformada);
     if (qtd < 0) qtd = 0;
     if (item.entrada_id && qtd > maxQuantidadeSolicitada) qtd = maxQuantidadeSolicitada;
     const pesoLiq = item.peso_liquido_embalagem || 0;
@@ -618,7 +618,7 @@ export default function SaidaItemRow({
   const handleReservaChange = (_label, option) => {
     if (!option) return;
     if (option.semReserva || option.id === SEM_RESERVA_ID) {
-      const qtd = Math.min(Math.round(Number(item.quantidade_solicitada) || 0), saldoDisponivelSemReserva);
+      const qtd = Math.min(roundQuantidade(item.quantidade_solicitada), saldoDisponivelSemReserva);
       const pesoLiq = item.peso_liquido_embalagem || 0;
       onChange({
         ...item,
@@ -1110,7 +1110,8 @@ export default function SaidaItemRow({
               <div className="space-y-1.5">
                 <Label>Quantidade Solicitada ({unidadeEmbalado}) *</Label>
                 <NumberInputBr
-                  decimals={0}
+                  decimals={3}
+                  trimTrailingZeros
                   value={item.quantidade_solicitada || ""}
                   onChange={(v) => handleQuantidadeChange(v === "" ? 0 : v)}
                   max={item.entrada_id ? maxQuantidadeSolicitada : undefined}

@@ -361,7 +361,7 @@ export async function persistTransbordo({
         ...(data.origens || []).map((o) => o.entrada_id),
       ];
 
-      // Normaliza volumes para litros inteiros (soma destino = soma origem)
+      // Normaliza volumes (até 3 casas) mantendo soma destino = soma origem
       const dens = parseDensidade(data.densidade);
       const origens = (data.origens || []).map((o) => {
         const lotesRet = (o.lotes_retirados || [])

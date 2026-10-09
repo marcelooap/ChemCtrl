@@ -35,6 +35,10 @@ import {
   persistTransbordo,
   revertTopUpsDoTransbordo,
 } from "@transbordo/lib/persistTransbordo";
+import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
 
 
 function labelUnidadeEntrada(unidade) {
@@ -212,20 +216,28 @@ export default function Transbordo() {
         console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
 
-      const [trans, prods, cliens, ents, isos, vascs] = await Promise.all([
+      const [trans, prods, cliens, ents, isos, vascs, entradasDoc] = await Promise.all([
         entities.transbordos.list("-created_date"),
         entities.produtos.list(),
         entities.clientes.list(),
         entities.estoque.list(),
         entities.isotanques.list(),
         entities.vasilhames.list(),
+        entities.entradas.list(),
       ]);
-      setTransbordos(trans);
+      const volumes = applyDeclaredVolumeDecimals({
+        estoque: ents,
+        entradas: entradasDoc,
+        transbordos: trans,
+        vasilhames: vascs,
+      });
+      void persistDeclaredVolumeDecimals(volumes);
+      setTransbordos(volumes.transbordos);
       setProdutos(prods);
       setClientes(cliens);
-      setEntradas(ents);
+      setEntradas(volumes.estoque);
       setIsotanques(isos);
-      setVasilhames(vascs);
+      setVasilhames(volumes.vasilhames);
     } catch {
       if (!silent) setTransbordos([]);
     }

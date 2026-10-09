@@ -23,6 +23,10 @@ import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 import { formatVolume, formatCurrency, formatQuantidade } from "@transbordo/lib/format";
 import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
+import {
   computeEstoqueSaldo,
   computeEstoqueQuantidadesPorLocal,
   getEstoqueQuantidade,
@@ -175,12 +179,19 @@ export default function Estoque() {
         entities.entradas.list(),
         entities.vasilhames.list(),
       ]);
+      const volumes = applyDeclaredVolumeDecimals({
+        estoque: ests,
+        entradas: ents,
+        transbordos: trans,
+        vasilhames: vascs,
+      });
+      void persistDeclaredVolumeDecimals(volumes);
 
       // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
       // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
       // Matéria-prima da Industrialização fica só no módulo Industrialização.
       const entradasPorId = entradaByIdMap(ents);
-      const estoqueWithSaldo = ests
+      const estoqueWithSaldo = volumes.estoque
         .filter((e) => !isEstoqueEmbalagemUnitaria(e))
         .filter(
           (e) =>
@@ -198,9 +209,9 @@ export default function Estoque() {
           ...itemOp,
           saldo_atual: computeEstoqueSaldo(
             itemOp,
-            trans,
+            volumes.transbordos,
             saics,
-            vascs
+            volumes.vasilhames
           ),
         };
       });
@@ -211,10 +222,10 @@ export default function Estoque() {
       setEstoque(estoqueWithSaldo);
       setProdutos(prods);
       setClientes(cliens);
-      setTransbordos(trans);
+      setTransbordos(volumes.transbordos);
       setSaidas(saics);
       setEntradas(ents);
-      setVasilhames(vascs);
+      setVasilhames(volumes.vasilhames);
     } catch {
       if (!silent) setEstoque([]);
     } finally {

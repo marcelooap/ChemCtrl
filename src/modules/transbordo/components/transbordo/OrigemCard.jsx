@@ -424,7 +424,8 @@ export default function OrigemCard({
                   Quantidade Retirada ({unidadeLabel}) *
                 </Label>
                 <NumberInputBr
-                  decimals={0}
+                  decimals={3}
+                  trimTrailingZeros
                   min={0}
                   max={l.saldo_disponivel || 0}
                   value={l.volume_retirado || ""}
@@ -617,7 +618,8 @@ export default function OrigemCard({
       <div className="space-y-1.5">
         <Label>Quantidade Retirada ({unidadeLabel})</Label>
         <NumberInputBr
-          decimals={0}
+          decimals={3}
+          trimTrailingZeros
           min={0}
           value={origem.volume_retirado ?? ""}
           onChange={(v) => handleVolumeChange(v)}
@@ -707,7 +709,8 @@ export default function OrigemCard({
             <div className="space-y-1.5">
               <Label>Quantidade Retirada ({unidadeLabel}) *</Label>
               <NumberInputBr
-                decimals={0}
+                decimals={3}
+                trimTrailingZeros
                 min={0}
                 value={origem.volume_retirado || ""}
                 onChange={(v) => handleVolumeChange(v)}

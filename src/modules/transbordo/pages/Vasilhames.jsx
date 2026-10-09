@@ -18,6 +18,10 @@ import VasilhameModal from "@transbordo/components/vasilhame/VasilhameModal";
 import VasilhameViewDialog from "@transbordo/components/vasilhame/VasilhameViewDialog";
 import { formatVolume, formatMass, roundVolume, roundMass } from "@transbordo/lib/format";
 import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
+import {
   normalizeVasilhameLote,
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
@@ -248,16 +252,27 @@ export default function Vasilhames() {
       // unifyDuplicateVasilhames / repairVasilhameComposicao / heal de volume
       // devem rodar via script administrativo, não a cada abertura da tela.
 
-      const [vas, prods, cliens, trans, ests] = await Promise.all([
+      const [vas, prods, cliens, trans, ests, ents] = await Promise.all([
         entities.vasilhames.list("-created_date"),
         entities.produtos.list(),
         entities.clientes.list(),
         entities.transbordos.list(),
         entities.estoque.list(),
+        entities.entradas.list(),
       ]);
-      setTransbordos(trans);
+      const volumes = applyDeclaredVolumeDecimals({
+        estoque: ests,
+        entradas: ents,
+        transbordos: trans,
+        vasilhames: vas,
+      });
+      void persistDeclaredVolumeDecimals(volumes);
+      const vasById = new Map(
+        (volumes.vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
+      );
+      setTransbordos(volumes.transbordos);
       setEstoqueById(
-        new Map((ests || []).filter((e) => e?.id).map((e) => [e.id, e]))
+        new Map((volumes.estoque || []).filter((e) => e?.id).map((e) => [e.id, e]))
       );
 
       const produtoFiltrado = new Set(
@@ -265,15 +280,16 @@ export default function Vasilhames() {
       );
       const list = [];
       for (const raw of vas || []) {
-        const patch = collapsedPlacaHealPatch(raw, trans);
+        const source = vasById.get(raw.id) || raw;
+        const patch = collapsedPlacaHealPatch(source, volumes.transbordos);
         if (!patch) {
-          list.push(normalizeVasilhameLote(raw));
+          list.push(normalizeVasilhameLote(source));
           continue;
         }
         try {
           const updated = await entities.vasilhames.update(raw.id, patch);
           const row = normalizeVasilhameLote({
-            ...raw,
+            ...source,
             ...(updated || {}),
             ...patch,
           });
@@ -286,7 +302,7 @@ export default function Vasilhames() {
           list.push(row);
         } catch (err) {
           console.error("[Transbordo] Falha ao restaurar composição do vasilhame:", err);
-          list.push(normalizeVasilhameLote(raw));
+          list.push(normalizeVasilhameLote(source));
         }
       }
 

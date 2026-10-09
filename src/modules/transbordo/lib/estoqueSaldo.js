@@ -26,10 +26,22 @@ export function getEstoqueQuantidade(estoqueItem) {
     const umOp = normalizeUnidadeEntrada(estoqueItem?.unidade_medida);
     const qtd = Number(estoqueItem?.quantidade) || 0;
 
-    // Já migrado / persistido em litros
-    if (umOp === "l" && qtd > 0) return Math.round(qtd);
+    // Já migrado / persistido em litros. Se a coluna foi inteira, recupera
+    // a fração ainda presente no lote da entrada (ex.: 19.849 → 19.848,5).
+    if (umOp === "l" && qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
     // Persistido em galões → litros operacionais
-    if (umOp === "gal" && qtd > 0) return Math.round(qtd * 3.78541);
+    if (umOp === "gal" && qtd > 0) {
+      const litros = roundQuantidade(qtd * 3.78541);
+      const declaredGal = roundQuantidade(lote?.quantidade);
+      const galTemFracao = Math.abs(declaredGal - Math.trunc(declaredGal)) > 1e-9;
+      if (
+        galTemFracao &&
+        Math.abs(Math.round(declaredGal) - Math.round(qtd)) < 0.001
+      ) {
+        return roundQuantidade(declaredGal * 3.78541);
+      }
+      return litros;
+    }
     // Legado (kg) ou embalado em L: volume declarado da entrada
     if (declaredL > 0) return declaredL;
     if (embalado && qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
@@ -152,7 +164,7 @@ export function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
       // Operacional interno em L → exibir galões
       const umOp = normalizeUnidadeEntrada(estoqueItem?.unidade_medida);
       if (umOp === "l" || estoqueOperaEmLitros(estoqueItem)) {
-        return Math.round(valor / 3.78541);
+        return roundQuantidade(valor / 3.78541);
       }
     }
     return roundQuantidade(valor);
@@ -178,7 +190,7 @@ export function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
         ...estoqueItem,
         quantidade: getEstoqueQuantidade(estoqueItem),
       });
-      return Math.round(litros / 3.78541);
+      return roundQuantidade(litros / 3.78541);
     }
     case "lb":
       return Math.round(valor / 0.453592);

@@ -20,6 +20,10 @@ import ComunicacaoRecebimentoDialog from "@transbordo/components/entrada/Comunic
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
 import { formatQuantidade } from "@transbordo/lib/format";
+import {
+  applyDeclaredVolumeDecimals,
+  persistDeclaredVolumeDecimals,
+} from "@transbordo/lib/declaredVolume";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
@@ -160,6 +164,14 @@ export default function Entrada() {
         ];
       }
 
+      const volumes = applyDeclaredVolumeDecimals({
+        estoque: ests,
+        entradas: ents,
+        transbordos: transbs,
+        vasilhames: vascs,
+      });
+      void persistDeclaredVolumeDecimals(volumes);
+
       setEntradas(ents);
       setProdutos(prods);
       setClientes(
@@ -171,8 +183,8 @@ export default function Entrada() {
           ...(isotanques || []).map((iso) => iso.cliente_nome),
         ])
       );
-      setTransbordos(transbs);
-      setEstoque(ests);
+      setTransbordos(volumes.transbordos);
+      setEstoque(volumes.estoque);
     } catch (err) {
       console.error("[Transbordo] Erro ao carregar Entrada:", err);
       if (!silent) {
