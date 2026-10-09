@@ -7,7 +7,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
 import { FileText } from "lucide-react";
-import { formatMass, formatVolume, formatCurrency, formatDensidade, roundMass } from "@transbordo/lib/format";
+import { formatMass, formatVolume, formatCurrency, formatDensidade, formatQuantidade, roundQuantidade } from "@transbordo/lib/format";
 import { generateRelatorioEstoquePDF } from "@transbordo/lib/pdfEstoque";
 import {
   listSaidasHistoricoForEstoque,
@@ -177,7 +177,7 @@ export default function EstoqueViewDialog({
 
   const estoqueInicial = getEstoqueQuantidade(item);
   // Baixa só com saída de vasilhame (pátio ou fiscal) / embalado fiscal
-  const totalSaido = roundMass(
+  const totalSaido = roundQuantidade(
     calcSaidasEmbalado(item, saidas) +
       calcSaidasConvencional(item, saidas, vasilhames, transbordos) +
       calcVasilhamesExpedidosPatio(item, vasilhames, transbordos, saidas)
@@ -291,11 +291,11 @@ export default function EstoqueViewDialog({
           <Section title="ESTOQUE">
             <InfoItem
               label={`Quantidade (${unidade})`}
-              value={formatMass(item.quantidade, { empty: "—" })}
+              value={formatQuantidade(estoqueInicial, { empty: "—" })}
             />
             <InfoItem
               label={`Saldo Atual (${unidade})`}
-              value={formatMass(item.saldo_atual, { empty: "—" })}
+              value={formatQuantidade(saldoCalculado, { empty: "—" })}
               highlight="text-primary font-bold"
             />
             <InfoItem label="Unidade" value={unidade} />
@@ -567,7 +567,7 @@ export default function EstoqueViewDialog({
                             {s.vasilhame || (s.tipo === "embalado" ? "Embalado" : "—")}
                           </td>
                           <td className="px-3 py-2 text-right text-foreground/80">
-                            {formatMass(s.quantidade, { empty: "—" })} {s.unidade}
+                            {formatQuantidade(s.quantidade, { empty: "—" })} {s.unidade}
                           </td>
                           <td className="px-3 py-2">
                             <span
@@ -593,7 +593,7 @@ export default function EstoqueViewDialog({
                           Total Expedido (fiscal)
                         </td>
                         <td className="px-3 py-2 text-right font-bold text-primary">
-                          {formatMass(
+                          {formatQuantidade(
                             saidasHistorico
                               .filter((s) => s.enviado_ao_fiscal)
                               .reduce(
@@ -616,7 +616,7 @@ export default function EstoqueViewDialog({
                   <div className="space-y-0.5">
                     <p className="text-xs text-muted-foreground">Estoque inicial</p>
                     <p className="text-sm font-semibold text-foreground">
-                      {formatMass(estoqueInicial, { empty: "—" })} {unidade}
+                      {formatQuantidade(estoqueInicial, { empty: "—" })} {unidade}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -624,7 +624,7 @@ export default function EstoqueViewDialog({
                       (−) Total Expedido
                     </p>
                     <p className="text-sm font-semibold text-red-600">
-                      {formatMass(totalSaido, { empty: "—" })} {unidade}
+                      {formatQuantidade(totalSaido, { empty: "—" })} {unidade}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -632,10 +632,10 @@ export default function EstoqueViewDialog({
                       (=) Estoque atual
                     </p>
                     <p className="text-sm font-bold text-primary">
-                      {formatMass(saldoCalculado, { empty: "—" })} {unidade}
+                      {formatQuantidade(saldoCalculado, { empty: "—" })} {unidade}
                       {Math.abs(saldoCalculado - saldoAtualBase) > 0.001 && (
                         <span className="ml-2 text-[11px] font-medium text-amber-700">
-                          (base: {formatMass(saldoAtualBase, { empty: "—" })})
+                          (base: {formatQuantidade(saldoAtualBase, { empty: "—" })})
                         </span>
                       )}
                     </p>

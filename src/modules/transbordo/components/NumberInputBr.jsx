@@ -17,18 +17,19 @@ export default function NumberInputBr({
   className = '',
   max,
   min,
+  trimTrailingZeros = false,
   id,
   name,
   'aria-label': ariaLabel,
 }) {
   const [focused, setFocused] = useState(false);
-  const [text, setText] = useState(() => formatDisplay(value, decimals));
+  const [text, setText] = useState(() => formatDisplay(value, decimals, trimTrailingZeros));
 
   useEffect(() => {
     if (!focused) {
-      setText(formatDisplay(value, decimals));
+      setText(formatDisplay(value, decimals, trimTrailingZeros));
     }
-  }, [value, decimals, focused]);
+  }, [value, decimals, trimTrailingZeros, focused]);
 
   const handleChange = (e) => {
     const next = sanitizeTyping(e.target.value, decimals);
@@ -77,7 +78,7 @@ export default function NumberInputBr({
     if (typeof min === 'number' && Number.isFinite(min) && n < min) n = min;
     if (typeof max === 'number' && Number.isFinite(max) && n > max) n = max;
     onChange?.(n);
-    setText(formatDisplay(n, decimals));
+    setText(formatDisplay(n, decimals, trimTrailingZeros));
   };
 
   return (
@@ -98,11 +99,13 @@ export default function NumberInputBr({
   );
 }
 
-function formatDisplay(value, decimals) {
+function formatDisplay(value, decimals, trimTrailingZeros = false) {
   if (value === '' || value == null) return '';
   const n = parseNumero(value);
   if (!Number.isFinite(n)) return '';
-  return formatNum(n, decimals, { empty: '' });
+  const text = formatNum(n, decimals, { empty: '' });
+  if (!trimTrailingZeros || decimals <= 0 || !text.includes(',')) return text;
+  return text.replace(/,(\d*?)0+$/, (_, digits) => (digits ? `,${digits}` : ''));
 }
 
 function sanitizeTyping(raw, decimals) {

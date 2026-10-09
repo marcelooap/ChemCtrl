@@ -7,7 +7,7 @@ import {
   } from "@shared/components/ui/dialog";
   import { Button } from "@shared/components/ui/button";
   import { Package, FileText, CheckCircle, AlertCircle } from "lucide-react";
-import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
+import { formatMass, formatVolume, formatDensidade, formatQuantidade } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
   
@@ -89,7 +89,7 @@ import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
       doc.setFontSize(8);
       doc.setTextColor(94, 108, 132);
       lotes.forEach((l) => {
-        doc.text(`${l.produto_nome || "-"} | ${formatMass(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })} ${l.unidade_medida || ""} | Lote: ${l.lote || "-"}`, 14, y);
+        doc.text(`${l.produto_nome || "-"} | ${formatQuantidade(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })} ${l.unidade_medida || ""} | Lote: ${l.lote || "-"}`, 14, y);
         y += 5;
       });
   
@@ -151,7 +151,7 @@ import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
                   {lotes.map((l, i) => (
                     <tr key={i}>
                       <td className={tdClass}>{l.produto_nome || "-"}</td>
-                      <td className={tdClass}>{formatMass(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })}</td>
+                      <td className={tdClass}>{formatQuantidade(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })}</td>
                       <td className={tdClass}>{l.unidade_medida || "-"}</td>
                       <td className={tdClass}>{l.lote || "-"}</td>
                     </tr>

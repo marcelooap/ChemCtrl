@@ -19,10 +19,15 @@ import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ComunicacaoRecebimentoDialog from "@transbordo/components/entrada/ComunicacaoRecebimentoDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
-import { formatMass, formatNum } from "@transbordo/lib/format";
+import { formatQuantidade } from "@transbordo/lib/format";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
+import {
+  listNomesClientesIndustrializacao,
+  persistClienteSelecionado,
+} from "@painel/lib/saidaClientes";
+import { buildSaidaClienteOptions } from "@painel/lib/recebimentoCatalog";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { prepareEntradaView } from "@industrializacao/lib/syncMpEntradaTransbordo";
@@ -38,6 +43,21 @@ const ORIGEM_OPTIONS = [
 
 function getSistemaOrigem(entrada) {
   return entrada?.origem === "industrializacao" ? "Industrialização" : "Transbordo";
+}
+
+async function listAllClientes() {
+  const pageSize = 1000;
+  const all = [];
+  for (let page = 0; page < 20; page += 1) {
+    const rows = await entities.clientes.list("nome", {
+      limit: pageSize,
+      offset: page * pageSize,
+    });
+    const list = Array.isArray(rows) ? rows : [];
+    all.push(...list);
+    if (list.length < pageSize) break;
+  }
+  return all;
 }
 
 function getEntradaLotes(entrada) {
@@ -96,13 +116,27 @@ export default function Entrada() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [ents, prods, cliens, transbs, ests] = await Promise.all([
-        entities.entradas.list("-created_date"),
-        entities.produtos.list(),
-        entities.clientes.list(),
-        entities.transbordos.list(),
-        entities.estoque.list(),
-      ]);
+      const [ents, prods, cliens, transbs, ests, nomesInd, vascs, isotanques] =
+        await Promise.all([
+          entities.entradas.list("-created_date"),
+          entities.produtos.list(),
+          listAllClientes(),
+          entities.transbordos.list(),
+          entities.estoque.list(),
+          listNomesClientesIndustrializacao().catch((err) => {
+            console.warn(
+              "[Entrada] Clientes da Industrialização não carregaram:",
+              err?.message || err
+            );
+            return [];
+          }),
+          entities.vasilhames
+            .list("id", { select: "cliente_nome" })
+            .catch(() => []),
+          entities.isotanques
+            .list("id", { select: "cliente_nome" })
+            .catch(() => []),
+        ]);
 
       // Garante que clientes referenciados em produtos existam em t_clientes
       const nomesExistentes = new Set(
@@ -128,7 +162,15 @@ export default function Entrada() {
 
       setEntradas(ents);
       setProdutos(prods);
-      setClientes(clientesAtualizados);
+      setClientes(
+        buildSaidaClienteOptions(clientesAtualizados, [
+          ...(nomesInd || []),
+          ...(prods || []).map((p) => p.cliente_nome),
+          ...(ents || []).map((e) => e.cliente_nome),
+          ...(vascs || []).map((v) => v.cliente_nome),
+          ...(isotanques || []).map((iso) => iso.cliente_nome),
+        ])
+      );
       setTransbordos(transbs);
       setEstoque(ests);
     } catch (err) {
@@ -231,6 +273,19 @@ export default function Entrada() {
   };
 
   const handleSave = async (data) => {
+    const clientePersistido = await persistClienteSelecionado(
+      data.cliente_id,
+      data.cliente_nome
+    );
+    if (!clientePersistido?.id) {
+      throw new Error("Selecione um cliente.");
+    }
+    data = {
+      ...data,
+      cliente_id: clientePersistido.id,
+      cliente_nome: clientePersistido.nome || data.cliente_nome,
+    };
+
     if (!editingEntrada) {
       const result = await createEntradaCompleta({ data, produtos });
       await loadData();
@@ -542,7 +597,7 @@ export default function Entrada() {
                       <td className="px-5 py-3 font-medium text-foreground">
                         <StackedCell
                           items={lotes.map((l) =>
-                            formatNum(l.quantidade, 0, { empty: "-" })
+                            formatQuantidade(l.quantidade, { empty: "-" })
                           )}
                         />
                       </td>
@@ -626,7 +681,7 @@ export default function Entrada() {
           <span className="text-muted-foreground">
             Quantidade total:{" "}
             <span className="font-medium text-foreground">
-              {formatMass(
+              {formatQuantidade(
                 filtered.reduce((sum, e) => {
                   const lotes = getEntradaLotes(e);
                   const fromLotes = lotes.reduce(

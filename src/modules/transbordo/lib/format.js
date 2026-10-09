@@ -111,6 +111,27 @@ export function formatMass(v, opts = {}) {
   return formatNum(v, 0, { empty: opts.empty ?? "0" });
 }
 
+/**
+ * Quantidade informada na entrada: até 3 casas decimais.
+ * Inteiros continuam sem casas (8.250). Frações preservam o que foi digitado (5.499,298).
+ */
+export function roundQuantidade(v) {
+  const n = parseNumero(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 1000) / 1000;
+}
+
+export function formatQuantidade(v, opts = {}) {
+  const empty = opts.empty ?? "0";
+  if (v == null || v === "") return empty;
+  const n = roundQuantidade(v);
+  if (!Number.isFinite(n)) return empty;
+  const hasFraction = Math.abs(n - Math.trunc(n)) > 1e-9;
+  if (!hasFraction) return formatNum(n, 0, { empty });
+  const text = formatNum(n, 3, { empty });
+  return text.replace(/,(\d*?)0+$/, (_, digits) => (digits ? `,${digits}` : ""));
+}
+
 /** Densidade — até 3 casas decimais PT-BR (ex.: 0,858). */
 export function formatDensidade(v, opts = {}) {
   return formatNum(v, 3, { empty: opts.empty ?? "-" });

@@ -319,12 +319,17 @@ export default function EntradaModal({
   const filteredProdutos = !clienteNome
     ? []
     : produtos.filter((p) => {
-        if (clienteId && p.cliente_id) {
-          return p.cliente_id === clienteId;
+        const sameName =
+          String(p.cliente_nome || "").trim().toLowerCase() ===
+          clienteNome.trim().toLowerCase();
+        const clienteIdReal =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            String(clienteId || "")
+          );
+        if (clienteIdReal && p.cliente_id) {
+          return p.cliente_id === clienteId || sameName;
         }
-        return (
-          p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
-        );
+        return sameName;
       });
 
   // ── Totais derivados dos lotes ──

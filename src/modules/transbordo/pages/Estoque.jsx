@@ -21,7 +21,7 @@ import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
-import { formatMass, formatVolume, formatCurrency } from "@transbordo/lib/format";
+import { formatVolume, formatCurrency, formatQuantidade } from "@transbordo/lib/format";
 import {
   computeEstoqueSaldo,
   computeEstoqueQuantidadesPorLocal,
@@ -82,7 +82,7 @@ function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
   if (isUnidadeVolumeEntrada(getEstoqueUnidadeEntrada(estoqueItem))) {
     return formatVolume(valor, { empty: "-" });
   }
-  return formatMass(valor, { empty: "-" });
+  return formatQuantidade(valor, { empty: "-" });
 }
 
 function SaldoBadge({ children, tone }) {
@@ -732,7 +732,7 @@ export default function Estoque() {
           <span className="text-muted-foreground">
             Qtd. total em estoque:{" "}
             <span className="font-medium text-foreground">
-              {formatMass(totalSaldo)}
+              {formatQuantidade(totalSaldo)}
             </span>{" "}
             (unid. mistas)
           </span>

@@ -75,6 +75,20 @@ function SummaryItem({ label, value }) {
   );
 }
 
+function qtdEmbalagensFromPeso(quantidade, peso) {
+  const total = Number(quantidade) || 0;
+  const pesoNum = Number(peso) || 0;
+  if (total <= 0 || pesoNum <= 0) return "";
+  return total / pesoNum;
+}
+
+function pesoLiquidoFromQtd(quantidade, qtdEmb) {
+  const total = Number(quantidade) || 0;
+  const qtd = Number(qtdEmb) || 0;
+  if (total <= 0 || qtd <= 0) return "";
+  return total / qtd;
+}
+
 function recalcVasilhame(lote, densOverride) {
   const dens =
     densOverride != null
@@ -193,6 +207,38 @@ export default function LoteBlock({
     onChange(recalcVasilhame(updated));
   };
 
+  const handleQuantidadeChange = (value) => {
+    const quantidade = value === "" ? "" : value;
+    const next = { ...lote, quantidade };
+    if (isEmbalado && Number(quantidade) > 0 && Number(lote.peso_liquido) > 0) {
+      next.quantidade_embalagens = qtdEmbalagensFromPeso(
+        quantidade,
+        lote.peso_liquido
+      );
+    }
+    onChange(next);
+  };
+
+  const handlePesoLiquidoChange = (value) => {
+    const peso = value === "" ? "" : value;
+    const next = { ...lote, peso_liquido: peso };
+    if (peso === "") {
+      next.quantidade_embalagens = "";
+    } else if (Number(lote.quantidade) > 0 && Number(peso) > 0) {
+      next.quantidade_embalagens = qtdEmbalagensFromPeso(lote.quantidade, peso);
+    }
+    onChange(next);
+  };
+
+  const handleQtdEmbalagensChange = (value) => {
+    const qtdEmb = value === "" ? "" : value;
+    const next = { ...lote, quantidade_embalagens: qtdEmb };
+    if (Number(qtdEmb) > 0 && Number(lote.quantidade) > 0) {
+      next.peso_liquido = pesoLiquidoFromQtd(lote.quantidade, qtdEmb);
+    }
+    onChange(next);
+  };
+
   const produtoDisplay =
     lote.produto_codigo && lote.produto_nome
       ? `${lote.produto_codigo} - ${lote.produto_nome}`
@@ -202,13 +248,6 @@ export default function LoteBlock({
   const lQtd = parseFloat(lote.quantidade) || 0;
   const lPreco = parseFloat(lote.preco_unitario) || 0;
   const lCustoTotal = lQtd * lPreco;
-
-  const lPeso = parseFloat(lote.peso_liquido) || 0;
-  const lQtdEmb = parseFloat(lote.quantidade_embalagens) || 0;
-  const lTotalCalculado = lPeso * lQtdEmb;
-
-  const embalagemDiverge =
-    isEmbalado && lQtd > 0 && Math.abs(lTotalCalculado - lQtd) > 0.001;
 
   const qtdDisplay =
     lote.quantidade !== "" && lote.quantidade != null
@@ -414,7 +453,7 @@ export default function LoteBlock({
               decimals={3}
               min={0}
               value={lote.quantidade || ""}
-              onChange={(v) => update("quantidade", v === "" ? "" : v)}
+              onChange={handleQuantidadeChange}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}
@@ -520,14 +559,14 @@ export default function LoteBlock({
 
       {/* Embalagem Fields */}
       {isEmbalado && (
-        <div className="grid grid-cols-3 gap-3 p-3 rounded-lg border border-border">
+        <div className="grid grid-cols-2 gap-3 p-3 rounded-lg border border-border">
           <div className="space-y-1.5">
             <Label>Peso Líquido</Label>
             <NumberInputBr
               decimals={3}
               min={0}
               value={lote.peso_liquido || ""}
-              onChange={(v) => update("peso_liquido", v === "" ? "" : v)}
+              onChange={handlePesoLiquidoChange}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}
@@ -536,29 +575,16 @@ export default function LoteBlock({
           <div className="space-y-1.5">
             <Label>Qtd. Embalagens</Label>
             <NumberInputBr
-              decimals={0}
+              decimals={3}
               min={0}
+              trimTrailingZeros
               value={lote.quantidade_embalagens || ""}
-              onChange={(v) => update("quantidade_embalagens", v === "" ? "" : v)}
+              onChange={handleQtdEmbalagensChange}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Total Calculado</Label>
-            <Input
-              value={formatNum(lTotalCalculado, 0)}
-              disabled
-              className="bg-muted/40 font-medium"
-            />
-          </div>
-          {embalagemDiverge && (
-            <p className="col-span-3 text-xs text-red-600">
-              ⚠ Divergência: O total calculado ({formatNum(lTotalCalculado, 0)}) não
-              corresponde à quantidade do bloco ({formatNum(lQtd, 0)}).
-            </p>
-          )}
         </div>
       )}
 

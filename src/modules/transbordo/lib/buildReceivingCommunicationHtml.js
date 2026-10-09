@@ -1,4 +1,4 @@
-import { formatMass, formatVolume, formatDensidade } from "@transbordo/lib/format";
+import { formatMass, formatVolume, formatDensidade, formatQuantidade } from "@transbordo/lib/format";
 import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
 
 const FONT = "Arial,Helvetica,sans-serif";
@@ -420,7 +420,7 @@ export function formatReceivingLoteRow(
     produto_codigo: lote.produto_codigo,
     produto_nome: lote.produto_nome,
     nota_fiscal: lote.nota_fiscal || notaFiscal,
-    quantidadeFmt: formatMass(
+    quantidadeFmt: formatQuantidade(
       getQuantidadeNotaFiscal(lote, entrada, { lotesCount }),
       { empty: "-" }
     ),

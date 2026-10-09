@@ -8,7 +8,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
 import { Package, CheckCircle, AlertCircle, AlertTriangle } from "lucide-react";
-import { formatMass, formatVolume, formatDensidade, formatNum } from "@transbordo/lib/format";
+import { formatMass, formatVolume, formatDensidade, formatNum, formatQuantidade } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import {
@@ -375,7 +375,7 @@ export default function ComunicacaoRecebimentoDialog({
                       </td>
                       <td className={tdClass}>{l.nota_fiscal || entrada.nota_fiscal || "-"}</td>
                       <td className={`${tdClass} text-right tabular-nums`}>
-                        {formatMass(
+                        {formatQuantidade(
                           getQuantidadeNotaFiscal(l, entrada, { lotesCount }),
                           { empty: "-" }
                         )}

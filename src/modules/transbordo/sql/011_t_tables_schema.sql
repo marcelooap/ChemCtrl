@@ -118,7 +118,7 @@ create table if not exists t_entradas (
   saldo_atual numeric not null default 0,
   embalado boolean not null default false,
   peso_liquido numeric,
-  quantidade_embalagens integer,
+  quantidade_embalagens numeric,
   status_wms boolean not null default false,
   granel_pesagem boolean not null default false,
   granel_ticket text,
@@ -174,7 +174,7 @@ create table if not exists t_estoque (
   custo_total numeric,
   embalado boolean not null default false,
   peso_liquido numeric,
-  quantidade_embalagens integer,
+  quantidade_embalagens numeric,
   status_wms boolean not null default false,
   -- lotes[]: mesmo shape de t_entradas.lotes (normalmente 1 item)
   lotes jsonb not null default '[]'::jsonb,

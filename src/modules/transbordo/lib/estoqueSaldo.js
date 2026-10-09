@@ -1,4 +1,4 @@
-import { roundMass, parseDensidade, roundVolume } from "@transbordo/lib/format";
+import { roundMass, parseDensidade, roundVolume, roundQuantidade } from "@transbordo/lib/format";
 import {
   loteToKg,
   loteToLitros,
@@ -32,11 +32,11 @@ export function getEstoqueQuantidade(estoqueItem) {
     if (umOp === "gal" && qtd > 0) return Math.round(qtd * 3.78541);
     // Legado (kg) ou embalado em L: volume declarado da entrada
     if (declaredL > 0) return declaredL;
-    if (embalado && qtd > 0) return Math.round(qtd);
+    if (embalado && qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
   }
 
   const qtd = Number(estoqueItem?.quantidade) || 0;
-  if (qtd > 0) return qtd;
+  if (qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
 
   if (lote) {
     const fromLote = loteToKg({
@@ -155,7 +155,7 @@ export function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
         return Math.round(valor / 3.78541);
       }
     }
-    return Math.round(valor);
+    return roundQuantidade(valor);
   }
 
   const dens =
@@ -184,7 +184,7 @@ export function valorNaUnidadeEntrada(estoqueItem, valorOperacional) {
       return Math.round(valor / 0.453592);
     case "kg":
     default:
-      return Math.round(valor);
+      return roundQuantidade(valor);
   }
 }
 
@@ -208,7 +208,7 @@ export function getEstoqueSaldoEntrada(estoqueItem) {
 export function getEstoqueExpedidoEntrada(estoqueItem) {
   const inicial = getEstoqueQuantidadeEntrada(estoqueItem);
   const atual = getEstoqueSaldoEntrada(estoqueItem);
-  return Math.max(0, Math.round(inicial - atual));
+  return Math.max(0, roundQuantidade(inicial - atual));
 }
 
 /**
@@ -1341,7 +1341,7 @@ export function computeEstoqueSaldo(
     0,
     estoqueOperaEmLitros(estoqueItem)
       ? roundVolume(quantidade - saidoEmb - saidoConv - saidoPatio)
-      : roundMass(quantidade - saidoEmb - saidoConv - saidoPatio)
+      : roundQuantidade(quantidade - saidoEmb - saidoConv - saidoPatio)
   );
 }
 
@@ -1372,7 +1372,7 @@ function litrosParaQuantidadeOperacional(estoqueItem, litros) {
     isEstoqueEmbalado(estoqueItem) &&
     isUnidadeMassaEntrada(getEstoqueUnidadeEntrada(estoqueItem))
   ) {
-    return roundMass(vol);
+    return roundQuantidade(vol);
   }
   const dens = parseDensidade(estoqueItem.densidade);
   return dens > 0 ? roundMass(vol * dens) : roundMass(vol);
@@ -1402,7 +1402,20 @@ function quantidadeComposicaoOperacional(c, estoqueItem) {
 function roundOp(estoqueItem, value) {
   return estoqueOperaEmLitros(estoqueItem)
     ? roundVolume(value)
-    : roundMass(value);
+    : roundQuantidade(value);
+}
+
+/** Se a coluna foi gravada inteira, recupera a fração ainda presente no lote da entrada. */
+function quantidadeComDecimalDoLote(lote, quantidadeColuna) {
+  const coluna = roundQuantidade(quantidadeColuna);
+  const informada = roundQuantidade(lote?.quantidade);
+  if (!(informada > 0)) return coluna;
+  const temFracao = Math.abs(informada - Math.trunc(informada)) > 1e-9;
+  if (!temFracao) return coluna;
+  if (coluna <= 0) return informada;
+  if (Math.abs(Math.round(informada) - Math.round(coluna)) < 0.001) return informada;
+  if (Math.abs(informada - coluna) < 1) return informada;
+  return coluna;
 }
 
 /** Chaves de identificação de um vasilhame no pátio (para cruzar com FIFO/cadeia). */

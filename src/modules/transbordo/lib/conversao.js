@@ -1,4 +1,4 @@
-import { distributeByWeights } from "@transbordo/lib/format";
+import { distributeByWeights, roundQuantidade } from "@transbordo/lib/format";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 
 const LB_TO_KG = 0.453592;
@@ -17,7 +17,7 @@ export const loteToKg = (lote) => {
 
   // Embalado: total já vem no campo quantidade (ex.: L ou kg do bloco)
   if (lote?.embalado) {
-    return Math.round(lQtd);
+    return roundQuantidade(lQtd);
   }
 
   const lDens =
@@ -45,7 +45,7 @@ export const loteToKg = (lote) => {
         ? Math.round(lQtd * GAL_TO_L * lDens)
         : Math.round(lQtd * GAL_TO_L);
     default:
-      return Math.round(lQtd);
+      return roundQuantidade(lQtd);
   }
 };
 
@@ -150,7 +150,7 @@ export const loteUnidadeEstoque = (lote) => {
  */
 export const loteQuantidadeEstoque = (lote) => {
   if (lote?.embalado) {
-    return Math.round(parseFloat(lote?.quantidade) || 0);
+    return roundQuantidade(parseFloat(lote?.quantidade) || 0);
   }
   const um = String(lote?.unidade_medida || "kg").trim().toLowerCase();
   if (
