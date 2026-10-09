@@ -16,7 +16,8 @@ import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
   CHECKLIST_STATUS,
-  checksForKind,
+  checkDefLabel,
+  checkDefsForItem,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
 import { generateChecklistItemPDF } from '@painel/lib/pdfChecklistItem';
@@ -69,7 +70,7 @@ export default function SaidaChecklistItemViewDialog({
   }, [open]);
 
   const checkDefs = useMemo(
-    () => (item ? checksForKind(item.kind) : []),
+    () => (item ? checkDefsForItem(item) : []),
     [item]
   );
 
@@ -216,7 +217,7 @@ export default function SaidaChecklistItemViewDialog({
                       key={c.key}
                       className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <p className="text-sm leading-snug">{t(c.labelKey)}</p>
+                      <p className="text-sm leading-snug">{checkDefLabel(c, t)}</p>
                       {meta ? (
                         <span
                           className={cn(

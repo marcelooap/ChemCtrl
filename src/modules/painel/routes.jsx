@@ -6,6 +6,7 @@ import MainLayout from '@painel/layouts/MainLayout';
 import Home from '@painel/pages/Home';
 import Operadores from '@painel/pages/configuracao/Operadores';
 import Etiquetas from '@painel/pages/configuracao/Etiquetas';
+import ChecklistExpedicao from '@painel/pages/configuracao/ChecklistExpedicao';
 import Dashboard from '@painel/pages/Dashboard';
 import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
@@ -38,6 +39,7 @@ export default function PainelRoutes() {
             <Route path="configuracao" element={<Navigate to="/painel/configuracao/operadores" replace />} />
             <Route path="configuracao/operadores" element={<Operadores />} />
             <Route path="configuracao/etiquetas" element={<Etiquetas />} />
+            <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
 
             <Route
               path="comercial"

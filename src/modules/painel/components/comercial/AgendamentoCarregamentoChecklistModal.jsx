@@ -42,13 +42,15 @@ import {
   areAllItemsApproved,
   buildChecklistItemsFromSaidas,
   buildChecklistPayloadV2,
-  checksForKind,
+  checkDefLabel,
+  checkDefsForItem,
   computeChecksSummary,
   computeItemStatus,
   hasRejectedItem,
   mergeChecklistItems,
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
+import { listChecklistExpedicaoByClienteIds } from '@painel/lib/checklistExpedicaoConfig';
 
 const STATUS_STYLE = {
   [CHECKLIST_STATUS.PENDENTE]: 'bg-muted text-muted-foreground',
@@ -174,15 +176,56 @@ export default function AgendamentoCarregamentoChecklistModal({
   // Após liberação ainda permite editar/anexar fotos; bloqueia só quando o carregamento já concluiu.
   const readOnly = isCarregado;
 
+  const [checkDefsByCliente, setCheckDefsByCliente] = useState(null);
+  const [defsLoading, setDefsLoading] = useState(false);
+
+  const clienteIdsKey = useMemo(() => {
+    const ids = new Set();
+    for (const b of list) {
+      if (b?.cliente_id) ids.add(String(b.cliente_id));
+    }
+    for (const s of saidas || []) {
+      if (s?.cliente_id) ids.add(String(s.cliente_id));
+    }
+    return [...ids].sort().join(',');
+  }, [list, saidas]);
+
+  useEffect(() => {
+    if (!open) {
+      setCheckDefsByCliente(null);
+      setDefsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const ids = clienteIdsKey ? clienteIdsKey.split(',').filter(Boolean) : [];
+    setDefsLoading(true);
+    listChecklistExpedicaoByClienteIds(ids)
+      .then((map) => {
+        if (!cancelled) setCheckDefsByCliente(map);
+      })
+      .catch(() => {
+        if (!cancelled) setCheckDefsByCliente(new Map());
+      })
+      .finally(() => {
+        if (!cancelled) setDefsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, clienteIdsKey]);
+
   const builtItems = useMemo(
-    () =>
-      buildChecklistItemsFromSaidas({
+    () => {
+      if (defsLoading || checkDefsByCliente == null) return [];
+      return buildChecklistItemsFromSaidas({
         bookings: list,
         saidas,
         vasilhames,
         entradas,
-      }),
-    [list, saidas, vasilhames, entradas]
+        checkDefsByCliente,
+      });
+    },
+    [list, saidas, vasilhames, entradas, checkDefsByCliente, defsLoading]
   );
 
   const [items, setItems] = useState([]);
@@ -198,7 +241,8 @@ export default function AgendamentoCarregamentoChecklistModal({
       initializedRef.current = false;
       return;
     }
-    if (!booking || initializedRef.current) return;
+    if (!booking || defsLoading || checkDefsByCliente == null) return;
+    if (initializedRef.current) return;
     initializedRef.current = true;
     const stored = parseStoredChecklist(booking.checklist_respostas);
     setItems(mergeChecklistItems(builtItems, stored.items));
@@ -207,7 +251,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     setUploading(false);
     setError('');
     dirtyRef.current = false;
-  }, [open, booking, builtItems]);
+  }, [open, booking, builtItems, defsLoading, checkDefsByCliente]);
 
   // Reconcilia quando saídas/vasilhames carregam depois da abertura, sem perder progresso local
   useEffect(() => {
@@ -245,7 +289,7 @@ export default function AgendamentoCarregamentoChecklistModal({
       prev.map((it) => {
         if (it.item_key !== itemKey) return it;
         const next = updater(it);
-        const status = computeItemStatus(next.kind, next.checks);
+        const status = computeItemStatus(next);
         const wasFinal =
           it.status === CHECKLIST_STATUS.APROVADO || it.status === CHECKLIST_STATUS.REPROVADO;
         const isFinal =
@@ -374,7 +418,8 @@ export default function AgendamentoCarregamentoChecklistModal({
       ? t('painel.comercial.agendamentos.encaixe')
       : booking.horario;
 
-  const checkDefs = active ? checksForKind(active.kind) : [];
+  const checkDefs = active ? checkDefsForItem(active) : [];
+  const hasCustomChecks = Array.isArray(active?.check_defs) && active.check_defs.length > 0;
   const sections = [...new Set(checkDefs.map((c) => c.section))];
   const sectionTitle = (section) =>
     t(`painel.comercial.agendamentos.checklist.sections.${section}`, { defaultValue: section });
@@ -432,7 +477,14 @@ export default function AgendamentoCarregamentoChecklistModal({
 
         {/* Corpo */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {items.length === 0 ? (
+          {defsLoading ? (
+            <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t('painel.comercial.agendamentos.checklist.loadingDefs', {
+                defaultValue: 'Carregando checklist...',
+              })}
+            </div>
+          ) : items.length === 0 ? (
             <div className="px-6 py-10 text-center text-sm text-muted-foreground">
               {t('painel.comercial.agendamentos.checklist.emptyItems')}
             </div>
@@ -446,7 +498,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                 </div>
               ) : null}
               {items.map((it) => {
-                const s = computeChecksSummary(it.kind, it.checks);
+                const s = computeChecksSummary(it);
                 const Icon = it.kind === CHECKLIST_KIND.CONVENCIONAL ? Container : Package;
                 return (
                   <button
@@ -570,7 +622,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                 />
               </div>
 
-              {active.kind === CHECKLIST_KIND.CONVENCIONAL ? (
+              {active.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks ? (
                 <div className="space-y-3 rounded-lg border border-border p-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -606,7 +658,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                       .map((c) => (
                         <CheckAnswerRow
                           key={c.key}
-                          label={t(c.labelKey)}
+                          label={checkDefLabel(c, t)}
                           value={active.checks?.[c.key] || ''}
                           disabled={readOnly || saving}
                           onChange={(v) => setAnswer(c.key, v)}
@@ -618,8 +670,30 @@ export default function AgendamentoCarregamentoChecklistModal({
                 </div>
               ) : null}
 
+              {active.kind === CHECKLIST_KIND.CONVENCIONAL && hasCustomChecks && active.lacres?.length > 0 ? (
+                <div className="space-y-2 rounded-lg border border-border p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('painel.comercial.agendamentos.checklist.sections.lacres')}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {active.lacres.map((l, i) => (
+                      <span
+                        key={`${l.numero}-${i}`}
+                        className="inline-flex items-center rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-sm font-medium text-foreground"
+                      >
+                        {l.numero}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {sections
-                .filter((section) => !(active.kind === CHECKLIST_KIND.CONVENCIONAL && section === 'lacres'))
+                .filter((section) => !(
+                  !hasCustomChecks
+                  && active.kind === CHECKLIST_KIND.CONVENCIONAL
+                  && section === 'lacres'
+                ))
                 .map((section) => (
                 <div key={section} className="space-y-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -630,7 +704,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                     .map((c) => (
                       <CheckAnswerRow
                         key={c.key}
-                        label={t(c.labelKey)}
+                        label={checkDefLabel(c, t)}
                         value={active.checks?.[c.key] || ''}
                         disabled={readOnly || saving}
                         onChange={(v) => setAnswer(c.key, v)}

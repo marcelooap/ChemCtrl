@@ -129,6 +129,33 @@ export function checksForKind(kind) {
   return kind === CHECKLIST_KIND.CONVENCIONAL ? CONVENCIONAL_CHECKS : EMBALADO_CHECKS;
 }
 
+/**
+ * Definições de verificação de um item: snapshot customizado do cliente
+ * ou os checks padrão do kind (legado / cliente sem configuração).
+ */
+export function checkDefsForItem(item) {
+  if (Array.isArray(item?.check_defs) && item.check_defs.length > 0) {
+    return item.check_defs;
+  }
+  return checksForKind(item?.kind);
+}
+
+/** Rótulo traduzível: preferência por label persistido (config por cliente). */
+export function checkDefLabel(def, t) {
+  if (!def) return '';
+  if (def.label) return String(def.label);
+  if (def.labelKey && typeof t === 'function') return t(def.labelKey);
+  return String(def.key || '');
+}
+
+export function emptyChecksMapForDefs(defs = []) {
+  const map = {};
+  for (const c of defs || []) {
+    if (c?.key) map[c.key] = '';
+  }
+  return map;
+}
+
 /** Parseia lacres do envase (texto livre) sem criar novos números. */
 export function parseLacresFromEnvase(raw) {
   const text = String(raw || '').trim();
@@ -190,6 +217,8 @@ function tanqueLabel(item, vasilhame, index) {
 
 /**
  * Monta a lista de itens de conferência a partir das saídas do slot.
+ * @param {Map<string, Array>|Record<string, Array>|null} [checkDefsByCliente]
+ *   Definições customizadas por cliente_id. Ausência / lista vazia → checks padrão do kind.
  * @returns {Array<object>}
  */
 export function buildChecklistItemsFromSaidas({
@@ -197,10 +226,17 @@ export function buildChecklistItemsFromSaidas({
   saidas = [],
   vasilhames = [],
   entradas = [],
+  checkDefsByCliente = null,
 } = {}) {
   const saidaById = new Map((saidas || []).map((s) => [String(s.id), s]));
   const vasilhameById = new Map((vasilhames || []).map((v) => [String(v.id), v]));
   const estoqueById = new Map((entradas || []).map((e) => [String(e.id), e]));
+  const defsMap =
+    checkDefsByCliente instanceof Map
+      ? checkDefsByCliente
+      : checkDefsByCliente && typeof checkDefsByCliente === 'object'
+        ? new Map(Object.entries(checkDefsByCliente))
+        : null;
   const items = [];
   let convencionalSeq = 0;
 
@@ -208,6 +244,10 @@ export function buildChecklistItemsFromSaidas({
     const saida = saidaById.get(String(booking.saida_id));
     if (!saida) continue;
     const linhas = Array.isArray(saida.itens) ? saida.itens : [];
+    const clienteId = String(saida.cliente_id || booking.cliente_id || '').trim() || null;
+    const customDefs =
+      clienteId && defsMap?.has(clienteId) ? defsMap.get(clienteId) : null;
+    const useCustom = Array.isArray(customDefs) && customDefs.length > 0;
 
     linhas.forEach((linha, idx) => {
       const kind = checklistKindForTipo(linha.tipo);
@@ -232,6 +272,9 @@ export function buildChecklistItemsFromSaidas({
         estoque,
         estoqueById,
       });
+
+      const check_defs = useCustom ? customDefs : null;
+      const defs = useCustom ? customDefs : checksForKind(kind);
 
       items.push({
         item_key: itemKey,
@@ -260,7 +303,8 @@ export function buildChecklistItemsFromSaidas({
         data_fabricacao,
         data_validade,
         lacres,
-        checks: emptyChecksMap(kind),
+        check_defs,
+        checks: emptyChecksMapForDefs(defs),
         fotos: [],
         status: CHECKLIST_STATUS.PENDENTE,
         conferido_em: null,
@@ -325,11 +369,7 @@ function resolveItemDates({ linha, vasilhame, estoque, estoqueById }) {
 }
 
 export function emptyChecksMap(kind) {
-  const map = {};
-  for (const c of checksForKind(kind)) {
-    map[c.key] = '';
-  }
-  return map;
+  return emptyChecksMapForDefs(checksForKind(kind));
 }
 
 /** Normaliza valores salvos (inclui formato antigo booleano). */
@@ -345,9 +385,20 @@ export function normalizeCheckValue(value) {
   return '';
 }
 
-/** Resumo das verificações de um item. */
-export function computeChecksSummary(kind, checks) {
-  const defs = checksForKind(kind);
+/**
+ * Resumo das verificações de um item.
+ * Aceita (item) ou (kind, checks) para compatibilidade com callers legados.
+ */
+export function computeChecksSummary(kindOrItem, checksMaybe) {
+  let defs;
+  let checks;
+  if (kindOrItem && typeof kindOrItem === 'object' && !Array.isArray(kindOrItem)) {
+    defs = checkDefsForItem(kindOrItem);
+    checks = kindOrItem.checks;
+  } else {
+    defs = checksForKind(kindOrItem);
+    checks = checksMaybe;
+  }
   let answered = 0;
   let reprovados = 0;
   for (const d of defs) {
@@ -359,7 +410,7 @@ export function computeChecksSummary(kind, checks) {
     total: defs.length,
     answered,
     reprovados,
-    complete: answered === defs.length,
+    complete: answered === defs.length && defs.length > 0,
   };
 }
 
@@ -368,9 +419,10 @@ export function computeChecksSummary(kind, checks) {
  * qualquer verificação reprovada → Reprovado;
  * todas respondidas sem reprovação → Aprovado;
  * parcialmente respondido → Em conferência.
+ * Aceita (item) ou (kind, checks).
  */
-export function computeItemStatus(kind, checks) {
-  const s = computeChecksSummary(kind, checks);
+export function computeItemStatus(kindOrItem, checksMaybe) {
+  const s = computeChecksSummary(kindOrItem, checksMaybe);
   if (s.reprovados > 0) return CHECKLIST_STATUS.REPROVADO;
   if (s.complete) return CHECKLIST_STATUS.APROVADO;
   if (s.answered > 0) return CHECKLIST_STATUS.EM_CONFERENCIA;
@@ -453,6 +505,15 @@ export function buildChecklistPayloadV2({ items, user }) {
       data_fabricacao: it.data_fabricacao || null,
       data_validade: it.data_validade || null,
       lacres: Array.isArray(it.lacres) ? it.lacres : [],
+      // Snapshot das verificações do cliente — preserva histórico se a config mudar.
+      check_defs: Array.isArray(it.check_defs) && it.check_defs.length > 0
+        ? it.check_defs.map((d) => ({
+            key: d.key,
+            label: d.label || null,
+            labelKey: d.labelKey || null,
+            section: d.section || 'verificacoes',
+          }))
+        : null,
       checks: { ...it.checks },
       fotos: Array.isArray(it.fotos) ? [...it.fotos] : [],
       status: it.status || CHECKLIST_STATUS.PENDENTE,
@@ -492,15 +553,27 @@ export function mergeChecklistItems(builtItems, storedItems) {
   return (builtItems || []).map((built) => {
     const saved = byKey.get(built.item_key);
     if (!saved) return built;
-    const checks = { ...emptyChecksMap(built.kind) };
+
+    // Preferência: defs reconstruídas da config atual; se o built não trouxe
+    // custom e o snapshot salvo existe, mantém o snapshot (inspeção já iniciada).
+    const check_defs =
+      Array.isArray(built.check_defs) && built.check_defs.length > 0
+        ? built.check_defs
+        : Array.isArray(saved.check_defs) && saved.check_defs.length > 0
+          ? saved.check_defs
+          : null;
+
+    const mergedBase = { ...built, check_defs };
+    const defs = checkDefsForItem(mergedBase);
+    const checks = { ...emptyChecksMapForDefs(defs) };
     for (const key of Object.keys(checks)) {
       checks[key] = normalizeCheckValue(saved.checks?.[key]);
     }
     return {
-      ...built,
+      ...mergedBase,
       checks,
       fotos: Array.isArray(saved.fotos) ? [...saved.fotos] : [],
-      status: computeItemStatus(built.kind, checks),
+      status: computeItemStatus({ ...mergedBase, checks }),
       conferido_em: saved.conferido_em || null,
       conferido_por_id: saved.conferido_por_id || null,
       conferido_por_nome: saved.conferido_por_nome || null,

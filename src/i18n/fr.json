@@ -554,6 +554,7 @@
       "painelEstoque": "Stock",
       "painelOperadores": "Opérateurs",
       "painelEtiquetas": "Étiquettes",
+      "painelChecklistExpedicao": "Check-list Expédition",
       "tbHome": "Accueil",
       "tbDashboard": "Tableau de bord",
       "tbCadastro": "Cadastre",
@@ -705,7 +706,8 @@
       "profiles": "Permissions",
       "configuracao": "Configuration",
       "operadores": "Opérateurs",
-      "etiquetas": "Étiquettes"
+      "etiquetas": "Étiquettes",
+      "checklistExpedicao": "Check-list Expédition"
     },
     "modules": {
       "switch": "Changer de module",
@@ -818,6 +820,39 @@
           "embalagem": "Emballage",
           "responsavelTecnico": "Responsable technique"
         }
+      },
+      "checklistExpedicao": {
+        "title": "Check-list Expédition",
+        "subtitle": "Gérez les éléments d'inspection d'expédition spécifiques à chaque client",
+        "clientLabel": "Client",
+        "searchClient": "Sélectionnez ou recherchez un client...",
+        "selectClient": "Sélectionnez un client pour configurer le check-list d'expédition.",
+        "loading": "Chargement...",
+        "noConfig": "Ce client n'a pas encore de check-list d'expédition. Utilisez les éléments par défaut ou ajoutez les premiers éléments.",
+        "useDefaults": "Utiliser les éléments par défaut",
+        "addItem": "+ Ajouter un élément",
+        "save": "Enregistrer le check-list",
+        "saved": "Check-list d'expédition enregistré.",
+        "saveError": "Impossible d'enregistrer le check-list.",
+        "loadError": "Impossible de charger le check-list.",
+        "itemsTitle": "Éléments d'inspection",
+        "itemsHint": "Modifiez, réordonnez, ajoutez ou supprimez des éléments. L'ordre défini sera utilisé lors de l'inspection d'expédition.",
+        "itemPlaceholder": "Description de l'élément d'inspection",
+        "itemLabel": "Élément {{index}}",
+        "reorder": "Glisser pour réordonner",
+        "moveUp": "Monter",
+        "moveDown": "Descendre",
+        "removeTitle": "Supprimer l'élément",
+        "removeConfirm": "Supprimer l'élément « {{descricao}} » ? Cette modification ne sera permanente qu'après l'enregistrement.",
+        "discardTitle": "Modifications non enregistrées",
+        "discardConfirm": "Il y a des modifications non enregistrées sur le check-list. Voulez-vous les ignorer ?",
+        "discardConfirmAction": "Ignorer",
+        "emptyHint": "Remplissez la description de tous les éléments avant d'enregistrer.",
+        "duplicateHint": "Il y a des éléments avec la même description. Supprimez les doublons avant d'enregistrer.",
+        "tableMissingBanner": "La table du check-list d'expédition n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
+        "copySql": "Copier le script SQL",
+        "sqlCopied": "Script SQL copié. Collez-le dans l'éditeur SQL de Supabase et exécutez-le.",
+        "sqlCopyError": "Impossible de copier le script. Ouvrez le fichier src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
       }
     },
     "areas": {
@@ -1033,6 +1068,10 @@
           "attachPhotos": "Joindre des photos",
           "takePhoto": "Prendre une photo",
           "saveProgress": "Enregistrer le progrès",
+          "loadingDefs": "Chargement du check-list...",
+          "sections": {
+            "verificacoes": "Vérifications"
+          },
           "questions": {
             "docConferida": "Documentation de la carga vérifiée",
             "epiUtilizado": "EPI utilisés correctement",

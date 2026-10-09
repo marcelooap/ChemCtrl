@@ -554,6 +554,7 @@
       "painelEstoque": "Stock",
       "painelOperadores": "Operadores",
       "painelEtiquetas": "Etiquetas",
+      "painelChecklistExpedicao": "Check List Expedición",
       "tbHome": "Inicio",
       "tbDashboard": "Dashboard",
       "tbCadastro": "Cadastro",
@@ -705,7 +706,8 @@
       "profiles": "Permisos",
       "configuracao": "Configuración",
       "operadores": "Operadores",
-      "etiquetas": "Etiquetas"
+      "etiquetas": "Etiquetas",
+      "checklistExpedicao": "Check List Expedición"
     },
     "modules": {
       "switch": "Cambiar módulo",
@@ -818,6 +820,39 @@
           "embalagem": "Embalaje",
           "responsavelTecnico": "Responsable técnico"
         }
+      },
+      "checklistExpedicao": {
+        "title": "Check List Expedición",
+        "subtitle": "Gestione los ítems de inspección de expedición específicos de cada cliente",
+        "clientLabel": "Cliente",
+        "searchClient": "Seleccione o busque un cliente...",
+        "selectClient": "Seleccione un cliente para configurar el checklist de expedición.",
+        "loading": "Cargando...",
+        "noConfig": "Este cliente aún no tiene checklist de expedición configurado. Use los ítems predeterminados o agregue los primeros ítems.",
+        "useDefaults": "Usar ítems predeterminados",
+        "addItem": "+ Agregar ítem",
+        "save": "Guardar checklist",
+        "saved": "Checklist de expedición guardado.",
+        "saveError": "No fue posible guardar el checklist.",
+        "loadError": "No fue posible cargar el checklist.",
+        "itemsTitle": "Ítems de inspección",
+        "itemsHint": "Edite, reordene, agregue o elimine ítems. El orden definido se usará en la inspección de expedición.",
+        "itemPlaceholder": "Descripción del ítem de inspección",
+        "itemLabel": "Ítem {{index}}",
+        "reorder": "Arrastrar para reordenar",
+        "moveUp": "Mover hacia arriba",
+        "moveDown": "Mover hacia abajo",
+        "removeTitle": "Eliminar ítem",
+        "removeConfirm": "¿Eliminar el ítem \"{{descricao}}\"? Este cambio solo será permanente después de guardar.",
+        "discardTitle": "Cambios no guardados",
+        "discardConfirm": "Hay cambios no guardados en el checklist. ¿Desea descartarlos?",
+        "discardConfirmAction": "Descartar",
+        "emptyHint": "Complete la descripción de todos los ítems antes de guardar.",
+        "duplicateHint": "Hay ítems con la misma descripción. Elimine los duplicados antes de guardar.",
+        "tableMissingBanner": "La tabla del checklist de expedición aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
+        "copySql": "Copiar script SQL",
+        "sqlCopied": "Script SQL copiado. Péguelo en el SQL Editor de Supabase y ejecútelo.",
+        "sqlCopyError": "No fue posible copiar el script. Abra el archivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
       }
     },
     "areas": {
@@ -1033,6 +1068,10 @@
           "attachPhotos": "Adjuntar fotos",
           "takePhoto": "Tomar foto",
           "saveProgress": "Guardar progreso",
+          "loadingDefs": "Cargando checklist...",
+          "sections": {
+            "verificacoes": "Verificaciones"
+          },
           "questions": {
             "docConferida": "Documentación de la carga verificada",
             "epiUtilizado": "EPP utilizado correctamente",

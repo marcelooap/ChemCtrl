@@ -606,6 +606,7 @@
       "painelEstoque": "Inventory",
       "painelOperadores": "Operators",
       "painelEtiquetas": "Labels",
+      "painelChecklistExpedicao": "Shipping Checklist",
       "tbHome": "Home",
       "tbDashboard": "Dashboard",
       "tbCadastro": "Registry",
@@ -758,7 +759,8 @@
       "profiles": "Permissions",
       "configuracao": "Settings",
       "operadores": "Operators",
-      "etiquetas": "Labels"
+      "etiquetas": "Labels",
+      "checklistExpedicao": "Shipping Checklist"
     },
     "modules": {
       "switch": "Switch module",
@@ -871,6 +873,39 @@
           "embalagem": "Packaging",
           "responsavelTecnico": "Technical manager"
         }
+      },
+      "checklistExpedicao": {
+        "title": "Shipping Checklist",
+        "subtitle": "Manage shipping inspection items specific to each customer",
+        "clientLabel": "Customer",
+        "searchClient": "Select or search for a customer...",
+        "selectClient": "Select a customer to configure the shipping checklist.",
+        "loading": "Loading...",
+        "noConfig": "This customer does not have a shipping checklist yet. Use the default items or add the first ones.",
+        "useDefaults": "Use default items",
+        "addItem": "+ Add item",
+        "save": "Save checklist",
+        "saved": "Shipping checklist saved.",
+        "saveError": "Could not save the checklist.",
+        "loadError": "Could not load the checklist.",
+        "itemsTitle": "Inspection items",
+        "itemsHint": "Edit, reorder, add or remove items. The defined order will be used in the shipping inspection.",
+        "itemPlaceholder": "Inspection item description",
+        "itemLabel": "Item {{index}}",
+        "reorder": "Drag to reorder",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "removeTitle": "Remove item",
+        "removeConfirm": "Remove the item \"{{descricao}}\"? This change is only permanent after saving.",
+        "discardTitle": "Unsaved changes",
+        "discardConfirm": "There are unsaved checklist changes. Discard them?",
+        "discardConfirmAction": "Discard",
+        "emptyHint": "Fill in the description of all items before saving.",
+        "duplicateHint": "There are items with the same description. Remove duplicates before saving.",
+        "tableMissingBanner": "The shipping checklist table does not exist in the database yet. Paste the SQL script in the Supabase SQL Editor, run it and reload this page.",
+        "copySql": "Copy SQL script",
+        "sqlCopied": "SQL script copied. Paste it in the Supabase SQL Editor and run it.",
+        "sqlCopyError": "Could not copy the script. Open src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
       }
     },
     "areas": {
@@ -1168,8 +1203,10 @@
             "lote": "Lot",
             "lacracao": "Package sealing",
             "paletes": "Pallet condition",
-            "fotos": "Photos"
+            "fotos": "Photos",
+            "verificacoes": "Checks"
           },
+          "loadingDefs": "Loading checklist...",
           "items": {
             "convencional": {
               "identificacaoConfere": "Physical tank number matches the number registered in the system.",

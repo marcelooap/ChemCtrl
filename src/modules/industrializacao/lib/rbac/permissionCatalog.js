@@ -684,6 +684,24 @@ export const permissionModules = [
           { key: 'edit', labelKey: 'rbac.actions.edit' },
         ],
       },
+      {
+        id: 'painel_config_checklist_expedicao',
+        labelKey: 'rbac.resources.painelChecklistExpedicao',
+        icon: 'ClipboardCheck',
+        route: '/painel/configuracao/checklist-expedicao',
+        nav: {
+          showInSidebar: true,
+          order: 3,
+          groupId: 'configuracao',
+          groupLabelKey: 'painel.nav.configuracao',
+          groupIcon: 'Settings',
+          groupOrder: 7,
+        },
+        actions: [
+          { key: 'view', labelKey: 'rbac.actions.view' },
+          { key: 'edit', labelKey: 'rbac.actions.edit' },
+        ],
+      },
     ],
   },
   {
@@ -1040,6 +1058,7 @@ function mapResourceToSidebarLabel(resourceId) {
     painel_operacional_estoque: 'painel.nav.estoque',
     painel_config_operadores: 'painel.nav.operadores',
     painel_config_etiquetas: 'painel.nav.etiquetas',
+    painel_config_checklist_expedicao: 'painel.nav.checklistExpedicao',
     tb_home: 'transbordo.nav.home',
     tb_dashboard: 'transbordo.nav.dashboard',
     tb_cadastro: 'transbordo.nav.cadastro',

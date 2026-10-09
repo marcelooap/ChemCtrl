@@ -606,6 +606,7 @@
       "painelEstoque": "Estoque",
       "painelOperadores": "Operadores",
       "painelEtiquetas": "Etiquetas",
+      "painelChecklistExpedicao": "Check List Expedição",
       "tbHome": "Home",
       "tbDashboard": "Dashboard",
       "tbCadastro": "Cadastro",
@@ -758,7 +759,8 @@
       "profiles": "Permissões",
       "configuracao": "Configuração",
       "operadores": "Operadores",
-      "etiquetas": "Etiquetas"
+      "etiquetas": "Etiquetas",
+      "checklistExpedicao": "Check List Expedição"
     },
     "modules": {
       "switch": "Trocar módulo",
@@ -871,6 +873,39 @@
           "embalagem": "Embalagem",
           "responsavelTecnico": "Responsável técnico"
         }
+      },
+      "checklistExpedicao": {
+        "title": "Check List Expedição",
+        "subtitle": "Gerencie os itens de inspeção de expedição específicos de cada cliente",
+        "clientLabel": "Cliente",
+        "searchClient": "Selecione ou busque um cliente...",
+        "selectClient": "Selecione um cliente para configurar o checklist de expedição.",
+        "loading": "Carregando...",
+        "noConfig": "Este cliente ainda não possui checklist de expedição configurado. Use os itens padrão ou adicione os primeiros itens.",
+        "useDefaults": "Usar itens padrão",
+        "addItem": "+ Adicionar item",
+        "save": "Salvar checklist",
+        "saved": "Checklist de expedição salvo.",
+        "saveError": "Não foi possível salvar o checklist.",
+        "loadError": "Não foi possível carregar o checklist.",
+        "itemsTitle": "Itens de inspeção",
+        "itemsHint": "Edite, reordene, adicione ou remova itens. A ordem definida será usada na inspeção de expedição.",
+        "itemPlaceholder": "Descrição do item de inspeção",
+        "itemLabel": "Item {{index}}",
+        "reorder": "Arrastar para reordenar",
+        "moveUp": "Mover para cima",
+        "moveDown": "Mover para baixo",
+        "removeTitle": "Remover item",
+        "removeConfirm": "Remover o item \"{{descricao}}\"? Esta alteração só será permanente após salvar.",
+        "discardTitle": "Alterações não salvas",
+        "discardConfirm": "Há alterações não salvas no checklist. Deseja descartá-las?",
+        "discardConfirmAction": "Descartar",
+        "emptyHint": "Preencha a descrição de todos os itens antes de salvar.",
+        "duplicateHint": "Há itens com a mesma descrição. Remova as duplicatas antes de salvar.",
+        "tableMissingBanner": "A tabela do checklist de expedição ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
+        "copySql": "Copiar script SQL",
+        "sqlCopied": "Script SQL copiado. Cole no SQL Editor do Supabase e execute.",
+        "sqlCopyError": "Não foi possível copiar o script. Abra o arquivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
       }
     },
     "areas": {
@@ -1168,8 +1203,10 @@
             "lote": "Lote",
             "lacracao": "Lacração das embalagens",
             "paletes": "Estado dos paletes",
-            "fotos": "Fotos"
+            "fotos": "Fotos",
+            "verificacoes": "Verificações"
           },
+          "loadingDefs": "Carregando checklist...",
           "items": {
             "convencional": {
               "identificacaoConfere": "A numeração física do tanque confere com a numeração registrada no sistema.",

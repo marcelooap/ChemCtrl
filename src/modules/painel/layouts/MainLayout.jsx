@@ -16,6 +16,7 @@ import {
   Inbox,
   HardHat,
   Tag,
+  ClipboardCheck,
   Settings,
   Container,
   ArrowLeftRight,
@@ -132,6 +133,11 @@ export default function MainLayout() {
           path: '/painel/configuracao/etiquetas',
           label: t('painel.nav.etiquetas'),
           icon: Tag,
+        },
+        {
+          path: '/painel/configuracao/checklist-expedicao',
+          label: t('painel.nav.checklistExpedicao'),
+          icon: ClipboardCheck,
         },
       ],
     };

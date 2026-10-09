@@ -2,7 +2,8 @@ import { jsPDF } from 'jspdf';
 import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
-  checksForKind,
+  checkDefLabel,
+  checkDefsForItem,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
 
@@ -387,7 +388,7 @@ export async function generateChecklistItemPDF({
     y += lines.length * 5 + 4;
   }
 
-  const checkDefs = checksForKind(item.kind);
+  const checkDefs = checkDefsForItem(item);
   const sections = [...new Set(checkDefs.map((c) => c.section))];
 
   for (const section of sections) {
@@ -404,7 +405,7 @@ export async function generateChecklistItemPDF({
       .map((c) => {
         const answer = normalizeCheckValue(item.checks?.[c.key]);
         const meta = answerMeta(answer, t);
-        return [{ value: t(c.labelKey) }, { value: meta.label, color: meta.color }];
+        return [{ value: checkDefLabel(c, t) }, { value: meta.label, color: meta.color }];
       });
     y = addSimpleTable(
       doc,
