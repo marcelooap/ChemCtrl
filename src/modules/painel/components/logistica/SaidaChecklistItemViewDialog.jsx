@@ -16,10 +16,12 @@ import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
   CHECKLIST_STATUS,
+  VALIDADE_TESTES_SECTION,
   checkDefLabel,
   checkDefsForItem,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
+import { formatDataLimiteTestes } from '@painel/lib/validadeTestesTanque';
 import { generateChecklistItemPDF } from '@painel/lib/pdfChecklistItem';
 
 const STATUS_STYLE = {
@@ -206,6 +208,14 @@ export default function SaidaChecklistItemViewDialog({
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {sectionTitle(section)}
               </p>
+              {section === VALIDADE_TESTES_SECTION && item.validade_testes ? (
+                <p className="text-xs text-muted-foreground">
+                  {t('painel.comercial.agendamentos.checklist.validadeTestes.dataLimite')}:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatDataLimiteTestes(item.validade_testes.data_limite, i18n.language)}
+                  </span>
+                </p>
+              ) : null}
               {checkDefs
                 .filter((c) => c.section === section)
                 .map((c) => {

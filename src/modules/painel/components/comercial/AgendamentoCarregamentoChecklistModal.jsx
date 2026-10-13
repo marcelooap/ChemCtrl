@@ -41,6 +41,8 @@ import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
   CHECKLIST_STATUS,
+  VALIDADE_TESTES_CHECK_KEY,
+  VALIDADE_TESTES_SECTION,
   areAllItemsApproved,
   buildChecklistItemsFromSaidas,
   buildChecklistPayloadV2,
@@ -52,7 +54,8 @@ import {
   mergeChecklistItems,
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
-import { listChecklistExpedicaoByClientes } from '@painel/lib/checklistExpedicaoConfig';
+import { loadChecklistExpedicaoOperacional } from '@painel/lib/checklistExpedicaoConfig';
+import { formatDataLimiteTestes } from '@painel/lib/validadeTestesTanque';
 import { entities } from '@transbordo/services/entities';
 import { TIPO_IND_VASILHAME } from '@transbordo/lib/saidaOrigem';
 import { loadContainerLoteDatasMap } from '@industrializacao/lib/containerLoteDatas';
@@ -157,6 +160,36 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
   (o) => o.value === CHECK_ANSWER.APROVADO || o.value === CHECK_ANSWER.REPROVADO
 );
 
+/**
+ * Validade dos testes do tanque: a data limite é calculada pelo sistema
+ * (hoje + prazo do cliente); o operador apenas registra Aprovado/Reprovado.
+ */
+function ValidadeTestesSection({ validade, value, disabled, onChange, language, t }) {
+  const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {t(`painel.comercial.agendamentos.checklist.sections.${VALIDADE_TESTES_SECTION}`)}
+      </p>
+      <InfoChip
+        label={t(`${prefix}.dataLimite`)}
+        value={formatDataLimiteTestes(validade.data_limite, language)}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t(`${prefix}.hint`, { dias: validade.dias })}
+      </p>
+      <CheckAnswerRow
+        label={t(`${prefix}.resultado`)}
+        value={value}
+        disabled={disabled}
+        onChange={onChange}
+        options={APPROVE_REJECT_OPTIONS}
+        t={t}
+      />
+    </div>
+  );
+}
+
 export default function AgendamentoCarregamentoChecklistModal({
   open,
   onClose,
@@ -183,6 +216,7 @@ export default function AgendamentoCarregamentoChecklistModal({
   const readOnly = isCarregado;
 
   const [checkDefsByCliente, setCheckDefsByCliente] = useState(null);
+  const [validadeTestesByCliente, setValidadeTestesByCliente] = useState(null);
   const [defsLoading, setDefsLoading] = useState(false);
 
   // Clientes das saídas do slot (id + nome): o nome é o vínculo quando o cadastro
@@ -204,17 +238,22 @@ export default function AgendamentoCarregamentoChecklistModal({
   useEffect(() => {
     if (!open) {
       setCheckDefsByCliente(null);
+      setValidadeTestesByCliente(null);
       setDefsLoading(false);
       return;
     }
     let cancelled = false;
     setDefsLoading(true);
-    listChecklistExpedicaoByClientes(JSON.parse(clientesKey))
-      .then((map) => {
-        if (!cancelled) setCheckDefsByCliente(map);
+    loadChecklistExpedicaoOperacional(JSON.parse(clientesKey))
+      .then(({ checkDefs, validadeTestes }) => {
+        if (cancelled) return;
+        setCheckDefsByCliente(checkDefs);
+        setValidadeTestesByCliente(validadeTestes);
       })
       .catch(() => {
-        if (!cancelled) setCheckDefsByCliente(new Map());
+        if (cancelled) return;
+        setCheckDefsByCliente(new Map());
+        setValidadeTestesByCliente(new Map());
       })
       .finally(() => {
         if (!cancelled) setDefsLoading(false);
@@ -276,6 +315,7 @@ export default function AgendamentoCarregamentoChecklistModal({
         transbordos,
         containerDatasById,
         checkDefsByCliente,
+        validadeTestesByCliente,
       });
     },
     [
@@ -286,6 +326,7 @@ export default function AgendamentoCarregamentoChecklistModal({
       transbordos,
       containerDatasById,
       checkDefsByCliente,
+      validadeTestesByCliente,
       defsLoading,
     ]
   );
@@ -752,6 +793,7 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
 
               {sections
+                .filter((section) => section !== VALIDADE_TESTES_SECTION)
                 .filter((section) => !(
                   !hasCustomChecks
                   && active.kind === CHECKLIST_KIND.CONVENCIONAL
@@ -776,6 +818,17 @@ export default function AgendamentoCarregamentoChecklistModal({
                     ))}
                 </div>
               ))}
+
+              {active.validade_testes ? (
+                <ValidadeTestesSection
+                  validade={active.validade_testes}
+                  value={active.checks?.[VALIDADE_TESTES_CHECK_KEY] || ''}
+                  disabled={readOnly || saving}
+                  onChange={(v) => setAnswer(VALIDADE_TESTES_CHECK_KEY, v)}
+                  language={i18n.language}
+                  t={t}
+                />
+              ) : null}
 
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

@@ -905,7 +905,16 @@
         "tableMissingBanner": "A tabela do checklist de expedição ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
         "copySql": "Copiar script SQL",
         "sqlCopied": "Script SQL copiado. Cole no SQL Editor do Supabase e execute.",
-        "sqlCopyError": "Não foi possível copiar o script. Abra o arquivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
+        "sqlCopyError": "Não foi possível copiar o script. Abra o arquivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "validadeTestes": {
+          "title": "Verificação da validade dos testes",
+          "hint": "Adiciona ao checklist de expedição deste cliente a conferência da validade dos testes do tanque.",
+          "enable": "Ativar verificação dos testes",
+          "prazoLabel": "Prazo de validade (dias)",
+          "prazoInvalid": "Informe um prazo inteiro entre {{min}} e {{max}} dias.",
+          "example": "Com {{dias}} dias, a data limite exibida hoje na expedição é {{date}}.",
+          "tableMissingBanner": "A configuração da validade dos testes ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página."
+        }
       }
     },
     "areas": {
@@ -1206,7 +1215,14 @@
             "lacracao": "Lacração das embalagens",
             "paletes": "Estado dos paletes",
             "fotos": "Fotos",
-            "verificacoes": "Verificações"
+            "verificacoes": "Verificações",
+            "validade_testes": "Validade dos testes do tanque"
+          },
+          "validadeTestes": {
+            "dataLimite": "Data limite de vencimento dos testes",
+            "limiteCurto": "limite",
+            "hint": "Prazo de {{dias}} dias a partir de hoje. Confira se o vencimento dos testes do tanque é igual ou posterior a esta data.",
+            "resultado": "Resultado da verificação"
           },
           "loadingDefs": "Carregando checklist...",
           "items": {

@@ -17,6 +17,11 @@ import { clienteNomeKey } from '@transbordo/lib/saidaOrigem';
 import { isMissingRpcError } from '@painel/lib/saidaReservas';
 import { listNomesClientesIndustrializacao } from '@painel/lib/saidaClientes';
 import { buildSaidaClienteOptions } from '@painel/lib/recebimentoCatalog';
+import {
+  VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
+  normalizePrazoDias,
+  parsePrazoDias,
+} from '@painel/lib/validadeTestesTanque';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,10 +29,30 @@ const UUID_RE =
 const RPC_SETUP_MESSAGE =
   'Execute o script 039_t_checklist_expedicao_itens.sql no SQL Editor do ChemFlow para habilitar o checklist de expedição por cliente.';
 
+const CONFIG_RPC_SETUP_MESSAGE =
+  'Execute o script 040_t_checklist_expedicao_config.sql no SQL Editor do ChemFlow para habilitar a verificação da validade dos testes.';
+
 let tableAvailable = true;
+let configTableAvailable = true;
 
 export function isChecklistExpedicaoTableAvailable() {
   return tableAvailable;
+}
+
+export function isChecklistExpedicaoConfigAvailable() {
+  return configTableAvailable;
+}
+
+function isConfigTableMissingError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('t_checklist_expedicao_config') &&
+    (msg.includes('pgrst205') ||
+      msg.includes('does not exist') ||
+      msg.includes('schema cache') ||
+      msg.includes('could not find') ||
+      msg.includes('relation'))
+  );
 }
 
 function isTableMissingError(err) {
@@ -109,6 +134,78 @@ export async function listChecklistExpedicaoItens(clienteId) {
   }
 }
 
+/** Configuração padrão: verificação da validade dos testes desativada, prazo de 180 dias. */
+export const DEFAULT_VALIDADE_TESTES_CONFIG = Object.freeze({
+  ativo: false,
+  dias: VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
+});
+
+/** Linha do banco → `{ ativo, dias }` usado pela interface. */
+function toValidadeTestesConfig(row) {
+  return {
+    ativo: Boolean(row?.verificar_validade_testes),
+    dias: normalizePrazoDias(row?.prazo_validade_testes_dias),
+  };
+}
+
+/**
+ * Configuração da validade dos testes de um cliente (padrão quando não há registro).
+ * @returns {Promise<{ ativo: boolean, dias: number }>}
+ */
+export async function getChecklistExpedicaoConfig(clienteId) {
+  const id = normalizeClienteId(clienteId);
+  if (!id) return { ...DEFAULT_VALIDADE_TESTES_CONFIG };
+  try {
+    const rows = await entities.checklistExpedicaoConfig.filter({ cliente_id: id });
+    configTableAvailable = true;
+    return rows?.[0] ? toValidadeTestesConfig(rows[0]) : { ...DEFAULT_VALIDADE_TESTES_CONFIG };
+  } catch (err) {
+    if (isConfigTableMissingError(err)) {
+      configTableAvailable = false;
+      return { ...DEFAULT_VALIDADE_TESTES_CONFIG };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Persiste a configuração da validade dos testes de um cliente (RPC com validação no banco).
+ * @param {{ clienteId: string, ativo: boolean, dias: number|string }} args
+ * @returns {Promise<{ ativo: boolean, dias: number }>}
+ */
+export async function saveChecklistExpedicaoConfig({ clienteId, ativo, dias } = {}) {
+  const id = normalizeClienteId(clienteId);
+  if (!id) throw new Error('Selecione um cliente.');
+
+  const prazo = parsePrazoDias(dias);
+  if (prazo == null) {
+    const err = new Error('Informe um prazo de validade entre 1 e 3650 dias.');
+    err.code = 'INVALID_PRAZO';
+    throw err;
+  }
+
+  if (!isChemFlowConfigured || !chemflowSupabase) {
+    throw new Error(CONFIG_RPC_SETUP_MESSAGE);
+  }
+
+  const { data, error } = await chemflowSupabase.rpc('t_salvar_checklist_expedicao_config', {
+    p_cliente_id: id,
+    p_verificar_validade_testes: Boolean(ativo),
+    p_prazo_validade_testes_dias: prazo,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error) || isConfigTableMissingError(error)) {
+      configTableAvailable = false;
+      throw new Error(CONFIG_RPC_SETUP_MESSAGE);
+    }
+    throw new Error(error.message || 'Não foi possível salvar a configuração.');
+  }
+
+  configTableAvailable = true;
+  return toValidadeTestesConfig(data);
+}
+
 /** Cadastro de clientes indexado por nome (ids duplicados do mesmo nome) e por id. */
 async function loadClienteIdIndex() {
   const idsByNome = new Map();
@@ -136,26 +233,14 @@ function latestUpdatedAt(rows) {
 }
 
 /**
- * Carrega, em uma única query, as verificações configuradas dos clientes informados.
- *
- * O mesmo cliente pode existir mais de uma vez em `t_clientes` (ids duplicados com o
- * mesmo nome). Por isso a configuração é buscada em todos os ids do cliente e, havendo
- * mais de uma, vale a salva mais recentemente (a que a tela de Configuração editou).
- *
- * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
- * @returns {Map<string, Array<{ key: string, label: string, section: string }>>}
- *   Chaves: id do cliente e `checkDefsNomeKey(nome)`.
+ * Agrupa os clientes informados com todos os ids de `t_clientes` que compartilham o
+ * mesmo nome (o cadastro pode ter ids duplicados).
  */
-export async function listChecklistExpedicaoByClientes(clientes = []) {
-  const map = new Map();
+async function resolveClienteGroups(clientes = []) {
   const requested = (clientes || [])
     .map((c) => ({ id: normalizeClienteId(c?.id), nome: c?.nome }))
     .filter((c) => c.id || clienteNomeKey(c.nome));
-  if (requested.length === 0) return map;
-
-  if (!isChemFlowConfigured || !chemflowSupabase) {
-    return map;
-  }
+  if (requested.length === 0) return { groups: [], allIds: [] };
 
   const { idsByNome, nomeById } = await loadClienteIdIndex();
   const groups = requested.map((c) => {
@@ -165,47 +250,123 @@ export async function listChecklistExpedicaoByClientes(clientes = []) {
     return { id: c.id, nome: c.nome, ids };
   });
   const allIds = [...new Set(groups.flatMap((g) => [...g.ids]))];
-  if (allIds.length === 0) return map;
+  return { groups, allIds };
+}
 
+/** Entre os ids do grupo, escolhe as linhas salvas mais recentemente. */
+function pickLatestRows(group, rowsByCliente) {
+  let best = null;
+  for (const id of group.ids) {
+    const rows = rowsByCliente.get(id);
+    if (!rows?.length) continue;
+    const stamp = latestUpdatedAt(rows);
+    if (!best || stamp > best.stamp) best = { rows, stamp };
+  }
+  return best?.rows || null;
+}
+
+function groupByClienteId(rows = []) {
+  const byCliente = new Map();
+  for (const row of rows || []) {
+    const cid = String(row.cliente_id);
+    if (!byCliente.has(cid)) byCliente.set(cid, []);
+    byCliente.get(cid).push(row);
+  }
+  return byCliente;
+}
+
+function setForGroup(map, group, value) {
+  if (group.id) map.set(group.id, value);
+  const nomeKey = checkDefsNomeKey(group.nome);
+  if (nomeKey) map.set(nomeKey, value);
+}
+
+async function fetchItensRows(allIds) {
   try {
     const { data, error } = await chemflowSupabase
       .from('t_checklist_expedicao_itens')
       .select('*')
       .in('cliente_id', allIds)
       .order('ordem', { ascending: true });
-
     if (error) throw error;
     tableAvailable = true;
-
-    const byCliente = new Map();
-    for (const row of data || []) {
-      const cid = String(row.cliente_id);
-      if (!byCliente.has(cid)) byCliente.set(cid, []);
-      byCliente.get(cid).push(row);
-    }
-
-    for (const group of groups) {
-      let best = null;
-      for (const id of group.ids) {
-        const rows = byCliente.get(id);
-        if (!rows?.length) continue;
-        const stamp = latestUpdatedAt(rows);
-        if (!best || stamp > best.stamp) best = { rows, stamp };
-      }
-      const defs = best ? toCheckDefs(best.rows) : [];
-      if (defs.length === 0) continue;
-      if (group.id) map.set(group.id, defs);
-      const nomeKey = checkDefsNomeKey(group.nome);
-      if (nomeKey) map.set(nomeKey, defs);
-    }
-    return map;
+    return data || [];
   } catch (err) {
     if (isTableMissingError(err)) {
       tableAvailable = false;
-      return map;
+      return [];
     }
     throw err;
   }
+}
+
+/** Configuração ausente (tabela não criada) equivale a "verificação desativada". */
+async function fetchConfigRows(allIds) {
+  try {
+    const { data, error } = await chemflowSupabase
+      .from('t_checklist_expedicao_config')
+      .select('*')
+      .in('cliente_id', allIds);
+    if (error) throw error;
+    configTableAvailable = true;
+    return data || [];
+  } catch (err) {
+    if (isConfigTableMissingError(err)) {
+      configTableAvailable = false;
+      return [];
+    }
+    throw err;
+  }
+}
+
+/**
+ * Carrega, em uma única ida ao banco por tabela, a configuração operacional dos
+ * clientes informados: verificações do checklist e validade dos testes do tanque.
+ *
+ * O mesmo cliente pode existir mais de uma vez em `t_clientes` (ids duplicados com o
+ * mesmo nome). Por isso a configuração é buscada em todos os ids do cliente e, havendo
+ * mais de uma, vale a salva mais recentemente (a que a tela de Configuração editou).
+ *
+ * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
+ * @returns {Promise<{
+ *   checkDefs: Map<string, Array<{ key: string, label: string, section: string }>>,
+ *   validadeTestes: Map<string, { ativo: boolean, dias: number }>,
+ * }>} Chaves dos mapas: id do cliente e `checkDefsNomeKey(nome)`.
+ */
+export async function loadChecklistExpedicaoOperacional(clientes = []) {
+  const checkDefs = new Map();
+  const validadeTestes = new Map();
+  const result = { checkDefs, validadeTestes };
+
+  if (!isChemFlowConfigured || !chemflowSupabase) return result;
+
+  const { groups, allIds } = await resolveClienteGroups(clientes);
+  if (allIds.length === 0) return result;
+
+  const [itensRows, configRows] = await Promise.all([
+    fetchItensRows(allIds),
+    fetchConfigRows(allIds),
+  ]);
+  const itensByCliente = groupByClienteId(itensRows);
+  const configByCliente = groupByClienteId(configRows);
+
+  for (const group of groups) {
+    const itens = pickLatestRows(group, itensByCliente);
+    const defs = itens ? toCheckDefs(itens) : [];
+    if (defs.length > 0) setForGroup(checkDefs, group, defs);
+
+    const config = pickLatestRows(group, configByCliente)?.[0];
+    if (config) setForGroup(validadeTestes, group, toValidadeTestesConfig(config));
+  }
+  return result;
+}
+
+/**
+ * Verificações configuradas dos clientes informados (sem a validade dos testes).
+ * @see loadChecklistExpedicaoOperacional
+ */
+export async function listChecklistExpedicaoByClientes(clientes = []) {
+  return (await loadChecklistExpedicaoOperacional(clientes)).checkDefs;
 }
 
 /**

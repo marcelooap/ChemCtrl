@@ -15,6 +15,10 @@ import {
 } from '@transbordo/lib/saidaOrigem';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
+import {
+  calcularDataLimiteTestes,
+  normalizePrazoDias,
+} from '@painel/lib/validadeTestesTanque';
 
 export const CHECKLIST_STATUS = {
   PENDENTE: 'pendente',
@@ -131,15 +135,28 @@ export function checksForKind(kind) {
   return kind === CHECKLIST_KIND.CONVENCIONAL ? CONVENCIONAL_CHECKS : EMBALADO_CHECKS;
 }
 
+/** Verificação automática da validade dos testes do tanque (habilitada por cliente). */
+export const VALIDADE_TESTES_CHECK_KEY = 'validade_testes_tanque';
+export const VALIDADE_TESTES_SECTION = 'validade_testes';
+
+const VALIDADE_TESTES_CHECK_DEF = Object.freeze({
+  key: VALIDADE_TESTES_CHECK_KEY,
+  section: VALIDADE_TESTES_SECTION,
+  labelKey: 'painel.comercial.agendamentos.checklist.validadeTestes.resultado',
+});
+
 /**
  * Definições de verificação de um item: snapshot customizado do cliente
  * ou os checks padrão do kind (legado / cliente sem configuração).
+ * Quando o item carrega `validade_testes`, a verificação de validade dos testes
+ * é acrescentada ao final, sem alterar os demais itens.
  */
 export function checkDefsForItem(item) {
-  if (Array.isArray(item?.check_defs) && item.check_defs.length > 0) {
-    return item.check_defs;
-  }
-  return checksForKind(item?.kind);
+  const base =
+    Array.isArray(item?.check_defs) && item.check_defs.length > 0
+      ? item.check_defs
+      : checksForKind(item?.kind);
+  return item?.validade_testes ? [...base, VALIDADE_TESTES_CHECK_DEF] : base;
 }
 
 /** Rótulo traduzível: preferência por label persistido (config por cliente). */
@@ -251,7 +268,9 @@ export function buildChecklistItemsFromSaidas({
   transbordos = [],
   containerDatasById = null,
   checkDefsByCliente = null,
+  validadeTestesByCliente = null,
 } = {}) {
+  const hoje = new Date();
   const saidaById = new Map((saidas || []).map((s) => [String(s.id), s]));
   const vasilhameById = new Map((vasilhames || []).map((v) => [String(v.id), v]));
   const estoqueById = new Map((entradas || []).map((e) => [String(e.id), e]));
@@ -275,6 +294,11 @@ export function buildChecklistItemsFromSaidas({
       saida.cliente_nome || booking.cliente_nome
     );
     const useCustom = Array.isArray(customDefs) && customDefs.length > 0;
+    const validadeConfig = resolveCustomCheckDefs(
+      validadeTestesByCliente,
+      clienteId,
+      saida.cliente_nome || booking.cliente_nome
+    );
 
     linhas.forEach((linha, idx) => {
       const kind = checklistKindForTipo(linha.tipo);
@@ -309,7 +333,15 @@ export function buildChecklistItemsFromSaidas({
       });
 
       const check_defs = useCustom ? customDefs : null;
-      const defs = useCustom ? customDefs : checksForKind(kind);
+      // Validade dos testes: apenas tanques (convencional/vasilhame) de clientes com a opção ativa.
+      const validade_testes =
+        isConv && validadeConfig?.ativo
+          ? {
+              dias: normalizePrazoDias(validadeConfig.dias),
+              data_limite: calcularDataLimiteTestes(validadeConfig.dias, hoje),
+            }
+          : null;
+      const defs = checkDefsForItem({ kind, check_defs, validade_testes });
 
       items.push({
         item_key: itemKey,
@@ -339,6 +371,7 @@ export function buildChecklistItemsFromSaidas({
         data_validade,
         lacres,
         check_defs,
+        validade_testes,
         checks: emptyChecksMapForDefs(defs),
         fotos: [],
         status: CHECKLIST_STATUS.PENDENTE,
@@ -589,6 +622,10 @@ export function buildChecklistPayloadV2({ items, user }) {
             section: d.section || 'verificacoes',
           }))
         : null,
+      // Prazo e data limite vigentes na conferência (histórico auditável).
+      validade_testes: it.validade_testes
+        ? { dias: it.validade_testes.dias, data_limite: it.validade_testes.data_limite }
+        : null,
       checks: { ...it.checks },
       fotos: Array.isArray(it.fotos) ? [...it.fotos] : [],
       status: it.status || CHECKLIST_STATUS.PENDENTE,
@@ -638,7 +675,18 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ? saved.check_defs
           : null;
 
-    const mergedBase = { ...built, check_defs };
+    // Data limite é calculada a partir de "hoje"; após o operador registrar o resultado,
+    // mantém a data com que a conferência foi feita (não "anda" ao reabrir).
+    const answeredValidade = Boolean(normalizeCheckValue(saved.checks?.[VALIDADE_TESTES_CHECK_KEY]));
+    const validade_testes =
+      built.validade_testes && answeredValidade && saved.validade_testes?.data_limite
+        ? {
+            dias: normalizePrazoDias(saved.validade_testes.dias),
+            data_limite: saved.validade_testes.data_limite,
+          }
+        : built.validade_testes;
+
+    const mergedBase = { ...built, check_defs, validade_testes };
     const defs = checkDefsForItem(mergedBase);
     const checks = { ...emptyChecksMapForDefs(defs) };
     for (const key of Object.keys(checks)) {

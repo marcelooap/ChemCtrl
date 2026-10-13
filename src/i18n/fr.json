@@ -852,7 +852,16 @@
         "tableMissingBanner": "La table du check-list d'expédition n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
         "copySql": "Copier le script SQL",
         "sqlCopied": "Script SQL copié. Collez-le dans l'éditeur SQL de Supabase et exécutez-le.",
-        "sqlCopyError": "Impossible de copier le script. Ouvrez le fichier src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
+        "sqlCopyError": "Impossible de copier le script. Ouvrez le fichier src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "validadeTestes": {
+          "title": "Vérification de la validité des tests",
+          "hint": "Ajoute à la checklist d'expédition de ce client la vérification de la validité des tests du réservoir.",
+          "enable": "Activer la vérification des tests",
+          "prazoLabel": "Délai de validité (jours)",
+          "prazoInvalid": "Indiquez un délai entier compris entre {{min}} et {{max}} jours.",
+          "example": "Avec {{dias}} jours, la date limite affichée aujourd'hui à l'expédition est {{date}}.",
+          "tableMissingBanner": "La configuration de la validité des tests n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page."
+        }
       }
     },
     "areas": {

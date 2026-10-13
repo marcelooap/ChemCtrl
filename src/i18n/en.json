@@ -905,7 +905,16 @@
         "tableMissingBanner": "The shipping checklist table does not exist in the database yet. Paste the SQL script in the Supabase SQL Editor, run it and reload this page.",
         "copySql": "Copy SQL script",
         "sqlCopied": "SQL script copied. Paste it in the Supabase SQL Editor and run it.",
-        "sqlCopyError": "Could not copy the script. Open src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
+        "sqlCopyError": "Could not copy the script. Open src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "validadeTestes": {
+          "title": "Test validity check",
+          "hint": "Adds the tank test validity check to this client's shipping checklist.",
+          "enable": "Enable test validity check",
+          "prazoLabel": "Validity period (days)",
+          "prazoInvalid": "Enter a whole number of days between {{min}} and {{max}}.",
+          "example": "With {{dias}} days, the cut-off date shown today at shipping is {{date}}.",
+          "tableMissingBanner": "The test validity configuration does not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page."
+        }
       }
     },
     "areas": {
@@ -1206,7 +1215,14 @@
             "lacracao": "Package sealing",
             "paletes": "Pallet condition",
             "fotos": "Photos",
-            "verificacoes": "Checks"
+            "verificacoes": "Checks",
+            "validade_testes": "Tank test validity"
+          },
+          "validadeTestes": {
+            "dataLimite": "Test expiry cut-off date",
+            "limiteCurto": "cut-off",
+            "hint": "{{dias}}-day period from today. Check that the tank tests expire on or after this date.",
+            "resultado": "Check result"
           },
           "loadingDefs": "Loading checklist...",
           "items": {

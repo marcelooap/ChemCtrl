@@ -2,10 +2,12 @@ import { jsPDF } from 'jspdf';
 import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
+  VALIDADE_TESTES_SECTION,
   checkDefLabel,
   checkDefsForItem,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
+import { formatDataLimiteTestes } from '@painel/lib/validadeTestesTanque';
 
 const M = 14;
 const PW = 210;
@@ -471,7 +473,13 @@ export async function generateChecklistItemPDF({
       .map((c) => {
         const answer = normalizeCheckValue(item.checks?.[c.key]);
         const meta = answerMeta(answer, t);
-        return [{ value: checkDefLabel(c, t) }, { value: meta.label, color: meta.color }];
+        const label =
+          section === VALIDADE_TESTES_SECTION && item.validade_testes
+            ? `${checkDefLabel(c, t)} (${t(
+                'painel.comercial.agendamentos.checklist.validadeTestes.limiteCurto'
+              )} ${formatDataLimiteTestes(item.validade_testes.data_limite, language)})`
+            : checkDefLabel(c, t);
+        return [{ value: label }, { value: meta.label, color: meta.color }];
       });
     y = addSimpleTable(
       doc,

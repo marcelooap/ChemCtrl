@@ -852,7 +852,16 @@
         "tableMissingBanner": "La tabla del checklist de expedición aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
         "copySql": "Copiar script SQL",
         "sqlCopied": "Script SQL copiado. Péguelo en el SQL Editor de Supabase y ejecútelo.",
-        "sqlCopyError": "No fue posible copiar el script. Abra el archivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql."
+        "sqlCopyError": "No fue posible copiar el script. Abra el archivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "validadeTestes": {
+          "title": "Verificación de la vigencia de las pruebas",
+          "hint": "Agrega al checklist de expedición de este cliente la verificación de la vigencia de las pruebas del tanque.",
+          "enable": "Activar verificación de las pruebas",
+          "prazoLabel": "Plazo de vigencia (días)",
+          "prazoInvalid": "Indique un plazo entero entre {{min}} y {{max}} días.",
+          "example": "Con {{dias}} días, la fecha límite que se muestra hoy en la expedición es {{date}}.",
+          "tableMissingBanner": "La configuración de la vigencia de las pruebas aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página."
+        }
       }
     },
     "areas": {

@@ -11,16 +11,38 @@ import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import ChecklistExpedicaoItensEditor, {
   validateChecklistItens,
 } from '@painel/components/configuracao/ChecklistExpedicaoItensEditor';
+import ChecklistExpedicaoValidadeTestesConfig from '@painel/components/configuracao/ChecklistExpedicaoValidadeTestesConfig';
 import {
+  DEFAULT_VALIDADE_TESTES_CONFIG,
   createTempItemId,
+  getChecklistExpedicaoConfig,
   getDefaultChecklistDescricoes,
+  isChecklistExpedicaoConfigAvailable,
   isChecklistExpedicaoTableAvailable,
   listChecklistExpedicaoClientes,
   listChecklistExpedicaoItens,
   saveChecklistExpedicao,
+  saveChecklistExpedicaoConfig,
 } from '@painel/lib/checklistExpedicaoConfig';
+import {
+  VALIDADE_TESTES_PRAZO_MAX_DIAS,
+  VALIDADE_TESTES_PRAZO_MIN_DIAS,
+  normalizePrazoDias,
+  parsePrazoDias,
+} from '@painel/lib/validadeTestesTanque';
 import { persistClienteSelecionado } from '@painel/lib/saidaClientes';
 import checklistSql from '@transbordo/sql/039_t_checklist_expedicao_itens.sql?raw';
+import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config.sql?raw';
+
+/** Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre). */
+const DEFAULT_CONFIG_FORM = {
+  ativo: DEFAULT_VALIDADE_TESTES_CONFIG.ativo,
+  dias: String(DEFAULT_VALIDADE_TESTES_CONFIG.dias),
+};
+
+function toConfigForm(config) {
+  return { ativo: Boolean(config?.ativo), dias: String(normalizePrazoDias(config?.dias)) };
+}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,9 +68,18 @@ export default function ChecklistExpedicao() {
   const [loadingClientes, setLoadingClientes] = useState(true);
   const [loadingItens, setLoadingItens] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [config, setConfig] = useState(DEFAULT_CONFIG_FORM);
+  const [itensDirty, setItensDirty] = useState(false);
+  const [configDirty, setConfigDirty] = useState(false);
   const [tableMissing, setTableMissing] = useState(false);
+  const [configMissing, setConfigMissing] = useState(false);
   const [hadConfig, setHadConfig] = useState(false);
+
+  const dirty = itensDirty || configDirty;
+  const resetDirty = useCallback(() => {
+    setItensDirty(false);
+    setConfigDirty(false);
+  }, []);
 
   const {
     discardDialog,
@@ -88,15 +119,21 @@ export default function ChecklistExpedicao() {
     async (clienteId) => {
       if (!isPersistedClienteId(clienteId)) {
         setItens([]);
+        setConfig(DEFAULT_CONFIG_FORM);
         setHadConfig(false);
-        setDirty(false);
+        resetDirty();
         setLoadingItens(false);
         return;
       }
       setLoadingItens(true);
       try {
-        const rows = await listChecklistExpedicaoItens(clienteId);
+        const [rows, savedConfig] = await Promise.all([
+          listChecklistExpedicaoItens(clienteId),
+          getChecklistExpedicaoConfig(clienteId),
+        ]);
         setTableMissing(!isChecklistExpedicaoTableAvailable());
+        setConfigMissing(!isChecklistExpedicaoConfigAvailable());
+        setConfig(toConfigForm(savedConfig));
         setItens(
           rows.map((r) => ({
             id: r.id,
@@ -104,7 +141,7 @@ export default function ChecklistExpedicao() {
           }))
         );
         setHadConfig(rows.length > 0);
-        setDirty(false);
+        resetDirty();
       } catch (err) {
         console.error('[ChecklistExpedicao] itens:', err);
         toast({
@@ -113,13 +150,14 @@ export default function ChecklistExpedicao() {
           variant: 'destructive',
         });
         setItens([]);
+        setConfig(DEFAULT_CONFIG_FORM);
         setHadConfig(false);
-        setDirty(false);
+        resetDirty();
       } finally {
         setLoadingItens(false);
       }
     },
-    [t, toast]
+    [resetDirty, t, toast]
   );
 
   useEffect(() => {
@@ -130,25 +168,30 @@ export default function ChecklistExpedicao() {
     const key = clienteOptionKey(option);
     if (!key || key === String(selectedKey)) return;
     requestProceed(() => {
-      setDirty(false);
+      resetDirty();
       setSelectedKey(key);
     });
   };
 
   const handleItensChange = (next) => {
     setItens(next);
-    setDirty(true);
+    setItensDirty(true);
   };
 
   const handleUseDefaults = () => {
     const labels = getDefaultChecklistDescricoes(t);
     setItens(labels.map((descricao) => ({ id: createTempItemId(), descricao })));
-    setDirty(true);
+    setItensDirty(true);
   };
 
-  const handleCopySql = async () => {
+  const handleConfigChange = (next) => {
+    setConfig(next);
+    setConfigDirty(true);
+  };
+
+  const handleCopySql = async (sql) => {
     try {
-      await navigator.clipboard.writeText(checklistSql);
+      await navigator.clipboard.writeText(sql);
       toast({ title: t('painel.configuracao.checklistExpedicao.sqlCopied') });
     } catch {
       toast({
@@ -174,6 +217,20 @@ export default function ChecklistExpedicao() {
         return;
       }
 
+      // Desativada, o prazo digitado não é validado: mantém o último válido (ou 180).
+      const prazoDias = parsePrazoDias(config.dias);
+      if (config.ativo && prazoDias == null) {
+        toast({
+          title: t('painel.configuracao.checklistExpedicao.saveError'),
+          description: t('painel.configuracao.checklistExpedicao.validadeTestes.prazoInvalid', {
+            min: VALIDADE_TESTES_PRAZO_MIN_DIAS,
+            max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
+          }),
+          variant: 'destructive',
+        });
+        return;
+      }
+
       setSaving(true);
       try {
         // Garante UUID em t_clientes (clientes só da Industrialização entram com id temporário).
@@ -182,10 +239,20 @@ export default function ChecklistExpedicao() {
           throw new Error(t('painel.configuracao.checklistExpedicao.selectClient'));
         }
 
-        const saved = await saveChecklistExpedicao({
-          clienteId: persisted.id,
-          itens: validation.itens,
-        });
+        if (configDirty) {
+          const savedConfig = await saveChecklistExpedicaoConfig({
+            clienteId: persisted.id,
+            ativo: config.ativo,
+            dias: prazoDias ?? DEFAULT_VALIDADE_TESTES_CONFIG.dias,
+          });
+          setConfig(toConfigForm(savedConfig));
+          setConfigDirty(false);
+          setConfigMissing(!isChecklistExpedicaoConfigAvailable());
+        }
+
+        const saved = itensDirty
+          ? await saveChecklistExpedicao({ clienteId: persisted.id, itens: validation.itens })
+          : null;
 
         const nextKey = String(persisted.id);
         setClientes((prev) => {
@@ -204,14 +271,19 @@ export default function ChecklistExpedicao() {
           );
         });
         setSelectedKey(nextKey);
-        setItens(saved.map((r) => ({ id: r.id, descricao: r.descricao || '' })));
-        setHadConfig(saved.length > 0);
-        setDirty(false);
+        if (saved) {
+          setItens(saved.map((r) => ({ id: r.id, descricao: r.descricao || '' })));
+          setHadConfig(saved.length > 0);
+        }
+        resetDirty();
         setTableMissing(!isChecklistExpedicaoTableAvailable());
         toast({ title: t('painel.configuracao.checklistExpedicao.saved') });
       } catch (err) {
         if (String(err?.message || '').includes('039_t_checklist')) {
           setTableMissing(true);
+        }
+        if (String(err?.message || '').includes('040_t_checklist')) {
+          setConfigMissing(true);
         }
         toast({
           title: t('painel.configuracao.checklistExpedicao.saveError'),
@@ -227,7 +299,7 @@ export default function ChecklistExpedicao() {
     Boolean(selected) && dirty && !saving && !submitBusy && !loadingItens;
 
   const showEmptyConfig =
-    selected && !loadingItens && itens.length === 0 && !hadConfig && !dirty;
+    selected && !loadingItens && itens.length === 0 && !hadConfig && !itensDirty;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
@@ -251,22 +323,34 @@ export default function ChecklistExpedicao() {
         </Button>
       </div>
 
-      {tableMissing && (
-        <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center gap-3">
-          <p className="flex-1">
-            {t('painel.configuracao.checklistExpedicao.tableMissingBanner')}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="shrink-0 bg-white gap-2"
-            onClick={handleCopySql}
+      {[
+        { missing: tableMissing, messageKey: 'tableMissingBanner', sql: checklistSql },
+        {
+          missing: configMissing,
+          messageKey: 'validadeTestes.tableMissingBanner',
+          sql: checklistConfigSql,
+        },
+      ]
+        .filter((banner) => banner.missing)
+        .map((banner) => (
+          <div
+            key={banner.messageKey}
+            className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-col sm:flex-row sm:items-center gap-3"
           >
-            <Copy className="w-4 h-4" />
-            {t('painel.configuracao.checklistExpedicao.copySql')}
-          </Button>
-        </div>
-      )}
+            <p className="flex-1">
+              {t(`painel.configuracao.checklistExpedicao.${banner.messageKey}`)}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 bg-white gap-2"
+              onClick={() => handleCopySql(banner.sql)}
+            >
+              <Copy className="w-4 h-4" />
+              {t('painel.configuracao.checklistExpedicao.copySql')}
+            </Button>
+          </div>
+        ))}
 
       <div className="shrink-0 bg-card rounded-xl border border-border shadow-sm p-4">
         <Label htmlFor="checklist-expedicao-cliente" className="text-sm font-medium">
@@ -292,6 +376,16 @@ export default function ChecklistExpedicao() {
           />
         </div>
       </div>
+
+      {selected && !loadingItens ? (
+        <div className="shrink-0">
+          <ChecklistExpedicaoValidadeTestesConfig
+            value={config}
+            onChange={handleConfigChange}
+            disabled={saving || submitBusy}
+          />
+        </div>
+      ) : null}
 
       <div className="flex-1 min-h-0">
         {!selected ? (
