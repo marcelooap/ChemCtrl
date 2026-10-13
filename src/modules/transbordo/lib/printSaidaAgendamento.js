@@ -1,6 +1,7 @@
 import { printContainerLabel } from '@industrializacao/lib/labelprint';
+import { entities } from '@transbordo/services/entities';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
-import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
+import { getDominantLote, resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 import { resolveProdutoPublicToken } from '@transbordo/lib/ensureProdutoPublicToken';
 import { getQuantidadeEmbalagensFromVasilhame } from '@transbordo/lib/tiposEmbalagem';
 import {
@@ -9,6 +10,7 @@ import {
   TIPO_IND_RETORNO_MP,
   TIPO_IND_VASILHAME,
   formatSaidaItemInformacoes,
+  resolveSaidaItemLote,
   tipoItemLabel,
 } from '@transbordo/lib/saidaOrigem';
 
@@ -192,12 +194,35 @@ export function resolveVasilhameForItem(item, vasilhames = []) {
   );
 }
 
+/**
+ * Fabricação/validade do lote do vasilhame: o que foi editado no vasilhame
+ * vale; o que faltar vem das datas da entrada (estoque) de origem.
+ */
+async function loadVasilhameLoteDatas(vasilhame) {
+  const doVasilhame = resolveVasilhameLoteDatas(vasilhame);
+  if (!vasilhame || (doVasilhame.data_fabricacao && doVasilhame.data_validade)) {
+    return doVasilhame;
+  }
+  try {
+    const [estoque, transbordos] = await Promise.all([
+      entities.estoque.list(),
+      entities.transbordos.list(),
+    ]);
+    const estoqueById = new Map((estoque || []).map((row) => [row.id, row]));
+    return resolveVasilhameLoteDatas(vasilhame, estoqueById, { transbordos });
+  } catch (err) {
+    console.error('[Etiqueta] Falha ao resolver datas do lote:', err);
+    return doVasilhame;
+  }
+}
+
 export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
   const vasilhame = resolveVasilhameForItem(item, vasilhames);
+  const loteDatas = await loadVasilhameLoteDatas(vasilhame);
   const container = {
     op_number: saida?.codigo || vasilhame?.codigo || '—',
     product: item?.produto_nome || vasilhame?.produto_nome || '—',
-    lot: item?.lote || vasilhame?.lote || '—',
+    lot: resolveSaidaItemLote(item, { vasilhame }) || '—',
     container_number: item?.vasilhame_placa || vasilhame?.placa || '',
     barril_number: item?.vasilhame_barril || vasilhame?.barril || '',
     type: vasilhame?.tipo || '',
@@ -217,7 +242,9 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
   }).catch(() => null);
 
   await printContainerLabel(container, null, publicToken, {
-    manufactureDate: vasilhame?.created_at || saida?.data_programada,
+    manufactureDate:
+      loteDatas.data_fabricacao || vasilhame?.created_at || saida?.data_programada,
+    expiryDate: loteDatas.data_validade || undefined,
     volume: vasilhame?.volume,
     clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
     clienteId: saida?.cliente_id || vasilhame?.cliente_id,
@@ -229,6 +256,7 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
 export async function printEtiquetaVasilhame(vasilhame) {
   if (!vasilhame) return;
 
+  const loteDatas = await loadVasilhameLoteDatas(vasilhame);
   const lot =
     String(vasilhame.lote || '').trim() ||
     getDominantLote(vasilhame.composicao) ||
@@ -257,7 +285,9 @@ export async function printEtiquetaVasilhame(vasilhame) {
   }).catch(() => null);
 
   await printContainerLabel(container, null, publicToken, {
-    manufactureDate: vasilhame.created_at || vasilhame.created_date,
+    manufactureDate:
+      loteDatas.data_fabricacao || vasilhame.created_at || vasilhame.created_date,
+    expiryDate: loteDatas.data_validade || undefined,
     volume: vasilhame.volume,
     clienteNome: vasilhame.cliente_nome,
     clienteId: vasilhame.cliente_id,

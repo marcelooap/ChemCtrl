@@ -234,8 +234,19 @@ export function origemLabel(origem) {
   return "Transbordo";
 }
 
+/** Lote vazio ou marcador "Não informado" (sem lote real). */
+export function isLoteNaoInformado(lote) {
+  const text = String(lote ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+  return text === "" || text === "-" || /^NAO INFORMAD[OA]$/.test(text);
+}
+
 /**
  * Resolve o lote do item (direto, vasilhame ou composição).
+ * Lote gravado como "Não informado" não bloqueia o lote atual do vasilhame.
  */
 export function resolveSaidaItemLote(item, { vasilhame } = {}) {
   const loteFromComp = () => {
@@ -253,7 +264,13 @@ export function resolveSaidaItemLote(item, { vasilhame } = {}) {
     return best;
   };
 
-  return String(item?.lote || vasilhame?.lote || loteFromComp() || "").trim();
+  const itemLote = String(item?.lote ?? "").trim();
+  if (itemLote && !isLoteNaoInformado(itemLote)) return itemLote;
+
+  const atual = [vasilhame?.lote, loteFromComp()]
+    .map((lote) => String(lote ?? "").trim())
+    .find((lote) => !isLoteNaoInformado(lote));
+  return atual || itemLote || String(vasilhame?.lote ?? "").trim();
 }
 
 /**

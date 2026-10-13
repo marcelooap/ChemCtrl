@@ -2,6 +2,7 @@ import { entities } from "@transbordo/services/entities";
 import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
 import { parseDensidade } from "@transbordo/lib/format";
+import { isLoteNaoInformado } from "@transbordo/lib/saidaOrigem";
 import {
   calculateFIFOAllocation,
   expandOrigensForFifo,
@@ -404,7 +405,7 @@ function patchVasilhameLote(vasilhame, transbordos, index, forceIds) {
   };
 
   composicao = composicao.map((entry) => {
-    const estoque = index.byId.get(normId(entry.estoque_id || entry.entrada_id));
+    const estoque = resolveEstoqueForOrigem(entry, index);
     if (!estoque) return entry;
     const nextLote = normCode(estoque.lote);
     if (!nextLote || sameText(entry.lote, nextLote)) {
@@ -491,8 +492,11 @@ function isSaidaVasilhameItem(item) {
   return item.tipo !== "embalado" && item.tipo !== "ind_retorno_mp";
 }
 
-function patchSaidasLote(saidas, index, vasilhamePatches) {
+function patchSaidasLote(saidas, index, vasilhamePatches, vasilhamesAtuais = []) {
   const patchById = new Map(vasilhamePatches.map((patch) => [String(patch.id), patch]));
+  const vasilhameById = new Map(
+    (vasilhamesAtuais || []).map((vasilhame) => [String(vasilhame.id), vasilhame])
+  );
   const updates = [];
 
   for (const saida of saidas || []) {
@@ -507,15 +511,22 @@ function patchSaidasLote(saidas, index, vasilhamePatches) {
       }
 
       if (!isSaidaVasilhameItem(item)) return item;
-      const patch = patchById.get(String(item.vasilhame_id));
-      if (!patch) return item;
       const current = normCode(item.lote);
+      const patch = patchById.get(String(item.vasilhame_id));
+      if (!patch) {
+        // Vasilhame já alinhado antes: só completa lote ausente/"Não informado".
+        const atual = normCode(vasilhameById.get(String(item.vasilhame_id))?.lote);
+        if (!isLoteNaoInformado(current) || isLoteNaoInformado(atual)) return item;
+        changed = true;
+        return { ...item, lote: atual };
+      }
       const nextLote =
         patch.replacements.get(current) ||
-        (patch.beforeLotes.size <= 1 &&
-        (!current || patch.beforeLotes.has(current))
+        ((patch.beforeLotes.size <= 1 || isLoteNaoInformado(current)) &&
+        (!current || isLoteNaoInformado(current) || patch.beforeLotes.has(current))
           ? patch.lote
           : "");
+      if (isLoteNaoInformado(nextLote)) return item;
       if (!nextLote || sameText(current, nextLote)) return item;
       changed = true;
       return { ...item, lote: nextLote };
@@ -568,7 +579,12 @@ export function planLinkedLoteSync({
     ({ replacements, beforeLotes, ...row }) => row
   );
 
-  const saidaUpdates = patchSaidasLote(saidas, index, vasilhamePatches);
+  const saidaUpdates = patchSaidasLote(
+    saidas,
+    index,
+    vasilhamePatches,
+    mergeById(vasilhames, vasilhameUpdates)
+  );
 
   const patchById = new Map(vasilhamePatches.map((patch) => [String(patch.id), patch]));
   const filtracaoUpdates = [];

@@ -13,20 +13,22 @@ import { Switch } from "@shared/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+import DateInputBr from "@shared/components/ui/DateInputBr";
 import { formatMass, parseDensidade } from "@transbordo/lib/format";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
 const INPUT_EDITABLE = "bg-white";
+const DATE_INPUT_EDITABLE = "[&>input:first-child]:bg-white";
 const INPUT_LOCKED = "bg-muted/40 font-medium";
 
 const TIPOS = ["Contentor", "Vasilhame", "Tambor", "Bombona", "IBC", "One Way"];
 
 const EDITABLE_WHEN_VASILHAME = new Set([
-  "tipo",
   "placa",
   "barril",
   "lote",
+  "volume",
   "lacres",
   "tara",
   "eslinga",
@@ -117,10 +119,10 @@ export default function VasilhameModal({
       setLacres(editingVasilhame.lacres || "");
       setEslinga(editingVasilhame.eslinga || "");
       setGps(editingVasilhame.gps || "");
-      setMenorTeste(editingVasilhame.menor_teste || "");
+      setMenorTeste(String(editingVasilhame.menor_teste || "").slice(0, 10));
       setDataFabricacao(loteDatas?.data_fabricacao || "");
       setDataValidade(loteDatas?.data_validade || "");
-      setDataSaida(editingVasilhame.data_saida || "");
+      setDataSaida(String(editingVasilhame.data_saida || "").slice(0, 10));
       setResponsavel(editingVasilhame.responsavel || "");
       setFracionado(!!editingVasilhame.fracionado);
     } else {
@@ -182,15 +184,16 @@ export default function VasilhameModal({
 
   /**
    * Em edição:
-   * - tipo Vasilhame → tipo, nº placa, nº barril, lote, lacres, tara, eslinga, gps, menor teste, densidade
-   * - demais tipos → somente tipo e lote
+   * - tipo Vasilhame → nº placa, nº barril, lote, volume, lacres, tara, eslinga, gps,
+   *   menor teste, densidade, fabricação e validade
+   * - demais tipos → somente lote, fabricação e validade
+   * O tipo não é editável (mantém o valor atual).
    * Cadastro novo: todos os campos liberados.
    */
   const canEditField = (field) => {
     if (readOnly) return false;
     if (!isEditing) return true;
     if (
-      field === "tipo" ||
       field === "lote" ||
       field === "data_fabricacao" ||
       field === "data_validade"
@@ -384,7 +387,7 @@ export default function VasilhameModal({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label>Lote</Label>
               <Input
@@ -395,6 +398,36 @@ export default function VasilhameModal({
                 className={INPUT_EDITABLE}
               />
             </div>
+            {showField("volume") && (
+              <div className="space-y-1.5">
+                <Label>Volume (L) *</Label>
+                <NumberInputBr
+                  decimals={0}
+                  min={0}
+                  value={volume}
+                  onChange={(v) => setVolume(v === "" ? "" : v)}
+                  placeholder="0"
+                  disabled={!canEditField("volume")}
+                  className={INPUT_EDITABLE}
+                />
+                {showField("fracionado") && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Switch
+                      checked={fracionado}
+                      onCheckedChange={setFracionado}
+                      disabled={!canEditField("fracionado")}
+                      id="vasilhame-fracionado"
+                    />
+                    <Label
+                      htmlFor="vasilhame-fracionado"
+                      className={`cursor-pointer ${!canEditField("fracionado") ? "pointer-events-none opacity-70" : ""}`}
+                    >
+                      Fracionado
+                    </Label>
+                  </div>
+                )}
+              </div>
+            )}
             {showField("densidade") && (
               <div className="space-y-1.5">
                 <Label>
@@ -472,12 +505,11 @@ export default function VasilhameModal({
               {showField("menor_teste") && (
                 <div className="space-y-1.5">
                   <Label>Data Menor Teste</Label>
-                  <Input
-                    type="date"
+                  <DateInputBr
                     value={menorTeste}
-                    onChange={(e) => setMenorTeste(e.target.value)}
+                    onChange={setMenorTeste}
                     disabled={!canEditField("menor_teste")}
-                    className={INPUT_EDITABLE}
+                    className={DATE_INPUT_EDITABLE}
                   />
                 </div>
               )}
@@ -498,88 +530,52 @@ export default function VasilhameModal({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="vasilhame-data-fabricacao">Fabricação do lote</Label>
-              <Input
-                id="vasilhame-data-fabricacao"
-                type="date"
+              <Label>Fabricação do lote</Label>
+              <DateInputBr
                 value={dataFabricacao}
-                onChange={(e) => setDataFabricacao(e.target.value)}
+                onChange={setDataFabricacao}
                 disabled={!canEditField("data_fabricacao")}
-                className={INPUT_EDITABLE}
+                className={DATE_INPUT_EDITABLE}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="vasilhame-data-validade">Validade do lote</Label>
-              <Input
-                id="vasilhame-data-validade"
-                type="date"
+              <Label>Validade do lote</Label>
+              <DateInputBr
                 value={dataValidade}
-                min={dataFabricacao || undefined}
-                onChange={(e) => setDataValidade(e.target.value)}
+                onChange={setDataValidade}
                 disabled={!canEditField("data_validade")}
-                className={INPUT_EDITABLE}
+                className={DATE_INPUT_EDITABLE}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Tipo</Label>
-              <SearchableSelect
-                value={tipo}
-                onChange={(label) => setTipo(label)}
-                options={TIPOS.map((t) => ({ value: t, label: t }))}
-                getOptionLabel={(o) => o.label}
-                getOptionValue={(o) => o.value}
-                placeholder="Selecione..."
-                disabled={!canEditField("tipo")}
-                inputClassName={INPUT_EDITABLE}
-              />
-            </div>
-            {showField("lacres") && (
-              <div className="space-y-1.5">
-                <Label>Lacres</Label>
-                <Input
-                  value={lacres}
-                  onChange={(e) => setLacres(e.target.value)}
-                  placeholder="Nº lacres"
-                  disabled={!canEditField("lacres")}
-                  className={INPUT_EDITABLE}
-                />
-              </div>
-            )}
-          </div>
-
-          {(showField("volume") || showField("responsavel")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {showField("volume") && (
+          {(!editingVasilhame || showField("lacres") || showField("responsavel")) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {!editingVasilhame && (
                 <div className="space-y-1.5">
-                  <Label>Volume (L) *</Label>
-                  <NumberInputBr
-                    decimals={0}
-                    min={0}
-                    value={volume}
-                    onChange={(v) => setVolume(v === "" ? "" : v)}
-                    placeholder="0"
-                    disabled={!canEditField("volume")}
+                  <Label>Tipo</Label>
+                  <SearchableSelect
+                    value={tipo}
+                    onChange={(label) => setTipo(label)}
+                    options={TIPOS.map((t) => ({ value: t, label: t }))}
+                    getOptionLabel={(o) => o.label}
+                    getOptionValue={(o) => o.value}
+                    placeholder="Selecione..."
+                    disabled={!canEditField("tipo")}
+                    inputClassName={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+              {showField("lacres") && (
+                <div className="space-y-1.5">
+                  <Label>Lacres</Label>
+                  <Input
+                    value={lacres}
+                    onChange={(e) => setLacres(e.target.value)}
+                    placeholder="Nº lacres"
+                    disabled={!canEditField("lacres")}
                     className={INPUT_EDITABLE}
                   />
-                  {showField("fracionado") && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <Switch
-                        checked={fracionado}
-                        onCheckedChange={setFracionado}
-                        disabled={!canEditField("fracionado")}
-                        id="vasilhame-fracionado"
-                      />
-                      <Label
-                        htmlFor="vasilhame-fracionado"
-                        className={`cursor-pointer ${!canEditField("fracionado") ? "pointer-events-none opacity-70" : ""}`}
-                      >
-                        Fracionado
-                      </Label>
-                    </div>
-                  )}
                 </div>
               )}
               {showField("responsavel") && (
@@ -600,12 +596,11 @@ export default function VasilhameModal({
           {showField("data_saida") && (
             <div className="space-y-1.5">
               <Label>Data de Saída</Label>
-              <Input
-                type="date"
+              <DateInputBr
                 value={dataSaida}
-                onChange={(e) => setDataSaida(e.target.value)}
+                onChange={setDataSaida}
                 disabled={!canEditField("data_saida")}
-                className={INPUT_EDITABLE}
+                className={DATE_INPUT_EDITABLE}
               />
               <p className="text-xs text-muted-foreground">
                 Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'.

@@ -89,6 +89,7 @@ export default function PrintContainerLabelDialog({
   clienteId,
   clienteNome,
   manufactureDate,
+  expiryDate,
   publicToken: publicTokenOverride,
   resolvePublicToken,
 }) {
@@ -184,6 +185,7 @@ export default function PrintContainerLabelDialog({
     try {
       await printContainerLabel(container, meta?.validityDays, meta?.publicToken, {
         manufactureDate: fabDate,
+        expiryDate: expiryDate || undefined,
         locale: i18n.language,
         clienteNome: meta?.clienteNome,
         clienteId,
@@ -212,7 +214,7 @@ export default function PrintContainerLabelDialog({
     op_number: container?.op_number || '—',
     lot: container?.lot || '—',
     manufactureDate: fabDate,
-    expiryDate: calcValidityDate(fabDate, meta?.validityDays),
+    expiryDate: expiryDate || calcValidityDate(fabDate, meta?.validityDays),
     net_weight: volumeOk ? weights.netWeight : 0,
     gross_weight: volumeOk ? weights.grossWeight : 0,
     volume: volumeOk ? Math.round(weights.volume) : null,

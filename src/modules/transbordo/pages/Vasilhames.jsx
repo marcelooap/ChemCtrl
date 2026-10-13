@@ -28,8 +28,12 @@ import {
   collapsedPlacaHealPatch,
   resolveVasilhameLoteDatas,
   applyLoteDatasToComposicao,
+  rescaleComposicaoToVolume,
 } from "@transbordo/lib/vasilhameComposicao";
-import { upsertFiltracaoForVasilhame } from "@transbordo/lib/filtracao";
+import {
+  upsertFiltracaoForVasilhame,
+  syncFiltracaoFromVasilhame,
+} from "@transbordo/lib/filtracao";
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromVasilhame,
@@ -219,9 +223,16 @@ export default function Vasilhames() {
   const loteDatasEdicao = useMemo(
     () =>
       editingVasilhame
-        ? resolveVasilhameLoteDatas(editingVasilhame, estoqueById)
+        ? resolveVasilhameLoteDatas(editingVasilhame, estoqueById, { transbordos })
         : null,
-    [editingVasilhame, estoqueById]
+    [editingVasilhame, estoqueById, transbordos]
+  );
+  const loteDatasEtiqueta = useMemo(
+    () =>
+      labelVasilhame
+        ? resolveVasilhameLoteDatas(labelVasilhame, estoqueById, { transbordos })
+        : null,
+    [labelVasilhame, estoqueById, transbordos]
   );
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
   const location = useLocation();
@@ -471,6 +482,7 @@ export default function Vasilhames() {
       (data?.data_saida != null && String(data.data_saida).trim() !== "");
 
     let saved = editingVasilhame;
+    let volumeChanged = false;
     if (editingVasilhame) {
       // Fabricação/validade não são colunas do vasilhame: ficam na composição do lote.
       const {
@@ -530,8 +542,25 @@ export default function Vasilhames() {
         payload = { ...payload, lote: newLote || null, composicao: nextComp };
       }
 
+      // Volume editado: a composição por lote acompanha (peso líquido/bruto já vêm
+      // recalculados do modal) para o saldo por lote continuar coerente.
+      volumeChanged =
+        roundVolume(data.volume ?? 0) !== roundVolume(editingVasilhame.volume ?? 0);
+      if (volumeChanged) {
+        payload = {
+          ...payload,
+          composicao: rescaleComposicaoToVolume(
+            payload.composicao ?? editingVasilhame.composicao,
+            data.volume,
+            data.densidade ?? editingVasilhame.densidade
+          ),
+        };
+      }
+
       // Só persiste as datas que o usuário realmente alterou (evita copiar o estoque).
-      const datasAtuais = resolveVasilhameLoteDatas(editingVasilhame, estoqueById);
+      const datasAtuais = resolveVasilhameLoteDatas(editingVasilhame, estoqueById, {
+        transbordos,
+      });
       const datasPatch = {};
       if (String(nextFabricacao || "") !== datasAtuais.data_fabricacao) {
         datasPatch.data_fabricacao = nextFabricacao || "";
@@ -603,11 +632,26 @@ export default function Vasilhames() {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }
       }
+      if (volumeChanged || newLote !== oldLote) {
+        try {
+          const existentes = await entities.filtracoes.filter({
+            vasilhame_id: editingVasilhame.id,
+          });
+          if (existentes.length > 0) {
+            await entities.filtracoes.update(
+              existentes[0].id,
+              syncFiltracaoFromVasilhame(saved)
+            );
+          }
+        } catch (err) {
+          console.error("[Transbordo] Falha ao atualizar filtração do vasilhame:", err);
+        }
+      }
     } else {
       return;
     }
 
-    if (prevExpedido !== nextExpedido || nextExpedido) {
+    if (volumeChanged || prevExpedido !== nextExpedido || nextExpedido) {
       await syncEstoqueFromVasilhame(saved);
     }
 
@@ -1079,7 +1123,12 @@ export default function Vasilhames() {
         contexto="convencional"
         clienteId={labelVasilhame?.cliente_id}
         clienteNome={labelVasilhame?.cliente_nome}
-        manufactureDate={labelVasilhame?.created_at || labelVasilhame?.created_date}
+        manufactureDate={
+          loteDatasEtiqueta?.data_fabricacao ||
+          labelVasilhame?.created_at ||
+          labelVasilhame?.created_date
+        }
+        expiryDate={loteDatasEtiqueta?.data_validade || undefined}
         resolvePublicToken={
           labelVasilhame
             ? () => resolveProdutoPublicToken({

@@ -312,36 +312,109 @@ const toDateOnly = (value) => {
   return text ? text.slice(0, 10) : "";
 };
 
+const sameLoteText = (a, b) => (a || "").trim() === (b || "").trim();
+
+/**
+ * Registros de estoque (entrada) que originaram o lote do vasilhame,
+ * do vínculo mais confiável para o menos confiável:
+ * 1) id do estoque na composição; 2) entrada da composição;
+ * 3) origens dos transbordos do tanque; 4) código da entrada; 5) mesmo lote.
+ * Dentro de cada grupo, registros do mesmo lote vêm primeiro.
+ */
+function listEstoqueOrigemDoLote(vasilhame, lote, entries, estoqueById, transbordos) {
+  const all = [...estoqueById.values()].filter(Boolean);
+  const result = [];
+  const seen = new Set();
+  const push = (rows) => {
+    const ordered = [
+      ...rows.filter((r) => sameLoteText(r.lote, lote)),
+      ...rows.filter((r) => !sameLoteText(r.lote, lote)),
+    ];
+    for (const row of ordered) {
+      const key = row?.id ?? row;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(row);
+    }
+  };
+
+  push(
+    entries
+      .flatMap((c) => [c.estoque_id, c.entrada_id])
+      .map((id) => (id ? estoqueById.get(id) : null))
+      .filter(Boolean)
+  );
+
+  const entradaIds = new Set(entries.map((c) => c.entrada_id).filter(Boolean));
+  if (entradaIds.size > 0) push(all.filter((r) => entradaIds.has(r.entrada_id)));
+
+  const opCodes = new Set(
+    [
+      vasilhame.codigo,
+      vasilhame.numero_op,
+      ...entries.map((c) => c.transbordo_codigo),
+    ]
+      .map((c) => (c || "").trim())
+      .filter(Boolean)
+  );
+  const origemIds = new Set();
+  for (const t of transbordos || []) {
+    const ligado =
+      (vasilhame.transbordo_id && t.id === vasilhame.transbordo_id) ||
+      opCodes.has((t.codigo_transbordo || "").trim());
+    if (!ligado) continue;
+    for (const o of t.origens || []) {
+      if (o.estoque_id) origemIds.add(o.estoque_id);
+      if (o.entrada_id) origemIds.add(o.entrada_id);
+    }
+  }
+  if (origemIds.size > 0) {
+    push(all.filter((r) => origemIds.has(r.id) || origemIds.has(r.entrada_id)));
+  }
+
+  const entradaCodigos = new Set(
+    [vasilhame.codigo, ...entries.map((c) => c.entrada_codigo)]
+      .map((c) => (c || "").trim())
+      .filter(Boolean)
+  );
+  push(all.filter((r) => entradaCodigos.has((r.entrada_codigo || "").trim())));
+
+  if (lote) push(all.filter((r) => sameLoteText(r.lote, lote)));
+
+  return result;
+}
+
 /**
  * Fabricação/validade do lote do vasilhame (YYYY-MM-DD).
- * Prioriza o que foi editado no vasilhame (composição); senão usa o estoque
- * da entrada de origem (por id ou, na falta, pelo mesmo lote).
+ * Prioriza o que foi editado no vasilhame (composição); senão usa as datas
+ * informadas na entrada que originou o lote.
  *
  * @param {object} vasilhame
  * @param {Map<string, object>|null} estoqueById
+ * @param {{ transbordos?: object[] }} [options]
  */
-export function resolveVasilhameLoteDatas(vasilhame, estoqueById = null) {
+export function resolveVasilhameLoteDatas(
+  vasilhame,
+  estoqueById = null,
+  { transbordos = [] } = {}
+) {
   const empty = { data_fabricacao: "", data_validade: "" };
   if (!vasilhame) return empty;
 
   const lote = (vasilhame.lote || getDominantLote(vasilhame.composicao) || "").trim();
   const composicao = Array.isArray(vasilhame.composicao) ? vasilhame.composicao : [];
-  const doLote = composicao.filter((c) => (c.lote || "").trim() === lote);
+  const doLote = composicao.filter((c) => sameLoteText(c.lote, lote));
   const entries = doLote.length > 0 ? doLote : composicao;
+
+  const origens =
+    estoqueById && estoqueById.size > 0
+      ? listEstoqueOrigemDoLote(vasilhame, lote, entries, estoqueById, transbordos)
+      : [];
 
   const pick = (field) => {
     const own = entries.find((c) => Object.prototype.hasOwnProperty.call(c, field));
     if (own) return toDateOnly(own[field]);
-
-    if (!estoqueById) return "";
-    for (const c of entries) {
-      const est = estoqueById.get(c.estoque_id) || estoqueById.get(c.entrada_id);
-      const value = toDateOnly(est?.[field]);
-      if (value) return value;
-    }
-    if (!lote) return "";
-    for (const est of estoqueById.values()) {
-      if ((est?.lote || "").trim() !== lote) continue;
+    for (const est of origens) {
       const value = toDateOnly(est[field]);
       if (value) return value;
     }
@@ -802,6 +875,56 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
   }
 
   return { kept, deletedIds };
+}
+
+/**
+ * Reescala a composição por lote para o novo volume do tanque, mantendo a
+ * proporção entre lotes e a soma exata (sem criar "Aporte anterior" no seed).
+ * Sem densidade, os kg acompanham a mesma proporção dos litros.
+ */
+export function rescaleComposicaoToVolume(composicao = [], volume, densidade = 0) {
+  const base = Array.isArray(composicao) ? composicao : [];
+  const target = roundVolume(volume || 0);
+  if (base.length === 0) return base;
+
+  const dens = parseDensidade(densidade);
+  const sum = roundVolume(base.reduce((s, c) => s + (c.quantidade_l || 0), 0));
+  const scaled = base.map((c) => {
+    const qL =
+      sum > 0
+        ? roundVolume(((c.quantidade_l || 0) * target) / sum)
+        : base.length === 1
+          ? target
+          : 0;
+    return { ...c, quantidade_l: qL };
+  });
+
+  const residual = roundVolume(
+    target - scaled.reduce((s, c) => s + c.quantidade_l, 0)
+  );
+  if (residual !== 0) {
+    let idx = 0;
+    scaled.forEach((c, i) => {
+      if (c.quantidade_l > scaled[idx].quantidade_l) idx = i;
+    });
+    scaled[idx] = {
+      ...scaled[idx],
+      quantidade_l: Math.max(0, roundVolume(scaled[idx].quantidade_l + residual)),
+    };
+  }
+
+  return scaled
+    .map((c, i) => {
+      const prev = base[i];
+      const kg =
+        dens > 0
+          ? roundMass(c.quantidade_l * dens)
+          : sum > 0
+            ? roundMass(((prev.quantidade_kg || 0) * c.quantidade_l) / (prev.quantidade_l || 1))
+            : roundMass(prev.quantidade_kg || 0);
+      return { ...c, quantidade_kg: kg };
+    })
+    .filter((c) => c.quantidade_l > 0);
 }
 
 export function normalizeVasilhameLote(v) {
