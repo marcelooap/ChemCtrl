@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Search, Eye, Pencil, Truck, X, Printer } from "lucide-react";
+import { Search, Eye, Pencil, Truck, X, Printer, FileText } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { SelectDot } from "@shared/components/ui/SelectDot";
+import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
+import { generateRelatorioFiscalVasilhamesPDF } from "@transbordo/lib/pdfFiscal";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
@@ -61,7 +64,15 @@ import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicTo
 import {
   collectConvencionalItemsForVasilhame,
   buildVasilhameYardRestorePatch,
+  resolveVasilhameExpedidoDisplay,
 } from "@transbordo/lib/vasilhamePatio";
+
+/** Chave de agrupamento por cliente (id, com fallback para o nome). */
+function clienteKeyOf(vasilhame) {
+  return String(
+    vasilhame?.cliente_id || (vasilhame?.cliente_nome || "").trim().toLowerCase() || ""
+  );
+}
 
 function labelUnidadeEntrada(unidade) {
   const u = normalizeUnidadeEntrada(unidade);
@@ -220,6 +231,22 @@ export default function Vasilhames() {
   const [labelVasilhame, setLabelVasilhame] = useState(null);
   const [transbordos, setTransbordos] = useState([]);
   const [estoqueById, setEstoqueById] = useState(() => new Map());
+  const [saidas, setSaidas] = useState([]);
+  const { user } = useAuth();
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  // Itens de saída convencional por vasilhame (para exibir volume/qtd de expedidos).
+  const saidaItemsByVasilhame = useMemo(() => {
+    const map = new Map();
+    for (const saida of saidas) {
+      for (const item of saida.itens || []) {
+        if (item?.tipo !== "convencional" || !item.vasilhame_id) continue;
+        const list = map.get(item.vasilhame_id) || [];
+        list.push({ saida, item });
+        map.set(item.vasilhame_id, list);
+      }
+    }
+    return map;
+  }, [saidas]);
   const loteDatasEdicao = useMemo(
     () =>
       editingVasilhame
@@ -276,14 +303,16 @@ export default function Vasilhames() {
       // unifyDuplicateVasilhames / repairVasilhameComposicao / heal de volume
       // devem rodar via script administrativo, não a cada abertura da tela.
 
-      const [vas, prods, cliens, trans, ests, ents] = await Promise.all([
+      const [vas, prods, cliens, trans, ests, ents, saidasList] = await Promise.all([
         entities.vasilhames.list("-created_date"),
         entities.produtos.list(),
         entities.clientes.list(),
         entities.transbordos.list(),
         entities.estoque.list(),
         entities.entradas.list(),
+        entities.saidas.list("-created_date").catch(() => []),
       ]);
+      setSaidas(saidasList || []);
       const volumes = applyDeclaredVolumeDecimals({
         estoque: ests,
         entradas: ents,
@@ -800,6 +829,33 @@ export default function Vasilhames() {
     }
   };
 
+  const selectedVasilhames = vasilhames.filter((v) => selectedIds.has(v.id));
+  const selectedClienteKey = selectedVasilhames.length
+    ? clienteKeyOf(selectedVasilhames[0])
+    : null;
+
+  const toggleSelected = (v) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(v.id)) next.delete(v.id);
+      else next.add(v.id);
+      return next;
+    });
+  };
+
+  const handleRelatorioFiscal = () => {
+    if (selectedVasilhames.length === 0) return;
+    const resolved = selectedVasilhames.map((v) =>
+      resolveVasilhameExpedidoDisplay(v, {
+        linkedItems: saidaItemsByVasilhame.get(v.id) || [],
+        transbordos,
+      })
+    );
+    generateRelatorioFiscalVasilhamesPDF(resolved, {
+      responsavel: user?.nome || user?.full_name || "",
+    });
+  };
+
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
   const statusFilterOptions = [
     { value: "Todos", label: "Todos" },
@@ -818,9 +874,35 @@ export default function Vasilhames() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
       <div className="shrink-0 space-y-4">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Vasilhames / Envase</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Vasilhames</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
+          </div>
+          {selectedVasilhames.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {selectedVasilhames.length} selecionado(s)
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Limpar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-primary hover:bg-primary/90"
+                onClick={handleRelatorioFiscal}
+              >
+                <FileText className="w-4 h-4 mr-1.5" />
+                Relatório Fiscal
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -877,6 +959,9 @@ export default function Vasilhames() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                <th className="w-10 pl-4 pr-0 py-3 font-medium">
+                  <span className="sr-only">Selecionar</span>
+                </th>
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Nº Placa</th>
                 <th className="px-4 py-3 font-medium">Nº Barril</th>
@@ -894,13 +979,13 @@ export default function Vasilhames() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
                     Carregando vasilhames...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum vasilhame encontrado.
                   </td>
                 </tr>
@@ -909,7 +994,13 @@ export default function Vasilhames() {
                   const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
                   const medida = resolveVasilhameMedida(v, transbordos, estoqueById);
                   const { volume: volumeCell, quantidade: quantidadeCell } =
-                    renderVolumeQuantidadeCells(v, medida);
+                    renderVolumeQuantidadeCells(
+                      resolveVasilhameExpedidoDisplay(v, {
+                        linkedItems: saidaItemsByVasilhame.get(v.id) || [],
+                        transbordos,
+                      }),
+                      medida
+                    );
                   return (
                     <tr
                       key={v.id}
@@ -917,6 +1008,24 @@ export default function Vasilhames() {
                         i % 2 === 1 ? "bg-muted/40/30" : ""
                       }`}
                     >
+                      <td className="w-10 pl-4 pr-0 py-3">
+                        <SelectDot
+                          checked={selectedIds.has(v.id)}
+                          disabled={
+                            selectedClienteKey != null &&
+                            !selectedIds.has(v.id) &&
+                            clienteKeyOf(v) !== selectedClienteKey
+                          }
+                          onClick={() => toggleSelected(v)}
+                          label={
+                            selectedClienteKey != null &&
+                            !selectedIds.has(v.id) &&
+                            clienteKeyOf(v) !== selectedClienteKey
+                              ? "Só é possível selecionar vasilhames do mesmo cliente"
+                              : `Selecionar ${v.codigo || "vasilhame"}`
+                          }
+                        />
+                      </td>
                       <td className="px-4 py-3 font-medium text-primary">{v.codigo || "-"}</td>
                       <td className="px-4 py-3 text-foreground">{v.placa || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{v.barril || "—"}</td>

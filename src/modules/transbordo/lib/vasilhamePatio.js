@@ -152,6 +152,38 @@ export function buildVasilhameYardRestorePatch(
   return patch;
 }
 
+function isVasilhameExpedido(vasilhame) {
+  return (
+    (vasilhame?.status || "") === "Expedido" ||
+    (vasilhame?.data_saida != null && String(vasilhame.data_saida).trim() !== "")
+  );
+}
+
+/**
+ * Valores de volume/peso para EXIBIÇÃO de vasilhame expedido.
+ * A baixa zera `volume`/`peso_liquido` no cadastro; aqui recuperamos o conteúdo
+ * (snapshot da saída → composição → OP/densidade) sem alterar o registro.
+ */
+export function resolveVasilhameExpedidoDisplay(
+  vasilhame,
+  { linkedItems = [], transbordos = [] } = {}
+) {
+  if (!vasilhame || !isVasilhameExpedido(vasilhame)) return vasilhame;
+  if ((Number(vasilhame.volume) || 0) > 0 || (Number(vasilhame.peso_liquido) || 0) > 0) {
+    return vasilhame;
+  }
+  const restored = buildVasilhameYardRestorePatch(vasilhame, {
+    linkedItems,
+    transbordos,
+  });
+  if (!restored) return vasilhame;
+  return {
+    ...vasilhame,
+    volume: restored.volume,
+    peso_liquido: restored.peso_liquido,
+  };
+}
+
 /** True quando o tanque está no pátio sem volume/peso, mas ainda há conteúdo recuperável. */
 export function needsVasilhameYardVolumeHeal(vasilhame, linkedItems = []) {
   if (!vasilhame) return false;

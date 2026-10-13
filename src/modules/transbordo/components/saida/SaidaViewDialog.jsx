@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,7 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
+import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
 import { entities } from "@transbordo/services/entities";
 import { Check, ClipboardList, FileText, Printer } from "lucide-react";
@@ -84,32 +86,6 @@ function quantidadeItens(items) {
   );
 }
 
-function SelectDot({ checked, indeterminate = false, onClick, label }) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={indeterminate ? "mixed" : checked}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        checked
-          ? "border-primary bg-primary"
-          : indeterminate
-            ? "border-primary bg-background"
-            : "border-muted-foreground/40 bg-background hover:border-primary"
-      }`}
-    >
-      {checked ? (
-        <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
-      ) : indeterminate ? (
-        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-      ) : null}
-    </button>
-  );
-}
-
 export default function SaidaViewDialog({
   open,
   onClose,
@@ -126,6 +102,7 @@ export default function SaidaViewDialog({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [checklistItemView, setChecklistItemView] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [markedLocal, setMarkedLocal] = useState(() => new Set());
@@ -195,7 +172,11 @@ export default function SaidaViewDialog({
         }
       : saida;
 
-    generateRelatorioFiscalSaidaPDF(reportSaida, { vasilhames, entradas });
+    generateRelatorioFiscalSaidaPDF(reportSaida, {
+      vasilhames,
+      entradas,
+      responsavel: user?.nome || user?.full_name || "",
+    });
 
     if (!saida.id || indexes.length === 0) return;
 

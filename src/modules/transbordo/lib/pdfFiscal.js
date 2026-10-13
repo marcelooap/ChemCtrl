@@ -563,7 +563,7 @@ function buildSaidaEmbaladoRow(item, entrada) {
  */
 export function generateRelatorioFiscalSaidaPDF(
   saida,
-  { vasilhames = [], entradas = [] } = {}
+  { vasilhames = [], entradas = [], responsavel = "" } = {}
 ) {
   if (!saida) return;
 
@@ -581,15 +581,9 @@ export function generateRelatorioFiscalSaidaPDF(
       ["Solicitante", saida.usuario_criador || "-"],
       ["Data Solicitação", fmtDate(saida.data_solicitacao)],
       ["Data Programada", fmtDate(saida.data_programada)],
-      [
-        "Validação",
-        saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
-          ? "Validado"
-          : "Pendente",
-      ],
       ["Qtd. Total", fmtNum(saida.quantidade_total, 0) + " kg"],
-      ["Responsável", saida.usuario_responsavel || "-"],
-      ["Observações", saida.observacoes || "-", 3],
+      ["Responsável", responsavel || "-"],
+      ["Observações", saida.observacoes || "-", 2],
     ],
     3
   );
@@ -610,6 +604,20 @@ export function generateRelatorioFiscalSaidaPDF(
     convencionalRows.push(...buildSaidaConvencionalLoteRows(item, v));
   });
 
+  y = drawItensFiscaisTables(doc, y, { embaladoRows, convencionalRows });
+
+  addFooter(doc);
+
+  const fileBase = safePdfFilenamePart(codigo) || "saida";
+  doc.save(`${fileBase} - Relatório Fiscal.pdf`);
+}
+
+/**
+ * Tabelas fiscais por tipo (Embalado / Convencional), compartilhadas entre o
+ * relatório da Saída e o relatório de Vasilhames. Retorna o novo `y`.
+ */
+function drawItensFiscaisTables(doc, startY, { embaladoRows, convencionalRows }) {
+  let y = startY;
   const tableOpts = { dataFs: 7.2, hdrFs: 6.2 };
 
   const drawTypedTable = (sectionTitle, headers, rows, totalsRow, minWidths) => {
@@ -710,8 +718,63 @@ export function generateRelatorioFiscalSaidaPDF(
     );
   }
 
+  return y;
+}
+
+/**
+ * Relatório Fiscal de Vasilhames selecionados (A4) — mesmo modelo do
+ * Relatório Fiscal da Saída. Espera vasilhames do MESMO cliente, já com
+ * volume/peso resolvidos (ver `resolveVasilhameExpedidoDisplay`).
+ */
+export function generateRelatorioFiscalVasilhamesPDF(
+  vasilhames,
+  { responsavel = "" } = {}
+) {
+  const list = (vasilhames || []).filter(Boolean);
+  if (list.length === 0) return;
+
+  const doc = new jsPDF({ format: "a4" });
+  const codigos = list.map((v) => v.codigo || v.placa || "-");
+  const title = "Retorno Fiscal";
+
+  const convencionalRows = list.flatMap((v) =>
+    buildSaidaConvencionalLoteRows(
+      {
+        tipo: "convencional",
+        vasilhame_id: v.id,
+        produto_codigo: v.produto_codigo,
+        produto_nome: v.produto_nome,
+        volume_solicitado: v.volume,
+        peso_liquido: v.peso_liquido,
+        lote: v.lote,
+        tara: v.tara,
+      },
+      v
+    )
+  );
+  const totalMassa = convencionalRows.reduce((s, r) => s + (r.massa || 0), 0);
+
+  let y = addPageTitle(doc, title, "Relatório Fiscal dos Vasilhames");
+  y = addInfoGrid(
+    doc,
+    y,
+    [
+      ["Cliente", list[0].cliente_nome || "-", 2],
+      ["Data Emissão", fmtDate(new Date())],
+      ["Vasilhames", codigos.join(", "), 2],
+      ["Qtd. Total", fmtNum(totalMassa, 0) + " kg"],
+      ["Responsável", responsavel || "-", 3],
+    ],
+    3
+  );
+
+  y = drawItensFiscaisTables(doc, y, { embaladoRows: [], convencionalRows });
+
   addFooter(doc);
 
-  const fileBase = safePdfFilenamePart(codigo) || "saida";
-  doc.save(`${fileBase} - Relatório Fiscal.pdf`);
+  const fileBase =
+    list.length === 1
+      ? safePdfFilenamePart(codigos[0])
+      : safePdfFilenamePart(`Vasilhames ${list[0].cliente_nome || ""}`);
+  doc.save(`${fileBase || "vasilhames"} - Relatório Fiscal.pdf`);
 }
