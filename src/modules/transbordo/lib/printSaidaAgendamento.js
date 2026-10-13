@@ -222,7 +222,7 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
   const container = {
     op_number: saida?.codigo || vasilhame?.codigo || '—',
     product: item?.produto_nome || vasilhame?.produto_nome || '—',
-    lot: resolveSaidaItemLote(item, { vasilhame }) || '—',
+    lot: resolveSaidaItemLote(item, { vasilhame, preferVasilhame: true }) || '—',
     container_number: item?.vasilhame_placa || vasilhame?.placa || '',
     barril_number: item?.vasilhame_barril || vasilhame?.barril || '',
     type: vasilhame?.tipo || '',

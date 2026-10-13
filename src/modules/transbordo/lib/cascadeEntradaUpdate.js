@@ -2,6 +2,10 @@ import { entities } from "@transbordo/services/entities";
 import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
 import { parseDensidade } from "@transbordo/lib/format";
+import {
+  computeTankaLotesDisponiveis,
+  sortTransbordosChrono,
+} from "@transbordo/lib/tankaVolume";
 import { isLoteNaoInformado } from "@transbordo/lib/saidaOrigem";
 import {
   calculateFIFOAllocation,
@@ -381,6 +385,53 @@ function patchTransbordoOrigens(transbordo, index) {
   return changed ? { id: transbordo.id, origens } : null;
 }
 
+/**
+ * Origem "tanka": o lote é uma cópia do que a tanka continha no momento do OP
+ * (vindo de OPs anteriores, que por sua vez apontam para a entrada).
+ * Realinha o snapshot ao lote atual da tanka quando ele foi renomeado ou
+ * estava "Não informado".
+ */
+function patchTransbordoOrigensTanka(transbordo, anteriores) {
+  let changed = false;
+
+  const origens = (transbordo?.origens || []).map((origem) => {
+    if (origem?.tipo_origem !== "tanka" || !origem.entrada_id) return origem;
+
+    // Só realinha quando a tanka continha um único lote (sem ambiguidade).
+    const lotesDaTanka = computeTankaLotesDisponiveis({
+      isotanqueId: origem.entrada_id,
+      tankaCodigo: origem.tanka_codigo || "",
+      transbordos: anteriores,
+    }).map((item) => normCode(item.lote));
+    if (lotesDaTanka.length !== 1 || isLoteNaoInformado(lotesDaTanka[0])) {
+      return origem;
+    }
+
+    const lotePadrao = lotesDaTanka[0];
+    const resolver = (lote) =>
+      sameText(lote, lotePadrao) ? lote : lotePadrao;
+
+    let next = origem;
+    if (!sameText(origem.lote, lotePadrao)) {
+      next = { ...next, lote: lotePadrao };
+      changed = true;
+    }
+    if (Array.isArray(origem.lotes_retirados) && origem.lotes_retirados.length > 0) {
+      const lotes_retirados = origem.lotes_retirados.map((item) => {
+        const lote = resolver(item?.lote);
+        return sameText(lote, item?.lote) ? item : { ...item, lote };
+      });
+      if (lotes_retirados.some((item, i) => item !== origem.lotes_retirados[i])) {
+        next = { ...next, lotes_retirados };
+        changed = true;
+      }
+    }
+    return next;
+  });
+
+  return changed ? { id: transbordo.id, origens } : null;
+}
+
 function patchVasilhameLote(vasilhame, transbordos, index, forceIds) {
   const manual = composicaoManual(vasilhame);
   const forced = vasilhameUsaEstoqueForcado(
@@ -423,7 +474,12 @@ function patchVasilhameLote(vasilhame, transbordos, index, forceIds) {
   for (const transbordo of transbordos || []) {
     if (!vasilhameBelongsToTransbordo(vasilhame, transbordo)) continue;
     const expected = expectedLotesDoTransbordo(transbordo, index);
-    const linked = expected.filter((item) => item.estoque && item.lote);
+    const linked = expected.filter(
+      (item) =>
+        item.lote &&
+        (item.estoque ||
+          (item.origem?.tipo_origem === "tanka" && !isLoteNaoInformado(item.lote)))
+    );
     if (linked.length === 0) continue;
 
     const unique = [...new Set(expected.map((item) => item.lote).filter(Boolean))];
@@ -562,13 +618,30 @@ export function planLinkedLoteSync({
   const index = indexEstoqueRows(estoqueRows);
   const forceIds = new Set((forceEstoqueIds || []).filter(Boolean).map(String));
 
-  const transbordoUpdates = [];
-  const transbordosNext = (transbordos || []).map((transbordo) => {
+  const updatesById = new Map();
+  const working = new Map();
+  for (const transbordo of transbordos || []) {
     const patch = patchTransbordoOrigens(transbordo, index);
-    if (!patch) return transbordo;
-    transbordoUpdates.push(patch);
-    return { ...transbordo, ...patch };
+    if (patch) updatesById.set(String(transbordo.id), patch);
+    working.set(String(transbordo.id), patch ? { ...transbordo, ...patch } : transbordo);
+  }
+
+  // Origens "tanka" dependem dos OPs anteriores já realinhados (ordem cronológica).
+  const ordered = sortTransbordosChrono([...working.values()]);
+  ordered.forEach((transbordo, i) => {
+    const key = String(transbordo.id);
+    const current = working.get(key);
+    const anteriores = ordered.slice(0, i).map((prev) => working.get(String(prev.id)));
+    const patch = patchTransbordoOrigensTanka(current, anteriores);
+    if (!patch) return;
+    working.set(key, { ...current, ...patch });
+    updatesById.set(key, patch);
   });
+
+  const transbordoUpdates = [...updatesById.values()];
+  const transbordosNext = (transbordos || []).map(
+    (transbordo) => working.get(String(transbordo.id)) || transbordo
+  );
 
   const vasilhamePatches = [];
   for (const vasilhame of vasilhames || []) {

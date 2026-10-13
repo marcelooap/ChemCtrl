@@ -51,6 +51,9 @@ import {
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
 import { listChecklistExpedicaoByClienteIds } from '@painel/lib/checklistExpedicaoConfig';
+import { entities } from '@transbordo/services/entities';
+import { TIPO_IND_VASILHAME } from '@transbordo/lib/saidaOrigem';
+import { loadContainerLoteDatasMap } from '@industrializacao/lib/containerLoteDatas';
 
 const STATUS_STYLE = {
   [CHECKLIST_STATUS.PENDENTE]: 'bg-muted text-muted-foreground',
@@ -214,6 +217,47 @@ export default function AgendamentoCarregamentoChecklistModal({
     };
   }, [open, clienteIdsKey]);
 
+  // Origem do produto: Transbordo (OPs) e Industrialização (containers) fornecem
+  // lote/fabricação/validade iguais aos da tela de Vasilhames de cada módulo.
+  const origemNeeds = useMemo(() => {
+    const containerIds = new Set();
+    let precisaTransbordos = false;
+    for (const saida of saidas || []) {
+      for (const linha of saida?.itens || []) {
+        if (linha?.vasilhame_id) precisaTransbordos = true;
+        if (linha?.tipo === TIPO_IND_VASILHAME && linha.container_id) {
+          containerIds.add(String(linha.container_id));
+        }
+      }
+    }
+    return {
+      precisaTransbordos,
+      containerKey: [...containerIds].sort().join(','),
+    };
+  }, [saidas]);
+
+  const [transbordos, setTransbordos] = useState([]);
+  const [containerDatasById, setContainerDatasById] = useState(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    if (origemNeeds.precisaTransbordos) {
+      entities.transbordos
+        .list()
+        .then((rows) => !cancelled && setTransbordos(rows || []))
+        .catch(() => {});
+    }
+    if (origemNeeds.containerKey) {
+      loadContainerLoteDatasMap(origemNeeds.containerKey.split(','))
+        .then((map) => !cancelled && setContainerDatasById(map))
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, origemNeeds.precisaTransbordos, origemNeeds.containerKey]);
+
   const builtItems = useMemo(
     () => {
       if (defsLoading || checkDefsByCliente == null) return [];
@@ -222,10 +266,21 @@ export default function AgendamentoCarregamentoChecklistModal({
         saidas,
         vasilhames,
         entradas,
+        transbordos,
+        containerDatasById,
         checkDefsByCliente,
       });
     },
-    [list, saidas, vasilhames, entradas, checkDefsByCliente, defsLoading]
+    [
+      list,
+      saidas,
+      vasilhames,
+      entradas,
+      transbordos,
+      containerDatasById,
+      checkDefsByCliente,
+      defsLoading,
+    ]
   );
 
   const [items, setItems] = useState([]);

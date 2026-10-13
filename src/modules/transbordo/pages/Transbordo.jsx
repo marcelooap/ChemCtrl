@@ -26,6 +26,7 @@ import {
   parseDensidade,
 } from "@transbordo/lib/format";
 import { restoreTankaVasilhamesAfterExclude } from "@transbordo/lib/tankaVolume";
+import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   deleteEstoqueDoTransbordo,
   migrateEstoqueEmbaladoParaVasilhames,
@@ -232,12 +233,26 @@ export default function Transbordo() {
         vasilhames: vascs,
       });
       void persistDeclaredVolumeDecimals(volumes);
-      setTransbordos(volumes.transbordos);
+      let transbordosAlinhados = volumes.transbordos;
+      let vasilhamesAlinhados = volumes.vasilhames;
+      try {
+        // Lote da entrada é a fonte: realinha cópias antigas (ex.: "Não informado").
+        const healed = await healLinkedLotes({
+          estoqueRows: volumes.estoque,
+          transbordos: volumes.transbordos,
+          vasilhames: volumes.vasilhames,
+        });
+        transbordosAlinhados = healed.transbordos || transbordosAlinhados;
+        vasilhamesAlinhados = healed.vasilhames || vasilhamesAlinhados;
+      } catch (healErr) {
+        console.error("[Transbordo] Falha ao alinhar lotes:", healErr);
+      }
+      setTransbordos(transbordosAlinhados);
       setProdutos(prods);
       setClientes(cliens);
       setEntradas(volumes.estoque);
       setIsotanques(isos);
-      setVasilhames(volumes.vasilhames);
+      setVasilhames(vasilhamesAlinhados);
     } catch {
       if (!silent) setTransbordos([]);
     }

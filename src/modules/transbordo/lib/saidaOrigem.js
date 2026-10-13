@@ -248,7 +248,7 @@ export function isLoteNaoInformado(lote) {
  * Resolve o lote do item (direto, vasilhame ou composição).
  * Lote gravado como "Não informado" não bloqueia o lote atual do vasilhame.
  */
-export function resolveSaidaItemLote(item, { vasilhame } = {}) {
+export function resolveSaidaItemLote(item, { vasilhame, preferVasilhame = false } = {}) {
   const loteFromComp = () => {
     const comp = Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : [];
     let best = "";
@@ -265,19 +265,26 @@ export function resolveSaidaItemLote(item, { vasilhame } = {}) {
   };
 
   const itemLote = String(item?.lote ?? "").trim();
+  const doVasilhame = () =>
+    [vasilhame?.lote, loteFromComp()]
+      .map((lote) => String(lote ?? "").trim())
+      .find((lote) => !isLoteNaoInformado(lote));
+
+  // Vasilhame é a fonte do lote (tela de Vasilhames); a saída guarda só uma cópia.
+  if (preferVasilhame) {
+    const atual = doVasilhame();
+    if (atual) return atual;
+  }
   if (itemLote && !isLoteNaoInformado(itemLote)) return itemLote;
 
-  const atual = [vasilhame?.lote, loteFromComp()]
-    .map((lote) => String(lote ?? "").trim())
-    .find((lote) => !isLoteNaoInformado(lote));
-  return atual || itemLote || String(vasilhame?.lote ?? "").trim();
+  return doVasilhame() || itemLote || String(vasilhame?.lote ?? "").trim();
 }
 
 /**
  * Coluna Lote na visualização de saída.
  */
-export function formatSaidaItemLote(item, { vasilhame } = {}) {
-  return resolveSaidaItemLote(item, { vasilhame }) || "—";
+export function formatSaidaItemLote(item, { vasilhame, preferVasilhame = false } = {}) {
+  return resolveSaidaItemLote(item, { vasilhame, preferVasilhame }) || "—";
 }
 
 /**

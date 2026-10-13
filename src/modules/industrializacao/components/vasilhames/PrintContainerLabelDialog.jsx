@@ -18,14 +18,12 @@ import {
 } from '@transbordo/lib/etiquetaConfig';
 import { printContainerLabel, calcValidityDate } from '@industrializacao/lib/labelprint';
 import { ensureProductionPublicToken } from '@industrializacao/lib/ensurePublicToken';
-import { base44 } from '@industrializacao/api/base44Client';
 import {
   productionOfContainer,
   containerDisplayVolume,
   containerDensity,
 } from '@industrializacao/lib/fractionalSupply';
-import { resolveValidityDays } from '@industrializacao/lib/recipeRevisions';
-import { resolveQualityValidityDays } from '@industrializacao/lib/qualityValidity';
+import { resolveValidityDaysForContainer } from '@industrializacao/lib/containerLoteDatas';
 import {
   calcLabelWeightsFromVolume,
   formatLabelEmbalagem,
@@ -42,40 +40,6 @@ function defaultVolumeForContainer(container, productions) {
   const stored = Number(container.volume);
   if (Number.isFinite(stored) && stored > 0) return Math.round(stored);
   return '';
-}
-
-async function resolveValidityDaysForContainer(container, production, recipes) {
-  const cqProduct = container?.product || production?.product;
-  const cqClient = container?.client || production?.client;
-  try {
-    const tests = await base44.entities.QualityTest.list('-updated_date', 500);
-    const fromCq = resolveQualityValidityDays(tests || [], cqProduct, cqClient);
-    if (fromCq != null) return fromCq;
-  } catch { /* Cadastro CQ indisponível: usa a receita como fallback */ }
-
-  let validityDays = resolveValidityDays(recipes || [], container, production);
-
-  if (validityDays == null && production?.recipe_id) {
-    try {
-      const remote = await base44.entities.Recipe.get(production.recipe_id);
-      const n = Number(remote?.validity_days);
-      if (Number.isFinite(n) && n > 0) validityDays = n;
-    } catch { /* ignore */ }
-  }
-  if (validityDays == null) {
-    const productName = container.product || production?.product;
-    if (productName) {
-      try {
-        const remoteList = await base44.entities.Recipe.filter(
-          { product_name: productName },
-          '-revision_number',
-          20,
-        );
-        validityDays = resolveValidityDays(remoteList || [], container, production);
-      } catch { /* ignore */ }
-    }
-  }
-  return validityDays;
 }
 
 export default function PrintContainerLabelDialog({

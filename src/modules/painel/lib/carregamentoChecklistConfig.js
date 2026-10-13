@@ -13,6 +13,7 @@ import {
   tipoItemLabel,
 } from '@transbordo/lib/saidaOrigem';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
+import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 
 export const CHECKLIST_STATUS = {
   PENDENTE: 'pendente',
@@ -226,6 +227,8 @@ export function buildChecklistItemsFromSaidas({
   saidas = [],
   vasilhames = [],
   entradas = [],
+  transbordos = [],
+  containerDatasById = null,
   checkDefsByCliente = null,
 } = {}) {
   const saidaById = new Map((saidas || []).map((s) => [String(s.id), s]));
@@ -258,7 +261,13 @@ export function buildChecklistItemsFromSaidas({
         (linha.entrada_id && estoqueById.get(String(linha.entrada_id))) ||
         (linha.stock_id && estoqueById.get(String(linha.stock_id))) ||
         null;
-      const lacres = parseLacresFromEnvase(vasilhame?.lacres || linha.lacres || '');
+      const container =
+        (linha.container_id && containerDatasById?.get?.(String(linha.container_id))) ||
+        null;
+      // Lacres: vasilhame do Transbordo ou container da Industrialização.
+      const lacres = parseLacresFromEnvase(
+        vasilhame?.lacres || container?.lacres || linha.lacres || ''
+      );
       const isConv = kind === CHECKLIST_KIND.CONVENCIONAL;
       if (isConv) convencionalSeq += 1;
 
@@ -266,11 +275,13 @@ export function buildChecklistItemsFromSaidas({
         ? `conv:${saida.id}:${linha.vasilhame_id || linha.container_id || idx}`
         : `emb:${saida.id}:${linha.entrada_id || linha.stock_id || idx}`;
 
-      const { data_fabricacao, data_validade } = resolveItemDates({
+      const { lote, data_fabricacao, data_validade } = resolveItemLoteDatas({
         linha,
         vasilhame,
         estoque,
         estoqueById,
+        transbordos,
+        container,
       });
 
       const check_defs = useCustom ? customDefs : null;
@@ -289,7 +300,7 @@ export function buildChecklistItemsFromSaidas({
           : `${linha.produto_nome || linha.produto || 'Produto'} · ${saida.codigo || ''}`.trim(),
         produto: linha.produto_nome || linha.produto || '—',
         produto_codigo: linha.produto_codigo || '',
-        lote: formatSaidaItemLote(linha, { vasilhame }),
+        lote,
         quantidade: formatQtdItem(linha),
         quantidade_embalagens: linha.quantidade_embalagens ?? null,
         unidade: linha.unidade || (isConv ? 'L' : 'kg'),
@@ -315,6 +326,46 @@ export function buildChecklistItemsFromSaidas({
   }
 
   return items;
+}
+
+/**
+ * Lote, fabricação e validade exibidos no checklist.
+ * - Vasilhame do Transbordo: valores da tela de Vasilhames (lote do vasilhame e
+ *   datas editadas ou herdadas da entrada de origem).
+ * - Container da Industrialização: valores da tela de Vasilhames da Industrialização.
+ * - Embalado: dados da entrada/estoque.
+ */
+function resolveItemLoteDatas({
+  linha,
+  vasilhame,
+  estoque,
+  estoqueById,
+  transbordos,
+  container,
+}) {
+  if (container) {
+    const fallback = resolveItemDates({ linha, vasilhame: null, estoque, estoqueById });
+    return {
+      lote: container.lote || formatSaidaItemLote(linha, { vasilhame }),
+      data_fabricacao: container.data_fabricacao || fallback.data_fabricacao,
+      data_validade: container.data_validade || fallback.data_validade,
+    };
+  }
+
+  const fallback = resolveItemDates({ linha, vasilhame, estoque, estoqueById });
+  if (!vasilhame) {
+    return { lote: formatSaidaItemLote(linha, { vasilhame }), ...fallback };
+  }
+
+  // Datas da tela de Vasilhames valem por inteiro (inclusive campo limpo);
+  // só sem nenhuma data resolvida recorre ao vínculo antigo com o estoque.
+  const datas = resolveVasilhameLoteDatas(vasilhame, estoqueById, { transbordos });
+  const temDatas = Boolean(datas.data_fabricacao || datas.data_validade);
+  return {
+    lote: formatSaidaItemLote(linha, { vasilhame, preferVasilhame: true }),
+    data_fabricacao: temDatas ? datas.data_fabricacao || null : fallback.data_fabricacao,
+    data_validade: temDatas ? datas.data_validade || null : fallback.data_validade,
+  };
 }
 
 /**

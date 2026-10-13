@@ -26,7 +26,7 @@ function transbordoSeq(t) {
 }
 
 /** Ordem cronológica real (created_at). `data` sozinha empata OPs do mesmo dia. */
-function sortTransbordosChrono(transbordos = []) {
+export function sortTransbordosChrono(transbordos = []) {
   return [...(transbordos || [])].sort((a, b) => {
     const dt = transbordoTimestamp(a) - transbordoTimestamp(b);
     if (dt !== 0) return dt;

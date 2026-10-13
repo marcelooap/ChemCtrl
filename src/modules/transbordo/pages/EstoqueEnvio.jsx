@@ -35,7 +35,7 @@ import {
   sumReservadoVasilhamesConteudo,
 } from "@painel/lib/vasilhameReservas";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
-import { formatMass, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
+import { formatMass, formatNum, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 
 const PRODUCT_COLORS = [
@@ -417,8 +417,9 @@ export default function EstoqueEnvio() {
         const saldoReservado = Math.round(
           reservadoEmbalado + reservadoVasilhame
         );
-        const saldoAtual = Math.round(row.saldo || 0);
-        const saldoFinal = Math.max(0, saldoAtual - saldoReservado);
+        // Saldos preservam até 3 casas (ex.: BACTIREP 50 QT com saldo fracionado).
+        const saldoAtual = roundVolume(row.saldo || 0);
+        const saldoFinal = Math.max(0, roundVolume(saldoAtual - saldoReservado));
         return {
           ...row,
           saldo: saldoAtual,
@@ -844,7 +845,7 @@ export default function EstoqueEnvio() {
                         )}
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="blue">
-                            {formatSaldo(p.saldo, p.unidade)}
+                            {formatNum(p.saldo, 3, { empty: "-" })}
                           </SaldoBadge>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -856,7 +857,7 @@ export default function EstoqueEnvio() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="emerald">
-                            {formatSaldo(p.saldoFinal, p.unidade)}
+                            {formatNum(p.saldoFinal, 3, { empty: "-" })}
                           </SaldoBadge>
                         </td>
                         <td className="px-4 py-3 text-center font-semibold text-primary">
