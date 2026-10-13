@@ -12,7 +12,7 @@ import { Button } from "@shared/components/ui/button";
 import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
 import { entities } from "@transbordo/services/entities";
-import { Check, ClipboardList, FileText, Printer } from "lucide-react";
+import { Check, ClipboardList, FileText, Loader2, Printer } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -33,6 +33,8 @@ import {
 } from "@transbordo/lib/saidaOrigem";
 import { findChecklistItemForSaidaLinha } from "@painel/lib/carregamentoChecklistConfig";
 import SaidaChecklistItemViewDialog from "@painel/components/logistica/SaidaChecklistItemViewDialog";
+import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
+import { loadIndContainerLabelContext } from "@transbordo/lib/saidaIndEtiqueta";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -107,11 +109,15 @@ export default function SaidaViewDialog({
   const [selected, setSelected] = useState(() => new Set());
   const [markedLocal, setMarkedLocal] = useState(() => new Set());
   const [printing, setPrinting] = useState(false);
+  const [indLabel, setIndLabel] = useState(null);
+  const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
 
   useEffect(() => {
     setSelected(new Set());
     setMarkedLocal(new Set());
     setPrinting(false);
+    setIndLabel(null);
+    setIndLabelLoadingIndex(null);
   }, [open, saida?.id]);
 
   if (!saida) return null;
@@ -216,7 +222,25 @@ export default function SaidaViewDialog({
     }
   };
 
-  const handlePrintEtiqueta = async (item) => {
+  const handlePrintEtiqueta = async (item, index) => {
+    // Vasilhame da Industrialização: usa o mesmo diálogo de etiqueta da tela
+    // de Vasilhames do módulo (volume, quantidade de cópias e pré-visualização).
+    if (item.tipo === TIPO_IND_VASILHAME) {
+      setIndLabelLoadingIndex(index);
+      try {
+        setIndLabel(await loadIndContainerLabelContext(item.container_id));
+      } catch (err) {
+        toast({
+          title: t("painel.comercial.agendamentos.printLabel"),
+          description: err?.message || t("painel.comercial.agendamentos.printBlocked"),
+          variant: "destructive",
+        });
+      } finally {
+        setIndLabelLoadingIndex(null);
+      }
+      return;
+    }
+
     try {
       await printEtiquetaConvencional(item, saida, vasilhames);
     } catch (err) {
@@ -383,15 +407,22 @@ export default function SaidaViewDialog({
                               <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
                             </button>
                           ) : null}
-                          {showPrintEtiqueta && item.tipo === TIPO_CONVENCIONAL ? (
+                          {showPrintEtiqueta &&
+                          (item.tipo === TIPO_CONVENCIONAL ||
+                            (item.tipo === TIPO_IND_VASILHAME && item.container_id)) ? (
                             <button
                               type="button"
-                              className="p-1 rounded hover:bg-muted"
+                              className="p-1 rounded hover:bg-muted disabled:opacity-60"
                               title={t("painel.comercial.agendamentos.printLabel")}
                               aria-label={t("painel.comercial.agendamentos.printLabel")}
-                              onClick={() => handlePrintEtiqueta(item)}
+                              disabled={indLabelLoadingIndex === i}
+                              onClick={() => handlePrintEtiqueta(item, i)}
                             >
-                              <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                              {indLabelLoadingIndex === i ? (
+                                <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
+                              ) : (
+                                <Printer className="w-3.5 h-3.5 text-muted-foreground" />
+                              )}
                             </button>
                           ) : null}
                         </div>
@@ -457,6 +488,17 @@ export default function SaidaViewDialog({
       item={checklistItemView}
       saida={saida}
       onClose={() => setChecklistItemView(null)}
+    />
+
+    <PrintContainerLabelDialog
+      key={indLabel?.container?.id || "closed"}
+      open={!!indLabel}
+      onOpenChange={(v) => {
+        if (!v) setIndLabel(null);
+      }}
+      container={indLabel?.container || null}
+      productions={indLabel?.productions}
+      recipes={indLabel?.recipes}
     />
     </>
   );

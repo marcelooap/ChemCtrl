@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FileDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,11 +16,29 @@ import {
 } from '@painel/lib/materialReservas';
 import {
   ORIGEM_INDUSTRIALIZACAO,
+  generateVasilhameBoleta,
   isVasilhameReservaChave,
 } from '@painel/lib/vasilhameReservas';
+import { useSubmitGuard } from '@shared/hooks/useSubmitGuard';
+import { useToast } from '@shared/components/ui/use-toast';
 
 export default function ReservaViewModal({ open, onClose, row, reservas = [] }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const boletaGuard = useSubmitGuard();
+
+  const handleGenerateBoleta = () =>
+    boletaGuard.run(async () => {
+      try {
+        await generateVasilhameBoleta(row);
+      } catch (err) {
+        console.error('[ReservaViewModal] boleta:', err);
+        toast({
+          variant: 'destructive',
+          title: t('painel.comercial.reservarMaterial.vasilhames.boletaError'),
+        });
+      }
+    });
 
   const historico = useMemo(() => {
     if (!row?.chave) return [];
@@ -248,7 +267,18 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            {isVasilhame && (
+              <Button
+                type="button"
+                variant="default"
+                onClick={handleGenerateBoleta}
+                disabled={boletaGuard.busy}
+              >
+                <FileDown className="w-4 h-4" />
+                {t('painel.comercial.reservarMaterial.vasilhames.actions.generateBoleta')}
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={onClose}>
               {t('buttons.close')}
             </Button>

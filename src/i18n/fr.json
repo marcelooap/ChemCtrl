@@ -1178,8 +1178,10 @@
           "actions": {
             "view": "Voir",
             "reservar": "Réserver",
-            "remover": "Retirer la réservation"
+            "remover": "Retirer la réservation",
+            "generateBoleta": "Générer la Boleta"
           },
+          "boletaError": "Impossible de générer la boleta.",
           "fracionado": "Fractionné"
         },
         "editTitle": "Modifier le solde réservé",

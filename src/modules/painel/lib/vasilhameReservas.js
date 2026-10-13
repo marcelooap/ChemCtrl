@@ -141,7 +141,27 @@ export function mapIndContainer(
     reservado: isVasilhameReservado(reservas, chave),
     fracionado: isContainerFractional(container, production, transfers),
     source: container,
+    // Referências (sem cópia) usadas para calcular pesos/volume da boleta.
+    boletaContext: { productions, recipes },
   };
+}
+
+/**
+ * Gera o PDF da boleta do vasilhame, reutilizando o gerador de cada módulo
+ * (mesmo layout das telas de Vasilhames). Geradores carregados sob demanda.
+ */
+export async function generateVasilhameBoleta(row) {
+  if (!row?.source) throw new Error('Vasilhame inválido.');
+
+  if (row.origem === ORIGEM_INDUSTRIALIZACAO) {
+    const { generateBoletaPDF } = await import('@industrializacao/lib/pdfReports');
+    const { productions = [], recipes = [] } = row.boletaContext || {};
+    generateBoletaPDF(row.source, productions, recipes);
+    return;
+  }
+
+  const { generateBoletaPDF } = await import('@transbordo/lib/pdfBoleta');
+  generateBoletaPDF(row.source);
 }
 
 export function buildVasilhameReservaRows({

@@ -1336,8 +1336,10 @@
           "actions": {
             "view": "View",
             "reservar": "Reserve",
-            "remover": "Remove reservation"
+            "remover": "Remove reservation",
+            "generateBoleta": "Generate Slip"
           },
+          "boletaError": "Could not generate the slip.",
           "fracionado": "Fractional"
         },
         "editTitle": "Edit reserved balance",

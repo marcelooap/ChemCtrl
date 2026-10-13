@@ -195,7 +195,7 @@ export function generateBoletaPDF(vasilhame) {
     const wCX = wCellX + wCellW / 2;
     const wRowH = s4H / 3;
     const weightRows = [
-      { label: "TARA", value: fmtNum(tara, 3) + " kg" },
+      { label: "TARA", value: fmtNum(tara, 0) + " kg" },
       { label: "PESO LÍQUIDO", value: fmtNum(netWeight, 0) + " kg" },
       { label: "PESO BRUTO", value: fmtNum(grossWeight, 0) + " kg" },
     ];

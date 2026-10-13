@@ -1344,7 +1344,7 @@ export function generateBoletaPDF(container, productions = [], recipes = []) {
     doc.text(String(container.operator || '-'), bM + bW * 0.19, y + 22, { align: 'center' });
     const wCellX = bM + bW * 0.38; const wCellW = bW * 0.62; const wCX = wCellX + wCellW / 2; const wRowH = s4H / 3;
     const weightRows = [
-      { label: t('pdf.boleta.tare'), value: fmtNum(container.tare, 3) + ' kg' },
+      { label: t('pdf.boleta.tare'), value: fmtNum(container.tare, 0) + ' kg' },
       { label: t('pdf.boleta.netWeight'), value: fmtNum(displayNetWeight, 0) + ' kg' },
       { label: t('pdf.boleta.grossWeight'), value: fmtNum(displayGrossWeight, 0) + ' kg' },
     ];

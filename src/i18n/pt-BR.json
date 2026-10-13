@@ -1336,8 +1336,10 @@
           "actions": {
             "view": "Visualizar",
             "reservar": "Reservar",
-            "remover": "Remover reserva"
+            "remover": "Remover reserva",
+            "generateBoleta": "Gerar Boleta"
           },
+          "boletaError": "Não foi possível gerar a boleta.",
           "fracionado": "Fracionado"
         },
         "editTitle": "Editar saldo reservado",

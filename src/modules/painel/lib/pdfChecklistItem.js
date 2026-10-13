@@ -292,16 +292,82 @@ function statusLabel(status, t) {
   return t(`painel.comercial.agendamentos.checklist.status.${key}`);
 }
 
+/** Maior lado da foto no PDF (px): mantém boa nitidez sem inflar o arquivo. */
+const FOTO_MAX_PX = 1800;
+const FOTO_JPEG_QUALITY = 0.85;
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Decodifica o blob já aplicando a orientação EXIF (fotos de celular vêm
+ * "deitadas" com a rotação só no metadado, que o jsPDF ignora).
+ */
+async function decodeUprightImage(blob) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    } catch {
+      // cai no fallback via <img>
+    }
+  }
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/**
+ * Baixa a foto e a normaliza para JPEG na orientação correta, devolvendo também
+ * as dimensões reais para preservar a proporção no PDF.
+ * Se não for possível decodificar, usa o arquivo original sem dimensões.
+ */
 async function urlToDataUrl(url) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const blob = await resp.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ dataUrl: reader.result, mime: blob.type || '' });
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+
+  try {
+    const source = await decodeUprightImage(blob);
+    const srcW = source.naturalWidth || source.width;
+    const srcH = source.naturalHeight || source.height;
+    if (!srcW || !srcH) throw new Error('Imagem sem dimensões');
+
+    const scale = Math.min(1, FOTO_MAX_PX / Math.max(srcW, srcH));
+    const width = Math.max(1, Math.round(srcW * scale));
+    const height = Math.max(1, Math.round(srcH * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(source, 0, 0, width, height);
+    source.close?.();
+
+    return {
+      dataUrl: canvas.toDataURL('image/jpeg', FOTO_JPEG_QUALITY),
+      mime: 'image/jpeg',
+      width,
+      height,
+    };
+  } catch {
+    return { dataUrl: await blobToDataUrl(blob), mime: blob.type || '', width: 0, height: 0 };
+  }
 }
 
 function imageFormatFromMime(mime, dataUrl) {
@@ -482,12 +548,13 @@ export async function generateChecklistItemPDF({
         const maxH = slotH - pad * 2;
         const format = imageFormatFromMime(img.mime, img.dataUrl);
 
-        // Mantém proporção aproximada 4:3 dentro do slot
+        // Ajusta ao slot preservando a proporção real da foto (4:3 se desconhecida)
+        const ratio = img.width > 0 && img.height > 0 ? img.height / img.width : 0.75;
         let imgW = maxW;
-        let imgH = maxW * 0.75;
+        let imgH = maxW * ratio;
         if (imgH > maxH) {
           imgH = maxH;
-          imgW = maxH / 0.75;
+          imgW = maxH / ratio;
         }
         const imgX = M + (CW - imgW) / 2;
         const imgY = slotY + (slotH - imgH) / 2;
