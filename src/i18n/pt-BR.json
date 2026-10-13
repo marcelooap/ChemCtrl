@@ -1184,6 +1184,8 @@
           },
           "photoAlt": "Foto da conferência",
           "photoError": "Não foi possível anexar a foto",
+          "photoRequired": "Foto obrigatória",
+          "photoRequiredHint": "Anexe ao menos uma foto de cada item conferido para liberar a expedição.",
           "lacresCount": "{{count}} lacre(s) registrado(s) no envase",
           "noLacres": "Nenhum lacre registrado no envase para este tanque.",
           "status": {

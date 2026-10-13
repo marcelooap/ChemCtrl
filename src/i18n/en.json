@@ -1184,6 +1184,8 @@
           },
           "photoAlt": "Inspection photo",
           "photoError": "Could not attach the photo",
+          "photoRequired": "Photo required",
+          "photoRequiredHint": "Attach at least one photo for each inspected item to release for shipping.",
           "lacresCount": "{{count}} seal(s) registered during filling",
           "noLacres": "No seals registered during filling for this tank.",
           "status": {

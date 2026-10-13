@@ -7,6 +7,7 @@ import {
   rpcAbaterReservasSaida,
   rpcEstornarReservasSaida,
 } from '@painel/lib/saidaReservas';
+import { areAllItemsReleasable } from '@painel/lib/carregamentoChecklistConfig';
 import { entities } from '@transbordo/services/entities';
 
 export const ENCAIXE_HORARIO = 'encaixe';
@@ -237,11 +238,20 @@ export async function saveCarregamentoChecklistProgress({
     );
   }
 
-  const allApproved =
-    markValidated ||
-    (Array.isArray(payload.items) &&
-      payload.items.length > 0 &&
-      payload.items.every((it) => it.status === 'aprovado'));
+  // Foto é obrigatória para validar; checklists já liberados são preservados
+  // (edição posterior não pode invalidar uma liberação anterior).
+  const alreadyValidated = list.every((row) => Boolean(row.checklist_validado_em));
+  const releasable = areAllItemsReleasable(payload.items, { requirePhotos: !alreadyValidated });
+  const isLegacyPayload = payload.version !== 2;
+
+  if (markValidated && !isLegacyPayload && !releasable) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.checklist.liberarBlockedHint') ||
+        'O checklist precisa estar aprovado e com foto em todos os itens.'
+    );
+  }
+
+  const allApproved = isLegacyPayload ? markValidated || releasable : releasable;
 
   const patch = {
     checklist_respostas: payload,

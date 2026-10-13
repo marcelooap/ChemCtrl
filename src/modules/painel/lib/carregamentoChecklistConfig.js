@@ -546,6 +546,26 @@ export function areAllItemsApproved(items = []) {
   return items.every((it) => isItemApproved(it));
 }
 
+/** Item com ao menos uma foto anexada na conferência. */
+export function itemHasPhotos(item) {
+  return Array.isArray(item?.fotos) && item.fotos.length > 0;
+}
+
+/** Itens aprovados que ainda não têm foto (obrigatória para liberar a expedição). */
+export function countItemsMissingPhotos(items = []) {
+  return (items || []).filter((it) => !itemHasPhotos(it)).length;
+}
+
+/**
+ * Checklist apto para liberar a expedição: todos os itens aprovados e,
+ * quando `requirePhotos`, cada item com ao menos uma foto.
+ * Aceita itens do estado do modal ou do payload persistido.
+ */
+export function areAllItemsReleasable(items = [], { requirePhotos = true } = {}) {
+  if (!areAllItemsApproved(items)) return false;
+  return !requirePhotos || countItemsMissingPhotos(items) === 0;
+}
+
 export function hasRejectedItem(items = []) {
   return (items || []).some((it) => it?.status === CHECKLIST_STATUS.REPROVADO);
 }

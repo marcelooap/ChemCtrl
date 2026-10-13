@@ -44,6 +44,7 @@ import {
   VALIDADE_TESTES_CHECK_KEY,
   VALIDADE_TESTES_SECTION,
   areAllItemsApproved,
+  areAllItemsReleasable,
   buildChecklistItemsFromSaidas,
   buildChecklistPayloadV2,
   checkDefLabel,
@@ -51,6 +52,7 @@ import {
   computeChecksSummary,
   computeItemStatus,
   hasRejectedItem,
+  itemHasPhotos,
   mergeChecklistItems,
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
@@ -88,11 +90,13 @@ function StatusBadge({ status, label, className }) {
   );
 }
 
-function InfoChip({ label, value }) {
+function InfoChip({ label, value, className, valueClassName }) {
   return (
-    <div className="rounded-md border border-border bg-muted/40 px-2.5 py-1.5">
+    <div className={cn('rounded-md border border-border bg-white px-2.5 py-1.5 shadow-sm', className)}>
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium text-foreground break-words">{value || '—'}</p>
+      <p className={cn('text-sm font-medium text-foreground break-words', valueClassName)}>
+        {value || '—'}
+      </p>
     </div>
   );
 }
@@ -121,16 +125,28 @@ const ANSWER_OPTIONS = [
   },
 ];
 
-function CheckAnswerRow({ label, value, disabled, onChange, t, options = ANSWER_OPTIONS }) {
+/** Numeração sequencial dos itens de verificação: 1 -> "01 -". */
+function formatItemNumber(n) {
+  return `${String(n).padStart(2, '0')} -`;
+}
+
+function CheckAnswerRow({ label, number, value, disabled, onChange, t, options = ANSWER_OPTIONS }) {
   const isRejected = value === CHECK_ANSWER.REPROVADO;
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-lg border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between',
-        isRejected ? 'border-red-200 bg-red-50/50' : 'border-border bg-background'
+        'flex flex-col gap-2 rounded-lg border px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between',
+        isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
       )}
     >
-      <p className="text-sm leading-snug sm:flex-1">{label}</p>
+      <p className="text-sm leading-snug sm:flex-1">
+        {number != null ? (
+          <span className="mr-1.5 font-semibold tabular-nums text-[#2575D1]">
+            {formatItemNumber(number)}
+          </span>
+        ) : null}
+        {label}
+      </p>
       <div className="flex shrink-0 gap-1.5">
         {options.map((opt) => {
           const Icon = opt.icon;
@@ -164,7 +180,7 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
  * Validade dos testes do tanque: a data limite é calculada pelo sistema
  * (hoje + prazo do cliente); o operador apenas registra Aprovado/Reprovado.
  */
-function ValidadeTestesSection({ validade, value, disabled, onChange, language, t }) {
+function ValidadeTestesSection({ validade, number, value, disabled, onChange, language, t }) {
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
   return (
     <div className="space-y-1.5">
@@ -174,12 +190,14 @@ function ValidadeTestesSection({ validade, value, disabled, onChange, language, 
       <InfoChip
         label={t(`${prefix}.dataLimite`)}
         value={formatDataLimiteTestes(validade.data_limite, language)}
+        valueClassName="font-bold text-emerald-800"
       />
       <p className="text-xs text-muted-foreground">
         {t(`${prefix}.hint`, { dias: validade.dias })}
       </p>
       <CheckAnswerRow
         label={t(`${prefix}.resultado`)}
+        number={number}
         value={value}
         disabled={disabled}
         onChange={onChange}
@@ -370,6 +388,9 @@ export default function AgendamentoCarregamentoChecklistModal({
 
   const active = activeKey ? items.find((it) => it.item_key === activeKey) || null : null;
   const allApproved = areAllItemsApproved(items);
+  // Foto obrigatória em cada item para liberar (liberações anteriores são preservadas).
+  const releaseOptions = { requirePhotos: !alreadyLiberated };
+  const canRelease = areAllItemsReleasable(items, releaseOptions);
   const anyRejected = hasRejectedItem(items);
   const doneCount = items.filter(
     (it) => it.status === CHECKLIST_STATUS.APROVADO || it.status === CHECKLIST_STATUS.REPROVADO
@@ -422,7 +443,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     const payload = buildChecklistPayloadV2({ items: nextItems, user });
     await onSaveProgress?.({
       payload,
-      markValidated: markValidated || areAllItemsApproved(nextItems),
+      markValidated: markValidated || areAllItemsReleasable(nextItems, releaseOptions),
     });
     dirtyRef.current = false;
     return payload;
@@ -449,7 +470,7 @@ export default function AgendamentoCarregamentoChecklistModal({
   };
 
   const handleLiberar = async () => {
-    if (!allApproved || readOnly) return;
+    if (!canRelease || readOnly) return;
     setSaving(true);
     setError('');
     try {
@@ -474,7 +495,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     setSaving(true);
     setError('');
     try {
-      await persist(items, { markValidated: areAllItemsApproved(items) });
+      await persist(items, { markValidated: areAllItemsReleasable(items, releaseOptions) });
       dirtyRef.current = false;
       toast({ title: t('painel.comercial.agendamentos.checklist.progressSaved') });
     } catch (err) {
@@ -527,6 +548,25 @@ export default function AgendamentoCarregamentoChecklistModal({
   const sections = [...new Set(checkDefs.map((c) => c.section))];
   const sectionTitle = (section) =>
     t(`painel.comercial.agendamentos.checklist.sections.${section}`, { defaultValue: section });
+
+  const showLacresBlock = active?.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks;
+  const visibleSections = sections.filter(
+    (section) =>
+      section !== VALIDADE_TESTES_SECTION && !(showLacresBlock && section === 'lacres')
+  );
+
+  // Ordem de exibição = ordem de conferência: lacres, validade dos testes e demais seções.
+  const itemNumbers = (() => {
+    const orderedKeys = [];
+    if (showLacresBlock) {
+      checkDefs.filter((c) => c.section === 'lacres').forEach((c) => orderedKeys.push(c.key));
+    }
+    if (active?.validade_testes) orderedKeys.push(VALIDADE_TESTES_CHECK_KEY);
+    visibleSections.forEach((section) => {
+      checkDefs.filter((c) => c.section === section).forEach((c) => orderedKeys.push(c.key));
+    });
+    return new Map(orderedKeys.map((key, index) => [key, index + 1]));
+  })();
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !saving && handleClose()}>
@@ -610,12 +650,12 @@ export default function AgendamentoCarregamentoChecklistModal({
                     type="button"
                     onClick={() => setActiveKey(it.item_key)}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-muted/40',
+                      'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left shadow-sm transition-colors',
                       it.status === CHECKLIST_STATUS.REPROVADO
-                        ? 'border-red-200 bg-red-50/40'
+                        ? 'border-red-200 bg-red-50 hover:bg-red-100/60'
                         : it.status === CHECKLIST_STATUS.APROVADO
-                          ? 'border-emerald-200 bg-emerald-50/40'
-                          : 'border-border'
+                          ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100/60'
+                          : 'border-border bg-white hover:bg-slate-50'
                     )}
                   >
                     <div
@@ -644,6 +684,11 @@ export default function AgendamentoCarregamentoChecklistModal({
                           answered: s.answered,
                           total: s.total,
                         })}
+                        {releaseOptions.requirePhotos && !itemHasPhotos(it) ? (
+                          <span className="ml-2 font-medium text-amber-700">
+                            · {t('painel.comercial.agendamentos.checklist.photoRequired')}
+                          </span>
+                        ) : null}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -726,8 +771,8 @@ export default function AgendamentoCarregamentoChecklistModal({
                 />
               </div>
 
-              {active.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks ? (
-                <div className="space-y-3 rounded-lg border border-border p-3">
+              {showLacresBlock ? (
+                <div className="space-y-3 rounded-lg border border-border bg-white p-3 shadow-sm">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {t('painel.comercial.agendamentos.checklist.sections.lacres')}
@@ -763,6 +808,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                         <CheckAnswerRow
                           key={c.key}
                           label={checkDefLabel(c, t)}
+                          number={itemNumbers.get(c.key)}
                           value={active.checks?.[c.key] || ''}
                           disabled={readOnly || saving}
                           onChange={(v) => setAnswer(c.key, v)}
@@ -775,7 +821,7 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
 
               {active.kind === CHECKLIST_KIND.CONVENCIONAL && hasCustomChecks && active.lacres?.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-border p-3">
+                <div className="space-y-2 rounded-lg border border-border bg-white p-3 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {t('painel.comercial.agendamentos.checklist.sections.lacres')}
                   </p>
@@ -792,14 +838,19 @@ export default function AgendamentoCarregamentoChecklistModal({
                 </div>
               ) : null}
 
-              {sections
-                .filter((section) => section !== VALIDADE_TESTES_SECTION)
-                .filter((section) => !(
-                  !hasCustomChecks
-                  && active.kind === CHECKLIST_KIND.CONVENCIONAL
-                  && section === 'lacres'
-                ))
-                .map((section) => (
+              {active.validade_testes ? (
+                <ValidadeTestesSection
+                  validade={active.validade_testes}
+                  number={itemNumbers.get(VALIDADE_TESTES_CHECK_KEY)}
+                  value={active.checks?.[VALIDADE_TESTES_CHECK_KEY] || ''}
+                  disabled={readOnly || saving}
+                  onChange={(v) => setAnswer(VALIDADE_TESTES_CHECK_KEY, v)}
+                  language={i18n.language}
+                  t={t}
+                />
+              ) : null}
+
+              {visibleSections.map((section) => (
                 <div key={section} className="space-y-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {sectionTitle(section)}
@@ -810,6 +861,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                       <CheckAnswerRow
                         key={c.key}
                         label={checkDefLabel(c, t)}
+                        number={itemNumbers.get(c.key)}
                         value={active.checks?.[c.key] || ''}
                         disabled={readOnly || saving}
                         onChange={(v) => setAnswer(c.key, v)}
@@ -819,21 +871,18 @@ export default function AgendamentoCarregamentoChecklistModal({
                 </div>
               ))}
 
-              {active.validade_testes ? (
-                <ValidadeTestesSection
-                  validade={active.validade_testes}
-                  value={active.checks?.[VALIDADE_TESTES_CHECK_KEY] || ''}
-                  disabled={readOnly || saving}
-                  onChange={(v) => setAnswer(VALIDADE_TESTES_CHECK_KEY, v)}
-                  language={i18n.language}
-                  t={t}
-                />
-              ) : null}
-
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {t('painel.comercial.agendamentos.checklist.sections.fotos')}
+                  {releaseOptions.requirePhotos ? (
+                    <span className="ml-1 text-red-600" aria-hidden="true">*</span>
+                  ) : null}
                 </p>
+                {releaseOptions.requirePhotos && !itemHasPhotos(active) ? (
+                  <p className="text-xs text-amber-700">
+                    {t('painel.comercial.agendamentos.checklist.photoRequiredHint')}
+                  </p>
+                ) : null}
                 <input
                   ref={galleryInputRef}
                   type="file"
@@ -998,16 +1047,18 @@ export default function AgendamentoCarregamentoChecklistModal({
               {!alreadyLiberated ? (
                 <Button
                   type="button"
-                  disabled={!allApproved || saving}
+                  disabled={!canRelease || saving || uploading}
                   onClick={handleLiberar}
                   className="text-white"
-                  style={{ background: allApproved ? '#059669' : '#94a3b8' }}
+                  style={{ background: canRelease ? '#059669' : '#94a3b8' }}
                   title={
-                    allApproved
+                    canRelease
                       ? ''
                       : anyRejected
                         ? t('painel.comercial.agendamentos.checklist.rejectedBlockedHint')
-                        : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
+                        : allApproved
+                          ? t('painel.comercial.agendamentos.checklist.photoRequiredHint')
+                          : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
                   }
                 >
                   {saving ? (
