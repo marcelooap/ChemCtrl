@@ -177,8 +177,8 @@ export default function VasilhamesReservaTable({
                     <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span className="inline-flex items-center justify-end whitespace-nowrap">
-                        {formatVolume(row.volume, { empty: '—' })}
                         {row.fracionado ? <FracionadoBadge /> : null}
+                        {formatVolume(row.volume, { empty: '—' })}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
@@ -353,7 +353,7 @@ function StatusBadge({ reservado }) {
 function FracionadoBadge() {
   const { t } = useTranslation();
   return (
-    <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
+    <span className="mr-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
       {t('painel.comercial.reservarMaterial.vasilhames.fracionado', {
         defaultValue: 'Fracionado',
       })}

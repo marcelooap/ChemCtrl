@@ -10,7 +10,24 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
-    <meta name="theme-color" content="#223f56" />
+    <meta name="theme-color" content="#f3f4f6" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('chemctrl-theme');
+          var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = theme === 'dark' || (theme !== 'light' && prefersDark);
+          document.documentElement.classList.toggle('dark', dark);
+          var scheme = dark ? 'only dark' : 'only light';
+          var colorScheme = document.querySelector('meta[name="color-scheme"]');
+          if (colorScheme) colorScheme.setAttribute('content', scheme);
+          var themeColor = document.querySelector('meta[name="theme-color"]');
+          if (themeColor) themeColor.setAttribute('content', dark ? '#0f111a' : '#f3f4f6');
+        } catch (e) {}
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

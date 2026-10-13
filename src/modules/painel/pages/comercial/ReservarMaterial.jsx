@@ -383,7 +383,7 @@ export default function ReservarMaterial() {
                           i % 2 === 1 ? 'bg-muted/20' : ''
                         }`}
                       >
-                        <td className="px-4 py-3 text-muted-foreground">{row.clienteNome}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">{row.clienteNome}</td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
                         <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
                         <td className="px-4 py-3 font-mono">{row.lote}</td>

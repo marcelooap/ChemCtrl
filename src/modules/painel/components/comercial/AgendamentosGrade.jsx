@@ -937,6 +937,12 @@ function TimeSlotButton({
   const showChecklistBtn = occupied && !carregado && Boolean(onChecklist);
   const showCheck = occupied && !carregado && checklistValidado && Boolean(onConcluir);
   const filled = hasTransporte(summary.first);
+  const transportadora = String(summary.transportadora || '').trim();
+  const motorista = String(summary.motorista || '').trim();
+  const placa = String(summary.placa || '').trim();
+  const cliente =
+    summary.clientesLabel && summary.clientesLabel !== '—' ? summary.clientesLabel : '';
+  const besideId = filled ? transportadora : cliente;
   const hasSideActions = showTruck || showEye || showCheck || showChecklistBtn;
   const minH = compact ? 'min-h-[56px]' : 'min-h-[72px]';
 
@@ -983,7 +989,7 @@ function TimeSlotButton({
         type="button"
         onClick={interactive ? onClick : undefined}
         disabled={!interactive}
-        className={`w-full h-full ${minH} text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        className={`w-full min-h-full ${minH} text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           showTruck && filled ? 'pr-14' : hasSideActions ? 'pr-10' : ''
         } ${interactive ? '' : 'cursor-default'}`}
       >
@@ -1012,24 +1018,24 @@ function TimeSlotButton({
                 {saidasCountLabel?.(summary.count) || `${summary.count} saídas`}
               </span>
             ) : null}
-            <span className="flex min-w-0 items-baseline gap-x-1.5 overflow-hidden">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
               <span className={`shrink-0 text-xs font-semibold ${tone.meta}`}>
                 {summary.codesLabel}
               </span>
-              <span className={`min-w-0 truncate text-[13px] font-medium ${tone.metaMuted}`}>
-                {[
-                  summary.clientesLabel && summary.clientesLabel !== '—'
-                    ? summary.clientesLabel
-                    : null,
-                  filled ? summary.motorista : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
+              {besideId ? (
+                <span className={`min-w-0 max-w-full break-words text-[13px] font-medium ${tone.metaMuted}`}>
+                  {besideId}
+                </span>
+              ) : null}
             </span>
-            {filled && (summary.placa || summary.transportadora) ? (
-              <span className={`block truncate text-[13px] font-medium ${tone.meta}`}>
-                {[summary.placa, summary.transportadora].filter(Boolean).join(' · ')}
+            {filled && (motorista || placa) ? (
+              <span className={`flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[13px] font-medium ${tone.meta}`}>
+                {motorista ? (
+                  <span className="max-w-full shrink-0 break-words">{motorista}</span>
+                ) : null}
+                {placa ? (
+                  <span className="shrink-0 whitespace-nowrap">{placa}</span>
+                ) : null}
               </span>
             ) : null}
           </span>

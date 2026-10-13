@@ -38,6 +38,10 @@ export function ThemeSelector() {
             <button
               key={value}
               type="button"
+              onPointerDown={(event) => {
+                if (event.pointerType !== 'touch') return;
+                setTheme(value);
+              }}
               onClick={() => setTheme(value)}
               title={label}
               aria-label={t('theme.ariaLabel', { theme: label })}
