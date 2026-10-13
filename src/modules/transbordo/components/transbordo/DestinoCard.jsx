@@ -467,6 +467,7 @@ export default function DestinoCard({
               value={destino.volume}
               onChange={(v) => updateField("volume", v)}
               readOnly={readOnly}
+              decimals={3}
             />
           </div>
 
