@@ -3138,7 +3138,8 @@
       "percentMass": "% m/m",
       "quantityKg": "Qtd. (kg)",
       "hideMpNames": "Ocultar nomes das matérias primas",
-      "showMpNames": "Exibir nomes das matérias primas"
+      "showMpNames": "Exibir nomes das matérias primas",
+      "mpControl": "Controle"
     },
     "form": {
       "productName": "Nome do Produto",
@@ -3165,6 +3166,14 @@
       "seq": "Seq.",
       "seqDragHint": "Arraste as linhas pelo ícone ≡ para alterar a ordem de dosagem.",
       "seqReorder": "Arrastar para reordenar dosagem",
+      "mpControl": {
+        "trigger": "Controle de órgão regulamentador",
+        "triggerControlled": "Controlada: {{organ}}",
+        "label": "MP controlada?",
+        "hint": "Indica se esta matéria prima é controlada por órgão regulamentador",
+        "organ": "Órgão regulamentador",
+        "organPlaceholder": "Selecione o órgão"
+      },
       "mpCode": "CÓDIGO MP",
       "mpCodePlaceholder": "Selecione ou digite...",
       "mpName": "MATÉRIA PRIMA",
@@ -3187,6 +3196,7 @@
       "productRequired": "Informe o nome do produto",
       "duplicateMpCode": "Código de MP duplicado: {{code}}",
       "duplicateMpDesc": "Não é permitido cadastrar matérias primas com o mesmo código.",
+      "mpOrganRequired": "Selecione o órgão regulamentador da MP controlada {{mp}}",
       "revisionInUse": "Não é possível excluir: esta revisão já foi utilizada em uma ordem de produção."
     },
     "fds": {

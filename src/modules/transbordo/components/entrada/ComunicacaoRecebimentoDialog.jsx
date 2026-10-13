@@ -106,6 +106,7 @@ export default function ComunicacaoRecebimentoDialog({
   transbordos = [],
   estoque = [],
   destinosInformados = [],
+  controleLotes = [],
 }) {
   const produtosById = useMemo(() => {
     const map = new Map();
@@ -133,9 +134,19 @@ export default function ComunicacaoRecebimentoDialog({
     ];
   }, [entrada]);
 
+  // Cadastro de produtos do Transbordo tem prioridade; o controle vindo de
+  // fora (ex.: receitas da Industrialização) cobre as MPs sem cadastro controlado.
   const lotesControle = useMemo(
-    () => lotes.map((l) => resolveControleProduto(l, produtosById)),
-    [lotes, produtosById]
+    () =>
+      lotes.map((l, i) => {
+        const doCadastro = resolveControleProduto(l, produtosById);
+        if (doCadastro.controlado) return doCadastro;
+        const externo = controleLotes[i];
+        return externo?.controlado && externo.orgao_regulamentador
+          ? { controlado: true, orgao: externo.orgao_regulamentador }
+          : doCadastro;
+      }),
+    [lotes, produtosById, controleLotes]
   );
 
   const controleResumo = useMemo(() => {

@@ -112,6 +112,7 @@ export default function Entrada() {
   const [editingEntrada, setEditingEntrada] = useState(null);
   const [viewEntrada, setViewEntrada] = useState(null);
   const [viewDestinos, setViewDestinos] = useState([]);
+  const [viewControleLotes, setViewControleLotes] = useState([]);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -265,10 +266,12 @@ export default function Entrada() {
   const handleView = async (entrada) => {
     let current = entrada;
     let destinos = [];
+    let controleLotes = [];
     try {
       const prepared = await prepareEntradaView(entrada);
       current = prepared.entrada;
       destinos = prepared.destinosInformados || [];
+      controleLotes = prepared.controleLotes || [];
       if (current !== entrada) {
         setEntradas((prev) =>
           prev.map((item) =>
@@ -281,6 +284,7 @@ export default function Entrada() {
     }
     setViewEntrada(current);
     setViewDestinos(destinos);
+    setViewControleLotes(controleLotes);
     setViewOpen(true);
   };
 
@@ -731,6 +735,7 @@ export default function Entrada() {
         entrada={viewEntrada}
         entradaId={viewEntrada ? idMap[viewEntrada.id] || "-" : "-"}
         destinosInformados={viewDestinos}
+        controleLotes={viewControleLotes}
         produtos={produtos}
         transbordos={transbordos}
         estoque={estoque}

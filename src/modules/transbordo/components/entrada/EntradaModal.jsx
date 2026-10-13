@@ -23,6 +23,7 @@ import {
   getQuantidadeNotaFiscal,
 } from "@transbordo/lib/conversao";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
+import { hasProdutoInformado } from "@transbordo/lib/entradaForm";
 import { entities } from "@transbordo/services/entities";
 import {
   findLinkedTransbordo,
@@ -449,7 +450,7 @@ export default function EntradaModal({
     for (let i = 0; i < lotes.length; i++) {
       const l = lotes[i];
       const tipo = resolveTipoRecebimento(l);
-      if (!l.produto_id) {
+      if (!hasProdutoInformado(l)) {
         setError(`Produto é obrigatório no bloco ${i + 1}.`);
         return null;
       }

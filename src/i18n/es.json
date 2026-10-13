@@ -3005,7 +3005,8 @@
       "percentMass": "% m/m",
       "quantityKg": "Cant. (kg)",
       "hideMpNames": "Ocultar nombres de las materias primas",
-      "showMpNames": "Mostrar nombres de las materias primas"
+      "showMpNames": "Mostrar nombres de las materias primas",
+      "mpControl": "Control"
     },
     "form": {
       "productName": "Nombre del Producto",
@@ -3026,6 +3027,14 @@
       "seq": "Seq.",
       "seqDragHint": "Arrastre las filas por el icono ≡ para cambiar el orden de dosificación.",
       "seqReorder": "Arrastrar para reordenar dosificación",
+      "mpControl": {
+        "trigger": "Control de órgano regulador",
+        "triggerControlled": "Controlada: {{organ}}",
+        "label": "¿MP controlada?",
+        "hint": "Indica si esta materia prima está controlada por un órgano regulador",
+        "organ": "Órgano regulador",
+        "organPlaceholder": "Seleccione el órgano"
+      },
       "mpCode": "CÓDIGO MP",
       "mpCodePlaceholder": "Seleccione o escriba...",
       "mpName": "MATERIA PRIMA",
@@ -3043,7 +3052,8 @@
     "messages": {
       "productRequired": "Ingrese el nombre del producto",
       "duplicateMpCode": "Código de MP duplicado: {{code}}",
-      "duplicateMpDesc": "No se permiten materias primas con el mismo código."
+      "duplicateMpDesc": "No se permiten materias primas con el mismo código.",
+      "mpOrganRequired": "Seleccione el órgano regulador de la MP controlada {{mp}}"
     },
     "fds": {
       "title": "Ficha de Datos de Seguridad (FDS)",

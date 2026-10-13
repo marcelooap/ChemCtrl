@@ -59,6 +59,19 @@ export function applyTipoRecebimento(lote, tipo) {
 }
 
 /**
+ * Indica se o bloco tem produto identificado.
+ * Entradas vindas da Industrialização não possuem `produto_id` (cadastro do
+ * Transbordo), apenas código/nome do produto — também são válidas.
+ */
+export function hasProdutoInformado(lote) {
+  return !!(
+    lote?.produto_id ||
+    String(lote?.produto_codigo ?? "").trim() ||
+    String(lote?.produto_nome ?? "").trim()
+  );
+}
+
+/**
  * Valida lotes de entrada (embalado/vasilhame/granel) — mesmas regras do modal.
  * @returns {string} mensagem de erro ou string vazia
  */
@@ -68,7 +81,7 @@ export function validateEntradaLotes(lotes, produtos = []) {
   for (let i = 0; i < lotes.length; i++) {
     const l = lotes[i];
     const tipo = resolveTipoRecebimento(l);
-    if (!l.produto_id) return `Produto é obrigatório no bloco ${i + 1}.`;
+    if (!hasProdutoInformado(l)) return `Produto é obrigatório no bloco ${i + 1}.`;
     if (!l.nota_fiscal) return `Nota Fiscal é obrigatória no bloco ${i + 1}.`;
     if (!l.lote) return `Lote é obrigatório no bloco ${i + 1}.`;
 

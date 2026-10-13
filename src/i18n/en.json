@@ -3237,7 +3237,8 @@
       "percentMass": "% m/m",
       "quantityKg": "Qty. (kg)",
       "hideMpNames": "Hide raw material names",
-      "showMpNames": "Show raw material names"
+      "showMpNames": "Show raw material names",
+      "mpControl": "Control"
     },
     "form": {
       "productName": "Product Name",
@@ -3264,6 +3265,14 @@
       "seq": "Seq.",
       "seqDragHint": "Drag rows by the ≡ icon to change the dosing order.",
       "seqReorder": "Drag to reorder dosing",
+      "mpControl": {
+        "trigger": "Regulatory agency control",
+        "triggerControlled": "Controlled: {{organ}}",
+        "label": "Controlled RM?",
+        "hint": "Indicates whether this raw material is controlled by a regulatory agency",
+        "organ": "Regulatory agency",
+        "organPlaceholder": "Select the agency"
+      },
       "mpCode": "RM CODE",
       "mpCodePlaceholder": "Select or type...",
       "mpName": "RAW MATERIAL",
@@ -3286,6 +3295,7 @@
       "productRequired": "Enter product name",
       "duplicateMpCode": "Duplicate RM code: {{code}}",
       "duplicateMpDesc": "Raw materials with the same code are not allowed.",
+      "mpOrganRequired": "Select the regulatory agency for the controlled RM {{mp}}",
       "revisionInUse": "This revision cannot be deleted: it has already been used in a production order."
     },
     "fds": {

@@ -15,6 +15,8 @@ import { generateRecipePDF } from '@industrializacao/lib/pdfReports';
 import Combobox from '@shared/components/ui/combobox';
 import SimuladorReceita from '@industrializacao/components/receitas/SimuladorReceita';
 import RecipeFdsSection, { RecipeFdsViewSection } from '@industrializacao/components/receitas/RecipeFdsSection';
+import MpControlePopover from '@industrializacao/components/receitas/MpControlePopover';
+import OrgaoRegulamentadorBadge from '@transbordo/components/cadastro/OrgaoRegulamentadorBadge';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import RevisionExpiryCell from '@industrializacao/components/RevisionExpiryCell';
 import { fmtNumber, fmtCurrency, fmtVolume, fmtDate, todayDateInputValue } from '@/i18n/formatters';
@@ -38,7 +40,13 @@ const normalizeCreatedBy = (value) => (value || '').trim();
 const resolveCreatedBy = (item) => item?.created_by || DEFAULT_CREATED_BY;
 
 const newMpRowKey = () => `mp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-const emptyMP = () => ({ mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0, _key: newMpRowKey() });
+const emptyMP = () => ({ mp_code: '', mp_name: '', mp_density: 1, percentage: 0, quantity_kg: 0, controlado: false, orgao_regulamentador: null, _key: newMpRowKey() });
+/** Órgão só é mantido quando a MP é controlada (evita dado órfão ao desmarcar). */
+const normalizeMpControle = (m) => (
+  m.controlado
+    ? { ...m, controlado: true, orgao_regulamentador: m.orgao_regulamentador || null }
+    : { ...m, controlado: false, orgao_regulamentador: null }
+);
 const withMpRowKeys = (list) => (list || []).map((m) => (m?._key ? m : { ...m, _key: newMpRowKey() }));
 const stripMpRowKeys = (list) => (list || []).map(({ _key, ...rest }) => rest);
 
@@ -90,6 +98,7 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
           <th className="px-3 py-2 text-right">{t('recipes.view.mpDensity')}</th>
           <th className="px-3 py-2 text-right">{t('recipes.view.percentMass')}</th>
           <th className="px-3 py-2 text-right">{t('recipes.view.quantityKg')}</th>
+          <th className="px-3 py-2 text-left">{t('recipes.view.mpControl')}</th>
         </tr></thead>
         <tbody>
           {(viewing.raw_materials || []).map((m, i) => (
@@ -102,12 +111,16 @@ function ViewRecipeBody({ viewing, calcCapacidade, generateRecipePDF, onClose, c
               <td className="px-3 py-2 text-right">{m.mp_density}</td>
               <td className="px-3 py-2 text-right">{(m.percentage || 0).toFixed(2)}%</td>
               <td className="px-3 py-2 text-right font-medium">{fmtNumber(m.quantity_kg || 0)}</td>
+              <td className="px-3 py-2">
+                <OrgaoRegulamentadorBadge compact controlado={m.controlado} orgao={m.orgao_regulamentador} />
+              </td>
             </tr>
           ))}
           <tr className="border-t bg-muted/50 font-bold">
             <td colSpan={4} className="px-3 py-2">{t('common.totals')}</td>
             <td className="px-3 py-2 text-right">{(viewing.raw_materials || []).reduce((s, m) => s + (m.percentage || 0), 0).toFixed(2)}%</td>
             <td className="px-3 py-2 text-right">{fmtNumber((viewing.raw_materials || []).reduce((s, m) => s + (m.quantity_kg || 0), 0))} {t('common.units.kg')}</td>
+            <td />
           </tr>
         </tbody>
       </table>
@@ -274,7 +287,7 @@ export default function Receitas() {
   /** Catálogo de MPs já cadastradas (receitas + estoque), chave: cliente|código */
   const mpCatalogByClient = useMemo(() => {
     const map = new Map();
-    const upsert = (client, mp_code, mp_name, mp_density) => {
+    const upsert = (client, mp_code, mp_name, mp_density, controle = null) => {
       const code = (mp_code || '').trim();
       if (!code) return;
       const c = (client || '').trim();
@@ -285,9 +298,15 @@ export default function Receitas() {
           mp_code: code,
           mp_name: mp_name || '',
           mp_density: mp_density != null && mp_density !== '' ? Number(mp_density) : null,
+          controlado: Boolean(controle?.controlado && controle?.orgao_regulamentador),
+          orgao_regulamentador: controle?.controlado ? controle.orgao_regulamentador || null : null,
           client: c,
         });
         return;
+      }
+      if (!prev.controlado && controle?.controlado && controle.orgao_regulamentador) {
+        prev.controlado = true;
+        prev.orgao_regulamentador = controle.orgao_regulamentador;
       }
       if (!prev.mp_name && mp_name) prev.mp_name = mp_name;
       if (prev.mp_density == null && mp_density != null && mp_density !== '') {
@@ -295,7 +314,7 @@ export default function Receitas() {
       }
     };
     recipes.forEach((r) => {
-      (r.raw_materials || []).forEach((mp) => upsert(r.client, mp.mp_code, mp.mp_name, mp.mp_density));
+      (r.raw_materials || []).forEach((mp) => upsert(r.client, mp.mp_code, mp.mp_name, mp.mp_density, mp));
     });
     stocks.forEach((s) => upsert(s.client, s.mp_code, s.mp_name, s.density));
     return map;
@@ -411,7 +430,18 @@ export default function Receitas() {
       mp_code: match.mp_code || row.mp_code,
       mp_name: match.mp_name || row.mp_name,
       mp_density: match.mp_density != null ? match.mp_density : row.mp_density,
+      ...(match.controlado
+        ? { controlado: true, orgao_regulamentador: match.orgao_regulamentador || null }
+        : {}),
     };
+  };
+
+  const updateMPControle = (idx, controle) => {
+    setForm((prev) => {
+      const mps = [...prev.raw_materials];
+      mps[idx] = { ...mps[idx], ...controle };
+      return { ...prev, raw_materials: mps };
+    });
   };
 
   const handleMpCodeChange = (idx, code) => {
@@ -459,6 +489,15 @@ export default function Receitas() {
     const dupCode = codes.find((c, i) => codes.indexOf(c) !== i);
     if (dupCode) { toast({ title: t('recipes.messages.duplicateMpCode', { code: dupCode }), description: t('recipes.messages.duplicateMpDesc'), variant: 'destructive' }); return; }
 
+    const mpWithoutOrgan = form.raw_materials.find((m) => m.controlado && !m.orgao_regulamentador);
+    if (mpWithoutOrgan) {
+      toast({
+        title: t('recipes.messages.mpOrganRequired', { mp: mpWithoutOrgan.mp_code || mpWithoutOrgan.mp_name || '-' }),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Nova receita OU nova revisão sempre resultam em um novo registro (nunca sobrescrevem).
     const isCreatingRow = !editing || isNewRevision;
 
@@ -471,7 +510,7 @@ export default function Receitas() {
     }
 
     const mps = stripMpRowKeys(
-      form.raw_materials.map((m) => ({ ...m, quantity_kg: calcQty(m.percentage || 0) }))
+      form.raw_materials.map((m) => normalizeMpControle({ ...m, quantity_kg: calcQty(m.percentage || 0) }))
     );
     const { id: _formId, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, revision, revision_date, revision_number, validity_days: _validityDays, ...recipeData } = form;
 
@@ -857,7 +896,7 @@ export default function Receitas() {
                       <col className="w-[4.75rem]" />
                       <col className="w-[4.75rem]" />
                       <col className="w-[5.5rem]" />
-                      <col className="w-8" />
+                      <col className="w-14" />
                     </colgroup>
                     <thead><tr className="bg-muted/50 text-xs font-semibold text-muted-foreground">
                       <th className="px-1 py-2 text-center">{t('recipes.form.seq')}</th>
@@ -936,9 +975,16 @@ export default function Receitas() {
                                     {calcQty(m.percentage || 0).toFixed(3)}
                                   </td>
                                   <td className="px-0.5 py-1 text-center">
-                                    <button type="button" onClick={() => removeMP(idx)} className="p-1 hover:bg-muted rounded">
-                                      <X className="w-3 h-3 text-red-400" />
-                                    </button>
+                                    <div className="flex items-center justify-center gap-0.5">
+                                      <MpControlePopover
+                                        controlado={m.controlado}
+                                        orgao={m.orgao_regulamentador}
+                                        onChange={(controle) => updateMPControle(idx, controle)}
+                                      />
+                                      <button type="button" onClick={() => removeMP(idx)} className="p-1 hover:bg-muted rounded" aria-label={t('buttons.delete')}>
+                                        <X className="w-3 h-3 text-red-400" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               )}

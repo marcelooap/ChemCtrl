@@ -6,6 +6,7 @@ import {
   loteUnidadeEstoque,
 } from "@transbordo/lib/conversao";
 import { base44 } from "@industrializacao/api/base44Client";
+import { resolveMpControle } from "@industrializacao/lib/mpControle";
 
 const LINK_PREFIX = "INDMP:";
 
@@ -322,16 +323,47 @@ export async function backfillEntradaPesagem(entrada, validacaoRow = undefined) 
   return { ...entrada, ...pesagem };
 }
 
-/** Pesagem e destinos informados na ordem, para a visualização da entrada. */
+/**
+ * Controle (órgão regulamentador) de cada lote da entrada, definido nas
+ * receitas da Industrialização. Mesma ordem de `entrada.lotes`.
+ * Falhas aqui nunca bloqueiam a visualização.
+ */
+async function resolveControleLotes(entrada) {
+  const lotes = Array.isArray(entrada?.lotes) && entrada.lotes.length
+    ? entrada.lotes
+    : [{
+        produto_codigo: entrada?.produto_codigo,
+        produto_nome: entrada?.produto_nome,
+      }];
+  try {
+    const recipes = await base44.entities.Recipe.list("-created_date", 500);
+    return lotes.map((lote) =>
+      resolveMpControle(recipes, {
+        mpCode: lote?.produto_codigo,
+        mpName: lote?.produto_nome,
+        client: entrada?.cliente_nome,
+      })
+    );
+  } catch (err) {
+    console.error("[Entrada] controle de MP:", err);
+    return lotes.map(() => null);
+  }
+}
+
+/** Pesagem, destinos informados e controle de MP, para a visualização da entrada. */
 export async function prepareEntradaView(entrada) {
   if (!entrada?.id || entrada.origem !== "industrializacao") {
-    return { entrada, destinosInformados: [] };
+    return { entrada, destinosInformados: [], controleLotes: [] };
   }
-  const row = await findValidacaoRow(entrada);
+  const [row, controleLotes] = await Promise.all([
+    findValidacaoRow(entrada),
+    resolveControleLotes(entrada),
+  ]);
   const enriched = await backfillEntradaPesagem(entrada, row);
   return {
     entrada: enriched,
     destinosInformados: destinosInformadosFromValidacao(row),
+    controleLotes,
   };
 }
 
