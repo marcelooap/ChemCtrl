@@ -16,6 +16,10 @@ import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
 } from "@transbordo/lib/declaredVolume";
+import {
+  entradaByIdMap,
+  isMateriaPrimaIndustrializacao,
+} from "@transbordo/lib/materiaPrimaIndustrializacao";
 
 const isSameMonth = (dateStr) => {
   if (!dateStr) return false;
@@ -94,7 +98,17 @@ export default function Home() {
         void persistDeclaredVolumeDecimals(volumes);
 
         // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
-        const estoqueWithSaldo = volumes.estoque.map((e) => {
+        // Matéria-prima da Industrialização fica só na tela de Industrialização.
+        const entradasPorId = entradaByIdMap(ents);
+        const estoqueWithSaldo = volumes.estoque
+          .filter(
+            (e) =>
+              !isMateriaPrimaIndustrializacao(
+                e,
+                entradasPorId.get(String(e?.entrada_id))
+              )
+          )
+          .map((e) => {
           const quantidade = getEstoqueQuantidade(e);
           const unidade_medida = getEstoqueUnidade(e);
           return {
