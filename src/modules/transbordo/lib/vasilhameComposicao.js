@@ -307,6 +307,93 @@ export function getLoteEnvaseDate(item) {
   return dates.length > 0 ? dates[0] : null;
 }
 
+const toDateOnly = (value) => {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, 10) : "";
+};
+
+/**
+ * Fabricação/validade do lote do vasilhame (YYYY-MM-DD).
+ * Prioriza o que foi editado no vasilhame (composição); senão usa o estoque
+ * da entrada de origem (por id ou, na falta, pelo mesmo lote).
+ *
+ * @param {object} vasilhame
+ * @param {Map<string, object>|null} estoqueById
+ */
+export function resolveVasilhameLoteDatas(vasilhame, estoqueById = null) {
+  const empty = { data_fabricacao: "", data_validade: "" };
+  if (!vasilhame) return empty;
+
+  const lote = (vasilhame.lote || getDominantLote(vasilhame.composicao) || "").trim();
+  const composicao = Array.isArray(vasilhame.composicao) ? vasilhame.composicao : [];
+  const doLote = composicao.filter((c) => (c.lote || "").trim() === lote);
+  const entries = doLote.length > 0 ? doLote : composicao;
+
+  const pick = (field) => {
+    const own = entries.find((c) => Object.prototype.hasOwnProperty.call(c, field));
+    if (own) return toDateOnly(own[field]);
+
+    if (!estoqueById) return "";
+    for (const c of entries) {
+      const est = estoqueById.get(c.estoque_id) || estoqueById.get(c.entrada_id);
+      const value = toDateOnly(est?.[field]);
+      if (value) return value;
+    }
+    if (!lote) return "";
+    for (const est of estoqueById.values()) {
+      if ((est?.lote || "").trim() !== lote) continue;
+      const value = toDateOnly(est[field]);
+      if (value) return value;
+    }
+    return "";
+  };
+
+  return {
+    data_fabricacao: pick("data_fabricacao"),
+    data_validade: pick("data_validade"),
+  };
+}
+
+/**
+ * Grava fabricação/validade nas entradas da composição do lote informado.
+ * Sem composição, cria uma entrada única para carregar as datas.
+ */
+export function applyLoteDatasToComposicao(
+  composicao = [],
+  lote,
+  datas = {},
+  fallback = {}
+) {
+  const loteKey = (lote || "").trim();
+  const patch = {};
+  if ("data_fabricacao" in datas) {
+    patch.data_fabricacao = toDateOnly(datas.data_fabricacao) || null;
+  }
+  if ("data_validade" in datas) {
+    patch.data_validade = toDateOnly(datas.data_validade) || null;
+  }
+  if (Object.keys(patch).length === 0) return composicao || [];
+
+  const base = Array.isArray(composicao) ? composicao : [];
+  if (base.length === 0) {
+    return [
+      {
+        lote: loteKey,
+        quantidade_l: fallback.quantidade_l || 0,
+        quantidade_kg: fallback.quantidade_kg || 0,
+        transbordo_codigo: fallback.transbordo_codigo || null,
+        data: null,
+        ...patch,
+      },
+    ];
+  }
+
+  const hasLote = base.some((c) => (c.lote || "").trim() === loteKey);
+  return base.map((c) =>
+    !hasLote || (c.lote || "").trim() === loteKey ? { ...c, ...patch } : c
+  );
+}
+
 /** Lote de maior volume na composição (para coluna da listagem). */
 export function getDominantLote(composicao = []) {
   const agg = aggregateComposicaoByLote(composicao).filter((r) =>

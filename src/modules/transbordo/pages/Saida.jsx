@@ -49,6 +49,7 @@ import {
 } from "@painel/lib/agendamentosCarregamento";
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
+import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 
 const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
@@ -135,6 +136,19 @@ export default function Saida({
       });
       void persistDeclaredVolumeDecimals(volumes);
       let list = saics || [];
+      let vasilhamesAlinhados = volumes.vasilhames;
+      try {
+        const healed = await healLinkedLotes({
+          estoqueRows: volumes.estoque,
+          transbordos: volumes.transbordos,
+          vasilhames: volumes.vasilhames,
+          saidas: list,
+        });
+        list = healed.saidas || list;
+        vasilhamesAlinhados = healed.vasilhames || volumes.vasilhames;
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar lote das saídas:", err);
+      }
       if (onlyIndustrializacao) {
         list = list.filter(saidaHasIndustrializacaoItems);
       }
@@ -144,7 +158,7 @@ export default function Saida({
       setSaidas(list);
       setClientes(cliens);
       setEntradas(volumes.estoque);
-      setVasilhames(volumes.vasilhames);
+      setVasilhames(vasilhamesAlinhados);
       setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
       setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {

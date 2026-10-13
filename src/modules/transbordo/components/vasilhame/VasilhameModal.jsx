@@ -53,6 +53,7 @@ export default function VasilhameModal({
   readOnly,
   clientes,
   produtos,
+  loteDatas = null,
 }) {
   const [numeroOp, setNumeroOp] = useState("Manual");
   const [placa, setPlaca] = useState("");
@@ -73,6 +74,8 @@ export default function VasilhameModal({
   const [eslinga, setEslinga] = useState("");
   const [gps, setGps] = useState("");
   const [menorTeste, setMenorTeste] = useState("");
+  const [dataFabricacao, setDataFabricacao] = useState("");
+  const [dataValidade, setDataValidade] = useState("");
   const [dataSaida, setDataSaida] = useState("");
   const [responsavel, setResponsavel] = useState("");
   const [fracionado, setFracionado] = useState(false);
@@ -115,6 +118,8 @@ export default function VasilhameModal({
       setEslinga(editingVasilhame.eslinga || "");
       setGps(editingVasilhame.gps || "");
       setMenorTeste(editingVasilhame.menor_teste || "");
+      setDataFabricacao(loteDatas?.data_fabricacao || "");
+      setDataValidade(loteDatas?.data_validade || "");
       setDataSaida(editingVasilhame.data_saida || "");
       setResponsavel(editingVasilhame.responsavel || "");
       setFracionado(!!editingVasilhame.fracionado);
@@ -138,12 +143,15 @@ export default function VasilhameModal({
       setEslinga("");
       setGps("");
       setMenorTeste("");
+      setDataFabricacao("");
+      setDataValidade("");
       setDataSaida("");
       setResponsavel("");
       setFracionado(false);
     }
     setError("");
     setSaving(false);
+    // loteDatas deriva de editingVasilhame; não reinicia o form por conta própria.
   }, [editingVasilhame, open, produtos]);
 
   const clientesComProdutos = produtos
@@ -181,7 +189,14 @@ export default function VasilhameModal({
   const canEditField = (field) => {
     if (readOnly) return false;
     if (!isEditing) return true;
-    if (field === "tipo" || field === "lote") return true;
+    if (
+      field === "tipo" ||
+      field === "lote" ||
+      field === "data_fabricacao" ||
+      field === "data_validade"
+    ) {
+      return true;
+    }
     return isTipoVasilhame && EDITABLE_WHEN_VASILHAME.has(field);
   };
 
@@ -204,6 +219,10 @@ export default function VasilhameModal({
     }
     if (densEditable && dens <= 0) {
       setError("Informe a densidade do produto.");
+      return;
+    }
+    if (dataFabricacao && dataValidade && dataValidade < dataFabricacao) {
+      setError("A validade não pode ser anterior à fabricação.");
       return;
     }
 
@@ -230,6 +249,8 @@ export default function VasilhameModal({
         eslinga: eslinga || null,
         gps: gps || null,
         menor_teste: emptyToNull(menorTeste),
+        data_fabricacao: emptyToNull(dataFabricacao),
+        data_validade: emptyToNull(dataValidade),
         status,
         data_saida: emptyToNull(dataSaida),
         responsavel: responsavel || null,
@@ -365,6 +386,144 @@ export default function VasilhameModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
+              <Label>Lote</Label>
+              <Input
+                value={lote}
+                onChange={(e) => setLote(e.target.value)}
+                placeholder="Ex: 16090930-25"
+                disabled={!canEditField("lote")}
+                className={INPUT_EDITABLE}
+              />
+            </div>
+            {showField("densidade") && (
+              <div className="space-y-1.5">
+                <Label>
+                  Densidade {densidadeDoCadastro ? "(Tabelada)" : densEditable ? "*" : ""}
+                </Label>
+                <NumberInputBr
+                  decimals={3}
+                  value={densidade}
+                  onChange={(v) => {
+                    setDensidade(v === "" ? "" : v);
+                    if (isEditing && isTipoVasilhame) {
+                      setDensidadeDoCadastro(false);
+                    }
+                  }}
+                  placeholder={densLockedByCadastro ? "Automático" : "Ex: 1,025"}
+                  disabled={!densEditable}
+                  className={densEditable ? INPUT_EDITABLE : INPUT_LOCKED}
+                />
+                {densEditable && produtoNome && (
+                  <p className="text-xs text-muted-foreground">
+                    {isEditing
+                      ? "Alterar a densidade recalcula o peso líquido automaticamente."
+                      : "Produto sem densidade cadastrada — informe manualmente."}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {(showField("tara") || showPesosAuto) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {showField("tara") && (
+                <div className="space-y-1.5">
+                  <Label>Tara (kg)</Label>
+                  <NumberInputBr
+                    decimals={0}
+                    min={0}
+                    value={tara}
+                    onChange={(v) => setTara(v === "" ? "" : v)}
+                    placeholder="0"
+                    disabled={!canEditField("tara")}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+              {showPesosAuto && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Peso Líquido (kg) - auto</Label>
+                    <Input value={formatMass(pesoLiquido)} disabled className={INPUT_LOCKED} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Peso Bruto (kg) - auto</Label>
+                    <Input value={formatMass(pesoBruto)} disabled className={INPUT_LOCKED} />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {(showField("gps") || showField("menor_teste") || showField("eslinga")) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {showField("gps") && (
+                <div className="space-y-1.5">
+                  <Label>GPS</Label>
+                  <Input
+                    value={gps}
+                    onChange={(e) => setGps(e.target.value)}
+                    placeholder="GPS"
+                    disabled={!canEditField("gps")}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+              {showField("menor_teste") && (
+                <div className="space-y-1.5">
+                  <Label>Data Menor Teste</Label>
+                  <Input
+                    type="date"
+                    value={menorTeste}
+                    onChange={(e) => setMenorTeste(e.target.value)}
+                    disabled={!canEditField("menor_teste")}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+              {showField("eslinga") && (
+                <div className="space-y-1.5">
+                  <Label>Eslinga</Label>
+                  <Input
+                    value={eslinga}
+                    onChange={(e) => setEslinga(e.target.value)}
+                    placeholder="Eslinga"
+                    disabled={!canEditField("eslinga")}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="vasilhame-data-fabricacao">Fabricação do lote</Label>
+              <Input
+                id="vasilhame-data-fabricacao"
+                type="date"
+                value={dataFabricacao}
+                onChange={(e) => setDataFabricacao(e.target.value)}
+                disabled={!canEditField("data_fabricacao")}
+                className={INPUT_EDITABLE}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vasilhame-data-validade">Validade do lote</Label>
+              <Input
+                id="vasilhame-data-validade"
+                type="date"
+                value={dataValidade}
+                min={dataFabricacao || undefined}
+                onChange={(e) => setDataValidade(e.target.value)}
+                disabled={!canEditField("data_validade")}
+                className={INPUT_EDITABLE}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <Label>Tipo</Label>
               <SearchableSelect
                 value={tipo}
@@ -377,19 +536,21 @@ export default function VasilhameModal({
                 inputClassName={INPUT_EDITABLE}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Lote</Label>
-              <Input
-                value={lote}
-                onChange={(e) => setLote(e.target.value)}
-                placeholder="Ex: 16090930-25"
-                disabled={!canEditField("lote")}
-                className={INPUT_EDITABLE}
-              />
-            </div>
+            {showField("lacres") && (
+              <div className="space-y-1.5">
+                <Label>Lacres</Label>
+                <Input
+                  value={lacres}
+                  onChange={(e) => setLacres(e.target.value)}
+                  placeholder="Nº lacres"
+                  disabled={!canEditField("lacres")}
+                  className={INPUT_EDITABLE}
+                />
+              </div>
+            )}
           </div>
 
-          {(showField("volume") || showField("lacres") || showField("fracionado")) && (
+          {(showField("volume") || showField("responsavel")) && (
             <div className="grid grid-cols-2 gap-4">
               {showField("volume") && (
                 <div className="space-y-1.5">
@@ -421,81 +582,6 @@ export default function VasilhameModal({
                   )}
                 </div>
               )}
-              {showField("lacres") && (
-                <div className="space-y-1.5">
-                  <Label>Lacres</Label>
-                  <Input
-                    value={lacres}
-                    onChange={(e) => setLacres(e.target.value)}
-                    placeholder="Nº lacres"
-                    disabled={!canEditField("lacres")}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {(showField("tara") || showField("eslinga")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {showField("tara") && (
-                <div className="space-y-1.5">
-                  <Label>Tara (kg)</Label>
-                  <NumberInputBr
-                    decimals={0}
-                    min={0}
-                    value={tara}
-                    onChange={(v) => setTara(v === "" ? "" : v)}
-                    placeholder="0"
-                    disabled={!canEditField("tara")}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-              )}
-              {showField("eslinga") && (
-                <div className="space-y-1.5">
-                  <Label>Eslinga</Label>
-                  <Input
-                    value={eslinga}
-                    onChange={(e) => setEslinga(e.target.value)}
-                    placeholder="Eslinga"
-                    disabled={!canEditField("eslinga")}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {(showField("densidade") || showField("responsavel")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {showField("densidade") && (
-                <div className="space-y-1.5">
-                  <Label>
-                    Densidade {densidadeDoCadastro ? "(Tabelada)" : densEditable ? "*" : ""}
-                  </Label>
-                  <NumberInputBr
-                    decimals={3}
-                    value={densidade}
-                    onChange={(v) => {
-                      setDensidade(v === "" ? "" : v);
-                      if (isEditing && isTipoVasilhame) {
-                        setDensidadeDoCadastro(false);
-                      }
-                    }}
-                    placeholder={densLockedByCadastro ? "Automático" : "Ex: 1,025"}
-                    disabled={!densEditable}
-                    className={densEditable ? INPUT_EDITABLE : INPUT_LOCKED}
-                  />
-                  {densEditable && produtoNome && (
-                    <p className="text-xs text-muted-foreground">
-                      {isEditing
-                        ? "Alterar a densidade recalcula o peso líquido automaticamente."
-                        : "Produto sem densidade cadastrada — informe manualmente."}
-                    </p>
-                  )}
-                </div>
-              )}
               {showField("responsavel") && (
                 <div className="space-y-1.5">
                   <Label>Responsável</Label>
@@ -511,61 +597,19 @@ export default function VasilhameModal({
             </div>
           )}
 
-          {showPesosAuto && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Peso Líquido (kg) - auto</Label>
-                <Input value={formatMass(pesoLiquido)} disabled className={INPUT_LOCKED} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Peso Bruto (kg) - auto</Label>
-                <Input value={formatMass(pesoBruto)} disabled className={INPUT_LOCKED} />
-              </div>
-            </div>
-          )}
-
-          {showField("gps") && (
+          {showField("data_saida") && (
             <div className="space-y-1.5">
-              <Label>GPS</Label>
+              <Label>Data de Saída</Label>
               <Input
-                value={gps}
-                onChange={(e) => setGps(e.target.value)}
-                placeholder="GPS"
-                disabled={!canEditField("gps")}
+                type="date"
+                value={dataSaida}
+                onChange={(e) => setDataSaida(e.target.value)}
+                disabled={!canEditField("data_saida")}
                 className={INPUT_EDITABLE}
               />
-            </div>
-          )}
-
-          {(showField("menor_teste") || showField("data_saida")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {showField("menor_teste") && (
-                <div className="space-y-1.5">
-                  <Label>Data Menor Teste</Label>
-                  <Input
-                    type="date"
-                    value={menorTeste}
-                    onChange={(e) => setMenorTeste(e.target.value)}
-                    disabled={!canEditField("menor_teste")}
-                    className={INPUT_EDITABLE}
-                  />
-                </div>
-              )}
-              {showField("data_saida") && (
-                <div className="space-y-1.5">
-                  <Label>Data de Saída</Label>
-                  <Input
-                    type="date"
-                    value={dataSaida}
-                    onChange={(e) => setDataSaida(e.target.value)}
-                    disabled={!canEditField("data_saida")}
-                    className={INPUT_EDITABLE}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'.
-                  </p>
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Ao definir uma data, o status muda para 'Expedido'. Remova a data para reverter para 'No Pátio'.
+              </p>
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { Search, Eye, Pencil, Truck, X, Printer } from "lucide-react";
@@ -26,6 +26,8 @@ import {
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
   collapsedPlacaHealPatch,
+  resolveVasilhameLoteDatas,
+  applyLoteDatasToComposicao,
 } from "@transbordo/lib/vasilhameComposicao";
 import { upsertFiltracaoForVasilhame } from "@transbordo/lib/filtracao";
 import {
@@ -38,6 +40,10 @@ import {
   isUnidadeVolumeEntrada,
   normalizeUnidadeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  healLinkedLotes,
+  syncSaidaLoteDoVasilhame,
+} from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   isDestinoEmbalagemUnitaria,
   isVasilhameLegadoEmbalado,
@@ -210,6 +216,13 @@ export default function Vasilhames() {
   const [labelVasilhame, setLabelVasilhame] = useState(null);
   const [transbordos, setTransbordos] = useState([]);
   const [estoqueById, setEstoqueById] = useState(() => new Map());
+  const loteDatasEdicao = useMemo(
+    () =>
+      editingVasilhame
+        ? resolveVasilhameLoteDatas(editingVasilhame, estoqueById)
+        : null,
+    [editingVasilhame, estoqueById]
+  );
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -270,7 +283,6 @@ export default function Vasilhames() {
       const vasById = new Map(
         (volumes.vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
       );
-      setTransbordos(volumes.transbordos);
       setEstoqueById(
         new Map((volumes.estoque || []).filter((e) => e?.id).map((e) => [e.id, e]))
       );
@@ -306,7 +318,24 @@ export default function Vasilhames() {
         }
       }
 
-      setVasilhames(list);
+      let aligned = list;
+      let alignedTransbordos = volumes.transbordos;
+      try {
+        const healed = await healLinkedLotes({
+          estoqueRows: volumes.estoque,
+          transbordos: volumes.transbordos,
+          vasilhames: list,
+        });
+        aligned = (healed.vasilhames || list).map((row) =>
+          normalizeVasilhameLote(row)
+        );
+        alignedTransbordos = healed.transbordos || volumes.transbordos;
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar lote dos vasilhames:", err);
+      }
+
+      setTransbordos(alignedTransbordos);
+      setVasilhames(aligned);
       setProdutos(prods);
       setClientes(cliens);
     } catch {
@@ -443,7 +472,13 @@ export default function Vasilhames() {
 
     let saved = editingVasilhame;
     if (editingVasilhame) {
-      let payload = { ...data };
+      // Fabricação/validade não são colunas do vasilhame: ficam na composição do lote.
+      const {
+        data_fabricacao: nextFabricacao,
+        data_validade: nextValidade,
+        ...vasilhameData
+      } = data;
+      let payload = { ...vasilhameData };
       const newLote = String(data?.lote ?? "").trim();
       const oldLote = String(editingVasilhame.lote || "").trim();
 
@@ -465,6 +500,7 @@ export default function Vasilhames() {
             ? [
                 {
                   lote: newLote,
+                  lote_manual: true,
                   quantidade_l: vol,
                   quantidade_kg:
                     Number(data.peso_liquido ?? editingVasilhame.peso_liquido) ||
@@ -481,15 +517,44 @@ export default function Vasilhames() {
               ]
             : [];
         } else if (uniqueLotes.size <= 1) {
-          nextComp = prevComp.map((c) => ({ ...c, lote: newLote }));
+          nextComp = prevComp.map((c) => ({ ...c, lote: newLote, lote_manual: true }));
         } else {
           nextComp = prevComp.map((c) => {
             const cl = String(c.lote || "").trim();
-            if (!oldLote || cl === oldLote) return { ...c, lote: newLote };
+            if (!oldLote || cl === oldLote) {
+              return { ...c, lote: newLote, lote_manual: true };
+            }
             return c;
           });
         }
         payload = { ...payload, lote: newLote || null, composicao: nextComp };
+      }
+
+      // Só persiste as datas que o usuário realmente alterou (evita copiar o estoque).
+      const datasAtuais = resolveVasilhameLoteDatas(editingVasilhame, estoqueById);
+      const datasPatch = {};
+      if (String(nextFabricacao || "") !== datasAtuais.data_fabricacao) {
+        datasPatch.data_fabricacao = nextFabricacao || "";
+      }
+      if (String(nextValidade || "") !== datasAtuais.data_validade) {
+        datasPatch.data_validade = nextValidade || "";
+      }
+      if (Object.keys(datasPatch).length > 0) {
+        payload = {
+          ...payload,
+          composicao: applyLoteDatasToComposicao(
+            payload.composicao ?? editingVasilhame.composicao,
+            newLote || oldLote,
+            datasPatch,
+            {
+              quantidade_l: Number(data.volume ?? editingVasilhame.volume) || 0,
+              quantidade_kg:
+                Number(data.peso_liquido ?? editingVasilhame.peso_liquido) || 0,
+              transbordo_codigo:
+                editingVasilhame.numero_op || editingVasilhame.codigo || null,
+            }
+          ),
+        };
       }
 
       if (prevExpedido && !nextExpedido) {
@@ -531,6 +596,13 @@ export default function Vasilhames() {
       }
       await entities.vasilhames.update(editingVasilhame.id, payload);
       saved = { ...editingVasilhame, ...payload };
+      if (newLote !== oldLote) {
+        try {
+          await syncSaidaLoteDoVasilhame(editingVasilhame.id, oldLote, newLote);
+        } catch (err) {
+          console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
+        }
+      }
     } else {
       return;
     }
@@ -902,6 +974,7 @@ export default function Vasilhames() {
         readOnly={readOnly}
         clientes={clientes}
         produtos={produtos}
+        loteDatas={loteDatasEdicao}
       />
 
       {/* View Dialog */}

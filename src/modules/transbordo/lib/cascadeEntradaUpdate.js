@@ -1,6 +1,11 @@
 import { entities } from "@transbordo/services/entities";
 import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import { parseDensidade } from "@transbordo/lib/format";
+import {
+  calculateFIFOAllocation,
+  expandOrigensForFifo,
+} from "@transbordo/lib/fifo";
 
 /**
  * Mantém a entrada como fonte mandatória de identidade (lote, NF, produto, etc.).
@@ -154,14 +159,6 @@ function shouldPatchComposicaoEntry(entry, pair, ctx) {
   if (ctx.vasilhameTransbordoId && ctx.transbordoIds.has(ctx.vasilhameTransbordoId)) {
     return true;
   }
-  // Fallback: mesmo lote antigo no tanque do produto vinculado
-  if (
-    sameText(ctx.vasilhameLote, pair.before.lote) ||
-    sameText(ctx.vasilhameProdutoId, pair.before.produto_id) ||
-    sameText(ctx.vasilhameProdutoCodigo, pair.before.produto_codigo)
-  ) {
-    return true;
-  }
   return false;
 }
 
@@ -173,6 +170,494 @@ function patchComposicao(composicao, pair, ctx) {
     return { ...c, lote: pair.after.lote };
   });
   return { composicao: next, changed };
+}
+
+function normId(value) {
+  if (value == null || value === "") return "";
+  return String(value);
+}
+
+function normCode(value) {
+  return String(value || "").trim();
+}
+
+function placaBarrilKey(placa, barril) {
+  return `${normCode(placa).toUpperCase()}||${normCode(barril).toUpperCase()}`;
+}
+
+function indexEstoqueRows(rows = []) {
+  const byId = new Map();
+  const byEntradaId = new Map();
+  const list = [];
+  for (const row of rows || []) {
+    if (!row?.id) continue;
+    list.push(row);
+    byId.set(String(row.id), row);
+    const entradaId = normId(row.entrada_id);
+    if (!entradaId) continue;
+    if (!byEntradaId.has(entradaId)) byEntradaId.set(entradaId, []);
+    byEntradaId.get(entradaId).push(row);
+  }
+  return { byId, byEntradaId, list };
+}
+
+function codigoApontaEntrada(origemCodigo, entradaCodigo) {
+  const code = normCode(entradaCodigo);
+  const text = normCode(origemCodigo);
+  if (!code || !text) return false;
+  if (text === code) return true;
+  return (
+    text.startsWith(`${code} `) ||
+    text.startsWith(`${code}—`) ||
+    text.startsWith(`${code} -`) ||
+    text.startsWith(`${code}–`)
+  );
+}
+
+function resolveEstoqueForOrigem(origem, index) {
+  if (!origem || !index) return null;
+  const directId = normId(origem.estoque_id || origem.entrada_id);
+  if (directId && index.byId.has(directId)) return index.byId.get(directId);
+
+  if (directId && index.byEntradaId.has(directId)) {
+    const group = index.byEntradaId.get(directId);
+    if (group.length === 1) return group[0];
+    const byLote = group.find((row) => sameText(row.lote, origem.lote));
+    if (byLote) return byLote;
+  }
+
+  const matches = index.list.filter((row) =>
+    codigoApontaEntrada(origem.entrada_codigo, row.entrada_codigo)
+  );
+  if (matches.length === 1) return matches[0];
+  return matches.find((row) => sameText(row.lote, origem.lote)) || null;
+}
+
+function replaceLoteInCodigo(entradaCodigo, oldLote, newLote) {
+  const codigo = String(entradaCodigo || "");
+  const from = normCode(oldLote);
+  const to = normCode(newLote);
+  if (!codigo || !from || !to || sameText(from, to)) return codigo;
+  return codigo.replace(
+    new RegExp(`Lote\\s+${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+    `Lote ${to}`
+  );
+}
+
+function collectLotes(row) {
+  const lotes = new Set();
+  const header = normCode(row?.lote);
+  if (header) lotes.add(header);
+  for (const entry of row?.composicao || []) {
+    const lote = normCode(entry?.lote);
+    if (lote) lotes.add(lote);
+  }
+  return lotes;
+}
+
+function composicaoManual(row) {
+  return (row?.composicao || []).some((entry) => entry?.lote_manual);
+}
+
+function dropLoteManual(entry, lote) {
+  const next = { ...entry, lote };
+  delete next.lote_manual;
+  return next;
+}
+
+function vasilhameBelongsToTransbordo(vasilhame, transbordo) {
+  if (!vasilhame || !transbordo) return false;
+  if (
+    vasilhame.transbordo_id &&
+    transbordo.id &&
+    String(vasilhame.transbordo_id) === String(transbordo.id)
+  ) {
+    return true;
+  }
+  const code = normCode(transbordo.codigo_transbordo);
+  if (code) {
+    if (normCode(vasilhame.codigo) === code || normCode(vasilhame.numero_op) === code) {
+      return true;
+    }
+    if (
+      (vasilhame.composicao || []).some(
+        (entry) => normCode(entry?.transbordo_codigo) === code
+      )
+    ) {
+      return true;
+    }
+  }
+  const key = placaBarrilKey(vasilhame.placa, vasilhame.barril);
+  if (key === "||") return false;
+  return (transbordo.destinos || []).some(
+    (destino) =>
+      placaBarrilKey(destino.placa || destino.tanka_codigo, destino.barril) === key
+  );
+}
+
+function opCodesOf(vasilhame) {
+  const codes = new Set();
+  const codigo = normCode(vasilhame?.codigo);
+  const numero = normCode(vasilhame?.numero_op);
+  if (codigo) codes.add(codigo);
+  if (numero) codes.add(numero);
+  for (const entry of vasilhame?.composicao || []) {
+    const code = normCode(entry?.transbordo_codigo);
+    if (code && code.toLowerCase() !== "manual") codes.add(code);
+  }
+  return codes;
+}
+
+function entryBelongsToOp(entry, vasilhame, code) {
+  const entryCode = normCode(entry?.transbordo_codigo);
+  if (entryCode && code) return entryCode === code;
+  if (entryCode) return false;
+  const codes = opCodesOf(vasilhame);
+  return !code || codes.size <= 1 || codes.has(code);
+}
+
+function expectedLotesDoTransbordo(transbordo, index) {
+  const dens = parseDensidade(transbordo?.densidade);
+  return expandOrigensForFifo(transbordo?.origens || [], dens).map((origem) => {
+    const estoque = resolveEstoqueForOrigem(origem, index);
+    return {
+      origem,
+      estoque,
+      lote: normCode(estoque?.lote || origem?.lote),
+    };
+  });
+}
+
+function vasilhameUsaEstoqueForcado(vasilhame, transbordos, index, forceIds) {
+  if (!forceIds || forceIds.size === 0) return false;
+  for (const entry of vasilhame?.composicao || []) {
+    const estoque = index.byId.get(normId(entry?.estoque_id || entry?.entrada_id));
+    if (estoque && forceIds.has(String(estoque.id))) return true;
+  }
+  return (transbordos || []).some((transbordo) => {
+    if (!vasilhameBelongsToTransbordo(vasilhame, transbordo)) return false;
+    return expectedLotesDoTransbordo(transbordo, index).some(
+      (item) => item.estoque && forceIds.has(String(item.estoque.id))
+    );
+  });
+}
+
+function patchTransbordoOrigens(transbordo, index) {
+  let changed = false;
+  const origens = (transbordo?.origens || []).map((origem) => {
+    const estoque = resolveEstoqueForOrigem(origem, index);
+    const nextLote = normCode(estoque?.lote);
+    if (!estoque || !nextLote) return origem;
+
+    let next = origem;
+    if (!sameText(origem.lote, nextLote)) {
+      changed = true;
+      next = {
+        ...origem,
+        lote: nextLote,
+        entrada_codigo: replaceLoteInCodigo(
+          origem.entrada_codigo,
+          origem.lote,
+          nextLote
+        ),
+      };
+    }
+
+    if (Array.isArray(origem.lotes_retirados) && origem.lotes_retirados.length > 0) {
+      let lotesChanged = false;
+      const lotes_retirados = origem.lotes_retirados.map((lote) => {
+        if (sameText(lote?.lote, nextLote)) return lote;
+        lotesChanged = true;
+        return { ...lote, lote: nextLote };
+      });
+      if (lotesChanged) {
+        changed = true;
+        next = { ...next, lote: nextLote, lotes_retirados };
+      }
+    }
+    return next;
+  });
+  return changed ? { id: transbordo.id, origens } : null;
+}
+
+function patchVasilhameLote(vasilhame, transbordos, index, forceIds) {
+  const manual = composicaoManual(vasilhame);
+  const forced = vasilhameUsaEstoqueForcado(
+    vasilhame,
+    transbordos,
+    index,
+    forceIds
+  );
+  if (manual && !forced) return null;
+
+  const beforeLotes = collectLotes(vasilhame);
+  const replacements = new Map();
+  let changed = false;
+  let headerLote = normCode(vasilhame.lote);
+  let composicao = (vasilhame.composicao || []).map((entry) => ({ ...entry }));
+
+  const note = (from, to) => {
+    const oldLote = normCode(from);
+    const newLote = normCode(to);
+    if (!oldLote || !newLote || sameText(oldLote, newLote)) return;
+    replacements.set(oldLote, newLote);
+  };
+
+  composicao = composicao.map((entry) => {
+    const estoque = index.byId.get(normId(entry.estoque_id || entry.entrada_id));
+    if (!estoque) return entry;
+    const nextLote = normCode(estoque.lote);
+    if (!nextLote || sameText(entry.lote, nextLote)) {
+      if (forced && entry.lote_manual) {
+        changed = true;
+        return dropLoteManual(entry, normCode(entry.lote));
+      }
+      return entry;
+    }
+    note(entry.lote, nextLote);
+    changed = true;
+    return dropLoteManual(entry, nextLote);
+  });
+
+  for (const transbordo of transbordos || []) {
+    if (!vasilhameBelongsToTransbordo(vasilhame, transbordo)) continue;
+    const expected = expectedLotesDoTransbordo(transbordo, index);
+    const linked = expected.filter((item) => item.estoque && item.lote);
+    if (linked.length === 0) continue;
+
+    const unique = [...new Set(expected.map((item) => item.lote).filter(Boolean))];
+    const code = normCode(transbordo.codigo_transbordo);
+
+    if (unique.length === 1) {
+      const nextLote = unique[0];
+      const singleOp = opCodesOf(vasilhame).size <= 1;
+      const stored = new Set();
+      if (singleOp && normCode(vasilhame.lote)) stored.add(normCode(vasilhame.lote));
+      for (const entry of composicao) {
+        if (!singleOp && !entryBelongsToOp(entry, vasilhame, code)) continue;
+        const lote = normCode(entry.lote);
+        if (lote) stored.add(lote);
+      }
+      if (stored.size > 1) continue;
+      const only = [...stored][0] || "";
+      if (sameText(only, nextLote)) {
+        if (forced && composicao.some((entry) => entry.lote_manual)) {
+          composicao = composicao.map((entry) =>
+            entry.lote_manual ? dropLoteManual(entry, normCode(entry.lote)) : entry
+          );
+          changed = true;
+        }
+        continue;
+      }
+      note(only || vasilhame.lote, nextLote);
+      if (singleOp) headerLote = nextLote;
+      composicao = composicao.map((entry) => {
+        if (!singleOp && !entryBelongsToOp(entry, vasilhame, code)) return entry;
+        return dropLoteManual(entry, nextLote);
+      });
+      changed = true;
+      continue;
+    }
+
+    for (const item of linked) {
+      const oldLote = normCode(item.origem?.lote);
+      const nextLote = item.lote;
+      if (!oldLote || sameText(oldLote, nextLote)) continue;
+      composicao = composicao.map((entry) => {
+        if (!entryBelongsToOp(entry, vasilhame, code)) return entry;
+        if (!sameText(entry.lote, oldLote)) return entry;
+        note(oldLote, nextLote);
+        changed = true;
+        return dropLoteManual(entry, nextLote);
+      });
+    }
+  }
+
+  const lote = getDominantLote(composicao) || headerLote;
+  if (!sameText(lote, vasilhame.lote)) changed = true;
+  if (!changed) return null;
+
+  return {
+    id: vasilhame.id,
+    composicao,
+    lote,
+    replacements,
+    beforeLotes,
+  };
+}
+
+function isSaidaVasilhameItem(item) {
+  if (!item?.vasilhame_id) return false;
+  return item.tipo !== "embalado" && item.tipo !== "ind_retorno_mp";
+}
+
+function patchSaidasLote(saidas, index, vasilhamePatches) {
+  const patchById = new Map(vasilhamePatches.map((patch) => [String(patch.id), patch]));
+  const updates = [];
+
+  for (const saida of saidas || []) {
+    let changed = false;
+    const itens = (saida.itens || []).map((item) => {
+      if (item?.tipo === "embalado") {
+        const estoque = index.byId.get(normId(item.entrada_id));
+        const nextLote = normCode(estoque?.lote);
+        if (!estoque || !nextLote || sameText(item.lote, nextLote)) return item;
+        changed = true;
+        return { ...item, lote: nextLote };
+      }
+
+      if (!isSaidaVasilhameItem(item)) return item;
+      const patch = patchById.get(String(item.vasilhame_id));
+      if (!patch) return item;
+      const current = normCode(item.lote);
+      const nextLote =
+        patch.replacements.get(current) ||
+        (patch.beforeLotes.size <= 1 &&
+        (!current || patch.beforeLotes.has(current))
+          ? patch.lote
+          : "");
+      if (!nextLote || sameText(current, nextLote)) return item;
+      changed = true;
+      return { ...item, lote: nextLote };
+    });
+    if (changed) updates.push({ id: saida.id, itens });
+  }
+
+  return updates;
+}
+
+function mergeById(rows, updates) {
+  if (!updates?.length) return rows || [];
+  const byId = new Map(updates.map((row) => [String(row.id), row]));
+  return (rows || []).map((row) =>
+    byId.has(String(row.id)) ? { ...row, ...byId.get(String(row.id)) } : row
+  );
+}
+
+/**
+ * Alinha lote de transbordo, vasilhame, filtração e saída ao lote atual do estoque
+ * da entrada. A entrada é a fonte do lote; a saída de tanque guarda só uma cópia.
+ *
+ * `forceEstoqueIds` sobrescreve ajuste manual feito no vasilhame.
+ */
+export function planLinkedLoteSync({
+  estoqueRows = [],
+  transbordos = [],
+  vasilhames = [],
+  saidas = [],
+  filtracoes = [],
+  forceEstoqueIds = [],
+} = {}) {
+  const index = indexEstoqueRows(estoqueRows);
+  const forceIds = new Set((forceEstoqueIds || []).filter(Boolean).map(String));
+
+  const transbordoUpdates = [];
+  const transbordosNext = (transbordos || []).map((transbordo) => {
+    const patch = patchTransbordoOrigens(transbordo, index);
+    if (!patch) return transbordo;
+    transbordoUpdates.push(patch);
+    return { ...transbordo, ...patch };
+  });
+
+  const vasilhamePatches = [];
+  for (const vasilhame of vasilhames || []) {
+    const patch = patchVasilhameLote(vasilhame, transbordosNext, index, forceIds);
+    if (patch) vasilhamePatches.push(patch);
+  }
+  const vasilhameUpdates = vasilhamePatches.map(
+    ({ replacements, beforeLotes, ...row }) => row
+  );
+
+  const saidaUpdates = patchSaidasLote(saidas, index, vasilhamePatches);
+
+  const patchById = new Map(vasilhamePatches.map((patch) => [String(patch.id), patch]));
+  const filtracaoUpdates = [];
+  for (const filtracao of filtracoes || []) {
+    const patch = patchById.get(String(filtracao.vasilhame_id));
+    if (!patch) continue;
+    let changed = !sameText(filtracao.lote, patch.lote);
+    const composicao = (filtracao.composicao || []).map((entry) => {
+      const nextLote = patch.replacements.get(normCode(entry?.lote));
+      if (!nextLote || sameText(entry?.lote, nextLote)) return entry;
+      changed = true;
+      return { ...entry, lote: nextLote };
+    });
+    const lote = getDominantLote(composicao) || patch.lote || filtracao.lote || "";
+    if (!sameText(lote, filtracao.lote)) changed = true;
+    if (!changed) continue;
+    filtracaoUpdates.push({ id: filtracao.id, composicao, lote });
+  }
+
+  return {
+    transbordoUpdates,
+    vasilhameUpdates,
+    saidaUpdates,
+    filtracaoUpdates,
+  };
+}
+
+/** Copia o lote editado no vasilhame para as saídas já registradas desse tanque. */
+export async function syncSaidaLoteDoVasilhame(vasilhameId, oldLote, newLote) {
+  if (!vasilhameId || sameText(oldLote, newLote)) return;
+  const saidas = await entities.saidas.list();
+  const updates = [];
+  for (const saida of saidas || []) {
+    let changed = false;
+    const itens = (saida.itens || []).map((item) => {
+      if (String(item?.vasilhame_id || "") !== String(vasilhameId)) return item;
+      if (!isSaidaVasilhameItem(item)) return item;
+      if (normCode(item.lote) && !sameText(item.lote, oldLote)) return item;
+      changed = true;
+      return { ...item, lote: normCode(newLote) };
+    });
+    if (changed) updates.push({ id: saida.id, itens });
+  }
+  if (updates.length > 0) await entities.saidas.bulkUpdate(updates);
+}
+
+export async function healLinkedLotes({
+  estoqueRows,
+  transbordos,
+  vasilhames,
+  saidas,
+  filtracoes,
+  forceEstoqueIds = [],
+} = {}) {
+  const [estoque, transbordoRows, vasilhameRows, saidaRows, filtracaoRows] =
+    await Promise.all([
+      estoqueRows ? Promise.resolve(estoqueRows) : entities.estoque.list(),
+      transbordos ? Promise.resolve(transbordos) : entities.transbordos.list(),
+      vasilhames ? Promise.resolve(vasilhames) : entities.vasilhames.list(),
+      saidas ? Promise.resolve(saidas) : entities.saidas.list(),
+      filtracoes ? Promise.resolve(filtracoes) : entities.filtracoes.list(),
+    ]);
+
+  const plan = planLinkedLoteSync({
+    estoqueRows: estoque,
+    transbordos: transbordoRows,
+    vasilhames: vasilhameRows,
+    saidas: saidaRows,
+    filtracoes: filtracaoRows,
+    forceEstoqueIds,
+  });
+
+  await Promise.all([
+    entities.transbordos.bulkUpdate(plan.transbordoUpdates),
+    entities.vasilhames.bulkUpdate(plan.vasilhameUpdates),
+    entities.saidas.bulkUpdate(plan.saidaUpdates),
+  ]);
+  try {
+    await entities.filtracoes.bulkUpdate(plan.filtracaoUpdates);
+  } catch (err) {
+    console.error("[Transbordo] Falha ao alinhar lote das filtrações:", err);
+  }
+
+  return {
+    ...plan,
+    transbordos: mergeById(transbordoRows, plan.transbordoUpdates),
+    vasilhames: mergeById(vasilhameRows, plan.vasilhameUpdates),
+    saidas: mergeById(saidaRows, plan.saidaUpdates),
+  };
 }
 
 /**
@@ -257,6 +742,7 @@ export async function cascadeEntradaIdentity(pairs = []) {
   const vasilhameUpdates = [];
   for (const v of vasilhames) {
     let anyChange = false;
+    let composicaoPatched = false;
     let composicao = v.composicao || [];
 
     for (const pair of changedPairs) {
@@ -271,15 +757,14 @@ export async function cascadeEntradaIdentity(pairs = []) {
       const patched = patchComposicao(composicao, pair, ctx);
       if (patched.changed) {
         composicao = patched.composicao;
+        composicaoPatched = true;
         anyChange = true;
       }
 
       // Cabeçalho do vasilhame quando o lote dominante era o antigo
       if (
         sameText(v.lote, pair.before.lote) &&
-        (affectedTransbordoIds.has(v.transbordo_id) ||
-          sameText(v.produto_id, pair.before.produto_id) ||
-          sameText(v.produto_codigo, pair.before.produto_codigo))
+        affectedTransbordoIds.has(v.transbordo_id)
       ) {
         anyChange = true;
       }
@@ -289,16 +774,16 @@ export async function cascadeEntradaIdentity(pairs = []) {
 
     const dominant = getDominantLote(composicao);
     const primaryPair =
-      changedPairs.find(
-        (p) =>
-          sameText(v.lote, p.before.lote) ||
-          sameText(v.produto_id, p.before.produto_id)
-      ) || changedPairs[0];
+      changedPairs.find((p) => sameText(v.lote, p.before.lote)) ||
+      changedPairs[0];
+    const nextLote = composicaoPatched
+      ? dominant || primaryPair?.after.lote || v.lote || ""
+      : primaryPair?.after.lote || v.lote || "";
 
     vasilhameUpdates.push({
       id: v.id,
       composicao,
-      lote: dominant || primaryPair?.after.lote || v.lote || "",
+      lote: nextLote,
       produto_id: primaryPair?.after.produto_id ?? v.produto_id,
       produto_nome: primaryPair?.after.produto_nome || v.produto_nome,
       produto_codigo: primaryPair?.after.produto_codigo || v.produto_codigo,
@@ -329,9 +814,7 @@ export async function cascadeEntradaIdentity(pairs = []) {
       }
       if (
         sameText(f.lote, pair.before.lote) &&
-        (affectedTransbordoIds.has(f.transbordo_id) ||
-          sameText(f.produto_id, pair.before.produto_id) ||
-          sameText(f.produto_codigo, pair.before.produto_codigo))
+        affectedTransbordoIds.has(f.transbordo_id)
       ) {
         anyChange = true;
       }
@@ -430,6 +913,13 @@ export async function syncEntradaEstoqueCascade({
     ...(created || []),
   ];
   const cascade = await cascadeEntradaIdentity(plan.pairs);
+  const forceEstoqueIds = plan.pairs
+    .filter((pair) => !sameText(pair.before?.lote, pair.after?.lote))
+    .map((pair) => pair.estoqueId);
+  await healLinkedLotes({
+    estoqueRows: savedEstoques,
+    forceEstoqueIds,
+  });
 
   const estoqueIds = savedEstoques.map((e) => e.id).filter(Boolean);
   if (estoqueIds.length > 0) {

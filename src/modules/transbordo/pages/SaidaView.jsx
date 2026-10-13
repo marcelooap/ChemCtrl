@@ -7,6 +7,7 @@ import { Button } from "@shared/components/ui/button";
 import { Switch } from "@shared/components/ui/switch";
 import { Label } from "@shared/components/ui/label";
 import { formatVolume, formatMass, formatNum } from "@transbordo/lib/format";
+import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
@@ -249,9 +250,23 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           entities.estoque.list(),
           entities.vasilhames.list(),
         ]);
-        setSaida(s);
+        let saidaRow = s;
+        let vasRows = vascs;
+        try {
+          const healed = await healLinkedLotes({
+            estoqueRows: ents,
+            vasilhames: vascs,
+            saidas: s ? [s] : [],
+          });
+          saidaRow =
+            (healed.saidas || []).find((row) => row.id === s?.id) || s;
+          vasRows = healed.vasilhames || vascs;
+        } catch (err) {
+          console.error("[Transbordo] Falha ao alinhar lote da saída:", err);
+        }
+        setSaida(saidaRow);
         setEntradas(ents);
-        setVasilhames(vascs);
+        setVasilhames(vasRows);
       } catch {
         setSaida(null);
       }
