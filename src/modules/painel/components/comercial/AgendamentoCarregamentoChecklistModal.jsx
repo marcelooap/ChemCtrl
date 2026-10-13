@@ -13,6 +13,7 @@ import {
   Loader2,
   MinusCircle,
   Package,
+  Save,
   Trash2,
   XCircle,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import {
   DialogTitle,
 } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
+import { useToast } from '@shared/components/ui/use-toast';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { cn } from '@shared/lib/utils';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -50,7 +52,7 @@ import {
   mergeChecklistItems,
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
-import { listChecklistExpedicaoByClienteIds } from '@painel/lib/checklistExpedicaoConfig';
+import { listChecklistExpedicaoByClientes } from '@painel/lib/checklistExpedicaoConfig';
 import { entities } from '@transbordo/services/entities';
 import { TIPO_IND_VASILHAME } from '@transbordo/lib/saidaOrigem';
 import { loadContainerLoteDatasMap } from '@industrializacao/lib/containerLoteDatas';
@@ -168,6 +170,7 @@ export default function AgendamentoCarregamentoChecklistModal({
 }) {
   const { t, i18n } = useTranslation();
   const { user } = useInternalAuth();
+  const { toast } = useToast();
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -182,15 +185,20 @@ export default function AgendamentoCarregamentoChecklistModal({
   const [checkDefsByCliente, setCheckDefsByCliente] = useState(null);
   const [defsLoading, setDefsLoading] = useState(false);
 
-  const clienteIdsKey = useMemo(() => {
-    const ids = new Set();
-    for (const b of list) {
-      if (b?.cliente_id) ids.add(String(b.cliente_id));
-    }
-    for (const s of saidas || []) {
-      if (s?.cliente_id) ids.add(String(s.cliente_id));
-    }
-    return [...ids].sort().join(',');
+  // Clientes das saídas do slot (id + nome): o nome é o vínculo quando o cadastro
+  // tem ids duplicados ou a saída não guarda o id do cliente.
+  const clientesKey = useMemo(() => {
+    const byKey = new Map();
+    const collect = (row) => {
+      const id = row?.cliente_id ? String(row.cliente_id) : '';
+      const nome = String(row?.cliente_nome || '').trim();
+      if (!id && !nome) return;
+      byKey.set(`${id}|${nome.toLowerCase()}`, { id, nome });
+    };
+    const saidaIds = new Set(list.map((b) => String(b?.saida_id)));
+    list.forEach(collect);
+    (saidas || []).filter((s) => saidaIds.has(String(s?.id))).forEach(collect);
+    return JSON.stringify([...byKey.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, c]) => c));
   }, [list, saidas]);
 
   useEffect(() => {
@@ -200,9 +208,8 @@ export default function AgendamentoCarregamentoChecklistModal({
       return;
     }
     let cancelled = false;
-    const ids = clienteIdsKey ? clienteIdsKey.split(',').filter(Boolean) : [];
     setDefsLoading(true);
-    listChecklistExpedicaoByClienteIds(ids)
+    listChecklistExpedicaoByClientes(JSON.parse(clientesKey))
       .then((map) => {
         if (!cancelled) setCheckDefsByCliente(map);
       })
@@ -215,7 +222,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     return () => {
       cancelled = true;
     };
-  }, [open, clienteIdsKey]);
+  }, [open, clientesKey]);
 
   // Origem do produto: Transbordo (OPs) e Industrialização (containers) fornecem
   // lote/fabricação/validade iguais aos da tela de Vasilhames de cada módulo.
@@ -428,6 +435,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     try {
       await persist(items, { markValidated: areAllItemsApproved(items) });
       dirtyRef.current = false;
+      toast({ title: t('painel.comercial.agendamentos.checklist.progressSaved') });
     } catch (err) {
       setError(err?.message || t('painel.comercial.agendamentos.checklist.submitError'));
     } finally {
@@ -913,26 +921,28 @@ export default function AgendamentoCarregamentoChecklistModal({
 
         <DialogFooter className="gap-2 border-t border-border bg-muted/30 px-6 py-3">
           <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
-            {readOnly ? t('buttons.close') : t('buttons.cancel')}
+            {t('buttons.close')}
           </Button>
           {!readOnly ? (
             <Can anyOf={[`${permissionPrefix}.edit`, `${permissionPrefix}.view`]}>
-              {alreadyLiberated ? (
+              {items.length > 0 ? (
                 <Button
                   type="button"
-                  disabled={saving}
+                  variant={alreadyLiberated ? 'default' : 'outline'}
+                  disabled={saving || uploading}
                   onClick={handleSaveChanges}
-                  className="text-white"
-                  style={{ background: '#2575D1' }}
+                  className={alreadyLiberated ? 'text-white' : undefined}
+                  style={alreadyLiberated ? { background: '#2575D1' } : undefined}
                 >
                   {saving ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    <Save className="mr-2 h-4 w-4" />
                   )}
                   {t('painel.comercial.agendamentos.checklist.saveProgress')}
                 </Button>
-              ) : (
+              ) : null}
+              {!alreadyLiberated ? (
                 <Button
                   type="button"
                   disabled={!allApproved || saving}
@@ -954,7 +964,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                   )}
                   {t('painel.comercial.agendamentos.checklist.liberarExpedicao')}
                 </Button>
-              )}
+              ) : null}
             </Can>
           ) : null}
         </DialogFooter>

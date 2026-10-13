@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-export default function Combobox({ value, onValueChange, options = [], placeholder = '', onSelect, inputClassName, emptyOptionsLabel, disabled = false }) {
+export default function Combobox({ id, value, onValueChange, options = [], placeholder = '', onSelect, inputClassName, emptyOptionsLabel, disabled = false }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -60,7 +60,9 @@ export default function Combobox({ value, onValueChange, options = [], placehold
   return (
     <div ref={containerRef} className="relative">
       <input
+        id={id}
         type="text"
+        autoComplete="off"
         value={value || ''}
         disabled={disabled}
         onChange={e => { onValueChange(e.target.value); if (!open) setOpen(true); }}

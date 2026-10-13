@@ -11,7 +11,9 @@ import { entities } from '@transbordo/services/entities';
 import {
   CONVENCIONAL_CHECKS,
   EMBALADO_CHECKS,
+  checkDefsNomeKey,
 } from '@painel/lib/carregamentoChecklistConfig';
+import { clienteNomeKey } from '@transbordo/lib/saidaOrigem';
 import { isMissingRpcError } from '@painel/lib/saidaReservas';
 import { listNomesClientesIndustrializacao } from '@painel/lib/saidaClientes';
 import { buildSaidaClienteOptions } from '@painel/lib/recebimentoCatalog';
@@ -107,24 +109,69 @@ export async function listChecklistExpedicaoItens(clienteId) {
   }
 }
 
+/** Cadastro de clientes indexado por nome (ids duplicados do mesmo nome) e por id. */
+async function loadClienteIdIndex() {
+  const idsByNome = new Map();
+  const nomeById = new Map();
+  try {
+    const cadastro = (await entities.clientes.list()) || [];
+    for (const row of cadastro) {
+      const id = normalizeClienteId(row?.id);
+      const nomeKey = clienteNomeKey(row?.nome);
+      if (!id || !nomeKey) continue;
+      nomeById.set(id, nomeKey);
+      idsByNome.set(nomeKey, [...(idsByNome.get(nomeKey) || []), id]);
+    }
+  } catch {
+    // Sem o cadastro, segue apenas com os ids/nomes informados.
+  }
+  return { idsByNome, nomeById };
+}
+
+function latestUpdatedAt(rows) {
+  return rows.reduce((max, row) => {
+    const stamp = String(row.updated_at || row.created_at || '');
+    return stamp > max ? stamp : max;
+  }, '');
+}
+
 /**
- * Carrega itens de vários clientes em uma única query.
+ * Carrega, em uma única query, as verificações configuradas dos clientes informados.
+ *
+ * O mesmo cliente pode existir mais de uma vez em `t_clientes` (ids duplicados com o
+ * mesmo nome). Por isso a configuração é buscada em todos os ids do cliente e, havendo
+ * mais de uma, vale a salva mais recentemente (a que a tela de Configuração editou).
+ *
+ * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
  * @returns {Map<string, Array<{ key: string, label: string, section: string }>>}
+ *   Chaves: id do cliente e `checkDefsNomeKey(nome)`.
  */
-export async function listChecklistExpedicaoByClienteIds(clienteIds = []) {
-  const ids = [...new Set((clienteIds || []).map(normalizeClienteId).filter(Boolean))];
+export async function listChecklistExpedicaoByClientes(clientes = []) {
   const map = new Map();
-  if (ids.length === 0) return map;
+  const requested = (clientes || [])
+    .map((c) => ({ id: normalizeClienteId(c?.id), nome: c?.nome }))
+    .filter((c) => c.id || clienteNomeKey(c.nome));
+  if (requested.length === 0) return map;
 
   if (!isChemFlowConfigured || !chemflowSupabase) {
     return map;
   }
 
+  const { idsByNome, nomeById } = await loadClienteIdIndex();
+  const groups = requested.map((c) => {
+    const nomeKey = clienteNomeKey(c.nome) || (c.id && nomeById.get(c.id)) || '';
+    const ids = new Set(nomeKey ? idsByNome.get(nomeKey) || [] : []);
+    if (c.id) ids.add(c.id);
+    return { id: c.id, nome: c.nome, ids };
+  });
+  const allIds = [...new Set(groups.flatMap((g) => [...g.ids]))];
+  if (allIds.length === 0) return map;
+
   try {
     const { data, error } = await chemflowSupabase
       .from('t_checklist_expedicao_itens')
       .select('*')
-      .in('cliente_id', ids)
+      .in('cliente_id', allIds)
       .order('ordem', { ascending: true });
 
     if (error) throw error;
@@ -137,9 +184,19 @@ export async function listChecklistExpedicaoByClienteIds(clienteIds = []) {
       byCliente.get(cid).push(row);
     }
 
-    for (const [cid, rows] of byCliente) {
-      const defs = toCheckDefs(rows);
-      if (defs.length > 0) map.set(cid, defs);
+    for (const group of groups) {
+      let best = null;
+      for (const id of group.ids) {
+        const rows = byCliente.get(id);
+        if (!rows?.length) continue;
+        const stamp = latestUpdatedAt(rows);
+        if (!best || stamp > best.stamp) best = { rows, stamp };
+      }
+      const defs = best ? toCheckDefs(best.rows) : [];
+      if (defs.length === 0) continue;
+      if (group.id) map.set(group.id, defs);
+      const nomeKey = checkDefsNomeKey(group.nome);
+      if (nomeKey) map.set(nomeKey, defs);
     }
     return map;
   } catch (err) {

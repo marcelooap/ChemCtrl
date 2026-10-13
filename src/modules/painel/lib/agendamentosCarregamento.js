@@ -257,7 +257,7 @@ export async function saveCarregamentoChecklistProgress({
   }
 
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
-  return { validated: allApproved };
+  return { validated: allApproved, patch };
 }
 
 export function normalizeBookings(bookings) {
@@ -555,6 +555,59 @@ export function normalizePlaca(value) {
     .replace(/\s+/g, '');
 }
 
+/** Nome de transportadora/motorista sempre em maiúsculas, sem espaços extras. */
+export function normalizeNomeTransporte(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleUpperCase('pt-BR');
+}
+
+const SUGESTOES_PAGE_SIZE = 1000;
+const SUGESTOES_MAX_PAGES = 10;
+
+/**
+ * Nomes de transportadoras e motoristas já registrados nos agendamentos
+ * (únicos, em maiúsculas e ordenados) para alimentar as listas suspensas.
+ */
+export async function listTransporteSugestoes() {
+  assertConfigured('t_agendamentos_carregamento.listTransporteSugestoes');
+
+  const transportadoras = new Set();
+  const motoristas = new Set();
+
+  for (let page = 0; page < SUGESTOES_MAX_PAGES; page += 1) {
+    const from = page * SUGESTOES_PAGE_SIZE;
+    const { data, error } = await chemflowSupabase
+      .from('t_agendamentos_carregamento')
+      .select('transportadora, motorista')
+      .or('transportadora.not.is.null,motorista.not.is.null')
+      .order('id', { ascending: true })
+      .range(from, from + SUGESTOES_PAGE_SIZE - 1);
+
+    if (error) {
+      throw new Error(
+        `[ChemFlow:t_agendamentos_carregamento.listTransporteSugestoes] ${error.message || 'Erro desconhecido'}`
+      );
+    }
+
+    for (const row of data || []) {
+      const transportadora = normalizeNomeTransporte(row.transportadora);
+      const motorista = normalizeNomeTransporte(row.motorista);
+      if (transportadora) transportadoras.add(transportadora);
+      if (motorista) motoristas.add(motorista);
+    }
+
+    if ((data || []).length < SUGESTOES_PAGE_SIZE) break;
+  }
+
+  const sortPtBr = (a, b) => a.localeCompare(b, 'pt-BR');
+  return {
+    transportadoras: [...transportadoras].sort(sortPtBr),
+    motoristas: [...motoristas].sort(sortPtBr),
+  };
+}
+
 export function hasTransporte(booking) {
   if (!booking) return false;
   return Boolean(
@@ -577,8 +630,8 @@ export async function updateTransporte({
   if (agendamentoId && !ids.includes(agendamentoId)) ids.push(agendamentoId);
   if (ids.length === 0) throw new Error('Agendamento inválido.');
 
-  const transportadoraNorm = String(transportadora || '').trim();
-  const motoristaNorm = String(motorista || '').trim();
+  const transportadoraNorm = normalizeNomeTransporte(transportadora);
+  const motoristaNorm = normalizeNomeTransporte(motorista);
   const placaNorm = normalizePlaca(placa);
 
   // Campos opcionais: permite limpar e salvar vazio para corrigir dados.

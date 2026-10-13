@@ -1092,6 +1092,7 @@
           "transportadora": "Transportadora",
           "motorista": "Motorista",
           "placa": "Placa",
+          "noSuggestions": "Nenhum registro ainda — digite um novo nome",
           "saveSuccess": "Dados de transporte salvos"
         },
         "concluir": {
@@ -1164,6 +1165,7 @@
           "rejectItem": "Reprovar item",
           "reopenItem": "Reabrir conferência",
           "saveProgress": "Salvar progresso",
+          "progressSaved": "Progresso salvo. Você pode retomar a conferência depois.",
           "attachPhotos": "Anexar fotos",
           "takePhoto": "Tirar foto",
           "answers": {

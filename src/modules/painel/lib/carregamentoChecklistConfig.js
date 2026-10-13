@@ -7,6 +7,7 @@
 import {
   TIPO_CONVENCIONAL,
   TIPO_EMBALADO,
+  clienteNomeKey,
   TIPO_IND_RETORNO_MP,
   TIPO_IND_VASILHAME,
   formatSaidaItemLote,
@@ -217,9 +218,29 @@ function tanqueLabel(item, vasilhame, index) {
 }
 
 /**
+ * Chave, no mapa de verificações, do cliente identificado pelo nome.
+ * O cadastro pode ter ids duplicados para o mesmo nome; o nome garante o vínculo.
+ */
+export function checkDefsNomeKey(nome) {
+  const key = clienteNomeKey(nome);
+  return key ? `nome:${key}` : null;
+}
+
+function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
+  if (!defsMap) return null;
+  const nomeKey = checkDefsNomeKey(clienteNome);
+  return (
+    (clienteId && defsMap.get(clienteId)) ||
+    (nomeKey && defsMap.get(nomeKey)) ||
+    null
+  );
+}
+
+/**
  * Monta a lista de itens de conferência a partir das saídas do slot.
  * @param {Map<string, Array>|Record<string, Array>|null} [checkDefsByCliente]
- *   Definições customizadas por cliente_id. Ausência / lista vazia → checks padrão do kind.
+ *   Definições customizadas por cliente_id ou por `checkDefsNomeKey(nome)`.
+ *   Ausência / lista vazia → checks padrão do kind.
  * @returns {Array<object>}
  */
 export function buildChecklistItemsFromSaidas({
@@ -248,8 +269,11 @@ export function buildChecklistItemsFromSaidas({
     if (!saida) continue;
     const linhas = Array.isArray(saida.itens) ? saida.itens : [];
     const clienteId = String(saida.cliente_id || booking.cliente_id || '').trim() || null;
-    const customDefs =
-      clienteId && defsMap?.has(clienteId) ? defsMap.get(clienteId) : null;
+    const customDefs = resolveCustomCheckDefs(
+      defsMap,
+      clienteId,
+      saida.cliente_nome || booking.cliente_nome
+    );
     const useCustom = Array.isArray(customDefs) && customDefs.length > 0;
 
     linhas.forEach((linha, idx) => {

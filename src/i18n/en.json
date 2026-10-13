@@ -1092,6 +1092,7 @@
           "transportadora": "Carrier",
           "motorista": "Driver",
           "placa": "Plate",
+          "noSuggestions": "No records yet — type a new name",
           "saveSuccess": "Transport details saved"
         },
         "concluir": {
@@ -1164,6 +1165,7 @@
           "rejectItem": "Reject item",
           "reopenItem": "Reopen inspection",
           "saveProgress": "Save progress",
+          "progressSaved": "Progress saved. You can resume the inspection later.",
           "attachPhotos": "Attach photos",
           "takePhoto": "Take photo",
           "answers": {

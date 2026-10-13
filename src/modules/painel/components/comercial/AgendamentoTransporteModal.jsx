@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle } from 'lucide-react';
 import {
   Dialog,
@@ -11,12 +12,21 @@ import {
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
+import Combobox from '@shared/components/ui/combobox';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
+  listTransporteSugestoes,
   normalizePlaca,
 } from '@painel/lib/agendamentosCarregamento';
+
+const SUGESTOES_QUERY_KEY = ['agendamentos-transporte-sugestoes'];
+const SUGESTOES_STALE_MS = 5 * 60 * 1000;
+const EMPTY_OPTIONS = [];
+
+const toUpper = (value) => String(value || '').toLocaleUpperCase('pt-BR');
+const toOptions = (names) => names.map((name) => ({ value: name, label: name }));
 
 export default function AgendamentoTransporteModal({
   open,
@@ -26,6 +36,21 @@ export default function AgendamentoTransporteModal({
   onSave,
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { data: sugestoes } = useQuery({
+    queryKey: SUGESTOES_QUERY_KEY,
+    queryFn: listTransporteSugestoes,
+    enabled: open,
+    staleTime: SUGESTOES_STALE_MS,
+  });
+  const transportadoraOptions = useMemo(
+    () => (sugestoes ? toOptions(sugestoes.transportadoras) : EMPTY_OPTIONS),
+    [sugestoes]
+  );
+  const motoristaOptions = useMemo(
+    () => (sugestoes ? toOptions(sugestoes.motoristas) : EMPTY_OPTIONS),
+    [sugestoes]
+  );
   const [transportadora, setTransportadora] = useState('');
   const [motorista, setMotorista] = useState('');
   const [placa, setPlaca] = useState('');
@@ -35,8 +60,8 @@ export default function AgendamentoTransporteModal({
 
   useEffect(() => {
     if (!open || !booking) return;
-    setTransportadora(booking.transportadora || '');
-    setMotorista(booking.motorista || '');
+    setTransportadora(toUpper(booking.transportadora));
+    setMotorista(toUpper(booking.motorista));
     setPlaca(booking.placa || '');
     setError('');
     setSaving(false);
@@ -62,6 +87,7 @@ export default function AgendamentoTransporteModal({
         motorista,
         placa,
       });
+      queryClient.invalidateQueries({ queryKey: SUGESTOES_QUERY_KEY });
       onClose();
     } catch (err) {
       setError(err?.message || t('painel.comercial.agendamentos.errors.transporteFailed'));
@@ -86,17 +112,21 @@ export default function AgendamentoTransporteModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Field
+          <NameField
             id="ag-transportadora"
             label={t('painel.comercial.agendamentos.transporte.transportadora')}
             value={transportadora}
-            onChange={setTransportadora}
+            onChange={(v) => setTransportadora(toUpper(v))}
+            options={transportadoraOptions}
+            emptyLabel={t('painel.comercial.agendamentos.transporte.noSuggestions')}
           />
-          <Field
+          <NameField
             id="ag-motorista"
             label={t('painel.comercial.agendamentos.transporte.motorista')}
             value={motorista}
-            onChange={setMotorista}
+            onChange={(v) => setMotorista(toUpper(v))}
+            options={motoristaOptions}
+            emptyLabel={t('painel.comercial.agendamentos.transporte.noSuggestions')}
           />
           <Field
             id="ag-placa"
@@ -128,6 +158,22 @@ export default function AgendamentoTransporteModal({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function NameField({ id, label, value, onChange, options, emptyLabel }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Combobox
+        id={id}
+        value={value}
+        onValueChange={onChange}
+        options={options}
+        emptyOptionsLabel={emptyLabel}
+        inputClassName="uppercase"
+      />
+    </div>
   );
 }
 

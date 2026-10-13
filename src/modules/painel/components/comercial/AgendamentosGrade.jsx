@@ -443,13 +443,19 @@ export default function AgendamentosGrade({
   const handleSaveChecklistProgress = async ({ payload, markValidated }) => {
     const list = normalizeBookings(checklistBookings);
     if (list.length === 0) return;
-    await saveCarregamentoChecklistProgress({
+    const { patch } = await saveCarregamentoChecklistProgress({
       bookings: list,
       payload,
       user,
       t,
       markValidated,
     });
+    // Mantém a grade em sincronia sem recarregar tudo: ao reabrir o checklist,
+    // o operador retoma exatamente do ponto salvo.
+    const savedIds = new Set(list.map((row) => row.id));
+    setAgendamentos((prev) =>
+      prev.map((row) => (savedIds.has(row.id) ? { ...row, ...patch } : row))
+    );
     if (markValidated) {
       await loadData({ silent: true });
     }
@@ -942,7 +948,8 @@ function TimeSlotButton({
   const placa = String(summary.placa || '').trim();
   const cliente =
     summary.clientesLabel && summary.clientesLabel !== '—' ? summary.clientesLabel : '';
-  const besideId = filled ? transportadora : cliente;
+  // O cliente fica fixo na linha do horário; ao lado da saída vai só a transportadora.
+  const besideId = filled ? transportadora : '';
   const hasSideActions = showTruck || showEye || showCheck || showChecklistBtn;
   const minH = compact ? 'min-h-[56px]' : 'min-h-[72px]';
 
@@ -999,7 +1006,15 @@ function TimeSlotButton({
           ) : (
             <Clock className={`w-3.5 h-3.5 ${tone.icon}`} />
           )}
-          <span className={`text-sm font-semibold tabular-nums ${tone.title}`}>{hora}</span>
+          <span className={`shrink-0 text-sm font-semibold tabular-nums ${tone.title}`}>{hora}</span>
+          {occupied && cliente ? (
+            <span
+              className={`ml-auto min-w-0 truncate text-right text-xs font-semibold ${tone.meta}`}
+              title={cliente}
+            >
+              {cliente}
+            </span>
+          ) : null}
         </span>
         {occupied ? (
           <span className="mt-1.5 block space-y-0.5">
