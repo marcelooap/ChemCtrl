@@ -653,6 +653,15 @@ export default function Saida({
         entradas={entradas}
         showRelatorioFiscal={!isExpedicao}
         highlightModule={isModuloOperacional ? operationalModule : null}
+        onSaidaChange={(updated) => {
+          if (!updated?.id) return;
+          setViewSaida(updated);
+          setSaidas((prev) =>
+            prev.map((row) =>
+              row.id === updated.id ? { ...row, ...updated } : row
+            )
+          );
+        }}
       />
 
       {/* Validação Confirmation (ChemFlow / Industrialização) */}

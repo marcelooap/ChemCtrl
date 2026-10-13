@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dialog,
@@ -8,7 +8,9 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { ClipboardList, FileText, Printer } from "lucide-react";
+import { useToast } from "@shared/components/ui/use-toast";
+import { entities } from "@transbordo/services/entities";
+import { Check, ClipboardList, FileText, Printer } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -75,6 +77,39 @@ function tipoBadgeClass(tipo) {
   return "bg-amber-100 text-amber-700";
 }
 
+function quantidadeItens(items) {
+  return items.reduce(
+    (sum, item) => sum + (Number(item?.quantidade_solicitada) || 0),
+    0
+  );
+}
+
+function SelectDot({ checked, indeterminate = false, onClick, label }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={indeterminate ? "mixed" : checked}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        checked
+          ? "border-primary bg-primary"
+          : indeterminate
+            ? "border-primary bg-background"
+            : "border-muted-foreground/40 bg-background hover:border-primary"
+      }`}
+    >
+      {checked ? (
+        <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+      ) : indeterminate ? (
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+      ) : null}
+    </button>
+  );
+}
+
 export default function SaidaViewDialog({
   open,
   onClose,
@@ -87,16 +122,30 @@ export default function SaidaViewDialog({
   highlightModule = null,
   checklistItems = null,
   showPrintEtiqueta = true,
+  onSaidaChange,
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [checklistItemView, setChecklistItemView] = useState(null);
+  const [selected, setSelected] = useState(() => new Set());
+  const [markedLocal, setMarkedLocal] = useState(() => new Set());
+  const [printing, setPrinting] = useState(false);
+
+  useEffect(() => {
+    setSelected(new Set());
+    setMarkedLocal(new Set());
+    setPrinting(false);
+  }, [open, saida?.id]);
 
   if (!saida) return null;
 
   const isAgendamento = variant === "agendamento";
   const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
   const itens = saida.itens || [];
-  const colCount = isAgendamento ? 8 : 7;
+  const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
+  const colCount = (isAgendamento ? 8 : 7) + (canSelectFiscal ? 1 : 0);
+  const allSelected = itens.length > 0 && selected.size === itens.length;
+  const someSelected = selected.size > 0 && !allSelected;
   const statusLabel = highlightModule
     ? isSaidaValidadaNoModulo(saida, highlightModule)
       ? "Validado"
@@ -106,12 +155,84 @@ export default function SaidaViewDialog({
       : "Pendente";
   const showRelatorio = isAgendamento ? showRelatorioSaida : showRelatorioFiscal;
 
-  const handlePrintRelatorio = () => {
+  const toggleItem = (index) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((prev) =>
+      prev.size === itens.length
+        ? new Set()
+        : new Set(itens.map((_, index) => index))
+    );
+  };
+
+  const itemJaGerado = (item, index) =>
+    Boolean(item?.relatorio_fiscal_gerado) || markedLocal.has(index);
+
+  const handlePrintRelatorio = async () => {
     if (isAgendamento) {
       printSaidaAgendamento(saida, { t, vasilhames });
       return;
     }
-    generateRelatorioFiscalSaidaPDF(saida, { vasilhames, entradas });
+
+    const indexes =
+      selected.size > 0
+        ? [...selected].sort((a, b) => a - b)
+        : itens.map((_, index) => index);
+    const picked = indexes.map((index) => itens[index]).filter(Boolean);
+    const partial = selected.size > 0 && selected.size < itens.length;
+    const reportSaida = partial
+      ? {
+          ...saida,
+          itens: picked,
+          quantidade_total: quantidadeItens(picked),
+        }
+      : saida;
+
+    generateRelatorioFiscalSaidaPDF(reportSaida, { vasilhames, entradas });
+
+    if (!saida.id || indexes.length === 0) return;
+
+    const now = new Date().toISOString();
+    const mark = new Set(indexes);
+    const nextItens = itens.map((item, index) =>
+      mark.has(index)
+        ? {
+            ...item,
+            relatorio_fiscal_gerado: true,
+            relatorio_fiscal_gerado_em: now,
+          }
+        : item
+    );
+
+    setPrinting(true);
+    try {
+      const saved = await entities.saidas.update(saida.id, { itens: nextItens });
+      const nextSaida = saved?.itens ? saved : { ...saida, itens: nextItens };
+      setMarkedLocal((prev) => {
+        const next = new Set(prev);
+        indexes.forEach((index) => next.add(index));
+        return next;
+      });
+      setSelected(new Set());
+      onSaidaChange?.(nextSaida);
+    } catch (err) {
+      toast({
+        title: "Relatório gerado",
+        description:
+          err?.message ||
+          "Não foi possível registrar quais itens já tiveram relatório.",
+        variant: "destructive",
+      });
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const handlePrintEtiqueta = async (item) => {
@@ -158,6 +279,20 @@ export default function SaidaViewDialog({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
+                {canSelectFiscal ? (
+                  <th className="pl-3 pr-1 py-2.5 w-10">
+                    <SelectDot
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onClick={toggleAll}
+                      label={
+                        allSelected
+                          ? "Desmarcar todos os itens"
+                          : "Selecionar todos os itens"
+                      }
+                    />
+                  </th>
+                ) : null}
                 <th className="px-3 py-2.5 font-medium">Código</th>
                 <th className="px-3 py-2.5 font-medium">Produto</th>
                 <th className="px-3 py-2.5 font-medium">Tipo</th>
@@ -200,6 +335,15 @@ export default function SaidaViewDialog({
                       i % 2 === 1 ? "bg-muted/30" : ""
                     } ${isForeignModule ? "text-muted-foreground/80" : ""}`}
                   >
+                    {canSelectFiscal ? (
+                      <td className="pl-3 pr-1 py-2.5">
+                        <SelectDot
+                          checked={selected.has(i)}
+                          onClick={() => toggleItem(i)}
+                          label={`Incluir ${item.produto_nome || "item"} no relatório fiscal`}
+                        />
+                      </td>
+                    ) : null}
                     <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-primary"
                     }`}>
@@ -208,7 +352,16 @@ export default function SaidaViewDialog({
                     <td className={`px-3 py-2.5 ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
-                      {item.produto_nome || "—"}
+                      <span className="inline-flex items-center gap-1.5">
+                        {canSelectFiscal && itemJaGerado(item, i) ? (
+                          <Check
+                            className="w-3.5 h-3.5 shrink-0 text-emerald-600"
+                            aria-label="Relatório fiscal já gerado"
+                            title="Relatório fiscal já gerado"
+                          />
+                        ) : null}
+                        <span>{item.produto_nome || "—"}</span>
+                      </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span
@@ -284,18 +437,31 @@ export default function SaidaViewDialog({
           </span>
         </div>
 
+        {canSelectFiscal ? (
+          <p className="text-xs text-muted-foreground -mt-1">
+            {selected.size > 0
+              ? `${selected.size} ${
+                  selected.size === 1 ? "item selecionado" : "itens selecionados"
+                }. O relatório sai só com eles.`
+              : "Sem seleção, o relatório inclui todos os itens."}
+          </p>
+        ) : null}
+
         <DialogFooter>
           {showRelatorio ? (
             <Button
               type="button"
               variant="outline"
               className="gap-2"
+              disabled={printing || (!isAgendamento && itens.length === 0)}
               onClick={handlePrintRelatorio}
             >
               <FileText className="w-4 h-4" />
               {isAgendamento
                 ? t("painel.comercial.agendamentos.relatorioSaida")
-                : "Relatório Fiscal"}
+                : selected.size > 0
+                  ? `Relatório Fiscal (${selected.size})`
+                  : "Relatório Fiscal"}
             </Button>
           ) : null}
           <Button variant="outline" onClick={onClose}>
