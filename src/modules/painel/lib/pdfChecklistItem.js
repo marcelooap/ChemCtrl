@@ -428,10 +428,11 @@ function addInfoCards(doc, y, pairs, cols, ctx) {
   const colW = (CW - COL_GAP * (cols - 1)) / cols;
   const labelFs = 6.5;
   const valueFs = 9.5;
-  const lineH = 4;
-  const padTop = 3.2;
-  const padLabelGap = 4.8;
-  const padBottom = 3.2;
+  const lineH = 4.2;
+  // Espaço confortável entre rótulo (ex.: PRODUTO) e valor (ex.: INIPOL AH 99).
+  const padTop = 4;
+  const padLabelGap = 8.5;
+  const padBottom = 3.8;
 
   const rowsData = [];
   let currentRow = [];
@@ -492,7 +493,7 @@ function addInfoCards(doc, y, pairs, cols, ctx) {
       doc.setFontSize(labelFs);
       doc.setFont('helvetica', 'bold');
       setColor(doc, MUTED);
-      doc.text(String(cell.label).toUpperCase(), x + CARD_PAD, y + padTop + 1.5);
+      doc.text(String(cell.label).toUpperCase(), x + CARD_PAD, y + padTop + 2);
 
       const lines = measureLines(cell.value, cellW - CARD_PAD * 2, cell.emphasize);
       setColor(doc, TEXT);
@@ -590,9 +591,11 @@ function measureCheckCard(doc, label, meta) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   const lines = doc.splitTextToSize(String(label || '-'), Math.max(20, textMaxW));
+  const numH = 3.2;
+  const gapNumText = 3.2;
   const textH = Math.max(lines.length * 3.8, 5);
-  const h = Math.max(11, CARD_PAD + 3.2 + textH + CARD_PAD);
-  return { h, lines, badgeW, textMaxW };
+  const h = Math.max(13, CARD_PAD + numH + gapNumText + textH + CARD_PAD);
+  return { h, lines, badgeW, textMaxW, numH, gapNumText };
 }
 
 function addCheckCard(doc, y, index, label, meta, ctx) {
@@ -609,15 +612,18 @@ function addCheckCard(doc, y, index, label, meta, ctx) {
     { n: num }
   );
 
+  const numY = y + CARD_PAD + 2.2;
+  const textY = numY + measured.numH + measured.gapNumText;
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   setColor(doc, MUTED);
-  doc.text(numLabel, M + CARD_PAD, y + CARD_PAD + 1.2);
+  doc.text(numLabel, M + CARD_PAD, numY);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   setColor(doc, TEXT);
-  doc.text(measured.lines, M + CARD_PAD, y + CARD_PAD + 5.2);
+  doc.text(measured.lines, M + CARD_PAD, textY);
 
   const badgeH = 5.8;
   const badgeX = M + CW - CARD_PAD - measured.badgeW;
@@ -632,12 +638,28 @@ function addCheckCard(doc, y, index, label, meta, ctx) {
   return y + measured.h + 2;
 }
 
-function addPhotosSection(doc, y, loaded, title, emptyMessage, ctx) {
-  y = ensureSpace(doc, y, 24, ctx);
+const FOTOS_POR_PAGINA = 4;
+const FOTOS_COLS = 2;
+
+/** Garante que as evidências fotográficas comecem na 3ª folha. */
+function startPhotosOnPage3(doc, ctx) {
+  const startedOn = doc.internal.getNumberOfPages();
+  if (startedOn >= 3) {
+    doc.addPage();
+    return drawContinuedHeader(doc, ctx);
+  }
+  while (doc.internal.getNumberOfPages() < 3) {
+    doc.addPage();
+  }
+  doc.setPage(3);
+  return drawContinuedHeader(doc, ctx);
+}
+
+function addPhotosSection(doc, _y, loaded, title, emptyMessage, ctx) {
+  let y = startPhotosOnPage3(doc, ctx);
   y = drawSectionTitle(doc, y, title);
 
   if (!loaded.length) {
-    y = ensureSpace(doc, y, 12, ctx);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     setColor(doc, MUTED);
@@ -646,55 +668,72 @@ function addPhotosSection(doc, y, loaded, title, emptyMessage, ctx) {
     return y + 8;
   }
 
-  const cols = 2;
   const gap = COL_GAP;
-  const cellW = (CW - gap * (cols - 1)) / cols;
-  const maxImgH = 95;
-  const pad = 3.5;
+  const cellW = (CW - gap * (FOTOS_COLS - 1)) / FOTOS_COLS;
+  const pad = 3;
+  const rowsPerPage = Math.ceil(FOTOS_POR_PAGINA / FOTOS_COLS);
+  const rowGap = CARD_GAP;
 
-  for (let i = 0; i < loaded.length; i += cols) {
-    const pair = loaded.slice(i, i + cols);
-    const sizes = pair.map((img) => {
-      const ratio = img.width > 0 && img.height > 0 ? img.height / img.width : 0.75;
-      const innerW = cellW - pad * 2;
-      let imgW = innerW;
-      let imgH = innerW * ratio;
-      if (imgH > maxImgH) {
-        imgH = maxImgH;
-        imgW = maxImgH / ratio;
-      }
-      const cardH = imgH + pad * 2;
-      return { imgW, imgH, cardH, format: imageFormatFromMime(img.mime, img.dataUrl) };
-    });
-    const rowH = Math.max(...sizes.map((s) => s.cardH));
+  let lastY = y;
+  for (let pageStart = 0; pageStart < loaded.length; pageStart += FOTOS_POR_PAGINA) {
+    if (pageStart > 0) {
+      doc.addPage();
+      y = drawContinuedHeader(doc, ctx);
+      y = drawSectionTitle(doc, y, title);
+    }
 
-    y = ensureSpace(doc, y, rowH + CARD_GAP, ctx);
+    // Altura útil da página de fotos (após título), dividida em 2 linhas (4 fotos).
+    const usableH = CONTENT_BOTTOM - y - 2;
+    const maxRowH = (usableH - rowGap * (rowsPerPage - 1)) / rowsPerPage;
+    const pageImgs = loaded.slice(pageStart, pageStart + FOTOS_POR_PAGINA);
+    let rowY = y;
 
-    pair.forEach((img, idx) => {
-      const size = sizes[idx];
-      const x = M + idx * (cellW + gap);
-      drawCard(doc, x, y, cellW, rowH);
-
-      const imgX = x + (cellW - size.imgW) / 2;
-      const imgY = y + (rowH - size.imgH) / 2;
-      try {
-        doc.addImage(img.dataUrl, size.format, imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
-      } catch {
-        try {
-          doc.addImage(img.dataUrl, 'JPEG', imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
-        } catch {
-          doc.setFontSize(8);
-          setColor(doc, MUTED);
-          doc.text('Não foi possível renderizar a foto', x + pad, y + 10);
-          setColor(doc, TEXT);
+    for (let rowStart = 0; rowStart < pageImgs.length; rowStart += FOTOS_COLS) {
+      const pair = pageImgs.slice(rowStart, rowStart + FOTOS_COLS);
+      const sizes = pair.map((img) => {
+        const ratio = img.width > 0 && img.height > 0 ? img.height / img.width : 0.75;
+        const innerW = cellW - pad * 2;
+        const innerH = maxRowH - pad * 2;
+        let imgW = innerW;
+        let imgH = innerW * ratio;
+        if (imgH > innerH) {
+          imgH = innerH;
+          imgW = innerH / ratio;
         }
-      }
-    });
+        return {
+          imgW,
+          imgH,
+          format: imageFormatFromMime(img.mime, img.dataUrl),
+        };
+      });
 
-    y += rowH + CARD_GAP;
+      pair.forEach((img, idx) => {
+        const size = sizes[idx];
+        const x = M + idx * (cellW + gap);
+        drawCard(doc, x, rowY, cellW, maxRowH);
+
+        const imgX = x + (cellW - size.imgW) / 2;
+        const imgY = rowY + (maxRowH - size.imgH) / 2;
+        try {
+          doc.addImage(img.dataUrl, size.format, imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
+        } catch {
+          try {
+            doc.addImage(img.dataUrl, 'JPEG', imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
+          } catch {
+            doc.setFontSize(8);
+            setColor(doc, MUTED);
+            doc.text('Não foi possível renderizar a foto', x + pad, rowY + 10);
+            setColor(doc, TEXT);
+          }
+        }
+      });
+
+      rowY += maxRowH + rowGap;
+    }
+    lastY = rowY;
   }
 
-  return y;
+  return lastY;
 }
 
 /** Maior lado da foto no PDF (px): mantém boa nitidez sem inflar o arquivo. */
@@ -784,7 +823,8 @@ function imageFormatFromMime(mime, dataUrl) {
 
 /**
  * Gera PDF A4 retrato do checklist do item (layout moderno em cards).
- * Conteúdo flui naturalmente; fotos em grade de 2 colunas sem forçar nova página.
+ * Ordem: dados → lacres → validade dos testes → color cod → demais verificações.
+ * Evidências fotográficas sempre a partir da 3ª folha (4 fotos por página).
  */
 export async function generateChecklistItemPDF({
   item,
@@ -847,11 +887,19 @@ export async function generateChecklistItemPDF({
 
   const checkDefs = checkDefsForItem(item);
   const sections = [...new Set(checkDefs.map((c) => c.section))];
+  // Validade e Color Cod logo após o card de lacres; demais seções em seguida.
+  const orderedSections = [
+    ...sections.filter((s) => s === VALIDADE_TESTES_SECTION),
+    ...sections.filter((s) => s === ESLINGA_COLOR_SECTION),
+    ...sections.filter(
+      (s) => s !== VALIDADE_TESTES_SECTION && s !== ESLINGA_COLOR_SECTION
+    ),
+  ];
   let checkIndex = 0;
 
-  for (const section of sections) {
+  const renderSection = (section) => {
     const defs = checkDefs.filter((c) => c.section === section);
-    if (!defs.length) continue;
+    if (!defs.length) return;
 
     const resolveLabel = (def) => {
       if (section === VALIDADE_TESTES_SECTION && item.validade_testes) {
@@ -884,6 +932,10 @@ export async function generateChecklistItemPDF({
     }
 
     y += 1;
+  };
+
+  for (const section of orderedSections) {
+    renderSection(section);
   }
 
   const urls = (fotoUrls || []).filter(Boolean);
