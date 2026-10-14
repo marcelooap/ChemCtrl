@@ -587,6 +587,14 @@ export function isItemApproved(item) {
   return item?.status === CHECKLIST_STATUS.APROVADO;
 }
 
+/** Conferência encerrada pela logística — o PDF do item já pode ser baixado. */
+export function isChecklistItemRealizado(item) {
+  return (
+    item?.status === CHECKLIST_STATUS.APROVADO ||
+    item?.status === CHECKLIST_STATUS.REPROVADO
+  );
+}
+
 export function areAllItemsApproved(items = []) {
   if (!Array.isArray(items) || items.length === 0) return false;
   return items.every((it) => isItemApproved(it));

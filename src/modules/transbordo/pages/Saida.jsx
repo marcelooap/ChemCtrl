@@ -47,6 +47,7 @@ import {
   findAgendamentoDisplayBySaida,
   formatSlotRef,
 } from "@painel/lib/agendamentosCarregamento";
+import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConfig";
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
@@ -666,6 +667,15 @@ export default function Saida({
         vasilhames={vasilhames}
         entradas={entradas}
         showRelatorioFiscal={!isExpedicao}
+        showChecklistColumn={isExpedicao}
+        checklistItems={
+          isExpedicao
+            ? checklistItemsFromBooking(
+                findAgendamentoDisplayBySaida(agendamentos, viewSaida?.id),
+                viewSaida?.id
+              )
+            : null
+        }
         highlightModule={isModuloOperacional ? operationalModule : null}
         onSaidaChange={(updated) => {
           if (!updated?.id) return;

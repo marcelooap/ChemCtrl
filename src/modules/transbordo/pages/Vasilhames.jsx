@@ -450,33 +450,44 @@ export default function Vasilhames() {
     setLabelVasilhame(v);
   };
 
-  const labelContainer = labelVasilhame
+  // A baixa da expedição zera volume e peso no cadastro. A grade recupera o
+  // conteúdo (snapshot da saída, composição ou volume do tanque na OP); a
+  // etiqueta precisa desse mesmo volume, senão o campo abre em zero e os
+  // pesos líquido/bruto ficam em branco.
+  const labelResolved = labelVasilhame
+    ? resolveVasilhameExpedidoDisplay(labelVasilhame, {
+        linkedItems: saidaItemsByVasilhame.get(labelVasilhame.id) || [],
+        transbordos,
+      })
+    : null;
+
+  const labelContainer = labelResolved
     ? {
-        id: labelVasilhame.id,
-        product: labelVasilhame.produto_nome || "—",
+        id: labelResolved.id,
+        product: labelResolved.produto_nome || "—",
         lot:
-          String(labelVasilhame.lote || "").trim() ||
-          getDominantLote(labelVasilhame.composicao) ||
+          String(labelResolved.lote || "").trim() ||
+          getDominantLote(labelResolved.composicao) ||
           "—",
-        client: labelVasilhame.cliente_nome,
-        op_number: labelVasilhame.codigo || "—",
-        container_number: labelVasilhame.placa || "",
-        barril_number: labelVasilhame.barril || "",
-        type: labelVasilhame.tipo || "",
-        volume: labelVasilhame.volume,
-        tare: labelVasilhame.tara || 0,
-        net_weight: labelVasilhame.peso_liquido,
-        gross_weight: labelVasilhame.peso_bruto,
-        created_date: labelVasilhame.created_at || labelVasilhame.created_date,
+        client: labelResolved.cliente_nome,
+        op_number: labelResolved.codigo || "—",
+        container_number: labelResolved.placa || "",
+        barril_number: labelResolved.barril || "",
+        type: labelResolved.tipo || "",
+        volume: labelResolved.volume,
+        tare: labelResolved.tara || 0,
+        net_weight: labelResolved.peso_liquido,
+        gross_weight: labelResolved.peso_bruto,
+        created_date: labelResolved.created_at || labelResolved.created_date,
       }
     : null;
 
   const labelDensity = (() => {
-    if (!labelVasilhame) return undefined;
-    const dens = Number(labelVasilhame.densidade);
+    if (!labelResolved) return undefined;
+    const dens = parseDensidade(labelResolved.densidade);
     if (dens > 0) return dens;
-    const vol = Number(labelVasilhame.volume) || 0;
-    const net = Number(labelVasilhame.peso_liquido) || 0;
+    const vol = Number(labelResolved.volume) || 0;
+    const net = Number(labelResolved.peso_liquido) || 0;
     if (vol > 0 && net > 0) return net / vol;
     return undefined;
   })();

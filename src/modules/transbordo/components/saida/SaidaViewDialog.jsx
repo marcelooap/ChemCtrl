@@ -12,9 +12,11 @@ import { Button } from "@shared/components/ui/button";
 import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
 import { entities } from "@transbordo/services/entities";
-import { Check, ClipboardList, FileText, Loader2, Printer } from "lucide-react";
+import { Check, ClipboardList, Download, FileText, Loader2, Printer } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
+import { generateChecklistItemPDF } from "@painel/lib/pdfChecklistItem";
+import { getSignedFileUrl } from "@industrializacao/api/storage";
 import {
   formatQtdEmbalagens,
   printEtiquetaConvencional,
@@ -31,7 +33,10 @@ import {
   resolveItemOrigem,
   isSaidaValidadaNoModulo,
 } from "@transbordo/lib/saidaOrigem";
-import { findChecklistItemForSaidaLinha } from "@painel/lib/carregamentoChecklistConfig";
+import {
+  findChecklistItemForSaidaLinha,
+  isChecklistItemRealizado,
+} from "@painel/lib/carregamentoChecklistConfig";
 import SaidaChecklistItemViewDialog from "@painel/components/logistica/SaidaChecklistItemViewDialog";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { loadIndContainerLabelContext } from "@transbordo/lib/saidaIndEtiqueta";
@@ -99,10 +104,11 @@ export default function SaidaViewDialog({
   showRelatorioSaida = true,
   highlightModule = null,
   checklistItems = null,
+  showChecklistColumn = false,
   showPrintEtiqueta = true,
   onSaidaChange,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
   const [checklistItemView, setChecklistItemView] = useState(null);
@@ -111,6 +117,7 @@ export default function SaidaViewDialog({
   const [printing, setPrinting] = useState(false);
   const [indLabel, setIndLabel] = useState(null);
   const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
+  const [checklistDownloadingIndex, setChecklistDownloadingIndex] = useState(null);
 
   useEffect(() => {
     setSelected(new Set());
@@ -118,6 +125,7 @@ export default function SaidaViewDialog({
     setPrinting(false);
     setIndLabel(null);
     setIndLabelLoadingIndex(null);
+    setChecklistDownloadingIndex(null);
   }, [open, saida?.id]);
 
   if (!saida) return null;
@@ -126,7 +134,10 @@ export default function SaidaViewDialog({
   const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
   const itens = saida.itens || [];
   const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
-  const colCount = (isAgendamento ? 8 : 7) + (canSelectFiscal ? 1 : 0);
+  const colCount =
+    (isAgendamento ? 8 : 7) +
+    (canSelectFiscal ? 1 : 0) +
+    (showChecklistColumn ? 1 : 0);
   const allSelected = itens.length > 0 && selected.size === itens.length;
   const someSelected = selected.size > 0 && !allSelected;
   const statusLabel = highlightModule
@@ -222,6 +233,37 @@ export default function SaidaViewDialog({
     }
   };
 
+  const handleDownloadChecklist = async (item, index) => {
+    if (!item || checklistDownloadingIndex != null) return;
+    setChecklistDownloadingIndex(index);
+    try {
+      const fotoUrls = [];
+      for (const path of item.fotos || []) {
+        try {
+          const signed = await getSignedFileUrl(path);
+          fotoUrls.push(signed || path);
+        } catch {
+          fotoUrls.push(path);
+        }
+      }
+      await generateChecklistItemPDF({
+        item,
+        saida,
+        fotoUrls,
+        t,
+        language: i18n.language,
+      });
+    } catch (err) {
+      toast({
+        title: t("painel.logistica.carregamentos.checklistPrintError"),
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setChecklistDownloadingIndex(null);
+    }
+  };
+
   const handlePrintEtiqueta = async (item, index) => {
     // Vasilhame da Industrialização: usa o mesmo diálogo de etiqueta da tela
     // de Vasilhames do módulo (volume, quantidade de cópias e pré-visualização).
@@ -259,7 +301,9 @@ export default function SaidaViewDialog({
         }
       }}
     >
-      <DialogContent className="max-w-5xl overflow-hidden gap-4">
+      <DialogContent
+        className={`overflow-hidden gap-4 ${showChecklistColumn ? "max-w-6xl" : "max-w-5xl"}`}
+      >
         <DialogHeader>
           <DialogTitle>
             Saída {saida.codigo || ""}
@@ -281,7 +325,7 @@ export default function SaidaViewDialog({
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
@@ -311,6 +355,11 @@ export default function SaidaViewDialog({
                     : "Qtd. Final Estoque"}
                 </th>
                 {isAgendamento ? <th className="px-3 py-2.5 w-10" /> : null}
+                {showChecklistColumn ? (
+                  <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                    {t("painel.logistica.carregamentos.checklistColumn")}
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -331,9 +380,11 @@ export default function SaidaViewDialog({
                   const isForeignModule =
                     Boolean(highlightModule) &&
                     resolveItemOrigem(item) !== highlightModule;
-                  const checklistItem = hasChecklist
-                    ? findChecklistItemForSaidaLinha(checklistItems, saida, item, i)
-                    : null;
+                  const checklistItem =
+                    hasChecklist || showChecklistColumn
+                      ? findChecklistItemForSaidaLinha(checklistItems, saida, item, i)
+                      : null;
+                  const checklistPronto = isChecklistItemRealizado(checklistItem);
                   return (
                   <tr
                     key={i}
@@ -427,6 +478,30 @@ export default function SaidaViewDialog({
                             </button>
                           ) : null}
                         </div>
+                      </td>
+                    ) : null}
+                    {showChecklistColumn ? (
+                      <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        {checklistPronto ? (
+                          <button
+                            type="button"
+                            className="inline-flex p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
+                            title={t("painel.logistica.carregamentos.checklistDownload")}
+                            aria-label={t("painel.logistica.carregamentos.checklistDownload")}
+                            disabled={checklistDownloadingIndex != null}
+                            onClick={() => handleDownloadChecklist(checklistItem, i)}
+                          >
+                            {checklistDownloadingIndex === i ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-300">
+                            {t("painel.logistica.carregamentos.checklistAwaiting")}
+                          </span>
+                        )}
                       </td>
                     ) : null}
                   </tr>
