@@ -927,6 +927,81 @@ export function rescaleComposicaoToVolume(composicao = [], volume, densidade = 0
     .filter((c) => c.quantidade_l > 0);
 }
 
+/**
+ * Aplica a edição lote a lote (nome + volume) sem redistribuir um lote no outro.
+ * Entradas do mesmo lote são reescaladas entre si para somar o volume informado.
+ * Lotes ausentes da edição (ex.: aporte sintético) permanecem como estão.
+ */
+export function applyEditedLotesToComposicao(composicao = [], edits = [], densidade = 0) {
+  const base = (Array.isArray(composicao) ? composicao : []).map((c) => ({ ...c }));
+  const dens = parseDensidade(densidade);
+  const groups = new Map();
+
+  base.forEach((c, index) => {
+    const key = (c.lote || "").trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(index);
+  });
+
+  for (const edit of edits || []) {
+    const original = String(edit?.lote_original ?? "").trim();
+    const nextLote = String(edit?.lote ?? "").trim();
+    const target = roundVolume(Number(edit?.volume) || 0);
+    const indices = groups.get(original);
+
+    if (!indices || indices.length === 0) {
+      if (target <= 0 && !nextLote) continue;
+      base.push({
+        lote: nextLote,
+        lote_manual: true,
+        quantidade_l: target,
+        quantidade_kg: dens > 0 ? roundMass(target * dens) : 0,
+        data: null,
+      });
+      continue;
+    }
+
+    const entries = indices.map((i) => base[i]);
+    const sum = roundVolume(entries.reduce((s, c) => s + (c.quantidade_l || 0), 0));
+    const scaled = entries.map((c) => {
+      const prev = c.quantidade_l || 0;
+      return sum > 0
+        ? roundVolume((prev * target) / sum)
+        : entries.length === 1
+          ? target
+          : 0;
+    });
+    const residual = roundVolume(target - scaled.reduce((s, n) => s + n, 0));
+    if (residual !== 0 && scaled.length > 0) {
+      let idx = 0;
+      scaled.forEach((n, i) => {
+        if (n > scaled[idx]) idx = i;
+      });
+      scaled[idx] = Math.max(0, roundVolume(scaled[idx] + residual));
+    }
+
+    indices.forEach((entryIndex, j) => {
+      const prev = base[entryIndex];
+      const qL = scaled[j];
+      const kg =
+        dens > 0
+          ? roundMass(qL * dens)
+          : sum > 0
+            ? roundMass(((prev.quantidade_kg || 0) * qL) / (prev.quantidade_l || 1))
+            : roundMass(prev.quantidade_kg || 0);
+      base[entryIndex] = {
+        ...prev,
+        lote: nextLote,
+        lote_manual: true,
+        quantidade_l: qL,
+        quantidade_kg: kg,
+      };
+    });
+  }
+
+  return base.filter((c) => roundVolume(c.quantidade_l || 0) > 0);
+}
+
 export function normalizeVasilhameLote(v) {
   if (!v) return v;
   const dominant = getDominantLote(v.composicao);

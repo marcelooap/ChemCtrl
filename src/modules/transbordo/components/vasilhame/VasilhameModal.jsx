@@ -14,7 +14,11 @@ import { AlertCircle } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import DateInputBr from "@shared/components/ui/DateInputBr";
-import { formatMass, parseDensidade } from "@transbordo/lib/format";
+import { formatMass, parseDensidade, roundVolume } from "@transbordo/lib/format";
+import {
+  aggregateComposicaoByLote,
+  LOTE_APORTE_ANTERIOR,
+} from "@transbordo/lib/vasilhameComposicao";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
@@ -36,6 +40,22 @@ const EDITABLE_WHEN_VASILHAME = new Set([
   "menor_teste",
   "densidade",
 ]);
+
+/** Uma linha por lote real (maior volume primeiro). Aporte sintético fica de fora. */
+function lotesEditaveisFromVasilhame(vasilhame) {
+  return aggregateComposicaoByLote(vasilhame?.composicao || [])
+    .filter(
+      (c) =>
+        (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR &&
+        roundVolume(c.quantidade_l || 0) > 0
+    )
+    .map((c, i) => ({
+      key: `${c.lote || ""}::${i}`,
+      loteOriginal: c.lote || "",
+      lote: c.lote || "",
+      volume: c.quantidade_l,
+    }));
+}
 
 function produtoTemDensidade(produto) {
   if (!produto) return false;
@@ -71,6 +91,7 @@ export default function VasilhameModal({
   const [densidadeDoCadastro, setDensidadeDoCadastro] = useState(false);
   const [lote, setLote] = useState("");
   const [volume, setVolume] = useState("");
+  const [lotesForm, setLotesForm] = useState([]);
   const [tara, setTara] = useState("");
   const [lacres, setLacres] = useState("");
   const [eslinga, setEslinga] = useState("");
@@ -115,6 +136,8 @@ export default function VasilhameModal({
       );
       setLote(editingVasilhame.lote || "");
       setVolume(editingVasilhame.volume ?? "");
+      const linhas = lotesEditaveisFromVasilhame(editingVasilhame);
+      setLotesForm(linhas.length > 1 ? linhas : []);
       setTara(editingVasilhame.tara ?? "");
       setLacres(editingVasilhame.lacres || "");
       setEslinga(editingVasilhame.eslinga || "");
@@ -140,6 +163,7 @@ export default function VasilhameModal({
       setDensidadeDoCadastro(false);
       setLote("");
       setVolume("");
+      setLotesForm([]);
       setTara("");
       setLacres("");
       setEslinga("");
@@ -173,7 +197,18 @@ export default function VasilhameModal({
   );
 
   const dens = parseDensidade(densidade);
-  const vol = parseFloat(volume) || 0;
+  const isMultiLote = lotesForm.length > 1;
+  const volumeLotes = isMultiLote
+    ? lotesForm.reduce((s, l) => s + (parseFloat(l.volume) || 0), 0)
+    : parseFloat(volume) || 0;
+  const volumeForaDoForm = isMultiLote
+    ? (editingVasilhame?.composicao || []).reduce((s, c) => {
+        const key = String(c?.lote || "").trim();
+        if (lotesForm.some((l) => l.loteOriginal === key)) return s;
+        return s + (Number(c?.quantidade_l) || 0);
+      }, 0)
+    : 0;
+  const vol = volumeLotes + volumeForaDoForm;
   const tar = parseFloat(tara) || 0;
   const pesoLiquido = vol * dens;
   const pesoBruto = tar + pesoLiquido;
@@ -216,6 +251,10 @@ export default function VasilhameModal({
       setError("Produto é obrigatório.");
       return;
     }
+    if (isMultiLote && lotesForm.some((l) => !(parseFloat(l.volume) > 0))) {
+      setError("Informe o volume de cada lote.");
+      return;
+    }
     if (!vol || vol <= 0) {
       setError("Volume deve ser maior que zero.");
       return;
@@ -228,6 +267,14 @@ export default function VasilhameModal({
       setError("A validade não pode ser anterior à fabricação.");
       return;
     }
+
+    const headerOriginal = String(editingVasilhame?.lote || "").trim();
+    const headerRow = isMultiLote
+      ? lotesForm.find((l) => l.loteOriginal === headerOriginal) || lotesForm[0]
+      : null;
+    const loteSalvo = isMultiLote
+      ? String(headerRow?.lote || "").trim()
+      : String(lote || "").trim();
 
     setError("");
     setSaving(true);
@@ -243,7 +290,16 @@ export default function VasilhameModal({
         cliente_id: emptyToNull(clienteId),
         cliente_nome: clienteNome || null,
         densidade: densidade ? String(densidade) : null,
-        lote: lote || null,
+        lote: loteSalvo || null,
+        ...(isMultiLote
+          ? {
+              lotes: lotesForm.map((l) => ({
+                lote_original: l.loteOriginal,
+                lote: String(l.lote || "").trim(),
+                volume: parseFloat(l.volume) || 0,
+              })),
+            }
+          : {}),
         volume: vol,
         tara: tar,
         peso_liquido: pesoLiquido,
@@ -387,75 +443,131 @@ export default function VasilhameModal({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label>Lote</Label>
-              <Input
-                value={lote}
-                onChange={(e) => setLote(e.target.value)}
-                placeholder="Ex: 16090930-25"
-                disabled={!canEditField("lote")}
-                className={INPUT_EDITABLE}
-              />
-            </div>
-            {showField("volume") && (
-              <div className="space-y-1.5">
-                <Label>Volume (L) *</Label>
-                <NumberInputBr
-                  decimals={0}
-                  min={0}
-                  value={volume}
-                  onChange={(v) => setVolume(v === "" ? "" : v)}
-                  placeholder="0"
-                  disabled={!canEditField("volume")}
-                  className={INPUT_EDITABLE}
-                />
-                {showField("fracionado") && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch
-                      checked={fracionado}
-                      onCheckedChange={setFracionado}
-                      disabled={!canEditField("fracionado")}
-                      id="vasilhame-fracionado"
+          {(() => {
+            const linhasLote = isMultiLote
+              ? lotesForm
+              : [{ key: "single", lote, volume, single: true }];
+            const loteRows = linhasLote.map((row, index) => (
+              <div
+                key={row.key}
+                className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${
+                  isMultiLote && index > 0 ? "mt-4 border-t border-border pt-4" : ""
+                }`}
+              >
+                <div className="space-y-1.5">
+                  <Label>Lote</Label>
+                  <Input
+                    value={row.lote}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (row.single) {
+                        setLote(next);
+                        return;
+                      }
+                      setLotesForm((rows) =>
+                        rows.map((item) =>
+                          item.key === row.key ? { ...item, lote: next } : item
+                        )
+                      );
+                    }}
+                    placeholder="Ex: 16090930-25"
+                    disabled={!canEditField("lote")}
+                    className={INPUT_EDITABLE}
+                  />
+                </div>
+                {showField("volume") && (
+                  <div className="space-y-1.5">
+                    <Label>Volume (L) *</Label>
+                    <NumberInputBr
+                      decimals={0}
+                      min={0}
+                      value={row.volume}
+                      onChange={(v) => {
+                        const next = v === "" ? "" : v;
+                        if (row.single) {
+                          setVolume(next);
+                          return;
+                        }
+                        setLotesForm((rows) =>
+                          rows.map((item) =>
+                            item.key === row.key ? { ...item, volume: next } : item
+                          )
+                        );
+                      }}
+                      placeholder="0"
+                      disabled={!canEditField("volume")}
+                      className={INPUT_EDITABLE}
                     />
-                    <Label
-                      htmlFor="vasilhame-fracionado"
-                      className={`cursor-pointer ${!canEditField("fracionado") ? "pointer-events-none opacity-70" : ""}`}
-                    >
-                      Fracionado
+                    {row.single && showField("fracionado") && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Switch
+                          checked={fracionado}
+                          onCheckedChange={setFracionado}
+                          disabled={!canEditField("fracionado")}
+                          id="vasilhame-fracionado"
+                        />
+                        <Label
+                          htmlFor="vasilhame-fracionado"
+                          className={`cursor-pointer ${!canEditField("fracionado") ? "pointer-events-none opacity-70" : ""}`}
+                        >
+                          Fracionado
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {showField("densidade") && (
+                  <div className="space-y-1.5">
+                    <Label>
+                      Densidade {densidadeDoCadastro ? "(Tabelada)" : densEditable ? "*" : ""}
                     </Label>
+                    <NumberInputBr
+                      decimals={3}
+                      value={densidade}
+                      onChange={(v) => {
+                        setDensidade(v === "" ? "" : v);
+                        if (isEditing && isTipoVasilhame) {
+                          setDensidadeDoCadastro(false);
+                        }
+                      }}
+                      placeholder={densLockedByCadastro ? "Automático" : "Ex: 1,025"}
+                      disabled={!densEditable}
+                      className={densEditable ? INPUT_EDITABLE : INPUT_LOCKED}
+                    />
+                    {!isMultiLote && index === 0 && densEditable && produtoNome && (
+                      <p className="text-xs text-muted-foreground">
+                        {isEditing
+                          ? "Alterar a densidade recalcula o peso líquido automaticamente."
+                          : "Produto sem densidade cadastrada — informe manualmente."}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-            {showField("densidade") && (
-              <div className="space-y-1.5">
-                <Label>
-                  Densidade {densidadeDoCadastro ? "(Tabelada)" : densEditable ? "*" : ""}
-                </Label>
-                <NumberInputBr
-                  decimals={3}
-                  value={densidade}
-                  onChange={(v) => {
-                    setDensidade(v === "" ? "" : v);
-                    if (isEditing && isTipoVasilhame) {
-                      setDensidadeDoCadastro(false);
-                    }
-                  }}
-                  placeholder={densLockedByCadastro ? "Automático" : "Ex: 1,025"}
-                  disabled={!densEditable}
-                  className={densEditable ? INPUT_EDITABLE : INPUT_LOCKED}
-                />
-                {densEditable && produtoNome && (
-                  <p className="text-xs text-muted-foreground">
-                    {isEditing
-                      ? "Alterar a densidade recalcula o peso líquido automaticamente."
-                      : "Produto sem densidade cadastrada — informe manualmente."}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+            ));
+
+            if (!isMultiLote) {
+              return <div className="space-y-4">{loteRows}</div>;
+            }
+
+            return (
+              <section className="overflow-hidden rounded-lg border border-border">
+                <div className="border-b border-border bg-muted/40 px-4 py-2.5">
+                  <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
+                    Composição por Lote
+                  </h3>
+                </div>
+                <div className="bg-muted/20 p-4">
+                  {loteRows}
+                  {densEditable && produtoNome && (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      Alterar a densidade recalcula o peso líquido de todos os lotes.
+                    </p>
+                  )}
+                </div>
+              </section>
+            );
+          })()}
 
           {(showField("tara") || showPesosAuto) && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

@@ -19,7 +19,7 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import VasilhameModal from "@transbordo/components/vasilhame/VasilhameModal";
 import VasilhameViewDialog from "@transbordo/components/vasilhame/VasilhameViewDialog";
-import { formatVolume, formatMass, roundVolume, roundMass } from "@transbordo/lib/format";
+import { formatVolume, formatMass, parseDensidade, roundVolume, roundMass } from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
@@ -32,6 +32,7 @@ import {
   resolveVasilhameLoteDatas,
   applyLoteDatasToComposicao,
   rescaleComposicaoToVolume,
+  applyEditedLotesToComposicao,
 } from "@transbordo/lib/vasilhameComposicao";
 import {
   upsertFiltracaoForVasilhame,
@@ -517,15 +518,77 @@ export default function Vasilhames() {
       const {
         data_fabricacao: nextFabricacao,
         data_validade: nextValidade,
+        lotes: _lotesForm,
         ...vasilhameData
       } = data;
       let payload = { ...vasilhameData };
       const newLote = String(data?.lote ?? "").trim();
       const oldLote = String(editingVasilhame.lote || "").trim();
+      const lotesEditados = Array.isArray(data?.lotes) ? data.lotes : [];
+      const multiLote = lotesEditados.length > 1;
+      let lotesRenamed = false;
+      const densChanged =
+        String(data?.densidade ?? "") !== String(editingVasilhame.densidade ?? "");
+
+      // Vários lotes: cada linha edita o próprio lote e volume, sem ratear um no outro.
+      if (multiLote) {
+        const nextComp = applyEditedLotesToComposicao(
+          editingVasilhame.composicao,
+          lotesEditados,
+          data.densidade ?? editingVasilhame.densidade
+        );
+        const volumeFinal = roundVolume(
+          nextComp.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
+        );
+        const dens = parseDensidade(data.densidade ?? editingVasilhame.densidade);
+        const pesoLiq =
+          dens > 0
+            ? roundMass(volumeFinal * dens)
+            : roundMass(
+                nextComp.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0)
+              );
+        const taraFinal = roundMass(data.tara ?? editingVasilhame.tara ?? 0);
+        lotesRenamed = lotesEditados.some(
+          (l) => String(l.lote || "").trim() !== String(l.lote_original || "").trim()
+        );
+        const prevByLote = new Map();
+        for (const c of editingVasilhame.composicao || []) {
+          const key = String(c.lote || "").trim();
+          prevByLote.set(key, (prevByLote.get(key) || 0) + (Number(c.quantidade_l) || 0));
+        }
+        if (dens > 0 && nextComp.length > 0) {
+          const kgAlvo = pesoLiq;
+          const kgAtual = nextComp.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0);
+          const diffKg = kgAlvo - kgAtual;
+          if (diffKg !== 0) {
+            let idx = 0;
+            nextComp.forEach((c, i) => {
+              if ((c.quantidade_kg || 0) > (nextComp[idx].quantidade_kg || 0)) idx = i;
+            });
+            nextComp[idx] = {
+              ...nextComp[idx],
+              quantidade_kg: Math.max(0, roundMass((nextComp[idx].quantidade_kg || 0) + diffKg)),
+            };
+          }
+        }
+        volumeChanged = lotesEditados.some(
+          (l) =>
+            roundVolume(l.volume) !==
+            roundVolume(prevByLote.get(String(l.lote_original || "").trim()) || 0)
+        );
+        payload = {
+          ...payload,
+          composicao: nextComp,
+          lote: getDominantLote(nextComp) || newLote || null,
+          volume: volumeFinal,
+          peso_liquido: pesoLiq,
+          peso_bruto: roundMass(taraFinal + pesoLiq),
+        };
+      }
 
       // Lote da tela é o campo editável; a composição precisa acompanhar,
       // senão loadData/normalizeVasilhameLote reverte pelo lote dominante.
-      if (newLote !== oldLote) {
+      if (!multiLote && newLote !== oldLote) {
         const prevComp = Array.isArray(editingVasilhame.composicao)
           ? editingVasilhame.composicao
           : [];
@@ -573,9 +636,11 @@ export default function Vasilhames() {
 
       // Volume editado: a composição por lote acompanha (peso líquido/bruto já vêm
       // recalculados do modal) para o saldo por lote continuar coerente.
-      volumeChanged =
-        roundVolume(data.volume ?? 0) !== roundVolume(editingVasilhame.volume ?? 0);
-      if (volumeChanged) {
+      if (!multiLote) {
+        volumeChanged =
+          roundVolume(data.volume ?? 0) !== roundVolume(editingVasilhame.volume ?? 0);
+      }
+      if (!multiLote && volumeChanged) {
         payload = {
           ...payload,
           composicao: rescaleComposicaoToVolume(
@@ -654,14 +719,29 @@ export default function Vasilhames() {
       }
       await entities.vasilhames.update(editingVasilhame.id, payload);
       saved = { ...editingVasilhame, ...payload };
-      if (newLote !== oldLote) {
+      if (multiLote) {
+        const renomes = lotesEditados.filter(
+          (l) => String(l.lote || "").trim() !== String(l.lote_original || "").trim()
+        );
+        for (const item of renomes) {
+          try {
+            await syncSaidaLoteDoVasilhame(
+              editingVasilhame.id,
+              String(item.lote_original || "").trim(),
+              String(item.lote || "").trim()
+            );
+          } catch (err) {
+            console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
+          }
+        }
+      } else if (newLote !== oldLote) {
         try {
           await syncSaidaLoteDoVasilhame(editingVasilhame.id, oldLote, newLote);
         } catch (err) {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }
       }
-      if (volumeChanged || newLote !== oldLote) {
+      if (volumeChanged || lotesRenamed || (multiLote && densChanged) || (!multiLote && newLote !== oldLote)) {
         try {
           const existentes = await entities.filtracoes.filter({
             vasilhame_id: editingVasilhame.id,
@@ -676,6 +756,7 @@ export default function Vasilhames() {
           console.error("[Transbordo] Falha ao atualizar filtração do vasilhame:", err);
         }
       }
+      if (multiLote && densChanged) volumeChanged = true;
     } else {
       return;
     }
