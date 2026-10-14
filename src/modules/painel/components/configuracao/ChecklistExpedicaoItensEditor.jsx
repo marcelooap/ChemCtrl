@@ -97,7 +97,7 @@ export default function ChecklistExpedicaoItensEditor({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 gap-3">
+    <div className="flex flex-col gap-3">
       {(hasEmpty || hasDuplicates) && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           {hasEmpty
@@ -112,7 +112,7 @@ export default function ChecklistExpedicaoItensEditor({
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="flex-1 min-h-0 overflow-auto space-y-2 pr-1"
+              className="space-y-2"
             >
               {itens.map((item, index) => {
                 const descKey = normalizeDescricao(item.descricao).toLowerCase();

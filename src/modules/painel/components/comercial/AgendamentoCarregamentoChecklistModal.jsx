@@ -130,13 +130,24 @@ function formatItemNumber(n) {
   return `${String(n).padStart(2, '0')} -`;
 }
 
-function CheckAnswerRow({ label, number, value, disabled, onChange, t, options = ANSWER_OPTIONS }) {
+/** `bare`: sem moldura própria, para uso dentro de um card que agrupa o item de verificação. */
+function CheckAnswerRow({
+  label,
+  number,
+  value,
+  disabled,
+  onChange,
+  t,
+  options = ANSWER_OPTIONS,
+  bare = false,
+}) {
   const isRejected = value === CHECK_ANSWER.REPROVADO;
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-lg border px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between',
-        isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+        'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between',
+        !bare && 'rounded-lg border px-3 py-2.5 shadow-sm',
+        !bare && (isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white')
       )}
     >
       <p className="text-sm leading-snug sm:flex-1">
@@ -204,6 +215,8 @@ function ValidadeTestesSection({ validade, number, value, disabled, onChange, la
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
   const configurado = validade.configurado !== false && validade.dias != null;
   const situacao = validadeSituacao({ configurado, value });
+  const isRejected = value === CHECK_ANSWER.REPROVADO;
+  const chipClass = 'border-border/60 bg-muted/30 shadow-none';
 
   return (
     <div className="space-y-1.5">
@@ -211,56 +224,72 @@ function ValidadeTestesSection({ validade, number, value, disabled, onChange, la
         {t(`painel.comercial.agendamentos.checklist.sections.${VALIDADE_TESTES_SECTION}`)}
       </p>
 
-      {!configurado ? (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <p className="font-semibold">{t(`${prefix}.naoConfigurado`)}</p>
-            <p className="mt-0.5 text-xs">
-              {t(validade.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
-            </p>
+      {/* Card único: prazo, datas e resultado formam um só item de verificação. */}
+      <div
+        className={cn(
+          'space-y-3 rounded-lg border p-3 shadow-sm',
+          isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+        )}
+      >
+        {!configurado ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold">{t(`${prefix}.naoConfigurado`)}</p>
+              <p className="mt-0.5 text-xs">
+                {t(validade.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
+              </p>
+            </div>
           </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <InfoChip
+            className={chipClass}
+            label={t(`${prefix}.destino`)}
+            value={validade.destino || t(`${prefix}.destinoVazio`)}
+          />
+          <InfoChip
+            className={chipClass}
+            label={t(`${prefix}.prazo`)}
+            value={configurado ? t(`${prefix}.prazoDias`, { dias: validade.dias }) : '—'}
+          />
+          <InfoChip
+            className={chipClass}
+            label={t(`${prefix}.dataLimite`)}
+            value={configurado ? formatDataLimiteTestes(validade.data_limite, language) : '—'}
+            valueClassName={configurado ? 'font-bold text-emerald-800' : undefined}
+          />
+          <InfoChip
+            className={chipClass}
+            label={t(`${prefix}.situacao`)}
+            value={t(situacao.labelKey)}
+            valueClassName={cn('font-semibold', situacao.className)}
+          />
         </div>
-      ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <InfoChip
-          label={t(`${prefix}.destino`)}
-          value={validade.destino || t(`${prefix}.destinoVazio`)}
-        />
-        <InfoChip
-          label={t(`${prefix}.prazo`)}
-          value={configurado ? t(`${prefix}.prazoDias`, { dias: validade.dias }) : '—'}
-        />
-        <InfoChip
-          label={t(`${prefix}.dataLimite`)}
-          value={configurado ? formatDataLimiteTestes(validade.data_limite, language) : '—'}
-          valueClassName={configurado ? 'font-bold text-emerald-800' : undefined}
-        />
-        <InfoChip
-          label={t(`${prefix}.situacao`)}
-          value={t(situacao.labelKey)}
-          valueClassName={cn('font-semibold', situacao.className)}
-        />
+        {configurado ? (
+          <p className="text-xs text-muted-foreground">
+            {t(`${prefix}.hint`, { dias: validade.dias })}
+          </p>
+        ) : null}
+
+        <div className="border-t border-border/60 pt-3">
+          <CheckAnswerRow
+            bare
+            label={t(`${prefix}.resultado`)}
+            number={number}
+            value={value}
+            disabled={disabled || !configurado}
+            onChange={onChange}
+            options={APPROVE_REJECT_OPTIONS}
+            t={t}
+          />
+        </div>
       </div>
-
-      {configurado ? (
-        <p className="text-xs text-muted-foreground">
-          {t(`${prefix}.hint`, { dias: validade.dias })}
-        </p>
-      ) : null}
-      <CheckAnswerRow
-        label={t(`${prefix}.resultado`)}
-        number={number}
-        value={value}
-        disabled={disabled || !configurado}
-        onChange={onChange}
-        options={APPROVE_REJECT_OPTIONS}
-        t={t}
-      />
     </div>
   );
 }

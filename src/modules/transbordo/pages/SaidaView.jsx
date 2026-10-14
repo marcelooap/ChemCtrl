@@ -460,7 +460,10 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             <Switch
               checked={saida.enviado_ao_fiscal || false}
               onCheckedChange={handleFiscalToggle}
-              disabled={updatingFiscal}
+              disabled={
+                updatingFiscal ||
+                (!saida.enviado_ao_fiscal && (saida.itens || []).length === 0)
+              }
             />
             <Label className="text-sm font-medium cursor-pointer">
               Validação:{" "}

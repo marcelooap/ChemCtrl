@@ -108,6 +108,11 @@ export async function applySaidaFiscalToggle(
   if (!saida?.id) throw new Error("Saída inválida");
 
   const itensAll = saida.itens || [];
+  if (checked && itensAll.length === 0) {
+    throw new Error(
+      "Não é possível validar uma saída sem produtos. Edite a saída e adicione os tanques/produtos."
+    );
+  }
   const scope =
     isSaidaModuloPainel(saida) &&
     (moduleScope === ORIGEM_TRANSBORDO ||

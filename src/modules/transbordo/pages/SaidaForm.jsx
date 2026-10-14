@@ -31,6 +31,7 @@ import {
   TIPO_IND_VASILHAME,
   TIPO_IND_RETORNO_MP,
   emptySaidaItem,
+  isItemSaidaVazio,
   resolveItemOrigem,
 } from "@transbordo/lib/saidaOrigem";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
@@ -348,13 +349,18 @@ export default function SaidaForm({
       setError("Informe a data programada.");
       return;
     }
-    if (formData.itens.length === 0) {
+    // Saída pendente (ainda sem baixa) pode ser salva sem produtos: o horário é
+    // reservado agora e os tanques/produtos entram depois, via edição.
+    // Saída já validada exige produtos, pois o estoque já foi baixado.
+    const itensPreenchidos = formData.itens.filter((it) => !isItemSaidaVazio(it));
+    if (editingSaida?.enviado_ao_fiscal && itensPreenchidos.length === 0) {
       setError("Adicione pelo menos um produto.");
       return;
     }
 
     for (let i = 0; i < formData.itens.length; i++) {
       const item = formData.itens[i];
+      if (isItemSaidaVazio(item)) continue;
       const origem = resolveItemOrigem(item);
 
       if (showOrigemSelector && !origem) {
@@ -528,7 +534,7 @@ export default function SaidaForm({
         });
       }
 
-      const itensWithStock = formData.itens.map((item) => {
+      const itensWithStock = itensPreenchidos.map((item) => {
         if (item.tipo === TIPO_EMBALADO) {
           const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;
@@ -913,6 +919,17 @@ export default function SaidaForm({
             Adicionar Produto
           </Button>
         </div>
+        {!editingSaida?.enviado_ao_fiscal &&
+        formData.itens.every(isItemSaidaVazio) ? (
+          <p
+            role="note"
+            className="mb-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          >
+            Produtos são opcionais por enquanto: você pode salvar e reservar o
+            horário agora e, quando o cliente informar os tanques, editar esta
+            saída para adicioná-los.
+          </p>
+        ) : null}
         <div className="space-y-4">
           {formData.itens.map((item, index) => (
             <SaidaItemRow

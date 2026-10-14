@@ -229,6 +229,26 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
   return base;
 }
 
+/**
+ * Linha de produto sem nenhuma seleção/quantidade (placeholder do formulário).
+ * Permite reservar o horário da saída antes de o cliente informar os tanques.
+ */
+export function isItemSaidaVazio(item) {
+  if (!item) return true;
+  const semSelecao = [
+    item.entrada_id,
+    item.produto_id,
+    item.produto_nome,
+    item.vasilhame_id,
+    item.container_id,
+    item.stock_id,
+    item.movement_id,
+  ].every((v) => !v);
+  const semQuantidade =
+    !Number(item.quantidade_solicitada) && !Number(item.volume_solicitado);
+  return semSelecao && semQuantidade;
+}
+
 export function origemLabel(origem) {
   if (origem === ORIGEM_INDUSTRIALIZACAO) return "Industrialização";
   return "Transbordo";

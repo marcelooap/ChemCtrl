@@ -427,69 +427,68 @@ export default function ChecklistExpedicao() {
         </div>
       </div>
 
-      {selected && !loadingItens ? (
-        <div className="shrink-0">
+      {/* Cliente fica fixo no topo; validade dos testes e itens rolam juntos. */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-1">
+        {selected && !loadingItens ? (
           <ChecklistExpedicaoValidadeTestesConfig
             value={config}
             onChange={handleConfigChange}
             disabled={saving || submitBusy}
             showErrors={showDestinoErrors}
           />
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="flex-1 min-h-0">
-        {!selected ? (
-          <div className="h-full bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center text-muted-foreground gap-2 p-8">
-            <ClipboardCheck className="w-10 h-10 opacity-40" />
-            <p className="text-sm text-center max-w-sm">
-              {t('painel.configuracao.checklistExpedicao.selectClient')}
-            </p>
-          </div>
-        ) : loadingItens ? (
-          <div className="h-full bg-card rounded-xl border border-border shadow-sm flex items-center justify-center text-sm text-muted-foreground">
-            {t('painel.configuracao.checklistExpedicao.loading')}
-          </div>
-        ) : showEmptyConfig ? (
-          <div className="h-full bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center gap-4 p-8">
-            <ListChecks className="w-10 h-10 text-muted-foreground opacity-50" />
-            <p className="text-sm text-center text-muted-foreground max-w-md">
-              {t('painel.configuracao.checklistExpedicao.noConfig')}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button type="button" variant="outline" onClick={handleUseDefaults}>
-                {t('painel.configuracao.checklistExpedicao.useDefaults')}
-              </Button>
-              <Button
-                type="button"
-                onClick={() =>
-                  handleItensChange([{ id: createTempItemId(), descricao: '' }])
-                }
-                className="bg-primary hover:bg-primary/90"
-              >
-                {t('painel.configuracao.checklistExpedicao.addItem')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full bg-card rounded-xl border border-border shadow-sm p-4 flex flex-col min-h-0">
-            <div className="shrink-0 mb-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                {t('painel.configuracao.checklistExpedicao.itemsTitle')}
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {t('painel.configuracao.checklistExpedicao.itemsHint')}
+        <div>
+          {!selected ? (
+            <div className="min-h-[16rem] bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center text-muted-foreground gap-2 p-8">
+              <ClipboardCheck className="w-10 h-10 opacity-40" />
+              <p className="text-sm text-center max-w-sm">
+                {t('painel.configuracao.checklistExpedicao.selectClient')}
               </p>
             </div>
-            <div className="flex-1 min-h-0">
+          ) : loadingItens ? (
+            <div className="min-h-[16rem] bg-card rounded-xl border border-border shadow-sm flex items-center justify-center text-sm text-muted-foreground">
+              {t('painel.configuracao.checklistExpedicao.loading')}
+            </div>
+          ) : showEmptyConfig ? (
+            <div className="min-h-[16rem] bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center gap-4 p-8">
+              <ListChecks className="w-10 h-10 text-muted-foreground opacity-50" />
+              <p className="text-sm text-center text-muted-foreground max-w-md">
+                {t('painel.configuracao.checklistExpedicao.noConfig')}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" variant="outline" onClick={handleUseDefaults}>
+                  {t('painel.configuracao.checklistExpedicao.useDefaults')}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    handleItensChange([{ id: createTempItemId(), descricao: '' }])
+                  }
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {t('painel.configuracao.checklistExpedicao.addItem')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border shadow-sm p-4">
+              <div className="mb-3">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t('painel.configuracao.checklistExpedicao.itemsTitle')}
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {t('painel.configuracao.checklistExpedicao.itemsHint')}
+                </p>
+              </div>
               <ChecklistExpedicaoItensEditor
                 itens={itens}
                 onChange={handleItensChange}
                 disabled={saving || submitBusy}
               />
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <ConfirmDialog
