@@ -1353,19 +1353,9 @@ export default function SaidaItemRow({
                 <p className="col-span-3 text-xs text-muted-foreground">
                   {containersInd.length === 0
                     ? "Não foi possível carregar os vasilhames da Industrialização."
-                    : "Nenhum vasilhame No Pátio encontrado na Industrialização."}
+                    : "Nenhum vasilhame No Pátio para este cliente."}
                 </p>
               )}
-              {hasCliente &&
-                containersDisponiveis.length > 0 &&
-                !containersDisponiveis.some((c) =>
-                  clientsMatch(c.client, clienteNome)
-                ) && (
-                  <p className="col-span-3 text-xs text-amber-700">
-                    Nenhum vasilhame com o cliente &quot;{clienteNome}&quot;.
-                    Exibindo todos os vasilhames No Pátio da Industrialização.
-                  </p>
-                )}
             </div>
           )}
 

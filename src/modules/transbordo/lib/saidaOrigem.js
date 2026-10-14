@@ -86,8 +86,28 @@ export function isContainerNoPatio(container) {
 }
 
 /**
- * Lista vasilhames disponíveis (No Pátio), preferindo o cliente selecionado.
- * Se nenhum bater o nome, retorna todos do pátio (como a tela de Vasilhames).
+ * Cliente do vasilhame da Industrialização pertence ao cliente selecionado.
+ * Igualdade após normalizar (maiúsculas, acento, LTDA/SA). Também aceita o
+ * nome comercial completo dentro da razão social, sem tratar "REP" ou "BRASIL"
+ * como o mesmo cliente de "REP BRASIL".
+ */
+export function containerClientMatches(containerClient, clienteNome) {
+  const current = normalizeClientName(containerClient);
+  const target = normalizeClientName(clienteNome);
+  if (!current || !target) return false;
+  if (current === target) return true;
+
+  const shorter = current.length <= target.length ? current : target;
+  const longer = current.length <= target.length ? target : current;
+  const shorterWords = shorter.split(" ").filter(Boolean);
+  if (shorterWords.length < 2) return false;
+  const escaped = shorter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|\\s)${escaped}(?:\\s|$)`).test(longer);
+}
+
+/**
+ * Vasilhames No Pátio somente do cliente selecionado.
+ * Sem cliente, ou sem correspondência de nome, a lista fica vazia.
  */
 export function filterContainersIndForSaida(
   containers = [],
@@ -100,11 +120,9 @@ export function filterContainersIndForSaida(
     return true;
   });
 
-  const matched = clienteNome
-    ? yard.filter((c) => clientsMatch(c.client, clienteNome))
-    : yard;
+  if (!normalizeClientName(clienteNome)) return [];
 
-  const list = matched.length > 0 ? matched : yard;
+  const list = yard.filter((c) => containerClientMatches(c.client, clienteNome));
 
   return [...list].sort((a, b) => {
     const typeCmp = String(a.type || "").localeCompare(String(b.type || ""), "pt-BR");
