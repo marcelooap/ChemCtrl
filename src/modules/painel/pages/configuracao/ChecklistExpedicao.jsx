@@ -36,6 +36,7 @@ import { persistClienteSelecionado } from '@painel/lib/saidaClientes';
 import checklistSql from '@transbordo/sql/039_t_checklist_expedicao_itens.sql?raw';
 import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config.sql?raw';
 import checklistDestinosSql from '@transbordo/sql/042_t_checklist_expedicao_validade_destinos.sql?raw';
+import checklistDestinosColorSql from '@transbordo/sql/043_t_checklist_expedicao_validade_destinos_color_cod.sql?raw';
 
 /**
  * Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre).
@@ -55,6 +56,7 @@ function toConfigForm(config) {
       key: createTempItemId(),
       destino: p.destino,
       dias: String(p.dias),
+      color_cod: p.color_cod || '',
     })),
   };
 }
@@ -378,7 +380,7 @@ export default function ChecklistExpedicao() {
           // Só faz sentido instalar os prazos por destino depois da configuração (040).
           missing: destinosMissing && !configMissing,
           messageKey: 'validadeTestes.destinos.tableMissingBanner',
-          sql: checklistDestinosSql,
+          sql: `${checklistDestinosSql}\n\n${checklistDestinosColorSql}`,
         },
       ]
         .filter((banner) => banner.missing)

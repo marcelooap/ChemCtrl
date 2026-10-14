@@ -141,24 +141,37 @@ export function checksForKind(kind) {
 export const VALIDADE_TESTES_CHECK_KEY = 'validade_testes_tanque';
 export const VALIDADE_TESTES_SECTION = 'validade_testes';
 
+/** Verificação do Color Cod da eslinga (quando cadastrado no destino). */
+export const ESLINGA_COLOR_CHECK_KEY = 'color_cod_eslinga';
+export const ESLINGA_COLOR_SECTION = 'color_cod_eslinga';
+
 const VALIDADE_TESTES_CHECK_DEF = Object.freeze({
   key: VALIDADE_TESTES_CHECK_KEY,
   section: VALIDADE_TESTES_SECTION,
   labelKey: 'painel.comercial.agendamentos.checklist.validadeTestes.resultado',
 });
 
+const ESLINGA_COLOR_CHECK_DEF = Object.freeze({
+  key: ESLINGA_COLOR_CHECK_KEY,
+  section: ESLINGA_COLOR_SECTION,
+  labelKey: 'painel.comercial.agendamentos.checklist.eslingaColor.resultado',
+});
+
 /**
  * Definições de verificação de um item: snapshot customizado do cliente
  * ou os checks padrão do kind (legado / cliente sem configuração).
  * Quando o item carrega `validade_testes`, a verificação de validade dos testes
- * é acrescentada ao final, sem alterar os demais itens.
+ * é acrescentada ao final; com Color Cod cadastrado, segue a da eslinga.
  */
 export function checkDefsForItem(item) {
   const base =
     Array.isArray(item?.check_defs) && item.check_defs.length > 0
       ? item.check_defs
       : checksForKind(item?.kind);
-  return item?.validade_testes ? [...base, VALIDADE_TESTES_CHECK_DEF] : base;
+  const defs = [...base];
+  if (item?.validade_testes) defs.push(VALIDADE_TESTES_CHECK_DEF);
+  if (item?.validade_testes?.color_cod) defs.push(ESLINGA_COLOR_CHECK_DEF);
+  return defs;
 }
 
 /** Rótulo traduzível: preferência por label persistido (config por cliente). */
@@ -268,6 +281,7 @@ function buildValidadeTestes(config, destino, hoje) {
     configurado,
     dias: prazo.dias,
     data_limite: configurado ? calcularDataLimiteTestes(prazo.dias, hoje) : null,
+    color_cod: prazo.color_cod || null,
   };
 }
 
@@ -281,6 +295,11 @@ function isValidadeSnapshotVigente(built, saved) {
   const mesmoDestino =
     saved.destino == null || destinoKey(saved.destino) === destinoKey(built.destino);
   return mesmoDestino && Number(saved.dias) === built.dias;
+}
+
+/** Color Cod da eslinga mudou → a verificação da eslinga precisa ser reconferida. */
+function isEslingaColorSnapshotVigente(built, saved) {
+  return String(built?.color_cod || '') === String(saved?.color_cod || '');
 }
 
 /**
@@ -676,6 +695,7 @@ export function buildChecklistPayloadV2({ items, user }) {
             data_limite: it.validade_testes.data_limite,
             destino: it.validade_testes.destino || null,
             configurado: it.validade_testes.configurado !== false,
+            color_cod: it.validade_testes.color_cod || null,
           }
         : null,
       checks: { ...it.checks },
@@ -743,8 +763,16 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ...built.validade_testes,
           dias: normalizePrazoDias(saved.validade_testes.dias),
           data_limite: saved.validade_testes.data_limite,
+          // Mantém o Color Cod atual do destino; a eslinga é reconferida se mudar.
+          color_cod: built.validade_testes.color_cod || null,
         }
       : built.validade_testes;
+
+    const answeredEslinga = Boolean(normalizeCheckValue(saved.checks?.[ESLINGA_COLOR_CHECK_KEY]));
+    const eslingaInvalidada = Boolean(
+      answeredEslinga &&
+        !isEslingaColorSnapshotVigente(built.validade_testes, saved.validade_testes)
+    );
 
     const mergedBase = { ...built, check_defs, validade_testes };
     const defs = checkDefsForItem(mergedBase);
@@ -753,10 +781,11 @@ export function mergeChecklistItems(builtItems, storedItems) {
       checks[key] = normalizeCheckValue(saved.checks?.[key]);
     }
     if (validadeInvalidada) checks[VALIDADE_TESTES_CHECK_KEY] = '';
+    if (eslingaInvalidada) checks[ESLINGA_COLOR_CHECK_KEY] = '';
 
     const status = computeItemStatus({ ...mergedBase, checks });
     const isFinal = status === CHECKLIST_STATUS.APROVADO || status === CHECKLIST_STATUS.REPROVADO;
-    const keepConferencia = !validadeInvalidada || isFinal;
+    const keepConferencia = (!validadeInvalidada && !eslingaInvalidada) || isFinal;
     return {
       ...mergedBase,
       checks,

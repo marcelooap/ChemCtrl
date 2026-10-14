@@ -19,6 +19,7 @@ import { listNomesClientesIndustrializacao } from '@painel/lib/saidaClientes';
 import { buildSaidaClienteOptions } from '@painel/lib/recebimentoCatalog';
 import {
   VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
+  normalizeColorCod,
   normalizePrazoDias,
   parsePrazoDias,
   validarPrazosPorDestino,
@@ -34,7 +35,7 @@ const CONFIG_RPC_SETUP_MESSAGE =
   'Execute o script 040_t_checklist_expedicao_config.sql no SQL Editor do ChemFlow para habilitar a verificação da validade dos testes.';
 
 const DESTINOS_RPC_SETUP_MESSAGE =
-  'Execute o script 042_t_checklist_expedicao_validade_destinos.sql no SQL Editor do ChemFlow para habilitar os prazos de validade por destino.';
+  'Execute o script 042_t_checklist_expedicao_validade_destinos.sql (e 043_t_checklist_expedicao_validade_destinos_color_cod.sql) no SQL Editor do ChemFlow para habilitar os prazos de validade por destino.';
 
 let tableAvailable = true;
 let configTableAvailable = true;
@@ -161,13 +162,14 @@ export const DEFAULT_VALIDADE_TESTES_CONFIG = Object.freeze({
   prazosPorDestino: Object.freeze([]),
 });
 
-/** Linhas de prazo por destino do banco → `[{ destino, dias }]` na ordem de cadastro. */
+/** Linhas de prazo por destino do banco → `[{ destino, dias, color_cod }]` na ordem de cadastro. */
 function toPrazosPorDestino(rows = []) {
   return [...(rows || [])]
     .sort((a, b) => String(a?.created_at || '').localeCompare(String(b?.created_at || '')))
     .map((row) => ({
       destino: String(row.destino || '').trim(),
       dias: normalizePrazoDias(row.prazo_validade_testes_dias),
+      color_cod: normalizeColorCod(row.color_cod),
     }))
     .filter((row) => row.destino);
 }
@@ -200,7 +202,7 @@ async function listPrazosDestinoRows(clienteId) {
 
 /**
  * Configuração da validade dos testes de um cliente (padrão quando não há registro).
- * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>}
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>}
  */
 export async function getChecklistExpedicaoConfig(clienteId) {
   const id = normalizeClienteId(clienteId);
@@ -235,7 +237,11 @@ async function savePrazosPorDestino(clienteId, items) {
     't_salvar_checklist_expedicao_validade_destinos',
     {
       p_cliente_id: clienteId,
-      p_prazos: items.map(({ destino, dias }) => ({ destino, dias })),
+      p_prazos: items.map(({ destino, dias, color_cod }) => ({
+        destino,
+        dias,
+        color_cod: color_cod || null,
+      })),
     }
   );
 
@@ -260,9 +266,9 @@ async function savePrazosPorDestino(clienteId, items) {
  *   clienteId: string,
  *   ativo: boolean,
  *   dias: number|string,
- *   prazosPorDestino?: Array<{ destino: string, dias: number|string }>,
+ *   prazosPorDestino?: Array<{ destino: string, dias: number|string, color_cod?: string|null }>,
  * }} args
- * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>}
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>}
  */
 export async function saveChecklistExpedicaoConfig({
   clienteId,
@@ -460,7 +466,7 @@ async function fetchDestinoRows(allIds) {
  * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
  * @returns {Promise<{
  *   checkDefs: Map<string, Array<{ key: string, label: string, section: string }>>,
- *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>,
+ *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>,
  * }>} Chaves dos mapas: id do cliente e `checkDefsNomeKey(nome)`.
  */
 export async function loadChecklistExpedicaoOperacional(clientes = []) {

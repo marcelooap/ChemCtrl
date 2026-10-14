@@ -9,6 +9,7 @@ import {
 } from '@painel/lib/saidaReservas';
 import { areAllItemsReleasable } from '@painel/lib/carregamentoChecklistConfig';
 import { entities } from '@transbordo/services/entities';
+import { isItemSaidaVazio } from '@transbordo/lib/saidaOrigem';
 
 export const ENCAIXE_HORARIO = 'encaixe';
 export const SLOT_STEP_MINUTES = 30;
@@ -163,6 +164,28 @@ export function produtosLabel(saida) {
   if (count === 0) return '—';
   if (count === 1) return [...distinct.values()][0];
   return `${String(count).padStart(2, '0')} produtos`;
+}
+
+/**
+ * A saída pode ser agendada antes de o cliente informar produto/tanque.
+ * Linhas vazias do formulário não contam como produto informado.
+ */
+export function saidaTemProdutoInformado(saida) {
+  const itens = Array.isArray(saida?.itens) ? saida.itens : [];
+  return itens.some((item) => item && !isItemSaidaVazio(item));
+}
+
+/** Alguma saída do horário ainda está sem produto. */
+export function slotAguardandoInformacoes(bookings, saidasById) {
+  if (!saidasById || typeof saidasById.get !== 'function') return false;
+  for (const booking of normalizeBookings(bookings)) {
+    const id = booking?.saida_id;
+    if (!id) continue;
+    const saida = saidasById.get(String(id));
+    if (!saida) continue;
+    if (!saidaTemProdutoInformado(saida)) return true;
+  }
+  return false;
 }
 
 /** Agendados e concluídos — a grade mantém o horário preenchido após o carregamento. */

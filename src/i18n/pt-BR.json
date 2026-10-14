@@ -918,6 +918,15 @@
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Selecione o destino...",
             "prazoLabel": "Prazo de validade (dias)",
+            "colorCodLabel": "Color Cod",
+            "colorCodPlaceholder": "Selecione a cor...",
+            "colorOptions": {
+              "laranja": "Laranja",
+              "roxo": "Roxo",
+              "verde": "Verde",
+              "amarelo": "Amarelo",
+              "azul": "Azul"
+            },
             "add": "Adicionar destino",
             "remove": "Remover destino",
             "empty": "Nenhum destino cadastrado. Adicione ao menos um destino com seu prazo de validade.",
@@ -1092,6 +1101,7 @@
         "available": "Disponível",
         "occupied": "Ocupado",
         "carregado": "Carregado",
+        "awaitingInfo": "Aguardando informações",
         "saidasCount": "{{count}} saídas",
         "viewSaidaPickTitle": "Qual saída deseja visualizar?",
         "slotSummary": "{{free}} disponíveis · {{occupied}} ocupados · {{total}} horários",
@@ -1231,7 +1241,13 @@
             "paletes": "Estado dos paletes",
             "fotos": "Fotos",
             "verificacoes": "Verificações",
-            "validade_testes": "Validade dos testes do tanque"
+            "validade_testes": "Validade dos testes do tanque",
+            "color_cod_eslinga": "Color Cod da eslinga"
+          },
+          "eslingaColor": {
+            "colorLabel": "Color Cod cadastrado",
+            "hint": "Confira se a cor da eslinga física corresponde à cor cadastrada para este destino.",
+            "resultado": "Resultado da verificação do Color Cod da eslinga"
           },
           "validadeTestes": {
             "dataLimite": "Data limite de vencimento dos testes",
@@ -1250,6 +1266,11 @@
             "naoConfigurado": "Prazo de validade não configurado para este destino",
             "naoConfiguradoHint": "Ajuste a configuração em Configuração → Check List Expedição deste cliente. A verificação fica bloqueada até que o prazo seja configurado.",
             "naoConfiguradoSemDestino": "A solicitação não tem destino informado. Informe o destino na Solicitação de Saída ou ajuste a configuração em Configuração → Check List Expedição. A verificação fica bloqueada até lá."
+          },
+          "pdf": {
+            "documentTitle": "Checklist de Conferência de Carga",
+            "verification": "Verificação {{n}}",
+            "photosTitle": "Evidências fotográficas"
           },
           "loadingDefs": "Carregando checklist...",
           "items": {

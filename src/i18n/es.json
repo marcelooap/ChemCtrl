@@ -865,6 +865,15 @@
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Seleccione el destino...",
             "prazoLabel": "Plazo de vigencia (días)",
+            "colorCodLabel": "Color Cod",
+            "colorCodPlaceholder": "Seleccione el color...",
+            "colorOptions": {
+              "laranja": "Naranja",
+              "roxo": "Morado",
+              "verde": "Verde",
+              "amarelo": "Amarillo",
+              "azul": "Azul"
+            },
             "add": "Agregar destino",
             "remove": "Quitar destino",
             "empty": "Ningún destino registrado. Agregue al menos un destino con su plazo de vigencia.",
@@ -1038,6 +1047,7 @@
         "encaixeNew": "Nuevo cargamento",
         "available": "Disponible",
         "occupied": "Ocupado",
+        "awaitingInfo": "Esperando información",
         "saidasCount": "{{count}} salidas",
         "viewSaidaPickTitle": "¿Qué salida desea visualizar?",
         "slotSummary": "{{free}} disponibles · {{occupied}} ocupados · {{total}} horarios",
@@ -1093,8 +1103,19 @@
           "saveProgress": "Guardar progreso",
           "progressSaved": "Progreso guardado. Puede retomar la verificación más tarde.",
           "loadingDefs": "Cargando checklist...",
+          "pdf": {
+            "documentTitle": "Checklist de Conferencia de Carga",
+            "verification": "Verificación {{n}}",
+            "photosTitle": "Evidencias fotográficas"
+          },
+          "eslingaColor": {
+            "colorLabel": "Color Cod registrado",
+            "hint": "Compruebe que el color de la eslinga física coincide con el color registrado para este destino.",
+            "resultado": "Resultado de la verificación del Color Cod de la eslinga"
+          },
           "sections": {
-            "verificacoes": "Verificaciones"
+            "verificacoes": "Verificaciones",
+            "color_cod_eslinga": "Color Cod de la eslinga"
           },
           "questions": {
             "docConferida": "Documentación de la carga verificada",

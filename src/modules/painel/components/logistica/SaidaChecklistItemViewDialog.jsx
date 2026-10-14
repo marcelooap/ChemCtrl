@@ -16,12 +16,16 @@ import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
   CHECKLIST_STATUS,
+  ESLINGA_COLOR_SECTION,
   VALIDADE_TESTES_SECTION,
   checkDefLabel,
   checkDefsForItem,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
-import { formatDataLimiteTestes } from '@painel/lib/validadeTestesTanque';
+import {
+  COLOR_COD_TEXT_CLASS,
+  formatDataLimiteTestes,
+} from '@painel/lib/validadeTestesTanque';
 import { generateChecklistItemPDF } from '@painel/lib/pdfChecklistItem';
 
 const STATUS_STYLE = {
@@ -241,6 +245,24 @@ export default function SaidaChecklistItemViewDialog({
                       </p>
                     </>
                   )}
+                </div>
+              ) : null}
+              {section === ESLINGA_COLOR_SECTION && item.validade_testes?.color_cod ? (
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t('painel.comercial.agendamentos.checklist.eslingaColor.colorLabel')}
+                  </p>
+                  <p
+                    className={cn(
+                      'mt-0.5 text-sm font-bold',
+                      COLOR_COD_TEXT_CLASS[item.validade_testes.color_cod] || 'text-foreground'
+                    )}
+                  >
+                    {t(
+                      `painel.configuracao.checklistExpedicao.validadeTestes.destinos.colorOptions.${item.validade_testes.color_cod}`,
+                      { defaultValue: item.validade_testes.color_cod }
+                    )}
+                  </p>
                 </div>
               ) : null}
               {checkDefs

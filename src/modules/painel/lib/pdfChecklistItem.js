@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
+  ESLINGA_COLOR_SECTION,
   VALIDADE_TESTES_SECTION,
   checkDefLabel,
   checkDefsForItem,
@@ -13,17 +14,30 @@ const M = 14;
 const PW = 210;
 const PH = 297;
 const CW = PW - 2 * M;
-const FOTOS_POR_PAGINA = 2;
+const FOOTER_Y = PH - 18;
+const CONTENT_BOTTOM = PH - 20;
 
-const BLUE_DARK = [28, 53, 91];
-const BLUE_MID = [37, 99, 195];
-const GRAY_LABEL = [130, 140, 155];
-const GRAY_ROW = [248, 249, 251];
-const GRAY_BORDER = [220, 224, 230];
-const BLACK = [30, 30, 30];
-const GREEN = [4, 120, 87];
-const RED = [185, 28, 28];
-const SLATE = [71, 85, 105];
+const CARD_R = 2.5;
+const CARD_GAP = 3;
+const CARD_PAD = 4;
+const COL_GAP = 3;
+
+const BLUE = [40, 100, 215];
+const BLUE_DARK = [29, 53, 87];
+const BG_SOFT = [245, 247, 250];
+const BORDER = [220, 227, 237];
+const TEXT = [31, 41, 55];
+const MUTED = [100, 116, 139];
+const WHITE = [255, 255, 255];
+
+const GREEN_BG = [220, 252, 231];
+const GREEN_FG = [22, 101, 52];
+const RED_BG = [254, 226, 226];
+const RED_FG = [153, 27, 27];
+const AMBER_BG = [254, 243, 199];
+const AMBER_FG = [146, 64, 14];
+const NEUTRAL_BG = [241, 245, 249];
+const NEUTRAL_FG = [71, 85, 105];
 
 function setColor(doc, rgb) {
   doc.setTextColor(rgb[0], rgb[1], rgb[2]);
@@ -67,231 +81,93 @@ function safePdfFilenamePart(value) {
     .trim();
 }
 
-function addPageTitle(doc, title, subtitle) {
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M, 22);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  setColor(doc, GRAY_LABEL);
-  doc.text(subtitle || '', M, 29);
-  setDraw(doc, BLUE_MID);
-  doc.setLineWidth(0.6);
-  doc.line(M, 33, PW - M, 33);
-  doc.setLineWidth(0.2);
-  return 40;
+function hexFallback(t, key, fallback, vars) {
+  if (typeof t !== 'function') return fallback;
+  const value = t(key, { defaultValue: fallback, ...(vars || {}) });
+  return value == null || value === key ? fallback : value;
 }
 
-function addFooter(doc) {
-  const pages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.3);
-    doc.line(M, PH - 13, PW - M, PH - 13);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'normal');
-    setColor(doc, GRAY_LABEL);
-    doc.text('ChemCtrl - Sistema de Controle de Produção', M, PH - 8);
-    doc.text(`Página ${i} de ${pages}`, PW - M, PH - 8, { align: 'right' });
+function statusMeta(status, t) {
+  const st = String(status || 'pendente');
+  if (st === 'aprovado') {
+    return {
+      label: hexFallback(t, 'painel.comercial.agendamentos.checklist.status.aprovado', 'Aprovado'),
+      bg: GREEN_BG,
+      fg: GREEN_FG,
+      icon: 'check',
+    };
   }
-}
-
-function addSectionTitle(doc, y, title) {
-  setFill(doc, BLUE_MID);
-  doc.rect(M, y, 2.5, 7, 'F');
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M + 5, y + 5.5);
-  setColor(doc, BLACK);
-  return y + 11;
-}
-
-function addInfoGrid(doc, y, pairs, cols = 3) {
-  const colW = CW / cols;
-  const labelFs = 7;
-  const valueFs = 9;
-  const lineH = 4.2;
-  const padTop = 4;
-  const padLabelGap = 5.5;
-  const padBottom = 3.5;
-
-  const rowsData = [];
-  let currentRow = [];
-  let usedCols = 0;
-  for (const p of pairs) {
-    const span = p[2] || 1;
-    if (usedCols + span > cols && currentRow.length > 0) {
-      rowsData.push(currentRow);
-      currentRow = [];
-      usedCols = 0;
-    }
-    currentRow.push({ label: p[0], value: p[1], span });
-    usedCols += span;
-    if (usedCols >= cols) {
-      rowsData.push(currentRow);
-      currentRow = [];
-      usedCols = 0;
-    }
+  if (st === 'reprovado') {
+    return {
+      label: hexFallback(t, 'painel.comercial.agendamentos.checklist.status.reprovado', 'Reprovado'),
+      bg: RED_BG,
+      fg: RED_FG,
+      icon: 'x',
+    };
   }
-  if (currentRow.length > 0) rowsData.push(currentRow);
-
-  const measureLines = (text, width) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(valueFs);
-    return doc.splitTextToSize(String(text != null && text !== '' ? text : '-'), Math.max(8, width));
+  if (st === 'em_conferencia') {
+    return {
+      label: hexFallback(
+        t,
+        'painel.comercial.agendamentos.checklist.status.emConferencia',
+        'Em conferência'
+      ),
+      bg: AMBER_BG,
+      fg: AMBER_FG,
+      icon: 'dot',
+    };
+  }
+  return {
+    label: hexFallback(t, 'painel.comercial.agendamentos.checklist.status.pendente', 'Pendente'),
+    bg: NEUTRAL_BG,
+    fg: NEUTRAL_FG,
+    icon: 'dot',
   };
-
-  const rowHeights = rowsData.map((row) => {
-    let maxH = padTop + padLabelGap + lineH + padBottom;
-    row.forEach((cell) => {
-      const cellW = colW * cell.span - 6;
-      const lines = measureLines(cell.value, cellW);
-      const textH = padTop + padLabelGap + lines.length * lineH + padBottom;
-      if (textH > maxH) maxH = textH;
-    });
-    return maxH;
-  });
-  const totalH = rowHeights.reduce((a, b) => a + b, 0);
-
-  setDraw(doc, GRAY_BORDER);
-  doc.setLineWidth(0.3);
-  doc.rect(M, y, CW, totalH);
-
-  let yy = y;
-  rowsData.forEach((row, ri) => {
-    const rowH = rowHeights[ri];
-    let x = M;
-    row.forEach((cell) => {
-      const cellW = colW * cell.span;
-      if (x > M) {
-        setDraw(doc, GRAY_BORDER);
-        doc.setLineWidth(0.3);
-        doc.line(x, yy, x, yy + rowH);
-      }
-      doc.setFontSize(labelFs);
-      doc.setFont('helvetica', 'bold');
-      setColor(doc, GRAY_LABEL);
-      doc.text(String(cell.label).toUpperCase(), x + 3, yy + padTop + 1.5);
-
-      const lines = measureLines(cell.value, cellW - 6);
-      setColor(doc, BLACK);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(valueFs);
-      doc.text(lines, x + 3, yy + padTop + padLabelGap);
-      x += cellW;
-    });
-    if (ri < rowsData.length - 1) {
-      setDraw(doc, GRAY_BORDER);
-      doc.setLineWidth(0.3);
-      doc.line(M, yy + rowH, M + CW, yy + rowH);
-    }
-    yy += rowH;
-  });
-
-  setColor(doc, BLACK);
-  return y + totalH + 5;
-}
-
-function ensureSpace(doc, y, needed) {
-  if (y + needed > PH - 20) {
-    doc.addPage();
-    return 20;
-  }
-  return y;
-}
-
-function addSimpleTable(doc, y, headers, rows, colWidths) {
-  const widths = colWidths || headers.map(() => CW / headers.length);
-  const hdrH = 8;
-  const rowH = 8;
-
-  const drawHeader = (yy) => {
-    setFill(doc, BLUE_DARK);
-    doc.rect(M, yy, CW, hdrH, 'F');
-    let x = M;
-    headers.forEach((h, i) => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      setColor(doc, [255, 255, 255]);
-      doc.text(String(h), x + widths[i] / 2, yy + hdrH / 2, {
-        align: 'center',
-        baseline: 'middle',
-      });
-      x += widths[i];
-    });
-    return yy + hdrH;
-  };
-
-  y = drawHeader(y);
-
-  rows.forEach((row, ri) => {
-    if (y + rowH > PH - 20) {
-      doc.addPage();
-      y = 20;
-      y = drawHeader(y);
-    }
-    if (ri % 2 === 0) {
-      setFill(doc, GRAY_ROW);
-      doc.rect(M, y, CW, rowH, 'F');
-    }
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.15);
-    doc.line(M, y + rowH, M + CW, y + rowH);
-    let x = M;
-    row.forEach((cell, i) => {
-      const isAnswer = i === 1;
-      const answer = String(cell?.value ?? cell ?? '-');
-      const color = cell?.color || BLACK;
-      doc.setFont('helvetica', isAnswer ? 'bold' : 'normal');
-      doc.setFontSize(8);
-      setColor(doc, color);
-      const text = String(isAnswer ? answer : cell?.value ?? cell ?? '-');
-      const align = isAnswer ? 'center' : 'left';
-      const tx = isAnswer ? x + widths[i] / 2 : x + 3;
-      doc.text(text, tx, y + rowH / 2, { align, baseline: 'middle' });
-      x += widths[i];
-    });
-    y += rowH;
-  });
-
-  setColor(doc, BLACK);
-  return y + 4;
 }
 
 function answerMeta(answer, t) {
   if (answer === CHECK_ANSWER.APROVADO) {
     return {
-      label: t('painel.comercial.agendamentos.checklist.answers.aprovado'),
-      color: GREEN,
+      label: hexFallback(
+        t,
+        'painel.comercial.agendamentos.checklist.answers.aprovado',
+        'Aprovado'
+      ),
+      bg: GREEN_BG,
+      fg: GREEN_FG,
+      icon: 'check',
     };
   }
   if (answer === CHECK_ANSWER.REPROVADO) {
     return {
-      label: t('painel.comercial.agendamentos.checklist.answers.reprovado'),
-      color: RED,
+      label: hexFallback(
+        t,
+        'painel.comercial.agendamentos.checklist.answers.reprovado',
+        'Reprovado'
+      ),
+      bg: RED_BG,
+      fg: RED_FG,
+      icon: 'x',
     };
   }
   if (answer === CHECK_ANSWER.NAO_SE_APLICA) {
     return {
-      label: t('painel.comercial.agendamentos.checklist.answers.naoSeAplica'),
-      color: SLATE,
+      label: hexFallback(
+        t,
+        'painel.comercial.agendamentos.checklist.answers.naoSeAplica',
+        'Não se aplica'
+      ),
+      bg: NEUTRAL_BG,
+      fg: NEUTRAL_FG,
+      icon: 'dash',
     };
   }
-  return { label: '-', color: GRAY_LABEL };
-}
-
-function statusLabel(status, t) {
-  const key =
-    {
-      aprovado: 'aprovado',
-      reprovado: 'reprovado',
-      em_conferencia: 'emConferencia',
-      pendente: 'pendente',
-    }[status] || 'pendente';
-  return t(`painel.comercial.agendamentos.checklist.status.${key}`);
+  return {
+    label: hexFallback(t, 'painel.comercial.agendamentos.checklist.status.pendente', 'Pendente'),
+    bg: AMBER_BG,
+    fg: AMBER_FG,
+    icon: 'dot',
+  };
 }
 
 /**
@@ -311,6 +187,514 @@ function validadeTestesLabel(base, validade, t, language) {
     );
   }
   return `${base} (${parts.join(' · ')})`;
+}
+
+function eslingaColorLabel(base, colorCod, t) {
+  if (!colorCod) return base;
+  const name = hexFallback(
+    t,
+    `painel.configuracao.checklistExpedicao.validadeTestes.destinos.colorOptions.${colorCod}`,
+    colorCod
+  );
+  return `${base} (${name})`;
+}
+
+function drawIcon(doc, type, x, y, size, rgb) {
+  setDraw(doc, rgb);
+  doc.setLineWidth(0.45);
+  const s = size;
+  if (type === 'check') {
+    doc.line(x, y, x + s * 0.35, y + s * 0.35);
+    doc.line(x + s * 0.35, y + s * 0.35, x + s, y - s * 0.45);
+  } else if (type === 'x') {
+    doc.line(x, y - s * 0.35, x + s, y + s * 0.35);
+    doc.line(x, y + s * 0.35, x + s, y - s * 0.35);
+  } else if (type === 'dash') {
+    doc.line(x, y, x + s, y);
+  } else {
+    setFill(doc, rgb);
+    doc.circle(x + s / 2, y, s * 0.28, 'F');
+  }
+  doc.setLineWidth(0.2);
+}
+
+function drawPillBadge(doc, x, y, label, { bg, fg, icon }, opts = {}) {
+  const fontSize = opts.fontSize || 7.5;
+  const padX = opts.padX || 3.2;
+  const h = opts.height || 6.2;
+  const iconSize = opts.iconSize || 2.2;
+  const iconGap = opts.iconGap || 1.6;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(fontSize);
+  const textW = doc.getTextWidth(String(label).toUpperCase());
+  const iconW = icon ? iconSize + iconGap : 0;
+  const w = Math.max(opts.minWidth || 0, padX * 2 + iconW + textW);
+  const r = h / 2;
+
+  setFill(doc, bg);
+  setDraw(doc, bg);
+  doc.roundedRect(x, y, w, h, r, r, 'F');
+
+  if (icon) {
+    drawIcon(doc, icon, x + padX, y + h / 2, iconSize, fg);
+  }
+  setColor(doc, fg);
+  doc.text(String(label).toUpperCase(), x + padX + iconW, y + h / 2, {
+    baseline: 'middle',
+  });
+  setColor(doc, TEXT);
+  return w;
+}
+
+function measurePillWidth(doc, label, opts = {}) {
+  const fontSize = opts.fontSize || 7.5;
+  const padX = opts.padX || 3.2;
+  const iconSize = opts.iconSize || 2.2;
+  const iconGap = opts.iconGap || 1.6;
+  const withIcon = opts.withIcon !== false;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(fontSize);
+  const textW = doc.getTextWidth(String(label).toUpperCase());
+  const iconW = withIcon ? iconSize + iconGap : 0;
+  return Math.max(opts.minWidth || 0, padX * 2 + iconW + textW);
+}
+
+function drawCard(doc, x, y, w, h, { fill = WHITE, stroke = BORDER } = {}) {
+  setFill(doc, fill);
+  setDraw(doc, stroke);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(x, y, w, h, CARD_R, CARD_R, 'FD');
+  doc.setLineWidth(0.2);
+}
+
+function drawSectionTitle(doc, y, title) {
+  setFill(doc, BLUE);
+  doc.roundedRect(M, y + 0.5, 2, 6, 0.6, 0.6, 'F');
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  setColor(doc, BLUE_DARK);
+  doc.text(String(title), M + 5, y + 5);
+  setColor(doc, TEXT);
+  return y + 10;
+}
+
+function buildPageCtx(item, saida, t, language) {
+  const saidaCodigo = saida?.codigo || item.saida_codigo || '';
+  const itemLabel = item.label || item.produto || '';
+  const subtitleParts = [saidaCodigo, itemLabel].filter(Boolean);
+  return {
+    title: hexFallback(
+      t,
+      'painel.comercial.agendamentos.checklist.pdf.documentTitle',
+      'Checklist de Conferência de Carga'
+    ),
+    subtitle: subtitleParts.join(' · '),
+    saidaCodigo,
+    itemLabel,
+    status: statusMeta(item.status, t),
+    conferidoEm: item.conferido_em ? fmtDateTime(item.conferido_em, language) : '',
+    conferidoPor: item.conferido_por_nome || '',
+    conferidoLine: item.conferido_em
+      ? hexFallback(
+          t,
+          'painel.comercial.agendamentos.checklist.itemValidatedAt',
+          `Conferido em ${fmtDateTime(item.conferido_em, language)} por ${item.conferido_por_nome || '—'}`,
+          {
+            date: fmtDateTime(item.conferido_em, language),
+            operador: item.conferido_por_nome || '—',
+          }
+        )
+      : '',
+    t,
+    language,
+  };
+}
+
+function drawMainHeader(doc, ctx) {
+  let y = 12;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  setColor(doc, MUTED);
+  doc.text('ChemCtrl', M, y + 4);
+
+  const badgeW = measurePillWidth(doc, ctx.status.label, { fontSize: 7, height: 5.8 });
+  drawPillBadge(doc, PW - M - badgeW, y, ctx.status.label, ctx.status, {
+    fontSize: 7,
+    height: 5.8,
+  });
+
+  y += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  setColor(doc, BLUE_DARK);
+  doc.text(ctx.title, M, y);
+
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  setColor(doc, MUTED);
+  const subtitle = ctx.subtitle || '—';
+  doc.text(subtitle, M, y);
+
+  if (ctx.conferidoLine) {
+    doc.setFontSize(7.5);
+    const lines = doc.splitTextToSize(ctx.conferidoLine, CW * 0.42);
+    doc.text(lines, PW - M, y, { align: 'right' });
+  }
+
+  y += 5;
+  setDraw(doc, BLUE);
+  doc.setLineWidth(0.5);
+  doc.line(M, y, PW - M, y);
+  doc.setLineWidth(0.2);
+  setColor(doc, TEXT);
+  return y + 6;
+}
+
+function drawContinuedHeader(doc, ctx) {
+  let y = 12;
+  const badgeW = measurePillWidth(doc, ctx.status.label, {
+    fontSize: 6.5,
+    height: 5.2,
+    padX: 2.6,
+    iconSize: 1.8,
+  });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  setColor(doc, MUTED);
+  const leftMax = CW - badgeW - 6;
+  const left = doc.splitTextToSize(
+    `${ctx.title} · ${ctx.subtitle || ''}`.trim(),
+    Math.max(40, leftMax)
+  )[0];
+  doc.text(left, M, y + 3);
+  drawPillBadge(doc, PW - M - badgeW, y, ctx.status.label, ctx.status, {
+    fontSize: 6.5,
+    height: 5.2,
+    padX: 2.6,
+    iconSize: 1.8,
+  });
+  y += 8;
+  setDraw(doc, BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(M, y, PW - M, y);
+  doc.setLineWidth(0.2);
+  setColor(doc, TEXT);
+  return y + 5;
+}
+
+function ensureSpace(doc, y, needed, ctx) {
+  if (y + needed <= CONTENT_BOTTOM) return y;
+  doc.addPage();
+  return drawContinuedHeader(doc, ctx);
+}
+
+function addFooter(doc, ctx) {
+  const pages = doc.internal.getNumberOfPages();
+  const footerText = hexFallback(
+    ctx.t,
+    'pdf.footer',
+    'ChemCtrl - Sistema de Controle de Produção'
+  );
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    setDraw(doc, BORDER);
+    doc.setLineWidth(0.25);
+    doc.line(M, FOOTER_Y, PW - M, FOOTER_Y);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setColor(doc, MUTED);
+    doc.text(footerText, M, FOOTER_Y + 5);
+
+    const center = [ctx.conferidoLine, ctx.saidaCodigo].filter(Boolean).join(' · ');
+    if (center) {
+      const clipped = doc.splitTextToSize(center, CW * 0.42)[0] || center;
+      doc.text(clipped, PW / 2, FOOTER_Y + 5, { align: 'center' });
+    }
+
+    const pageLabel = hexFallback(ctx.t, 'pdf.page', `Página ${i} de ${pages}`, {
+      current: i,
+      total: pages,
+    });
+    doc.text(pageLabel, PW - M, FOOTER_Y + 5, { align: 'right' });
+  }
+  setColor(doc, TEXT);
+}
+
+function addInfoCards(doc, y, pairs, cols, ctx) {
+  const colW = (CW - COL_GAP * (cols - 1)) / cols;
+  const labelFs = 6.5;
+  const valueFs = 9.5;
+  const lineH = 4;
+  const padTop = 3.2;
+  const padLabelGap = 4.8;
+  const padBottom = 3.2;
+
+  const rowsData = [];
+  let currentRow = [];
+  let usedCols = 0;
+  for (const p of pairs) {
+    const span = p[2] || 1;
+    if (usedCols + span > cols && currentRow.length > 0) {
+      rowsData.push(currentRow);
+      currentRow = [];
+      usedCols = 0;
+    }
+    currentRow.push({
+      label: p[0],
+      value: p[1],
+      span,
+      emphasize: Boolean(p[3]),
+    });
+    usedCols += span;
+    if (usedCols >= cols) {
+      rowsData.push(currentRow);
+      currentRow = [];
+      usedCols = 0;
+    }
+  }
+  if (currentRow.length > 0) rowsData.push(currentRow);
+
+  const measureLines = (text, width, emphasize) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(emphasize ? 11 : valueFs);
+    return doc.splitTextToSize(String(text != null && text !== '' ? text : '-'), Math.max(8, width));
+  };
+
+  for (const row of rowsData) {
+    const spanSum = row.reduce((acc, cell) => acc + cell.span, 0);
+    // Linha incompleta: redistribui a largura igualmente entre os cards da linha.
+    const stretch = spanSum < cols;
+    const unitW = stretch
+      ? (CW - COL_GAP * (row.length - 1)) / spanSum
+      : colW;
+
+    let maxH = padTop + padLabelGap + lineH + padBottom;
+    row.forEach((cell) => {
+      const cellW = unitW * cell.span + (stretch ? 0 : COL_GAP * (cell.span - 1));
+      const lines = measureLines(cell.value, cellW - CARD_PAD * 2, cell.emphasize);
+      const textH = padTop + padLabelGap + lines.length * lineH + padBottom;
+      if (textH > maxH) maxH = textH;
+    });
+
+    y = ensureSpace(doc, y, maxH + CARD_GAP, ctx);
+
+    let x = M;
+    row.forEach((cell) => {
+      const cellW = unitW * cell.span + (stretch ? 0 : COL_GAP * (cell.span - 1));
+      drawCard(doc, x, y, cellW, maxH, {
+        fill: cell.emphasize ? BG_SOFT : WHITE,
+      });
+
+      doc.setFontSize(labelFs);
+      doc.setFont('helvetica', 'bold');
+      setColor(doc, MUTED);
+      doc.text(String(cell.label).toUpperCase(), x + CARD_PAD, y + padTop + 1.5);
+
+      const lines = measureLines(cell.value, cellW - CARD_PAD * 2, cell.emphasize);
+      setColor(doc, TEXT);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(cell.emphasize ? 11 : valueFs);
+      doc.text(lines, x + CARD_PAD, y + padTop + padLabelGap);
+      x += cellW + COL_GAP;
+    });
+
+    y += maxH + CARD_GAP;
+  }
+
+  setColor(doc, TEXT);
+  return y + 1;
+}
+
+function addLacresSection(doc, y, lacres, title, ctx) {
+  const numbers = (lacres || []).map((l) => l.numero).filter(Boolean);
+  if (!numbers.length) return y;
+
+  const chipPadX = 2.8;
+  const chipH = 7;
+  const chipGap = 2.2;
+  const chipFs = 9;
+  const titleH = 8;
+  const pad = CARD_PAD;
+
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(chipFs);
+  const chipWidths = numbers.map(
+    (n) => doc.getTextWidth(String(n)) + chipPadX * 2
+  );
+
+  const lines = [];
+  let current = [];
+  let used = 0;
+  const innerW = CW - pad * 2;
+  chipWidths.forEach((w, i) => {
+    const next = used === 0 ? w : used + chipGap + w;
+    if (next > innerW && current.length) {
+      lines.push(current);
+      current = [i];
+      used = w;
+    } else {
+      current.push(i);
+      used = next;
+    }
+  });
+  if (current.length) lines.push(current);
+
+  const bodyH = lines.length * chipH + Math.max(0, lines.length - 1) * chipGap;
+  const totalH = pad + titleH + bodyH + pad;
+
+  y = ensureSpace(doc, y, totalH + 2, ctx);
+  drawCard(doc, M, y, CW, totalH);
+
+  setFill(doc, BLUE);
+  doc.roundedRect(M + pad, y + pad + 0.4, 1.8, 5.2, 0.5, 0.5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  setColor(doc, BLUE_DARK);
+  doc.text(String(title), M + pad + 4, y + pad + 4.5);
+
+  let cy = y + pad + titleH;
+  lines.forEach((idxs) => {
+    let cx = M + pad;
+    idxs.forEach((i) => {
+      const w = chipWidths[i];
+      setFill(doc, BG_SOFT);
+      setDraw(doc, BORDER);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(cx, cy, w, chipH, 1.6, 1.6, 'FD');
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(chipFs);
+      setColor(doc, TEXT);
+      doc.text(String(numbers[i]), cx + chipPadX, cy + chipH / 2, {
+        baseline: 'middle',
+      });
+      cx += w + chipGap;
+    });
+    cy += chipH + chipGap;
+  });
+
+  setColor(doc, TEXT);
+  return y + totalH + CARD_GAP + 1;
+}
+
+function measureCheckCard(doc, label, meta) {
+  const badgeW = measurePillWidth(doc, meta.label, {
+    fontSize: 7,
+    padX: 2.8,
+    iconSize: 2,
+  });
+  const textMaxW = CW - CARD_PAD * 2 - badgeW - 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const lines = doc.splitTextToSize(String(label || '-'), Math.max(20, textMaxW));
+  const textH = Math.max(lines.length * 3.8, 5);
+  const h = Math.max(11, CARD_PAD + 3.2 + textH + CARD_PAD);
+  return { h, lines, badgeW, textMaxW };
+}
+
+function addCheckCard(doc, y, index, label, meta, ctx) {
+  const measured = measureCheckCard(doc, label, meta);
+  y = ensureSpace(doc, y, measured.h + 1.5, ctx);
+
+  drawCard(doc, M, y, CW, measured.h);
+
+  const num = String(index).padStart(2, '0');
+  const numLabel = hexFallback(
+    ctx.t,
+    'painel.comercial.agendamentos.checklist.pdf.verification',
+    `Verificação ${num}`,
+    { n: num }
+  );
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  setColor(doc, MUTED);
+  doc.text(numLabel, M + CARD_PAD, y + CARD_PAD + 1.2);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  setColor(doc, TEXT);
+  doc.text(measured.lines, M + CARD_PAD, y + CARD_PAD + 5.2);
+
+  const badgeH = 5.8;
+  const badgeX = M + CW - CARD_PAD - measured.badgeW;
+  const badgeY = y + (measured.h - badgeH) / 2;
+  drawPillBadge(doc, badgeX, badgeY, meta.label, meta, {
+    fontSize: 7,
+    height: badgeH,
+    padX: 2.8,
+    iconSize: 2,
+  });
+
+  return y + measured.h + 2;
+}
+
+function addPhotosSection(doc, y, loaded, title, emptyMessage, ctx) {
+  y = ensureSpace(doc, y, 24, ctx);
+  y = drawSectionTitle(doc, y, title);
+
+  if (!loaded.length) {
+    y = ensureSpace(doc, y, 12, ctx);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    setColor(doc, MUTED);
+    doc.text(emptyMessage, M, y + 3);
+    setColor(doc, TEXT);
+    return y + 8;
+  }
+
+  const cols = 2;
+  const gap = COL_GAP;
+  const cellW = (CW - gap * (cols - 1)) / cols;
+  const maxImgH = 95;
+  const pad = 3.5;
+
+  for (let i = 0; i < loaded.length; i += cols) {
+    const pair = loaded.slice(i, i + cols);
+    const sizes = pair.map((img) => {
+      const ratio = img.width > 0 && img.height > 0 ? img.height / img.width : 0.75;
+      const innerW = cellW - pad * 2;
+      let imgW = innerW;
+      let imgH = innerW * ratio;
+      if (imgH > maxImgH) {
+        imgH = maxImgH;
+        imgW = maxImgH / ratio;
+      }
+      const cardH = imgH + pad * 2;
+      return { imgW, imgH, cardH, format: imageFormatFromMime(img.mime, img.dataUrl) };
+    });
+    const rowH = Math.max(...sizes.map((s) => s.cardH));
+
+    y = ensureSpace(doc, y, rowH + CARD_GAP, ctx);
+
+    pair.forEach((img, idx) => {
+      const size = sizes[idx];
+      const x = M + idx * (cellW + gap);
+      drawCard(doc, x, y, cellW, rowH);
+
+      const imgX = x + (cellW - size.imgW) / 2;
+      const imgY = y + (rowH - size.imgH) / 2;
+      try {
+        doc.addImage(img.dataUrl, size.format, imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
+      } catch {
+        try {
+          doc.addImage(img.dataUrl, 'JPEG', imgX, imgY, size.imgW, size.imgH, undefined, 'FAST');
+        } catch {
+          doc.setFontSize(8);
+          setColor(doc, MUTED);
+          doc.text('Não foi possível renderizar a foto', x + pad, y + 10);
+          setColor(doc, TEXT);
+        }
+      }
+    });
+
+    y += rowH + CARD_GAP;
+  }
+
+  return y;
 }
 
 /** Maior lado da foto no PDF (px): mantém boa nitidez sem inflar o arquivo. */
@@ -399,8 +783,8 @@ function imageFormatFromMime(mime, dataUrl) {
 }
 
 /**
- * Gera PDF A4 retrato do checklist do item (mesmo layout visual dos relatórios ChemCtrl).
- * Página 1: dados + verificações. Fotos a partir da página 2 (2 por folha).
+ * Gera PDF A4 retrato do checklist do item (layout moderno em cards).
+ * Conteúdo flui naturalmente; fotos em grade de 2 colunas sem forçar nova página.
  */
 export async function generateChecklistItemPDF({
   item,
@@ -411,34 +795,25 @@ export async function generateChecklistItemPDF({
 } = {}) {
   if (!item) return;
 
-  const saidaCodigo = saida?.codigo || item.saida_codigo || '';
-  const itemLabel = item.label || item.produto || '';
-  const title =
-    saidaCodigo && itemLabel
-      ? `Checklist — ${saidaCodigo}`
-      : 'Checklist de carregamento';
-  const subtitle = itemLabel || t('painel.logistica.carregamentos.checklistItemTitle');
-
+  const ctx = buildPageCtx(item, saida, t, language);
   const doc = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
-  let y = addPageTitle(doc, title, subtitle);
-
-  // Status
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  const st = String(item.status || 'pendente');
-  const stColor =
-    st === 'aprovado' ? GREEN : st === 'reprovado' ? RED : st === 'em_conferencia' ? [146, 64, 14] : GRAY_LABEL;
-  setColor(doc, stColor);
-  doc.text(statusLabel(item.status, t).toUpperCase(), M, y);
-  setColor(doc, BLACK);
-  y += 6;
+  let y = drawMainHeader(doc, ctx);
 
   const infoPairs = [
-    // Produto em linha inteira para não quebrar fora da célula
-    [t('painel.comercial.agendamentos.checklist.fields.produto'), item.produto || '-', 3],
+    [
+      t('painel.comercial.agendamentos.checklist.fields.produto'),
+      item.produto || '-',
+      3,
+      true,
+    ],
     [t('painel.comercial.agendamentos.checklist.fields.tipo'), item.tipo_label || '-'],
     [t('painel.comercial.agendamentos.checklist.fields.lote'), item.lote || '-'],
-    [t('painel.comercial.agendamentos.checklist.fields.quantidade'), item.quantidade || '-'],
+    [
+      t('painel.comercial.agendamentos.checklist.fields.quantidade'),
+      item.quantidade || '-',
+      1,
+      true,
+    ],
     [
       t('painel.comercial.agendamentos.checklist.fields.fabricacao'),
       fmtDate(item.data_fabricacao, language),
@@ -454,155 +829,91 @@ export async function generateChecklistItemPDF({
       t('painel.comercial.agendamentos.checklist.fields.tanque'),
       [item.vasilhame_placa, item.vasilhame_barril].filter(Boolean).join(' / ') || '-',
       3,
+      true,
     ]);
   }
 
-  y = addInfoGrid(doc, y, infoPairs, 3);
+  y = addInfoCards(doc, y, infoPairs, 3, ctx);
 
   if (item.kind === CHECKLIST_KIND.CONVENCIONAL && Array.isArray(item.lacres) && item.lacres.length) {
-    y = ensureSpace(doc, y, 24);
-    y = addSectionTitle(
+    y = addLacresSection(
       doc,
       y,
-      t('painel.comercial.agendamentos.checklist.sections.lacres')
+      item.lacres,
+      t('painel.comercial.agendamentos.checklist.sections.lacres'),
+      ctx
     );
-    const lacresText = item.lacres.map((l) => l.numero).filter(Boolean).join('   ·   ') || '-';
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    setColor(doc, BLACK);
-    const lines = doc.splitTextToSize(lacresText, CW);
-    doc.text(lines, M, y);
-    y += lines.length * 5 + 4;
   }
 
   const checkDefs = checkDefsForItem(item);
   const sections = [...new Set(checkDefs.map((c) => c.section))];
+  let checkIndex = 0;
 
   for (const section of sections) {
-    y = ensureSpace(doc, y, 28);
-    y = addSectionTitle(
+    const defs = checkDefs.filter((c) => c.section === section);
+    if (!defs.length) continue;
+
+    const resolveLabel = (def) => {
+      if (section === VALIDADE_TESTES_SECTION && item.validade_testes) {
+        return validadeTestesLabel(checkDefLabel(def, t), item.validade_testes, t, language);
+      }
+      if (section === ESLINGA_COLOR_SECTION && item.validade_testes?.color_cod) {
+        return eslingaColorLabel(checkDefLabel(def, t), item.validade_testes.color_cod, t);
+      }
+      return checkDefLabel(def, t);
+    };
+
+    const firstLabel = resolveLabel(defs[0]);
+    const firstMeta = answerMeta(normalizeCheckValue(item.checks?.[defs[0].key]), t);
+    const firstH = measureCheckCard(doc, firstLabel, firstMeta).h;
+
+    y = ensureSpace(doc, y, 10 + firstH, ctx);
+    y = drawSectionTitle(
       doc,
       y,
       t(`painel.comercial.agendamentos.checklist.sections.${section}`, {
         defaultValue: section,
       })
     );
-    const rows = checkDefs
-      .filter((c) => c.section === section)
-      .map((c) => {
-        const answer = normalizeCheckValue(item.checks?.[c.key]);
-        const meta = answerMeta(answer, t);
-        const label =
-          section === VALIDADE_TESTES_SECTION && item.validade_testes
-            ? validadeTestesLabel(checkDefLabel(c, t), item.validade_testes, t, language)
-            : checkDefLabel(c, t);
-        return [{ value: label }, { value: meta.label, color: meta.color }];
-      });
-    y = addSimpleTable(
-      doc,
-      y,
-      ['Verificação', 'Resultado'],
-      rows,
-      [CW * 0.68, CW * 0.32]
-    );
-  }
 
-  if (item.conferido_em) {
-    y = ensureSpace(doc, y, 12);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    setColor(doc, GRAY_LABEL);
-    doc.text(
-      t('painel.comercial.agendamentos.checklist.itemValidatedAt', {
-        date: fmtDateTime(item.conferido_em, language),
-        operador: item.conferido_por_nome || '—',
-      }),
-      M,
-      y
-    );
-    y += 6;
+    for (const c of defs) {
+      checkIndex += 1;
+      const answer = normalizeCheckValue(item.checks?.[c.key]);
+      const meta = answerMeta(answer, t);
+      y = addCheckCard(doc, y, checkIndex, resolveLabel(c), meta, ctx);
+    }
+
+    y += 1;
   }
 
   const urls = (fotoUrls || []).filter(Boolean);
-  if (urls.length === 0) {
-    y = ensureSpace(doc, y, 20);
-    y = addSectionTitle(
-      doc,
-      y,
-      t('painel.comercial.agendamentos.checklist.sections.fotos')
-    );
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    setColor(doc, GRAY_LABEL);
-    doc.text(t('painel.logistica.carregamentos.checklistNoPhotos'), M, y);
-  } else {
-    const loaded = [];
-    for (const url of urls) {
-      try {
-        const img = await urlToDataUrl(url);
-        loaded.push(img);
-      } catch {
-        // ignora foto que falhou ao carregar
-      }
-    }
+  const photosTitle = hexFallback(
+    t,
+    'painel.comercial.agendamentos.checklist.pdf.photosTitle',
+    hexFallback(t, 'painel.comercial.agendamentos.checklist.sections.fotos', 'Fotos')
+  );
+  const emptyPhotos = hexFallback(
+    t,
+    'painel.logistica.carregamentos.checklistNoPhotos',
+    'Nenhuma foto registrada para este item.'
+  );
 
-    const totalPages = Math.ceil(loaded.length / FOTOS_POR_PAGINA) || 1;
-    for (let pageIndex = 0; pageIndex < loaded.length; pageIndex += FOTOS_POR_PAGINA) {
-      doc.addPage();
-      let py = addPageTitle(
-        doc,
-        t('painel.comercial.agendamentos.checklist.sections.fotos'),
-        totalPages > 1
-          ? `${saidaCodigo} — ${pageIndex / FOTOS_POR_PAGINA + 1}/${totalPages}`
-          : String(saidaCodigo || itemLabel)
-      );
-
-      const pair = loaded.slice(pageIndex, pageIndex + FOTOS_POR_PAGINA);
-      const gap = 8;
-      const usableH = PH - py - 20 - gap;
-      const slotH = usableH / FOTOS_POR_PAGINA;
-
-      pair.forEach((img, i) => {
-        const slotY = py + i * (slotH + gap);
-        setDraw(doc, GRAY_BORDER);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(M, slotY, CW, slotH, 2, 2, 'S');
-
-        const pad = 4;
-        const maxW = CW - pad * 2;
-        const maxH = slotH - pad * 2;
-        const format = imageFormatFromMime(img.mime, img.dataUrl);
-
-        // Ajusta ao slot preservando a proporção real da foto (4:3 se desconhecida)
-        const ratio = img.width > 0 && img.height > 0 ? img.height / img.width : 0.75;
-        let imgW = maxW;
-        let imgH = maxW * ratio;
-        if (imgH > maxH) {
-          imgH = maxH;
-          imgW = maxH / ratio;
-        }
-        const imgX = M + (CW - imgW) / 2;
-        const imgY = slotY + (slotH - imgH) / 2;
-
-        try {
-          doc.addImage(img.dataUrl, format, imgX, imgY, imgW, imgH, undefined, 'FAST');
-        } catch {
-          try {
-            doc.addImage(img.dataUrl, 'JPEG', imgX, imgY, imgW, imgH, undefined, 'FAST');
-          } catch {
-            doc.setFontSize(8);
-            setColor(doc, GRAY_LABEL);
-            doc.text('Não foi possível renderizar a foto', M + pad, slotY + 10);
-          }
-        }
-      });
+  const loaded = [];
+  for (const url of urls) {
+    try {
+      const img = await urlToDataUrl(url);
+      loaded.push(img);
+    } catch {
+      // ignora foto que falhou ao carregar
     }
   }
 
-  addFooter(doc);
+  y = addPhotosSection(doc, y, loaded, photosTitle, emptyPhotos, ctx);
+
+  addFooter(doc, ctx);
 
   const fileBase =
-    safePdfFilenamePart(saidaCodigo) ||
+    safePdfFilenamePart(ctx.saidaCodigo) ||
     safePdfFilenamePart(item.produto) ||
     'checklist';
   doc.save(`${fileBase} - Checklist.pdf`);

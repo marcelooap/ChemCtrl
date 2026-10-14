@@ -54,6 +54,7 @@ import {
   isSameISODate,
   listAgendamentosByRange,
   normalizeBookings,
+  slotAguardandoInformacoes,
   startOfWeekMonday,
   saveCarregamentoChecklistProgress,
   summarizeSlotBookings,
@@ -133,6 +134,13 @@ export default function AgendamentosGrade({
   const selectedWeekday = weekDays.find((d) => d.iso === selectedIso)?.weekday || 1;
   const slots = useMemo(() => getSlotsForWeekday(selectedWeekday), [selectedWeekday]);
   const bookingMap = useMemo(() => indexAgendamentosBySlot(agendamentos), [agendamentos]);
+  const saidasById = useMemo(() => {
+    const map = new Map();
+    for (const saida of saidas || []) {
+      if (saida?.id != null) map.set(String(saida.id), saida);
+    }
+    return map;
+  }, [saidas]);
 
   /** Saídas ainda Aguardando (não expedidas) — únicas elegíveis para agendar. */
   const saidasAguardando = useMemo(
@@ -644,6 +652,8 @@ export default function AgendamentosGrade({
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
+                saidasById={saidasById}
+                awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
                 compact={compact}
               />
             ))}
@@ -682,6 +692,8 @@ export default function AgendamentosGrade({
                 saidasCountLabel={(count) =>
                   t('painel.comercial.agendamentos.saidasCount', { count })
                 }
+                saidasById={saidasById}
+                awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
                 compact={compact}
               />
             ))}
@@ -725,6 +737,8 @@ export default function AgendamentosGrade({
                   saidasCountLabel={(count) =>
                     t('painel.comercial.agendamentos.saidasCount', { count })
                   }
+                  saidasById={saidasById}
+                  awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
                   compact={compact}
                   encaixe
                 />
@@ -930,11 +944,14 @@ function TimeSlotButton({
   onConcluir,
   concluirLabel,
   saidasCountLabel,
+  saidasById,
+  awaitingInfoLabel,
   compact = false,
 }) {
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
   const occupied = list.length > 0;
+  const awaitingInfo = occupied && slotAguardandoInformacoes(list, saidasById);
   const carregado = isCarregado(list);
   const checklistValidado = isChecklistValidado(list);
   const interactive = typeof onClick === 'function' && !carregado;
@@ -1018,6 +1035,14 @@ function TimeSlotButton({
         </span>
         {occupied ? (
           <span className="mt-1.5 block space-y-0.5">
+            {awaitingInfo ? (
+              <span
+                className="block break-words text-[11px] font-semibold leading-snug text-amber-800"
+                title={awaitingInfoLabel}
+              >
+                {awaitingInfoLabel}
+              </span>
+            ) : null}
             {carregado ? (
               <span
                 className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${tone.badge}`}

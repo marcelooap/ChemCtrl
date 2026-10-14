@@ -4,22 +4,34 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shared/components/ui/select';
+import { cn } from '@shared/lib/utils';
 import SaidaDestinoSelect from '@transbordo/components/saida/SaidaDestinoSelect';
 import { createTempItemId } from '@painel/lib/checklistExpedicaoConfig';
 import {
+  COLOR_COD_TEXT_CLASS,
+  COLOR_COD_VALUES,
   PRAZO_DESTINO_ERROR,
   VALIDADE_TESTES_PRAZO_MAX_DIAS,
   VALIDADE_TESTES_PRAZO_MIN_DIAS,
   validarPrazosPorDestino,
 } from '@painel/lib/validadeTestesTanque';
 
+const COLOR_NONE = '__none__';
+
 /**
- * Linhas "Destino + Prazo de validade" do item de validade dos testes.
+ * Linhas "Destino + Prazo de validade + Color Cod" do item de validade dos testes.
  * O destino usa o mesmo seletor (lista e comportamento) da Solicitação de Saída.
  *
  * @param {{
- *   rows: Array<{ key: string, destino: string, dias: string|number }>,
- *   onChange: (next: Array<{ key: string, destino: string, dias: string|number }>) => void,
+ *   rows: Array<{ key: string, destino: string, dias: string|number, color_cod?: string }>,
+ *   onChange: (next: Array<{ key: string, destino: string, dias: string|number, color_cod?: string }>) => void,
  *   disabled?: boolean,
  *   showErrors?: boolean,
  * }} props `showErrors` exibe também campos obrigatórios ainda vazios (após tentar salvar).
@@ -54,12 +66,18 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
 
   const removeRow = (key) => onChange(rows.filter((row) => row.key !== key));
 
-  const addRow = () => onChange([...rows, { key: createTempItemId(), destino: '', dias: '' }]);
+  const addRow = () =>
+    onChange([...rows, { key: createTempItemId(), destino: '', dias: '', color_cod: '' }]);
 
   const destinoErrorText = (code) =>
     code === PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO
       ? t(`${prefix}.duplicateDestino`)
       : t(`${prefix}.destinoRequired`);
+
+  const colorLabel = (value) =>
+    t(`${prefix}.colorOptions.${value}`, {
+      defaultValue: value,
+    });
 
   return (
     <div className="mt-5 border-t border-border pt-4">
@@ -76,11 +94,14 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
             const destinoError = errorsByRow.get(`${index}:destino`);
             const prazoError = errorsByRow.get(`${index}:dias`);
             const prazoId = `${baseId}-prazo-${row.key}`;
+            const colorId = `${baseId}-color-${row.key}`;
             const labelClass = index === 0 ? 'text-xs font-medium' : 'text-xs font-medium sm:sr-only';
+            const colorValue = row.color_cod || '';
+            const colorClass = COLOR_COD_TEXT_CLASS[colorValue] || '';
             return (
               <li
                 key={row.key}
-                className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-start"
+                className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.2fr)_9rem_9.5rem_auto] sm:items-start"
               >
                 <div className="min-w-0">
                   <Label className={labelClass}>{t(`${prefix}.destinoLabel`)}</Label>
@@ -129,6 +150,44 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                       })}
                     </p>
                   ) : null}
+                </div>
+
+                <div>
+                  <Label htmlFor={colorId} className={labelClass}>
+                    {t(`${prefix}.colorCodLabel`)}
+                  </Label>
+                  <Select
+                    value={colorValue || COLOR_NONE}
+                    disabled={disabled}
+                    onValueChange={(v) =>
+                      updateRow(row.key, { color_cod: v === COLOR_NONE ? '' : v })
+                    }
+                  >
+                    <SelectTrigger
+                      id={colorId}
+                      className={cn(
+                        index === 0 ? 'mt-1.5' : 'mt-1.5 sm:mt-0',
+                        'h-9 font-semibold',
+                        colorClass
+                      )}
+                    >
+                      <SelectValue placeholder={t(`${prefix}.colorCodPlaceholder`)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={COLOR_NONE} className="text-muted-foreground">
+                        {t(`${prefix}.colorCodPlaceholder`)}
+                      </SelectItem>
+                      {COLOR_COD_VALUES.map((value) => (
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          className={cn('font-semibold', COLOR_COD_TEXT_CLASS[value])}
+                        >
+                          {colorLabel(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Button

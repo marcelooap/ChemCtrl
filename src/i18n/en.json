@@ -918,6 +918,15 @@
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Select the destination...",
             "prazoLabel": "Validity period (days)",
+            "colorCodLabel": "Color Cod",
+            "colorCodPlaceholder": "Select the color...",
+            "colorOptions": {
+              "laranja": "Orange",
+              "roxo": "Purple",
+              "verde": "Green",
+              "amarelo": "Yellow",
+              "azul": "Blue"
+            },
             "add": "Add destination",
             "remove": "Remove destination",
             "empty": "No destination registered. Add at least one destination with its validity period.",
@@ -1092,6 +1101,7 @@
         "available": "Available",
         "occupied": "Occupied",
         "carregado": "Loaded",
+        "awaitingInfo": "Waiting for information",
         "saidasCount": "{{count}} outbound",
         "viewSaidaPickTitle": "Which outbound request do you want to view?",
         "slotSummary": "{{free}} available · {{occupied}} occupied · {{total}} slots",
@@ -1231,7 +1241,13 @@
             "paletes": "Pallet condition",
             "fotos": "Photos",
             "verificacoes": "Checks",
-            "validade_testes": "Tank test validity"
+            "validade_testes": "Tank test validity",
+            "color_cod_eslinga": "Sling Color Cod"
+          },
+          "eslingaColor": {
+            "colorLabel": "Registered Color Cod",
+            "hint": "Check that the physical sling color matches the color registered for this destination.",
+            "resultado": "Sling Color Cod check result"
           },
           "validadeTestes": {
             "dataLimite": "Test expiry cut-off date",
@@ -1250,6 +1266,11 @@
             "naoConfigurado": "Validity period not configured for this destination",
             "naoConfiguradoHint": "Adjust the setup in Settings → Shipping Checklist for this client. The check stays blocked until the period is configured.",
             "naoConfiguradoSemDestino": "The request has no destination. Set the destination in the Shipping Request or adjust the setup in Settings → Shipping Checklist. The check stays blocked until then."
+          },
+          "pdf": {
+            "documentTitle": "Load Inspection Checklist",
+            "verification": "Check {{n}}",
+            "photosTitle": "Photographic evidence"
           },
           "loadingDefs": "Loading checklist...",
           "items": {

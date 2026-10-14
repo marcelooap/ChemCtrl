@@ -865,6 +865,15 @@
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Sélectionnez la destination...",
             "prazoLabel": "Délai de validité (jours)",
+            "colorCodLabel": "Color Cod",
+            "colorCodPlaceholder": "Sélectionnez la couleur...",
+            "colorOptions": {
+              "laranja": "Orange",
+              "roxo": "Violet",
+              "verde": "Vert",
+              "amarelo": "Jaune",
+              "azul": "Bleu"
+            },
             "add": "Ajouter une destination",
             "remove": "Retirer la destination",
             "empty": "Aucune destination enregistrée. Ajoutez au moins une destination avec son délai de validité.",
@@ -1038,6 +1047,7 @@
         "encaixeNew": "Nouveau chargement",
         "available": "Disponible",
         "occupied": "Occupé",
+        "awaitingInfo": "En attente d'informations",
         "saidasCount": "{{count}} sorties",
         "viewSaidaPickTitle": "Quelle sortie souhaitez-vous consulter ?",
         "slotSummary": "{{free}} disponibles · {{occupied}} occupés · {{total}} créneaux",
@@ -1093,8 +1103,19 @@
           "saveProgress": "Enregistrer le progrès",
           "progressSaved": "Progrès enregistré. Vous pouvez reprendre la vérification plus tard.",
           "loadingDefs": "Chargement du check-list...",
+          "pdf": {
+            "documentTitle": "Checklist de Conférence de Charge",
+            "verification": "Vérification {{n}}",
+            "photosTitle": "Preuves photographiques"
+          },
+          "eslingaColor": {
+            "colorLabel": "Color Cod enregistré",
+            "hint": "Vérifiez que la couleur de l'élingue physique correspond à la couleur enregistrée pour cette destination.",
+            "resultado": "Résultat de la vérification du Color Cod de l'élingue"
+          },
           "sections": {
-            "verificacoes": "Vérifications"
+            "verificacoes": "Vérifications",
+            "color_cod_eslinga": "Color Cod de l'élingue"
           },
           "questions": {
             "docConferida": "Documentation de la carga vérifiée",

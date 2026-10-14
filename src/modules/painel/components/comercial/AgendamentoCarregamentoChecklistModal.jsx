@@ -38,9 +38,14 @@ import {
   summarizeSlotBookings,
 } from '@painel/lib/agendamentosCarregamento';
 import {
+  COLOR_COD_TEXT_CLASS,
+} from '@painel/lib/validadeTestesTanque';
+import {
   CHECK_ANSWER,
   CHECKLIST_KIND,
   CHECKLIST_STATUS,
+  ESLINGA_COLOR_CHECK_KEY,
+  ESLINGA_COLOR_SECTION,
   VALIDADE_TESTES_CHECK_KEY,
   VALIDADE_TESTES_SECTION,
   areAllItemsApproved,
@@ -284,6 +289,57 @@ function ValidadeTestesSection({ validade, number, value, disabled, onChange, la
             number={number}
             value={value}
             disabled={disabled || !configurado}
+            onChange={onChange}
+            options={APPROVE_REJECT_OPTIONS}
+            t={t}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Color Cod da eslinga: exibe a cor cadastrada no Check List do cliente
+ * (somente visualização) e registra Aprovado/Reprovado pelo operador.
+ */
+function EslingaColorSection({ colorCod, number, value, disabled, onChange, t }) {
+  const prefix = 'painel.comercial.agendamentos.checklist.eslingaColor';
+  const isRejected = value === CHECK_ANSWER.REPROVADO;
+  const colorClass = COLOR_COD_TEXT_CLASS[colorCod] || 'text-foreground';
+  const colorName = t(
+    `painel.configuracao.checklistExpedicao.validadeTestes.destinos.colorOptions.${colorCod}`,
+    { defaultValue: colorCod }
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {t(`painel.comercial.agendamentos.checklist.sections.${ESLINGA_COLOR_SECTION}`)}
+      </p>
+      <div
+        className={cn(
+          'space-y-3 rounded-lg border p-3 shadow-sm',
+          isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+        )}
+      >
+        <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {t(`${prefix}.colorLabel`)}
+          </p>
+          <p className={cn('mt-0.5 text-base font-bold tracking-wide', colorClass)}>
+            {colorName}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{t(`${prefix}.hint`)}</p>
+        </div>
+
+        <div className="border-t border-border/60 pt-3">
+          <CheckAnswerRow
+            bare
+            label={t(`${prefix}.resultado`)}
+            number={number}
+            value={value}
+            disabled={disabled}
             onChange={onChange}
             options={APPROVE_REJECT_OPTIONS}
             t={t}
@@ -636,18 +692,22 @@ export default function AgendamentoCarregamentoChecklistModal({
     t(`painel.comercial.agendamentos.checklist.sections.${section}`, { defaultValue: section });
 
   const showLacresBlock = active?.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks;
+  const showEslingaColor = Boolean(active?.validade_testes?.color_cod);
   const visibleSections = sections.filter(
     (section) =>
-      section !== VALIDADE_TESTES_SECTION && !(showLacresBlock && section === 'lacres')
+      section !== VALIDADE_TESTES_SECTION &&
+      section !== ESLINGA_COLOR_SECTION &&
+      !(showLacresBlock && section === 'lacres')
   );
 
-  // Ordem de exibição = ordem de conferência: lacres, validade dos testes e demais seções.
+  // Ordem de exibição = ordem de conferência: lacres, validade, eslinga e demais seções.
   const itemNumbers = (() => {
     const orderedKeys = [];
     if (showLacresBlock) {
       checkDefs.filter((c) => c.section === 'lacres').forEach((c) => orderedKeys.push(c.key));
     }
     if (active?.validade_testes) orderedKeys.push(VALIDADE_TESTES_CHECK_KEY);
+    if (showEslingaColor) orderedKeys.push(ESLINGA_COLOR_CHECK_KEY);
     visibleSections.forEach((section) => {
       checkDefs.filter((c) => c.section === section).forEach((c) => orderedKeys.push(c.key));
     });
@@ -932,6 +992,17 @@ export default function AgendamentoCarregamentoChecklistModal({
                   disabled={readOnly || saving}
                   onChange={(v) => setAnswer(VALIDADE_TESTES_CHECK_KEY, v)}
                   language={i18n.language}
+                  t={t}
+                />
+              ) : null}
+
+              {showEslingaColor ? (
+                <EslingaColorSection
+                  colorCod={active.validade_testes.color_cod}
+                  number={itemNumbers.get(ESLINGA_COLOR_CHECK_KEY)}
+                  value={active.checks?.[ESLINGA_COLOR_CHECK_KEY] || ''}
+                  disabled={readOnly || saving}
+                  onChange={(v) => setAnswer(ESLINGA_COLOR_CHECK_KEY, v)}
                   t={t}
                 />
               ) : null}
