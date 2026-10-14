@@ -4,6 +4,7 @@ import { productionOfContainer } from '@industrializacao/lib/fractionalSupply';
 import { resolveValidityDays } from '@industrializacao/lib/recipeRevisions';
 import { resolveQualityValidityDays } from '@industrializacao/lib/qualityValidity';
 import { calcValidityDate } from '@industrializacao/lib/labelprint';
+import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 
 /**
  * Dias de validade do container: Cadastro CQ → receita (lista) → receita remota.
@@ -48,8 +49,10 @@ export async function resolveValidityDaysForContainer(
   return validityDays;
 }
 
-/** Fabricação do container: fim da produção ou criação do vasilhame (igual à etiqueta). */
+/** Fabricação do container: correção da etiqueta, fim da produção ou criação do vasilhame. */
 export function resolveContainerFabricacao(container, production) {
+  const override = containerLabelDateOverride(container);
+  if (override?.manufactureDate) return override.manufactureDate;
   return production?.end_time || container?.created_date || null;
 }
 
@@ -106,6 +109,15 @@ export async function resolveContainerLoteDatas(
   { productions = [], recipes = [], tests = null } = {}
 ) {
   const production = productionOfContainer(container, productions || []);
+  const dateOverride = containerLabelDateOverride(container);
+  if (dateOverride) {
+    return {
+      lote: String(container?.lot || '').trim(),
+      lacres: String(container?.seals || '').trim(),
+      data_fabricacao: dateOverride.manufactureDate,
+      data_validade: dateOverride.expiryDate,
+    };
+  }
   const fabricacao = resolveContainerFabricacao(container, production);
   const validityDays = await resolveValidityDaysForContainer(
     container,

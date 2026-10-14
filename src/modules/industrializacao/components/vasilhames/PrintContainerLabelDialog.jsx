@@ -17,6 +17,7 @@ import {
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
 import { printContainerLabel, calcValidityDate } from '@industrializacao/lib/labelprint';
+import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 import { ensureProductionPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import {
   productionOfContainer,
@@ -88,7 +89,9 @@ export default function PrintContainerLabelDialog({
   const volumeOk = Number(volume) > 0;
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
   const embalagem = formatLabelEmbalagem(container);
-  const fabDate = manufactureDate || production?.end_time || container?.created_date;
+  const dateOverride = containerLabelDateOverride(container);
+  const fabDate = dateOverride?.manufactureDate || manufactureDate || production?.end_time || container?.created_date;
+  const labelExpiry = dateOverride?.expiryDate || expiryDate || calcValidityDate(fabDate, meta?.validityDays);
   const volumePlaceholder = suggestLabelVolumePlaceholder(container?.type || container?.tipo);
 
   useEffect(() => {
@@ -149,7 +152,7 @@ export default function PrintContainerLabelDialog({
     try {
       await printContainerLabel(container, meta?.validityDays, meta?.publicToken, {
         manufactureDate: fabDate,
-        expiryDate: expiryDate || undefined,
+        expiryDate: labelExpiry || undefined,
         locale: i18n.language,
         clienteNome: meta?.clienteNome,
         clienteId,
@@ -178,7 +181,7 @@ export default function PrintContainerLabelDialog({
     op_number: container?.op_number || '—',
     lot: container?.lot || '—',
     manufactureDate: fabDate,
-    expiryDate: expiryDate || calcValidityDate(fabDate, meta?.validityDays),
+    expiryDate: labelExpiry,
     net_weight: volumeOk ? weights.netWeight : 0,
     gross_weight: volumeOk ? weights.grossWeight : 0,
     volume: volumeOk ? Math.round(weights.volume) : null,

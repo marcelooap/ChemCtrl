@@ -22,6 +22,7 @@ import {
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
 import { formatLabelEmbalagem } from '@industrializacao/lib/packagingTypes';
+import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -597,7 +598,8 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     : (options?.embalagem || formatLabelEmbalagem(container));
 
   const opNum = container.op_number || '—';
-  const fabDateStr = options?.manufactureDate || container.created_date;
+  const dateOverride = containerLabelDateOverride(container);
+  const fabDateStr = dateOverride?.manufactureDate || options?.manufactureDate || container.created_date;
   const volume =
     volumeRaw != null && Number(volumeRaw) > 0
       ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
@@ -619,7 +621,7 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
   const dateFormat = printConfig.dateFormat;
   const fabDate = formatEtiquetaDate(fabDateStr, dateFormat, lang);
   const valDate = formatEtiquetaDate(
-    options?.expiryDate || calcValidityDate(fabDateStr, validityDays),
+    dateOverride?.expiryDate || options?.expiryDate || calcValidityDate(fabDateStr, validityDays),
     dateFormat,
     lang
   );
