@@ -566,13 +566,14 @@ begin
 
   if p_id is null then
     insert into t_saidas (
-      codigo, cliente_id, cliente_nome, data_solicitacao, data_programada,
+      codigo, cliente_id, cliente_nome, destino, data_solicitacao, data_programada,
       observacoes, itens, quantidade_total, usuario_criador, usuario_responsavel,
       modulo_origem, status, enviado_ao_fiscal
     ) values (
       p_data->>'codigo',
       v_cliente,
       p_data->>'cliente_nome',
+      nullif(btrim(p_data->>'destino'), ''),
       coalesce(nullif(p_data->>'data_solicitacao', '')::date, current_date),
       nullif(p_data->>'data_programada', '')::date,
       p_data->>'observacoes',
@@ -589,6 +590,7 @@ begin
     update t_saidas
       set cliente_id = v_cliente,
           cliente_nome = p_data->>'cliente_nome',
+          destino = nullif(btrim(p_data->>'destino'), ''),
           data_solicitacao = coalesce(nullif(p_data->>'data_solicitacao', '')::date, data_solicitacao),
           data_programada = nullif(p_data->>'data_programada', '')::date,
           observacoes = p_data->>'observacoes',

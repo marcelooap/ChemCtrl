@@ -857,10 +857,23 @@
           "title": "Verificación de la vigencia de las pruebas",
           "hint": "Agrega al checklist de expedición de este cliente la verificación de la vigencia de las pruebas del tanque.",
           "enable": "Activar verificación de las pruebas",
-          "prazoLabel": "Plazo de vigencia (días)",
           "prazoInvalid": "Indique un plazo entero entre {{min}} y {{max}} días.",
-          "example": "Con {{dias}} días, la fecha límite que se muestra hoy en la expedición es {{date}}.",
-          "tableMissingBanner": "La configuración de la vigencia de las pruebas aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página."
+          "tableMissingBanner": "La configuración de la vigencia de las pruebas aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
+          "destinos": {
+            "title": "Plazos por destino",
+            "hint": "Defina el plazo de vigencia según el destino de la carga indicado en la Solicitud de Salida. La expedición solo acepta los destinos listados.",
+            "destinoLabel": "Destino",
+            "destinoPlaceholder": "Seleccione el destino...",
+            "prazoLabel": "Plazo de vigencia (días)",
+            "add": "Agregar destino",
+            "remove": "Quitar destino",
+            "empty": "Ningún destino registrado. Agregue al menos un destino con su plazo de vigencia.",
+            "requiredHint": "Registre al menos un destino con plazo de vigencia o desactive la verificación de las pruebas.",
+            "destinoRequired": "Seleccione un destino.",
+            "duplicateDestino": "Este destino ya fue registrado en este ítem.",
+            "invalidHint": "Revise los plazos por destino: seleccione un destino, sin repetir, con un plazo entero entre {{min}} y {{max}} días.",
+            "tableMissingBanner": "Los plazos por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página."
+          }
         }
       }
     },

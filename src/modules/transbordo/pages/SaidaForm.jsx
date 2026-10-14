@@ -9,6 +9,8 @@ import { Label } from "@shared/components/ui/label";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import SaidaItemRow from "@transbordo/components/saida/SaidaItemRow";
+import SaidaDestinoSelect from "@transbordo/components/saida/SaidaDestinoSelect";
+import { normalizeDestino } from "@transbordo/lib/saidaDestinos";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { todayDateInputValue } from "@/i18n/formatters";
 import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
@@ -97,6 +99,7 @@ export default function SaidaForm({
   const [formData, setFormData] = useState({
     cliente_id: "",
     cliente_nome: "",
+    destino: "",
     data_solicitacao: todayStr(),
     data_programada: "",
     observacoes: "",
@@ -177,6 +180,7 @@ export default function SaidaForm({
           setFormData({
             cliente_id: saida.cliente_id || "",
             cliente_nome: saida.cliente_nome || "",
+            destino: normalizeDestino(saida.destino),
             data_solicitacao: saida.data_solicitacao || todayStr(),
             data_programada: saida.data_programada || "",
             observacoes: saida.observacoes || "",
@@ -634,6 +638,7 @@ export default function SaidaForm({
       const data = {
         cliente_id: clienteIdSalvo,
         cliente_nome: clienteNomeSalvo,
+        destino: normalizeDestino(formData.destino) || null,
         data_solicitacao: formData.data_solicitacao,
         data_programada: agendamentoPendente?.dateIso || formData.data_programada,
         observacoes: formData.observacoes,
@@ -816,7 +821,7 @@ export default function SaidaForm({
         <h2 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2 mb-4">
           Dados da Solicitação
         </h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Cliente *</Label>
             <SearchableSelect
@@ -843,6 +848,15 @@ export default function SaidaForm({
               getOptionLabel={(c) => c.nome}
               getOptionValue={(c) => c.id}
               placeholder="Selecione um cliente..."
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Destino</Label>
+            <SaidaDestinoSelect
+              value={formData.destino}
+              onChange={(destino) =>
+                setFormData((prev) => ({ ...prev, destino }))
+              }
             />
           </div>
           <div className="space-y-1.5">

@@ -136,7 +136,7 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
   * { box-sizing: border-box; }
   body { font-family: Inter, Arial, sans-serif; color: #111827; margin: 0; }
   h1 { font-size: 18px; margin: 0 0 16px; }
-  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
   .meta p { margin: 0; font-size: 11px; color: #6b7280; }
   .meta strong { display: block; margin-top: 2px; font-size: 13px; color: #111827; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -154,6 +154,7 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
   <h1>${escapeHtml(title)}</h1>
   <div class="meta">
     <div><p>Cliente</p><strong>${escapeHtml(saida.cliente_nome || '—')}</strong></div>
+    <div><p>Destino</p><strong>${escapeHtml(saida.destino || '—')}</strong></div>
     <div><p>Data da Solicitação</p><strong>${escapeHtml(formatDate(saida.data_solicitacao))}</strong></div>
     <div><p>Data Programada</p><strong>${escapeHtml(formatDate(saida.data_programada))}</strong></div>
     <div><p>Validação</p><strong>${escapeHtml(statusLabel)}</strong></div>

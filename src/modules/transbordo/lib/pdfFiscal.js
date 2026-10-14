@@ -578,6 +578,7 @@ export function generateRelatorioFiscalSaidaPDF(
     [
       ["Código", codigo],
       ["Cliente", saida.cliente_nome || "-"],
+      ["Destino", saida.destino || "-"],
       ["Solicitante", saida.usuario_criador || "-"],
       ["Data Solicitação", fmtDate(saida.data_solicitacao)],
       ["Data Programada", fmtDate(saida.data_programada)],

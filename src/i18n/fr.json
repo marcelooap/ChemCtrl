@@ -857,10 +857,23 @@
           "title": "Vérification de la validité des tests",
           "hint": "Ajoute à la checklist d'expédition de ce client la vérification de la validité des tests du réservoir.",
           "enable": "Activer la vérification des tests",
-          "prazoLabel": "Délai de validité (jours)",
           "prazoInvalid": "Indiquez un délai entier compris entre {{min}} et {{max}} jours.",
-          "example": "Avec {{dias}} jours, la date limite affichée aujourd'hui à l'expédition est {{date}}.",
-          "tableMissingBanner": "La configuration de la validité des tests n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page."
+          "tableMissingBanner": "La configuration de la validité des tests n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
+          "destinos": {
+            "title": "Délais par destination",
+            "hint": "Définissez le délai de validité selon la destination de la cargaison indiquée dans la Demande de Sortie. L'expédition n'accepte que les destinations listées.",
+            "destinoLabel": "Destination",
+            "destinoPlaceholder": "Sélectionnez la destination...",
+            "prazoLabel": "Délai de validité (jours)",
+            "add": "Ajouter une destination",
+            "remove": "Retirer la destination",
+            "empty": "Aucune destination enregistrée. Ajoutez au moins une destination avec son délai de validité.",
+            "requiredHint": "Enregistrez au moins une destination avec un délai de validité ou désactivez la vérification des tests.",
+            "destinoRequired": "Sélectionnez une destination.",
+            "duplicateDestino": "Cette destination est déjà enregistrée dans cet élément.",
+            "invalidHint": "Vérifiez les délais par destination : sélectionnez une destination, sans répétition, avec un délai entier compris entre {{min}} et {{max}} jours.",
+            "tableMissingBanner": "Les délais par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page."
+          }
         }
       }
     },

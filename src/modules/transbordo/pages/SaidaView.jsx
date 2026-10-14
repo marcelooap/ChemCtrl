@@ -75,15 +75,17 @@ function gerarSaidaPDF(saida) {
     doc.setFontSize(7);
     doc.setFont(undefined, "bold");
     doc.text("CLIENTE", margin, y);
-    doc.text("DATA DA SOLICITAÇÃO", margin + 90, y);
-    doc.text("DATA PROGRAMADA", margin + 150, y);
+    doc.text("DESTINO", margin + 58, y);
+    doc.text("DATA DA SOLICITAÇÃO", margin + 108, y);
+    doc.text("DATA PROGRAMADA", margin + 155, y);
     y += 4;
     doc.setFontSize(10);
     doc.setFont(undefined, "normal");
     doc.setTextColor(20, 20, 20);
-    doc.text(saida.cliente_nome || "—", margin, y);
-    doc.text(formatDate(saida.data_solicitacao), margin + 90, y);
-    doc.text(formatDate(saida.data_programada), margin + 150, y);
+    doc.text(saida.cliente_nome || "—", margin, y, { maxWidth: 54 });
+    doc.text(saida.destino || "—", margin + 58, y, { maxWidth: 46 });
+    doc.text(formatDate(saida.data_solicitacao), margin + 108, y);
+    doc.text(formatDate(saida.data_programada), margin + 155, y);
     y += 6;
 
     // Linha separadora
@@ -482,6 +484,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
         <div className="grid grid-cols-4 gap-4">
           <InfoItem label="Código" value={saida.codigo} highlight="text-primary text-lg font-bold" />
           <InfoItem label="Cliente" value={saida.cliente_nome} highlight="text-foreground text-lg font-bold" />
+          <InfoItem label="Destino" value={saida.destino} />
           <InfoItem label="Data da Solicitação" value={formatDate(saida.data_solicitacao)} />
           <InfoItem label="Data Programada" value={formatDate(saida.data_programada)} />
           <InfoItem

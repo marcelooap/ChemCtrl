@@ -910,10 +910,23 @@
           "title": "Test validity check",
           "hint": "Adds the tank test validity check to this client's shipping checklist.",
           "enable": "Enable test validity check",
-          "prazoLabel": "Validity period (days)",
           "prazoInvalid": "Enter a whole number of days between {{min}} and {{max}}.",
-          "example": "With {{dias}} days, the cut-off date shown today at shipping is {{date}}.",
-          "tableMissingBanner": "The test validity configuration does not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page."
+          "tableMissingBanner": "The test validity configuration does not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page.",
+          "destinos": {
+            "title": "Periods by destination",
+            "hint": "Set the validity period according to the cargo destination chosen in the Shipping Request. Shipping only accepts the listed destinations.",
+            "destinoLabel": "Destination",
+            "destinoPlaceholder": "Select the destination...",
+            "prazoLabel": "Validity period (days)",
+            "add": "Add destination",
+            "remove": "Remove destination",
+            "empty": "No destination registered. Add at least one destination with its validity period.",
+            "requiredHint": "Register at least one destination with a validity period or turn off the test validity check.",
+            "destinoRequired": "Select a destination.",
+            "duplicateDestino": "This destination is already registered in this item.",
+            "invalidHint": "Review the periods by destination: select a destination, without repeating, with a whole number of days between {{min}} and {{max}}.",
+            "tableMissingBanner": "The periods by destination do not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page."
+          }
         }
       }
     },
@@ -1224,7 +1237,19 @@
             "dataLimite": "Test expiry cut-off date",
             "limiteCurto": "cut-off",
             "hint": "{{dias}}-day period from today. Check that the tank tests expire on or after this date.",
-            "resultado": "Check result"
+            "resultado": "Check result",
+            "destino": "Destination",
+            "destinoVazio": "Not informed",
+            "prazo": "Test validity period",
+            "prazoDias": "{{dias}} days",
+            "situacao": "Status",
+            "situacaoDentro": "Within period",
+            "situacaoFora": "Outside period",
+            "situacaoPendente": "Awaiting check",
+            "situacaoIndefinida": "Period not configured",
+            "naoConfigurado": "Validity period not configured for this destination",
+            "naoConfiguradoHint": "Adjust the setup in Settings → Shipping Checklist for this client. The check stays blocked until the period is configured.",
+            "naoConfiguradoSemDestino": "The request has no destination. Set the destination in the Shipping Request or adjust the setup in Settings → Shipping Checklist. The check stays blocked until then."
           },
           "loadingDefs": "Loading checklist...",
           "items": {

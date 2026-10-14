@@ -177,29 +177,86 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
 );
 
 /**
- * Validade dos testes do tanque: a data limite é calculada pelo sistema
- * (hoje + prazo do cliente); o operador apenas registra Aprovado/Reprovado.
+ * Situação dos testes conforme a regra existente: o sistema calcula a data limite
+ * e o operador registra Aprovado (dentro do prazo) ou Reprovado (fora do prazo).
+ */
+function validadeSituacao({ configurado, value }) {
+  const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  if (!configurado) {
+    return { labelKey: `${prefix}.situacaoIndefinida`, className: 'text-amber-700' };
+  }
+  if (value === CHECK_ANSWER.APROVADO) {
+    return { labelKey: `${prefix}.situacaoDentro`, className: 'text-emerald-700' };
+  }
+  if (value === CHECK_ANSWER.REPROVADO) {
+    return { labelKey: `${prefix}.situacaoFora`, className: 'text-red-700' };
+  }
+  return { labelKey: `${prefix}.situacaoPendente`, className: 'text-muted-foreground' };
+}
+
+/**
+ * Validade dos testes do tanque: o prazo vem do destino da solicitação de saída
+ * (configurado no Check List do cliente) e a data limite é calculada pelo sistema
+ * (hoje + prazo); o operador apenas registra Aprovado/Reprovado.
+ * Sem prazo configurado para o destino, a verificação fica bloqueada e sinalizada.
  */
 function ValidadeTestesSection({ validade, number, value, disabled, onChange, language, t }) {
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  const configurado = validade.configurado !== false && validade.dias != null;
+  const situacao = validadeSituacao({ configurado, value });
+
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {t(`painel.comercial.agendamentos.checklist.sections.${VALIDADE_TESTES_SECTION}`)}
       </p>
-      <InfoChip
-        label={t(`${prefix}.dataLimite`)}
-        value={formatDataLimiteTestes(validade.data_limite, language)}
-        valueClassName="font-bold text-emerald-800"
-      />
-      <p className="text-xs text-muted-foreground">
-        {t(`${prefix}.hint`, { dias: validade.dias })}
-      </p>
+
+      {!configurado ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">{t(`${prefix}.naoConfigurado`)}</p>
+            <p className="mt-0.5 text-xs">
+              {t(validade.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <InfoChip
+          label={t(`${prefix}.destino`)}
+          value={validade.destino || t(`${prefix}.destinoVazio`)}
+        />
+        <InfoChip
+          label={t(`${prefix}.prazo`)}
+          value={configurado ? t(`${prefix}.prazoDias`, { dias: validade.dias }) : '—'}
+        />
+        <InfoChip
+          label={t(`${prefix}.dataLimite`)}
+          value={configurado ? formatDataLimiteTestes(validade.data_limite, language) : '—'}
+          valueClassName={configurado ? 'font-bold text-emerald-800' : undefined}
+        />
+        <InfoChip
+          label={t(`${prefix}.situacao`)}
+          value={t(situacao.labelKey)}
+          valueClassName={cn('font-semibold', situacao.className)}
+        />
+      </div>
+
+      {configurado ? (
+        <p className="text-xs text-muted-foreground">
+          {t(`${prefix}.hint`, { dias: validade.dias })}
+        </p>
+      ) : null}
       <CheckAnswerRow
         label={t(`${prefix}.resultado`)}
         number={number}
         value={value}
-        disabled={disabled}
+        disabled={disabled || !configurado}
         onChange={onChange}
         options={APPROVE_REJECT_OPTIONS}
         t={t}

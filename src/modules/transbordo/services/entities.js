@@ -176,5 +176,6 @@ export const entities = {
   etiquetaConfigs: createEntity('t_etiqueta_configs'),
   checklistExpedicaoItens: createEntity('t_checklist_expedicao_itens'),
   checklistExpedicaoConfig: createEntity('t_checklist_expedicao_config'),
+  checklistExpedicaoValidadeDestinos: createEntity('t_checklist_expedicao_validade_destinos'),
   transbordoValidacoes: createEntity('t_transbordo_validacoes'),
 };

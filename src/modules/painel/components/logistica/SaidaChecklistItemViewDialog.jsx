@@ -209,12 +209,39 @@ export default function SaidaChecklistItemViewDialog({
                 {sectionTitle(section)}
               </p>
               {section === VALIDADE_TESTES_SECTION && item.validade_testes ? (
-                <p className="text-xs text-muted-foreground">
-                  {t('painel.comercial.agendamentos.checklist.validadeTestes.dataLimite')}:{' '}
-                  <span className="font-medium text-foreground">
-                    {formatDataLimiteTestes(item.validade_testes.data_limite, i18n.language)}
-                  </span>
-                </p>
+                <div className="space-y-0.5 text-xs text-muted-foreground">
+                  {item.validade_testes.destino ? (
+                    <p>
+                      {t('painel.comercial.agendamentos.checklist.validadeTestes.destino')}:{' '}
+                      <span className="font-medium text-foreground">
+                        {item.validade_testes.destino}
+                      </span>
+                    </p>
+                  ) : null}
+                  {item.validade_testes.configurado === false ||
+                  item.validade_testes.dias == null ? (
+                    <p className="font-medium text-amber-700">
+                      {t('painel.comercial.agendamentos.checklist.validadeTestes.naoConfigurado')}
+                    </p>
+                  ) : (
+                    <>
+                      <p>
+                        {t('painel.comercial.agendamentos.checklist.validadeTestes.prazo')}:{' '}
+                        <span className="font-medium text-foreground">
+                          {t('painel.comercial.agendamentos.checklist.validadeTestes.prazoDias', {
+                            dias: item.validade_testes.dias,
+                          })}
+                        </span>
+                      </p>
+                      <p>
+                        {t('painel.comercial.agendamentos.checklist.validadeTestes.dataLimite')}:{' '}
+                        <span className="font-medium text-foreground">
+                          {formatDataLimiteTestes(item.validade_testes.data_limite, i18n.language)}
+                        </span>
+                      </p>
+                    </>
+                  )}
+                </div>
               ) : null}
               {checkDefs
                 .filter((c) => c.section === section)

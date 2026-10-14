@@ -5,6 +5,8 @@
  * aritmética é feita em UTC, evitando deslocamentos de fuso e de horário de verão.
  */
 
+import { destinoKey } from '@transbordo/lib/saidaDestinos';
+
 export const VALIDADE_TESTES_PRAZO_PADRAO_DIAS = 180;
 export const VALIDADE_TESTES_PRAZO_MIN_DIAS = 1;
 export const VALIDADE_TESTES_PRAZO_MAX_DIAS = 3650;
@@ -29,6 +31,73 @@ export function parsePrazoDias(value) {
 /** Prazo válido ou o padrão (180 dias) — usado ao ler dados persistidos. */
 export function normalizePrazoDias(value) {
   return parsePrazoDias(value) ?? VALIDADE_TESTES_PRAZO_PADRAO_DIAS;
+}
+
+/** Códigos de erro da validação dos prazos por destino. */
+export const PRAZO_DESTINO_ERROR = Object.freeze({
+  DESTINO_REQUIRED: 'DESTINO_REQUIRED',
+  DUPLICATE_DESTINO: 'DUPLICATE_DESTINO',
+  PRAZO_INVALID: 'PRAZO_INVALID',
+});
+
+/**
+ * Valida as linhas "destino + prazo" do item de validade dos testes.
+ * Regras: destino obrigatório, sem repetição no mesmo item e prazo inteiro positivo.
+ *
+ * @param {Array<{ destino?: string, dias?: string|number }>} rows
+ * @returns {{
+ *   ok: boolean,
+ *   errors: Array<{ index: number, field: 'destino'|'dias', code: string }>,
+ *   items: Array<{ destino: string, dias: number }>,
+ * }} `items` traz apenas as linhas válidas, já normalizadas.
+ */
+export function validarPrazosPorDestino(rows = []) {
+  const errors = [];
+  const items = [];
+  const seen = new Set();
+
+  (rows || []).forEach((row, index) => {
+    const destino = String(row?.destino ?? '').trim();
+    const key = destinoKey(destino);
+    const rowErrors = [];
+
+    if (!key) {
+      rowErrors.push({ index, field: 'destino', code: PRAZO_DESTINO_ERROR.DESTINO_REQUIRED });
+    } else if (seen.has(key)) {
+      rowErrors.push({ index, field: 'destino', code: PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO });
+    } else {
+      seen.add(key);
+    }
+
+    const dias = parsePrazoDias(row?.dias);
+    if (dias == null) {
+      rowErrors.push({ index, field: 'dias', code: PRAZO_DESTINO_ERROR.PRAZO_INVALID });
+    }
+
+    if (rowErrors.length > 0) errors.push(...rowErrors);
+    else items.push({ destino, dias });
+  });
+
+  return { ok: errors.length === 0, errors, items };
+}
+
+/**
+ * Prazo aplicável à solicitação: cliente + destino.
+ *
+ * O prazo existe somente por destino: sem cadastro para o destino da solicitação
+ * (ou sem destino informado) o prazo é `null` — nunca se reaproveita o prazo de
+ * outro destino nem um valor padrão.
+ *
+ * @param {{ prazosPorDestino?: Array<{ destino: string, dias: number|string }> }} config
+ * @param {string|null|undefined} destino destino da solicitação de saída
+ * @returns {{ dias: number|null, destino: string }}
+ */
+export function resolverPrazoValidadeTestes(config, destino) {
+  const destinoNome = String(destino ?? '').trim();
+  const prazos = Array.isArray(config?.prazosPorDestino) ? config.prazosPorDestino : [];
+  const key = destinoKey(destinoNome);
+  const found = key ? prazos.find((p) => destinoKey(p?.destino) === key) : null;
+  return { dias: found ? parsePrazoDias(found.dias) : null, destino: destinoNome };
 }
 
 /**

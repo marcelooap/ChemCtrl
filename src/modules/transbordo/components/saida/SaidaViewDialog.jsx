@@ -268,6 +268,7 @@ export default function SaidaViewDialog({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <InfoItem label="Cliente" value={saida.cliente_nome} />
+          <InfoItem label="Destino" value={saida.destino} />
           <InfoItem label="Data da Solicitação" value={formatDate(saida.data_solicitacao)} />
           <InfoItem label="Data Programada" value={formatDate(saida.data_programada)} />
           <InfoItem label="Validação" value={statusLabel} />

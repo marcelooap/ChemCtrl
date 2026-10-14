@@ -910,10 +910,23 @@
           "title": "Verificação da validade dos testes",
           "hint": "Adiciona ao checklist de expedição deste cliente a conferência da validade dos testes do tanque.",
           "enable": "Ativar verificação dos testes",
-          "prazoLabel": "Prazo de validade (dias)",
           "prazoInvalid": "Informe um prazo inteiro entre {{min}} e {{max}} dias.",
-          "example": "Com {{dias}} dias, a data limite exibida hoje na expedição é {{date}}.",
-          "tableMissingBanner": "A configuração da validade dos testes ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página."
+          "tableMissingBanner": "A configuração da validade dos testes ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
+          "destinos": {
+            "title": "Prazos por destino",
+            "hint": "Defina o prazo de validade conforme o destino da carga informado na Solicitação de Saída. A expedição só aceita os destinos listados.",
+            "destinoLabel": "Destino",
+            "destinoPlaceholder": "Selecione o destino...",
+            "prazoLabel": "Prazo de validade (dias)",
+            "add": "Adicionar destino",
+            "remove": "Remover destino",
+            "empty": "Nenhum destino cadastrado. Adicione ao menos um destino com seu prazo de validade.",
+            "requiredHint": "Cadastre ao menos um destino com prazo de validade ou desative a verificação dos testes.",
+            "destinoRequired": "Selecione um destino.",
+            "duplicateDestino": "Este destino já foi cadastrado neste item.",
+            "invalidHint": "Revise os prazos por destino: selecione um destino, sem repetir, com prazo inteiro entre {{min}} e {{max}} dias.",
+            "tableMissingBanner": "Os prazos por destino ainda não existem no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página."
+          }
         }
       }
     },
@@ -1224,7 +1237,19 @@
             "dataLimite": "Data limite de vencimento dos testes",
             "limiteCurto": "limite",
             "hint": "Prazo de {{dias}} dias a partir de hoje. Confira se o vencimento dos testes do tanque é igual ou posterior a esta data.",
-            "resultado": "Resultado da verificação"
+            "resultado": "Resultado da verificação",
+            "destino": "Destino",
+            "destinoVazio": "Não informado",
+            "prazo": "Prazo de validade dos testes",
+            "prazoDias": "{{dias}} dias",
+            "situacao": "Situação",
+            "situacaoDentro": "Dentro do prazo",
+            "situacaoFora": "Fora do prazo",
+            "situacaoPendente": "Aguardando conferência",
+            "situacaoIndefinida": "Prazo não configurado",
+            "naoConfigurado": "Prazo de validade não configurado para este destino",
+            "naoConfiguradoHint": "Ajuste a configuração em Configuração → Check List Expedição deste cliente. A verificação fica bloqueada até que o prazo seja configurado.",
+            "naoConfiguradoSemDestino": "A solicitação não tem destino informado. Informe o destino na Solicitação de Saída ou ajuste a configuração em Configuração → Check List Expedição. A verificação fica bloqueada até lá."
           },
           "loadingDefs": "Carregando checklist...",
           "items": {

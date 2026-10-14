@@ -294,6 +294,25 @@ function statusLabel(status, t) {
   return t(`painel.comercial.agendamentos.checklist.status.${key}`);
 }
 
+/**
+ * Rótulo da verificação de validade dos testes com destino, prazo e data limite
+ * usados na conferência (snapshot gravado no item).
+ */
+function validadeTestesLabel(base, validade, t, language) {
+  const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  const parts = [];
+  if (validade.destino) parts.push(`${t(`${prefix}.destino`)}: ${validade.destino}`);
+  if (validade.configurado === false || validade.dias == null) {
+    parts.push(t(`${prefix}.naoConfigurado`));
+  } else {
+    parts.push(t(`${prefix}.prazoDias`, { dias: validade.dias }));
+    parts.push(
+      `${t(`${prefix}.limiteCurto`)} ${formatDataLimiteTestes(validade.data_limite, language)}`
+    );
+  }
+  return `${base} (${parts.join(' · ')})`;
+}
+
 /** Maior lado da foto no PDF (px): mantém boa nitidez sem inflar o arquivo. */
 const FOTO_MAX_PX = 1800;
 const FOTO_JPEG_QUALITY = 0.85;
@@ -475,9 +494,7 @@ export async function generateChecklistItemPDF({
         const meta = answerMeta(answer, t);
         const label =
           section === VALIDADE_TESTES_SECTION && item.validade_testes
-            ? `${checkDefLabel(c, t)} (${t(
-                'painel.comercial.agendamentos.checklist.validadeTestes.limiteCurto'
-              )} ${formatDataLimiteTestes(item.validade_testes.data_limite, language)})`
+            ? validadeTestesLabel(checkDefLabel(c, t), item.validade_testes, t, language)
             : checkDefLabel(c, t);
         return [{ value: label }, { value: meta.label, color: meta.color }];
       });

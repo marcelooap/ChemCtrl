@@ -290,6 +290,9 @@ create table if not exists t_saidas (
   codigo text not null,
   cliente_id uuid references t_clientes(id) on delete set null,
   cliente_nome text,
+  -- Destino da carga. Null = em branco.
+  -- Valores: Petrobras | Petrorio | Trident | Total Energies | Shell
+  destino text,
   data_solicitacao date not null default current_date,
   data_programada date,
   observacoes text,

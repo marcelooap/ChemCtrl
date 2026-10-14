@@ -1,42 +1,31 @@
-import { useId, useMemo } from 'react';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { Switch } from '@shared/components/ui/switch';
-import {
-  VALIDADE_TESTES_PRAZO_MAX_DIAS,
-  VALIDADE_TESTES_PRAZO_MIN_DIAS,
-  calcularDataLimiteTestes,
-  formatDataLimiteTestes,
-  parsePrazoDias,
-} from '@painel/lib/validadeTestesTanque';
+import ChecklistExpedicaoValidadeDestinosEditor from '@painel/components/configuracao/ChecklistExpedicaoValidadeDestinosEditor';
 
 /**
  * Opção "Verificação da validade dos testes" do checklist de expedição de um cliente.
+ * O prazo é definido somente por destino.
  *
  * @param {{
- *   value: { ativo: boolean, dias: string|number },
- *   onChange: (next: { ativo: boolean, dias: string|number }) => void,
+ *   value: {
+ *     ativo: boolean,
+ *     destinos: Array<{ key: string, destino: string, dias: string|number }>,
+ *   },
+ *   onChange: (next: object) => void,
  *   disabled?: boolean,
+ *   showErrors?: boolean,
  * }} props
  */
 export default function ChecklistExpedicaoValidadeTestesConfig({
   value,
   onChange,
   disabled = false,
+  showErrors = false,
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const switchId = useId();
-  const prazoId = useId();
-  const prazoErrorId = useId();
-
-  const prazo = parsePrazoDias(value.dias);
-  const prazoInvalid = value.ativo && prazo == null;
-
-  const exemplo = useMemo(
-    () => (prazo == null ? null : formatDataLimiteTestes(calcularDataLimiteTestes(prazo), i18n.language)),
-    [prazo, i18n.language]
-  );
 
   return (
     <div className="bg-card rounded-xl border border-border shadow-sm p-4">
@@ -59,44 +48,12 @@ export default function ChecklistExpedicaoValidadeTestesConfig({
       </div>
 
       {value.ativo ? (
-        <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-3">
-          <div className="w-40">
-            <Label htmlFor={prazoId} className="text-xs font-medium">
-              {t('painel.configuracao.checklistExpedicao.validadeTestes.prazoLabel')}
-            </Label>
-            <Input
-              id={prazoId}
-              type="number"
-              inputMode="numeric"
-              min={VALIDADE_TESTES_PRAZO_MIN_DIAS}
-              max={VALIDADE_TESTES_PRAZO_MAX_DIAS}
-              step={1}
-              value={value.dias}
-              disabled={disabled}
-              onChange={(e) => onChange({ ...value, dias: e.target.value })}
-              aria-invalid={prazoInvalid}
-              aria-describedby={prazoInvalid ? prazoErrorId : undefined}
-              className={`mt-1.5 h-9 ${prazoInvalid ? 'border-destructive' : ''}`}
-            />
-          </div>
-          <div className="min-w-0 flex-1 pt-5 text-xs text-muted-foreground">
-            {prazoInvalid ? (
-              <p id={prazoErrorId} role="alert" className="text-destructive">
-                {t('painel.configuracao.checklistExpedicao.validadeTestes.prazoInvalid', {
-                  min: VALIDADE_TESTES_PRAZO_MIN_DIAS,
-                  max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
-                })}
-              </p>
-            ) : (
-              <p>
-                {t('painel.configuracao.checklistExpedicao.validadeTestes.example', {
-                  dias: prazo,
-                  date: exemplo,
-                })}
-              </p>
-            )}
-          </div>
-        </div>
+        <ChecklistExpedicaoValidadeDestinosEditor
+          rows={value.destinos || []}
+          onChange={(next) => onChange({ ...value, destinos: next })}
+          disabled={disabled}
+          showErrors={showErrors}
+        />
       ) : null}
     </div>
   );

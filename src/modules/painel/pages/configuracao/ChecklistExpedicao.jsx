@@ -18,6 +18,7 @@ import {
   getChecklistExpedicaoConfig,
   getDefaultChecklistDescricoes,
   isChecklistExpedicaoConfigAvailable,
+  isChecklistExpedicaoDestinosAvailable,
   isChecklistExpedicaoTableAvailable,
   listChecklistExpedicaoClientes,
   listChecklistExpedicaoItens,
@@ -29,19 +30,33 @@ import {
   VALIDADE_TESTES_PRAZO_MIN_DIAS,
   normalizePrazoDias,
   parsePrazoDias,
+  validarPrazosPorDestino,
 } from '@painel/lib/validadeTestesTanque';
 import { persistClienteSelecionado } from '@painel/lib/saidaClientes';
 import checklistSql from '@transbordo/sql/039_t_checklist_expedicao_itens.sql?raw';
 import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config.sql?raw';
+import checklistDestinosSql from '@transbordo/sql/042_t_checklist_expedicao_validade_destinos.sql?raw';
 
-/** Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre). */
+/**
+ * Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre).
+ * `destinos`: linhas "destino + prazo" com `key` estável para a lista.
+ */
 const DEFAULT_CONFIG_FORM = {
   ativo: DEFAULT_VALIDADE_TESTES_CONFIG.ativo,
   dias: String(DEFAULT_VALIDADE_TESTES_CONFIG.dias),
+  destinos: [],
 };
 
 function toConfigForm(config) {
-  return { ativo: Boolean(config?.ativo), dias: String(normalizePrazoDias(config?.dias)) };
+  return {
+    ativo: Boolean(config?.ativo),
+    dias: String(normalizePrazoDias(config?.dias)),
+    destinos: (config?.prazosPorDestino || []).map((p) => ({
+      key: createTempItemId(),
+      destino: p.destino,
+      dias: String(p.dias),
+    })),
+  };
 }
 
 const UUID_RE =
@@ -73,12 +88,15 @@ export default function ChecklistExpedicao() {
   const [configDirty, setConfigDirty] = useState(false);
   const [tableMissing, setTableMissing] = useState(false);
   const [configMissing, setConfigMissing] = useState(false);
+  const [destinosMissing, setDestinosMissing] = useState(false);
+  const [showDestinoErrors, setShowDestinoErrors] = useState(false);
   const [hadConfig, setHadConfig] = useState(false);
 
   const dirty = itensDirty || configDirty;
   const resetDirty = useCallback(() => {
     setItensDirty(false);
     setConfigDirty(false);
+    setShowDestinoErrors(false);
   }, []);
 
   const {
@@ -133,6 +151,7 @@ export default function ChecklistExpedicao() {
         ]);
         setTableMissing(!isChecklistExpedicaoTableAvailable());
         setConfigMissing(!isChecklistExpedicaoConfigAvailable());
+        setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
         setConfig(toConfigForm(savedConfig));
         setItens(
           rows.map((r) => ({
@@ -217,15 +236,34 @@ export default function ChecklistExpedicao() {
         return;
       }
 
-      // Desativada, o prazo digitado não é validado: mantém o último válido (ou 180).
-      const prazoDias = parsePrazoDias(config.dias);
-      if (config.ativo && prazoDias == null) {
+      const rangeParams = {
+        min: VALIDADE_TESTES_PRAZO_MIN_DIAS,
+        max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
+      };
+
+      // O prazo existe só por destino: ativa a verificação exige ao menos um destino.
+      if (config.ativo && config.destinos.length === 0) {
         toast({
           title: t('painel.configuracao.checklistExpedicao.saveError'),
-          description: t('painel.configuracao.checklistExpedicao.validadeTestes.prazoInvalid', {
-            min: VALIDADE_TESTES_PRAZO_MIN_DIAS,
-            max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
-          }),
+          description: t(
+            'painel.configuracao.checklistExpedicao.validadeTestes.destinos.requiredHint'
+          ),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Destino obrigatório, sem repetição e prazo inteiro positivo. Desativada, as linhas
+      // estão ocultas: só as completas são gravadas.
+      const destinosValidation = validarPrazosPorDestino(config.destinos);
+      if (config.ativo && !destinosValidation.ok) {
+        setShowDestinoErrors(true);
+        toast({
+          title: t('painel.configuracao.checklistExpedicao.saveError'),
+          description: t(
+            'painel.configuracao.checklistExpedicao.validadeTestes.destinos.invalidHint',
+            rangeParams
+          ),
           variant: 'destructive',
         });
         return;
@@ -243,11 +281,14 @@ export default function ChecklistExpedicao() {
           const savedConfig = await saveChecklistExpedicaoConfig({
             clienteId: persisted.id,
             ativo: config.ativo,
-            dias: prazoDias ?? DEFAULT_VALIDADE_TESTES_CONFIG.dias,
+            // Coluna legada obrigatória no banco; não é mais usada nem exibida.
+            dias: parsePrazoDias(config.dias) ?? DEFAULT_VALIDADE_TESTES_CONFIG.dias,
+            prazosPorDestino: destinosValidation.items,
           });
           setConfig(toConfigForm(savedConfig));
           setConfigDirty(false);
           setConfigMissing(!isChecklistExpedicaoConfigAvailable());
+          setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
         }
 
         const saved = itensDirty
@@ -284,6 +325,9 @@ export default function ChecklistExpedicao() {
         }
         if (String(err?.message || '').includes('040_t_checklist')) {
           setConfigMissing(true);
+        }
+        if (String(err?.message || '').includes('042_t_checklist')) {
+          setDestinosMissing(true);
         }
         toast({
           title: t('painel.configuracao.checklistExpedicao.saveError'),
@@ -329,6 +373,12 @@ export default function ChecklistExpedicao() {
           missing: configMissing,
           messageKey: 'validadeTestes.tableMissingBanner',
           sql: checklistConfigSql,
+        },
+        {
+          // Só faz sentido instalar os prazos por destino depois da configuração (040).
+          missing: destinosMissing && !configMissing,
+          messageKey: 'validadeTestes.destinos.tableMissingBanner',
+          sql: checklistDestinosSql,
         },
       ]
         .filter((banner) => banner.missing)
@@ -383,6 +433,7 @@ export default function ChecklistExpedicao() {
             value={config}
             onChange={handleConfigChange}
             disabled={saving || submitBusy}
+            showErrors={showDestinoErrors}
           />
         </div>
       ) : null}

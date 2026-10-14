@@ -18,7 +18,9 @@ import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 import {
   calcularDataLimiteTestes,
   normalizePrazoDias,
+  resolverPrazoValidadeTestes,
 } from '@painel/lib/validadeTestesTanque';
+import { destinoKey } from '@transbordo/lib/saidaDestinos';
 
 export const CHECKLIST_STATUS = {
   PENDENTE: 'pendente',
@@ -254,6 +256,34 @@ function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
 }
 
 /**
+ * Validade dos testes de um tanque: prazo cadastrado para o destino da solicitação e
+ * data limite calculada a partir de `hoje`.
+ * Sem prazo cadastrado para o destino, `configurado` é false e não há data limite.
+ */
+function buildValidadeTestes(config, destino, hoje) {
+  const prazo = resolverPrazoValidadeTestes(config, destino);
+  const configurado = prazo.dias != null;
+  return {
+    destino: prazo.destino,
+    configurado,
+    dias: prazo.dias,
+    data_limite: configurado ? calcularDataLimiteTestes(prazo.dias, hoje) : null,
+  };
+}
+
+/**
+ * A conferência já registrada continua válida enquanto o prazo que a originou não mudar.
+ * Mudou o destino da solicitação (ou o prazo do destino) → a validade precisa ser reconferida.
+ */
+function isValidadeSnapshotVigente(built, saved) {
+  if (!built?.configurado) return false;
+  // Registros anteriores aos prazos por destino não guardam o destino: compara só o prazo.
+  const mesmoDestino =
+    saved.destino == null || destinoKey(saved.destino) === destinoKey(built.destino);
+  return mesmoDestino && Number(saved.dias) === built.dias;
+}
+
+/**
  * Monta a lista de itens de conferência a partir das saídas do slot.
  * @param {Map<string, Array>|Record<string, Array>|null} [checkDefsByCliente]
  *   Definições customizadas por cliente_id ou por `checkDefsNomeKey(nome)`.
@@ -336,10 +366,7 @@ export function buildChecklistItemsFromSaidas({
       // Validade dos testes: apenas tanques (convencional/vasilhame) de clientes com a opção ativa.
       const validade_testes =
         isConv && validadeConfig?.ativo
-          ? {
-              dias: normalizePrazoDias(validadeConfig.dias),
-              data_limite: calcularDataLimiteTestes(validadeConfig.dias, hoje),
-            }
+          ? buildValidadeTestes(validadeConfig, saida.destino, hoje)
           : null;
       const defs = checkDefsForItem({ kind, check_defs, validade_testes });
 
@@ -644,7 +671,12 @@ export function buildChecklistPayloadV2({ items, user }) {
         : null,
       // Prazo e data limite vigentes na conferência (histórico auditável).
       validade_testes: it.validade_testes
-        ? { dias: it.validade_testes.dias, data_limite: it.validade_testes.data_limite }
+        ? {
+            dias: it.validade_testes.dias,
+            data_limite: it.validade_testes.data_limite,
+            destino: it.validade_testes.destino || null,
+            configurado: it.validade_testes.configurado !== false,
+          }
         : null,
       checks: { ...it.checks },
       fotos: Array.isArray(it.fotos) ? [...it.fotos] : [],
@@ -696,15 +728,23 @@ export function mergeChecklistItems(builtItems, storedItems) {
           : null;
 
     // Data limite é calculada a partir de "hoje"; após o operador registrar o resultado,
-    // mantém a data com que a conferência foi feita (não "anda" ao reabrir).
+    // mantém a data com que a conferência foi feita (não "anda" ao reabrir) — desde que o
+    // destino/prazo que a originou continue o mesmo. Caso contrário, a validade é reconferida.
     const answeredValidade = Boolean(normalizeCheckValue(saved.checks?.[VALIDADE_TESTES_CHECK_KEY]));
-    const validade_testes =
-      built.validade_testes && answeredValidade && saved.validade_testes?.data_limite
-        ? {
-            dias: normalizePrazoDias(saved.validade_testes.dias),
-            data_limite: saved.validade_testes.data_limite,
-          }
-        : built.validade_testes;
+    const keepSavedValidade = Boolean(
+      built.validade_testes &&
+        answeredValidade &&
+        saved.validade_testes?.data_limite &&
+        isValidadeSnapshotVigente(built.validade_testes, saved.validade_testes)
+    );
+    const validadeInvalidada = Boolean(built.validade_testes && answeredValidade && !keepSavedValidade);
+    const validade_testes = keepSavedValidade
+      ? {
+          ...built.validade_testes,
+          dias: normalizePrazoDias(saved.validade_testes.dias),
+          data_limite: saved.validade_testes.data_limite,
+        }
+      : built.validade_testes;
 
     const mergedBase = { ...built, check_defs, validade_testes };
     const defs = checkDefsForItem(mergedBase);
@@ -712,14 +752,19 @@ export function mergeChecklistItems(builtItems, storedItems) {
     for (const key of Object.keys(checks)) {
       checks[key] = normalizeCheckValue(saved.checks?.[key]);
     }
+    if (validadeInvalidada) checks[VALIDADE_TESTES_CHECK_KEY] = '';
+
+    const status = computeItemStatus({ ...mergedBase, checks });
+    const isFinal = status === CHECKLIST_STATUS.APROVADO || status === CHECKLIST_STATUS.REPROVADO;
+    const keepConferencia = !validadeInvalidada || isFinal;
     return {
       ...mergedBase,
       checks,
       fotos: Array.isArray(saved.fotos) ? [...saved.fotos] : [],
-      status: computeItemStatus({ ...mergedBase, checks }),
-      conferido_em: saved.conferido_em || null,
-      conferido_por_id: saved.conferido_por_id || null,
-      conferido_por_nome: saved.conferido_por_nome || null,
+      status,
+      conferido_em: keepConferencia ? saved.conferido_em || null : null,
+      conferido_por_id: keepConferencia ? saved.conferido_por_id || null : null,
+      conferido_por_nome: keepConferencia ? saved.conferido_por_nome || null : null,
     };
   });
 }

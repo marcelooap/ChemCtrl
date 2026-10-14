@@ -21,6 +21,7 @@ import {
   VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
   normalizePrazoDias,
   parsePrazoDias,
+  validarPrazosPorDestino,
 } from '@painel/lib/validadeTestesTanque';
 
 const UUID_RE =
@@ -32,8 +33,12 @@ const RPC_SETUP_MESSAGE =
 const CONFIG_RPC_SETUP_MESSAGE =
   'Execute o script 040_t_checklist_expedicao_config.sql no SQL Editor do ChemFlow para habilitar a verificação da validade dos testes.';
 
+const DESTINOS_RPC_SETUP_MESSAGE =
+  'Execute o script 042_t_checklist_expedicao_validade_destinos.sql no SQL Editor do ChemFlow para habilitar os prazos de validade por destino.';
+
 let tableAvailable = true;
 let configTableAvailable = true;
+let destinosTableAvailable = true;
 
 export function isChecklistExpedicaoTableAvailable() {
   return tableAvailable;
@@ -43,16 +48,28 @@ export function isChecklistExpedicaoConfigAvailable() {
   return configTableAvailable;
 }
 
-function isConfigTableMissingError(err) {
+export function isChecklistExpedicaoDestinosAvailable() {
+  return destinosTableAvailable;
+}
+
+function isMissingTableError(err, table) {
   const msg = String(err?.message || err || '').toLowerCase();
   return (
-    msg.includes('t_checklist_expedicao_config') &&
+    msg.includes(table) &&
     (msg.includes('pgrst205') ||
       msg.includes('does not exist') ||
       msg.includes('schema cache') ||
       msg.includes('could not find') ||
       msg.includes('relation'))
   );
+}
+
+function isConfigTableMissingError(err) {
+  return isMissingTableError(err, 't_checklist_expedicao_config');
+}
+
+function isDestinosTableMissingError(err) {
+  return isMissingTableError(err, 't_checklist_expedicao_validade_destinos');
 }
 
 function isTableMissingError(err) {
@@ -134,31 +151,69 @@ export async function listChecklistExpedicaoItens(clienteId) {
   }
 }
 
-/** Configuração padrão: verificação da validade dos testes desativada, prazo de 180 dias. */
+/**
+ * Configuração padrão: verificação da validade dos testes desativada, prazo de 180 dias
+ * e nenhum prazo específico por destino.
+ */
 export const DEFAULT_VALIDADE_TESTES_CONFIG = Object.freeze({
   ativo: false,
   dias: VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
+  prazosPorDestino: Object.freeze([]),
 });
 
-/** Linha do banco → `{ ativo, dias }` usado pela interface. */
-function toValidadeTestesConfig(row) {
+/** Linhas de prazo por destino do banco → `[{ destino, dias }]` na ordem de cadastro. */
+function toPrazosPorDestino(rows = []) {
+  return [...(rows || [])]
+    .sort((a, b) => String(a?.created_at || '').localeCompare(String(b?.created_at || '')))
+    .map((row) => ({
+      destino: String(row.destino || '').trim(),
+      dias: normalizePrazoDias(row.prazo_validade_testes_dias),
+    }))
+    .filter((row) => row.destino);
+}
+
+/** Linha do banco → `{ ativo, dias, prazosPorDestino }` usado pela interface. */
+function toValidadeTestesConfig(row, destinoRows = []) {
   return {
     ativo: Boolean(row?.verificar_validade_testes),
     dias: normalizePrazoDias(row?.prazo_validade_testes_dias),
+    prazosPorDestino: toPrazosPorDestino(destinoRows),
   };
+}
+
+/** Prazos por destino ausentes (tabela não criada) equivalem a "nenhum cadastrado". */
+async function listPrazosDestinoRows(clienteId) {
+  try {
+    const rows = await entities.checklistExpedicaoValidadeDestinos.filter({
+      cliente_id: clienteId,
+    });
+    destinosTableAvailable = true;
+    return rows || [];
+  } catch (err) {
+    if (isDestinosTableMissingError(err)) {
+      destinosTableAvailable = false;
+      return [];
+    }
+    throw err;
+  }
 }
 
 /**
  * Configuração da validade dos testes de um cliente (padrão quando não há registro).
- * @returns {Promise<{ ativo: boolean, dias: number }>}
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>}
  */
 export async function getChecklistExpedicaoConfig(clienteId) {
   const id = normalizeClienteId(clienteId);
   if (!id) return { ...DEFAULT_VALIDADE_TESTES_CONFIG };
   try {
-    const rows = await entities.checklistExpedicaoConfig.filter({ cliente_id: id });
+    const [rows, destinoRows] = await Promise.all([
+      entities.checklistExpedicaoConfig.filter({ cliente_id: id }),
+      listPrazosDestinoRows(id),
+    ]);
     configTableAvailable = true;
-    return rows?.[0] ? toValidadeTestesConfig(rows[0]) : { ...DEFAULT_VALIDADE_TESTES_CONFIG };
+    return rows?.[0]
+      ? toValidadeTestesConfig(rows[0], destinoRows)
+      : { ...DEFAULT_VALIDADE_TESTES_CONFIG };
   } catch (err) {
     if (isConfigTableMissingError(err)) {
       configTableAvailable = false;
@@ -169,11 +224,52 @@ export async function getChecklistExpedicaoConfig(clienteId) {
 }
 
 /**
- * Persiste a configuração da validade dos testes de um cliente (RPC com validação no banco).
- * @param {{ clienteId: string, ativo: boolean, dias: number|string }} args
- * @returns {Promise<{ ativo: boolean, dias: number }>}
+ * Substitui os prazos por destino de um cliente (RPC atômica). Exige a configuração
+ * do cliente já gravada (FK), por isso é chamada após `t_salvar_checklist_expedicao_config`.
  */
-export async function saveChecklistExpedicaoConfig({ clienteId, ativo, dias } = {}) {
+async function savePrazosPorDestino(clienteId, items) {
+  // Nada a gravar e a tabela nem existe: não bloqueia quem não usa o recurso.
+  if (items.length === 0 && !destinosTableAvailable) return [];
+
+  const { data, error } = await chemflowSupabase.rpc(
+    't_salvar_checklist_expedicao_validade_destinos',
+    {
+      p_cliente_id: clienteId,
+      p_prazos: items.map(({ destino, dias }) => ({ destino, dias })),
+    }
+  );
+
+  if (error) {
+    if (isMissingRpcError(error) || isDestinosTableMissingError(error)) {
+      destinosTableAvailable = false;
+      throw new Error(DESTINOS_RPC_SETUP_MESSAGE);
+    }
+    throw new Error(error.message || 'Não foi possível salvar os prazos por destino.');
+  }
+
+  destinosTableAvailable = true;
+  return data || [];
+}
+
+/**
+ * Persiste a configuração da validade dos testes de um cliente (RPC com validação no banco).
+ * Quando `prazosPorDestino` é informado, também substitui os prazos por destino do cliente;
+ * quando omitido, os prazos por destino existentes não são alterados.
+ *
+ * @param {{
+ *   clienteId: string,
+ *   ativo: boolean,
+ *   dias: number|string,
+ *   prazosPorDestino?: Array<{ destino: string, dias: number|string }>,
+ * }} args
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>}
+ */
+export async function saveChecklistExpedicaoConfig({
+  clienteId,
+  ativo,
+  dias,
+  prazosPorDestino,
+} = {}) {
   const id = normalizeClienteId(clienteId);
   if (!id) throw new Error('Selecione um cliente.');
 
@@ -182,6 +278,17 @@ export async function saveChecklistExpedicaoConfig({ clienteId, ativo, dias } = 
     const err = new Error('Informe um prazo de validade entre 1 e 3650 dias.');
     err.code = 'INVALID_PRAZO';
     throw err;
+  }
+
+  let destinoItems = null;
+  if (Array.isArray(prazosPorDestino)) {
+    const validation = validarPrazosPorDestino(prazosPorDestino);
+    if (!validation.ok) {
+      const err = new Error('Revise os prazos por destino.');
+      err.code = validation.errors[0].code;
+      throw err;
+    }
+    destinoItems = validation.items;
   }
 
   if (!isChemFlowConfigured || !chemflowSupabase) {
@@ -203,7 +310,10 @@ export async function saveChecklistExpedicaoConfig({ clienteId, ativo, dias } = 
   }
 
   configTableAvailable = true;
-  return toValidadeTestesConfig(data);
+  const destinoRows = destinoItems
+    ? await savePrazosPorDestino(id, destinoItems)
+    : await listPrazosDestinoRows(id);
+  return toValidadeTestesConfig(data, destinoRows);
 }
 
 /** Cadastro de clientes indexado por nome (ids duplicados do mesmo nome) e por id. */
@@ -319,9 +429,29 @@ async function fetchConfigRows(allIds) {
   }
 }
 
+/** Prazos por destino ausentes (tabela não criada) equivalem a "nenhum cadastrado". */
+async function fetchDestinoRows(allIds) {
+  try {
+    const { data, error } = await chemflowSupabase
+      .from('t_checklist_expedicao_validade_destinos')
+      .select('*')
+      .in('cliente_id', allIds);
+    if (error) throw error;
+    destinosTableAvailable = true;
+    return data || [];
+  } catch (err) {
+    if (isDestinosTableMissingError(err)) {
+      destinosTableAvailable = false;
+      return [];
+    }
+    throw err;
+  }
+}
+
 /**
  * Carrega, em uma única ida ao banco por tabela, a configuração operacional dos
- * clientes informados: verificações do checklist e validade dos testes do tanque.
+ * clientes informados: verificações do checklist e validade dos testes do tanque
+ * (prazo único e prazos por destino).
  *
  * O mesmo cliente pode existir mais de uma vez em `t_clientes` (ids duplicados com o
  * mesmo nome). Por isso a configuração é buscada em todos os ids do cliente e, havendo
@@ -330,7 +460,7 @@ async function fetchConfigRows(allIds) {
  * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
  * @returns {Promise<{
  *   checkDefs: Map<string, Array<{ key: string, label: string, section: string }>>,
- *   validadeTestes: Map<string, { ativo: boolean, dias: number }>,
+ *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number }> }>,
  * }>} Chaves dos mapas: id do cliente e `checkDefsNomeKey(nome)`.
  */
 export async function loadChecklistExpedicaoOperacional(clientes = []) {
@@ -343,20 +473,26 @@ export async function loadChecklistExpedicaoOperacional(clientes = []) {
   const { groups, allIds } = await resolveClienteGroups(clientes);
   if (allIds.length === 0) return result;
 
-  const [itensRows, configRows] = await Promise.all([
+  const [itensRows, configRows, destinoRows] = await Promise.all([
     fetchItensRows(allIds),
     fetchConfigRows(allIds),
+    fetchDestinoRows(allIds),
   ]);
   const itensByCliente = groupByClienteId(itensRows);
   const configByCliente = groupByClienteId(configRows);
+  const destinosByCliente = groupByClienteId(destinoRows);
 
   for (const group of groups) {
     const itens = pickLatestRows(group, itensByCliente);
     const defs = itens ? toCheckDefs(itens) : [];
     if (defs.length > 0) setForGroup(checkDefs, group, defs);
 
+    // Os prazos por destino pertencem ao mesmo id de cliente da configuração escolhida.
     const config = pickLatestRows(group, configByCliente)?.[0];
-    if (config) setForGroup(validadeTestes, group, toValidadeTestesConfig(config));
+    if (config) {
+      const prazos = destinosByCliente.get(String(config.cliente_id)) || [];
+      setForGroup(validadeTestes, group, toValidadeTestesConfig(config, prazos));
+    }
   }
   return result;
 }
