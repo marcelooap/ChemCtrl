@@ -164,6 +164,21 @@ export function saidaHasTransbordoItems(saida) {
   return (saida?.itens || []).some(isTransbordoItem);
 }
 
+/**
+ * Listagem operacional do Transbordo.
+ * Solicitação do Painel só com produtos da Industrialização não entra aqui.
+ * Rascunho criado no ChemFlow, ainda sem produto, continua visível.
+ */
+export function saidaVisivelNoTransbordo(saida) {
+  const itens = (saida?.itens || []).filter((item) => !isItemSaidaVazio(item));
+  if (itens.some(isTransbordoItem)) return true;
+  if (itens.some(isIndustrializacaoItem)) return false;
+  return (
+    !isSaidaModuloPainel(saida) &&
+    saida?.modulo_origem !== MODULO_SAIDA_INDUSTRIALIZACAO
+  );
+}
+
 export function getValidacaoModulo(saida, modulo) {
   const raw = saida?.validacao_modulos;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;

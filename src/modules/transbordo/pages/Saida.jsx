@@ -30,6 +30,7 @@ import {
 } from "@transbordo/lib/estoqueSaldo";
 import {
   saidaHasIndustrializacaoItems,
+  saidaVisivelNoTransbordo,
   isSaidaModuloChemflow,
   isSaidaModuloPainel,
   canExcluirSaidaNoModuloOperacional,
@@ -70,6 +71,7 @@ const DEFAULT_BASE_PATH = "/chemflow/saida";
  * Tela de listagem de saídas.
  * `basePath` / `title` permitem reutilizar a mesma UI no Painel / Industrialização.
  * `onlyIndustrializacao` limita à saídas com itens do módulo Industrialização.
+ * No Transbordo operacional, saídas só da Industrialização ficam de fora.
  * `excludeChemflow` oculta saídas criadas no ChemFlow (transbordo).
  * `statusMode`: "validacao" (ChemFlow) | "expedicao" (Painel Comercial — Expedido/Aguardando).
  */
@@ -152,6 +154,8 @@ export default function Saida({
       }
       if (onlyIndustrializacao) {
         list = list.filter(saidaHasIndustrializacaoItems);
+      } else if (!isExpedicao) {
+        list = list.filter(saidaVisivelNoTransbordo);
       }
       if (excludeChemflow) {
         list = list.filter((s) => !isSaidaModuloChemflow(s));
