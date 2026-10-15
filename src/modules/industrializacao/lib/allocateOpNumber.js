@@ -70,6 +70,15 @@ export async function allocateUniqueOpNumber(
   ProductionEntity,
   { pageSize = 1000, attempts = 5, rpcAttempts = 25 } = {}
 ) {
+  let knownMax = 0;
+  if (ProductionEntity?.list) {
+    const snapshot = await ProductionEntity.list('-created_date', pageSize).catch(() => []);
+    for (const row of snapshot || []) {
+      const n = parseOpNumber(row?.op_number);
+      if (n > knownMax) knownMax = n;
+    }
+  }
+
   for (let i = 0; i < rpcAttempts; i += 1) {
     let candidate = '';
     try {
@@ -78,6 +87,12 @@ export async function allocateUniqueOpNumber(
       break; // RPC ainda não aplicada — fallback abaixo
     }
     if (!candidate) break;
+
+    const candidateN = parseOpNumber(candidate);
+    // Sequence atrasada devolve um número já superado (ex.: OP85 com a fila em OP254).
+    // Não reciclá-lo: o fallback usa o maior OP realmente em uso.
+    if (knownMax > 0 && candidateN > 0 && candidateN <= knownMax) break;
+
     if (!(await isOpNumberTaken(ProductionEntity, candidate))) return candidate;
   }
 

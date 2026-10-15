@@ -11,6 +11,22 @@ export const parseArr = (val) => {
   }
 };
 
+/**
+ * Composição ou vasilhame desta produção.
+ * O id da produção prevalece: o mesmo op_number pode ter sido reutilizado
+ * (sequence atrasada) e não pode puxar embalagem de outra OP.
+ * Sem production_id, o vínculo legado é o número da OP.
+ */
+export function recordBelongsToProduction(record, production) {
+  if (!record || !production) return false;
+  const recId = record.production_id ? String(record.production_id) : '';
+  const prodId = production.id ? String(production.id) : '';
+  if (recId && prodId) return recId === prodId;
+  const op = String(production.op_number || '').trim();
+  const recOp = String(record.op_number || '').trim();
+  return Boolean(op && recOp && op === recOp);
+}
+
 /** Origins belonging to a container, sorted oldest-first. */
 export const originsOfContainer = (origins, containerId) => {
   if (!containerId || !origins?.length) return [];
@@ -250,15 +266,17 @@ export function packagingRowsForProduction(containers, origins, production) {
 
   for (const c of containers) {
     const cOrigins = effectiveOriginsOfContainer(origins, c);
-    const linkedByOrigin = cOrigins.some(
-      (o) =>
-        (production.id && o.production_id === production.id)
-        || (production.op_number && o.op_number === production.op_number)
+    const linkedByOrigin = cOrigins.some((o) => recordBelongsToProduction(o, production));
+    const containerIsOtherProduction = Boolean(
+      production.id && c.production_id && c.production_id !== production.id
     );
     const linkedByLegacy =
-      (production.id && c.production_id === production.id)
-      || (production.op_number && c.op_number === production.op_number)
-      || (lot && (c.lot || '').trim() === lot)
+      recordBelongsToProduction(c, production)
+      || (
+        !containerIsOtherProduction
+        && lot
+        && (c.lot || '').trim() === lot
+      )
       || (production.id && c.id && production.complement_container_id === c.id);
 
     if (!linkedByOrigin && !linkedByLegacy) continue;

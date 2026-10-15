@@ -1,6 +1,6 @@
 import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
 import { formatOriginalAggregatedLabel, isUnitPackagingLike } from '@industrializacao/lib/packagingTypes';
-import { originsOfContainer, originMergeKey } from '@industrializacao/lib/containerOrigins';
+import { originsOfContainer, originMergeKey, recordBelongsToProduction } from '@industrializacao/lib/containerOrigins';
 
 export const parseArr = (val) => {
   if (!val) return [];
@@ -74,11 +74,7 @@ export function initialVolumeForProductionPackaging(container, origins = [], pro
   if (!container?.id) return 0;
   const all = originsOfContainer(origins, container.id).filter((o) => !o._legacy);
   if (all.length === 0) return 0;
-  const forProd = all.filter(
-    (o) =>
-      (production?.id && o.production_id === production.id)
-      || (production?.op_number && o.op_number === production.op_number)
-  );
+  const forProd = all.filter((o) => recordBelongsToProduction(o, production));
   return sumDistinctInitialVolumes(forProd.length ? forProd : all);
 }
 
