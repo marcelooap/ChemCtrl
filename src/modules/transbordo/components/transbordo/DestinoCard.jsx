@@ -138,23 +138,35 @@ export default function DestinoCard({
           v.placa === destino.placa &&
           String(v.barril || "") === String(destino.barril || ""))
     ) ||
-    fracionadoVasilhames.find((v) => v.placa && v.placa === destino.placa);
+    fracionadoVasilhames.find((v) => v.placa && v.placa === destino.placa) ||
+    (!String(destino.placa || "").trim() && String(destino.barril || "").trim()
+      ? fracionadoVasilhames.find(
+          (v) =>
+            !String(v.placa || "").trim() &&
+            String(v.barril || "").trim().toUpperCase() ===
+              String(destino.barril || "").trim().toUpperCase()
+        )
+      : null);
 
   // Lista suspensa: tanques fracionados no pátio com prioridade + todos os tanques cadastrados
   const vasilhameOpcoes = (() => {
     const fracionadosKeys = new Set();
     const result = [];
 
-    // 1. Tanques fracionados no pátio do produto
+    // 1. Tanques fracionados no pátio do produto (placa ou só barril)
     for (const v of fracionadoVasilhames) {
-      if (!v.placa) continue;
-      const key = `${String(v.placa).trim().toUpperCase()}|${String(v.barril || "").trim().toUpperCase()}`;
+      const placa = String(v.placa || "").trim();
+      const barril = String(v.barril || "").trim();
+      if (!placa && !barril) continue;
+      const key = `${placa.toUpperCase()}|${barril.toUpperCase()}`;
       if (!fracionadosKeys.has(key)) {
         fracionadosKeys.add(key);
         result.push({
           ...v,
           _isFracionado: true,
-          displayLabel: `${v.placa}${v.barril ? ` - ${v.barril}` : ""} (Fracionado · ${formatVolume(v.volume)} L)`,
+          displayLabel: placa
+            ? `${placa}${barril ? ` - ${barril}` : ""} (Fracionado · ${formatVolume(v.volume)} L)`
+            : `${barril} (Fracionado · ${formatVolume(v.volume)} L)`,
         });
       }
     }
@@ -391,7 +403,10 @@ export default function DestinoCard({
               <SearchableSelect
                 value={destino.placa || ""}
                 onChange={(label, item) => {
-                  const placaText = String(item?.placa || label || "").trim();
+                  const semPlaca = item && !String(item.placa || "").trim() && item.barril;
+                  const placaText = semPlaca
+                    ? ""
+                    : String(item?.placa || label || "").trim();
                   const matched =
                     item || findVasilhameCadastro(placaText, vasilhames);
 
@@ -420,7 +435,9 @@ export default function DestinoCard({
                   const updated = {
                     ...destino,
                     placa: placaText,
-                    barril: matched?.barril || destino.barril || "",
+                    barril: semPlaca
+                      ? item.barril
+                      : matched?.barril || destino.barril || "",
                     tara: novaTara,
                     vasilhame_existente_id: isFracionadoPatio ? matched.id : null,
                     fracionado: isFracionadoPatio
@@ -454,7 +471,36 @@ export default function DestinoCard({
             <Field
               label="Nº do Barril"
               value={destino.barril}
-              onChange={(v) => updateField("barril", v)}
+              onChange={(v) => {
+                const barril = String(v || "");
+                const placa = String(destino.placa || "").trim();
+                const matched = !placa
+                  ? fracionadoVasilhames.find(
+                      (row) =>
+                        !String(row.placa || "").trim() &&
+                        String(row.barril || "").trim().toUpperCase() ===
+                          barril.trim().toUpperCase()
+                    )
+                  : null;
+                const updated = {
+                  ...destino,
+                  barril,
+                  vasilhame_existente_id: matched
+                    ? matched.id
+                    : !placa
+                      ? null
+                      : destino.vasilhame_existente_id,
+                  tara:
+                    matched &&
+                    matched.tara != null &&
+                    matched.tara !== "" &&
+                    Number(matched.tara) >= 0
+                      ? roundMass(matched.tara)
+                      : destino.tara,
+                };
+                recalc(updated);
+                onChange(updated);
+              }}
               placeholder="Nº barril"
               readOnly={readOnly}
             />

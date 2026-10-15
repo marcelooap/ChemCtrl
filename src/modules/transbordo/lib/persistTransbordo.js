@@ -16,6 +16,7 @@ import {
   aggregateComposicaoByLote,
   applyAdditionalDestino,
   placaKey,
+  sameTanqueIdentity,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
 import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
@@ -182,7 +183,7 @@ export async function revertTopUpsDoTransbordo({
   const dens = densFallback || parseDensidade(transbordo.densidade);
 
   for (const d of transbordo.destinos || []) {
-    if (d.tipo_embalagem !== "Vasilhame" || !d.placa) continue;
+    if (d.tipo_embalagem !== "Vasilhame" || !(d.placa || d.barril)) continue;
     const existing = findFracionadoNoPatio(vasilhamesList, {
       placa: d.placa,
       barril: d.barril,
@@ -193,14 +194,18 @@ export async function revertTopUpsDoTransbordo({
       vasilhamesList.find(
         (v) =>
           (v.status || "No Pátio") === "No Pátio" &&
-          String(v.placa || "").trim().toUpperCase() ===
-            String(d.placa || "").trim().toUpperCase() &&
+          sameTanqueIdentity(v.placa, v.barril, d.placa, d.barril) &&
           (v.composicao || []).some((c) => c.transbordo_codigo === codigo)
       );
     if (!candidate) continue;
 
-    // Não reverte registros criados por este OP — serão apagados via deleteMany
-    if (candidate.transbordo_id === transbordo.id) continue;
+    const hasForeignSlice = (candidate.composicao || []).some((c) => {
+      const code = String(c.transbordo_codigo || "").trim();
+      return code && code !== codigo;
+    });
+    // Registro criado só por este OP é apagado via deleteMany.
+    // Se já recebeu aporte de outro OP, preserva o tanque e tira só esta fatia.
+    if (candidate.transbordo_id === transbordo.id && !hasForeignSlice) continue;
 
     const cleaned = removeComposicaoByTransbordo(
       candidate.composicao || [],
@@ -221,16 +226,21 @@ export async function revertTopUpsDoTransbordo({
     );
     const densCand = parseDensidade(candidate.densidade) || dens;
     const peso = densCand > 0 ? roundMass(newVol * densCand) : 0;
-    const reverted = await entities.vasilhames.update(candidate.id, {
+    const patch = {
       volume: newVol,
       peso_liquido: peso,
       peso_bruto: roundMass((candidate.tara || 0) + peso),
       composicao: cleaned,
       lote: getDominantLote(cleaned) || candidate.lote || "",
       fracionado: newVol > 0 ? true : candidate.fracionado,
-    });
+    };
+    if (candidate.transbordo_id === transbordo.id && hasForeignSlice) {
+      patch.transbordo_id = null;
+    }
+    const reverted = await entities.vasilhames.update(candidate.id, patch);
     candidate.volume = newVol;
     candidate.composicao = cleaned;
+    if (patch.transbordo_id === null) candidate.transbordo_id = null;
 
     if (produtoFiltrado) {
       await upsertFiltracaoForVasilhame(
@@ -570,8 +580,8 @@ export async function persistTransbordo({
 
         if (!TIPOS_VASILHAME.has(d.tipo_embalagem)) continue;
 
-        // Vários destinos na mesma placa deste OP entram no mesmo tanque.
-        if (d.tipo_embalagem === "Vasilhame" && d.placa) {
+        // Vários destinos no mesmo tanque (placa ou barril) entram no mesmo registro.
+        if (d.tipo_embalagem === "Vasilhame" && (d.placa || d.barril)) {
           const key = placaKey(d.placa, d.barril);
           const session = sessionByPlaca.get(key);
 
@@ -611,9 +621,13 @@ export async function persistTransbordo({
               data: payload.data || null,
               dens,
             });
+            const sharedTank =
+              existing.transbordo_id &&
+              existing.transbordo_id !== savedTransbordo.id;
             const updatedTopUp = await entities.vasilhames.update(existing.id, {
               ...next,
               numero_op: codigo,
+              ...(sharedTank ? { transbordo_id: null } : {}),
               produto_id: nullIfEmpty(payload.produto_id) || existing.produto_id,
               produto_nome: payload.produto_nome || existing.produto_nome,
               produto_codigo: payload.produto_codigo || existing.produto_codigo,
@@ -632,6 +646,7 @@ export async function persistTransbordo({
               ...existing,
               ...next,
               ...(updatedTopUp || {}),
+              ...(sharedTank ? { transbordo_id: null } : {}),
             };
             sessionByPlaca.set(key, { kind: "existing", row });
             const idxAtual = vasilhamesAtuais.findIndex((v) => v.id === existing.id);
@@ -660,7 +675,7 @@ export async function persistTransbordo({
           comp
         );
         vasilhameRecords.push(createdBase);
-        if (d.tipo_embalagem === "Vasilhame" && d.placa) {
+        if (d.tipo_embalagem === "Vasilhame" && (d.placa || d.barril)) {
           sessionByPlaca.set(placaKey(d.placa, d.barril), {
             kind: "new",
             index: vasilhameRecords.length - 1,

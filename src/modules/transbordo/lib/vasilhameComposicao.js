@@ -710,8 +710,23 @@ export function removeComposicaoByTransbordo(composicao = [], codigo) {
   return (composicao || []).filter((c) => c.transbordo_codigo !== codigo);
 }
 
+/** Mesmo tanque físico: placa, ou barril quando a placa está em branco. */
+export function sameTanqueIdentity(aPlaca, aBarril, bPlaca, bBarril) {
+  const p1 = String(aPlaca || "").trim().toUpperCase();
+  const b1 = String(aBarril || "").trim().toUpperCase();
+  const p2 = String(bPlaca || "").trim().toUpperCase();
+  const b2 = String(bBarril || "").trim().toUpperCase();
+  if (p1 || p2) {
+    if (!p1 || !p2 || p1 !== p2) return false;
+    if (b1 && b2 && b1 !== b2) return false;
+    return true;
+  }
+  return Boolean(b1) && b1 === b2;
+}
+
 /**
- * Localiza vasilhame fracionado No Pátio pela placa/barril.
+ * Localiza vasilhame fracionado No Pátio pela placa ou, se a placa
+ * estiver em branco, pelo número do barril.
  */
 export function findFracionadoNoPatio(vasilhames = [], { placa, barril, id } = {}) {
   const noPatioAll = (vasilhames || []).filter(
@@ -728,6 +743,14 @@ export function findFracionadoNoPatio(vasilhames = [], { placa, barril, id } = {
   const noPatio = noPatioAll.filter((v) => v.fracionado === true);
 
   const p = String(placa || "").trim();
+  const b = String(barril || "").trim();
+  if (!p && b) {
+    const byBarril = noPatio.filter((v) =>
+      sameTanqueIdentity(v.placa, v.barril, "", b)
+    );
+    if (byBarril.length === 0) return null;
+    return [...byBarril].sort((a, c) => (c.volume || 0) - (a.volume || 0))[0];
+  }
   if (!p) return null;
 
   const key = placaKey(placa, barril);
@@ -757,7 +780,7 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
   const isOperacional = (v) =>
     (v.origem === "transbordo" || v.origem === "manual" || v.fracionado === true) &&
     (v.status || "No Pátio") === "No Pátio" &&
-    v.placa &&
+    (v.placa || v.barril) &&
     !TIPOS_NAO_VASILHAME.has(v.tipo) &&
     // Embalagens unitárias (bombona/tambor/IBC) não unificam por placa sintética
     !isDestinoEmbalagemUnitaria(v.tipo);
@@ -834,8 +857,12 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     }
 
     volume = roundVolume(volume);
-    // Se algum registro já estava completo, o unificado também deixa de ser fracionado
-    const fracionado = group.every((v) => v.fracionado === true);
+    const lotesReais = new Set(
+      composicao.map((c) => (c.lote || "").trim()).filter(isLoteReal)
+    );
+    // Mais de um lote, ou algum registro já completo, deixa de ser fracionado.
+    const fracionado =
+      group.every((v) => v.fracionado === true) && lotesReais.size <= 1;
     const dens =
       parseFloat(String(primary.densidade || "0").replace(",", ".")) || 0;
     const peso_liquido =

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { syncEstoqueSaldos, isUnidadeMassaEntrada, isUnidadeVolumeEntrada, normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
+import { isUnidadeMassaEntrada, isUnidadeVolumeEntrada, normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
 import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -23,19 +23,14 @@ import TransbordoViewDialog from "@transbordo/components/transbordo/TransbordoVi
 import {
   formatVolume,
   formatMass,
-  parseDensidade,
 } from "@transbordo/lib/format";
-import { restoreTankaVasilhamesAfterExclude } from "@transbordo/lib/tankaVolume";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
-  deleteEstoqueDoTransbordo,
   migrateEstoqueEmbaladoParaVasilhames,
   normalizeBarrilEmbalagensUnitarias,
 } from "@transbordo/lib/transbordoEmbalado";
-import {
-  persistTransbordo,
-  revertTopUpsDoTransbordo,
-} from "@transbordo/lib/persistTransbordo";
+import { persistTransbordo } from "@transbordo/lib/persistTransbordo";
+import { excluirTransbordo } from "@transbordo/lib/excluirTransbordo";
 import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
@@ -422,50 +417,17 @@ export default function Transbordo() {
     setTransbordos((prev) => prev.filter((t) => t.id !== id));
 
     try {
-      const dens = parseDensidade(toDelete.densidade);
       const produtoFiltrado = !!produtos.find(
         (p) => p.id === toDelete.produto_id
       )?.filtrado;
 
-      // IDs de estoque (entrada/embalado) que voltam a ficar disponíveis
-      const affectedEstoqueIds = (toDelete.origens || [])
-        .filter(
-          (o) =>
-            (!o.tipo_origem ||
-              o.tipo_origem === "entrada" ||
-              o.tipo_origem === "embalado") &&
-            o.entrada_id
-        )
-        .map((o) => o.entrada_id);
-
-      // 1) Reverte top-ups em vasilhames fracionados que já existiam
-      await revertTopUpsDoTransbordo({
+      await excluirTransbordo({
         transbordo: toDelete,
-        vasilhamesList: vasilhames,
-        densFallback: dens,
+        transbordos,
+        isotanques,
+        vasilhames,
         produtoFiltrado,
       });
-
-      // 2) Restaura volume das tankas usadas como origem (se tinham sido zeradas)
-      await restoreTankaVasilhamesAfterExclude({
-        origens: toDelete.origens || [],
-        excludeTransbordoId: toDelete.id,
-        isotanques,
-        transbordos,
-        entities,
-        vasilhamesList: vasilhames,
-      });
-
-      // 3) Remove embalagens, estoque embalado e filtrações criadas por este transbordo
-      await entities.vasilhames.deleteMany({ transbordo_id: id });
-      await entities.filtracoes.deleteMany({ transbordo_id: id });
-      await deleteEstoqueDoTransbordo(id);
-
-      // 4) Remove o movimento — libera novamente o disponível nas origens de estoque
-      await entities.transbordos.delete(id);
-
-      // 5) Recalcula saldo_atual dos estoques de origem
-      await syncEstoqueSaldos(affectedEstoqueIds);
 
       await loadData({ silent: true });
     } catch (err) {

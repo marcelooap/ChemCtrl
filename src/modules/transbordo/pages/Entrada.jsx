@@ -36,6 +36,7 @@ import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { prepareEntradaView } from "@industrializacao/lib/syncMpEntradaTransbordo";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
+import { reverterTransbordosDaEntrada } from "@transbordo/lib/excluirTransbordo";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
@@ -456,9 +457,10 @@ export default function Entrada() {
     const id = deleteId;
     const snap = peekScrollAnchor();
     setDeleteId(null);
-    setEntradas((prev) => prev.filter((e) => e.id !== id));
-    setEstoque((prev) => prev.filter((e) => e.entrada_id !== id));
     try {
+      await reverterTransbordosDaEntrada(id);
+      setEntradas((prev) => prev.filter((e) => e.id !== id));
+      setEstoque((prev) => prev.filter((e) => e.entrada_id !== id));
       await entities.estoque.deleteMany({ entrada_id: id });
       await entities.entradas.delete(id);
       await loadData({ silent: true });
@@ -747,8 +749,9 @@ export default function Entrada() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir esta entrada e todos os registros de estoque
-              associados? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir esta entrada? O estoque associado será
+              removido e os transbordos que consumiram esse lote — inclusive o volume
+              lançado em tankas — serão desfeitos. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
