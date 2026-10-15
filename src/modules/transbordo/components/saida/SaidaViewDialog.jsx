@@ -185,13 +185,22 @@ export default function SaidaViewDialog({
   const isAgendamento = variant === "agendamento";
   const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
   const itens = saida.itens || [];
+  const itemPertenceAoModulo = (item) =>
+    !highlightModule || resolveItemOrigem(item) === highlightModule;
+  const selectableIndexes = itens
+    .map((item, index) => (itemPertenceAoModulo(item) ? index : -1))
+    .filter((index) => index >= 0);
+  const selectableSet = new Set(selectableIndexes);
   const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
   const colCount =
     (isAgendamento ? 8 : 7) +
     (canSelectFiscal ? 1 : 0) +
     (showChecklistColumn ? 1 : 0);
-  const allSelected = itens.length > 0 && selected.size === itens.length;
-  const someSelected = selected.size > 0 && !allSelected;
+  const allSelected =
+    selectableIndexes.length > 0 &&
+    selectableIndexes.every((index) => selected.has(index));
+  const someSelected =
+    selectableIndexes.some((index) => selected.has(index)) && !allSelected;
   const statusLabel = highlightModule
     ? saidaTemItemPendenteNoModulo(saida, highlightModule)
       ? "Pendente"
@@ -216,9 +225,10 @@ export default function SaidaViewDialog({
 
   const toggleAll = () => {
     setSelected((prev) =>
-      prev.size === itens.length
+      selectableIndexes.length > 0 &&
+      selectableIndexes.every((index) => prev.has(index))
         ? new Set()
-        : new Set(itens.map((_, index) => index))
+        : new Set(selectableIndexes)
     );
   };
 
@@ -232,17 +242,17 @@ export default function SaidaViewDialog({
 
     const indexes =
       selected.size > 0
-        ? [...selected].sort((a, b) => a - b)
-        : itens.map((_, index) => index);
+        ? [...selected]
+            .filter((index) => selectableSet.has(index))
+            .sort((a, b) => a - b)
+        : selectableIndexes;
+    if (indexes.length === 0) return;
     const picked = indexes.map((index) => itens[index]).filter(Boolean);
-    const partial = selected.size > 0 && selected.size < itens.length;
-    const reportSaida = partial
-      ? {
-          ...saida,
-          itens: picked,
-          quantidade_total: quantidadeItens(picked),
-        }
-      : saida;
+    const reportSaida = {
+      ...saida,
+      itens: picked,
+      quantidade_total: quantidadeItens(picked),
+    };
 
     generateRelatorioFiscalSaidaPDF(reportSaida, {
       vasilhames,
@@ -451,11 +461,13 @@ export default function SaidaViewDialog({
                   >
                     {canSelectFiscal ? (
                       <td className="pl-3 pr-1 py-2.5">
-                        <SelectDot
-                          checked={selected.has(i)}
-                          onClick={() => toggleItem(i)}
-                          label={`Incluir ${item.produto_nome || "item"} no relatório fiscal`}
-                        />
+                        {isForeignModule ? null : (
+                          <SelectDot
+                            checked={selected.has(i)}
+                            onClick={() => toggleItem(i)}
+                            label={`Incluir ${item.produto_nome || "item"} no relatório fiscal`}
+                          />
+                        )}
                       </td>
                     ) : null}
                     <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
@@ -588,7 +600,9 @@ export default function SaidaViewDialog({
               ? `${selected.size} ${
                   selected.size === 1 ? "item selecionado" : "itens selecionados"
                 }. O relatório sai só com eles.`
-              : "Sem seleção, o relatório inclui todos os itens."}
+              : highlightModule
+                ? "Sem seleção, o relatório inclui os itens deste módulo."
+                : "Sem seleção, o relatório inclui todos os itens."}
           </p>
         ) : null}
 
@@ -598,7 +612,9 @@ export default function SaidaViewDialog({
               type="button"
               variant="outline"
               className="gap-2"
-              disabled={printing || (!isAgendamento && itens.length === 0)}
+              disabled={
+                printing || (!isAgendamento && selectableIndexes.length === 0)
+              }
               onClick={handlePrintRelatorio}
             >
               <FileText className="w-4 h-4" />
