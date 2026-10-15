@@ -340,25 +340,43 @@ export function formatSaidaItemLote(item, { vasilhame, preferVasilhame = false }
   return resolveSaidaItemLote(item, { vasilhame, preferVasilhame }) || "—";
 }
 
+const EMBALAGEM_VAZIA = new Set(["", "-", "—", "–", "−"]);
+
+/** Primeiro código útil entre cadastro e cópia gravada na saída. */
+function codigoEmbalagem(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (!EMBALAGEM_VAZIA.has(text)) return text;
+  }
+  return "";
+}
+
 /**
- * Coluna Embalagem: placa (barril) para convencional/vasilhame; "-" se embalado.
+ * Coluna Embalagem.
+ * - Embalado / retorno de MP: "-"
+ * - Placa e barril: "nº placa (nº barril)"
+ * - Só um dos dois: o que estiver registrado
  */
 export function formatSaidaItemEmbalagem(item, { vasilhame } = {}) {
   if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
     return "-";
   }
 
-  const placa = String(
-    item?.vasilhame_placa || vasilhame?.placa || ""
-  ).trim();
-  const barril = String(
-    item?.vasilhame_barril || vasilhame?.barril || ""
-  ).trim();
-  const hasBarril = Boolean(barril) && barril !== "—" && barril !== "-";
+  // Cadastro do vasilhame (Transbordo: placa/barril; Industrialização:
+  // container_number/barril_number) prevalece sobre a cópia da saída.
+  const placa = codigoEmbalagem(
+    vasilhame?.placa,
+    vasilhame?.container_number,
+    item?.vasilhame_placa
+  );
+  const barril = codigoEmbalagem(
+    vasilhame?.barril,
+    vasilhame?.barril_number,
+    item?.vasilhame_barril
+  );
 
-  if (!placa) return "—";
-  if (hasBarril) return `${placa} (${barril})`;
-  return placa;
+  if (placa && barril) return `${placa} (${barril})`;
+  return placa || barril || "—";
 }
 
 /**

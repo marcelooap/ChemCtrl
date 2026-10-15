@@ -40,6 +40,7 @@ import {
 import SaidaChecklistItemViewDialog from "@painel/components/logistica/SaidaChecklistItemViewDialog";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { loadIndContainerLabelContext } from "@transbordo/lib/saidaIndEtiqueta";
+import { base44 } from "@industrializacao/api/base44Client";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -93,6 +94,20 @@ function quantidadeItens(items) {
   );
 }
 
+function findById(list, id) {
+  if (!id) return null;
+  const key = String(id);
+  return (list || []).find((row) => String(row?.id) === key) || null;
+}
+
+/** Vasilhame do Transbordo ou container da Industrialização ligado à linha. */
+function resolveEmbalagemSource(item, vasilhames, containersById) {
+  const vasilhame = findById(vasilhames, item?.vasilhame_id);
+  if (vasilhame) return vasilhame;
+  if (!item?.container_id) return null;
+  return containersById.get(String(item.container_id)) || null;
+}
+
 export default function SaidaViewDialog({
   open,
   onClose,
@@ -118,6 +133,7 @@ export default function SaidaViewDialog({
   const [indLabel, setIndLabel] = useState(null);
   const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
   const [checklistDownloadingIndex, setChecklistDownloadingIndex] = useState(null);
+  const [containersById, setContainersById] = useState(() => new Map());
 
   useEffect(() => {
     setSelected(new Set());
@@ -127,6 +143,40 @@ export default function SaidaViewDialog({
     setIndLabelLoadingIndex(null);
     setChecklistDownloadingIndex(null);
   }, [open, saida?.id]);
+
+  useEffect(() => {
+    if (!open || !saida) {
+      setContainersById(new Map());
+      return undefined;
+    }
+
+    const ids = [
+      ...new Set(
+        (saida.itens || []).map((item) => item?.container_id).filter(Boolean)
+      ),
+    ];
+    if (ids.length === 0) {
+      setContainersById(new Map());
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const rows = await Promise.all(
+        ids.map((id) => base44.entities.Container.get(id).catch(() => null))
+      );
+      if (cancelled) return;
+      const next = new Map();
+      rows.forEach((row) => {
+        if (row?.id) next.set(String(row.id), row);
+      });
+      setContainersById(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, saida]);
 
   if (!saida) return null;
 
@@ -374,9 +424,11 @@ export default function SaidaViewDialog({
                 </tr>
               ) : (
                 itens.map((item, i) => {
-                  const vasilhame = item.vasilhame_id
-                    ? vasilhames.find((v) => v.id === item.vasilhame_id)
-                    : null;
+                  const vasilhame = resolveEmbalagemSource(
+                    item,
+                    vasilhames,
+                    containersById
+                  );
                   const isForeignModule =
                     Boolean(highlightModule) &&
                     resolveItemOrigem(item) !== highlightModule;
