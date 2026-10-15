@@ -14,6 +14,7 @@ import { normalizeDestino } from "@transbordo/lib/saidaDestinos";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { todayDateInputValue } from "@/i18n/formatters";
 import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
+import { clearSaidaLeituras } from "@transbordo/lib/saidaNovas";
 import { allocateSaidaCodigo } from "@transbordo/lib/allocateBusinessCodes";
 import { buildReservaChave } from "@painel/lib/materialReservas";
 import {
@@ -33,6 +34,10 @@ import {
   emptySaidaItem,
   isItemSaidaVazio,
   resolveItemOrigem,
+  itemFoiBaixado,
+  saidaItemChave,
+  isSaidaValidadaNoModulo,
+  isSaidaModuloPainel,
 } from "@transbordo/lib/saidaOrigem";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import {
@@ -202,22 +207,39 @@ export default function SaidaForm({
     load();
   }, [id, loadIndData, defaultOrigem]);
 
-  const getAvailableSaldo = (entradaId, currentIndex) => {
-    const entrada = entradas.find((e) => e.id === entradaId);
-    if (!entrada) return 0;
-    let saldo = entrada.saldo_atual || 0;
-    if (editingSaida?.enviado_ao_fiscal) {
-      (editingSaida.itens || []).forEach((item) => {
-        if (item.tipo === TIPO_EMBALADO && item.entrada_id === entradaId) {
-          saldo += item.quantidade_solicitada || 0;
-        }
-      });
+  const sameId = (a, b) => Boolean(a) && Boolean(b) && String(a) === String(b);
+
+  // Volume/saldo já baixado nesta saída volta para a conta, senão o tanque
+  // expedido (saldo 0) impede salvar a inclusão de outro item.
+  const creditoBaixado = (match, field) => {
+    if (!editingSaida) return 0;
+    let total = 0;
+    for (const item of editingSaida.itens || []) {
+      if (!match(item) || !itemFoiBaixado(item, editingSaida)) continue;
+      total += Number(item[field]) || 0;
     }
+    return total;
+  };
+
+  // Só devolve o volume baixado quando o saldo físico já foi reduzido.
+  // Tanque ainda cheio (validação que não zerou o cadastro) não é somado de novo.
+  const aplicarCredito = (saldo, credito) =>
+    credito > 0 && saldo + 1e-6 < credito ? saldo + credito : saldo;
+
+  const getAvailableSaldo = (entradaId, currentIndex) => {
+    const entrada = entradas.find((e) => sameId(e.id, entradaId));
+    let saldo = Number(entrada?.saldo_atual) || 0;
+    saldo = aplicarCredito(saldo, creditoBaixado(
+      (item) =>
+        (item.tipo === TIPO_EMBALADO || item.tipo === "embalado") &&
+        sameId(item.entrada_id, entradaId),
+      "quantidade_solicitada"
+    ));
     formData.itens.forEach((item, i) => {
       if (
         i !== currentIndex &&
         item.tipo === TIPO_EMBALADO &&
-        item.entrada_id === entradaId
+        sameId(item.entrada_id, entradaId)
       ) {
         saldo -= item.quantidade_solicitada || 0;
       }
@@ -226,21 +248,19 @@ export default function SaidaForm({
   };
 
   const getAvailableVolume = (vasilhameId, currentIndex) => {
-    const v = vasilhames.find((x) => x.id === vasilhameId);
-    if (!v) return 0;
-    let vol = v.volume || 0;
-    if (editingSaida?.enviado_ao_fiscal) {
-      (editingSaida.itens || []).forEach((item) => {
-        if (item.tipo === TIPO_CONVENCIONAL && item.vasilhame_id === vasilhameId) {
-          vol += item.volume_solicitado || 0;
-        }
-      });
-    }
+    const v = vasilhames.find((x) => sameId(x.id, vasilhameId));
+    let vol = Number(v?.volume) || 0;
+    vol = aplicarCredito(vol, creditoBaixado(
+      (item) =>
+        (item.tipo === TIPO_CONVENCIONAL || item.tipo === "convencional") &&
+        sameId(item.vasilhame_id, vasilhameId),
+      "volume_solicitado"
+    ));
     formData.itens.forEach((item, i) => {
       if (
         i !== currentIndex &&
         item.tipo === TIPO_CONVENCIONAL &&
-        item.vasilhame_id === vasilhameId
+        sameId(item.vasilhame_id, vasilhameId)
       ) {
         vol -= item.volume_solicitado || 0;
       }
@@ -249,21 +269,18 @@ export default function SaidaForm({
   };
 
   const getAvailableContainerVolume = (containerId, currentIndex) => {
-    const c = containersInd.find((x) => x.id === containerId);
-    if (!c) return 0;
-    let vol = c.volume || 0;
-    if (editingSaida?.enviado_ao_fiscal) {
-      (editingSaida.itens || []).forEach((item) => {
-        if (item.tipo === TIPO_IND_VASILHAME && item.container_id === containerId) {
-          vol += item.volume_solicitado || 0;
-        }
-      });
-    }
+    const c = containersInd.find((x) => sameId(x.id, containerId));
+    let vol = Number(c?.volume) || 0;
+    vol = aplicarCredito(vol, creditoBaixado(
+      (item) =>
+        item.tipo === TIPO_IND_VASILHAME && sameId(item.container_id, containerId),
+      "volume_solicitado"
+    ));
     formData.itens.forEach((item, i) => {
       if (
         i !== currentIndex &&
         item.tipo === TIPO_IND_VASILHAME &&
-        item.container_id === containerId
+        sameId(item.container_id, containerId)
       ) {
         vol -= item.volume_solicitado || 0;
       }
@@ -272,31 +289,41 @@ export default function SaidaForm({
   };
 
   const getAvailableStockSaldo = (stockId, currentIndex) => {
-    const s = stocksInd.find((x) => x.id === stockId);
-    if (!s) return 0;
-    let saldo = s.current_stock || 0;
-    if (editingSaida?.enviado_ao_fiscal) {
-      (editingSaida.itens || []).forEach((item) => {
-        if (
-          item.tipo === TIPO_IND_RETORNO_MP &&
-          item.stock_id === stockId &&
-          !item.movement_id
-        ) {
-          saldo += item.quantidade_solicitada || 0;
-        }
-      });
-    }
+    const s = stocksInd.find((x) => sameId(x.id, stockId));
+    let saldo = Number(s?.current_stock) || 0;
+    saldo = aplicarCredito(saldo, creditoBaixado(
+      (item) =>
+        item.tipo === TIPO_IND_RETORNO_MP &&
+        sameId(item.stock_id, stockId) &&
+        !item.movement_id,
+      "quantidade_solicitada"
+    ));
     formData.itens.forEach((item, i) => {
       if (
         i !== currentIndex &&
         item.tipo === TIPO_IND_RETORNO_MP &&
-        item.stock_id === stockId &&
+        sameId(item.stock_id, stockId) &&
         !item.movement_id
       ) {
         saldo -= item.quantidade_solicitada || 0;
       }
     });
     return saldo;
+  };
+
+  const originalPorChave = () => {
+    const map = new Map();
+    for (const item of editingSaida?.itens || []) {
+      const chave = saidaItemChave(item);
+      if (chave && !map.has(chave)) map.set(chave, item);
+    }
+    return map;
+  };
+
+  const itemTravado = (item) => {
+    if (!editingSaida) return false;
+    const original = originalPorChave().get(saidaItemChave(item));
+    return Boolean(original && itemFoiBaixado(original, editingSaida));
   };
 
   const updateItem = (index, updated) => {
@@ -319,6 +346,7 @@ export default function SaidaForm({
   };
 
   const removeItem = (index) => {
+    if (itemTravado(formData.itens[index])) return;
     setFormData((prev) => ({
       ...prev,
       itens: prev.itens.filter((_, i) => i !== index),
@@ -353,6 +381,21 @@ export default function SaidaForm({
     // reservado agora e os tanques/produtos entram depois, via edição.
     // Saída já validada exige produtos, pois o estoque já foi baixado.
     const itensPreenchidos = formData.itens.filter((it) => !isItemSaidaVazio(it));
+    if (editingSaida) {
+      const chavesAtuais = new Set(
+        itensPreenchidos.map((item) => saidaItemChave(item)).filter(Boolean)
+      );
+      const removeuValidado = (editingSaida.itens || []).some((item) => {
+        const chave = saidaItemChave(item);
+        return chave && itemFoiBaixado(item, editingSaida) && !chavesAtuais.has(chave);
+      });
+      if (removeuValidado) {
+        setError(
+          "Não é possível remover um item já validado. Reverta a validação para Pendente na tela de Saída do módulo que validou o item."
+        );
+        return;
+      }
+    }
     if (editingSaida?.enviado_ao_fiscal && itensPreenchidos.length === 0) {
       setError("Adicione pelo menos um produto.");
       return;
@@ -505,9 +548,15 @@ export default function SaidaForm({
       const affectedStocks = new Set();
 
       const isFiscal = editingSaida?.enviado_ao_fiscal;
+      const origemPorChave = originalPorChave();
+      const jaBaixadoOriginal = (item) => {
+        const original = origemPorChave.get(saidaItemChave(item));
+        return Boolean(original && itemFoiBaixado(original, editingSaida));
+      };
 
       if (isFiscal) {
         (editingSaida.itens || []).forEach((item) => {
+          if (!itemFoiBaixado(item, editingSaida)) return;
           if (item.tipo === TIPO_EMBALADO && item.entrada_id) {
             entradaSaldos[item.entrada_id] =
               (entradaSaldos[item.entrada_id] || 0) +
@@ -538,7 +587,7 @@ export default function SaidaForm({
         if (item.tipo === TIPO_EMBALADO) {
           const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;
-          if (isFiscal) {
+          if (isFiscal && jaBaixadoOriginal(item)) {
             entradaSaldos[item.entrada_id] = estoqueAntes - qtd;
           }
           const unidade =
@@ -567,7 +616,7 @@ export default function SaidaForm({
         if (item.tipo === TIPO_CONVENCIONAL) {
           const volAntes = vasilhameVolumes[item.vasilhame_id] || 0;
           const vol = item.volume_solicitado || 0;
-          if (isFiscal) {
+          if (isFiscal && jaBaixadoOriginal(item)) {
             vasilhameVolumes[item.vasilhame_id] = volAntes - vol;
           }
 
@@ -589,7 +638,7 @@ export default function SaidaForm({
         if (item.tipo === TIPO_IND_VASILHAME) {
           const volAntes = containerVolumes[item.container_id] || 0;
           const vol = item.volume_solicitado || 0;
-          if (isFiscal) {
+          if (isFiscal && jaBaixadoOriginal(item)) {
             containerVolumes[item.container_id] = volAntes - vol;
             affectedContainers.add(item.container_id);
           }
@@ -622,7 +671,7 @@ export default function SaidaForm({
 
         const estoqueAntes = stockSaldos[item.stock_id] || 0;
         const qtd = item.quantidade_solicitada || 0;
-        if (isFiscal) {
+        if (isFiscal && jaBaixadoOriginal(item)) {
           stockSaldos[item.stock_id] = estoqueAntes - qtd;
           affectedStocks.add(item.stock_id);
         }
@@ -634,7 +683,23 @@ export default function SaidaForm({
         };
       });
 
-      const quantidadeTotal = itensWithStock.reduce(
+      const itensPersistidos = itensWithStock.map((item) => {
+        if (jaBaixadoOriginal(item)) return { ...item, validado: true };
+        const original = origemPorChave.get(saidaItemChave(item));
+        if (original?.validado === false) return { ...item, validado: false };
+        if (!original && editingSaida) {
+          const modulo = resolveItemOrigem(item);
+          if (
+            isSaidaValidadaNoModulo(editingSaida, modulo) ||
+            editingSaida.enviado_ao_fiscal
+          ) {
+            return { ...item, validado: false };
+          }
+        }
+        return item;
+      });
+
+      const quantidadeTotal = itensPersistidos.reduce(
         (sum, item) => sum + (item.quantidade_solicitada || 0),
         0
       );
@@ -648,7 +713,7 @@ export default function SaidaForm({
         data_solicitacao: formData.data_solicitacao,
         data_programada: agendamentoPendente?.dateIso || formData.data_programada,
         observacoes: formData.observacoes,
-        itens: itensWithStock,
+        itens: itensPersistidos,
         quantidade_total: quantidadeTotal,
         usuario_criador: editingSaida?.usuario_criador || user?.nome || "",
         usuario_responsavel: user?.nome || "",
@@ -657,7 +722,7 @@ export default function SaidaForm({
       };
 
       validarItensEmbalado({
-        itens: itensWithStock,
+        itens: itensPersistidos,
         reservas,
         saidas,
         entradas,
@@ -674,7 +739,7 @@ export default function SaidaForm({
       });
       if (!salvo.missing && salvo.data) {
         createdSaida = salvo.data;
-      } else if (itensWithStock.some((item) => item.tipo === TIPO_EMBALADO)) {
+      } else if (itensPersistidos.some((item) => item.tipo === TIPO_EMBALADO)) {
         throw new Error(
           "Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para gravar a saída com controle de reserva."
         );
@@ -691,12 +756,16 @@ export default function SaidaForm({
       if (isFiscal) {
         // Transbordo: devolve/reaplica saldo de itens removidos/alterados e recalcula estoque.
         // Industrialização permanece no bloco abaixo (sem alteração de comportamento).
-        await resyncTransbordoStockAfterSaidaEdit(editingSaida, itensWithStock, {
-          estoque: entradas,
-          vasilhames,
-          dataSaida:
-            editingSaida?.data_programada || todayDateInputValue() || null,
-        });
+        await resyncTransbordoStockAfterSaidaEdit(
+          editingSaida,
+          itensPersistidos.filter((item) => item.validado !== false),
+          {
+            estoque: entradas,
+            vasilhames,
+            dataSaida:
+              editingSaida?.data_programada || todayDateInputValue() || null,
+          }
+        );
 
         for (const cid of affectedContainers) {
           const c = containerOriginal[cid];
@@ -721,6 +790,22 @@ export default function SaidaForm({
           await base44.entities.RawMaterialStock.update(sid, {
             current_stock: Math.max(0, stockSaldos[sid] || 0),
           });
+        }
+      }
+
+      if (editingSaida?.id && isSaidaModuloPainel(editingSaida)) {
+        const modulosNovos = new Set();
+        for (const item of itensPersistidos) {
+          const chave = saidaItemChave(item);
+          if (!chave || origemPorChave.has(chave)) continue;
+          modulosNovos.add(resolveItemOrigem(item));
+        }
+        for (const modulo of modulosNovos) {
+          try {
+            await clearSaidaLeituras(editingSaida.id, modulo);
+          } catch (err) {
+            console.error("[SaidaForm] Falha ao reabrir notificação da saída:", err);
+          }
         }
       }
 
@@ -951,6 +1036,7 @@ export default function SaidaForm({
               lockedOrigem={lockedOrigem}
               onChange={(updated) => updateItem(index, updated)}
               onRemove={() => removeItem(index)}
+              locked={itemTravado(item)}
               getAvailableSaldo={getAvailableSaldo}
               getAvailableVolume={getAvailableVolume}
               getAvailableContainerVolume={getAvailableContainerVolume}

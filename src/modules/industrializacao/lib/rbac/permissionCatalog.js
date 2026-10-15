@@ -39,6 +39,29 @@ export const MODULE_ACCESS_KEYS = Object.freeze({
   transbordo: 'module.transbordo',
 });
 
+/**
+ * Chaves de acesso a seções (grupos da sidebar).
+ * Página agrupada exige módulo + seção + página.view.
+ */
+export const SECTION_ACCESS_KEYS = Object.freeze({
+  comercial: 'section.painel.comercial',
+  logistica: 'section.painel.logistica',
+  operacional: 'section.painel.operacional',
+  usersPermissions: 'section.painel.users_permissions',
+  configuracao: 'section.painel.configuracao',
+  qualityControl: 'section.industrializacao.quality',
+});
+
+/** groupId → app module que possui a seção */
+export const SECTION_APP_MODULE = Object.freeze({
+  comercial: APP_MODULE_IDS.PAINEL,
+  logistica: APP_MODULE_IDS.PAINEL,
+  operacional: APP_MODULE_IDS.PAINEL,
+  usersPermissions: APP_MODULE_IDS.PAINEL,
+  configuracao: APP_MODULE_IDS.PAINEL,
+  qualityControl: APP_MODULE_IDS.INDUSTRIALIZACAO,
+});
+
 export const REQUIRED_INTERNAL_KEYS = Object.freeze([
   MODULE_ACCESS_KEYS.painel,
   'painel_home.view',
@@ -859,7 +882,10 @@ export function permissionKey(resourceId, actionKey) {
 }
 
 export function getAllPermissionKeys() {
-  const keys = [...Object.values(MODULE_ACCESS_KEYS)];
+  const keys = [
+    ...Object.values(MODULE_ACCESS_KEYS),
+    ...Object.values(SECTION_ACCESS_KEYS),
+  ];
   for (const mod of permissionModules) {
     for (const res of mod.resources) {
       for (const action of res.actions) {
@@ -868,6 +894,11 @@ export function getAllPermissionKeys() {
     }
   }
   return keys;
+}
+
+export function getSectionAccessKey(groupId) {
+  if (!groupId) return null;
+  return SECTION_ACCESS_KEYS[groupId] || null;
 }
 
 export function getScreenViewKeys(appModuleId) {
@@ -887,6 +918,11 @@ export function getKeysForAppModule(appModuleId) {
   const keys = [];
   const accessKey = MODULE_ACCESS_KEYS[appModuleId];
   if (accessKey) keys.push(accessKey);
+  for (const [groupId, sectionKey] of Object.entries(SECTION_ACCESS_KEYS)) {
+    if (SECTION_APP_MODULE[groupId] === appModuleId) {
+      keys.push(sectionKey);
+    }
+  }
   for (const mod of permissionModules) {
     if ((mod.appModuleId || APP_MODULE_IDS.INDUSTRIALIZACAO) !== appModuleId) continue;
     for (const res of mod.resources) {
@@ -899,7 +935,16 @@ export function getKeysForAppModule(appModuleId) {
 }
 
 /**
- * Árvore Módulo → Tela → Ações para a tela Permissões.
+ * Resolve a chave de seção a partir do pathname (null se página independente).
+ */
+export function getSectionKeyForPath(pathname) {
+  const resource = getResourceByPath(pathname);
+  if (!resource?.nav?.groupId) return null;
+  return getSectionAccessKey(resource.nav.groupId);
+}
+
+/**
+ * Árvore Módulo → Tela → Ações (legado; preferir getPermissionHierarchy).
  */
 export function getPermissionTree() {
   const appOrder = [
@@ -940,6 +985,113 @@ export function getPermissionTree() {
           })),
       }))),
   }));
+}
+
+function mapPageActions(res) {
+  return res.actions
+    .filter((a) => a.key !== 'view')
+    .map((a) => ({
+      key: permissionKey(res.id, a.key),
+      actionKey: a.key,
+      labelKey: a.labelKey,
+    }));
+}
+
+function buildPageNode(res) {
+  const sidebarLabel = mapResourceToSidebarLabel(res.id);
+  return {
+    type: 'page',
+    id: res.id,
+    labelKey: res.labelKey.startsWith('rbac.') ? sidebarLabel : res.labelKey,
+    icon: res.icon || null,
+    route: res.route || null,
+    viewKey: permissionKey(res.id, 'view'),
+    actions: mapPageActions(res),
+    order: res.nav?.order ?? 99,
+  };
+}
+
+/**
+ * Hierarquia Módulo → Seção/Página independente → Subpáginas,
+ * espelhando a estrutura real das sidebars (inclui users/profiles).
+ */
+export function getPermissionHierarchy() {
+  const appOrder = [
+    {
+      id: APP_MODULE_IDS.PAINEL,
+      labelKey: 'rbac.appModules.painel',
+      moduleAccessKey: MODULE_ACCESS_KEYS.painel,
+      required: true,
+      icon: 'LayoutDashboard',
+    },
+    {
+      id: APP_MODULE_IDS.INDUSTRIALIZACAO,
+      labelKey: 'rbac.appModules.industrializacao',
+      moduleAccessKey: MODULE_ACCESS_KEYS.industrializacao,
+      required: false,
+      icon: 'Factory',
+    },
+    {
+      id: APP_MODULE_IDS.TRANSBORDO,
+      labelKey: 'rbac.appModules.transbordo',
+      moduleAccessKey: MODULE_ACCESS_KEYS.transbordo,
+      required: false,
+      icon: 'Truck',
+    },
+  ];
+
+  return appOrder.map((app) => {
+    const flat = [];
+    const groups = new Map();
+
+    for (const mod of permissionModules) {
+      if ((mod.appModuleId || APP_MODULE_IDS.INDUSTRIALIZACAO) !== app.id) continue;
+      for (const res of mod.resources) {
+        if (!res.actions.some((a) => a.key === 'view')) continue;
+        const page = buildPageNode(res);
+        const nav = res.nav;
+        if (nav?.groupId) {
+          if (!groups.has(nav.groupId)) {
+            groups.set(nav.groupId, {
+              type: 'section',
+              id: nav.groupId,
+              sectionKey: getSectionAccessKey(nav.groupId),
+              labelKey: nav.groupLabelKey,
+              icon: nav.groupIcon || null,
+              order: nav.groupOrder ?? nav.order ?? 99,
+              pages: [],
+            });
+          }
+          groups.get(nav.groupId).pages.push(page);
+        } else {
+          flat.push(page);
+        }
+      }
+    }
+
+    for (const group of groups.values()) {
+      group.pages.sort((a, b) => a.order - b.order);
+      flat.push(group);
+    }
+    flat.sort((a, b) => a.order - b.order);
+
+    return {
+      ...app,
+      items: flat,
+    };
+  });
+}
+
+/** Todas as chaves de view de páginas sob um módulo (para contadores). */
+export function getPageViewKeysForAppModule(appModuleId) {
+  return getScreenViewKeys(appModuleId);
+}
+
+/** Chaves de seção de um módulo de app. */
+export function getSectionKeysForAppModule(appModuleId) {
+  return Object.entries(SECTION_ACCESS_KEYS)
+    .filter(([groupId]) => SECTION_APP_MODULE[groupId] === appModuleId)
+    .map(([, key]) => key);
 }
 
 export function getAllResources() {
@@ -999,6 +1151,7 @@ export function getSidebarNavSpec(appModuleId = APP_MODULE_IDS.INDUSTRIALIZACAO)
             labelKey: nav.groupLabelKey,
             icon: nav.groupIcon,
             groupId: nav.groupId,
+            sectionKey: getSectionAccessKey(nav.groupId),
             path: null,
             order: nav.groupOrder ?? nav.order ?? 99,
             children: [],

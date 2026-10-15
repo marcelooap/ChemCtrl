@@ -3,9 +3,12 @@ import { ROLE_KEYS } from '@/i18n/domainMaps';
 import {
   getDefaultRouteFromPermissions,
   getLegacyPermissionsForUser,
+  getSectionKeyForPath,
   getViewPermissionForPath,
+  MODULE_ACCESS_KEYS,
   permissionKey,
   RBAC_ADMIN_SLUG,
+  SECTION_ACCESS_KEYS,
 } from '@industrializacao/lib/rbac/permissionCatalog';
 
 function normalizeNivel(user) {
@@ -55,6 +58,7 @@ export function augmentLogisticaPermissions(permissions) {
     set.add('painel_logistica_carregamentos.view');
     set.add('painel_logistica_recebimento.view');
     set.add('painel_logistica_recebimento.create');
+    set.add(SECTION_ACCESS_KEYS.logistica);
   }
   return Array.from(set);
 }
@@ -74,7 +78,7 @@ export function canAccessRoute(user, path) {
     return true;
   }
   if (
-    (path === '/painel/home' || path === '/painel' || path === '/painel/' || path === '/painel/configuracao' || path.startsWith('/painel/configuracao/'))
+    (path === '/painel/home' || path === '/painel' || path === '/painel/')
     && user.tipo !== 'externo'
   ) {
     return true;
@@ -83,7 +87,28 @@ export function canAccessRoute(user, path) {
   if (!viewKey) {
     return false;
   }
-  return hasPermission(user, viewKey);
+  if (!hasPermission(user, viewKey)) return false;
+
+  // Exige chave de seção quando a página pertence a um grupo da sidebar.
+  // Pré-requisito: migration_section_permissions.sql aplicada e sessões sincronizadas.
+  const sectionKey = getSectionKeyForPath(path);
+  if (sectionKey && !hasPermission(user, sectionKey)) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Verifica se o usuário tem acesso a uma seção (grupo da sidebar). */
+export function hasSectionAccess(user, sectionKey) {
+  if (!sectionKey) return true;
+  return hasPermission(user, sectionKey);
+}
+
+export function hasModuleAccess(user, appModuleId) {
+  const key = MODULE_ACCESS_KEYS[appModuleId];
+  if (!key) return false;
+  return hasPermission(user, key);
 }
 
 export function isReadOnly(user, path) {

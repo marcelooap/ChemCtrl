@@ -831,6 +831,7 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
     return (
       sum +
       (saida.itens || []).reduce((s, item) => {
+        if (item.validado === false) return s;
         if (item.tipo !== "embalado" || item.entrada_id !== id) return s;
         const qtd = emLitros
           ? Number(item.quantidade_carregada) ||
@@ -870,6 +871,7 @@ export function calcSaidasConvencional(
     return (
       sum +
       (saida.itens || []).reduce((s, item) => {
+        if (item.validado === false) return s;
         if (item.tipo !== "convencional" || !item.vasilhame_id) return s;
         const v = vasilhameById.get(item.vasilhame_id);
         if (!v) return s;
@@ -1111,6 +1113,7 @@ export function calcVasilhamesExpedidosPatio(
   (saidas || []).forEach((saida) => {
     if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
     (saida.itens || []).forEach((item) => {
+      if (item.validado === false) return;
       if (item.tipo === "convencional" && item.vasilhame_id) {
         fiscalVasilhameIds.add(item.vasilhame_id);
       }

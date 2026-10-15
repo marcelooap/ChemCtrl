@@ -35,6 +35,7 @@ import {
   isSaidaModuloPainel,
   canExcluirSaidaNoModuloOperacional,
   isSaidaValidadaNoModulo,
+  saidaTemItemPendenteNoModulo,
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
   TIPO_EMBALADO,
@@ -365,8 +366,9 @@ export default function Saida({
 
   const requestFiscalToggle = (saida) => {
     if (fiscalBusyId) return;
-    const enviar = !isSaidaValidadaNoModulo(saida, operationalModule);
-    setFiscalConfirm({ saida, enviar });
+    const temPendente = saidaTemItemPendenteNoModulo(saida, operationalModule);
+    const enviar = temPendente || !isSaidaValidadaNoModulo(saida, operationalModule);
+    setFiscalConfirm({ saida, enviar, somentePendentes: temPendente });
   };
 
   const confirmFiscalToggle = async () => {
@@ -507,7 +509,8 @@ export default function Saida({
                     : null;
                   const isValidated = isExpedicao
                     ? false
-                    : isSaidaValidadaNoModulo(s, operationalModule);
+                    : isSaidaValidadaNoModulo(s, operationalModule) &&
+                      !saidaTemItemPendenteNoModulo(s, operationalModule);
                   const hideDias = isExpedicao
                     ? expedicaoStatus === "expedido"
                     : isValidated;
@@ -707,7 +710,9 @@ export default function Saida({
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {fiscalConfirm?.enviar
-                  ? "Confirma a validação desta saída?"
+                  ? fiscalConfirm?.somentePendentes
+                    ? "Há itens novos nesta saída. A baixa de estoque será feita só neles. Os itens que já foram validados permanecem com o check."
+                    : "Confirma a validação desta saída?"
                   : isSaidaModuloPainel(fiscalConfirm?.saida)
                     ? "Os saldos dos produtos deste módulo retornarão para o estoque. Itens de outros módulos não são alterados."
                     : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}

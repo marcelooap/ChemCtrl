@@ -25,6 +25,7 @@ import {
   isSaidaModuloPainel,
   allModulosRelevantesValidados,
   getModulosRelevantesSaida,
+  itemFoiBaixado,
 } from "@transbordo/lib/saidaOrigem";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
 import { deductStock, restoreStock } from "@industrializacao/lib/stockRpc";
@@ -119,8 +120,20 @@ export async function applySaidaFiscalToggle(
       moduleScope === ORIGEM_INDUSTRIALIZACAO)
       ? moduleScope
       : "all";
-  const itens = itemsForModuleScope(itensAll, scope);
-  const scopedRefs = new Set(itens);
+  const itensEscopo = itemsForModuleScope(itensAll, scope);
+  const scopedRefs = new Set(itensEscopo);
+  const itensJaBaixados = itensEscopo.filter((item) => itemFoiBaixado(item, saida));
+  const itensPendentes = itensEscopo.filter((item) => item?.validado === false);
+  // Validar de novo só baixa o tanque incluído depois. Reverter desfaz o que já saiu.
+  const somentePendentes =
+    checked && itensPendentes.length > 0 && itensJaBaixados.length > 0;
+  const itensMovimento = !checked
+    ? itensEscopo.filter((item) => itemFoiBaixado(item, saida))
+    : somentePendentes
+      ? itensPendentes
+      : itensEscopo;
+  const movimentoRefs = new Set(itensMovimento);
+  const itens = itensMovimento;
   // Data de registro da expedição = dia local em que o fiscal marca como enviado
   // (não usar data_programada nem toISOString UTC, que atrasa/avança o dia no BR).
   const dataSaidaRegistro = todayDateInputValue();
@@ -171,6 +184,13 @@ export async function applySaidaFiscalToggle(
 
   const updatedItens = itensAll.map((item) => {
     if (scope !== "all" && !scopedRefs.has(item)) return item;
+    if (!movimentoRefs.has(item)) {
+      if (!checked) return { ...item, validado: false };
+      if (itemFoiBaixado(item, saida) || item.validado === true) {
+        return { ...item, validado: true };
+      }
+      return item;
+    }
     if (item.tipo === "embalado" && item.entrada_id) {
       const e = estoqueById.get(item.entrada_id);
       const estoqueAtual = e?.saldo_atual || 0;
@@ -180,6 +200,7 @@ export async function applySaidaFiscalToggle(
           : item.quantidade_solicitada || 0;
       return {
         ...item,
+        validado: checked,
         estoque_atual: estoqueAtual,
         estoque_final: Math.max(0, estoqueAtual - (checked ? qtdBaixa : 0)),
       };
@@ -189,6 +210,7 @@ export async function applySaidaFiscalToggle(
       const volDisponivel = v?.volume || 0;
       return {
         ...item,
+        validado: checked,
         volume_disponivel: volDisponivel,
         saldo_final: Math.max(
           0,
@@ -201,6 +223,7 @@ export async function applySaidaFiscalToggle(
       const volDisponivel = c?.volume || 0;
       return {
         ...item,
+        validado: checked,
         volume_disponivel: volDisponivel,
         saldo_final: Math.max(
           0,
@@ -213,6 +236,7 @@ export async function applySaidaFiscalToggle(
       const estoqueAtual = s?.current_stock || 0;
       return {
         ...item,
+        validado: checked,
         estoque_atual: estoqueAtual,
         estoque_final: Math.max(
           0,
@@ -220,7 +244,7 @@ export async function applySaidaFiscalToggle(
         ),
       };
     }
-    return item;
+    return { ...item, validado: checked };
   });
 
   await entities.saidas.update(saida.id, { ...updates, itens: updatedItens });

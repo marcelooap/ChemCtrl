@@ -37,9 +37,6 @@ export default function PainelRoutes() {
             <Route index element={<Navigate to="home" replace />} />
             <Route path="home" element={<Home />} />
             <Route path="configuracao" element={<Navigate to="/painel/configuracao/operadores" replace />} />
-            <Route path="configuracao/operadores" element={<Operadores />} />
-            <Route path="configuracao/etiquetas" element={<Etiquetas />} />
-            <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
 
             <Route
               path="comercial"
@@ -64,6 +61,9 @@ export default function PainelRoutes() {
 
             <Route element={<ScreenAccessRoute />}>
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="configuracao/operadores" element={<Operadores />} />
+              <Route path="configuracao/etiquetas" element={<Etiquetas />} />
+              <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
               <Route path="comercial/reservar-material" element={<ReservarMaterial />} />
               <Route path="comercial/solicitacoes-saida" element={<SolicitacoesSaida />} />
               <Route

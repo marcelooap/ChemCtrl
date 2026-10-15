@@ -18,6 +18,7 @@ import {
   isSaidaValidadaNoModulo,
   saidaHasIndustrializacaoItems,
   saidaHasTransbordoItems,
+  saidaTemItemPendenteNoModulo,
 } from '@transbordo/lib/saidaOrigem';
 
 export const SAIDA_PATH_TRANSBORDO = '/chemflow/saida';
@@ -49,8 +50,19 @@ export function isSaidaNovaCandidata(saida, { onlyIndustrializacao = false, modu
   );
   if (!isSaidaModuloPainel(saida)) return false;
   if (!saidaHasItensDoModulo(saida, m)) return false;
+  // Tanque incluído depois da validação volta a notificar o módulo.
+  if (saidaTemItemPendenteNoModulo(saida, m)) return true;
   if (isSaidaValidadaNoModulo(saida, m)) return false;
   return true;
+}
+
+/** Apaga as leituras do módulo para a flag da sidebar voltar a aparecer. */
+export async function clearSaidaLeituras(saidaId, modulo) {
+  if (emptyClient() || !saidaId) return;
+  let query = chemflowSupabase.from('t_saida_leituras').delete().eq('saida_id', saidaId);
+  if (modulo) query = query.eq('modulo', normalizeSaidaModulo(modulo));
+  const { error } = await query;
+  if (error) throw error;
 }
 
 function emptyClient() {

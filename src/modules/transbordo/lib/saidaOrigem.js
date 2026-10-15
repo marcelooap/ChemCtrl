@@ -208,6 +208,61 @@ export function isSaidaValidadaNoModulo(saida, modulo) {
   return Boolean(saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal");
 }
 
+/**
+ * Identidade estável do item (tanque, lote ou retorno).
+ * Item vazio não tem chave.
+ */
+export function saidaItemChave(item) {
+  if (!item || isItemSaidaVazio(item)) return "";
+  if (
+    (item.tipo === TIPO_CONVENCIONAL || item.tipo === "convencional") &&
+    item.vasilhame_id
+  ) {
+    return `conv:${item.vasilhame_id}`;
+  }
+  if (item.tipo === TIPO_IND_VASILHAME && item.container_id) {
+    return `ind:${item.container_id}`;
+  }
+  if (
+    (item.tipo === TIPO_EMBALADO || item.tipo === "embalado") &&
+    item.entrada_id
+  ) {
+    return `emb:${item.entrada_id}`;
+  }
+  if (item.tipo === TIPO_IND_RETORNO_MP && (item.movement_id || item.stock_id)) {
+    return `mp:${item.movement_id || item.stock_id}`;
+  }
+  return "";
+}
+
+/**
+ * O estoque deste item já foi baixado.
+ * `validado: false` é um item incluído depois e ainda pendente.
+ * Sem a flag, vale a validação do módulo (saídas antigas).
+ */
+export function itemFoiBaixado(item, saida) {
+  if (!item || isItemSaidaVazio(item)) return false;
+  if (item.validado === false) return false;
+  if (item.validado === true) return true;
+  if (!saida) return false;
+  return isSaidaValidadaNoModulo(saida, resolveItemOrigem(item));
+}
+
+/** Check verde na visualização: item já validado. */
+export function isItemValidadoParaExibicao(item, saida) {
+  return itemFoiBaixado(item, saida);
+}
+
+/** Há tanque/produto deste módulo incluído depois da validação. */
+export function saidaTemItemPendenteNoModulo(saida, modulo) {
+  return (saida?.itens || []).some(
+    (item) =>
+      !isItemSaidaVazio(item) &&
+      resolveItemOrigem(item) === modulo &&
+      item.validado === false
+  );
+}
+
 export function allModulosRelevantesValidados(saida, validacaoOverride = null) {
   const mods = getModulosRelevantesSaida(saida);
   if (mods.length === 0) {

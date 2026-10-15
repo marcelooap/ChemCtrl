@@ -171,6 +171,7 @@ export default function SaidaItemRow({
   getAvailableStockSaldo,
   collapsed = false,
   onToggleCollapse,
+  locked = false,
 }) {
   const hasCliente = Boolean(clienteId);
   const origem = resolveItemOrigem(item) || lockedOrigem || ORIGEM_TRANSBORDO;
@@ -981,6 +982,11 @@ export default function SaidaItemRow({
           <span className="text-sm font-semibold text-primary shrink-0">
             Produto {String(index + 1).padStart(2, "0")}
           </span>
+          {locked ? (
+            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              Validado
+            </span>
+          ) : null}
           {collapsed && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-w-0">
               {lockedOrigem && (
@@ -1017,9 +1023,22 @@ export default function SaidaItemRow({
           <button
             type="button"
             onClick={onRemove}
-            className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="Remover"
-            aria-label="Remover produto"
+            disabled={locked}
+            className={`p-1.5 rounded-md transition-colors ${
+              locked
+                ? "cursor-not-allowed text-muted-foreground/40"
+                : "text-red-400 hover:text-red-600 hover:bg-red-50"
+            }`}
+            title={
+              locked
+                ? "Item já validado. Para remover, reverta a validação para Pendente na tela de Saída do módulo."
+                : "Remover"
+            }
+            aria-label={
+              locked
+                ? "Item validado. Remoção bloqueada até reverter a validação."
+                : "Remover produto"
+            }
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -1027,7 +1046,7 @@ export default function SaidaItemRow({
       </div>
 
       {!collapsed && (
-        <>
+        <fieldset disabled={locked} className="min-w-0 space-y-3 border-0 p-0 m-0">
           {showOrigemSelector ? (
             <div className="space-y-1.5">
               <Label>Tipo *</Label>
@@ -1457,7 +1476,7 @@ export default function SaidaItemRow({
               )}
             </div>
           )}
-        </>
+        </fieldset>
       )}
     </div>
   );

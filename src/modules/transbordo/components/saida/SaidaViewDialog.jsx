@@ -32,6 +32,8 @@ import {
   formatSaidaItemEmbalagem,
   resolveItemOrigem,
   isSaidaValidadaNoModulo,
+  isItemValidadoParaExibicao,
+  saidaTemItemPendenteNoModulo,
 } from "@transbordo/lib/saidaOrigem";
 import {
   findChecklistItemForSaidaLinha,
@@ -128,7 +130,7 @@ export default function SaidaViewDialog({
   const { user } = useAuth();
   const [checklistItemView, setChecklistItemView] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
-  const [markedLocal, setMarkedLocal] = useState(() => new Set());
+  const [, setMarkedLocal] = useState(() => new Set());
   const [printing, setPrinting] = useState(false);
   const [indLabel, setIndLabel] = useState(null);
   const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
@@ -191,12 +193,16 @@ export default function SaidaViewDialog({
   const allSelected = itens.length > 0 && selected.size === itens.length;
   const someSelected = selected.size > 0 && !allSelected;
   const statusLabel = highlightModule
-    ? isSaidaValidadaNoModulo(saida, highlightModule)
-      ? "Validado"
-      : "Pendente"
-    : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
-      ? "Validado"
-      : "Pendente";
+    ? saidaTemItemPendenteNoModulo(saida, highlightModule)
+      ? "Pendente"
+      : isSaidaValidadaNoModulo(saida, highlightModule)
+        ? "Validado"
+        : "Pendente"
+    : (saida.itens || []).some((item) => item?.validado === false)
+      ? "Pendente"
+      : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
+        ? "Validado"
+        : "Pendente";
   const showRelatorio = isAgendamento ? showRelatorioSaida : showRelatorioFiscal;
 
   const toggleItem = (index) => {
@@ -216,8 +222,7 @@ export default function SaidaViewDialog({
     );
   };
 
-  const itemJaGerado = (item, index) =>
-    Boolean(item?.relatorio_fiscal_gerado) || markedLocal.has(index);
+  const itemJaValidado = (item) => isItemValidadoParaExibicao(item, saida);
 
   const handlePrintRelatorio = async () => {
     if (isAgendamento) {
@@ -462,11 +467,11 @@ export default function SaidaViewDialog({
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
                       <span className="inline-flex items-center gap-1.5">
-                        {canSelectFiscal && itemJaGerado(item, i) ? (
+                        {canSelectFiscal && itemJaValidado(item) ? (
                           <Check
                             className="w-3.5 h-3.5 shrink-0 text-emerald-600"
-                            aria-label="Relatório fiscal já gerado"
-                            title="Relatório fiscal já gerado"
+                            aria-label="Item já validado"
+                            title="Item já validado"
                           />
                         ) : null}
                         <span>{item.produto_nome || "—"}</span>

@@ -115,15 +115,25 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
             });
             return;
           }
-          if (modulo === ORIGEM_INDUSTRIALIZACAO && !Array.isArray(row.itens)) return;
-          if (!isSaidaNovaCandidata(row, { modulo })) {
-            setUnreadIds((prev) => {
-              if (!prev.has(row.id)) return prev;
-              const next = new Set(prev);
-              next.delete(row.id);
-              return next.size ? next : EMPTY_SET;
-            });
+          if (!Array.isArray(row.itens)) {
+            refreshUnread();
+            return;
           }
+          if (isSaidaNovaCandidata(row, { modulo })) {
+            setUnreadIds((prev) => {
+              if (prev.has(row.id)) return prev;
+              const next = new Set(prev);
+              next.add(row.id);
+              return next;
+            });
+            return;
+          }
+          setUnreadIds((prev) => {
+            if (!prev.has(row.id)) return prev;
+            const next = new Set(prev);
+            next.delete(row.id);
+            return next.size ? next : EMPTY_SET;
+          });
         }
       },
       { channelKey }

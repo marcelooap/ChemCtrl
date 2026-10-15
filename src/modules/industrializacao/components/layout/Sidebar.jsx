@@ -5,7 +5,11 @@ import {
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Truck,
   Users, Building2, Warehouse, ClipboardCheck, CalendarDays, ShieldCheck, Microscope,
 } from 'lucide-react';
-import { canAccessRoute, getUserClient } from '@industrializacao/lib/permissions';
+import {
+  canAccessRoute,
+  getUserClient,
+  hasSectionAccess,
+} from '@industrializacao/lib/permissions';
 import { getSidebarNavSpec } from '@industrializacao/lib/rbac/permissionCatalog';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
 import { useSaidaNovas } from '@transbordo/context/SaidaNovasContext';
@@ -57,24 +61,29 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       if (path === VALIDACAO_PATH_INDUSTRIALIZACAO) return validacaoCount;
       return 0;
     };
-    const mapped = navSpec.map((item) => {
-      if (item.children) {
+    const mapped = navSpec
+      .filter((item) => {
+        if (!item.children || !item.sectionKey) return true;
+        return hasSectionAccess(user, item.sectionKey);
+      })
+      .map((item) => {
+        if (item.children) {
+          return {
+            ...item,
+            icon: resolveIcon(item.icon),
+            children: item.children.map((child) => ({
+              ...child,
+              icon: resolveIcon(child.icon),
+              badgeCount: badgeForPath(child.path),
+            })),
+          };
+        }
         return {
           ...item,
           icon: resolveIcon(item.icon),
-          children: item.children.map((child) => ({
-            ...child,
-            icon: resolveIcon(child.icon),
-            badgeCount: badgeForPath(child.path),
-          })),
+          badgeCount: badgeForPath(item.path),
         };
-      }
-      return {
-        ...item,
-        icon: resolveIcon(item.icon),
-        badgeCount: badgeForPath(item.path),
-      };
-    });
+      });
 
     if (isExterno) {
       return mapped.filter(
@@ -84,7 +93,7 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       );
     }
     return mapped;
-  }, [isExterno, navSpec, saidaCount, validacaoCount]);
+  }, [isExterno, navSpec, saidaCount, validacaoCount, user]);
 
   const resolveLabel = (item) => {
     let label = t(item.labelKey);

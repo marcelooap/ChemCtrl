@@ -23,7 +23,12 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { canAccessRoute, isAdminUser } from '@industrializacao/lib/permissions';
+import {
+  canAccessRoute,
+  hasSectionAccess,
+  isAdminUser,
+} from '@industrializacao/lib/permissions';
+import { SECTION_ACCESS_KEYS } from '@industrializacao/lib/rbac/permissionCatalog';
 import AppShell from '@shared/components/layout/AppShell';
 import ModuleSidebar from '@shared/components/layout/ModuleSidebar';
 
@@ -107,9 +112,10 @@ export default function MainLayout() {
       },
     ];
 
-    const adminItems = admin
+    const adminItems = admin && hasSectionAccess(user, SECTION_ACCESS_KEYS.usersPermissions)
       ? [{
         groupId: 'usersPermissions',
+        sectionKey: SECTION_ACCESS_KEYS.usersPermissions,
         label: t('painel.nav.usersAndPermissions'),
         icon: Users,
         children: [
@@ -119,31 +125,43 @@ export default function MainLayout() {
       }]
       : [];
 
-    const configItem = {
-      groupId: 'configuracao',
-      label: t('painel.nav.configuracao'),
-      icon: Settings,
-      children: [
-        {
-          path: '/painel/configuracao/operadores',
-          label: t('painel.nav.operadores'),
-          icon: HardHat,
-        },
-        {
-          path: '/painel/configuracao/etiquetas',
-          label: t('painel.nav.etiquetas'),
-          icon: Tag,
-        },
-        {
-          path: '/painel/configuracao/checklist-expedicao',
-          label: t('painel.nav.checklistExpedicao'),
-          icon: ClipboardCheck,
-        },
-      ],
-    };
+    const configItem = hasSectionAccess(user, SECTION_ACCESS_KEYS.configuracao)
+      ? {
+        groupId: 'configuracao',
+        sectionKey: SECTION_ACCESS_KEYS.configuracao,
+        label: t('painel.nav.configuracao'),
+        icon: Settings,
+        children: [
+          {
+            path: '/painel/configuracao/operadores',
+            label: t('painel.nav.operadores'),
+            icon: HardHat,
+          },
+          {
+            path: '/painel/configuracao/etiquetas',
+            label: t('painel.nav.etiquetas'),
+            icon: Tag,
+          },
+          {
+            path: '/painel/configuracao/checklist-expedicao',
+            label: t('painel.nav.checklistExpedicao'),
+            icon: ClipboardCheck,
+          },
+        ],
+      }
+      : null;
 
-    return [...base, ...business, ...adminItems, configItem];
-  }, [t, admin]);
+    const withSectionKeys = business.map((item) => {
+      if (!item.groupId) return item;
+      const sectionKey = SECTION_ACCESS_KEYS[item.groupId] || null;
+      return { ...item, sectionKey };
+    }).filter((item) => {
+      if (!item.sectionKey) return true;
+      return hasSectionAccess(user, item.sectionKey);
+    });
+
+    return [...base, ...withSectionKeys, ...adminItems, ...(configItem ? [configItem] : [])];
+  }, [t, admin, user]);
 
   if (user?.tipo === 'externo') {
     return <Navigate to="/tela-clientes" replace />;
@@ -161,10 +179,7 @@ export default function MainLayout() {
           moduleSubtitle={t('painel.subtitle')}
           items={items}
           canAccessPath={(path) =>
-            path === '/painel/home'
-            || path === '/painel/configuracao'
-            || path.startsWith('/painel/configuracao/')
-            || canAccessRoute(user, path)
+            path === '/painel/home' || canAccessRoute(user, path)
           }
           showModulesLink={false}
         />
