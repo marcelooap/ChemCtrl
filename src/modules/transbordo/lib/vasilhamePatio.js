@@ -181,6 +181,7 @@ export function resolveVasilhameExpedidoDisplay(
     ...vasilhame,
     volume: restored.volume,
     peso_liquido: restored.peso_liquido,
+    peso_bruto: restored.peso_bruto,
   };
 }
 

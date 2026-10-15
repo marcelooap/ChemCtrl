@@ -1193,8 +1193,13 @@
         },
         "vasilhames": {
           "tableTitle": "Contenants en stock",
+          "tableTitleAll": "Tous les contenants",
+          "includeExits": "Inclure les sorties",
+          "includeExitsOn": "Activé : affiche tous les contenants, y compris ceux déjà sortis",
+          "includeExitsOff": "Désactivé : affiche seulement les contenants dans la cour",
           "searchPlaceholder": "Rechercher ID, plaque, fût, client, code, produit ou lot...",
           "empty": "Aucun contenant en stock pour le filtre sélectionné.",
+          "emptyAll": "Aucun contenant trouvé pour le filtre sélectionné.",
           "confirmTitle": "Réserver le contenant",
           "confirmMessage": "Confirmer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut passera à Réservé.",
           "confirmAction": "Réserver",
@@ -1210,7 +1215,8 @@
             "barril": "Nº Fût",
             "volume": "Volume",
             "massa": "Masse",
-            "status": "Statut"
+            "status": "Statut",
+            "dataSaida": "Date de sortie"
           },
           "status": {
             "livre": "Libre",

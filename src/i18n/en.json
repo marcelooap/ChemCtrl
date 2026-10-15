@@ -1372,8 +1372,13 @@
         },
         "vasilhames": {
           "tableTitle": "Containers in stock",
+          "tableTitleAll": "All containers",
+          "includeExits": "Include departures",
+          "includeExitsOn": "On: shows every container, including those that already left",
+          "includeExitsOff": "Off: shows only containers in the yard",
           "searchPlaceholder": "Search ID, plate, barrel, client, code, product or lot...",
           "empty": "No containers in stock for the selected filter.",
+          "emptyAll": "No containers found for the selected filter.",
           "confirmTitle": "Reserve container",
           "confirmMessage": "Confirm reservation of container {{id}} ({{produto}} — {{cliente}})? Status will change to Reserved.",
           "confirmAction": "Reserve",
@@ -1389,7 +1394,8 @@
             "barril": "Barrel No.",
             "volume": "Volume",
             "massa": "Mass",
-            "status": "Status"
+            "status": "Status",
+            "dataSaida": "Departure date"
           },
           "status": {
             "livre": "Available",

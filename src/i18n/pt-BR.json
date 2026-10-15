@@ -1372,8 +1372,13 @@
         },
         "vasilhames": {
           "tableTitle": "Vasilhames em estoque",
+          "tableTitleAll": "Todos os vasilhames",
+          "includeExits": "Incluir saídas",
+          "includeExitsOn": "Ligado: mostra todos os vasilhames, inclusive os que já saíram",
+          "includeExitsOff": "Desligado: mostra somente os vasilhames no pátio",
           "searchPlaceholder": "Buscar ID, placa, barril, cliente, código, produto ou lote...",
           "empty": "Nenhum vasilhame em estoque para o filtro selecionado.",
+          "emptyAll": "Nenhum vasilhame encontrado para o filtro selecionado.",
           "confirmTitle": "Reservar vasilhame",
           "confirmMessage": "Confirmar reserva do vasilhame {{id}} ({{produto}} — {{cliente}})? O status passará para Reservado.",
           "confirmAction": "Reservar",
@@ -1389,7 +1394,8 @@
             "barril": "Nº Barril",
             "volume": "Volume",
             "massa": "Massa",
-            "status": "Status"
+            "status": "Status",
+            "dataSaida": "Data de saída"
           },
           "status": {
             "livre": "Livre",

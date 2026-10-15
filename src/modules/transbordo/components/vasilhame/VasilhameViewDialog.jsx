@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,10 @@ import {
 import { isDestinoEmbalagemUnitaria, isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import { entities } from "@transbordo/services/entities";
 import { listTbVasilhameExitHistory } from "@transbordo/lib/vasilhameExitHistory";
+import {
+  collectConvencionalItemsForVasilhame,
+  resolveVasilhameExpedidoDisplay,
+} from "@transbordo/lib/vasilhamePatio";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -55,9 +59,16 @@ const formatDate = (d) => {
     );
   }
   
-  export default function VasilhameViewDialog({ open, onClose, vasilhame }) {
-    const [saidas, setSaidas] = useState([]);
+  export default function VasilhameViewDialog({
+    open,
+    onClose,
+    vasilhame,
+    saidas: saidasProp,
+    transbordos = [],
+  }) {
+    const [fetchedSaidas, setFetchedSaidas] = useState([]);
     const [loadingSaidas, setLoadingSaidas] = useState(false);
+    const saidas = Array.isArray(saidasProp) ? saidasProp : fetchedSaidas;
 
     const isUnitario = Boolean(
       vasilhame &&
@@ -65,8 +76,9 @@ const formatDate = (d) => {
     );
 
     useEffect(() => {
+      if (Array.isArray(saidasProp)) return undefined;
       if (!open || !vasilhame?.id || !isUnitario) {
-        setSaidas([]);
+        setFetchedSaidas([]);
         setLoadingSaidas(false);
         return undefined;
       }
@@ -75,10 +87,10 @@ const formatDate = (d) => {
       entities.saidas
         .list("-created_date")
         .then((list) => {
-          if (!cancelled) setSaidas(list || []);
+          if (!cancelled) setFetchedSaidas(list || []);
         })
         .catch(() => {
-          if (!cancelled) setSaidas([]);
+          if (!cancelled) setFetchedSaidas([]);
         })
         .finally(() => {
           if (!cancelled) setLoadingSaidas(false);
@@ -86,9 +98,17 @@ const formatDate = (d) => {
       return () => {
         cancelled = true;
       };
-    }, [open, vasilhame?.id, isUnitario]);
+    }, [open, vasilhame?.id, isUnitario, saidasProp]);
 
-    if (!vasilhame) return null;
+    const display = useMemo(() => {
+      if (!vasilhame) return null;
+      return resolveVasilhameExpedidoDisplay(vasilhame, {
+        linkedItems: collectConvencionalItemsForVasilhame(saidas, vasilhame.id),
+        transbordos,
+      });
+    }, [vasilhame, saidas, transbordos]);
+
+    if (!vasilhame || !display) return null;
     const status = vasilhame.status || (vasilhame.data_saida ? "Expedido" : "No Pátio");
     const loteDominante =
       getDominantLote(vasilhame.composicao) || vasilhame.lote || "—";
@@ -152,7 +172,7 @@ const formatDate = (d) => {
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground">Volume (L)</p>
                 <p className="text-sm font-medium text-primary font-bold inline-flex items-center gap-2 flex-wrap">
-                  <span>{formatVolume(vasilhame.volume, { empty: "—" })}</span>
+                  <span>{formatVolume(display.volume, { empty: "—" })}</span>
                   {vasilhame.fracionado && (
                     <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
                       Fracionado
@@ -161,8 +181,8 @@ const formatDate = (d) => {
                 </p>
               </div>
               <InfoItem label="Tara (kg)" value={formatMass(vasilhame.tara, { empty: "—" })} />
-              <InfoItem label="Peso Líquido (kg)" value={formatMass(vasilhame.peso_liquido, { empty: "—" })} highlight="text-green-600 font-bold" />
-              <InfoItem label="Peso Bruto (kg)" value={formatMass(vasilhame.peso_bruto, { empty: "—" })} highlight="text-foreground font-bold" />
+              <InfoItem label="Peso Líquido (kg)" value={formatMass(display.peso_liquido, { empty: "—" })} highlight="text-green-600 font-bold" />
+              <InfoItem label="Peso Bruto (kg)" value={formatMass(display.peso_bruto, { empty: "—" })} highlight="text-foreground font-bold" />
               <InfoItem label="Menor Teste" value={formatDate(vasilhame.menor_teste)} />
             </Section>
   
@@ -358,14 +378,14 @@ const formatDate = (d) => {
           </div>
   
           <DialogFooter>
-            <Button type="button" variant="default" onClick={() => generateBoletaPDF(vasilhame)}>
+            <Button type="button" variant="default" onClick={() => generateBoletaPDF(display)}>
               <FileDown className="w-4 h-4" />
               Gerar Boleta
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => generateRelatorioFiscalPDF(vasilhame)}
+              onClick={() => generateRelatorioFiscalPDF(display)}
             >
               <FileText className="w-4 h-4" />
               Relatório Fiscal

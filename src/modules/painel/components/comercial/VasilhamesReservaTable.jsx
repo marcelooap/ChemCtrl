@@ -24,14 +24,26 @@ import {
   reservarVasilhame,
 } from '@painel/lib/vasilhameReservas';
 
+function formatExitDate(value, language) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString(language || 'pt-BR');
+}
+
 export default function VasilhamesReservaTable({
   rows = [],
   reservas = [],
   user,
   onReload,
   readOnly = false,
+  showDataSaida = false,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const [viewRow, setViewRow] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
@@ -98,7 +110,9 @@ export default function VasilhamesReservaTable({
       <div className="h-full bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
         <div className="shrink-0 px-5 py-4 border-b border-border flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">
-            {t('painel.comercial.reservarMaterial.vasilhames.tableTitle')}
+            {showDataSaida
+              ? t('painel.comercial.reservarMaterial.vasilhames.tableTitleAll')
+              : t('painel.comercial.reservarMaterial.vasilhames.tableTitle')}
           </h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
             {rows.length}
@@ -107,7 +121,9 @@ export default function VasilhamesReservaTable({
 
         {rows.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
-            {t('painel.comercial.reservarMaterial.vasilhames.empty')}
+            {showDataSaida
+              ? t('painel.comercial.reservarMaterial.vasilhames.emptyAll')
+              : t('painel.comercial.reservarMaterial.vasilhames.empty')}
           </div>
         ) : (
           <div className="overflow-auto flex-1 min-h-0">
@@ -147,6 +163,11 @@ export default function VasilhamesReservaTable({
                   <th className="px-4 py-3 font-medium text-center bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.status')}
                   </th>
+                  {showDataSaida ? (
+                    <th className="px-4 py-3 font-medium whitespace-nowrap bg-muted/40">
+                      {t('painel.comercial.reservarMaterial.vasilhames.columns.dataSaida')}
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3 font-medium text-center bg-muted/40">
                     {t('common.actions')}
                   </th>
@@ -158,7 +179,7 @@ export default function VasilhamesReservaTable({
                     key={row.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       i % 2 === 1 ? 'bg-muted/20' : ''
-                    }`}
+                    } ${row.emPatio === false ? 'text-muted-foreground' : ''}`}
                   >
                     <td className="px-4 py-3 font-mono font-medium text-primary">
                       {row.displayId}
@@ -188,6 +209,13 @@ export default function VasilhamesReservaTable({
                     <td className="px-4 py-3 text-center">
                       <StatusBadge reservado={row.reservado} />
                     </td>
+                    {showDataSaida ? (
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums font-medium text-foreground">
+                        {row.dataSaida
+                          ? formatExitDate(row.dataSaida, i18n.language)
+                          : '—'}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <RowActionButton
@@ -196,7 +224,7 @@ export default function VasilhamesReservaTable({
                         >
                           <Eye />
                         </RowActionButton>
-                        {!readOnly && (
+                        {!readOnly && (row.emPatio !== false || row.reservado) && (
                           <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
                             {row.reservado ? (
                               <RowActionButton

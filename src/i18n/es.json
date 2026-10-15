@@ -1193,8 +1193,13 @@
         },
         "vasilhames": {
           "tableTitle": "Envases en stock",
+          "tableTitleAll": "Todos los envases",
+          "includeExits": "Incluir salidas",
+          "includeExitsOn": "Encendido: muestra todos los envases, incluidos los que ya salieron",
+          "includeExitsOff": "Apagado: muestra solo los envases en el patio",
           "searchPlaceholder": "Buscar ID, placa, barril, cliente, código, producto o lote...",
           "empty": "Ningún envase en stock para el filtro seleccionado.",
+          "emptyAll": "Ningún envase encontrado para el filtro seleccionado.",
           "confirmTitle": "Reservar envase",
           "confirmMessage": "¿Confirmar la reserva del envase {{id}} ({{produto}} — {{cliente}})? El estado pasará a Reservado.",
           "confirmAction": "Reservar",
@@ -1210,7 +1215,8 @@
             "barril": "Nº Barril",
             "volume": "Volumen",
             "massa": "Masa",
-            "status": "Estado"
+            "status": "Estado",
+            "dataSaida": "Fecha de salida"
           },
           "status": {
             "livre": "Libre",

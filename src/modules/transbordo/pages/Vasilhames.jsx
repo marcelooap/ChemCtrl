@@ -1230,6 +1230,8 @@ export default function Vasilhames() {
           setViewVasilhame(null);
         }}
         vasilhame={viewVasilhame}
+        saidas={saidas}
+        transbordos={transbordos}
       />
 
       {/* Saída Dialog */}

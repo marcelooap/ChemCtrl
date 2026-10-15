@@ -7,6 +7,7 @@ import {
 } from '@industrializacao/lib/fractionalSupply';
 import { resolveProductCode } from '@industrializacao/lib/recipeRevisions';
 import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
+import { resolveVasilhameExpedidoDisplay } from '@transbordo/lib/vasilhamePatio';
 import { parseNumero } from '@transbordo/lib/format';
 import { entities } from '@transbordo/services/entities';
 
@@ -62,19 +63,47 @@ export function isVasilhameReservado(reservas = [], chave) {
   return (reservas || []).some((r) => r?.chave === chave && r.status === 'ativa');
 }
 
+function isTankagemTransbordo(vasilhame) {
+  return (vasilhame?.tipo || '') === 'Tankagem';
+}
+
+function isTankContainer(container) {
+  return String(container?.type || '').toLowerCase().includes('tank');
+}
+
+function transbordoStatus(vasilhame) {
+  return vasilhame?.status || (vasilhame?.data_saida ? 'Expedido' : 'No Pátio');
+}
+
 export function isTransbordoVasilhameEmEstoque(vasilhame) {
-  if (!vasilhame) return false;
-  if ((vasilhame.tipo || '') === 'Tankagem') return false;
-  const status =
-    vasilhame.status || (vasilhame.data_saida ? 'Expedido' : 'No Pátio');
-  return status === 'No Pátio';
+  if (!vasilhame || isTankagemTransbordo(vasilhame)) return false;
+  return transbordoStatus(vasilhame) === 'No Pátio';
 }
 
 export function isIndContainerEmEstoque(container) {
-  if (!container) return false;
-  const type = String(container.type || '').toLowerCase();
-  if (type.includes('tank')) return false;
+  if (!container || isTankContainer(container)) return false;
   return (container.status || '') === 'No Pátio';
+}
+
+function isTransbordoVasilhameElegivel(vasilhame, includeSaidos) {
+  if (!vasilhame || isTankagemTransbordo(vasilhame)) return false;
+  const status = transbordoStatus(vasilhame);
+  if (status === 'No Pátio') return true;
+  if (!includeSaidos) return false;
+  return status === 'Expedido' || Boolean(String(vasilhame.data_saida || '').trim());
+}
+
+function isIndContainerElegivel(container, includeSaidos) {
+  if (!container || isTankContainer(container)) return false;
+  const status = container.status || '';
+  if (status === 'No Pátio') return true;
+  if (!includeSaidos) return false;
+  return status === 'Expedido' || Boolean(String(container.departure_date || '').trim());
+}
+
+function exitDateOrNull(value) {
+  const raw = String(value ?? '').trim();
+  return raw || null;
 }
 
 function rowCreatedAtMs(row) {
@@ -84,7 +113,24 @@ function rowCreatedAtMs(row) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-export function mapTransbordoVasilhame(vasilhame, reservas = []) {
+function saidaItemsByVasilhameId(saidas = []) {
+  const map = new Map();
+  for (const saida of saidas || []) {
+    for (const item of saida?.itens || []) {
+      if (item?.tipo !== 'convencional' || !item.vasilhame_id) continue;
+      const list = map.get(item.vasilhame_id);
+      if (list) list.push({ saida, item });
+      else map.set(item.vasilhame_id, [{ saida, item }]);
+    }
+  }
+  return map;
+}
+
+export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
+  const display = resolveVasilhameExpedidoDisplay(vasilhame, {
+    linkedItems: context.linkedItems || [],
+    transbordos: context.transbordos || [],
+  });
   const origemId = vasilhame.id;
   const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, origemId);
   return {
@@ -100,13 +146,15 @@ export function mapTransbordoVasilhame(vasilhame, reservas = []) {
     clienteNome: dash(vasilhame.cliente_nome),
     codigo: dash(vasilhame.produto_codigo),
     produto: dash(vasilhame.produto_nome),
-    volume: Number(vasilhame.volume) || 0,
-    massa: Number(vasilhame.peso_liquido) || 0,
+    volume: Number(display.volume) || 0,
+    massa: Number(display.peso_liquido) || 0,
     lote: dash(getDominantLote(vasilhame.composicao) || vasilhame.lote),
     createdAt: vasilhame.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     fracionado: isTransbordoFracionado(vasilhame),
-    source: vasilhame,
+    emPatio: transbordoStatus(vasilhame) === 'No Pátio',
+    dataSaida: exitDateOrNull(vasilhame.data_saida),
+    source: display,
   };
 }
 
@@ -140,6 +188,8 @@ export function mapIndContainer(
     createdAt: container.created_date || container.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     fracionado: isContainerFractional(container, production, transfers),
+    emPatio: (container.status || '') === 'No Pátio',
+    dataSaida: exitDateOrNull(container.departure_date),
     source: container,
     // Referências (sem cópia) usadas para calcular pesos/volume da boleta.
     boletaContext: { productions, recipes },
@@ -171,13 +221,22 @@ export function buildVasilhameReservaRows({
   recipes = [],
   productions = [],
   transfers = [],
+  includeSaidos = false,
+  saidas = [],
+  transbordos = [],
 } = {}) {
+  const saidaItems = saidaItemsByVasilhameId(saidas);
   const transbordo = (vasilhames || [])
-    .filter(isTransbordoVasilhameEmEstoque)
-    .map((v) => mapTransbordoVasilhame(v, reservas));
+    .filter((v) => isTransbordoVasilhameElegivel(v, includeSaidos))
+    .map((v) =>
+      mapTransbordoVasilhame(v, reservas, {
+        linkedItems: saidaItems.get(v.id) || [],
+        transbordos,
+      })
+    );
 
   const industrializacao = (containers || [])
-    .filter(isIndContainerEmEstoque)
+    .filter((c) => isIndContainerElegivel(c, includeSaidos))
     .map((c) => mapIndContainer(c, reservas, recipes, productions, transfers));
 
   // Mais recente no topo (último cadastrado primeiro), sem agrupar por origem.

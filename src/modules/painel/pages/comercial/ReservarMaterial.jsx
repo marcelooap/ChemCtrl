@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cylinder, Eye, Package, Pencil, Search } from 'lucide-react';
+import { Cylinder, Eye, Package, Pencil, Power, Search } from 'lucide-react';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
+import { Switch } from '@shared/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import SearchableSelect from '@transbordo/components/cadastro/SearchableSelect';
@@ -50,6 +51,7 @@ export default function ReservarMaterial() {
   const [statusFilter, setStatusFilter] = useState('');
   const [editRow, setEditRow] = useState(null);
   const [viewRow, setViewRow] = useState(null);
+  const [mostrarSaidos, setMostrarSaidos] = useState(true);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -108,6 +110,9 @@ export default function ReservarMaterial() {
           recipes: indPack.recipes,
           productions: indPack.productions,
           transfers: indPack.transfers,
+          includeSaidos: true,
+          saidas: saics || [],
+          transbordos: trans || [],
         })
       );
       setReservas(reservasList || []);
@@ -171,6 +176,7 @@ export default function ReservarMaterial() {
   const filteredVasilhames = useMemo(() => {
     const q = search.trim().toLowerCase();
     return vasilhameRows.filter((row) => {
+      if (!mostrarSaidos && row.emPatio === false) return false;
       if (!matchesCliente(row.clienteNome)) return false;
       if (!matchesStatus(Boolean(row.reservado))) return false;
       if (!q) return true;
@@ -178,7 +184,7 @@ export default function ReservarMaterial() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [vasilhameRows, search, matchesCliente, matchesStatus]);
+  }, [vasilhameRows, search, mostrarSaidos, matchesCliente, matchesStatus]);
 
   const clienteOptions = useMemo(() => {
     const byName = new Map();
@@ -285,6 +291,35 @@ export default function ReservarMaterial() {
               {t('painel.comercial.reservarMaterial.tabs.vasilhames')}
             </TabsTrigger>
           </TabsList>
+
+          {tab === 'vasilhames' ? (
+            <div
+              className="inline-flex w-fit items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm cursor-pointer select-none"
+              onClick={() => setMostrarSaidos((current) => !current)}
+            >
+              <Power
+                className={`h-4 w-4 ${mostrarSaidos ? 'text-emerald-600' : 'text-muted-foreground'}`}
+                aria-hidden
+              />
+              <Switch
+                checked={mostrarSaidos}
+                onCheckedChange={setMostrarSaidos}
+                onClick={(event) => event.stopPropagation()}
+                aria-label={
+                  mostrarSaidos
+                    ? t('painel.comercial.reservarMaterial.vasilhames.includeExitsOn')
+                    : t('painel.comercial.reservarMaterial.vasilhames.includeExitsOff')
+                }
+                title={
+                  mostrarSaidos
+                    ? t('painel.comercial.reservarMaterial.vasilhames.includeExitsOn')
+                    : t('painel.comercial.reservarMaterial.vasilhames.includeExitsOff')
+                }
+                className={mostrarSaidos ? 'data-[state=checked]:bg-emerald-500' : undefined}
+              />
+              <span>{t('painel.comercial.reservarMaterial.vasilhames.includeExits')}</span>
+            </div>
+          ) : null}
 
           <div className="flex items-center gap-4 flex-wrap">
             <div className="relative flex-1 min-w-[240px] max-w-md">
@@ -435,6 +470,7 @@ export default function ReservarMaterial() {
             reservas={reservas}
             user={user}
             onReload={loadData}
+            showDataSaida={mostrarSaidos}
           />
         </TabsContent>
       </Tabs>

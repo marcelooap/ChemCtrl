@@ -117,6 +117,8 @@ export default function Estoque() {
           recipes: indPack.recipes,
           productions: indPack.productions,
           transfers: indPack.transfers,
+          saidas: saics || [],
+          transbordos: trans || [],
         })
       );
       setReservas(reservasList || []);
