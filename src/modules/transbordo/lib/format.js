@@ -158,6 +158,36 @@ export function formatCurrency(v) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function isMassaInteira(kg) {
+  const n = Number(kg);
+  if (!Number.isFinite(n)) return false;
+  return Math.abs(n - Math.round(n)) < 1e-6;
+}
+
+/**
+ * kg → litros operacionais.
+ * Massa inteira (39.040 kg) vira litro inteiro (33.948 L), no mesmo
+ * critério do volume pré-preenchido no transbordo. Esse litro só é
+ * aceito se a massa correspondente não passar do kg informado.
+ * Massa com fração mantém até 3 casas.
+ */
+export function litrosFromMassaKg(kg, densidade) {
+  const massa = Number(kg) || 0;
+  if (!(massa > 0)) return 0;
+  const dens = parseDensidade(densidade);
+  if (!(dens > 0)) return roundQuantidade(massa);
+
+  const litros = massa / dens;
+  if (!isMassaInteira(massa)) return roundQuantidade(litros);
+
+  const massaAlvo = Math.round(massa);
+  let litrosInt = Math.round(litros);
+  if (litrosInt > 0 && roundMass(litrosInt * dens) > massaAlvo) {
+    litrosInt -= 1;
+  }
+  return Math.max(0, litrosInt);
+}
+
 /**
  * Converte quantidade de estoque (kg) → litros inteiros, preservando
  * o total quando há vários lotes (soma das partes = total).
@@ -175,16 +205,14 @@ export function kgLotesToLitrosInteiros(lotes = []) {
 
   if (sameDens) {
     const totalKg = lotes.reduce((s, l) => s + (Number(l.quantidade_kg) || 0), 0);
-    const totalL = roundVolume(totalKg / firstDens);
+    const totalL = litrosFromMassaKg(totalKg, firstDens);
     const weights = lotes.map((l) => Number(l.quantidade_kg) || 0);
     return distributeByWeights(totalL, weights);
   }
 
-  // Densidades distintas: arredonda cada um; ajusta o último para não
-  // introduzir erro sistemático quando só há 1 densidade efetiva.
   return lotes.map((l) => {
     const dens = parseDensidade(l.densidade) || 0;
     const kg = Number(l.quantidade_kg) || 0;
-    return dens > 0 ? roundVolume(kg / dens) : roundVolume(kg);
+    return dens > 0 ? litrosFromMassaKg(kg, dens) : roundQuantidade(kg);
   });
 }

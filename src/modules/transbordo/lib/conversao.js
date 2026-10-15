@@ -1,4 +1,8 @@
-import { distributeByWeights, roundQuantidade } from "@transbordo/lib/format";
+import {
+  distributeByWeights,
+  litrosFromMassaKg,
+  roundQuantidade,
+} from "@transbordo/lib/format";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 
 const LB_TO_KG = 0.453592;
@@ -73,11 +77,11 @@ export const loteToLitros = (lote) => {
       return roundQuantidade(lQtd * GAL_TO_L);
     case "kg":
     case "kgs":
-      return lDens > 0 ? roundQuantidade(lQtd / lDens) : 0;
+      return lDens > 0 ? litrosFromMassaKg(lQtd, lDens) : 0;
     case "lb":
     case "lbs": {
       const kg = roundQuantidade(lQtd * LB_TO_KG);
-      return lDens > 0 ? roundQuantidade(kg / lDens) : 0;
+      return lDens > 0 ? litrosFromMassaKg(kg, lDens) : 0;
     }
     default:
       return roundQuantidade(lQtd);
@@ -116,8 +120,7 @@ export const saldoKgToLitros = (saldoKg, densidade, estoqueItem) => {
     }
   }
 
-  const dens = Number(densidade) || 0;
-  return dens > 0 ? roundQuantidade(saldo / dens) : roundQuantidade(saldo);
+  return litrosFromMassaKg(saldo, densidade);
 };
 
 /** Unidade a gravar no estoque a partir do lote. */
