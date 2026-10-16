@@ -72,6 +72,7 @@ create table if not exists t_isotanques (
   cliente_id uuid references t_clientes(id) on delete set null,
   cliente_nome text,
   capacidade numeric,
+  observacao text,
   inicio_locacao date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -267,6 +268,7 @@ create table if not exists t_vasilhames (
   eslinga text,
   gps text,
   menor_teste date,
+  observacao text,
   status text not null default 'No Pátio' check (status in ('No Pátio', 'Expedido')),
   data_saida date,
   responsavel text,

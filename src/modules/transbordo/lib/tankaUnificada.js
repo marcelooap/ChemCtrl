@@ -417,6 +417,9 @@ export function mergeTankasUnificadas({
         sourceIds: row.sourceIds,
         // Compatível com buildTankaDetalhe quando há isotanque
         produto_nome: produto,
+        observacao: cleanText(
+          row.isotanque?.observacao || row.indTank?.observacao || ""
+        ),
       };
     })
     .sort((a, b) =>

@@ -22,6 +22,7 @@ import {
   volumeTotalPorFiltro,
   promoverFiltroEmUso,
   statusElementoBadgeClass,
+  alignFiltracoesComVasilhames,
 } from "@transbordo/lib/filtracao";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
@@ -44,12 +45,12 @@ export default function InsumosTab() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [elems, filtracoes] = await Promise.all([
+      const [elems, aligned] = await Promise.all([
         entities.elementos_filtrantes.list("-created_date"),
-        entities.filtracoes.list(),
+        alignFiltracoesComVasilhames(entities),
       ]);
       setElementos(elems);
-      setVolumeMap(volumeTotalPorFiltro(filtracoes));
+      setVolumeMap(volumeTotalPorFiltro(aligned.rows));
     } catch {
       if (!silent) {
         setElementos([]);

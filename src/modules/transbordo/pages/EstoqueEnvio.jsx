@@ -12,8 +12,6 @@ import {
   computeEstoqueSaldo,
   getEstoqueQuantidade,
   getEstoqueUnidade,
-  getEstoqueUnidadeEntrada,
-  getEstoqueSaldoEntrada,
   hydrateEstoqueFiscal,
 } from "@transbordo/lib/estoqueSaldo";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
@@ -37,6 +35,7 @@ import {
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
 import { formatMass, formatNum, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
+import { collectEstoqueEnvioFontes } from "@transbordo/lib/estoqueEnvioProdutos";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -206,9 +205,11 @@ export default function EstoqueEnvio() {
   const [transbordos, setTransbordos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [reservas, setReservas] = useState([]);
+  const [entradas, setEntradas] = useState([]);
   const [indTanks, setIndTanks] = useState([]);
   const [indContainers, setIndContainers] = useState([]);
   const [indStock, setIndStock] = useState([]);
+  const [indStockReady, setIndStockReady] = useState(false);
   const [clienteFilter, setClienteFilter] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -220,7 +221,7 @@ export default function EstoqueEnvio() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [ests, vascs, isot, trans, cliens, saics, reservasList] =
+        const [ests, vascs, isot, trans, cliens, saics, reservasList, ents] =
           await Promise.all([
             entities.estoque.list(),
             entities.vasilhames.list(),
@@ -229,6 +230,7 @@ export default function EstoqueEnvio() {
             entities.clientes.list(),
             entities.saidas.list(),
             entities.materialReservas.list().catch(() => []),
+            entities.entradas.list(),
           ]);
 
         // Corrige volumes inflados (duplicata de OP / unificação) pelo histórico real
@@ -290,6 +292,7 @@ export default function EstoqueEnvio() {
         setTransbordos(trans);
         setClientes(cliens);
         setReservas(reservasList || []);
+        setEntradas(Array.isArray(ents) ? ents : []);
 
         // Industrialização em etapa separada (evita rate-limit / falha silenciosa
         // no Promise.all principal — tankas cadastradas devem aparecer mesmo vazias)
@@ -303,15 +306,43 @@ export default function EstoqueEnvio() {
             }
           };
 
-          const [tanksInd, containersInd, stockInd] = await Promise.all([
+          const [tanksInd, containersInd] = await Promise.all([
             loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
             loadIndList(() =>
               base44.entities.Container.list("-created_date", 2000)
             ),
-            loadIndList(() =>
-              base44.entities.RawMaterialStock.list("-created_date", 1000)
-            ),
           ]);
+
+          // Saldo de MP vem de current_stock. Falha aqui não pode zerar a lista
+          // e esconder o espelho: sem a carga, o consolidado segue o transbordo.
+          let stockInd = [];
+          let stockReady = false;
+          try {
+            const pageSize = 1000;
+            const seen = new Set();
+            for (let offset = 0; offset < 20000; offset += pageSize) {
+              const rows = await base44.entities.RawMaterialStock.list(
+                "-created_date",
+                pageSize,
+                { offset }
+              );
+              const batch = Array.isArray(rows) ? rows : [];
+              let added = 0;
+              for (const row of batch) {
+                const id = row?.id != null ? String(row.id) : "";
+                if (id && seen.has(id)) continue;
+                if (id) seen.add(id);
+                stockInd.push(row);
+                added += 1;
+              }
+              if (batch.length < pageSize || added === 0) break;
+            }
+            stockReady = true;
+          } catch (stockErr) {
+            console.warn("[EstoqueEnvio] matéria-prima:", stockErr);
+            stockInd = [];
+            stockReady = false;
+          }
 
           // Fallback sem ordenação se a lista de tankas veio vazia por erro de coluna
           let tanksFinal = tanksInd;
@@ -324,11 +355,13 @@ export default function EstoqueEnvio() {
           setIndTanks(tanksFinal);
           setIndContainers(containersInd);
           setIndStock(stockInd);
+          setIndStockReady(stockReady);
         } catch (indErr) {
           console.warn("[EstoqueEnvio] Industrialização:", indErr);
           setIndTanks([]);
           setIndContainers([]);
           setIndStock([]);
+          setIndStockReady(false);
         }
       } catch {
         setEstoque([]);
@@ -337,9 +370,11 @@ export default function EstoqueEnvio() {
         setTransbordos([]);
         setClientes([]);
         setReservas([]);
+        setEntradas([]);
         setIndTanks([]);
         setIndContainers([]);
         setIndStock([]);
+        setIndStockReady(false);
       } finally {
         setLoading(false);
       }
@@ -353,17 +388,23 @@ export default function EstoqueEnvio() {
 
   const produtosAgregados = useMemo(() => {
     const map = new Map();
+    const fontes = collectEstoqueEnvioFontes({
+      estoque,
+      entradas,
+      indStock,
+      clientes,
+      indStockReady,
+    });
 
-    for (const e of estoque) {
+    for (const e of fontes) {
       if (!matchesCliente(e, clienteFilter, clientes)) continue;
-      if ((Number(e.saldo_atual) || 0) <= 0) continue;
 
-      const saldo = getEstoqueSaldoEntrada(e);
+      const saldo = Number(e.saldo) || 0;
       if (saldo <= 0) continue;
 
-      const codigo = (e.produto_codigo || "").trim() || "—";
-      const produto = (e.produto_nome || "").trim() || "—";
-      const unidade = getEstoqueUnidadeEntrada(e) || "kg";
+      const codigo = e.codigo || "—";
+      const produto = e.produto || "—";
+      const unidade = e.unidade || "kg";
       // Diferencia pelo nome/descrição (mesmo código pode ser Bombona vs IBC)
       const key = [
         codigo,
@@ -439,7 +480,17 @@ export default function EstoqueEnvio() {
         if (byNome !== 0) return byNome;
         return String(a.unidade).localeCompare(String(b.unidade), "pt-BR");
       });
-  }, [estoque, clienteFilter, clientes, q, reservas, vasilhames]);
+  }, [
+    estoque,
+    entradas,
+    indStock,
+    indStockReady,
+    clienteFilter,
+    clientes,
+    q,
+    reservas,
+    vasilhames,
+  ]);
 
   const filteredVasilhames = useMemo(() => {
     return vasilhames
@@ -647,16 +698,18 @@ export default function EstoqueEnvio() {
       }));
 
       const tanks = filteredTankas.map((tank) => {
+        const fillColor = tank.produto ? productColorMap[tank.produto] || null : null;
         if (tank.hasTransbordo && tank.isotanque && tank.volumeSource === "transbordo") {
           const lotes = computeTankaLotesDisponiveis({
             isotanqueId: tank.isotanque.id,
             tankaCodigo: tank.tankaCodigo,
             transbordos,
           });
-          return { ...tank, lotes };
+          return { ...tank, lotes, fillColor };
         }
         return {
           ...tank,
+          fillColor,
           lotes:
             (Number(tank.volumeAtual) || 0) > 0
               ? [
@@ -1080,6 +1133,7 @@ export default function EstoqueEnvio() {
                 fillColor={
                   tank.produto ? productColorMap[tank.produto] : null
                 }
+                observacao={tank.observacao}
                 onView={() => handleViewTanka(tank)}
               />
             ))}

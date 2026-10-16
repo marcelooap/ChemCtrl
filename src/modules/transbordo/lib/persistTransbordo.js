@@ -25,6 +25,7 @@ import {
   getFiltroEmUso,
   isFiltracaoElegivel,
   upsertFiltracaoForVasilhame,
+  alignFiltracoesComVasilhames,
 } from '@transbordo/lib/filtracao';
 import {
   TIPOS_EMBALAGEM_ESTOQUE,
@@ -37,6 +38,26 @@ import {
 
 /** Vasilhame + embalagens unitárias (bombona/tambor/IBC) na tela de Vasilhames. */
 const TIPOS_VASILHAME = new Set(["Vasilhame", ...TIPOS_EMBALAGEM_ESTOQUE]);
+
+function cleanObservacao(value) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+/** Observação nova prevalece; campo vazio mantém a nota já gravada no tanque. */
+function mergeObservacao(current, incoming) {
+  return cleanObservacao(incoming) || cleanObservacao(current);
+}
+
+function rethrowIfMissingObservacao(err) {
+  const msg = String(err?.message || "");
+  if (/observacao/i.test(msg)) {
+    throw new Error(
+      "Execute o script 045_t_vasilhames_observacao.sql no SQL Editor do Supabase para gravar a observação do vasilhame."
+    );
+  }
+  throw err;
+}
 
 function isMissingOperadorUsuarioColumn(err) {
   const msg = String(err?.message || err || "").toLowerCase();
@@ -331,6 +352,7 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
     eslinga: d.eslinga || "",
     gps: d.gps || "",
     menor_teste: nullIfEmpty(d.menor_teste),
+    observacao: cleanObservacao(d.observacao),
     status: "No Pátio",
     responsavel: (data.operadores || []).join(", "),
     fracionado: isUnitario ? false : d.fracionado || false,
@@ -598,6 +620,7 @@ export async function persistTransbordo({
                 data: payload.data || null,
                 dens,
               }),
+              observacao: mergeObservacao(rec.observacao, d.observacao),
             };
             continue;
           }
@@ -624,24 +647,30 @@ export async function persistTransbordo({
             const sharedTank =
               existing.transbordo_id &&
               existing.transbordo_id !== savedTransbordo.id;
-            const updatedTopUp = await entities.vasilhames.update(existing.id, {
-              ...next,
-              numero_op: codigo,
-              ...(sharedTank ? { transbordo_id: null } : {}),
-              produto_id: nullIfEmpty(payload.produto_id) || existing.produto_id,
-              produto_nome: payload.produto_nome || existing.produto_nome,
-              produto_codigo: payload.produto_codigo || existing.produto_codigo,
-              cliente_id: nullIfEmpty(payload.cliente_id) || existing.cliente_id,
-              cliente_nome: payload.cliente_nome || existing.cliente_nome,
-              densidade: payload.densidade || existing.densidade,
-              lacres: d.lacres || existing.lacres || "",
-              eslinga: d.eslinga || existing.eslinga || "",
-              gps: d.gps || existing.gps || "",
-              menor_teste: nullIfEmpty(d.menor_teste) || existing.menor_teste,
-              responsavel:
-                (payload.operadores || []).join(", ") || existing.responsavel,
-              status: "No Pátio",
-            });
+            let updatedTopUp;
+            try {
+              updatedTopUp = await entities.vasilhames.update(existing.id, {
+                ...next,
+                numero_op: codigo,
+                ...(sharedTank ? { transbordo_id: null } : {}),
+                produto_id: nullIfEmpty(payload.produto_id) || existing.produto_id,
+                produto_nome: payload.produto_nome || existing.produto_nome,
+                produto_codigo: payload.produto_codigo || existing.produto_codigo,
+                cliente_id: nullIfEmpty(payload.cliente_id) || existing.cliente_id,
+                cliente_nome: payload.cliente_nome || existing.cliente_nome,
+                densidade: payload.densidade || existing.densidade,
+                lacres: d.lacres || existing.lacres || "",
+                eslinga: d.eslinga || existing.eslinga || "",
+                gps: d.gps || existing.gps || "",
+                menor_teste: nullIfEmpty(d.menor_teste) || existing.menor_teste,
+                observacao: mergeObservacao(existing.observacao, d.observacao),
+                responsavel:
+                  (payload.operadores || []).join(", ") || existing.responsavel,
+                status: "No Pátio",
+              });
+            } catch (err) {
+              rethrowIfMissingObservacao(err);
+            }
             const row = {
               ...existing,
               ...next,
@@ -684,7 +713,12 @@ export async function persistTransbordo({
       }
 
       if (vasilhameRecords.length > 0) {
-        const createdVasilhames = await entities.vasilhames.bulkCreate(vasilhameRecords);
+        let createdVasilhames;
+        try {
+          createdVasilhames = await entities.vasilhames.bulkCreate(vasilhameRecords);
+        } catch (err) {
+          rethrowIfMissingObservacao(err);
+        }
         if (produtoFiltrado && createdVasilhames.length > 0) {
           const filtracaoRecords = createdVasilhames
             .filter(isFiltracaoElegivel)
@@ -727,5 +761,18 @@ export async function persistTransbordo({
       });
 
       await syncEstoqueSaldos(affectedEstoqueIds);
+
+      // Top-up e unificação de placa alteram o tanque depois do espelho inicial.
+      // Realinha o volume da filtração ao conteúdo que a tela de Vasilhames exibe.
+      try {
+        const vasilhamesFinais = await entities.vasilhames.list();
+        await alignFiltracoesComVasilhames(entities, {
+          vasilhames: vasilhamesFinais,
+          transbordos,
+        });
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar volume das filtrações:", err);
+      }
+
   return savedTransbordo;
 }

@@ -728,7 +728,17 @@ export default function Vasilhames() {
           console.warn("[ChemFlow] Restore pátio (edit):", restoreErr);
         }
       }
-      await entities.vasilhames.update(editingVasilhame.id, payload);
+      try {
+        await entities.vasilhames.update(editingVasilhame.id, payload);
+      } catch (err) {
+        const msg = String(err?.message || "");
+        if (/observacao/i.test(msg)) {
+          throw new Error(
+            "Execute o script 045_t_vasilhames_observacao.sql no SQL Editor do Supabase para gravar a observação."
+          );
+        }
+        throw err;
+      }
       saved = { ...editingVasilhame, ...payload };
       if (multiLote) {
         const renomes = lotesEditados.filter(

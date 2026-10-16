@@ -1,4 +1,4 @@
-import { Eye } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import { formatVolume, formatPercent } from "@transbordo/lib/format";
 
 export default function TankSilo({
@@ -7,7 +7,9 @@ export default function TankSilo({
   volume,
   produto,
   fillColor,
+  observacao,
   onView,
+  onEdit,
 }) {
   const pct = capacidade > 0 ? (volume / capacidade) * 100 : 0;
   const pctClamped = Math.min(pct, 100);
@@ -48,8 +50,27 @@ export default function TankSilo({
               <Eye className="w-3.5 h-3.5" />
             </button>
           )}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="shrink-0 text-muted-foreground hover:text-primary transition-colors p-0.5"
+              title="Editar observação"
+              aria-label={`Editar observação de ${tanka || "tanka"}`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <p className="text-xs text-foreground truncate">{produto || "—"}</p>
+        {String(observacao || "").trim() ? (
+          <span
+            className="mt-1 inline-flex max-w-full rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold leading-snug text-orange-800 line-clamp-2"
+            title={String(observacao).trim()}
+          >
+            {String(observacao).trim()}
+          </span>
+        ) : null}
       </div>
     </div>
   );

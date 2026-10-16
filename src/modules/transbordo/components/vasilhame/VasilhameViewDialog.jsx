@@ -191,6 +191,12 @@ const formatDate = (d) => {
               <InfoItem label="Eslinga" value={vasilhame.eslinga} />
               <InfoItem label="GPS" value={vasilhame.gps} />
               <InfoItem label="Responsável" value={vasilhame.responsavel} />
+              <div className="col-span-3 space-y-0.5">
+                <p className="text-xs text-muted-foreground">Observação</p>
+                <p className="text-sm font-medium text-foreground whitespace-pre-wrap">
+                  {String(vasilhame.observacao || "").trim() || "—"}
+                </p>
+              </div>
             </Section>
   
             {composicaoAgg.length > 0 && (

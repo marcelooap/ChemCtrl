@@ -4,6 +4,10 @@
  * Apenas embalagens do tipo "Vasilhame" (não Tankagem / IBC / etc.).
  */
 
+import { roundVolume } from "@transbordo/lib/format";
+import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import { resolveVasilhameExpedidoDisplay } from "@transbordo/lib/vasilhamePatio";
+
 export const PARTICULA_TAMANHOS = [
   { key: "particulas_6", label: "6 mm", short: "6" },
   { key: "particulas_14", label: "14 mm", short: "14" },
@@ -122,8 +126,135 @@ export function volumeTotalPorFiltro(filtracoes = []) {
   return map;
 }
 
+/** SAE informado — o tanque deixa de estar pendente de resultado. */
+export function filtracaoTemSae(filtracao) {
+  return filtracao?.sae !== null && filtracao?.sae !== undefined && filtracao?.sae !== "";
+}
+
+function composicaoSignature(composicao) {
+  return (composicao || [])
+    .map((c) => {
+      const lote = String(c?.lote || "").trim();
+      const litros = roundVolume(c?.quantidade_l || 0);
+      const op = String(c?.transbordo_codigo || "").trim();
+      return `${lote}|${litros}|${op}`;
+    })
+    .sort()
+    .join(";");
+}
+
+function sameVolume(a, b) {
+  return Math.abs(roundVolume(a) - roundVolume(b)) < 0.0005;
+}
+
+/** Itens de saída convencional agrupados pelo vasilhame, como na grade de Vasilhames. */
+export function indexSaidaItemsByVasilhame(saidas = []) {
+  const map = new Map();
+  for (const saida of saidas || []) {
+    for (const item of saida?.itens || []) {
+      if (item?.tipo !== "convencional" || !item.vasilhame_id) continue;
+      const list = map.get(item.vasilhame_id) || [];
+      list.push({ saida, item });
+      map.set(item.vasilhame_id, list);
+    }
+  }
+  return map;
+}
+
+/**
+ * Volume exibido na grade de Vasilhames para o tanque ligado à filtração.
+ * Expedido zera o cadastro; a grade recupera o conteúdo (saída, composição ou OP).
+ * Devolve 0 quando não há conteúdo recuperável — o espelho não deve apagar o volume.
+ */
+export function volumeExibidoDoVasilhame(vasilhame, ctx = {}) {
+  if (!vasilhame) return 0;
+  const display = resolveVasilhameExpedidoDisplay(vasilhame, {
+    linkedItems: ctx.linkedItems || [],
+    transbordos: ctx.transbordos || [],
+  });
+  return roundVolume(display?.volume || 0);
+}
+
+/**
+ * Ajusta volume, composição e lote da filtração ao conteúdo atual do vasilhame.
+ * Não mexe em SAE, partículas, filtro, placa ou barril.
+ */
+export function mirrorFiltracaoFromVasilhame(filtracao, vasilhame, ctx = {}) {
+  if (!filtracao || !vasilhame) return { row: filtracao, patch: null };
+
+  const volume = volumeExibidoDoVasilhame(vasilhame, ctx);
+  if (!(volume > 0)) return { row: filtracao, patch: null };
+
+  const composicao =
+    Array.isArray(vasilhame.composicao) && vasilhame.composicao.length > 0
+      ? vasilhame.composicao
+      : filtracao.composicao || [];
+  const lote =
+    getDominantLote(composicao) || vasilhame.lote || filtracao.lote || "";
+
+  const patch = {};
+  if (!sameVolume(filtracao.volume, volume)) patch.volume = volume;
+  if (composicaoSignature(filtracao.composicao) !== composicaoSignature(composicao)) {
+    patch.composicao = composicao;
+  }
+  if (lote && String(lote) !== String(filtracao.lote || "")) patch.lote = lote;
+  if (Object.keys(patch).length === 0) return { row: filtracao, patch: null };
+
+  return {
+    row: { ...filtracao, ...patch },
+    patch: { id: filtracao.id, ...patch },
+  };
+}
+
+/**
+ * Reescreve filtrações cujo volume ficou para trás do tanque
+ * (top-up / unificação que não espelhou o registro).
+ */
+export async function alignFiltracoesComVasilhames(
+  entities,
+  {
+    vasilhames = null,
+    filtracoes = null,
+    saidas = null,
+    transbordos = null,
+  } = {}
+) {
+  const [vasList, filList, saidaList, transList] = await Promise.all([
+    vasilhames ? Promise.resolve(vasilhames) : entities.vasilhames.list(),
+    filtracoes ? Promise.resolve(filtracoes) : entities.filtracoes.list("-created_date"),
+    saidas ? Promise.resolve(saidas) : entities.saidas.list("-created_date").catch(() => []),
+    transbordos ? Promise.resolve(transbordos) : entities.transbordos.list().catch(() => []),
+  ]);
+
+  const vasById = new Map((vasList || []).filter((v) => v?.id).map((v) => [v.id, v]));
+  const saidaByVas = indexSaidaItemsByVasilhame(saidaList);
+  const rows = [];
+  const patches = [];
+
+  for (const filtracao of filList || []) {
+    const vasilhame = vasById.get(filtracao.vasilhame_id);
+    const mirrored = mirrorFiltracaoFromVasilhame(filtracao, vasilhame, {
+      linkedItems: saidaByVas.get(filtracao.vasilhame_id) || [],
+      transbordos: transList || [],
+    });
+    rows.push(mirrored.row);
+    if (mirrored.patch) patches.push(mirrored.patch);
+  }
+
+  if (patches.length > 0) {
+    try {
+      await entities.filtracoes.bulkUpdate(patches);
+    } catch (err) {
+      console.error("[Transbordo] Falha ao alinhar volume das filtrações:", err);
+    }
+  }
+
+  return { rows, patches };
+}
+
 /** Campos espelhados do vasilhame (sem sobrescrever SAE/partículas). */
-export function syncFiltracaoFromVasilhame(vasilhame) {
+export function syncFiltracaoFromVasilhame(vasilhame, ctx = {}) {
+  const volume = volumeExibidoDoVasilhame(vasilhame, ctx);
   return {
     codigo: vasilhame.codigo || "",
     placa: vasilhame.placa || "",
@@ -133,9 +264,9 @@ export function syncFiltracaoFromVasilhame(vasilhame) {
     produto_nome: vasilhame.produto_nome || "",
     cliente_id: vasilhame.cliente_id || null,
     cliente_nome: vasilhame.cliente_nome || "",
-    lote: vasilhame.lote || "",
+    lote: getDominantLote(vasilhame.composicao) || vasilhame.lote || "",
     composicao: vasilhame.composicao || [],
-    volume: vasilhame.volume || 0,
+    volume: volume > 0 ? volume : vasilhame.volume || 0,
   };
 }
 

@@ -1,4 +1,5 @@
 import { Input } from "@shared/components/ui/input";
+import { Textarea } from "@shared/components/ui/textarea";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import { Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
@@ -445,6 +446,9 @@ export default function DestinoCard({
                         ? !!destino.fracionado
                         : false
                       : false,
+                    observacao: item
+                      ? String(item.observacao || "").trim()
+                      : destino.observacao || "",
                   };
                   recalc(updated);
                   onChange(updated);
@@ -497,6 +501,9 @@ export default function DestinoCard({
                     Number(matched.tara) >= 0
                       ? roundMass(matched.tara)
                       : destino.tara,
+                  observacao: matched
+                    ? String(matched.observacao || "").trim()
+                    : destino.observacao || "",
                 };
                 recalc(updated);
                 onChange(updated);
@@ -582,6 +589,19 @@ export default function DestinoCard({
               Permite registrar o destino antes de completar sua capacidade.
               Desmarque ao completar o tanque.
             </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`destino-observacao-${index}`}>Observação</Label>
+            <Textarea
+              id={`destino-observacao-${index}`}
+              value={destino.observacao || ""}
+              onChange={(e) => updateField("observacao", e.target.value)}
+              placeholder="Apontamentos sobre este vasilhame"
+              disabled={readOnly}
+              rows={3}
+              className={INPUT_EDITABLE}
+            />
           </div>
         </div>
       )}

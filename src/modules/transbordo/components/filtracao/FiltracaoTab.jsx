@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { entities } from "@transbordo/services/entities";
 import { Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
+import { cn } from "@shared/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,12 @@ import {
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
-import { PARTICULA_TAMANHOS, formatParticulaCount } from "@transbordo/lib/filtracao";
+import {
+  PARTICULA_TAMANHOS,
+  formatParticulaCount,
+  alignFiltracoesComVasilhames,
+  filtracaoTemSae,
+} from "@transbordo/lib/filtracao";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
 export default function FiltracaoTab() {
@@ -36,16 +42,17 @@ export default function FiltracaoTab() {
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [resultadoFilter, setResultadoFilter] = useState("pendente");
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [list, cliens, elems] = await Promise.all([
-        entities.filtracoes.list("-created_date"),
+      const [aligned, cliens, elems] = await Promise.all([
+        alignFiltracoesComVasilhames(entities),
         entities.clientes.list(),
         entities.elementos_filtrantes.list("-created_date"),
       ]);
-      setFiltracoes(list);
+      setFiltracoes(aligned.rows);
       setClientes(cliens);
       setElementos(elems);
     } catch {
@@ -61,26 +68,35 @@ export default function FiltracaoTab() {
     loadData();
   }, []);
 
-  const filtered = filtracoes.filter((f) => {
+  const searched = useMemo(() => {
     const q = search.toLowerCase();
-    const matchSearch =
-      !q ||
-      f.codigo?.toLowerCase().includes(q) ||
-      f.placa?.toLowerCase().includes(q) ||
-      f.barril?.toLowerCase().includes(q) ||
-      f.produto_nome?.toLowerCase().includes(q) ||
-      f.produto_codigo?.toLowerCase().includes(q) ||
-      f.cliente_nome?.toLowerCase().includes(q) ||
-      f.lote?.toLowerCase().includes(q) ||
-      f.filtro_codigo?.toLowerCase().includes(q);
+    return filtracoes.filter((f) => {
+      const matchSearch =
+        !q ||
+        f.codigo?.toLowerCase().includes(q) ||
+        f.placa?.toLowerCase().includes(q) ||
+        f.barril?.toLowerCase().includes(q) ||
+        f.produto_nome?.toLowerCase().includes(q) ||
+        f.produto_codigo?.toLowerCase().includes(q) ||
+        f.cliente_nome?.toLowerCase().includes(q) ||
+        f.lote?.toLowerCase().includes(q) ||
+        f.filtro_codigo?.toLowerCase().includes(q);
 
-    const matchCliente =
-      !clienteFilter ||
-      clienteFilter === "Todos os clientes" ||
-      f.cliente_nome === clienteFilter;
+      const matchCliente =
+        !clienteFilter ||
+        clienteFilter === "Todos os clientes" ||
+        f.cliente_nome === clienteFilter;
 
-    return matchSearch && matchCliente;
-  });
+      return matchSearch && matchCliente;
+    });
+  }, [filtracoes, search, clienteFilter]);
+
+  const pendenteCount = searched.filter((f) => !filtracaoTemSae(f)).length;
+  const analisadoCount = searched.length - pendenteCount;
+
+  const filtered = searched.filter((f) =>
+    resultadoFilter === "analisado" ? filtracaoTemSae(f) : !filtracaoTemSae(f)
+  );
 
   const handleView = (f) => {
     setViewFiltracao(f);
@@ -141,8 +157,61 @@ export default function FiltracaoTab() {
           />
         </div>
         <span className="text-sm text-muted-foreground ml-auto">
-          {filtracoes.length} registro(s)
+          {filtered.length} registro(s)
         </span>
+      </div>
+
+      <div
+        role="group"
+        aria-label="Situação do resultado SAE"
+        className="shrink-0 inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-muted/80 p-1 shadow-sm"
+      >
+        <button
+          type="button"
+          aria-pressed={resultadoFilter === "pendente"}
+          onClick={() => setResultadoFilter("pendente")}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            resultadoFilter === "pendente"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-background hover:text-foreground"
+          )}
+        >
+          Pendente
+          <span
+            className={cn(
+              "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums",
+              resultadoFilter === "pendente"
+                ? "bg-white/20 text-white"
+                : "bg-amber-100 text-amber-800"
+            )}
+          >
+            {pendenteCount}
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={resultadoFilter === "analisado"}
+          onClick={() => setResultadoFilter("analisado")}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            resultadoFilter === "analisado"
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-muted-foreground hover:bg-background hover:text-foreground"
+          )}
+        >
+          Analisado
+          <span
+            className={cn(
+              "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums",
+              resultadoFilter === "analisado"
+                ? "bg-white/20 text-white"
+                : "bg-emerald-100 text-emerald-800"
+            )}
+          >
+            {analisadoCount}
+          </span>
+        </button>
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -176,7 +245,9 @@ export default function FiltracaoTab() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhum registro de filtração encontrado.
+                    {resultadoFilter === "pendente"
+                      ? "Nenhum tanque pendente de resultado SAE."
+                      : "Nenhum tanque com resultado SAE registrado."}
                     <span className="block text-xs mt-1">
                       Vasilhames de produtos marcados como filtrados são registrados
                       automaticamente no transbordo.
@@ -236,7 +307,7 @@ export default function FiltracaoTab() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {f.sae === null || f.sae === undefined || f.sae === "" ? (
+                        {!filtracaoTemSae(f) ? (
                           <span className="text-muted-foreground">—</span>
                         ) : (
                           <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">

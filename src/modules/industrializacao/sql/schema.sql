@@ -141,7 +141,8 @@ create table if not exists ind_cadastro_tanka (
   client text not null,
   capacity numeric default 26000,
   lot text,
-  density numeric
+  density numeric,
+  observacao text
 );
 alter table ind_cadastro_tanka enable row level security;
 drop policy if exists "allow_all_ind_cadastro_tanka" on ind_cadastro_tanka;

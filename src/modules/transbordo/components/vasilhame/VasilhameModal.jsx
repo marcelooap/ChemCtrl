@@ -8,6 +8,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
 import { Input } from "@shared/components/ui/input";
+import { Textarea } from "@shared/components/ui/textarea";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
 import { AlertCircle } from "lucide-react";
@@ -102,6 +103,7 @@ export default function VasilhameModal({
   const [dataSaida, setDataSaida] = useState("");
   const [responsavel, setResponsavel] = useState("");
   const [fracionado, setFracionado] = useState(false);
+  const [observacao, setObservacao] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -148,6 +150,7 @@ export default function VasilhameModal({
       setDataSaida(String(editingVasilhame.data_saida || "").slice(0, 10));
       setResponsavel(editingVasilhame.responsavel || "");
       setFracionado(!!editingVasilhame.fracionado);
+      setObservacao(editingVasilhame.observacao || "");
     } else {
       setNumeroOp("Manual");
       setPlaca("");
@@ -174,6 +177,7 @@ export default function VasilhameModal({
       setDataSaida("");
       setResponsavel("");
       setFracionado(false);
+      setObservacao("");
     }
     setError("");
     setSaving(false);
@@ -231,7 +235,8 @@ export default function VasilhameModal({
     if (
       field === "lote" ||
       field === "data_fabricacao" ||
-      field === "data_validade"
+      field === "data_validade" ||
+      field === "observacao"
     ) {
       return true;
     }
@@ -314,6 +319,7 @@ export default function VasilhameModal({
         data_saida: emptyToNull(dataSaida),
         responsavel: responsavel || null,
         fracionado,
+        observacao: String(observacao || "").trim() || null,
       });
     } catch (err) {
       setError(err?.message?.replace(/^\[ChemFlow:[^\]]+\]\s*/, "") || "Não foi possível salvar o tanque.");
@@ -719,6 +725,19 @@ export default function VasilhameModal({
               </p>
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="vasilhame-observacao">Observação</Label>
+            <Textarea
+              id="vasilhame-observacao"
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              placeholder="Apontamentos sobre este vasilhame"
+              disabled={!canEditField("observacao")}
+              rows={3}
+              className={INPUT_EDITABLE}
+            />
+          </div>
 
           {!readOnly && (
             <DialogFooter>

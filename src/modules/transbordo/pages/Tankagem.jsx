@@ -4,8 +4,10 @@ import { entities } from "@transbordo/services/entities";
 import { base44 } from "@industrializacao/api/base44Client";
 import { Search, X } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
+import { useToast } from "@shared/components/ui/use-toast";
 import TankSilo from "@transbordo/components/tankagem/TankSilo";
 import TankagemViewDialog from "@transbordo/components/tankagem/TankagemViewDialog";
+import TankaObservacaoDialog from "@transbordo/components/tankagem/TankaObservacaoDialog";
 import { formatVolume } from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
@@ -44,6 +46,7 @@ function tankProductColor(product) {
 export default function Tankagem() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [isotanques, setIsotanques] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
@@ -55,6 +58,9 @@ export default function Tankagem() {
   const [search, setSearch] = useState("");
   const [viewDetalhe, setViewDetalhe] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
+  const [obsTank, setObsTank] = useState(null);
+  const [obsOpen, setObsOpen] = useState(false);
+  const [obsSaving, setObsSaving] = useState(false);
 
   const estoqueFilterId = location.state?.estoqueId || null;
   const estoqueFilterCodigo = location.state?.estoqueCodigo || null;
@@ -246,6 +252,67 @@ export default function Tankagem() {
     }, {});
   }, [filteredTanks]);
 
+  const applyObservacaoLocal = (tank, observacao) => {
+    if (tank?.isotanque?.id) {
+      setIsotanques((prev) =>
+        prev.map((item) =>
+          item.id === tank.isotanque.id ? { ...item, observacao } : item
+        )
+      );
+    }
+    if (tank?.indTank?.id) {
+      setIndTanks((prev) =>
+        prev.map((item) =>
+          item.id === tank.indTank.id ? { ...item, observacao } : item
+        )
+      );
+    }
+  };
+
+  const handleSaveObservacao = async (texto) => {
+    if (!obsTank) return;
+    const value = String(texto || "").trim();
+    const payload = { observacao: value || null };
+    setObsSaving(true);
+    try {
+      let wrote = false;
+      if (obsTank.isotanque?.id) {
+        const saved = await entities.isotanques.update(obsTank.isotanque.id, payload);
+        if (value && String(saved?.observacao || "").trim() !== value) {
+          throw new Error(
+            "Execute o script 044_tanka_observacao.sql no SQL Editor para gravar a observação."
+          );
+        }
+        wrote = true;
+      }
+      if (obsTank.indTank?.id) {
+        const saved = await base44.entities.Tank.update(obsTank.indTank.id, payload);
+        const persisted = String(saved?.observacao || "").trim() === value;
+        if (value && !persisted && !wrote) {
+          throw new Error(
+            "Execute o script 044_tanka_observacao.sql no SQL Editor para gravar a observação."
+          );
+        }
+        wrote = wrote || persisted || !value;
+      }
+      if (!wrote) {
+        throw new Error("Esta tanka não tem cadastro para receber a observação.");
+      }
+      applyObservacaoLocal(obsTank, value);
+      setObsOpen(false);
+      setObsTank(null);
+      toast({ title: value ? "Observação salva" : "Observação removida" });
+    } catch (err) {
+      toast({
+        title: "Não foi possível salvar",
+        description: err?.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setObsSaving(false);
+    }
+  };
+
   const handleView = (tank) => {
     const fromIndustrializacao =
       tank.volumeSource === "ind_container" ||
@@ -353,7 +420,12 @@ export default function Tankagem() {
                     fillColor={
                       tank.produto ? productColorMap[tank.produto] : null
                     }
+                    observacao={tank.observacao}
                     onView={() => handleView(tank)}
+                    onEdit={() => {
+                      setObsTank(tank);
+                      setObsOpen(true);
+                    }}
                   />
                 ))}
               </div>
@@ -369,6 +441,18 @@ export default function Tankagem() {
           setViewDetalhe(null);
         }}
         detalhe={viewDetalhe}
+      />
+
+      <TankaObservacaoDialog
+        open={obsOpen}
+        tank={obsTank}
+        saving={obsSaving}
+        onClose={() => {
+          if (obsSaving) return;
+          setObsOpen(false);
+          setObsTank(null);
+        }}
+        onSave={handleSaveObservacao}
       />
     </div>
   );

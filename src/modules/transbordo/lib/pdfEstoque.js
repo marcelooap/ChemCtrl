@@ -59,11 +59,31 @@ function fmtVolume(n) {
   return formatVolume(n, { empty: "0" });
 }
 
+/** Placa e barril na mesma célula: "placa (barril)", ou só o número existente. */
+function formatEmbalagem(placa, barril) {
+  const p = String(placa || "").trim();
+  const b = String(barril || "").trim();
+  const pOk = p && p !== "-";
+  const bOk = b && b !== "-";
+  if (pOk && bOk) return `${p} (${b})`;
+  if (pOk) return p;
+  if (bOk) return b;
+  return "-";
+}
+
 function safePdfFilenamePart(value) {
   return String(value || "")
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Data local no nome do PDF: 16-10-26. */
+function formatPdfFileDate(date = new Date()) {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 }
 
 function addPageTitle(doc, title, subtitle) {
@@ -82,18 +102,26 @@ function addPageTitle(doc, title, subtitle) {
   return 44;
 }
 
+function pageBox(doc) {
+  return {
+    w: doc.internal.pageSize.getWidth(),
+    h: doc.internal.pageSize.getHeight(),
+  };
+}
+
 function addFooter(doc) {
   const pages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
+    const { w, h } = pageBox(doc);
     setDraw(doc, GRAY_BORDER);
     doc.setLineWidth(0.3);
-    doc.line(M, PH - 13, PW - M, PH - 13);
+    doc.line(M, h - 13, w - M, h - 13);
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "normal");
     setColor(doc, GRAY_LABEL);
-    doc.text("ChemCtrl - Sistema de Controle de Produção", M, PH - 8);
-    doc.text(`Página ${i} de ${pages}`, PW - M, PH - 8, { align: "right" });
+    doc.text("ChemCtrl - Sistema de Controle de Produção", M, h - 8);
+    doc.text(`Página ${i} de ${pages}`, w - M, h - 8, { align: "right" });
   }
 }
 
@@ -192,6 +220,99 @@ function ensureSpace(doc, y, needed) {
     return 20;
   }
   return y;
+}
+
+function measurePdfText(doc, value, fontSize, fontStyle) {
+  doc.setFont("helvetica", fontStyle);
+  doc.setFontSize(fontSize);
+  const items = Array.isArray(value) ? value : [value];
+  let max = 0;
+  for (const item of items) {
+    if (item == null || item === "") continue;
+    max = Math.max(max, doc.getTextWidth(String(item)));
+  }
+  return max;
+}
+
+/**
+ * Larguras pelo conteúdo, somando a largura útil da página.
+ * Colunas flexíveis (ex.: produto) absorvem o espaço que sobra e,
+ * se a tabela estourar, são as primeiras a encolher — as demais
+ * permanecem na largura do texto, em uma linha.
+ * wrapCols não entram na medição do conteúdo: o texto quebra dentro
+ * da largura que sobrar, sem empurrar as outras colunas.
+ */
+function fitColWidths(doc, headers, rows, totalsRow, options = {}) {
+  const dataFs = options.dataFs ?? 8.5;
+  const hdrFs = options.hdrFs ?? 7.5;
+  const cellPadX = options.cellPadX ?? 2.2;
+  const slack = options.slack ?? 1.6;
+  const total = options.total ?? CW;
+  const flexCols = new Set(options.flexCols || []);
+  const wrapCols = new Set(options.wrapCols || []);
+  const pad = cellPadX * 2 + slack;
+
+  const mins = headers.map((header, i) => {
+    let w = measurePdfText(doc, header, hdrFs, "bold");
+    if (!wrapCols.has(i)) {
+      for (const row of rows || []) {
+        w = Math.max(w, measurePdfText(doc, row?.[i], dataFs, "normal"));
+      }
+      if (totalsRow) {
+        w = Math.max(w, measurePdfText(doc, totalsRow[i], dataFs, "bold"));
+      }
+    }
+    return w + pad;
+  });
+
+  if (Number(options.wrapMin) > 0) {
+    for (const i of wrapCols) {
+      mins[i] = Math.max(mins[i], options.wrapMin);
+    }
+  }
+
+  const sum = mins.reduce((a, b) => a + b, 0);
+  if (sum <= total + 0.01) {
+    const extra = total - sum;
+    const out = mins.slice();
+    const flex = [...flexCols].filter((i) => i >= 0 && i < out.length);
+    if (!flex.length || extra <= 0) {
+      const widest = out.indexOf(Math.max(...out));
+      if (widest >= 0) out[widest] += extra;
+      return out;
+    }
+    const flexSum = flex.reduce((s, i) => s + out[i], 0) || flex.length;
+    for (const i of flex) out[i] += extra * (out[i] / flexSum);
+    return out;
+  }
+
+  const out = mins.slice();
+  let overflow = sum - total;
+  const flex = [...flexCols].filter((i) => i >= 0 && i < out.length);
+  if (flex.length && overflow > 0) {
+    const floors = flex.map((i) => {
+      const headerW = measurePdfText(doc, headers[i], hdrFs, "bold") + pad;
+      return Math.min(out[i], Math.max(headerW, options.flexMin ?? 28));
+    });
+    const shrinkable = flex.reduce(
+      (s, i, idx) => s + Math.max(0, out[i] - floors[idx]),
+      0
+    );
+    if (shrinkable > 0) {
+      const take = Math.min(overflow, shrinkable);
+      flex.forEach((i, idx) => {
+        const room = Math.max(0, out[i] - floors[idx]);
+        out[i] -= (room / shrinkable) * take;
+      });
+      overflow -= take;
+    }
+  }
+
+  if (overflow > 0.05) {
+    const scale = total / out.reduce((a, b) => a + b, 0);
+    return out.map((w) => w * scale);
+  }
+  return out;
 }
 
 /** Normaliza larguras para somar exatamente CW (largura útil da página). */
@@ -649,9 +770,197 @@ export function generateRelatorioEstoquePDF({
   doc.save(`${fileBase} - Relatório de Estoque.pdf`);
 }
 
+function hexToRgb(hex) {
+  const h = String(hex || "").trim().replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return [229, 231, 235];
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+function ellipsisText(doc, text, maxWidth) {
+  const raw = String(text || "—").replace(/\s+/g, " ").trim() || "—";
+  if (doc.getTextWidth(raw) <= maxWidth) return raw;
+  let cut = raw;
+  while (cut.length > 1 && doc.getTextWidth(`${cut}…`) > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  return `${cut}…`;
+}
+
+/** Cápsula no mesmo critério do TankSilo: líquido sobe de baixo, cor do produto. */
+function drawPdfSilo(doc, x, y, w, h, pct, fillHex) {
+  const radius = Math.min(w / 2, h / 2);
+  const inset = 0.4;
+  const pctClamped = Math.max(0, Math.min(100, Number(pct) || 0));
+  const innerH = h - inset * 2;
+  const fillH = innerH * (pctClamped / 100);
+
+  doc.setFillColor(255, 255, 255);
+  setDraw(doc, [203, 213, 225]);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(x, y, w, h, radius, radius, "FD");
+
+  if (fillH > 0.3) {
+    doc.saveGraphicsState();
+    doc.roundedRect(
+      x + inset,
+      y + inset,
+      w - inset * 2,
+      innerH,
+      Math.max(0.6, radius - inset),
+      Math.max(0.6, radius - inset),
+      null
+    );
+    doc.clip();
+    doc.discardPath();
+    const [r, g, b] = hexToRgb(fillHex);
+    doc.setFillColor(r, g, b);
+    doc.rect(x, y + h - inset - fillH, w, fillH + inset + 0.2, "F");
+    doc.restoreGraphicsState();
+    setDraw(doc, [203, 213, 225]);
+    doc.setLineWidth(0.45);
+    doc.roundedRect(x, y, w, h, radius, radius, "S");
+  }
+}
+
+function drawSiloLabel(doc, text, centerX, y, maxWidth, fontSize, style) {
+  doc.setFont("helvetica", style);
+  doc.setFontSize(fontSize);
+  setColor(doc, style === "bold" ? BLACK : [55, 65, 80]);
+  doc.text(ellipsisText(doc, text, maxWidth), centerX, y, { align: "center" });
+}
+
+/** Badge laranja claro, no mesmo lugar do silo na tela. */
+function drawSiloObsBadge(doc, text, centerX, y, maxWidth) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6);
+  const label = ellipsisText(doc, text, Math.max(8, maxWidth - 3));
+  const bw = Math.min(maxWidth, doc.getTextWidth(label) + 3.2);
+  const bh = 3.4;
+  const x = centerX - bw / 2;
+  doc.setFillColor(255, 237, 213);
+  doc.roundedRect(x, y - bh / 2, bw, bh, 1, 1, "F");
+  doc.setTextColor(154, 52, 18);
+  doc.text(label, centerX, y, { align: "center", baseline: "middle" });
+}
+
+/**
+ * Última(s) folha(s) em paisagem, com os silos do filtro.
+ * Uma página cabe 24 tankas (8 × 3). O excedente segue em outra folha paisagem.
+ */
+function addTankaSiloPages(doc, tanks = []) {
+  const cols = 8;
+  const rows = 3;
+  const perPage = cols * rows;
+  const pageCount = Math.max(1, Math.ceil(tanks.length / perPage));
+  const totalVolume = tanks.reduce(
+    (sum, tk) => sum + (Number(tk.volumeAtual) || 0),
+    0
+  );
+
+  for (let page = 0; page < pageCount; page++) {
+    doc.addPage("a4", "l");
+    const { w, h } = pageBox(doc);
+    const slice = tanks.slice(page * perPage, (page + 1) * perPage);
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    setColor(doc, BLUE_DARK);
+    doc.text("Tankas", M, 16);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    setColor(doc, GRAY_LABEL);
+    const continuation =
+      pageCount > 1 ? ` · folha ${page + 1} de ${pageCount}` : "";
+    doc.text(`${tanks.length} tanka(s)${continuation}`, M, 22);
+    doc.setFont("helvetica", "bold");
+    setColor(doc, BLACK);
+    doc.text(`${fmtVolume(totalVolume)} L`, w - M, 18, { align: "right" });
+    setDraw(doc, BLUE_MID);
+    doc.setLineWidth(0.6);
+    doc.line(M, 26, w - M, 26);
+    doc.setLineWidth(0.2);
+
+    if (slice.length === 0) {
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      setColor(doc, GRAY_LABEL);
+      doc.text("Nenhuma tanka no filtro.", w / 2, h / 2, { align: "center" });
+      continue;
+    }
+
+    const top = 34;
+    const bottom = h - 18;
+    const gridW = w - 2 * M;
+    const gridH = bottom - top;
+    const slotW = gridW / cols;
+    const slotH = gridH / rows;
+    const siloW = Math.min(20, slotW - 10);
+    const siloH = Math.min(slotH - 18, siloW * 1.85);
+
+    slice.forEach((tk, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const slotX = M + col * slotW;
+      const slotY = top + row * slotH;
+      const x = slotX + (slotW - siloW) / 2;
+      const y = slotY + 1;
+      const volume = Number(tk.volumeAtual) || 0;
+      const cap = Number(tk.capacidade) || 0;
+      const pct = cap > 0 ? (volume / cap) * 100 : 0;
+      const nome = tk.tanka || tk.tankaCodigo || tk.codigo_itku || "—";
+      const produto = tk.produto || tk.produto_nome || "—";
+
+      drawPdfSilo(doc, x, y, siloW, siloH, pct, tk.fillColor);
+
+      const volumeLabel = `${fmtVolume(volume)} L`;
+      const pctLabel = `${fmtNum(Math.min(pct, 100), 1)}%`;
+      doc.setFont("helvetica", "bold");
+      let volumeSize = 8;
+      doc.setFontSize(volumeSize);
+      const innerW = siloW - 3;
+      while (volumeSize > 5.5 && doc.getTextWidth(volumeLabel) > innerW) {
+        volumeSize -= 0.5;
+        doc.setFontSize(volumeSize);
+      }
+      setColor(doc, BLACK);
+      doc.text(volumeLabel, x + siloW / 2, y + siloH / 2 - 0.4, {
+        align: "center",
+        baseline: "middle",
+      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(Math.max(6, volumeSize - 1.5));
+      doc.text(pctLabel, x + siloW / 2, y + siloH / 2 + 3.4, {
+        align: "center",
+        baseline: "middle",
+      });
+
+      const labelW = slotW - 2;
+      drawSiloLabel(doc, nome, slotX + slotW / 2, y + siloH + 5, labelW, 8, "bold");
+      drawSiloLabel(
+        doc,
+        produto,
+        slotX + slotW / 2,
+        y + siloH + 9,
+        labelW,
+        7,
+        "normal"
+      );
+      const obs = String(tk.observacao || "").trim();
+      if (obs) {
+        drawSiloObsBadge(doc, obs, slotX + slotW / 2, y + siloH + 13.2, labelW);
+      }
+    });
+  }
+}
+
 /**
  * Relatório consolidado de Estoque Envio (produtos + vasilhames + tankas).
  * Layout alinhado ao PDF de Estoque Cliente (industrialização).
+ * A última folha é paisagem, com os silos coloridos do filtro.
  */
 export function generateEstoqueEnvioPDF({
   client,
@@ -683,10 +992,6 @@ export function generateEstoqueEnvioPDF({
   );
   const totalContainerVolume = containers.reduce(
     (s, c) => s + (Number(c.volume) || 0),
-    0
-  );
-  const totalContainerMass = containers.reduce(
-    (s, c) => s + (Number(c.peso_liquido) || 0),
     0
   );
 
@@ -836,48 +1141,60 @@ export function generateEstoqueEnvioPDF({
     doc.text("Nenhum vasilhame no filtro.", M, y);
     y += 8;
   } else {
+    const vasilhameHeaders = [
+      "EMBALAGEM",
+      "PRODUTO",
+      "LOTE",
+      "VOLUME",
+      "STATUS",
+      "OBSERVAÇÃO",
+    ];
+    const containersSorted = [...containers].sort((a, b) => {
+      const prodA = String(a.produto_nome || "").trim() || "—";
+      const prodB = String(b.produto_nome || "").trim() || "—";
+      const byProd = prodA.localeCompare(prodB, "pt-BR", { sensitivity: "base" });
+      if (byProd !== 0) return byProd;
+      return formatEmbalagem(a.placa, a.barril).localeCompare(
+        formatEmbalagem(b.placa, b.barril),
+        "pt-BR",
+        { numeric: true, sensitivity: "base" }
+      );
+    });
+    const vasilhameRows = containersSorted.map((c) => [
+      formatEmbalagem(c.placa, c.barril),
+      c.produto_nome || "-",
+      c.lote || "-",
+      fmtVolume(c.volume),
+      c.statusReserva || (c.reservado ? "Reservado" : "Livre"),
+      String(c.observacao || "").trim() || "-",
+    ]);
+    const vasilhameTotals = [
+      "TOTAL",
+      "",
+      "",
+      `${fmtVolume(totalContainerVolume)} L`,
+      "",
+      "",
+    ];
+    // Embalagem, lote, volume e status ficam em uma linha.
+    // Produto e observação absorvem o espaço; só a observação quebra linha.
+    const vasilhameWidths = fitColWidths(
+      doc,
+      vasilhameHeaders,
+      vasilhameRows,
+      vasilhameTotals,
+      { flexCols: [1, 5], wrapCols: [5], flexMin: 28, wrapMin: 42 }
+    );
     y = addTable(
       doc,
       y,
-      [
-        "PLACA",
-        "BARRIL",
-        "PRODUTO",
-        "LOTE",
-        "VOLUME",
-        "P. LÍQ.",
-        "STATUS",
-      ],
-      containers.map((c) => [
-        c.placa || "-",
-        c.barril || "-",
-        c.produto_nome || "-",
-        c.lote || "-",
-        fmtVolume(c.volume),
-        fmtNum(c.peso_liquido, 0),
-        c.statusReserva || (c.reservado ? "Reservado" : "Livre"),
-      ]),
-      [22, 16, 52, 36, 20, 22, 22],
-      [
-        "TOTAL",
-        "",
-        "",
-        "",
-        `${fmtVolume(totalContainerVolume)} L`,
-        `${fmtNum(totalContainerMass, 0)} kg`,
-        "",
-      ],
+      vasilhameHeaders,
+      vasilhameRows,
+      vasilhameWidths,
+      vasilhameTotals,
       [],
       {
-        align: [
-          "center",
-          "center",
-          "left",
-          "center",
-          "center",
-          "center",
-          "center",
-        ],
+        align: ["center", "left", "center", "center", "center", "left"],
       }
     );
   }
@@ -963,7 +1280,8 @@ export function generateEstoqueEnvioPDF({
     );
   }
 
+  addTankaSiloPages(doc, tanks);
   addFooter(doc);
-  const fileBase = safePdfFilenamePart(clientLabel) || "estoque-envio";
-  doc.save(`estoque-envio-${fileBase.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+  const clienteArquivo = safePdfFilenamePart(clientLabel) || "Cliente";
+  doc.save(`Estoque ${clienteArquivo} ${formatPdfFileDate()}.pdf`);
 }
