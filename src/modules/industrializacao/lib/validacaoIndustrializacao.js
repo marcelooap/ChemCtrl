@@ -4,10 +4,10 @@ import { buildMpStockPayload } from "@industrializacao/lib/mpStockForm";
 import { persistOperacaoFromValidacao, resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
 import { allocateMpEntryIds } from "@industrializacao/lib/allocateMpEntryId";
 import {
+  createEntradaFromMpRows,
   deleteEntradaLinkedToMp,
   granelPesagemFields,
   linkExistingEntradaToMp,
-  upsertEntradaFromMp,
 } from "@industrializacao/lib/syncMpEntradaTransbordo";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
@@ -349,9 +349,9 @@ export async function efetivarValidacaoIndustrializacao({ id, validadoPor = null
       const mpRows = await createMpStockRows(mapped, validadoPor);
       const pesagem = granelPesagemFields(payload);
       try {
-        for (const row of mpRows) {
-          await upsertEntradaFromMp(pesagem ? { ...row, ...pesagem } : row);
-        }
+        await createEntradaFromMpRows(
+          mpRows.map((row) => (pesagem ? { ...row, ...pesagem } : row))
+        );
       } catch (syncErr) {
         await rollbackMpRows(mpRows);
         throw syncErr;
@@ -383,9 +383,7 @@ export async function efetivarValidacaoIndustrializacao({ id, validadoPor = null
       if (persisted?.entradaId) {
         await linkExistingEntradaToMp(persisted.entradaId, mpRows);
       } else {
-        for (const row of mpRows) {
-          await upsertEntradaFromMp(row);
-        }
+        await createEntradaFromMpRows(mpRows);
       }
     } catch (syncErr) {
       if (!persisted) {

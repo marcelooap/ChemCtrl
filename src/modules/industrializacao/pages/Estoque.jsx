@@ -33,6 +33,7 @@ import { allocateMpEntryIdsFromList, compareMpEntryIdDesc } from '@industrializa
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
 import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import {
+  createEntradaFromMpRows,
   deleteEntradaLinkedToMp,
   upsertEntradaFromMp,
 } from '@industrializacao/lib/syncMpEntradaTransbordo';
@@ -265,11 +266,10 @@ export default function Estoque() {
           ? [await base44.entities.RawMaterialStock.create(rows[0])]
           : await base44.entities.RawMaterialStock.bulkCreate(rows);
         try {
-          for (let i = 0; i < (created || []).length; i += 1) {
-            const row = created[i];
-            if (!row?.id) continue;
-            await upsertEntradaFromMp({ ...rows[i], ...row, id: row.id });
-          }
+          const synced = (created || [])
+            .map((row, i) => (row?.id ? { ...rows[i], ...row, id: row.id } : null))
+            .filter(Boolean);
+          await createEntradaFromMpRows(synced);
         } catch (syncErr) {
           for (const row of created || []) {
             if (!row?.id) continue;

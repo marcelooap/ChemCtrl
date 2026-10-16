@@ -115,6 +115,31 @@ function mpToLote(mp) {
   };
 }
 
+function sumLoteQuantidade(lotes) {
+  return (lotes || []).reduce((sum, lote) => sum + (Number(lote?.quantidade) || 0), 0);
+}
+
+function sumLoteCusto(lotes) {
+  return (lotes || []).reduce((sum, lote) => {
+    const qty = Number(lote?.quantidade) || 0;
+    const preco = Number(lote?.preco_unitario) || 0;
+    return sum + qty * preco;
+  }, 0);
+}
+
+function headerUnidade(lotes, fallback) {
+  const units = [
+    ...new Set((lotes || []).map((lote) => lote?.unidade_medida).filter(Boolean)),
+  ];
+  if (units.length === 1) return units[0];
+  return fallback || units[0] || "kg";
+}
+
+/** Grupo compartilhado. Não usa INDMP:{id}, senão a primeira MP passaria a ser a entrada inteira. */
+function mpGroupId(anchorId) {
+  return `${LINK_PREFIX}G:${anchorId}`;
+}
+
 function mpToEntradaFields(mp) {
   const lote = mpToLote(mp);
   const qty = Number(lote.quantidade) || 0;
@@ -145,6 +170,25 @@ function mpToEntradaFields(mp) {
     grupo_entrada: mpEntradaGrupo(mp.id),
     lotes: [lote],
     ...(granelPesagemFields(mp) || {}),
+  };
+}
+
+function fieldsFromMpRows(mpRows) {
+  const lotes = mpRows.map(mpToLote);
+  const first = mpToEntradaFields(mpRows[0]);
+  const saldo = mpRows.reduce(
+    (sum, mp) => sum + (Number(mp?.current_stock ?? mp?.initial_stock) || 0),
+    0
+  );
+  return {
+    ...first,
+    quantidade: sumLoteQuantidade(lotes),
+    custo_total: sumLoteCusto(lotes),
+    saldo_atual: saldo,
+    unidade_medida: headerUnidade(lotes, first.unidade_medida),
+    grupo_entrada: mpGroupId(mpRows[0].id),
+    lotes,
+    origem: "industrializacao",
   };
 }
 
@@ -246,8 +290,8 @@ async function updateLoteEntrada(entrada, mp) {
     nota_fiscal: first.nota_fiscal ?? entrada.nota_fiscal,
     lote: first.lote ?? entrada.lote,
     densidade: first.densidade ?? entrada.densidade,
-    quantidade: Number(first.quantidade) || entrada.quantidade,
-    unidade_medida: first.unidade_medida || entrada.unidade_medida,
+    quantidade: sumLoteQuantidade(lotes),
+    unidade_medida: headerUnidade(lotes, first.unidade_medida || entrada.unidade_medida),
     data: mp.entry_date || entrada.data,
   });
 
@@ -367,6 +411,41 @@ export async function prepareEntradaView(entrada) {
   };
 }
 
+async function alignEstoqueStatusWms(savedEstoques, mpRows) {
+  const statusByMp = new Map(
+    (mpRows || [])
+      .filter((mp) => mp?.id)
+      .map((mp) => [String(mp.id), !!mp.status_wms])
+  );
+  const updates = (savedEstoques || [])
+    .map((row) => {
+      const mpId = row?.lotes?.[0]?.ind_mp_id;
+      if (!row?.id || !mpId || !statusByMp.has(String(mpId))) return null;
+      const status = statusByMp.get(String(mpId));
+      if (!!row.status_wms === status) return null;
+      return entities.estoque.update(row.id, { status_wms: status });
+    })
+    .filter(Boolean);
+  if (updates.length > 0) await Promise.all(updates);
+}
+
+/**
+ * Espelha vários MPs lançados juntos (Adicionar MP) numa única entrada do Transbordo.
+ * Cada MP continua um registro próprio no estoque de matéria-prima; aqui viram linhas da mesma entrada.
+ */
+export async function createEntradaFromMpRows(mpRows) {
+  const rows = (mpRows || []).filter((mp) => mp?.id);
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return createEntradaFromMp(rows[0]);
+
+  const created = await createEntradaCompleta({
+    data: fieldsFromMpRows(rows),
+    produtos: [],
+  });
+  await alignEstoqueStatusWms(created?.savedEstoques, rows);
+  return created;
+}
+
 /** Cria ou atualiza a entrada do Transbordo espelhada neste registro de MP. */
 export async function upsertEntradaFromMp(mp) {
   if (!mp?.id) return null;
@@ -415,8 +494,8 @@ export async function deleteEntradaLinkedToMp(mpId) {
     produto_codigo: first.produto_codigo || linked.entrada.produto_codigo,
     nota_fiscal: first.nota_fiscal ?? linked.entrada.nota_fiscal,
     lote: first.lote ?? linked.entrada.lote,
-    quantidade: Number(first.quantidade) || 0,
-    unidade_medida: first.unidade_medida || linked.entrada.unidade_medida,
+    quantidade: sumLoteQuantidade(lotes),
+    unidade_medida: headerUnidade(lotes, first.unidade_medida || linked.entrada.unidade_medida),
   });
 }
 
