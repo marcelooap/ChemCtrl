@@ -102,6 +102,7 @@ export async function registrarProdutosDaReceita({
         nome: mp?.mp_name,
         modulo: 'INDUSTRIALIZACAO',
         attrs: {
+          cliente_nome: client || '',
           densidade:
             mp?.mp_density === null ||
             mp?.mp_density === undefined ||

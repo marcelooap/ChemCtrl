@@ -570,6 +570,7 @@ BEGIN
     v_mp_id := cadastro_produtos_registrar_uso(
       v_mp_code, v_mp_name, 'INDUSTRIALIZACAO',
       jsonb_build_object(
+        'cliente_nome', coalesce(v_client, ''),
         'densidade', coalesce(nullif(trim(both FROM coalesce(v_mp->>'mp_density', '')), ''), '-'),
         'densidade_tabelada', (nullif(trim(both FROM coalesce(v_mp->>'mp_density', '')), '') IS NOT NULL),
         'controlado', coalesce((v_mp->>'controlado')::boolean, false),
