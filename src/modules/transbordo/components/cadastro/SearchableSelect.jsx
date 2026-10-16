@@ -13,6 +13,7 @@ export default function SearchableSelect({
   inputClassName = "",
   renderOption = null,
   selectOnly = false,
+  openOnFocus = true,
   ariaLabel,
 }) {
   const [open, setOpen] = useState(false);
@@ -51,9 +52,15 @@ export default function SearchableSelect({
   };
 
   const handleFocus = () => {
-    if (disabled || selectOnly) return;
+    if (disabled || selectOnly || !openOnFocus) return;
     setOpen(true);
     setSearch("");
+  };
+
+  const handleClick = () => {
+    if (disabled || selectOnly || openOnFocus) return;
+    setSearch("");
+    setOpen(true);
   };
 
   const handleToggle = (e) => {
@@ -72,6 +79,7 @@ export default function SearchableSelect({
           value={selectOnly ? value : search || value}
           onChange={handleInputChange}
           onFocus={handleFocus}
+          onClick={handleClick}
           onMouseDown={selectOnly ? handleToggle : undefined}
           readOnly={selectOnly}
           placeholder={placeholder}

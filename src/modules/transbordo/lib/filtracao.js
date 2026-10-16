@@ -16,13 +16,14 @@ export const PARTICULA_TAMANHOS = [
   { key: "particulas_70", label: "70 mm", short: "70" },
 ];
 
-/** Contagens em formato PT-BR (ex.: 10.000). */
+/** Contagens em formato PT-BR (ex.: 10.000 ou 13,547). */
 export function formatParticulaCount(v) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("pt-BR", {
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
   });
 }
 

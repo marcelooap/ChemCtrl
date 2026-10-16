@@ -97,7 +97,10 @@ export default function FiltracaoEditModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Editar Filtração</DialogTitle>
         </DialogHeader>
@@ -129,6 +132,7 @@ export default function FiltracaoEditModal({
             <Label>Filtro (elemento filtrante)</Label>
             <SearchableSelect
               value={selectedFiltroLabel}
+              openOnFocus={false}
               onChange={(_label, option) => {
                 setFiltroId(option?.id || "");
               }}
@@ -154,6 +158,7 @@ export default function FiltracaoEditModal({
               value={sae}
               onChange={(v) => setSae(v === "" ? "" : v)}
               placeholder="Ex.: 1, 2, 3..."
+              className="bg-white"
             />
           </div>
 
@@ -167,13 +172,15 @@ export default function FiltracaoEditModal({
                   </Label>
                   <NumberInputBr
                     id={`filtracao-${key}`}
-                    decimals={0}
+                    decimals={3}
+                    trimTrailingZeros
                     min={0}
                     value={particulas[key]}
                     onChange={(v) =>
                       setParticulas((prev) => ({ ...prev, [key]: v === "" ? "" : v }))
                     }
                     placeholder="0"
+                    className="bg-white"
                   />
                 </div>
               ))}
