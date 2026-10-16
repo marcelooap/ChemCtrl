@@ -70,7 +70,9 @@ export async function loadContainerLoteDatasMap(containerIds = []) {
   const [containers, productions, recipes, tests] = await Promise.all([
     base44.entities.Container.list('-created_date', 1000).catch(() => []),
     base44.entities.Production.list('-created_date', 500).catch(() => []),
-    base44.entities.Recipe.list('-updated_date', 500).catch(() => []),
+    import('@industrializacao/hooks/useRecipes')
+      .then(({ listRecipesGrouped }) => listRecipesGrouped('-updated_date', 2000))
+      .catch(() => []),
     base44.entities.QualityTest.list('-updated_date', 500).catch(() => null),
   ]);
 

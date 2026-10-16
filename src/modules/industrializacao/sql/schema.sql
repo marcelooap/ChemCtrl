@@ -289,6 +289,11 @@ create trigger trg_sync_order_client_order
 
 -- ============================================================================
 -- 8. ind_lista_receitas
+-- NOTA (046): em ambientes migrados a tabela foi renomeada para `receitas`.
+-- NOTA (047): 1 linha por MP por revisão — ver
+-- src/modules/industrializacao/sql/047_receitas_linhas_mp.sql
+-- Este CREATE histórico permanece para instalação legada; ver
+-- src/modules/transbordo/sql/046_cadastro_produtos_central.sql
 -- ============================================================================
 create table if not exists ind_lista_receitas (
   id text primary key default gen_random_uuid()::text,

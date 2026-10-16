@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useQualityAnalysisCatalog } from '@industrializacao/hooks/useQualityAnalysisCatalog';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, X, FileText, Loader2 } from 'lucide-react';
@@ -37,7 +38,7 @@ export default function Ensaios() {
   const currentUserName = user?.nome_completo || user?.nome || user?.full_name || '';
   const parseAnalyses = (item) => ({ ...item, analyses: parseArr(item.analyses) });
   const { data: tests, loading, reload: load } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500), [], parseAnalyses);
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: recipes } = useRecipes('-created_date', 500);
   const { options: analysisNameOptions, entries: catalogEntries, findByName } = useQualityAnalysisCatalog(tests);
   const [search, setSearch] = useState('');
   const pdfGuard = useSubmitGuard();

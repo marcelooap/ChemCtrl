@@ -40,7 +40,8 @@ const entityTableMap = {
   Container: 'ind_lista_vasilhames',
   ContainerOrigin: 'ind_composicao_vasilhame',
   Order: 'ind_lista_pedidos',
-  Recipe: 'ind_lista_receitas',
+  // Preferência pós-046; resolvePhysicalTable faz fallback para ind_lista_receitas.
+  Recipe: 'receitas',
   QualityResult: 'ind_cq_resultados',
   QualityTest: 'ind_cq_esp_tec',
   QualityAnalysis: 'ind_lista_ensaios',
@@ -74,6 +75,58 @@ const tableColumnsCache = {};
 // Descoberta de colunas é resolvida sob demanda. Este mapa garante que chamadas
 // concorrentes para a mesma tabela compartilhem uma única requisição.
 const tableColumnsInFlight = new Map();
+
+/** Fallbacks durante rollout da migration 046 (rename de tabelas). */
+const TABLE_FALLBACKS = {
+  receitas: ['receitas', 'ind_lista_receitas'],
+  cadastro_produtos: ['cadastro_produtos', 't_produtos'],
+};
+const physicalTableCache = new Map();
+const physicalTableInFlight = new Map();
+
+const probeTableExists = async (tableName) => {
+  try {
+    const resp = await rateLimitedFetch(
+      `${restUrl}/${tableName}?select=id&limit=1`,
+      { headers: getHeaders(), ...noCacheFetch },
+      { kind: 'read' }
+    );
+    return resp.ok || resp.status === 206;
+  } catch {
+    return false;
+  }
+};
+
+export const resolvePhysicalTable = async (preferredName) => {
+  if (physicalTableCache.has(preferredName)) {
+    return physicalTableCache.get(preferredName);
+  }
+  const pending = physicalTableInFlight.get(preferredName);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const candidates = TABLE_FALLBACKS[preferredName] || [preferredName];
+    for (const name of candidates) {
+      if (await probeTableExists(name)) {
+        physicalTableCache.set(preferredName, name);
+        return name;
+      }
+    }
+    physicalTableCache.set(preferredName, preferredName);
+    return preferredName;
+  })().finally(() => {
+    physicalTableInFlight.delete(preferredName);
+  });
+
+  physicalTableInFlight.set(preferredName, request);
+  return request;
+};
+
+export const getEntityTableName = async (entityName) => {
+  const preferred = entityTableMap[entityName];
+  if (!preferred) return null;
+  return resolvePhysicalTable(preferred);
+};
 
 const getTableColumns = async (tableName) => {
   if (tableColumnsCache[tableName]) return tableColumnsCache[tableName];
@@ -157,11 +210,13 @@ const handleResponse = async (resp, { allowMissingTable = false } = {}) => {
   try { return JSON.parse(text); } catch { return []; }
 };
 
-const createEntity = (entityName, tableName) => {
+const createEntity = (entityName, preferredTableName) => {
   const cacheTtl = getCacheTtlForEntity(entityName);
+  const tableOf = async () => resolvePhysicalTable(preferredTableName);
 
   return {
   list: async (sort, limit, options = {}) => {
+    const tableName = await tableOf();
     const params = new URLSearchParams();
     const select = options.select || '*';
     params.set('select', select);
@@ -174,11 +229,12 @@ const createEntity = (entityName, tableName) => {
     const cacheKey = `${entityName}:list:${sort || ''}:${limit || ''}:${options.offset || 0}:${select}`;
     return withCache(cacheKey, cacheTtl, async () => {
       const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
-      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(preferredTableName) });
     });
   },
   /** Listagem paginada (from/to inclusivo PostgREST via Range header). */
   listPage: async ({ sort, page = 1, pageSize = 50, select = '*' } = {}) => {
+    const tableName = await tableOf();
     const size = Math.min(200, Math.max(1, Number(pageSize) || 50));
     const p = Math.max(1, Number(page) || 1);
     const from = (p - 1) * size;
@@ -194,13 +250,14 @@ const createEntity = (entityName, tableName) => {
       }),
       ...noCacheFetch,
     }, { kind: 'read' });
-    const rows = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+    const rows = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(preferredTableName) });
     const contentRange = resp.headers.get('content-range') || '';
     const totalMatch = contentRange.match(/\/(\d+|\*)/);
     const total = totalMatch && totalMatch[1] !== '*' ? Number(totalMatch[1]) : null;
     return { rows: rows || [], page: p, pageSize: size, total };
   },
   filter: async (queryObj, sort, limit) => {
+    const tableName = await tableOf();
     const params = new URLSearchParams();
     params.set('select', '*');
     applyFilters(params, queryObj);
@@ -210,22 +267,24 @@ const createEntity = (entityName, tableName) => {
     const cacheKey = `${entityName}:filter:${JSON.stringify(queryObj || {})}:${sort || ''}:${limit || ''}`;
     return withCache(cacheKey, cacheTtl, async () => {
       const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
-      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+      return handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(preferredTableName) });
     });
   },
   get: async (id) => {
+    const tableName = await tableOf();
     const params = new URLSearchParams();
     params.set('select', '*');
     params.set('id', `eq.${id}`);
     const cacheKey = `${entityName}:get:${id}`;
     return withCache(cacheKey, cacheTtl, async () => {
       const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, { headers: getHeaders(), ...noCacheFetch }, { kind: 'read' });
-      const data = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(tableName) });
+      const data = await handleResponse(resp, { allowMissingTable: OPTIONAL_TABLES.has(preferredTableName) });
       if (!data || data.length === 0) throw new Error('Registro não encontrado');
       return data[0];
     });
   },
   create: async (itemData) => {
+    const tableName = await tableOf();
     invalidateTableColumns(tableName);
     const cols = await getTableColumns(tableName);
     const body = cleanData(filterKnownColumns(itemData, cols));
@@ -259,6 +318,7 @@ const createEntity = (entityName, tableName) => {
     return data[0];
   },
   update: async (id, itemData) => {
+    const tableName = await tableOf();
     const hasComplex = Object.values(itemData).some(v => Array.isArray(v) || (typeof v === 'object' && v !== null));
     let body;
     if (hasComplex) {
@@ -302,6 +362,7 @@ const createEntity = (entityName, tableName) => {
     return updated;
   },
   delete: async (id) => {
+    const tableName = await tableOf();
     const params = new URLSearchParams();
     params.set('id', `eq.${id}`);
     const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {
@@ -315,6 +376,7 @@ const createEntity = (entityName, tableName) => {
     return true;
   },
   bulkCreate: async (dataArray) => {
+    const tableName = await tableOf();
     const cols = await getTableColumns(tableName);
     const resp = await rateLimitedFetch(`${restUrl}/${tableName}`, {
       method: 'POST',
@@ -327,6 +389,7 @@ const createEntity = (entityName, tableName) => {
     return data;
   },
   bulkUpdate: async (items) => {
+    const tableName = await tableOf();
     const cols = await getTableColumns(tableName);
     const results = [];
     for (const item of items) {
@@ -348,6 +411,7 @@ const createEntity = (entityName, tableName) => {
     return results;
   },
   updateMany: async (queryObj, update) => {
+    const tableName = await tableOf();
     const cols = await getTableColumns(tableName);
     const selectParams = new URLSearchParams();
     selectParams.set('select', 'id');
@@ -370,6 +434,7 @@ const createEntity = (entityName, tableName) => {
     return { modified: data?.length || 0, has_more: false };
   },
   deleteMany: async (queryObj) => {
+    const tableName = await tableOf();
     const params = new URLSearchParams();
     applyFilters(params, queryObj);
     const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {

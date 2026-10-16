@@ -5,6 +5,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
@@ -57,10 +58,7 @@ export default function Programacao() {
     'ProductionSchedule',
     () => base44.entities.ProductionSchedule.list('scheduled_date', 2000)
   );
-  const { data: recipes } = useRealtimeEntity(
-    'Recipe',
-    () => base44.entities.Recipe.list('-created_date', 2000)
-  );
+  const { data: recipes } = useRecipes('-created_date', 2000);
   const { data: orders } = useRealtimeEntity(
     'Order',
     () => base44.entities.Order.list('-created_date', 2000)

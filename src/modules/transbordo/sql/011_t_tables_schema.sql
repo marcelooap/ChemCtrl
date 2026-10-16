@@ -39,6 +39,9 @@ create trigger t_clientes_set_updated_at
 
 -- ============================================================
 -- t_produtos
+-- NOTA (046): em ambientes migrados a tabela foi renomeada para `cadastro_produtos`
+-- (coluna origem + RPC cadastro_produtos_registrar_uso). Ver
+-- src/modules/transbordo/sql/046_cadastro_produtos_central.sql
 -- ============================================================
 create table if not exists t_produtos (
   id uuid primary key default gen_random_uuid(),

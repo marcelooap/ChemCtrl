@@ -7,7 +7,7 @@ import { fetchAllRows } from './lib/paginate.mjs';
 import { upsertBatch } from './lib/upsert.mjs';
 
 const TABLES = [
-  ['t_produtos', 'produtos'],
+  ['cadastro_produtos', 'produtos'],
   ['t_isotanques', 'isotanques'],
   ['t_descontaminacoes', 'descontaminacoes'],
   ['t_elementos_filtrantes', 'elementos_filtrantes'],

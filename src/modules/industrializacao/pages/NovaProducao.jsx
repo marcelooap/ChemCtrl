@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
+import { loadRecipeForProduction } from '@industrializacao/lib/checklists/loadRecipeForProduction';
+import { findRevisionByAnchorId } from '@industrializacao/lib/recipeComposition';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -103,7 +106,7 @@ export default function NovaProducao() {
   const complementId = searchParams.get('complement');
   const isComplementMode = !!complementId;
 
-  const { data: recipes, loading } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], (r) => ({ ...r, raw_materials: parseArr(r.raw_materials) }));
+  const { data: recipes, loading } = useRecipes('-created_date', 2000);
   // Ref para acessar a lista mais recente de receitas dentro de efeitos assíncronos
   // sem precisar re-disparar o efeito a cada atualização de `recipes` (realtime/poll).
   const recipesRef = useRef(recipes);
@@ -232,17 +235,14 @@ export default function NovaProducao() {
 
         let recipe = null;
         if (prod.recipe_id) {
-          try {
-            const fetched = await base44.entities.Recipe.get(prod.recipe_id);
-            recipe = fetched ? { ...fetched, raw_materials: parseArr(fetched.raw_materials) } : null;
-          } catch {
-            recipe = null;
-          }
+          recipe = await loadRecipeForProduction(prod);
         }
         if (!recipe) {
           const cachedRecipes = recipesRef.current;
-          const cached = cachedRecipes.find(r => r.id === prod.recipe_id) || cachedRecipes.find(r => r.product_name === prod.product);
-          recipe = cached ? { ...cached, raw_materials: parseArr(cached.raw_materials) } : null;
+          recipe =
+            findRevisionByAnchorId(cachedRecipes, prod.recipe_id) ||
+            cachedRecipes.find((r) => r.product_name === prod.product) ||
+            null;
         }
 
         setComplementProduction(prod);

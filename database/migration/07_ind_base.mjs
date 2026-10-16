@@ -11,7 +11,7 @@ import { transformIndRow } from './lib/remap.mjs';
 
 /** [source, target, mapName] */
 const TABLES = [
-  ['ind_lista_receitas', 'receitas', 'receitas'],
+  ['receitas', 'receitas', 'receitas'],
   ['ind_lista_pedidos', 'pedidos', 'pedidos'],
   ['ind_lista_ensaios', 'ensaios', 'ensaios'],
   ['ind_cq_esp_tec', 'cq_especificacoes', 'cq_especificacoes'],

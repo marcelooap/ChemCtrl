@@ -33,7 +33,7 @@ Confirmado pela leitura de `src/modules/*/sql`:
 - `sessions.session_id text PRIMARY KEY` (não uuid)
 - `t_*` PKs: `uuid`
 - `ind_*` domínio PKs: `text` (`gen_random_uuid()::text`)
-- `t_produtos.cliente_id` → `t_clientes(id) ON DELETE SET NULL` (opcional)
+- `cadastro_produtos.cliente_id` → `t_clientes(id) ON DELETE SET NULL` (opcional; ex-`t_produtos`)
 - `perfil_modulos.modulo` CHECK: `industrializacao | transbordo` (sem `painel`)
 - `t_validacao_leituras.validacao_id text` (polimórfico, sem FK)
 

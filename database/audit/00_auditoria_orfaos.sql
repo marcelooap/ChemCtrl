@@ -9,7 +9,7 @@
 -- 5.1.a — producoes.recipe_id → receitas
 SELECT 'producoes.recipe_id' AS check_name, p.id, p.recipe_id AS orphan_fk
 FROM ind_lista_producoes p
-LEFT JOIN ind_lista_receitas r ON r.id = p.recipe_id
+LEFT JOIN receitas r ON r.id = p.recipe_id
 WHERE p.recipe_id IS NOT NULL AND r.id IS NULL;
 
 -- 5.1.b — producoes.order_id → pedidos
@@ -63,7 +63,7 @@ WHERE pd.order_id IS NOT NULL AND o.id IS NULL;
 -- 5.1.j — checklist.recipe_id → receitas
 SELECT 'checklist.recipe_id' AS check_name, c.id, c.recipe_id AS orphan_fk
 FROM ind_checklist_op c
-LEFT JOIN ind_lista_receitas r ON r.id = c.recipe_id
+LEFT JOIN receitas r ON r.id = c.recipe_id
 WHERE c.recipe_id IS NOT NULL AND r.id IS NULL;
 
 -- Extra: usuarios.perfil_id → perfis
@@ -78,9 +78,9 @@ FROM t_estoque e
 LEFT JOIN t_entradas en ON en.id = e.entrada_id
 WHERE e.entrada_id IS NOT NULL AND en.id IS NULL;
 
--- Extra: t_produtos.cliente_id → t_clientes
+-- Extra: cadastro_produtos.cliente_id → t_clientes
 SELECT 'produtos.cliente_id' AS check_name, p.id, p.cliente_id AS orphan_fk
-FROM t_produtos p
+FROM cadastro_produtos p
 LEFT JOIN t_clientes c ON c.id = p.cliente_id
 WHERE p.cliente_id IS NOT NULL AND c.id IS NULL;
 
@@ -92,7 +92,7 @@ WHERE a.saida_id IS NOT NULL AND s.id IS NULL;
 
 -- Extra: uniques que podem falhar na carga
 SELECT product_name, revision_number, COUNT(*) AS dupes
-FROM ind_lista_receitas
+FROM receitas
 GROUP BY product_name, revision_number
 HAVING COUNT(*) > 1;
 
@@ -109,7 +109,7 @@ HAVING COUNT(*) > 1;
 -- Resumo de contagens para validação ANTES × DEPOIS
 SELECT 'ind_lista_usuarios' AS tabela, COUNT(*)::bigint AS total FROM ind_lista_usuarios
 UNION ALL SELECT 't_clientes', COUNT(*) FROM t_clientes
-UNION ALL SELECT 't_produtos', COUNT(*) FROM t_produtos
+UNION ALL SELECT 'cadastro_produtos', COUNT(*) FROM cadastro_produtos
 UNION ALL SELECT 't_operadores', COUNT(*) FROM t_operadores
 UNION ALL SELECT 't_entradas', COUNT(*) FROM t_entradas
 UNION ALL SELECT 't_estoque', COUNT(*) FROM t_estoque
@@ -117,7 +117,7 @@ UNION ALL SELECT 't_transbordos', COUNT(*) FROM t_transbordos
 UNION ALL SELECT 't_vasilhames', COUNT(*) FROM t_vasilhames
 UNION ALL SELECT 't_saidas', COUNT(*) FROM t_saidas
 UNION ALL SELECT 't_transbordo_validacoes', COUNT(*) FROM t_transbordo_validacoes
-UNION ALL SELECT 'ind_lista_receitas', COUNT(*) FROM ind_lista_receitas
+UNION ALL SELECT 'receitas', COUNT(*) FROM receitas
 UNION ALL SELECT 'ind_lista_pedidos', COUNT(*) FROM ind_lista_pedidos
 UNION ALL SELECT 'ind_lista_producoes', COUNT(*) FROM ind_lista_producoes
 UNION ALL SELECT 'ind_estoque_mp', COUNT(*) FROM ind_estoque_mp

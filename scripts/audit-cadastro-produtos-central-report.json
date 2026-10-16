@@ -1,0 +1,942 @@
+{
+  "generated_at": "2026-10-16T16:49:12.173Z",
+  "tables": {
+    "t_produtos": {
+      "ok": true,
+      "total": 204,
+      "fetched": 204
+    },
+    "ind_lista_receitas": {
+      "ok": true,
+      "total": 26,
+      "fetched": 26
+    }
+  },
+  "summary": {
+    "exact_dupes_codigo_nome": 0,
+    "same_codigo_diff_nome": 6,
+    "recipe_items_with_code_name": 87,
+    "recipe_items_missing_code_or_name": 1,
+    "match_unique_ambos_candidates": 27,
+    "to_insert_industrializacao": 58,
+    "ambiguous_conflicts": 2
+  },
+  "exact_dupes": [],
+  "same_codigo_diff_nome": [
+    {
+      "codigo_norm": "1023969",
+      "variants": [
+        {
+          "id": "a0d49dd4-f540-41ac-9ba4-caacae92e4da",
+          "codigo": "1023969",
+          "produto": "TRIETILENOGLICOL"
+        },
+        {
+          "id": "56b49855-7c62-40d8-9c16-62be5b4f7de1",
+          "codigo": "1023969",
+          "produto": "TRIETILENOGLICOL - TB 208 L"
+        }
+      ]
+    },
+    {
+      "codigo_norm": "5032101",
+      "variants": [
+        {
+          "id": "4126dd81-7d9d-4379-9ca5-1e4ca8af4fa7",
+          "codigo": "5032101",
+          "produto": "EB 8370"
+        },
+        {
+          "id": "4284f68d-913d-4cfd-b421-30df267af2a2",
+          "codigo": "5032101",
+          "produto": "PROSOLV EB 8379"
+        }
+      ]
+    },
+    {
+      "codigo_norm": "1007516",
+      "variants": [
+        {
+          "id": "49b120af-d678-452a-92d1-31ce850a2711",
+          "codigo": "1007516",
+          "produto": "SOLBRAX QP – BB 20 L"
+        },
+        {
+          "id": "53a0a83e-d568-45ff-931b-9c43b987cbbd",
+          "codigo": "1007516",
+          "produto": "SOLBRAX QP"
+        },
+        {
+          "id": "8024a9db-af5c-4865-aab2-fe97ad6ff374",
+          "codigo": "1007516",
+          "produto": "SOLBRAX QP - TB 200L"
+        }
+      ]
+    },
+    {
+      "codigo_norm": "1023966",
+      "variants": [
+        {
+          "id": "e9e50321-9318-487d-a589-fb5f1936b9bd",
+          "codigo": "1023966",
+          "produto": "METILDIETANOLAMINA - IBC 1000 L"
+        },
+        {
+          "id": "45fa6a29-8c48-46d3-8028-45110c601360",
+          "codigo": "1023966",
+          "produto": "METILDIETANOLAMINA - BB 210 kg"
+        }
+      ]
+    },
+    {
+      "codigo_norm": "1011262",
+      "variants": [
+        {
+          "id": "ba5d23e8-238c-4457-85df-61fc28450fc5",
+          "codigo": "1011262",
+          "produto": "GR CLEAN 65 GRANULADO - BD 45 kg"
+        },
+        {
+          "id": "51afbc83-ef3c-426f-9714-451c502ea2b7",
+          "codigo": "1011262",
+          "produto": "GR CLEAN 65 GRANULADO - BD 14 kg"
+        }
+      ]
+    },
+    {
+      "codigo_norm": "-",
+      "variants": [
+        {
+          "id": "97ed75e1-6f6c-4fb2-bfcb-ec03da43cf37",
+          "codigo": "-",
+          "produto": "BACTIRAM 1101 B"
+        },
+        {
+          "id": "2915a92a-1f47-4f92-a3c1-7e8ad5106df2",
+          "codigo": "-",
+          "produto": "PROCHINOR GM 100"
+        }
+      ]
+    }
+  ],
+  "missing_code_or_name": [
+    {
+      "type": "PA",
+      "code": null,
+      "name": "CORRTREAT 18497",
+      "recipe_id": "9b8b2938-9fb7-4aa0-824f-1bd50d371b6e",
+      "revision_number": 1
+    }
+  ],
+  "ambos_candidates": [
+    {
+      "type": "PA",
+      "code": "404933",
+      "name": "INIPOL AD 1700 BW",
+      "key": "404933|INIPOL AD 1700 BW",
+      "client": "ARKEMA COATEX",
+      "density": 1.17,
+      "produto_id": "4dbca9a2-da81-43a5-a73a-d6adc69d2c97"
+    },
+    {
+      "type": "MP",
+      "code": "404935",
+      "name": "INIPOL AD 8000",
+      "key": "404935|INIPOL AD 8000",
+      "density": 1.25,
+      "controlado": false,
+      "orgao_regulamentador": null,
+      "produto_id": "c8f22955-47c6-4d35-a309-255fe0a605c4"
+    },
+    {
+      "type": "MP",
+      "code": "404937",
+      "name": "BACTIRAM 3000",
+      "key": "404937|BACTIRAM 3000",
+      "density": 1.1,
+      "controlado": false,
+      "orgao_regulamentador": null,
+      "produto_id": "ac1fe442-c4a0-421e-8b7c-a3fc93fca343"
+    },
+    {
+      "type": "PA",
+      "code": "LSV_421508-10",
+      "name": "A-7 LB",
+      "key": "LSV_421508-10|A-7 LB",
+      "client": "BAKER HUGHES PP",
+      "density": 1.31,
+      "produto_id": "b87c080c-4ed4-4b21-8064-5bcbad6db010"
+    },
+    {
+      "type": "PA",
+      "code": "-",
+      "name": "BACTIRAM 1101 B",
+      "key": "-|BACTIRAM 1101 B",
+      "client": "ARKEMA COATEX",
+      "density": 1.325,
+      "produto_id": "97ed75e1-6f6c-4fb2-bfcb-ec03da43cf37"
+    },
+    {
+      "type": "PA",
+      "code": "108292",
+      "name": "INIPOL AH 99",
+      "key": "108292|INIPOL AH 99",
+      "client": "ARKEMA COATEX",
+      "density": 0.792,
+      "produto_id": "7afbb8de-b03d-4ecf-a64b-147c88e305cd"
+    },
+    {
+      "type": "PA",
+      "code": "-",
+      "name": "PROCHINOR GM 100",
+      "key": "-|PROCHINOR GM 100",
+      "client": "ARKEMA COATEX",
+      "density": 0.911,
+      "produto_id": "2915a92a-1f47-4f92-a3c1-7e8ad5106df2"
+    },
+    {
+      "type": "PA",
+      "code": "L777249-00",
+      "name": "PARAVAN - 25LB",
+      "key": "L777249-00|PARAVAN - 25LB",
+      "client": "BAKER HUGHES PP",
+      "density": 0.85,
+      "produto_id": "89a71215-97c8-4e67-b3f2-6247bb4bff13"
+    },
+    {
+      "type": "PA",
+      "code": "107207",
+      "name": "PROCHINOR GR77",
+      "key": "107207|PROCHINOR GR77",
+      "client": "ARKEMA COATEX",
+      "density": 0.925,
+      "produto_id": "286bef14-72b3-4f3c-966e-0bdf7485da23"
+    },
+    {
+      "type": "PA",
+      "code": "LSV_777425-00",
+      "name": "NE-18 LB",
+      "key": "LSV_777425-00|NE-18 LB",
+      "client": "BAKER HUGHES PP",
+      "density": 0.9,
+      "produto_id": "c5b700a1-e448-4a58-a71b-c859fc947cd1"
+    },
+    {
+      "type": "PA",
+      "code": "L423568-10",
+      "name": "R-21 LB",
+      "key": "L423568-10|R-21 LB",
+      "client": "BAKER HUGHES PP",
+      "density": 1.14,
+      "produto_id": "743abde6-d3f3-4fa3-817e-49ebf99b93dc"
+    },
+    {
+      "type": "PA",
+      "code": "01024399",
+      "name": "SISBRAX MEG 80",
+      "key": "01024399|SISBRAX MEG 80",
+      "client": "VIBRA ENERGIA",
+      "density": 1.09,
+      "produto_id": "e36ce492-0852-41ee-bdd3-a90d0b4d313c"
+    },
+    {
+      "type": "PA",
+      "code": "SCW 17397 - 5000T",
+      "name": "SCW 17397",
+      "key": "SCW 17397 - 5000T|SCW 17397",
+      "client": "BAKER HUGHES OIC",
+      "density": 1.031,
+      "produto_id": "9b530c67-5e3e-44cb-9e1d-f1931d9f5774"
+    },
+    {
+      "type": "PA",
+      "code": "01023175",
+      "name": "SISBRAX ACE 75",
+      "key": "01023175|SISBRAX ACE 75",
+      "client": "VIBRA ENERGIA",
+      "density": 1.068,
+      "produto_id": "18f81db6-e1b4-403b-9531-5ebea96e70e1"
+    },
+    {
+      "type": "PA",
+      "code": "107464",
+      "name": "PROCHINOR GM 129",
+      "key": "107464|PROCHINOR GM 129",
+      "client": "ARKEMA COATEX",
+      "density": 0.926,
+      "produto_id": "42161631-fe08-4dd9-9a5e-9200e2268404"
+    },
+    {
+      "type": "PA",
+      "code": "108683",
+      "name": "PROCHINOR TL 93",
+      "key": "108683|PROCHINOR TL 93",
+      "client": "ARKEMA COATEX",
+      "density": 0.88,
+      "produto_id": "9121440a-4188-4727-ae13-cd4ff6a143ea"
+    },
+    {
+      "type": "PA",
+      "code": "018066",
+      "name": "RO SC F611 (Alto Teor)",
+      "key": "018066|RO SC F611 (ALTO TEOR)",
+      "client": "REDA ENERGY",
+      "density": 0.84,
+      "produto_id": "19746333-0153-49f2-9cc0-014804d9ca3a"
+    },
+    {
+      "type": "PA",
+      "code": "SCW 17395 - 5000T",
+      "name": "SCW 17395",
+      "key": "SCW 17395 - 5000T|SCW 17395",
+      "client": "BAKER HUGHES OIC",
+      "density": 1.035,
+      "produto_id": "34368e5d-57a3-492e-b539-9dceee864283"
+    },
+    {
+      "type": "PA",
+      "code": "01023970",
+      "name": "SISBRAX TZ 53",
+      "key": "01023970|SISBRAX TZ 53",
+      "client": "VIBRA ENERGIA",
+      "density": 1.0424,
+      "produto_id": "f6a42227-42c5-4ae2-bc9b-3701755556cd"
+    },
+    {
+      "type": "PA",
+      "code": "LSV_777078-00",
+      "name": "CD-33 LB",
+      "key": "LSV_777078-00|CD-33 LB",
+      "client": "BAKER HUGHES PP",
+      "density": 1.18,
+      "produto_id": "1d4103cb-f261-43a1-8041-dac96a0997ca"
+    },
+    {
+      "type": "PA",
+      "code": "18068",
+      "name": "RO SC F656 (Baixo Teor)",
+      "key": "18068|RO SC F656 (BAIXO TEOR)",
+      "client": "REDA ENERGY",
+      "density": 0.82,
+      "produto_id": "1cb54a07-1e22-4357-9789-be8d3d75a4a1"
+    },
+    {
+      "type": "PA",
+      "code": "332012",
+      "name": "PHASETREAT 20102",
+      "key": "332012|PHASETREAT 20102",
+      "client": "CLARIANT",
+      "density": 1.02,
+      "produto_id": "960210df-9b45-46b8-9c67-4554b1f3ba5b"
+    },
+    {
+      "type": "PA",
+      "code": "SCW 17350 - 5000T",
+      "name": "SCW 17350",
+      "key": "SCW 17350 - 5000T|SCW 17350",
+      "client": "BAKER HUGHES OIC",
+      "density": 1.071,
+      "produto_id": "afeb9ae9-a91e-46d9-b161-051f7f145373"
+    },
+    {
+      "type": "PA",
+      "code": "5032101",
+      "name": "PROSOLV EB 8379",
+      "key": "5032101|PROSOLV EB 8379",
+      "client": "VEOLIA",
+      "density": 0.88,
+      "produto_id": "4284f68d-913d-4cfd-b421-30df267af2a2"
+    },
+    {
+      "type": "PA",
+      "code": "32412531431",
+      "name": "MULTITREAT DF 15918",
+      "key": "32412531431|MULTITREAT DF 15918",
+      "client": "CLARIANT",
+      "density": 0.92,
+      "produto_id": "7d84e7a8-f938-4190-8be2-fc2201cc8787"
+    },
+    {
+      "type": "PA",
+      "code": "L100091-10",
+      "name": "FERROTROL - 300LB",
+      "key": "L100091-10|FERROTROL - 300LB",
+      "client": "BAKER HUGHES PP",
+      "density": 1.24,
+      "produto_id": "5435f482-62bc-4269-8c83-2c31d992c928"
+    },
+    {
+      "type": "PA",
+      "code": "LSV_415042-10",
+      "name": "AEF 100 LB",
+      "key": "LSV_415042-10|AEF 100 LB",
+      "client": "BAKER HUGHES PP",
+      "density": 1.27,
+      "produto_id": "937f8999-d1ea-487b-843c-dae8460a2c59"
+    }
+  ],
+  "to_insert": [
+    {
+      "type": "MP",
+      "code": "404936",
+      "name": "INIPOL AH 98",
+      "key": "404936|INIPOL AH 98",
+      "density": 1.11,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "000",
+      "name": "ÁGUA",
+      "key": "000|AGUA",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L10011250",
+      "name": "CLORETO DE CÁLCIO",
+      "key": "L10011250|CLORETO DE CALCIO",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77752500",
+      "name": "FORMOL ESTABILIZADO",
+      "key": "L77752500|FORMOL ESTABILIZADO",
+      "density": 1.111,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "11234212248",
+      "name": "ETANOL",
+      "key": "11234212248|ETANOL",
+      "density": 0.809,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "21220330042",
+      "name": "2-MERCAPTOETANOL",
+      "key": "21220330042|2-MERCAPTOETANOL",
+      "density": 1.11,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10998712243",
+      "name": "DODIGEN 2808L",
+      "key": "10998712243|DODIGEN 2808L",
+      "density": 0.94,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "23853012248",
+      "name": "CORTREAT 7384",
+      "key": "23853012248|CORTREAT 7384",
+      "density": 1.11,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "301299",
+      "name": "IPEL 1001",
+      "key": "301299|IPEL 1001",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "403959",
+      "name": "COMBACT 50 BC",
+      "key": "403959|COMBACT 50 BC",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404151",
+      "name": "METANOL",
+      "key": "404151|METANOL",
+      "density": 0.792,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "301261",
+      "name": "CORANTE",
+      "key": "301261|CORANTE",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "301329",
+      "name": "PROCHINOR LA 1001",
+      "key": "301329|PROCHINOR LA 1001",
+      "density": 1.012,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "301330",
+      "name": "PROCHINOR LA 1002",
+      "key": "301330|PROCHINOR LA 1002",
+      "density": 1.072,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L777542-00",
+      "name": "TURPENTINE SPECIAL YELLOW",
+      "key": "L777542-00|TURPENTINE SPECIAL YELLOW",
+      "density": 0.85,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L777016-00",
+      "name": "ALCOOL GRAXO ETOXILADO",
+      "key": "L777016-00|ALCOOL GRAXO ETOXILADO",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "0A5L81P111G0",
+      "name": "SOLVESSO 150",
+      "key": "0A5L81P111G0|SOLVESSO 150",
+      "density": 0.866,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404716",
+      "name": "RM 201",
+      "key": "404716|RM 201",
+      "density": 1.06,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404717",
+      "name": "RM 202",
+      "key": "404717|RM 202",
+      "density": 1.05,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404719",
+      "name": "MP 307",
+      "key": "404719|MP 307",
+      "density": 1.025,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L100104-330",
+      "name": "BUTILGLICOL",
+      "key": "L100104-330|BUTILGLICOL",
+      "density": 0.901,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L555156-00",
+      "name": "ETANOL",
+      "key": "L555156-00|ETANOL",
+      "density": 0.812,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L777104-00",
+      "name": "DISSOLVAN 2489-1",
+      "key": "L777104-00|DISSOLVAN 2489-1",
+      "density": 1.054,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "11252221170",
+      "name": "SODA CÁUSTICA",
+      "key": "11252221170|SODA CAUSTICA",
+      "density": 2.13,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77716500",
+      "name": "GLUCONATO DE SÓDIO",
+      "key": "L77716500|GLUCONATO DE SODIO",
+      "density": 1.79,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77734700",
+      "name": "HV-ACID LB",
+      "key": "L77734700|HV-ACID LB",
+      "density": 1.438,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77741000",
+      "name": "LIGNOSULFONATO DE SÓDIO",
+      "key": "L77741000|LIGNOSULFONATO DE SODIO",
+      "density": 1.15,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "01006057",
+      "name": "MONOETILENOGLICOL",
+      "key": "01006057|MONOETILENOGLICOL",
+      "density": 1.11,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "BU8619-00",
+      "name": "SAL DE SÓDIO DE ÁCIDO POLIAMINO",
+      "key": "BU8619-00|SAL DE SODIO DE ACIDO POLIAMINO",
+      "density": 1.031,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "1023021",
+      "name": "ÁCIDO ACÉTICO GLACIAL",
+      "key": "1023021|ACIDO ACETICO GLACIAL",
+      "density": 1.05,
+      "controlado": true,
+      "orgao_regulamentador": "Federal"
+    },
+    {
+      "type": "MP",
+      "code": "16227",
+      "name": "SOLVESSO 100",
+      "key": "16227|SOLVESSO 100",
+      "density": 0.873,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404718",
+      "name": "MP 208",
+      "key": "404718|MP 208",
+      "density": 0.975,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "404720",
+      "name": "MP 122",
+      "key": "404720|MP 122",
+      "density": 1.03,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "017489",
+      "name": "DOWSIL 9945",
+      "key": "017489|DOWSIL 9945",
+      "density": 0.84,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "6602",
+      "name": "SOLVEN ECO T-22",
+      "key": "6602|SOLVEN ECO T-22",
+      "density": 0.84,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L49976550",
+      "name": "CD-33",
+      "key": "L49976550|CD-33",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "017490",
+      "name": "DOWSIL 9902",
+      "key": "017490|DOWSIL 9902",
+      "density": 0.82,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10982125358",
+      "name": "HOE E 2489-1",
+      "key": "10982125358|HOE E 2489-1",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10648924104",
+      "name": "DISSOLVAN 3245-1C",
+      "key": "10648924104|DISSOLVAN 3245-1C",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "18775414776",
+      "name": "DISSOLVAN 5252-1C",
+      "key": "18775414776|DISSOLVAN 5252-1C",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10648810620",
+      "name": "DISSOLVAN 4006-1C",
+      "key": "10648810620|DISSOLVAN 4006-1C",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10776727208",
+      "name": "GENAPOL LA 070",
+      "key": "10776727208|GENAPOL LA 070",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "BU5099-00",
+      "name": "MEG EXAUTO",
+      "key": "BU5099-00|MEG EXAUTO",
+      "density": 1.115,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "BM9900-10",
+      "name": "INIBIDOR DE INCRUSTAÇÃO",
+      "key": "BM9900-10|INIBIDOR DE INCRUSTACAO",
+      "density": 1.35,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "12036",
+      "name": "ETANOL",
+      "key": "12036|ETANOL",
+      "density": 0.809,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "32047",
+      "name": "POLIOL POLIMERIZADO",
+      "key": "32047|POLIOL POLIMERIZADO",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "31354",
+      "name": "RESINA FENOLICA OXIALQUILADA",
+      "key": "31354|RESINA FENOLICA OXIALQUILADA",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "11276710284",
+      "name": "METANOL",
+      "key": "11276710284|METANOL",
+      "density": 0.79,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "10634521170",
+      "name": "MONOETANOLAMINA",
+      "key": "10634521170|MONOETANOLAMINA",
+      "density": 1.016,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "11228126694",
+      "name": "ÁCIDO ACÉTICO GLACIAL",
+      "key": "11228126694|ACIDO ACETICO GLACIAL",
+      "density": 1.04,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "19536518038",
+      "name": "GENAMIN DAT 100",
+      "key": "19536518038|GENAMIN DAT 100",
+      "density": 1.06,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "24397523411",
+      "name": "TC - 925",
+      "key": "24397523411|TC - 925",
+      "density": 1.2,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "32176431284",
+      "name": "SI 2050",
+      "key": "32176431284|SI 2050",
+      "density": 1.285,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "11236421170",
+      "name": "MONOETILENOGLICOL",
+      "key": "11236421170|MONOETILENOGLICOL",
+      "density": 1.113,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77709000",
+      "name": "ÁCIDO CÍTRICO",
+      "key": "L77709000|ACIDO CITRICO",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L10034750",
+      "name": "SODA CÁUSTICA",
+      "key": "L10034750|SODA CAUSTICA",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "L77753800",
+      "name": "ALUMINATO DE SÓDIO",
+      "key": "L77753800|ALUMINATO DE SODIO",
+      "density": 1,
+      "controlado": false,
+      "orgao_regulamentador": null
+    },
+    {
+      "type": "MP",
+      "code": "31187721170",
+      "name": "GLICERINA",
+      "key": "31187721170|GLICERINA",
+      "density": 1.254,
+      "controlado": false,
+      "orgao_regulamentador": null
+    }
+  ],
+  "conflicts": [
+    {
+      "reason": "codigo_igual_nome_diferente",
+      "item": {
+        "type": "MP",
+        "code": "1024001",
+        "name": "SISBRAX TZ 70",
+        "key": "1024001|SISBRAX TZ 70",
+        "density": 1.15,
+        "controlado": false,
+        "orgao_regulamentador": null
+      },
+      "candidates": [
+        {
+          "id": "50f67f45-1e6b-4814-b3e9-ba74c83f61e7",
+          "codigo": "1024001",
+          "produto": "CARTASCAVE TZ"
+        }
+      ]
+    },
+    {
+      "reason": "codigo_igual_nome_diferente",
+      "item": {
+        "type": "MP",
+        "code": "1003687",
+        "name": "ETANOL",
+        "key": "1003687|ETANOL",
+        "density": 0.7902,
+        "controlado": false,
+        "orgao_regulamentador": null
+      },
+      "candidates": [
+        {
+          "id": "062b90f2-92f6-444a-b87a-e85a0e446421",
+          "codigo": "1003687",
+          "produto": "ALCOOL ANIDRO"
+        }
+      ]
+    }
+  ]
+}

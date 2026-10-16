@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Search, Eye, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -78,7 +79,7 @@ export default function Transbordo() {
   const canDelete = !isReadOnly && hasPermission('transfer.delete');
   const { data: transfers, loading, reload: load } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const { data: allContainers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: recipes } = useRecipes('-created_date', 500);
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

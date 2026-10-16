@@ -11,6 +11,7 @@ import { generateClientStockPDF } from '@industrializacao/lib/pdfReports';
 import { exportEstoqueClienteExcel } from '@industrializacao/lib/exportEstoqueClienteExcel';
 import { useToast } from '@shared/components/ui/use-toast';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { fmtDate, fmtNumber, fmtVolume, fmtMass, fmtPercent } from '@/i18n/formatters';
 import { translateStockExpiryStatus, translateContainerStatus } from '@/i18n/domainMaps';
 import { containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@industrializacao/lib/fractionalSupply';
@@ -47,7 +48,7 @@ export default function EstoqueCliente() {
   const { data: stocks, loading } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
+  const { data: recipes } = useRecipes('-updated_date', 500);
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const [selectedClient, setSelectedClient] = useState('all');
   const [generating, setGenerating] = useState(false);

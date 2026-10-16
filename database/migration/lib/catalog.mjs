@@ -7,7 +7,7 @@
 export const COUNT_PAIRS = [
   { source: 'ind_lista_usuarios', target: 'usuarios' },
   { source: 't_clientes', target: 'clientes' },
-  { source: 't_produtos', target: 'produtos' },
+  { source: 'cadastro_produtos', target: 'produtos' },
   { source: 't_operadores', target: 'operadores' },
   { source: 't_etiqueta_configs', target: 'etiqueta_configs' },
   { source: 't_isotanques', target: 'isotanques' },
@@ -27,7 +27,7 @@ export const COUNT_PAIRS = [
   { source: 'perfis', target: 'perfis' },
   { source: 'perfil_permissoes', target: 'perfil_permissoes' },
   { source: 'usuario_permissoes', target: 'usuario_permissoes' },
-  { source: 'ind_lista_receitas', target: 'receitas' },
+  { source: 'receitas', target: 'receitas' },
   { source: 'ind_lista_pedidos', target: 'pedidos' },
   { source: 'ind_lista_producoes', target: 'producoes' },
   { source: 'ind_estoque_mp', target: 'estoque_mp' },

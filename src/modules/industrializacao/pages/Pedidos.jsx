@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Search, Pencil, AlertTriangle, Eye, Trash2, Loader2, ArrowDown, ChevronDown } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -90,7 +91,7 @@ export default function Pedidos() {
   const canEdit = hasPermission('orders.edit');
   const canDelete = hasPermission('orders.delete');
   const { data: rawOrders, loading, reload: loadOrders } = useRealtimeEntity('Order', () => base44.entities.Order.list('-created_date', 500));
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: recipes } = useRecipes('-created_date', 500);
   const { data: productions, reload: loadProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') || '');

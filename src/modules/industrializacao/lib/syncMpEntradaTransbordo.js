@@ -380,7 +380,8 @@ async function resolveControleLotes(entrada) {
         produto_nome: entrada?.produto_nome,
       }];
   try {
-    const recipes = await base44.entities.Recipe.list("-created_date", 500);
+    const { listRecipesGrouped } = await import('@industrializacao/hooks/useRecipes');
+    const recipes = await listRecipesGrouped('-created_date', 2000);
     return lotes.map((lote) =>
       resolveMpControle(recipes, {
         mpCode: lote?.produto_codigo,

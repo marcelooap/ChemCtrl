@@ -1,10 +1,10 @@
 /**
  * Controle de Revisões de Receitas.
  *
- * Modelo: cada revisão de uma receita é uma linha própria na tabela `recipes`,
- * identificada por (product_name, revision_number). A revisão mais recente de
- * um produto é sempre a de maior `revision_number`. Nada é sobrescrito — uma
- * nova revisão é sempre um novo registro (ver `Receitas.jsx` → `save()`).
+ * Modelo (pós-047): cada revisão é um conjunto de linhas em `receitas`
+ * (1 linha por MP), agrupadas por (receita_id, revision_number).
+ * As funções abaixo esperam a lista já agrupada (ver `groupRecipeRows` /
+ * `useRecipes`). Legado: 1 linha por revisão com `raw_materials` JSON.
  */
 
 /** Formata o número da revisão no padrão exibido em toda a aplicação. */
@@ -64,7 +64,7 @@ function recipeCodesForProductName(name, recipes) {
 
 /**
  * Pedido e produto selecionado (receita) referem-se ao mesmo item da industrialização.
- * Usa nome, SKU no nome e código da receita em `ind_lista_receitas`.
+ * Usa nome, SKU no nome e código da receita em `receitas`.
  */
 export function orderMatchesSelectedProduct(orderProduct, selectedProduct, recipes = []) {
   if (productsMatch(orderProduct, selectedProduct)) return true;

@@ -1,5 +1,5 @@
 /**
- * Seed one-shot: cadastra clientes + produtos do Transbordo (t_clientes / t_produtos).
+ * Seed one-shot: cadastra clientes + produtos do Transbordo (t_clientes / cadastro_produtos).
  * Uso: node src/modules/transbordo/sql/seed_produtos_data.mjs
  *
  * Idempotente: não recria cliente pelo nome (case-insensitive) nem produto
@@ -272,10 +272,17 @@ async function main() {
     console.log('Nenhum cliente novo a criar.');
   }
 
-  const { data: produtosExistentes, error: produtosErr } = await supabase
-    .from('t_produtos')
+  let produtosTable = 'cadastro_produtos';
+  let { data: produtosExistentes, error: produtosErr } = await supabase
+    .from(produtosTable)
     .select('id, codigo, produto, cliente_nome');
-  if (produtosErr) throw new Error(`t_produtos: ${produtosErr.message}`);
+  if (produtosErr) {
+    produtosTable = 't_produtos';
+    ({ data: produtosExistentes, error: produtosErr } = await supabase
+      .from(produtosTable)
+      .select('id, codigo, produto, cliente_nome'));
+  }
+  if (produtosErr) throw new Error(`produtos: ${produtosErr.message}`);
 
   const existingKeys = new Set(
     (produtosExistentes || []).map((p) =>
@@ -313,7 +320,7 @@ async function main() {
   let inserted = 0;
   for (let i = 0; i < toInsert.length; i += chunkSize) {
     const chunk = toInsert.slice(i, i + chunkSize);
-    const { data, error } = await supabase.from('t_produtos').insert(chunk).select('id');
+    const { data, error } = await supabase.from(produtosTable).insert(chunk).select('id');
     if (error) throw new Error(`insert produtos (offset ${i}): ${error.message}`);
     inserted += data?.length || 0;
     console.log(`  lote ${Math.floor(i / chunkSize) + 1}: +${data?.length || 0}`);

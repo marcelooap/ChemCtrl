@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Eye, Pencil, Trash2, ArrowLeftRight, Loader2, Printer, Download, Package, FileText } from 'lucide-react';
 import MovimentacaoEstoqueDialog from '@industrializacao/components/estoque/MovimentacaoEstoqueDialog';
@@ -55,13 +56,12 @@ export default function Estoque() {
   const canEdit = !isReadOnly && hasPermission('raw_material_stock.edit');
   const canDelete = !isReadOnly && hasPermission('raw_material_stock.delete');
   const parseTankEntries = (i) => ({ ...i, tank_entries: parseJsonArray(i.tank_entries) });
-  const parseRawMaterials = (r) => ({ ...r, raw_materials: parseJsonArray(r.raw_materials) });
   const { data: items, loading, reload: load, setData: setItems } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), [], parseTankEntries);
   const { data: movements, loading: loadingMovements, reload: loadMovements } = useRealtimeEntity(
     'StockMovement',
     () => base44.entities.StockMovement.list('-movement_date', 1000),
   );
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
+  const { data: recipes } = useRecipes('-created_date', 2000);
   const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const [viewMode, setViewMode] = useState('estoque');

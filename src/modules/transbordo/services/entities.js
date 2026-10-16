@@ -6,12 +6,12 @@ import {
 
 /**
  * Camada de dados do módulo Transbordo.
- * Fala com as tabelas prefixadas `t_*` no Supabase unificado.
+ * Fala com as tabelas do Supabase unificado (`t_*`, exceto
+ * `cadastro_produtos` — ex-`t_produtos`, ver migration 046).
  *
  * Mantém a mesma API usada pelas telas (list/get/filter/create/
  * update/delete/bulkCreate/bulkUpdate/deleteMany) — as chaves do
- * objeto `entities` (clientes, produtos, ...) não mudam; apenas o
- * nome físico da tabela no Supabase usa o prefixo `t_`.
+ * objeto `entities` (clientes, produtos, ...) não mudam.
  */
 
 function normalizeOrder(sort) {
@@ -34,9 +34,61 @@ function assertConfigured(context) {
   }
 }
 
-function createEntity(table) {
+const TABLE_FALLBACKS = {
+  cadastro_produtos: ['cadastro_produtos', 't_produtos'],
+};
+const physicalTableCache = new Map();
+const physicalTableInFlight = new Map();
+
+function isMissingRelationError(error) {
+  const msg = String(error?.message || error?.details || '');
+  const code = String(error?.code || '');
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    /Could not find the table|relation .* does not exist|schema cache/i.test(msg)
+  );
+}
+
+async function resolvePhysicalTable(preferredName) {
+  if (physicalTableCache.has(preferredName)) {
+    return physicalTableCache.get(preferredName);
+  }
+  const pending = physicalTableInFlight.get(preferredName);
+  if (pending) return pending;
+
+  const request = (async () => {
+    assertConfigured(`${preferredName}.resolve`);
+    const candidates = TABLE_FALLBACKS[preferredName] || [preferredName];
+    for (const name of candidates) {
+      const { error } = await chemflowSupabase
+        .from(name)
+        .select('id')
+        .limit(1);
+      if (!error) {
+        physicalTableCache.set(preferredName, name);
+        return name;
+      }
+      if (!isMissingRelationError(error)) {
+        throwIfError(error, `${preferredName}.resolve`);
+      }
+    }
+    physicalTableCache.set(preferredName, preferredName);
+    return preferredName;
+  })().finally(() => {
+    physicalTableInFlight.delete(preferredName);
+  });
+
+  physicalTableInFlight.set(preferredName, request);
+  return request;
+}
+
+function createEntity(preferredTable) {
+  const tableOf = async () => resolvePhysicalTable(preferredTable);
+
   return {
     async list(sort, options = {}) {
+      const table = await tableOf();
       assertConfigured(`${table}.list`);
       const { column, ascending } = normalizeOrder(sort);
       let builder = chemflowSupabase
@@ -53,6 +105,7 @@ function createEntity(table) {
     },
 
     async listPage({ sort, page = 1, pageSize = 50, select = '*' } = {}) {
+      const table = await tableOf();
       assertConfigured(`${table}.listPage`);
       const { column, ascending } = normalizeOrder(sort);
       const size = Math.min(200, Math.max(1, Number(pageSize) || 50));
@@ -69,6 +122,7 @@ function createEntity(table) {
     },
 
     async get(id) {
+      const table = await tableOf();
       assertConfigured(`${table}.get`);
       const { data, error } = await chemflowSupabase
         .from(table)
@@ -80,6 +134,7 @@ function createEntity(table) {
     },
 
     async filter(query = {}) {
+      const table = await tableOf();
       assertConfigured(`${table}.filter`);
       let builder = chemflowSupabase.from(table).select('*');
       for (const [key, value] of Object.entries(query)) {
@@ -91,6 +146,7 @@ function createEntity(table) {
     },
 
     async create(payload) {
+      const table = await tableOf();
       assertConfigured(`${table}.create`);
       const { data, error } = await chemflowSupabase
         .from(table)
@@ -102,6 +158,7 @@ function createEntity(table) {
     },
 
     async bulkCreate(payloads) {
+      const table = await tableOf();
       assertConfigured(`${table}.bulkCreate`);
       if (!payloads || payloads.length === 0) return [];
       const { data, error } = await chemflowSupabase
@@ -113,6 +170,7 @@ function createEntity(table) {
     },
 
     async update(id, payload) {
+      const table = await tableOf();
       assertConfigured(`${table}.update`);
       const { data, error } = await chemflowSupabase
         .from(table)
@@ -125,6 +183,7 @@ function createEntity(table) {
     },
 
     async bulkUpdate(records) {
+      const table = await tableOf();
       assertConfigured(`${table}.bulkUpdate`);
       if (!records || records.length === 0) return [];
       const results = await Promise.all(
@@ -137,6 +196,7 @@ function createEntity(table) {
     },
 
     async delete(id) {
+      const table = await tableOf();
       assertConfigured(`${table}.delete`);
       const { error } = await chemflowSupabase.from(table).delete().eq('id', id);
       throwIfError(error, `${table}.delete`);
@@ -144,6 +204,7 @@ function createEntity(table) {
     },
 
     async deleteMany(query = {}) {
+      const table = await tableOf();
       assertConfigured(`${table}.deleteMany`);
       let builder = chemflowSupabase.from(table).delete();
       for (const [key, value] of Object.entries(query)) {
@@ -158,7 +219,7 @@ function createEntity(table) {
 
 export const entities = {
   clientes: createEntity('t_clientes'),
-  produtos: createEntity('t_produtos'),
+  produtos: createEntity('cadastro_produtos'),
   isotanques: createEntity('t_isotanques'),
   descontaminacoes: createEntity('t_descontaminacoes'),
   entradas: createEntity('t_entradas'),

@@ -1,0 +1,129 @@
+{
+  "generated_at": "2026-10-16T17:15:20.517Z",
+  "recipes": {
+    "ok": true,
+    "total": 26,
+    "fetched": 26,
+    "shape_counts": {
+      "json_string": 26
+    },
+    "revisions_with_valid_mps": 26,
+    "revisions_without_valid_mps": 0,
+    "valid_mp_items_total": 91,
+    "expected_rows_after_047": 91
+  },
+  "productions": {
+    "ok": true,
+    "total": 243,
+    "with_recipe_id": 243,
+    "orphan_recipe_id_count": 0,
+    "orphan_sample": []
+  },
+  "samples": [
+    {
+      "id": "22513ee6-96e9-433b-8717-d93f9246f060",
+      "code": "404933",
+      "product_name": "INIPOL AD 1700 BW",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 4,
+      "mp_codes": [
+        "404935",
+        "404936",
+        "000",
+        "404937"
+      ]
+    },
+    {
+      "id": "72ab89a0-2390-4e15-b6eb-00ad7b699060",
+      "code": "LSV_421508-10",
+      "product_name": "A-7 LB",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 3,
+      "mp_codes": [
+        "000",
+        "L10011250",
+        "L77752500"
+      ]
+    },
+    {
+      "id": "9b8b2938-9fb7-4aa0-824f-1bd50d371b6e",
+      "code": null,
+      "product_name": "CORRTREAT 18497",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 4,
+      "mp_codes": [
+        "11234212248",
+        "21220330042",
+        "10998712243",
+        "23853012248"
+      ]
+    },
+    {
+      "id": "8173014e-e55b-4444-903f-1f1f79796364",
+      "code": "-",
+      "product_name": "BACTIRAM 1101 B",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 3,
+      "mp_codes": [
+        "404937",
+        "301299",
+        "403959"
+      ]
+    },
+    {
+      "id": "9494b894-3920-4548-8a40-2acd97a1a074",
+      "code": "108292",
+      "product_name": "INIPOL AH 99",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 2,
+      "mp_codes": [
+        "404151",
+        "301261"
+      ]
+    },
+    {
+      "id": "adcac196-05f8-407b-8aba-31a5daecda87",
+      "code": "-",
+      "product_name": "PROCHINOR GM 100",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 3,
+      "mp_codes": [
+        "404151",
+        "301329",
+        "301330"
+      ]
+    },
+    {
+      "id": "2137a916-22e9-4728-bb8e-90730dabbd76",
+      "code": "L777249-00",
+      "product_name": "PARAVAN - 25LB",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 2,
+      "mp_codes": [
+        "L777542-00",
+        "L777016-00"
+      ]
+    },
+    {
+      "id": "5494b51f-4835-4b85-ade4-50ef51e9a530",
+      "code": "107207",
+      "product_name": "PROCHINOR GR77",
+      "revision_number": 1,
+      "shape": "json_string",
+      "mp_count": 4,
+      "mp_codes": [
+        "0A5L81P111G0",
+        "404716",
+        "404717",
+        "404719"
+      ]
+    }
+  ]
+}

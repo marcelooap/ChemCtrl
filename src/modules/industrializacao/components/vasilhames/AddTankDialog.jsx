@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -38,7 +39,7 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const { user: internalUser } = useInternalAuth();
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-updated_date', 500));
+  const { data: recipes } = useRecipes('-updated_date', 500);
 
   useEffect(() => {
     if (open) setForm(emptyForm());

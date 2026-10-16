@@ -22,6 +22,7 @@ import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente"
 import { formatDensidade } from "@transbordo/lib/format";
 import { generatePublicToken } from "@industrializacao/lib/publicToken";
 import { deleteProdutoDocument } from "@transbordo/api/storage";
+import { registrarUsoProduto } from "@transbordo/lib/cadastroProdutosCentral";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
@@ -296,17 +297,64 @@ export default function ProdutosTab() {
           },
         });
       } else {
+        // Reutiliza registro existente (ex.: origem INDUSTRIALIZACAO -> AMBOS)
+        // ou cria com origem ARMAZENAGEM. Não cria receita.
+        let existingId = null;
         try {
-          await entities.produtos.create({
-            ...payload,
-            public_token: generatePublicToken(),
+          existingId = await registrarUsoProduto({
+            codigo: payload.codigo,
+            nome: payload.produto,
+            modulo: "ARMAZENAGEM",
+            attrs: {
+              cliente_nome: payload.cliente_nome || "",
+              densidade: payload.densidade || "-",
+              densidade_tabelada: Boolean(payload.densidade_tabelada),
+              filtrado: Boolean(payload.filtrado),
+              controlado: Boolean(payload.controlado),
+              orgao_regulamentador: payload.orgao_regulamentador || "",
+            },
           });
         } catch (err) {
-          const msg = String(err?.message || '');
-          if (/public_token/i.test(msg)) {
-            await entities.produtos.create(payload);
-          } else {
-            throw err;
+          if (err?.code !== "CADASTRO_PRODUTOS_RPC_MISSING") throw err;
+          // Pré-046: create legado
+          try {
+            await entities.produtos.create({
+              ...payload,
+              public_token: generatePublicToken(),
+            });
+          } catch (createErr) {
+            const msg = String(createErr?.message || "");
+            if (/public_token/i.test(msg)) {
+              await entities.produtos.create(payload);
+            } else {
+              throw createErr;
+            }
+          }
+          existingId = null;
+        }
+
+        if (existingId) {
+          const updatePayload = {
+            ...payload,
+          };
+          try {
+            const current = await entities.produtos.get(existingId);
+            if (!current?.public_token) {
+              updatePayload.public_token = generatePublicToken();
+            }
+          } catch {
+            updatePayload.public_token = generatePublicToken();
+          }
+          try {
+            await entities.produtos.update(existingId, updatePayload);
+          } catch (err) {
+            const msg = String(err?.message || "");
+            if (/public_token/i.test(msg)) {
+              const { public_token: _pt, ...rest } = updatePayload;
+              await entities.produtos.update(existingId, rest);
+            } else {
+              throw err;
+            }
           }
         }
       }

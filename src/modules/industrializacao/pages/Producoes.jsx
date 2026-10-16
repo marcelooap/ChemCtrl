@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useNavigate } from 'react-router-dom';
 import { Search, Eye, Pencil, Ban, Loader2, PackagePlus } from 'lucide-react';
 import { Input } from '@shared/components/ui/input';
@@ -58,7 +59,7 @@ export default function Producoes() {
   const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
-  const { data: recipes } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500));
+  const { data: recipes } = useRecipes('-created_date', 500);
   const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () => base44.entities.ContainerOrigin.list('-created_date', 2000));
   const [search, setSearch] = useState(() => searchParams.get('product') || '');

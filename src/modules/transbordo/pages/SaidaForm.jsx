@@ -21,6 +21,7 @@ import {
   rpcSalvarSaidaComReserva,
   validarItensEmbalado,
 } from "@painel/lib/saidaReservas";
+import { promoverProdutosPorIds } from "@transbordo/lib/cadastroProdutosCentral";
 import { rescheduleSaidaAgendamento, ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
 import AgendamentoPosSaidaModal from "@painel/components/comercial/AgendamentoPosSaidaModal";
 import {
@@ -752,6 +753,11 @@ export default function SaidaForm({
           enviado_ao_fiscal: false,
         });
       }
+
+      // Itens JSON não têm trigger de produto_id — promove origem se necessário.
+      await promoverProdutosPorIds(
+        itensPersistidos.map((item) => item.produto_id).filter(Boolean)
+      ).catch(() => 0);
 
       if (isFiscal) {
         // Transbordo: devolve/reaplica saldo de itens removidos/alterados e recalcula estoque.

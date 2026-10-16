@@ -4,6 +4,12 @@ import { useOutletContext } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useRecipes } from '@industrializacao/hooks/useRecipes';
+import {
+  salvarRevisaoReceita,
+  isReceitasSalvarRpcMissing,
+  parseRawMaterialsField,
+} from '@industrializacao/lib/recipeComposition';
 import { Plus, Search, Eye, EyeOff, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame, GripVertical } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -33,6 +39,7 @@ import {
   canDeleteRevision,
   getRevisionNumber,
 } from '@industrializacao/lib/recipeRevisions';
+import { registrarProdutosDaReceita } from '@transbordo/lib/cadastroProdutosCentral';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const DEFAULT_CREATED_BY = 'Marcelo Amaral';
@@ -175,8 +182,7 @@ export default function Receitas() {
   const canManageFds = canManageRecipeFds(user);
   const canRemoveFds = canRemoveRecipeFds(user);
   const canViewFds = canViewRecipeFds(user);
-  const parseRawMaterials = (r) => ({ ...r, raw_materials: Array.isArray(r.raw_materials) ? r.raw_materials : (typeof r.raw_materials === 'string' ? (() => { try { return JSON.parse(r.raw_materials); } catch { return []; } })() : []) });
-  const { data: recipes, loading, reload: load } = useRealtimeEntity('Recipe', () => base44.entities.Recipe.list('-created_date', 500), [], parseRawMaterials);
+  const { data: recipes, loading, reload: load } = useRecipes('-created_date', 2000);
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500), []);
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500), []);
   const backfillCreatedByRef = useRef(false);
@@ -373,9 +379,6 @@ export default function Receitas() {
     return !q || [r.product_name, r.client, r.code, r.created_by].some(v => (v || '').toLowerCase().includes(q));
   });
 
-  const parseRawMaterialsField = (raw) =>
-    Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
-
   const openNew = () => {
     setEditing(null);
     setIsNewRevision(false);
@@ -544,34 +547,76 @@ export default function Receitas() {
 
     setSaving(true);
     try {
-      if (editing && !isNewRevision) {
-        await base44.entities.Recipe.update(editing.id, data);
-      } else {
-        const created = await base44.entities.Recipe.create(data);
-        if (pendingFdsFile && created?.id) {
-          const path = await uploadRecipeDocument(created.id, DOC_TYPES.SDS, pendingFdsFile);
-          await base44.entities.Recipe.update(created.id, {
-            fds_url: path,
-            fds_filename: pendingFdsFile.name,
+      const mode = !editing ? 'create' : isNewRevision ? 'new_revision' : 'replace';
+      const header = {
+        code: data.code || '',
+        product_name: data.product_name,
+        client: data.client || '',
+        density: data.density,
+        price: data.price,
+        revision: data.revision,
+        revision_date: data.revision_date,
+        necessita_n2: Boolean(data.necessita_n2),
+        created_by: data.created_by || '',
+        created_by_id: data.created_by_id || '',
+      };
+
+      let anchorId = editing?.id || null;
+      try {
+        const saved = await salvarRevisaoReceita({
+          receitaId: editing?.receita_id || (!editing ? null : editing.id),
+          revisionNumber: data.revision_number || 1,
+          header,
+          rawMaterials: mps,
+          mode,
+        });
+        anchorId = saved?.anchor_id || anchorId;
+      } catch (rpcErr) {
+        if (!isReceitasSalvarRpcMissing(rpcErr)) throw rpcErr;
+        // Fallback pré-047: uma linha com raw_materials JSON
+        try {
+          await registrarProdutosDaReceita({
+            code: data.code,
+            product_name: data.product_name,
+            client: data.client,
+            density: data.density,
+            raw_materials: mps,
+          });
+        } catch (regErr) {
+          if (regErr?.code !== 'CADASTRO_PRODUTOS_RPC_MISSING') throw regErr;
+        }
+        if (editing && !isNewRevision) {
+          await base44.entities.Recipe.update(editing.id, data);
+          anchorId = editing.id;
+        } else {
+          const created = await base44.entities.Recipe.create(data);
+          anchorId = created?.id || null;
+        }
+      }
+
+      if (pendingFdsFile && anchorId) {
+        const path = await uploadRecipeDocument(anchorId, DOC_TYPES.SDS, pendingFdsFile);
+        await base44.entities.Recipe.update(anchorId, {
+          fds_url: path,
+          fds_filename: pendingFdsFile.name,
+          fds_uploaded_at: new Date().toISOString(),
+          fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
+        });
+        setPendingFdsFile(null);
+      } else if (isNewRevision && editing?.fds_url && anchorId && anchorId !== editing.id) {
+        try {
+          await copyRecipeDocument(editing.id, anchorId, DOC_TYPES.SDS);
+          await base44.entities.Recipe.update(anchorId, {
+            fds_url: getRecipeDocStorageUrl(anchorId, DOC_TYPES.SDS),
+            fds_filename: editing.fds_filename || null,
             fds_uploaded_at: new Date().toISOString(),
             fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
           });
-          setPendingFdsFile(null);
-        } else if (isNewRevision && editing?.fds_url && created?.id) {
-          // A nova revisão herda automaticamente o FDS da revisão anterior.
-          try {
-            await copyRecipeDocument(editing.id, created.id, DOC_TYPES.SDS);
-            await base44.entities.Recipe.update(created.id, {
-              fds_url: getRecipeDocStorageUrl(created.id, DOC_TYPES.SDS),
-              fds_filename: editing.fds_filename || null,
-              fds_uploaded_at: new Date().toISOString(),
-              fds_uploaded_by: user?.nome || user?.full_name || user?.id || '',
-            });
-          } catch {
-            // Não bloqueia a criação da revisão; o usuário pode reanexar o FDS depois.
-          }
+        } catch {
+          // Não bloqueia a criação da revisão; o usuário pode reanexar o FDS depois.
         }
       }
+
       setShowForm(false);
       setIsNewRevision(false);
       load();
@@ -590,7 +635,16 @@ export default function Receitas() {
       if (deleteTarget.fds_url) {
         await deleteRecipeDocument(deleteTarget.id, DOC_TYPES.SDS).catch(() => {});
       }
-      await base44.entities.Recipe.delete(deleteTarget.id);
+      const receitaId = deleteTarget.receita_id || deleteTarget.id;
+      if (deleteTarget.receita_id || deleteTarget._line_ids?.length > 1) {
+        try {
+          await base44.entities.Recipe.deleteMany({ receita_id: receitaId });
+        } catch {
+          await base44.entities.Recipe.delete(deleteTarget.id);
+        }
+      } else {
+        await base44.entities.Recipe.delete(deleteTarget.id);
+      }
       setDeleteTarget(null);
       load();
       toast({ title: t('success.deleted') });
@@ -607,7 +661,24 @@ export default function Receitas() {
   const confirmRenewRevision = async () => {
     if (!renewTarget?.id) return;
     const revision_date = todayDateInputValue();
-    await base44.entities.Recipe.update(renewTarget.id, { revision_date });
+    const receitaId = renewTarget.receita_id || renewTarget.id;
+    const rev = getRevisionNumber(renewTarget);
+    const lineIds = renewTarget._line_ids?.length
+      ? renewTarget._line_ids
+      : [renewTarget.id];
+    await Promise.all(
+      lineIds.map((id) => base44.entities.Recipe.update(id, { revision_date }))
+    );
+    // Também propaga se existirem linhas irmãs carregadas
+    const siblings = (recipes || []).filter(
+      (r) =>
+        (r.receita_id || r.id) === receitaId && getRevisionNumber(r) === rev
+    );
+    if (siblings.length && !renewTarget._line_ids?.length) {
+      await Promise.all(
+        siblings.map((r) => base44.entities.Recipe.update(r.id, { revision_date }))
+      );
+    }
     setEditing((prev) => (
       prev?.id === renewTarget.id && !isNewRevision ? { ...prev, revision_date } : prev
     ));
@@ -617,7 +688,10 @@ export default function Receitas() {
 
   const confirmDeleteRevision = async () => {
     if (!deleteRevisionTarget) return;
-    const inUse = productions.some((p) => p.recipe_id === deleteRevisionTarget.id);
+    const lineIds = deleteRevisionTarget._line_ids || [deleteRevisionTarget.id];
+    const inUse = productions.some(
+      (p) => p.recipe_id && lineIds.map(String).includes(String(p.recipe_id))
+    );
     if (inUse) {
       toast({ title: t('recipes.messages.revisionInUse'), variant: 'destructive' });
       setDeleteRevisionTarget(null);
@@ -627,7 +701,16 @@ export default function Receitas() {
       if (deleteRevisionTarget.fds_url) {
         await deleteRecipeDocument(deleteRevisionTarget.id, DOC_TYPES.SDS).catch(() => {});
       }
-      await base44.entities.Recipe.delete(deleteRevisionTarget.id);
+      const receitaId = deleteRevisionTarget.receita_id || deleteRevisionTarget.id;
+      const rev = getRevisionNumber(deleteRevisionTarget);
+      if (deleteRevisionTarget.receita_id) {
+        await base44.entities.Recipe.deleteMany({
+          receita_id: receitaId,
+          revision_number: rev,
+        });
+      } else {
+        await base44.entities.Recipe.delete(deleteRevisionTarget.id);
+      }
       setDeleteRevisionTarget(null);
       setShowForm(false);
       load();

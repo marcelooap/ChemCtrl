@@ -209,7 +209,10 @@ export default function ProdutoModal({
       setError("Preencha os campos obrigatórios (Código e Nome).");
       return;
     }
-    if (isDuplicateDescricao) {
+    // Em criação, codigo+nome já existente é reutilizado no cadastro central
+    // (origem promovida para AMBOS quando veio da Industrialização).
+    // Em edição, bloqueia colisão com outro registro.
+    if (editingProduto && isDuplicateDescricao) {
       setError(
         "Já existe um produto cadastrado com este código e esta descrição. Informe uma descrição diferente."
       );

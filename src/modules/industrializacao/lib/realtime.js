@@ -13,7 +13,8 @@ import { createClient } from '@supabase/supabase-js';
 import {
   supabaseUrl,
   supabaseAnonKey,
-  entityTableMap
+  entityTableMap,
+  getEntityTableName,
 } from '@industrializacao/api/supabaseClient';
 
 import { getSessionId } from '@industrializacao/api/rpcClient';
@@ -440,101 +441,62 @@ export function subscribeToTable(
   entityName,
   callback
 ){
+  let cancelled = false;
+  let activeTableName = null;
 
-  const tableName =
-    entityTableMap[entityName];
-
-
-  if(!tableName){
-    return ()=>{};
-  }
-
-
-  if(!tableCallbacks.has(tableName)){
-
-    tableCallbacks.set(
-      tableName,
-      new Set()
-    );
-
-  }
-
-
-  tableCallbacks
-    .get(tableName)
-    .add(callback);
-
-
-
-  if(!tableChannels.has(tableName)){
-
-    createChannel(tableName);
-
-  }
-
-
-
-  return ()=>{
-
-
-    const callbacks =
-      tableCallbacks.get(tableName);
-
-
-
-    if(callbacks){
-
-      callbacks.delete(callback);
-
-
-
-      if(callbacks.size === 0){
-
-
-        tableCallbacks.delete(tableName);
-
-
-
-        const channel =
-          tableChannels.get(tableName);
-
-
-
-        if(channel){
-
-          safeExecute(()=>{
-            getSupabase()
-              .removeChannel(channel);
-          });
-
-        }
-
-
-
-        tableChannels.delete(tableName);
-        tableStatus.delete(tableName);
-
-
-
-        const timer =
-          reconnectTimers.get(tableName);
-
-
-        if(timer){
-
-          clearTimeout(timer);
-          reconnectTimers.delete(tableName);
-
-        }
-
-
+  const detach = (tableName) => {
+    if (!tableName) return;
+    const callbacks = tableCallbacks.get(tableName);
+    if (!callbacks) return;
+    callbacks.delete(callback);
+    if (callbacks.size === 0) {
+      tableCallbacks.delete(tableName);
+      const channel = tableChannels.get(tableName);
+      if (channel) {
+        safeExecute(() => {
+          getSupabase().removeChannel(channel);
+        });
       }
-
+      tableChannels.delete(tableName);
+      tableStatus.delete(tableName);
+      const timer = reconnectTimers.get(tableName);
+      if (timer) {
+        clearTimeout(timer);
+        reconnectTimers.delete(tableName);
+      }
     }
-
-
   };
 
+  getEntityTableName(entityName)
+    .then((tableName) => {
+      if (cancelled || !tableName) return;
+      activeTableName = tableName;
+      if (!tableCallbacks.has(tableName)) {
+        tableCallbacks.set(tableName, new Set());
+      }
+      tableCallbacks.get(tableName).add(callback);
+      if (!tableChannels.has(tableName)) {
+        createChannel(tableName);
+      }
+    })
+    .catch(() => {
+      // Fallback síncrono ao mapa lógico se a resolução falhar.
+      const tableName = entityTableMap[entityName];
+      if (cancelled || !tableName) return;
+      activeTableName = tableName;
+      if (!tableCallbacks.has(tableName)) {
+        tableCallbacks.set(tableName, new Set());
+      }
+      tableCallbacks.get(tableName).add(callback);
+      if (!tableChannels.has(tableName)) {
+        createChannel(tableName);
+      }
+    });
+
+  return () => {
+    cancelled = true;
+    detach(activeTableName);
+  };
 }
 
 
