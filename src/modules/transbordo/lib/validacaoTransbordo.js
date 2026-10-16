@@ -7,6 +7,7 @@ import {
   getLoteQuantidadeDeclarada,
   kgToLoteUnidade,
 } from "@transbordo/lib/conversao";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 
 /**
  * Validação de operações vindas da Ordem de Transbordo.
@@ -361,7 +362,7 @@ export async function persistOperacaoFromValidacao({
   const [transbordos, produtos, isotanques, vasilhames] = await Promise.all([
     entities.transbordos.list("-created_date"),
     entities.produtos.list(),
-    entities.isotanques.list(),
+    listTankas(),
     entities.vasilhames.list(),
   ]);
 

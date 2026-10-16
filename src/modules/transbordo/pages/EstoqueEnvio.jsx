@@ -38,6 +38,7 @@ import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, n
 import { formatMass, formatNum, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 import { collectEstoqueEnvioFontes } from "@transbordo/lib/estoqueEnvioProdutos";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import {
   collectTankIdentityNames,
   mapIndContainersForEstoqueEnvio,
@@ -224,7 +225,7 @@ export default function EstoqueEnvio() {
           await Promise.all([
             entities.estoque.list(),
             entities.vasilhames.list(),
-            entities.isotanques.list(),
+            listTankas(),
             entities.transbordos.list(),
             entities.clientes.list(),
             entities.saidas.list(),
@@ -305,9 +306,8 @@ export default function EstoqueEnvio() {
             }
           };
 
-          const [tanksInd, containersInd, productionsInd, recipesInd, transfersInd] =
+          const [containersInd, productionsInd, recipesInd, transfersInd] =
             await Promise.all([
-              loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
               loadIndList(() =>
                 base44.entities.Container.list("-created_date", 2000)
               ),
@@ -353,15 +353,8 @@ export default function EstoqueEnvio() {
             stockReady = false;
           }
 
-          // Fallback sem ordenação se a lista de tankas veio vazia por erro de coluna
-          let tanksFinal = tanksInd;
-          if (tanksFinal.length === 0) {
-            tanksFinal = await loadIndList(() =>
-              base44.entities.Tank.list(undefined, 500)
-            );
-          }
-
-          setIndTanks(tanksFinal);
+          // Cadastro de tankas vem do mestre (listTankas); não carregar ind_cadastro_tanka
+          setIndTanks([]);
           setIndContainers(containersInd);
           setIndProductions(productionsInd);
           setIndRecipes(recipesInd);
@@ -517,9 +510,9 @@ export default function EstoqueEnvio() {
         productions: indProductions,
         recipes: indRecipes,
         transfers: indTransfers,
-        tankNames: collectTankIdentityNames({ indTanks, isotanques }),
+        tankNames: collectTankIdentityNames({ tankas: isotanques }),
       }),
-    [indContainers, indProductions, indRecipes, indTransfers, indTanks, isotanques]
+    [indContainers, indProductions, indRecipes, indTransfers, isotanques]
   );
 
   const vasilhamesConsolidados = useMemo(
@@ -653,13 +646,12 @@ export default function EstoqueEnvio() {
   const unifiedTankas = useMemo(
     () =>
       mergeTankasUnificadas({
-        isotanques,
+        tankas: isotanques,
         transbordos,
-        indTanks,
         indContainers,
         indStock,
       }),
-    [isotanques, transbordos, indTanks, indContainers, indStock]
+    [isotanques, transbordos, indContainers, indStock]
   );
 
   const filteredTankas = useMemo(() => {
@@ -791,12 +783,11 @@ export default function EstoqueEnvio() {
       if (!nome) continue;
       map.set(nome.toLowerCase(), { id: c.id, nome });
     }
-    // Inclui clientes cadastrados só na Industrialização (ex.: Vibra Energia em tankas)
-    for (const t of indTanks || []) {
-      const nome = String(t?.client || "").trim();
+    for (const t of isotanques || []) {
+      const nome = String(t?.cliente_nome || t?.client || "").trim();
       if (!nome) continue;
       const key = nome.toLowerCase();
-      if (!map.has(key)) map.set(key, { id: `ind-client:${key}`, nome });
+      if (!map.has(key)) map.set(key, { id: `tank-client:${key}`, nome });
     }
     for (const source of [...(indContainers || []), ...(indStock || [])]) {
       const nome = String(source?.client || "").trim();
@@ -816,7 +807,7 @@ export default function EstoqueEnvio() {
         a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
       ),
     ];
-  }, [clientes, indTanks, indContainers, indStock, unifiedTankas]);
+  }, [clientes, isotanques, indContainers, indStock, unifiedTankas]);
 
   const canExportPdf =
     produtosAgregados.length > 0 ||

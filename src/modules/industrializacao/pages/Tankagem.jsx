@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+﻿import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
@@ -6,12 +6,47 @@ import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { Plus, Cylinder, Eye, Search, Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
+import { Label } from '@shared/components/ui/label';
+import { Textarea } from '@shared/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import TankViewDialog from '@industrializacao/components/vasilhames/TankViewDialog';
+import NumberInputBr from '@transbordo/components/NumberInputBr';
+import SearchableSelect from '@transbordo/components/cadastro/SearchableSelect';
 import { fmtNumber } from '@/i18n/formatters';
+import { loadProdutosIndustrializacao } from '@industrializacao/lib/cadastroProdutosOptions';
+import {
+  matchProdutoCliente,
+  normProdutoKey,
+} from '@transbordo/lib/cadastroProdutosCentral';
+import {
+  listTankas,
+  createTanka,
+  updateTanka,
+  deleteTanka,
+  normalizeTankaRow,
+} from '@transbordo/lib/cadastroTankaCentral';
+
+function todayISODate() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const EMPTY_FORM = {
+  codigo_itku: '',
+  name: '',
+  client: '',
+  produto_id: '',
+  produto_nome: '',
+  capacidade: '26000',
+  inicio_locacao: '',
+  observacao: '',
+};
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -46,7 +81,13 @@ function getProductColor(product) {
 
 export default function Tankagem() {
   const { t, i18n } = useTranslation();
-  const { data: tanks, loading, reload: load } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
+  const { data: tanks, loading, reload: load } = useRealtimeEntity(
+    'Tank',
+    async () => {
+      const rows = await listTankas();
+      return (rows || []).map(normalizeTankaRow);
+    },
+  );
   const { data: recipes } = useRecipes('-created_date', 500);
   const { data: stockEntries } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
@@ -55,7 +96,11 @@ export default function Tankagem() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [viewTank, setViewTank] = useState(null);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ name: '', client: '' });
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    inicio_locacao: todayISODate(),
+  }));
+  const [produtos, setProdutos] = useState([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -63,26 +108,88 @@ export default function Tankagem() {
 
   const fmt = useCallback((n) => fmtNumber(n || 0, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language), [i18n.language]);
 
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setProdutos(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const clientOptions = useMemo(() => {
     const clients = new Map();
     recipes.forEach(r => { if (r.client && !clients.has(r.client)) clients.set(r.client, true); });
     tanks.forEach(item => { if (item.client && !clients.has(item.client)) clients.set(item.client, true); });
     stockEntries.forEach(s => { if (s.client && !clients.has(s.client)) clients.set(s.client, true); });
-    return Array.from(clients.keys());
-  }, [recipes, tanks, stockEntries]);
+    produtos.forEach((p) => {
+      const nome = p.cliente_nome || p.client;
+      if (nome && !clients.has(nome)) clients.set(nome, true);
+    });
+    return Array.from(clients.keys()).sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [recipes, tanks, stockEntries, produtos]);
+
+  /** Produtos do cliente selecionado, sem duplicar por nome normalizado. */
+  const produtoOptions = useMemo(() => {
+    const clienteNome = String(form.client || '').trim();
+    if (!clienteNome) return [];
+
+    const seen = new Set();
+    const options = [];
+    for (const p of produtos || []) {
+      if (!matchProdutoCliente(p, { clienteNome })) continue;
+      const nome = String(p.produto || p.nome || '').trim();
+      if (!nome) continue;
+      const key = normProdutoKey(nome);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push(p);
+    }
+
+    // Mantém o produto já gravado na edição, mesmo se o filtro mudar
+    if (
+      form.produto_id &&
+      !options.some((p) => String(p.id) === String(form.produto_id))
+    ) {
+      const ghostNome = String(form.produto_nome || '').trim();
+      if (ghostNome && !seen.has(normProdutoKey(ghostNome))) {
+        options.unshift({
+          id: form.produto_id,
+          produto: ghostNome,
+          codigo: '',
+          cliente_nome: form.client || '',
+        });
+      }
+    }
+
+    return options.sort((a, b) =>
+      String(a.produto || '').localeCompare(String(b.produto || ''), 'pt-BR', {
+        sensitivity: 'base',
+      })
+    );
+  }, [produtos, form.client, form.produto_id, form.produto_nome]);
 
   const tanksWithData = useMemo(() => {
     return tanks.map(tank => {
       const tankContainers = containers.filter(c => {
         const isTank = (c.type || '').toLowerCase().includes('tank');
-        return isTank && c.container_number === tank.name && c.status === 'No Pátio';
+        const tankName = tank.name || tank.nome || '';
+        return isTank && c.container_number === tankName && c.status === 'No Pátio';
       });
 
+      const tankName = tank.name || tank.nome || '';
       if (tankContainers.length > 0) {
         let volume = 0;
         let latestLot = tank.lot || '';
         let latestDate = 0;
-        let latestProduct = tank.product || '';
+        let latestProduct = tank.product || tank.produto_nome || '';
         const products = new Set();
 
         tankContainers.forEach(c => {
@@ -92,21 +199,30 @@ export default function Tankagem() {
           if (d > latestDate) { latestDate = d; latestLot = c.lot || latestLot; latestProduct = c.product || latestProduct; }
         });
 
-        return { ...tank, current_volume: volume, computed_lot: latestLot, computed_products: Array.from(products), latest_product: latestProduct };
+        return {
+          ...tank,
+          name: tankName,
+          client: tank.client || tank.cliente_nome || '',
+          capacity: tank.capacity ?? tank.capacidade ?? 26000,
+          current_volume: volume,
+          computed_lot: latestLot,
+          computed_products: Array.from(products),
+          latest_product: latestProduct,
+        };
       }
 
       let volume = 0;
       let latestLot = tank.lot || '';
       let latestDate = 0;
       const products = new Set();
-      let latestProduct = tank.product || '';
+      let latestProduct = tank.product || tank.produto_nome || '';
 
       stockEntries.forEach(s => {
         if (!s.tank_storage) return;
         const entries = parseArr(s.tank_entries);
         if (entries.length) {
           entries.forEach(te => {
-            if (te.tank_name === tank.name && te.volume) {
+            if (te.tank_name === tankName && te.volume) {
               volume += te.volume;
               if (s.mp_name) products.add(s.mp_name);
               const d = new Date(s.created_date || s.entry_date || 0).getTime();
@@ -114,7 +230,7 @@ export default function Tankagem() {
             }
           });
         }
-        if (!entries.length && s.tank_name === tank.name && s.tank_volume) {
+        if (!entries.length && s.tank_name === tankName && s.tank_volume) {
           volume += s.tank_volume;
           if (s.mp_name) products.add(s.mp_name);
           const d = new Date(s.created_date || s.entry_date || 0).getTime();
@@ -122,7 +238,16 @@ export default function Tankagem() {
         }
       });
 
-      return { ...tank, current_volume: volume, computed_lot: latestLot, computed_products: Array.from(products), latest_product: latestProduct };
+      return {
+        ...tank,
+        name: tankName,
+        client: tank.client || tank.cliente_nome || '',
+        capacity: tank.capacity ?? tank.capacidade ?? 26000,
+        current_volume: volume,
+        computed_lot: latestLot,
+        computed_products: Array.from(products),
+        latest_product: latestProduct,
+      };
     });
   }, [tanks, stockEntries, containers]);
 
@@ -132,9 +257,11 @@ export default function Tankagem() {
     return tanksWithData.filter((tank) => {
       const haystack = [
         tank.name,
+        tank.codigo_itku,
         tank.client,
         tank.latest_product,
         tank.computed_lot,
+        tank.observacao,
         ...(tank.computed_products || []),
       ]
         .filter(Boolean)
@@ -159,14 +286,32 @@ export default function Tankagem() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ name: '', client: '' });
+    setForm({
+      ...EMPTY_FORM,
+      capacidade: '26000',
+      inicio_locacao: todayISODate(),
+    });
     setShowForm(true);
   };
 
   const openEdit = (item) => {
     setViewTank(null);
     setEditing(item);
-    setForm({ name: item.name || '', client: item.client || '' });
+    setForm({
+      codigo_itku: item.codigo_itku || '',
+      name: item.name || item.nome || '',
+      client: item.client || item.cliente_nome || '',
+      produto_id: item.produto_id || '',
+      produto_nome: item.produto_nome || item.product || '',
+      capacidade:
+        item.capacidade != null || item.capacity != null
+          ? String(item.capacidade ?? item.capacity)
+          : '26000',
+      inicio_locacao: item.inicio_locacao
+        ? String(item.inicio_locacao).slice(0, 10)
+        : '',
+      observacao: item.observacao || '',
+    });
     setShowForm(true);
   };
 
@@ -175,18 +320,52 @@ export default function Tankagem() {
     setDeleteTarget(item);
   };
 
+  const setFormField = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleClientChange = (clientNome) => {
+    setForm((prev) => {
+      const stillValid =
+        Boolean(prev.produto_nome) &&
+        (produtos || []).some(
+          (p) =>
+            matchProdutoCliente(p, { clienteNome }) &&
+            normProdutoKey(p.produto) === normProdutoKey(prev.produto_nome)
+        );
+      return {
+        ...prev,
+        client: clientNome || '',
+        ...(stillValid
+          ? {}
+          : { produto_id: '', produto_nome: '' }),
+      };
+    });
+  };
+
   const save = async () => {
-    if (!form.name || !form.client) {
+    if (!form.name?.trim() || !form.client?.trim()) {
       toast({ title: t('containers.tankagePage.form.required'), variant: 'destructive' });
       return;
     }
-    const data = { name: form.name, client: form.client };
     setSaving(true);
     try {
+      const payload = {
+        codigo_itku: form.codigo_itku?.trim() || null,
+        nome: form.name.trim(),
+        cliente_nome: form.client.trim(),
+        produto_id: form.produto_id || null,
+        produto_nome: form.produto_nome?.trim() || null,
+        capacidade: form.capacidade === '' || form.capacidade == null
+          ? 26000
+          : Number(form.capacidade),
+        inicio_locacao: form.inicio_locacao || null,
+        observacao: form.observacao?.trim() || null,
+      };
       if (editing) {
-        await base44.entities.Tank.update(editing.id, data);
+        await updateTanka(editing.id, payload);
       } else {
-        await base44.entities.Tank.create(data);
+        await createTanka(payload);
       }
       setShowForm(false);
       load();
@@ -200,10 +379,14 @@ export default function Tankagem() {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    await base44.entities.Tank.delete(deleteTarget.id);
-    setDeleteTarget(null);
-    load();
-    toast({ title: t('containers.tankagePage.messages.deleted') });
+    try {
+      await deleteTanka(deleteTarget.id);
+      setDeleteTarget(null);
+      load();
+      toast({ title: t('containers.tankagePage.messages.deleted') });
+    } catch (err) {
+      toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -311,27 +494,155 @@ export default function Tankagem() {
       </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? t('containers.tankagePage.form.editTitle') : t('containers.tankagePage.form.registerTitle')}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editing
+                ? t('containers.tankagePage.form.editTitle')
+                : t('containers.tankagePage.form.registerTitle')}
+            </DialogTitle>
+          </DialogHeader>
           <div className="grid gap-4">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.tankagePage.form.nameLabel')}</label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('containers.tankagePage.form.namePlaceholder')} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('containers.tankagePage.form.itkuLabel')}
+                </Label>
+                <Input
+                  className="bg-white"
+                  value={form.codigo_itku}
+                  onChange={(e) => setFormField('codigo_itku', e.target.value)}
+                  placeholder={t('containers.tankagePage.form.itkuPlaceholder')}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('containers.tankagePage.form.nameLabel')}
+                </Label>
+                <Input
+                  className="bg-white"
+                  value={form.name}
+                  onChange={(e) => setFormField('name', e.target.value)}
+                  placeholder={t('containers.tankagePage.form.namePlaceholder')}
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('containers.fields.client')} *</label>
-              <Select value={form.client} onValueChange={v => setForm({ ...form, client: v })}>
-                <SelectTrigger><SelectValue placeholder={t('containers.tankagePage.form.clientPlaceholder')} /></SelectTrigger>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                {t('containers.fields.client')} *
+              </Label>
+              <Select
+                value={form.client}
+                onValueChange={handleClientChange}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue
+                    placeholder={t('containers.tankagePage.form.clientPlaceholder')}
+                  />
+                </SelectTrigger>
                 <SelectContent>
-                  {clientOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {form.client &&
+                    !clientOptions.includes(form.client) && (
+                      <SelectItem value={form.client}>{form.client}</SelectItem>
+                    )}
+                  {clientOptions.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                {t('containers.tankagePage.form.productLabel')}
+              </Label>
+              <SearchableSelect
+                value={form.produto_nome}
+                onChange={(label, item) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    produto_nome: label || '',
+                    produto_id: item?.id || '',
+                  }));
+                }}
+                options={produtoOptions}
+                getOptionLabel={(p) => p.produto || p.nome || ''}
+                getOptionValue={(p) => p.id}
+                placeholder={
+                  form.client
+                    ? t('containers.tankagePage.form.productPlaceholder')
+                    : t('containers.tankagePage.form.productSelectClientFirst')
+                }
+                disabled={!form.client}
+                inputClassName="bg-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('containers.tankagePage.form.capacityLabel')}
+                </Label>
+                <NumberInputBr
+                  decimals={0}
+                  value={form.capacidade}
+                  onChange={(v) => setFormField('capacidade', v === '' ? '' : v)}
+                  placeholder="26000"
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('containers.tankagePage.form.leaseStartLabel')}
+                </Label>
+                <Input
+                  type="date"
+                  className="bg-white"
+                  value={form.inicio_locacao}
+                  onChange={(e) => setFormField('inicio_locacao', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
+                {t('containers.tankagePage.form.notesLabel')}
+              </Label>
+              <Textarea
+                rows={2}
+                className="bg-white"
+                value={form.observacao}
+                onChange={(e) => setFormField('observacao', e.target.value)}
+                placeholder={t('containers.tankagePage.form.notesPlaceholder')}
+              />
+            </div>
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>{t('buttons.cancel')}</Button>
-            <Button onClick={save} disabled={saving} style={{ background: '#2575D1' }} className="text-white">
-              {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}</> : editing ? t('buttons.save') : t('buttons.register')}
+            <Button
+              variant="outline"
+              onClick={() => setShowForm(false)}
+              disabled={saving}
+            >
+              {t('buttons.cancel')}
+            </Button>
+            <Button
+              onClick={save}
+              disabled={saving}
+              style={{ background: '#2575D1' }}
+              className="text-white"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('common.saving')}
+                </>
+              ) : editing ? (
+                t('buttons.save')
+              ) : (
+                t('buttons.register')
+              )}
             </Button>
           </div>
         </DialogContent>

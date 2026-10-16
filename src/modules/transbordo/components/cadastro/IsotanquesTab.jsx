@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
+import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
+import {
+  listTankas,
+  createTanka,
+  updateTanka,
+  deleteTanka,
+  normalizeTankaRow,
+} from '@transbordo/lib/cadastroTankaCentral';
 import { Plus, Search, Eye, Pencil, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
@@ -43,11 +51,11 @@ export default function IsotanquesTab() {
     if (!silent) setLoading(true);
     try {
       const [isos, prods, cliens] = await Promise.all([
-        entities.isotanques.list(),
-        entities.produtos.list(),
+        listTankas(),
+        listProdutos({ modulo: "ARMAZENAGEM" }),
         entities.clientes.list(),
       ]);
-      setIsotanques(isos);
+      setIsotanques((isos || []).map(normalizeTankaRow));
       setProdutos(prods);
       setClientes(cliens);
       try {
@@ -75,9 +83,11 @@ export default function IsotanquesTab() {
 
   const filtered = isotanques.filter((it) => {
     const q = search.toLowerCase();
+    if (!q) return true;
+    const nome = (it.nome || it.tanka || "").toLowerCase();
     return (
       it.codigo_itku?.toLowerCase().includes(q) ||
-      it.tanka?.toLowerCase().includes(q) ||
+      nome.includes(q) ||
       it.produto_nome?.toLowerCase().includes(q) ||
       it.cliente_nome?.toLowerCase().includes(q)
     );
@@ -104,22 +114,28 @@ export default function IsotanquesTab() {
     try {
       const cliente = await ensureClienteByNome(data.cliente_nome);
       const payload = {
-        ...data,
+        codigo_itku: data.codigo_itku,
+        nome: data.nome || data.tanka,
         cliente_id: emptyToNull(cliente.id || data.cliente_id),
         cliente_nome: emptyToNull(cliente.nome || data.cliente_nome),
         produto_id: emptyToNull(data.produto_id),
+        produto_nome: emptyToNull(data.produto_nome),
+        capacidade: data.capacidade,
+        inicio_locacao: data.inicio_locacao,
+        observacao: data.observacao,
       };
 
       if (editingIsotanque) {
-        await entities.isotanques.update(editingIsotanque.id, payload);
+        await updateTanka(editingIsotanque.id, payload);
       } else {
-        await entities.isotanques.create(payload);
+        await createTanka(payload);
       }
       await loadData({ silent: true });
       setModalOpen(false);
       setEditingIsotanque(null);
     } catch (err) {
       console.error("[Transbordo] Erro ao salvar isotanque:", err);
+      throw err;
     }
   };
 
@@ -127,7 +143,7 @@ export default function IsotanquesTab() {
     const idToDelete = deleteId;
     setDeleteId(null);
     try {
-      await entities.isotanques.delete(idToDelete);
+      await deleteTanka(idToDelete);
       setIsotanques((prev) => prev.filter((it) => it.id !== idToDelete));
     } catch (err) {
       console.error("[Transbordo] Erro ao excluir isotanque:", err);
@@ -182,9 +198,9 @@ export default function IsotanquesTab() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
-      {/* Search + Buttons */}
-      <div className="shrink-0 flex items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
+      {/* Search + action buttons (left, under search) */}
+      <div className="shrink-0 flex flex-col items-start gap-2">
+        <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
@@ -193,7 +209,7 @@ export default function IsotanquesTab() {
             className="pl-10 bg-white h-9"
           />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={() => setDescontamOpen(true)}
@@ -251,7 +267,7 @@ export default function IsotanquesTab() {
                     </td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-800">
-                        {it.tanka || "-"}
+                        {it.nome || it.tanka || "-"}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 font-medium text-foreground">

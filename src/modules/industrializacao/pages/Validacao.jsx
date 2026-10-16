@@ -17,6 +17,8 @@ import { Can } from "@industrializacao/lib/rbac/Can";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { base44 } from "@industrializacao/api/base44Client";
 import { entities } from "@transbordo/services/entities";
+import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
@@ -98,9 +100,9 @@ export default function ValidacaoIndustrializacao() {
       const [vals, cliens, prods, ents, isos, vascs, trans] = await Promise.all([
         base44.entities.IndValidacao.list("-created_date"),
         entities.clientes.list(),
-        entities.produtos.list(),
+        listProdutos({ modulo: "INDUSTRIALIZACAO" }),
         entities.estoque.list(),
-        entities.isotanques.list(),
+        listTankas(),
         entities.vasilhames.list(),
         entities.transbordos.list("-created_at"),
       ]);

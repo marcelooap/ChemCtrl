@@ -38,6 +38,14 @@ import {
   deleteEntradaLinkedToMp,
   upsertEntradaFromMp,
 } from '@industrializacao/lib/syncMpEntradaTransbordo';
+import {
+  loadProdutosIndustrializacao,
+  buildIndMpSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
+import {
+  listTankas,
+  normalizeTankaRow,
+} from '@transbordo/lib/cadastroTankaCentral';
 
 const VIEW_TAB_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
@@ -62,7 +70,10 @@ export default function Estoque() {
     () => base44.entities.StockMovement.list('-movement_date', 1000),
   );
   const { data: recipes } = useRecipes('-created_date', 2000);
-  const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
+  const { data: tanks } = useRealtimeEntity('Tank', async () => {
+    const rows = await listTankas();
+    return (rows || []).map(normalizeTankaRow);
+  });
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const [viewMode, setViewMode] = useState('estoque');
   const [search, setSearch] = useState('');
@@ -86,6 +97,21 @@ export default function Estoque() {
   const highlightRef = useRef(null);
   const { toast } = useToast();
   const isFiscalView = viewMode === 'fiscal';
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reloadAfterMovement = () => {
     load();
@@ -93,21 +119,41 @@ export default function Estoque() {
   };
 
   const mpOptions = useMemo(() => {
-    const map = new Map();
-    recipes.forEach(r => {
-      (r.raw_materials || []).forEach(mp => {
+    const fromCatalog = buildIndMpSelectOptions({ produtos: catalogProdutos }).map(
+      (o) => ({
+        value: o.value,
+        label: o.label,
+        item: {
+          mp_code: o.mp_code || o.codigo,
+          mp_name: o.mp_name || o.produto,
+          client: o.cliente_nome || '',
+          density: o.mp_density,
+        },
+      })
+    );
+    const seen = new Set(fromCatalog.map((o) => String(o.value).toLowerCase()));
+    // Transição: MPs ainda só em receitas
+    recipes.forEach((r) => {
+      (r.raw_materials || []).forEach((mp) => {
         const key = (mp.mp_code || mp.mp_name || '').trim();
-        if (key && !map.has(key)) {
-          map.set(key, { mp_code: mp.mp_code || '', mp_name: mp.mp_name || '', client: r.client || '', density: mp.mp_density || null });
-        }
+        if (!key || seen.has(key.toLowerCase())) return;
+        seen.add(key.toLowerCase());
+        fromCatalog.push({
+          value: mp.mp_code || mp.mp_name,
+          label: `${mp.mp_code}${mp.mp_code ? ' — ' : ''}${mp.mp_name}`,
+          item: {
+            mp_code: mp.mp_code || '',
+            mp_name: mp.mp_name || '',
+            client: r.client || '',
+            density: mp.mp_density || null,
+          },
+        });
       });
     });
-    return Array.from(map.values()).map(mp => ({
-      value: mp.mp_code || mp.mp_name,
-      label: `${mp.mp_code}${mp.mp_code ? ' — ' : ''}${mp.mp_name}`,
-      item: mp,
-    }));
-  }, [recipes]);
+    return fromCatalog.sort((a, b) =>
+      String(a.label).localeCompare(String(b.label), 'pt-BR')
+    );
+  }, [catalogProdutos, recipes]);
 
   const clientOptions = useMemo(() => {
     const set = new Set();

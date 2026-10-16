@@ -238,89 +238,166 @@ function resolveTransbordoCliente(iso, tankaCodigo, transbordos) {
   return fillings[0]?.cliente_nome || "";
 }
 
+/** Resolve lista mestre a partir de `cadastro_tanka` (via listTankas). */
+function resolveMasterTankas({ tankas = [] } = {}) {
+  return (tankas || [])
+    .map((row) => {
+      const nome = String(row?.nome || row?.tanka || row?.name || "").trim();
+      if (!nome) return null;
+      return {
+        id: row.id,
+        nome,
+        codigo_itku: row.codigo_itku || "",
+        capacidade: Number(row.capacidade ?? row.capacity) || 0,
+        cliente_nome: row.cliente_nome || row.client || "",
+        produto_nome: row.produto_nome || row.product || "",
+        observacao: row.observacao || "",
+        densidade: row.densidade || row.density || "",
+        lot: row.lot || "",
+        raw: row,
+      };
+    })
+    .filter(Boolean);
+}
+
 /**
- * Une cadastros de Transbordo e Industrialização por nome normalizado.
- * Escolhe um único volume/produto atual (sem somar os dois módulos).
+ * Nomes operacionais (container / estoque MP) sem linha no mestre.
+ * @returns {Map<string, string>} key normalizada → nome de exibição
+ */
+function collectOrphanOperacionalNames(masterKeys, indContainers, indStock) {
+  const orphans = new Map();
+  const remember = (raw) => {
+    const display = String(raw || "").trim();
+    const key = normName(display);
+    if (key && !masterKeys.has(key) && !orphans.has(key)) {
+      orphans.set(key, display || key);
+    }
+  };
+  for (const c of indContainers || []) {
+    if (!isTankContainer(c) || !isNoPatio(c.status)) continue;
+    remember(c.container_number);
+  }
+  for (const s of indStock || []) {
+    if (!s?.tank_storage) continue;
+    const entries = parseArr(s.tank_entries);
+    if (entries.length) {
+      for (const te of entries) {
+        if (Number(te.volume) > 0) remember(te.tank_name);
+      }
+    } else if (Number(s.tank_volume) > 0) {
+      remember(s.tank_name);
+    }
+  }
+  return orphans;
+}
+
+/**
+ * Visão unificada a partir do mestre `cadastro_tanka` (+ volume operacional TB/Ind).
  *
  * Precedência do estado real:
  * 1) Vasilhame Tankagem "No Pátio" da Industrialização com volume > 0
- *    (mesmo nome da tanka / código ITKU em container_number)
  * 2) Saldo por OPs de Transbordo (quando > 0)
  * 3) Fallback de estoque MP em tanka (Industrialização)
  * 4) Metadados de cadastro (volume 0)
+ *
+ * Órfãos operacionais (container/estoque sem mestre) entram com `orfaoOperacional: true`.
  */
 export function mergeTankasUnificadas({
-  isotanques = [],
+  tankas = [],
   transbordos = [],
-  indTanks = [],
   indContainers = [],
   indStock = [],
 } = {}) {
+  const masters = resolveMasterTankas({ tankas });
   const byName = new Map();
 
-  for (const iso of isotanques || []) {
-    const tankaCodigo = String(iso.tanka || iso.codigo_itku || "").trim();
+  for (const m of masters) {
+    const tankaCodigo = m.nome;
     const key = normName(tankaCodigo);
     if (!key) continue;
 
     const volumeTb = roundVolume(
       computeTankaSaldo({
-        isotanqueId: iso.id,
+        isotanqueId: m.id,
         tankaCodigo,
         transbordos,
       })
     );
 
+    // Compat: isotanque/indTank apontam ao mesmo registro mestre
+    const asIso = {
+      id: m.id,
+      codigo_itku: m.codigo_itku,
+      tanka: m.nome,
+      nome: m.nome,
+      capacidade: m.capacidade,
+      cliente_nome: m.cliente_nome,
+      produto_nome: m.produto_nome,
+      observacao: m.observacao,
+      densidade: m.densidade,
+    };
+    const asInd = {
+      id: m.id,
+      name: m.nome,
+      client: m.cliente_nome,
+      capacity: m.capacidade,
+      product: m.produto_nome,
+      observacao: m.observacao,
+      density: m.densidade,
+      lot: m.lot,
+    };
+
     byName.set(key, {
-      id: iso.id,
-      sourceIds: { transbordo: iso.id, industrializacao: null },
+      id: m.id,
+      sourceIds: { transbordo: m.id, industrializacao: m.id, mestre: m.id },
       tanka: tankaCodigo,
       tankaCodigo,
-      codigo_itku: iso.codigo_itku || "",
-      capacidade: Number(iso.capacidade) || 0,
-      densidade: iso.densidade || "",
+      codigo_itku: m.codigo_itku || "",
+      capacidade: m.capacidade || 0,
+      densidade: m.densidade || "",
       volumeTb,
-      produtoTb: resolveTransbordoProduto(iso, tankaCodigo, transbordos),
-      clienteTb: resolveTransbordoCliente(iso, tankaCodigo, transbordos),
-      isotanque: iso,
-      indTank: null,
+      produtoTb: resolveTransbordoProduto(asIso, tankaCodigo, transbordos),
+      clienteTb: resolveTransbordoCliente(asIso, tankaCodigo, transbordos),
+      isotanque: asIso,
+      indTank: asInd,
       hasTransbordo: true,
-      hasIndustrializacao: false,
+      hasIndustrializacao: true,
+      orfaoOperacional: false,
+      cadastroProduto: m.produto_nome || "",
+      cadastroCliente: m.cliente_nome || "",
+      cadastroLote: m.lot || "",
+      observacao: m.observacao || "",
     });
   }
 
-  for (const tank of indTanks || []) {
-    const tankaCodigo = String(tank.name || "").trim();
-    const key = normName(tankaCodigo);
-    if (!key) continue;
-
-    const prev = byName.get(key);
-    if (prev) {
-      prev.hasIndustrializacao = true;
-      prev.indTank = tank;
-      prev.sourceIds.industrializacao = tank.id;
-      if (!prev.capacidade && tank.capacity) {
-        prev.capacidade = Number(tank.capacity) || 0;
-      }
-      if (!prev.densidade && tank.density) prev.densidade = tank.density;
-    } else {
-      byName.set(key, {
-        id: `ind:${tank.id}`,
-        sourceIds: { transbordo: null, industrializacao: tank.id },
-        tanka: tankaCodigo,
-        tankaCodigo,
-        codigo_itku: "",
-        capacidade: Number(tank.capacity) || 0,
-        densidade: tank.density || "",
-        volumeTb: 0,
-        produtoTb: "",
-        clienteTb: "",
-        isotanque: null,
-        indTank: tank,
-        hasTransbordo: false,
-        hasIndustrializacao: true,
-      });
-    }
+  const orphanMap = collectOrphanOperacionalNames(
+    byName,
+    indContainers,
+    indStock
+  );
+  for (const [key, displayName] of orphanMap) {
+    if (byName.has(key)) continue;
+    byName.set(key, {
+      id: `orfao:${key}`,
+      sourceIds: { transbordo: null, industrializacao: null, mestre: null },
+      tanka: displayName,
+      tankaCodigo: displayName,
+      codigo_itku: "",
+      capacidade: 26000,
+      densidade: "",
+      volumeTb: 0,
+      produtoTb: "",
+      clienteTb: "",
+      isotanque: null,
+      indTank: null,
+      hasTransbordo: false,
+      hasIndustrializacao: false,
+      orfaoOperacional: true,
+      cadastroProduto: "",
+      cadastroCliente: "",
+      cadastroLote: "",
+      observacao: "",
+    });
   }
 
   return [...byName.values()]
@@ -331,10 +408,9 @@ export function mergeTankasUnificadas({
         indContainers
       );
 
-      // Cadastro Ind sem containers/stock ativos ainda pode ter product/client no registro
-      const indCadastroProduto = row.indTank?.product || "";
-      const indCadastroCliente = row.indTank?.client || "";
-      const indCadastroLote = row.indTank?.lot || "";
+      const indCadastroProduto = row.cadastroProduto || row.indTank?.product || "";
+      const indCadastroCliente = row.cadastroCliente || row.indTank?.client || "";
+      const indCadastroLote = row.cadastroLote || row.indTank?.lot || "";
 
       let volumeAtual = 0;
       let produto = "";
@@ -343,7 +419,6 @@ export function mergeTankasUnificadas({
       let volumeSource = "none";
       let densidade = row.densidade || "";
 
-      // Vasilhame vazio não apaga saldo já movimentado no Transbordo.
       if (indState.source === "ind_container" && indState.volume > 0) {
         volumeAtual = indState.volume;
         produto = indState.produto || indCadastroProduto || row.produtoTb || "";
@@ -366,31 +441,15 @@ export function mergeTankasUnificadas({
         lote = indState.lote || indCadastroLote || "";
         volumeSource = "ind_stock";
       } else {
-        // Sem volume ativo: tanka do Transbordo mantém o próprio cadastro.
-        // Cadastro da Industrialização só preenche o que estiver vazio,
-        // ou define a tanka que existe só lá.
         volumeAtual = 0;
-        if (row.hasTransbordo) {
-          produto = row.produtoTb || indState.produto || indCadastroProduto || "";
-          cliente_nome =
-            row.clienteTb || indState.cliente || indCadastroCliente || "";
-        } else {
-          produto =
-            indCadastroProduto ||
-            row.produtoTb ||
-            indState.produto ||
-            "";
-          cliente_nome =
-            indCadastroCliente ||
-            row.clienteTb ||
-            indState.cliente ||
-            "";
-        }
+        produto = row.produtoTb || indCadastroProduto || indState.produto || "";
+        cliente_nome =
+          row.clienteTb || indCadastroCliente || indState.cliente || "";
         lote = indCadastroLote || indState.lote || "";
-        volumeSource = row.hasIndustrializacao
-          ? "ind_cadastro"
-          : row.hasTransbordo
-            ? "transbordo"
+        volumeSource = row.orfaoOperacional
+          ? "orfao_operacional"
+          : row.hasTransbordo || row.hasIndustrializacao
+            ? "cadastro_mestre"
             : "none";
       }
 
@@ -412,14 +471,12 @@ export function mergeTankasUnificadas({
         volumeSource,
         hasTransbordo: row.hasTransbordo,
         hasIndustrializacao: row.hasIndustrializacao,
+        orfaoOperacional: Boolean(row.orfaoOperacional),
         isotanque: row.isotanque,
         indTank: row.indTank,
         sourceIds: row.sourceIds,
-        // Compatível com buildTankaDetalhe quando há isotanque
         produto_nome: produto,
-        observacao: cleanText(
-          row.isotanque?.observacao || row.indTank?.observacao || ""
-        ),
+        observacao: cleanText(row.observacao || ""),
       };
     })
     .sort((a, b) =>

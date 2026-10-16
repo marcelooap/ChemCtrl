@@ -45,7 +45,7 @@ export function resolveLocacaoAntes(isotanques, tanka, dataDescontaminacao) {
 
   const date = String(dataDescontaminacao || "").slice(0, 10);
   const matches = (isotanques || []).filter(
-    (it) => normalizeTanka(it.tanka) === key
+    (it) => normalizeTanka(it.nome || it.tanka || it.name) === key
   );
   if (!matches.length) return null;
 

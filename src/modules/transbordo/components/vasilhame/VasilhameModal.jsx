@@ -196,9 +196,30 @@ export default function VasilhameModal({
       return acc;
     }, []);
 
-  const filteredProdutos = produtos.filter(
-    (p) => !clienteNome || p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
-  );
+  const filteredProdutos = (() => {
+    const list = produtos.filter(
+      (p) =>
+        !clienteNome ||
+        p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
+    );
+    if (
+      produtoId &&
+      !list.some((p) => String(p.id) === String(produtoId))
+    ) {
+      return [
+        {
+          id: produtoId,
+          codigo: produtoCodigo || "",
+          produto: produtoNome || produtoDisplay || "",
+          cliente_id: clienteId || null,
+          cliente_nome: clienteNome,
+          densidade,
+        },
+        ...list,
+      ];
+    }
+    return list;
+  })();
 
   const dens = parseDensidade(densidade);
   const isMultiLote = lotesForm.length > 1;

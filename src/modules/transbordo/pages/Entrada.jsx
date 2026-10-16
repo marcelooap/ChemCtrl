@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
+import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
+import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
@@ -125,7 +127,7 @@ export default function Entrada() {
       const [ents, prods, cliens, transbs, ests, nomesInd, vascs, isotanques] =
         await Promise.all([
           entities.entradas.list("-created_date"),
-          entities.produtos.list(),
+          listProdutos({ modulo: "ARMAZENAGEM" }),
           listAllClientes(),
           entities.transbordos.list(),
           entities.estoque.list(),
@@ -139,9 +141,7 @@ export default function Entrada() {
           entities.vasilhames
             .list("id", { select: "cliente_nome" })
             .catch(() => []),
-          entities.isotanques
-            .list("id", { select: "cliente_nome" })
-            .catch(() => []),
+          listTankas({ select: "id, cliente_nome" }).catch(() => []),
         ]);
 
       // Garante que clientes referenciados em produtos existam em t_clientes

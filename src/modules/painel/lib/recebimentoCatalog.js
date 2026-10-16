@@ -12,6 +12,13 @@ import {
   computeTankaSaldo,
   matchesTanka,
 } from "@transbordo/lib/tankaVolume";
+import {
+  normProdutoKey,
+  produtoIdentityKey,
+  ORIGEM_INDUSTRIALIZACAO,
+  ORIGEM_AMBOS,
+  ORIGEM_ARMAZENAGEM,
+} from "@transbordo/lib/cadastroProdutosCentral";
 
 export function parseRecipeRawMaterials(recipe) {
   const raw = recipe?.raw_materials;
@@ -42,7 +49,16 @@ function uniqueClientsFromNames(names) {
   );
 }
 
-function toProdutoOption({ id, codigo, produto, clienteNome, densidade }) {
+function toProdutoOption({
+  id,
+  codigo,
+  produto,
+  clienteId,
+  clienteNome,
+  densidade,
+  origem,
+  fonte,
+}) {
   const dens =
     densidade != null && densidade !== "" ? String(densidade) : "";
   const densNum = parseFloat(String(dens).replace(",", ".")) || 0;
@@ -50,57 +66,109 @@ function toProdutoOption({ id, codigo, produto, clienteNome, densidade }) {
     id,
     codigo: codigo || "",
     produto: produto || "",
-    cliente_id: null,
+    cliente_id: clienteId || null,
     cliente_nome: clienteNome || "",
     densidade: dens,
     densidade_tabelada: densNum > 0,
+    origem: origem || null,
+    fonte: fonte || null,
   };
 }
 
-/** Matérias-primas (receitas + estoque MP), por cliente. */
-export function buildMpProdutos(recipes, stocks) {
+function catalogByIdentity(produtosCatalog) {
+  const byId = new Map();
+  const byIdentity = new Map();
+  const byNomeCliente = new Map();
+  for (const p of produtosCatalog || []) {
+    if (p?.id) byId.set(String(p.id), p);
+    const ident = produtoIdentityKey(p.codigo, p.produto);
+    if (ident !== "|") byIdentity.set(ident, p);
+    const nc = `${normProdutoKey(p.cliente_nome)}|${normProdutoKey(p.produto)}`;
+    if (nc !== "|") byNomeCliente.set(nc, p);
+  }
+  return { byId, byIdentity, byNomeCliente };
+}
+
+function isOrigemInd(origem) {
+  const o = String(origem || "").toUpperCase();
+  return o === ORIGEM_INDUSTRIALIZACAO || o === ORIGEM_AMBOS || !o;
+}
+
+/**
+ * Matérias-primas: prioriza UUID de cadastro_produtos (IND/AMBOS).
+ * Usa receitas/estoque só para descobrir quais MPs existem por cliente;
+ * resolve id real no catálogo. Fallback `ind-mp:` apenas se não houver match.
+ */
+export function buildMpProdutos(recipes, stocks, produtosCatalog = []) {
+  const { byIdentity, byId } = catalogByIdentity(
+    (produtosCatalog || []).filter((p) => isOrigemInd(p.origem))
+  );
   const map = new Map();
-  const upsert = (client, mpCode, mpName, density) => {
+
+  const upsert = (client, mpCode, mpName, density, materiaPrimaId) => {
     const clienteNome = String(client || "").trim();
     const codigo = String(mpCode || "").trim();
     const produto = String(mpName || "").trim() || codigo;
     if (!clienteNome || (!codigo && !produto)) return;
-    const key = `${clienteNome.toLowerCase()}|${(codigo || produto).toLowerCase()}`;
-    const prev = map.get(key);
-    if (!prev) {
+
+    let catalog = null;
+    if (materiaPrimaId && byId.has(String(materiaPrimaId))) {
+      catalog = byId.get(String(materiaPrimaId));
+    }
+    if (!catalog && codigo && produto) {
+      catalog = byIdentity.get(produtoIdentityKey(codigo, produto)) || null;
+    }
+
+    const key = catalog?.id
+      ? `id:${catalog.id}`
+      : `${clienteNome.toLowerCase()}|${(codigo || produto).toLowerCase()}`;
+    if (map.has(key)) return;
+
+    if (catalog) {
       map.set(
         key,
         toProdutoOption({
-          id: `ind-mp:${key}`,
-          codigo,
-          produto,
-          clienteNome,
-          densidade: density,
+          id: catalog.id,
+          codigo: catalog.codigo || codigo,
+          produto: catalog.produto || produto,
+          clienteId: catalog.cliente_id,
+          clienteNome: catalog.cliente_nome || clienteNome,
+          densidade: catalog.densidade || density,
+          origem: catalog.origem,
+          fonte: "industrializacao",
         })
       );
       return;
     }
-    if (!prev.produto && produto) prev.produto = produto;
-    if (!prev.codigo && codigo) prev.codigo = codigo;
-    if (!prev.densidade && density) {
-      const next = toProdutoOption({
-        id: prev.id,
-        codigo: prev.codigo,
-        produto: prev.produto,
+
+    // Transição: sem linha no cadastro — id sintético mapeável depois
+    map.set(
+      key,
+      toProdutoOption({
+        id: `ind-mp:${key}`,
+        codigo,
+        produto,
         clienteNome,
         densidade: density,
-      });
-      map.set(key, next);
-    }
+        origem: ORIGEM_INDUSTRIALIZACAO,
+        fonte: "industrializacao",
+      })
+    );
   };
 
   (recipes || []).forEach((r) => {
     parseRecipeRawMaterials(r).forEach((mp) => {
-      upsert(r.client, mp.mp_code, mp.mp_name, mp.mp_density);
+      upsert(
+        r.client,
+        mp.mp_code,
+        mp.mp_name,
+        mp.mp_density,
+        r.materia_prima_id || mp.materia_prima_id
+      );
     });
   });
   (stocks || []).forEach((s) => {
-    upsert(s.client, s.mp_code, s.mp_name, s.density);
+    upsert(s.client, s.mp_code, s.mp_name, s.density, s.materia_prima_id);
   });
 
   return Array.from(map.values()).sort((a, b) =>
@@ -108,28 +176,64 @@ export function buildMpProdutos(recipes, stocks) {
   );
 }
 
-/** Produtos acabados (última revisão da receita por cliente + nome). */
-export function buildPaProdutos(recipes) {
+/**
+ * Produtos acabados: UUID de cadastro_produtos quando houver match
+ * (produto_acabado_id ou codigo+nome); senão fallback sintético.
+ */
+export function buildPaProdutos(recipes, produtosCatalog = []) {
+  const { byId, byIdentity, byNomeCliente } = catalogByIdentity(
+    (produtosCatalog || []).filter((p) => isOrigemInd(p.origem))
+  );
   const map = new Map();
+
   (recipes || []).forEach((r) => {
     const produto = String(r.product_name || "").trim();
     const clienteNome = String(r.client || "").trim();
     if (!produto || !clienteNome) return;
-    const key = `${clienteNome.toLowerCase()}|${produto.toLowerCase()}`;
-    const current = map.get(key);
-    if (!current || getRevisionNumber(r) > getRevisionNumber(current.recipe)) {
-      map.set(key, {
-        recipe: r,
-        option: toProdutoOption({
-          id: r.id ? `ind-pa:${r.id}` : `ind-pa:${key}`,
+    const revKey = `${clienteNome.toLowerCase()}|${produto.toLowerCase()}`;
+    const current = map.get(revKey);
+    if (current && getRevisionNumber(r) <= getRevisionNumber(current.recipe)) {
+      return;
+    }
+
+    let catalog = null;
+    if (r.produto_acabado_id && byId.has(String(r.produto_acabado_id))) {
+      catalog = byId.get(String(r.produto_acabado_id));
+    }
+    if (!catalog && r.code) {
+      catalog = byIdentity.get(produtoIdentityKey(r.code, produto)) || null;
+    }
+    if (!catalog) {
+      catalog =
+        byNomeCliente.get(
+          `${normProdutoKey(clienteNome)}|${normProdutoKey(produto)}`
+        ) || null;
+    }
+
+    const option = catalog
+      ? toProdutoOption({
+          id: catalog.id,
+          codigo: catalog.codigo || r.code || "",
+          produto: catalog.produto || produto,
+          clienteId: catalog.cliente_id,
+          clienteNome: catalog.cliente_nome || clienteNome,
+          densidade: catalog.densidade || r.density,
+          origem: catalog.origem,
+          fonte: "industrializacao",
+        })
+      : toProdutoOption({
+          id: r.id ? `ind-pa:${r.id}` : `ind-pa:${revKey}`,
           codigo: r.code || "",
           produto,
           clienteNome,
           densidade: r.density,
-        }),
-      });
-    }
+          origem: ORIGEM_INDUSTRIALIZACAO,
+          fonte: "industrializacao",
+        });
+
+    map.set(revKey, { recipe: r, option });
   });
+
   return Array.from(map.values())
     .map((x) => x.option)
     .sort((a, b) => a.produto.localeCompare(b.produto, "pt-BR"));
@@ -203,6 +307,23 @@ function sortProdutosByNome(produtos) {
   });
 }
 
+/** Filtra produtos do cadastro para uso no Transbordo (ARMAZENAGEM|AMBOS). */
+export function filterProdutosArmazenagem(produtosCatalog = []) {
+  return sortProdutosByNome(
+    (produtosCatalog || [])
+      .filter((p) => {
+        const o = String(p.origem || "").toUpperCase();
+        return (
+          !o ||
+          o === ORIGEM_ARMAZENAGEM ||
+          o === ORIGEM_AMBOS ||
+          !["INDUSTRIALIZACAO", "ARMAZENAGEM", "AMBOS"].includes(o)
+        );
+      })
+      .map((p) => ({ ...p, fonte: "transbordo" }))
+  );
+}
+
 /**
  * Matéria-prima (ou produto acabado) vinda do cadastro da Industrialização.
  * Esses itens devem ir para a validação da Industrialização, nunca do Transbordo.
@@ -211,7 +332,9 @@ export function isProdutoIndustrializacao(produto) {
   if (!produto) return false;
   if (produto.fonte === "industrializacao") return true;
   const id = String(produto.id || produto.produto_id || "");
-  return id.startsWith("ind-");
+  if (id.startsWith("ind-")) return true;
+  const o = String(produto.origem || "").toUpperCase();
+  return o === ORIGEM_INDUSTRIALIZACAO;
 }
 
 /**

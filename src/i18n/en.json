@@ -4462,9 +4462,18 @@
       "form": {
         "editTitle": "Edit Tank",
         "registerTitle": "Register Tank",
+        "itkuLabel": "ITKU Code",
+        "itkuPlaceholder": "E.g.: ITKU-001",
         "nameLabel": "Tank Name *",
         "namePlaceholder": "E.g.: TANK 01",
+        "productLabel": "Product in Use",
+        "productPlaceholder": "Select or type a product",
+        "productSelectClientFirst": "Select the client first",
         "clientPlaceholder": "Select a client",
+        "capacityLabel": "Capacity (Liters)",
+        "leaseStartLabel": "Lease Start Date",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "Notes about the tank (optional)",
         "required": "Enter the tank name and client"
       },
       "messages": {

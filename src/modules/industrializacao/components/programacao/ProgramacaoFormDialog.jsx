@@ -7,7 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/compon
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import ProductCombobox from '@shared/components/ui/ProductCombobox';
 import { fmtDate, fmtVolume } from '@/i18n/formatters';
-import { getLatestRecipeForProduct, getLatestRecipes, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 import {
   isOrderEligibleForProgramming,
   toNum,
@@ -33,13 +37,31 @@ export default function ProgramacaoFormDialog({
   const [orderId, setOrderId] = useState('');
   const [client, setClient] = useState('');
   const [volume, setVolume] = useState('');
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const productOptions = useMemo(
-    () => getLatestRecipes(recipes).map((r) => ({
-      value: r.product_name,
-      label: r.product_name,
-    })),
-    [recipes]
+    () =>
+      buildIndPaSelectOptions({
+        produtos: catalogProdutos,
+        recipes,
+        currentProductName: product,
+      }),
+    [catalogProdutos, recipes, product]
   );
 
   const eligibleOrders = useMemo(() => {
@@ -100,6 +122,10 @@ export default function ProgramacaoFormDialog({
   };
 
   const handleProductChange = (productName) => {
+    const fromOpt = productOptions.find((o) => o.value === productName);
+    const recipe =
+      fromOpt?.item?.recipe || getLatestRecipeForProduct(recipes, productName);
+    if (!recipe) return;
     applyProductDefaults(productName);
   };
 

@@ -23,17 +23,27 @@ function isTankType(container) {
     .includes("tank");
 }
 
-/** Nomes de tanka fixa (Transbordo + Industrialização) para não listar o mesmo volume duas vezes. */
-export function collectTankIdentityNames({ indTanks = [], isotanques = [] } = {}) {
+/** Nomes de tanka no mestre (cadastro_tanka) para não listar o mesmo volume duas vezes. */
+export function collectTankIdentityNames({
+  tankas = [],
+  indTanks = [],
+  isotanques = [],
+} = {}) {
   const names = new Set();
   const add = (value) => {
     const key = normName(value);
     if (key) names.add(key);
   };
-  for (const tank of indTanks || []) add(tank?.name);
-  for (const iso of isotanques || []) {
-    add(iso?.tanka);
-    add(iso?.codigo_itku);
+  const master = tankas?.length ? tankas : isotanques;
+  for (const row of master || []) {
+    add(row?.nome);
+    add(row?.tanka);
+    add(row?.name);
+    add(row?.codigo_itku);
+  }
+  for (const tank of indTanks || []) {
+    add(tank?.name);
+    add(tank?.nome);
   }
   return names;
 }

@@ -33,7 +33,9 @@ function RegistrarDescontaminacaoDialog({ open, onClose, onSave, isotanques }) {
   const tankaOptions = useMemo(() => {
     const unique = [
       ...new Set(
-        (isotanques || []).map((it) => it.tanka?.trim()).filter(Boolean)
+        (isotanques || [])
+          .map((it) => (it.nome || it.tanka || it.name || "").trim())
+          .filter(Boolean)
       ),
     ];
     return unique

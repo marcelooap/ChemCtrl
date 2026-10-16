@@ -4139,9 +4139,18 @@
       "form": {
         "editTitle": "Modifier la Cuve",
         "registerTitle": "Enregistrer une Cuve",
+        "itkuLabel": "Code ITKU",
+        "itkuPlaceholder": "Ex : ITKU-001",
         "nameLabel": "Nom de la Cuve *",
         "namePlaceholder": "Ex : CUVE 01",
+        "productLabel": "Produit en Cours",
+        "productPlaceholder": "Sélectionnez ou saisissez un produit",
+        "productSelectClientFirst": "Sélectionnez d'abord le client",
         "clientPlaceholder": "Sélectionnez un client",
+        "capacityLabel": "Capacité (Litres)",
+        "leaseStartLabel": "Début de Location",
+        "notesLabel": "Observation",
+        "notesPlaceholder": "Observations sur la cuve (facultatif)",
         "required": "Renseignez le nom de la cuve et le client"
       },
       "messages": {

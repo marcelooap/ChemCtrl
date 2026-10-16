@@ -19,6 +19,11 @@ import {
   buildIndTankaDetalhe,
 } from "@transbordo/lib/tankaUnificada";
 import { listTankaIdsLinkedToEstoque } from "@transbordo/lib/estoqueSaldo";
+import {
+  listTankas,
+  normalizeTankaRow,
+  updateTanka,
+} from "@transbordo/lib/cadastroTankaCentral";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -47,10 +52,9 @@ export default function Tankagem() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isotanques, setIsotanques] = useState([]);
+  const [tankas, setTankas] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
-  const [indTanks, setIndTanks] = useState([]);
   const [indContainers, setIndContainers] = useState([]);
   const [indStock, setIndStock] = useState([]);
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
@@ -73,8 +77,8 @@ export default function Tankagem() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [isot, trans, vas, ests, ents] = await Promise.all([
-          entities.isotanques.list(),
+        const [masterRows, trans, vas, ests, ents] = await Promise.all([
+          listTankas(),
           entities.transbordos.list(),
           entities.vasilhames.list(),
           entities.estoque.list(),
@@ -87,7 +91,7 @@ export default function Tankagem() {
           vasilhames: vas,
         });
         void persistDeclaredVolumeDecimals(volumes);
-        setIsotanques(isot);
+        setTankas((masterRows || []).map(normalizeTankaRow));
         setTransbordos(volumes.transbordos);
         setVasilhames(volumes.vasilhames);
 
@@ -101,8 +105,7 @@ export default function Tankagem() {
             }
           };
 
-          const [tanksInd, containersInd, stockInd] = await Promise.all([
-            loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
+          const [containersInd, stockInd] = await Promise.all([
             loadIndList(async () => {
               const tanksOnly = await base44.entities.Container.filter(
                 { type: "Tankagem" },
@@ -117,27 +120,17 @@ export default function Tankagem() {
             ),
           ]);
 
-          let tanksFinal = tanksInd;
-          if (tanksFinal.length === 0) {
-            tanksFinal = await loadIndList(() =>
-              base44.entities.Tank.list(undefined, 500)
-            );
-          }
-
-          setIndTanks(tanksFinal);
           setIndContainers(containersInd);
           setIndStock(stockInd);
         } catch (indErr) {
           console.warn("[Tankagem] Industrialização:", indErr);
-          setIndTanks([]);
           setIndContainers([]);
           setIndStock([]);
         }
       } catch {
-        setIsotanques([]);
+        setTankas([]);
         setTransbordos([]);
         setVasilhames([]);
-        setIndTanks([]);
         setIndContainers([]);
         setIndStock([]);
       }
@@ -172,13 +165,12 @@ export default function Tankagem() {
 
   const tanksWithVolume = useMemo(() => {
     return mergeTankasUnificadas({
-      isotanques,
+      tankas,
       transbordos,
-      indTanks,
       indContainers,
       indStock,
-    }).filter((tank) => tank.hasTransbordo);
-  }, [isotanques, transbordos, indTanks, indContainers, indStock]);
+    }).filter((tank) => !tank.orfaoOperacional);
+  }, [tankas, transbordos, indContainers, indStock]);
 
   const sortedTanks = useMemo(() => {
     return [...tanksWithVolume].sort((a, b) => {
@@ -253,50 +245,34 @@ export default function Tankagem() {
   }, [filteredTanks]);
 
   const applyObservacaoLocal = (tank, observacao) => {
-    if (tank?.isotanque?.id) {
-      setIsotanques((prev) =>
-        prev.map((item) =>
-          item.id === tank.isotanque.id ? { ...item, observacao } : item
-        )
-      );
-    }
-    if (tank?.indTank?.id) {
-      setIndTanks((prev) =>
-        prev.map((item) =>
-          item.id === tank.indTank.id ? { ...item, observacao } : item
-        )
-      );
-    }
+    const id = tank?.id || tank?.isotanque?.id;
+    if (!id) return;
+    setTankas((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, observacao } : item
+      )
+    );
   };
 
   const handleSaveObservacao = async (texto) => {
     if (!obsTank) return;
     const value = String(texto || "").trim();
-    const payload = { observacao: value || null };
+    const tankaId = obsTank.id || obsTank.isotanque?.id;
+    if (!tankaId || String(tankaId).startsWith("orfao:")) {
+      toast({
+        title: "Não foi possível salvar",
+        description: "Esta tanka não tem cadastro mestre para receber a observação.",
+        variant: "destructive",
+      });
+      return;
+    }
     setObsSaving(true);
     try {
-      let wrote = false;
-      if (obsTank.isotanque?.id) {
-        const saved = await entities.isotanques.update(obsTank.isotanque.id, payload);
-        if (value && String(saved?.observacao || "").trim() !== value) {
-          throw new Error(
-            "Execute o script 044_tanka_observacao.sql no SQL Editor para gravar a observação."
-          );
-        }
-        wrote = true;
-      }
-      if (obsTank.indTank?.id) {
-        const saved = await base44.entities.Tank.update(obsTank.indTank.id, payload);
-        const persisted = String(saved?.observacao || "").trim() === value;
-        if (value && !persisted && !wrote) {
-          throw new Error(
-            "Execute o script 044_tanka_observacao.sql no SQL Editor para gravar a observação."
-          );
-        }
-        wrote = wrote || persisted || !value;
-      }
-      if (!wrote) {
-        throw new Error("Esta tanka não tem cadastro para receber a observação.");
+      const saved = await updateTanka(tankaId, { observacao: value || null });
+      if (value && String(saved?.observacao || "").trim() !== value) {
+        throw new Error(
+          "Execute o script 044_tanka_observacao.sql / 049_cadastro_tanka_central.sql no SQL Editor."
+        );
       }
       applyObservacaoLocal(obsTank, value);
       setObsOpen(false);
@@ -341,7 +317,7 @@ export default function Tankagem() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Tankagem</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {isotanques.length} isotanque(s) cadastrado(s)
+          {tankas.length} tanka(s) no cadastro mestre
         </p>
       </div>
 
@@ -378,8 +354,8 @@ export default function Tankagem() {
       ) : Object.entries(groupedByClient).length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           {estoqueFilterId || search.trim()
-            ? "Nenhum isotanque encontrado para o filtro."
-            : "Nenhum isotanque cadastrado."}
+            ? "Nenhuma tanka encontrada para o filtro."
+            : "Nenhuma tanka cadastrada."}
         </div>
       ) : (
         Object.entries(groupedByClient).map(([cliente, tanks]) => {
@@ -411,7 +387,6 @@ export default function Tankagem() {
                     tanka={tank.tanka || tank.codigo_itku}
                     capacidade={
                       Number(tank.isotanque?.capacidade) ||
-                      Number(tank.indTank?.capacity) ||
                       Number(tank.capacidade) ||
                       0
                     }

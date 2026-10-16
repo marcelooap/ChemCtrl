@@ -26,7 +26,11 @@ import OrderDetailsDialog from '@industrializacao/components/pedidos/OrderDetail
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import { fmtDate, fmtNumber, fmtCurrency, toDateInputValue, todayDateInputValue } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
-import { getLatestRecipeForProduct, getLatestRecipes, getRevisionNumber } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, getRevisionNumber } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 import { matchesClient } from '@industrializacao/lib/permissions';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import {
@@ -106,6 +110,31 @@ export default function Pedidos() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const cqCancelHealRef = useRef('');
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const productOptions = useMemo(
+    () =>
+      buildIndPaSelectOptions({
+        produtos: catalogProdutos,
+        recipes,
+        currentProductName: form.product,
+      }),
+    [catalogProdutos, recipes, form.product]
+  );
 
   // Corrige legado: OP Cancelado apenas por CQ Reprovado → Finalizado
   useEffect(() => {
@@ -299,7 +328,17 @@ export default function Pedidos() {
   }, [rawOrders, form.client, i18n.language]);
 
   const handleProductChange = (productName) => {
-    const recipe = getLatestRecipeForProduct(recipes, productName);
+    const fromOpt = productOptions.find((o) => o.value === productName);
+    const recipe =
+      fromOpt?.item?.recipe || getLatestRecipeForProduct(recipes, productName);
+    if (!recipe) {
+      toast({
+        title: 'Produto sem receita cadastrada',
+        description: 'Selecione um produto que possua receita na Industrialização.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const nextClient = recipe?.client || '';
     setForm((prev) => {
       const prevClient = (prev.client || '').trim().toLowerCase();
@@ -590,7 +629,7 @@ export default function Pedidos() {
                 <ProductCombobox
                   value={form.product}
                   onChange={handleProductChange}
-                  options={getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name }))}
+                  options={productOptions}
                   placeholder={t('orders.form.productPlaceholder')}
                 />
               </div>

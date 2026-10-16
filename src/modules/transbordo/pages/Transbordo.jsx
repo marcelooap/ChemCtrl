@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
+import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
+import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
 import { isUnidadeMassaEntrada, isUnidadeVolumeEntrada, normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
 import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
@@ -214,10 +216,10 @@ export default function Transbordo() {
 
       const [trans, prods, cliens, ents, isos, vascs, entradasDoc] = await Promise.all([
         entities.transbordos.list("-created_date"),
-        entities.produtos.list(),
+        listProdutos({ modulo: "ARMAZENAGEM" }),
         entities.clientes.list(),
         entities.estoque.list(),
-        entities.isotanques.list(),
+        listTankas(),
         entities.vasilhames.list(),
         entities.entradas.list(),
       ]);

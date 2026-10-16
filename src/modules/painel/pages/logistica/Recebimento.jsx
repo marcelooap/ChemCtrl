@@ -34,8 +34,10 @@ import {
   buildPaProdutos,
   catalogProdutosByDestino,
   clientsFromProdutos,
+  filterProdutosArmazenagem,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
+import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
 import { formatMass, formatNum } from "@transbordo/lib/format";
 import { loteToKg } from "@transbordo/lib/conversao";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
@@ -99,7 +101,7 @@ export default function LogisticaRecebimento() {
     try {
       const [cliens, prods, vascs, recipes, stocks, valsTb, valsInd] = await Promise.all([
         entities.clientes.list(),
-        entities.produtos.list(),
+        listProdutos(),
         entities.vasilhames.list(),
         base44.entities.Recipe.list("-created_date", 2000),
         base44.entities.RawMaterialStock.list("-created_date", 2000),
@@ -107,10 +109,10 @@ export default function LogisticaRecebimento() {
         base44.entities.IndValidacao.list("-created_date", 500).catch(() => []),
       ]);
       setClientesTb(cliens || []);
-      setProdutosTb(prods || []);
+      setProdutosTb(filterProdutosArmazenagem(prods || []));
       setVasilhames(vascs || []);
-      setProdutosMp(buildMpProdutos(recipes || [], stocks || []));
-      setProdutosPa(buildPaProdutos(recipes || []));
+      setProdutosMp(buildMpProdutos(recipes || [], stocks || [], prods || []));
+      setProdutosPa(buildPaProdutos(recipes || [], prods || []));
       setPendentes(
         mergeRecebimentoPendentes(valsTb || [], valsInd || [])
       );

@@ -1,5 +1,6 @@
 import { base44 } from "@industrializacao/api/base44Client";
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,7 +15,6 @@ const IND_CLIENT_SOURCES = [
   ["Container", "client"],
   ["Order", "client"],
   ["Production", "client"],
-  ["Tank", "client"],
   ["Transfer", "client"],
   ["StockMovement", "client"],
   ["QualityTest", "client"],
@@ -48,22 +48,33 @@ async function collectColumn(entity, column) {
 
 /** Nomes de cliente usados no módulo Industrialização. */
 export async function listNomesClientesIndustrializacao() {
-  const lists = await Promise.all(
-    IND_CLIENT_SOURCES.map(async ([entityName, column]) => {
-      const entity = base44.entities?.[entityName];
-      if (!entity?.list) return [];
-      try {
-        return await collectColumn(entity, column);
-      } catch (err) {
+  const [lists, tankas] = await Promise.all([
+    Promise.all(
+      IND_CLIENT_SOURCES.map(async ([entityName, column]) => {
+        const entity = base44.entities?.[entityName];
+        if (!entity?.list) return [];
+        try {
+          return await collectColumn(entity, column);
+        } catch (err) {
+          console.warn(
+            `[saidaClientes] Falha ao ler ${entityName}.${column}:`,
+            err?.message || err
+          );
+          return [];
+        }
+      })
+    ),
+    listTankas({ select: "id, cliente_nome" })
+      .then((rows) => (rows || []).map((t) => t.cliente_nome).filter(Boolean))
+      .catch((err) => {
         console.warn(
-          `[saidaClientes] Falha ao ler ${entityName}.${column}:`,
+          "[saidaClientes] Falha ao ler cadastro_tanka.cliente_nome:",
           err?.message || err
         );
         return [];
-      }
-    })
-  );
-  return lists.flat();
+      }),
+  ]);
+  return [...lists.flat(), ...tankas];
 }
 
 /**

@@ -17,6 +17,10 @@ import { translateStockExpiryStatus, translateContainerStatus } from '@/i18n/dom
 import { containerDisplayVolume, containerDisplayNetWeight, containerDisplayGrossWeight } from '@industrializacao/lib/fractionalSupply';
 import moment from 'moment';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
+import {
+  listTankas,
+  normalizeTankaRow,
+} from '@transbordo/lib/cadastroTankaCentral';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -49,7 +53,10 @@ export default function EstoqueCliente() {
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: recipes } = useRecipes('-updated_date', 500);
-  const { data: tanks } = useRealtimeEntity('Tank', () => base44.entities.Tank.list('-created_date', 500));
+  const { data: tanks } = useRealtimeEntity('Tank', async () => {
+    const rows = await listTankas();
+    return (rows || []).map(normalizeTankaRow);
+  });
   const [selectedClient, setSelectedClient] = useState('all');
   const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState('');

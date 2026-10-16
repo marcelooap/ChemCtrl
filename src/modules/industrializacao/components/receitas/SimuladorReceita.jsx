@@ -1,9 +1,13 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
-import { getLatestRecipeForProduct, getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 import { FileText } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
@@ -222,6 +226,32 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [volume, setVolume] = useState('');
   const [density, setDensity] = useState('');
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const productOptions = useMemo(
+    () =>
+      buildIndPaSelectOptions({
+        produtos: catalogProdutos,
+        recipes,
+        currentProductName: selectedProduct,
+      }),
+    [catalogProdutos, recipes, selectedProduct]
+  );
 
   const recipe = useMemo(
     () => getLatestRecipeForProduct(recipes, selectedProduct),
@@ -279,11 +309,6 @@ export default function SimuladorReceita({ recipes, open, onOpenChange }) {
       lang,
     });
   };
-
-  const productOptions = useMemo(
-    () => getLatestRecipes(recipes).map((r) => ({ value: r.product_name, label: r.product_name })),
-    [recipes]
-  );
 
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, lang);
 

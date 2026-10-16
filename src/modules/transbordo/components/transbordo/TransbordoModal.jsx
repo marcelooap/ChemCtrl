@@ -512,13 +512,34 @@ export default function TransbordoModal({
     (p) => !clienteNome || p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
   );
 
-  const produtosComSaldo = filteredProdutos.filter((p) =>
-    entradas.some((e) => {
-      if (!(e.produto_id === p.id || e.produto_nome === p.produto)) return false;
-      const disponivel = computeDisponivelTransbordo(e, transbordos);
-      return disponivel > 0 || (e.saldo_atual || 0) > 0;
-    })
-  );
+  const produtosComSaldo = (() => {
+    const withSaldo = filteredProdutos.filter((p) =>
+      entradas.some((e) => {
+        if (!(e.produto_id === p.id || e.produto_nome === p.produto)) return false;
+        const disponivel = computeDisponivelTransbordo(e, transbordos);
+        return disponivel > 0 || (e.saldo_atual || 0) > 0;
+      })
+    );
+    // Fantasma na edição: produto já selecionado sem saldo atual / fora do filtro
+    if (
+      produtoId &&
+      !withSaldo.some((p) => String(p.id) === String(produtoId))
+    ) {
+      const fromCatalog = produtos.find((p) => String(p.id) === String(produtoId));
+      return [
+        fromCatalog || {
+          id: produtoId,
+          codigo: produtoCodigo || "",
+          produto: produtoNome || produtoDisplay || "",
+          cliente_id: clienteId || null,
+          cliente_nome: clienteNome,
+          densidade,
+        },
+        ...withSaldo,
+      ];
+    }
+    return withSaldo;
+  })();
 
   const sortedEntradas = [...entradas].sort(
     (a, b) => new Date(createdAt(a)) - new Date(createdAt(b))
@@ -557,7 +578,7 @@ export default function TransbordoModal({
         i.produto_nome?.toLowerCase() === produtoNome?.toLowerCase()
     )
     .map((i) => {
-      const tankaCodigo = i.tanka || i.codigo_itku || "";
+      const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
       const saldo = computeTankaSaldo({
         isotanqueId: i.id,
         tankaCodigo,
@@ -576,7 +597,7 @@ export default function TransbordoModal({
 
   const tankasComSaldo = filteredIsotanques
     .map((i) => {
-      const tankaCodigo = i.tanka || i.codigo_itku || "";
+      const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
       const lotesDisponiveis = computeTankaLotesDisponiveis({
         isotanqueId: i.id,
         tankaCodigo,
@@ -801,7 +822,7 @@ export default function TransbordoModal({
         ? roundVolume(tanka.saldo_atual)
         : computeTankaSaldo({
             isotanqueId: tanka.id,
-            tankaCodigo: tanka.tanka || tanka.codigo_itku || "",
+            tankaCodigo: tanka.nome || tanka.tanka || tanka.codigo_itku || "",
             transbordos,
             excludeTransbordoId: editingIdForSaldo,
           });

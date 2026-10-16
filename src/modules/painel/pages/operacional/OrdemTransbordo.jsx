@@ -35,11 +35,14 @@ import {
   catalogProdutosByDestino,
   catalogProdutosGranel,
   clientsFromProdutos,
+  filterProdutosArmazenagem,
   filterProdutosByOrigem,
   isProdutoIndustrializacao,
   mergeClientesByNome,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
+import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 
 const INPUT_EDITABLE = "bg-white";
 const PERM = "painel_operacional_ordem_transbordo";
@@ -165,10 +168,10 @@ export default function OrdemTransbordo() {
         conts,
       ] = await Promise.all([
         entities.transbordos.list("-created_date"),
-        entities.produtos.list(),
+        listProdutos(),
         entities.clientes.list(),
         entities.estoque.list(),
-        entities.isotanques.list(),
+        listTankas(),
         entities.vasilhames.list(),
         entities.transbordoValidacoes.list("-created_at"),
         base44.entities.Recipe.list("-created_date", 2000),
@@ -177,14 +180,14 @@ export default function OrdemTransbordo() {
         base44.entities.Container.list("-created_date", 500).catch(() => []),
       ]);
       setTransbordos(trans || []);
-      setProdutosTb(prods || []);
+      setProdutosTb(filterProdutosArmazenagem(prods || []));
       setClientesTb(cliens || []);
       setEntradas(ents || []);
       setIsotanques(isos || []);
       setVasilhames(vascs || []);
       setContainers(conts || []);
-      setProdutosMp(buildMpProdutos(recipes || [], stocks || []));
-      setProdutosPa(buildPaProdutos(recipes || []));
+      setProdutosMp(buildMpProdutos(recipes || [], stocks || [], prods || []));
+      setProdutosPa(buildPaProdutos(recipes || [], prods || []));
       setValidacoesPendentes(
         mergeOrdemPendentes(vals || [], valsInd || [])
       );

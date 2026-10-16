@@ -268,11 +268,13 @@ export default function DestinoCard({
 
   const selectedTanka =
     isotanques.find((i) => i.id === destino.tanka_id) ||
-    isotanques.find(
-      (i) =>
-        (i.tanka && i.tanka === destino.tanka_codigo) ||
+    isotanques.find((i) => {
+      const nome = i.nome || i.tanka || i.name || "";
+      return (
+        (nome && nome === destino.tanka_codigo) ||
         (i.codigo_itku && i.codigo_itku === destino.tanka_codigo)
-    );
+      );
+    });
   const tankaCapacidade = roundVolume(selectedTanka?.capacidade || 0);
   const tankaSaldoAtual = roundVolume(selectedTanka?.saldo_atual || 0);
   const tankaVolumeDisponivel =
@@ -614,7 +616,7 @@ export default function DestinoCard({
               value={destino.tanka_codigo || ""}
               onChange={handleTankaChange}
               options={isotanques}
-              getOptionLabel={(i) => i.tanka || i.codigo_itku || ""}
+              getOptionLabel={(i) => i.nome || i.tanka || i.codigo_itku || ""}
               getOptionValue={(i) => i.id}
               placeholder="Selecionar tanka"
               disabled={readOnly}

@@ -36,6 +36,8 @@ function assertConfigured(context) {
 
 const TABLE_FALLBACKS = {
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
+  // Pós-049 cutover: mestre único (sem fallback t_isotanques).
+  cadastro_tanka: ['cadastro_tanka'],
 };
 const physicalTableCache = new Map();
 const physicalTableInFlight = new Map();
@@ -220,7 +222,8 @@ function createEntity(preferredTable) {
 export const entities = {
   clientes: createEntity('t_clientes'),
   produtos: createEntity('cadastro_produtos'),
-  isotanques: createEntity('t_isotanques'),
+  /** Mestre único cadastro_tanka (pós-049 cutover). */
+  isotanques: createEntity('cadastro_tanka'),
   descontaminacoes: createEntity('t_descontaminacoes'),
   entradas: createEntity('t_entradas'),
   estoque: createEntity('t_estoque'),

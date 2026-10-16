@@ -1,4 +1,5 @@
 import { entities } from "@transbordo/services/entities";
+import { listTankas, updateTanka } from "@transbordo/lib/cadastroTankaCentral";
 
 /**
  * Ao alterar nome/código no cadastro de produtos, propaga os snapshots
@@ -125,7 +126,7 @@ export async function cascadeProdutoIdentity({ produtoId, before, after }) {
     transbordos,
     vasilhames,
     filtracoes,
-    isotanques,
+    tankas,
     saidas,
     reservas,
   ] = await Promise.all([
@@ -134,7 +135,7 @@ export async function cascadeProdutoIdentity({ produtoId, before, after }) {
     entities.transbordos.filter({ produto_id: produtoId }).catch(() => []),
     entities.vasilhames.filter({ produto_id: produtoId }).catch(() => []),
     entities.filtracoes.filter({ produto_id: produtoId }).catch(() => []),
-    entities.isotanques.filter({ produto_id: produtoId }).catch(() => []),
+    listTankas().catch(() => []),
     entities.saidas.list().catch(() => []),
     entities.materialReservas.filter({ produto_id: produtoId }).catch(() => []),
   ]);
@@ -212,7 +213,7 @@ export async function cascadeProdutoIdentity({ produtoId, before, after }) {
     )
     .map((row) => buildHeaderPatch(row, identity));
 
-  const isotanqueUpdates = (isotanques || [])
+  const tankaUpdates = (tankas || [])
     .filter((row) => matchesProdutoRow(row, produtoId, beforeCodigo))
     .filter((row) => !sameText(row.produto_nome, afterNome))
     .map((row) => ({
@@ -287,7 +288,14 @@ export async function cascadeProdutoIdentity({ produtoId, before, after }) {
     entities.transbordos.bulkUpdate(transbordoUpdates),
     entities.vasilhames.bulkUpdate(vasilhameUpdates),
     entities.filtracoes.bulkUpdate(filtracaoUpdates),
-    entities.isotanques.bulkUpdate(isotanqueUpdates),
+    Promise.all(
+      tankaUpdates.map((row) =>
+        updateTanka(row.id, {
+          produto_id: row.produto_id,
+          produto_nome: row.produto_nome,
+        })
+      )
+    ),
     entities.saidas.bulkUpdate(saidaUpdates),
     entities.materialReservas.bulkUpdate(reservaUpdates),
   ]);
@@ -298,7 +306,7 @@ export async function cascadeProdutoIdentity({ produtoId, before, after }) {
     transbordos: transbordoUpdates.length,
     vasilhames: vasilhameUpdates.length,
     filtracoes: filtracaoUpdates.length,
-    isotanques: isotanqueUpdates.length,
+    isotanques: tankaUpdates.length,
     saidas: saidaUpdates.length,
     reservas: reservaUpdates.length,
   };

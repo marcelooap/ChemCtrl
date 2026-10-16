@@ -317,21 +317,39 @@ export default function EntradaModal({
     );
   })();
 
-  const filteredProdutos = !clienteNome
-    ? []
-    : produtos.filter((p) => {
-        const sameName =
-          String(p.cliente_nome || "").trim().toLowerCase() ===
-          clienteNome.trim().toLowerCase();
-        const clienteIdReal =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            String(clienteId || "")
-          );
-        if (clienteIdReal && p.cliente_id) {
-          return p.cliente_id === clienteId || sameName;
-        }
-        return sameName;
+  const filteredProdutos = (() => {
+    if (!clienteNome) return [];
+    const list = produtos.filter((p) => {
+      const sameName =
+        String(p.cliente_nome || "").trim().toLowerCase() ===
+        clienteNome.trim().toLowerCase();
+      const clienteIdReal =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          String(clienteId || "")
+        );
+      if (clienteIdReal && p.cliente_id) {
+        return p.cliente_id === clienteId || sameName;
+      }
+      return sameName;
+    });
+    // Opção fantasma: produto já gravado no lote e fora do filtro (edição / origem)
+    const seen = new Set(list.map((p) => String(p.id || "")));
+    const ghosts = [];
+    for (const l of lotes || []) {
+      const pid = String(l.produto_id || "").trim();
+      if (!pid || seen.has(pid)) continue;
+      seen.add(pid);
+      ghosts.push({
+        id: pid,
+        codigo: l.produto_codigo || "",
+        produto: l.produto_nome || "",
+        cliente_id: clienteId || null,
+        cliente_nome: clienteNome,
+        densidade: l.densidade || "",
       });
+    }
+    return ghosts.length ? [...ghosts, ...list] : list;
+  })();
 
   // ── Totais derivados dos lotes ──
   const qtd = lotes.reduce(

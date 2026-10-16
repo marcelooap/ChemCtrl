@@ -35,7 +35,8 @@ const entityTableMap = {
   PerfilPermissao: 'perfil_permissoes',
   Production: 'ind_lista_producoes',
   RawMaterialStock: 'ind_estoque_mp',
-  Tank: 'ind_cadastro_tanka',
+  // Mestre único cadastro_tanka (pós-049 cutover).
+  Tank: 'cadastro_tanka',
   Transfer: 'ind_transbordo_ind',
   Container: 'ind_lista_vasilhames',
   ContainerOrigin: 'ind_composicao_vasilhame',
@@ -80,6 +81,8 @@ const tableColumnsInFlight = new Map();
 const TABLE_FALLBACKS = {
   receitas: ['receitas', 'ind_lista_receitas'],
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
+  // Pós-049 cutover: mestre único (sem fallback ind_cadastro_tanka).
+  cadastro_tanka: ['cadastro_tanka'],
 };
 const physicalTableCache = new Map();
 const physicalTableInFlight = new Map();

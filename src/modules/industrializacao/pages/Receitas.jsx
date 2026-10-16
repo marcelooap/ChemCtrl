@@ -40,6 +40,10 @@ import {
   getRevisionNumber,
 } from '@industrializacao/lib/recipeRevisions';
 import { registrarProdutosDaReceita } from '@transbordo/lib/cadastroProdutosCentral';
+import {
+  loadProdutosIndustrializacao,
+  buildIndMpSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const DEFAULT_CREATED_BY = 'Marcelo Amaral';
@@ -290,41 +294,21 @@ export default function Receitas() {
     return Array.from(set).map(v => ({ value: v, label: v }));
   }, [recipes, stocks]);
 
-  /** Catálogo de MPs já cadastradas (receitas + estoque), chave: cliente|código */
-  const mpCatalogByClient = useMemo(() => {
-    const map = new Map();
-    const upsert = (client, mp_code, mp_name, mp_density, controle = null) => {
-      const code = (mp_code || '').trim();
-      if (!code) return;
-      const c = (client || '').trim();
-      const key = `${c.toLowerCase()}|${code.toLowerCase()}`;
-      const prev = map.get(key);
-      if (!prev) {
-        map.set(key, {
-          mp_code: code,
-          mp_name: mp_name || '',
-          mp_density: mp_density != null && mp_density !== '' ? Number(mp_density) : null,
-          controlado: Boolean(controle?.controlado && controle?.orgao_regulamentador),
-          orgao_regulamentador: controle?.controlado ? controle.orgao_regulamentador || null : null,
-          client: c,
-        });
-        return;
-      }
-      if (!prev.controlado && controle?.controlado && controle.orgao_regulamentador) {
-        prev.controlado = true;
-        prev.orgao_regulamentador = controle.orgao_regulamentador;
-      }
-      if (!prev.mp_name && mp_name) prev.mp_name = mp_name;
-      if (prev.mp_density == null && mp_density != null && mp_density !== '') {
-        prev.mp_density = Number(mp_density);
-      }
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
     };
-    recipes.forEach((r) => {
-      (r.raw_materials || []).forEach((mp) => upsert(r.client, mp.mp_code, mp.mp_name, mp.mp_density, mp));
-    });
-    stocks.forEach((s) => upsert(s.client, s.mp_code, s.mp_name, s.density));
-    return map;
-  }, [recipes, stocks]);
+  }, []);
 
   const [showForm, setShowForm] = useState(false);
   const [showView, setShowView] = useState(false);
@@ -358,21 +342,86 @@ export default function Receitas() {
   const displayRevisionDate = (!editing || isNewRevision) ? todayISO() : (editing.revision_date || todayISO());
 
   const mpCodeOptions = useMemo(() => {
+    const fromCatalog = buildIndMpSelectOptions({
+      produtos: catalogProdutos,
+      clienteNome: form.client,
+    });
+    // Transição: códigos ainda só em receitas/estoque do cliente
+    const seen = new Set(fromCatalog.map((o) => String(o.value).toLowerCase()));
     const clientKey = (form.client || '').trim().toLowerCase();
-    const byCode = new Map();
-    for (const [, mp] of mpCatalogByClient) {
-      if (clientKey && (mp.client || '').trim().toLowerCase() !== clientKey) continue;
-      const codeKey = mp.mp_code.toLowerCase();
-      if (!byCode.has(codeKey)) byCode.set(codeKey, mp);
-    }
-    return Array.from(byCode.values())
-      .sort((a, b) => a.mp_code.localeCompare(b.mp_code, 'pt-BR'))
-      .map((mp) => ({
-        value: mp.mp_code,
-        label: mp.mp_name ? `${mp.mp_code} — ${mp.mp_name}` : mp.mp_code,
-        item: mp,
-      }));
-  }, [mpCatalogByClient, form.client]);
+    const extras = [];
+    const upsertExtra = (client, mp_code, mp_name, mp_density, controle = null) => {
+      const code = (mp_code || '').trim();
+      if (!code) return;
+      if (clientKey && (client || '').trim().toLowerCase() !== clientKey) return;
+      const key = code.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      extras.push({
+        value: code,
+        label: mp_name ? `${code} — ${mp_name}` : code,
+        item: {
+          mp_code: code,
+          mp_name: mp_name || '',
+          mp_density:
+            mp_density != null && mp_density !== '' ? Number(mp_density) : null,
+          controlado: Boolean(controle?.controlado && controle?.orgao_regulamentador),
+          orgao_regulamentador: controle?.controlado
+            ? controle.orgao_regulamentador || null
+            : null,
+        },
+      });
+    };
+    recipes.forEach((r) => {
+      (r.raw_materials || []).forEach((mp) =>
+        upsertExtra(r.client, mp.mp_code, mp.mp_name, mp.mp_density, mp)
+      );
+    });
+    stocks.forEach((s) =>
+      upsertExtra(s.client, s.mp_code, s.mp_name, s.density)
+    );
+    return [...fromCatalog, ...extras].sort((a, b) =>
+      String(a.value).localeCompare(String(b.value), 'pt-BR')
+    );
+  }, [catalogProdutos, form.client, recipes, stocks]);
+
+  const handleClientChange = (nextClient) => {
+    const clientKey = (nextClient || '').trim().toLowerCase();
+    setForm((prev) => {
+      const allowed = new Set(
+        buildIndMpSelectOptions({
+          produtos: catalogProdutos,
+          clienteNome: nextClient,
+        }).map((o) => String(o.value).toLowerCase())
+      );
+      // Mantém códigos ainda válidos no fallback receita/estoque do novo cliente
+      recipes.forEach((r) => {
+        if ((r.client || '').trim().toLowerCase() !== clientKey) return;
+        (r.raw_materials || []).forEach((mp) => {
+          const c = (mp.mp_code || '').trim().toLowerCase();
+          if (c) allowed.add(c);
+        });
+      });
+      stocks.forEach((s) => {
+        if ((s.client || '').trim().toLowerCase() !== clientKey) return;
+        const c = (s.mp_code || '').trim().toLowerCase();
+        if (c) allowed.add(c);
+      });
+      const raw_materials = (prev.raw_materials || []).map((mp) => {
+        const code = (mp.mp_code || '').trim().toLowerCase();
+        if (!code || !clientKey || allowed.has(code)) return mp;
+        return {
+          ...mp,
+          mp_code: '',
+          mp_name: '',
+          mp_density: 1,
+          controlado: false,
+          orgao_regulamentador: null,
+        };
+      });
+      return { ...prev, client: nextClient, raw_materials };
+    });
+  };
 
   const filtered = latestRecipes.filter(r => {
     const q = debouncedSearch.toLowerCase();
@@ -453,9 +502,33 @@ export default function Receitas() {
 
   const handleMpCodeSelect = (idx, selected) => {
     if (!selected) return;
+    const match = {
+      mp_code: selected.mp_code || selected.codigo || selected.value || '',
+      mp_name: selected.mp_name || selected.produto || '',
+      mp_density: selected.mp_density ?? (
+        selected.densidade && selected.densidade !== '-'
+          ? Number(String(selected.densidade).replace(',', '.'))
+          : null
+      ),
+      controlado: Boolean(selected.controlado),
+      orgao_regulamentador: selected.orgao_regulamentador || null,
+      ...(selected.item && typeof selected.item === 'object' && !selected.mp_code
+        ? {
+            mp_code: selected.item.codigo || selected.item.mp_code,
+            mp_name: selected.item.produto || selected.item.mp_name,
+            mp_density:
+              selected.item.mp_density ??
+              (selected.item.densidade && selected.item.densidade !== '-'
+                ? Number(String(selected.item.densidade).replace(',', '.'))
+                : null),
+            controlado: Boolean(selected.item.controlado),
+            orgao_regulamentador: selected.item.orgao_regulamentador || null,
+          }
+        : {}),
+    };
     setForm((prev) => {
       const mps = [...prev.raw_materials];
-      mps[idx] = applyMpCatalogFields({ ...mps[idx] }, selected);
+      mps[idx] = applyMpCatalogFields({ ...mps[idx] }, match);
       return { ...prev, raw_materials: mps };
     });
   };
@@ -903,7 +976,7 @@ export default function Receitas() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productName')} *</label><Input value={form.product_name} onChange={e => setForm({ ...form, product_name: e.target.value })} /></div>
-              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.client')}</label><Combobox value={form.client} onValueChange={v => setForm({ ...form, client: v })} options={clientOptions} placeholder={t('recipes.form.clientPlaceholder')} /></div>
+              <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.client')}</label><Combobox value={form.client} onValueChange={handleClientChange} options={clientOptions} placeholder={t('recipes.form.clientPlaceholder')} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div><label className="text-xs font-medium text-muted-foreground">{t('recipes.form.productCode')}</label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} /></div>

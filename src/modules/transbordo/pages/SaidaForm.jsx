@@ -22,6 +22,7 @@ import {
   validarItensEmbalado,
 } from "@painel/lib/saidaReservas";
 import { promoverProdutosPorIds } from "@transbordo/lib/cadastroProdutosCentral";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import { rescheduleSaidaAgendamento, ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
 import AgendamentoPosSaidaModal from "@painel/components/comercial/AgendamentoPosSaidaModal";
 import {
@@ -150,20 +151,18 @@ export default function SaidaForm({
           }
 
           try {
-            const [nomesInd, produtos, isotanques] = await Promise.all([
+            const [nomesInd, produtos, tankas] = await Promise.all([
               listNomesClientesIndustrializacao(),
               entities.produtos
                 .list("produto", { select: "cliente_nome" })
                 .catch(() => []),
-              entities.isotanques
-                .list("codigo_itku", { select: "cliente_nome" })
-                .catch(() => []),
+              listTankas({ select: "id, cliente_nome" }).catch(() => []),
             ]);
             setClientes(
               buildSaidaClienteOptions(cliens, [
                 ...(nomesInd || []),
                 ...(produtos || []).map((p) => p.cliente_nome),
-                ...(isotanques || []).map((iso) => iso.cliente_nome),
+                ...(tankas || []).map((t) => t.cliente_nome),
                 ...(ents || []).map((e) => e.cliente_nome),
                 ...(vascs || []).map((v) => v.cliente_nome),
               ])

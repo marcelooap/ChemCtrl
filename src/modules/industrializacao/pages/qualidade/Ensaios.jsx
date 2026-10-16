@@ -17,7 +17,10 @@ import { fmtDate, fmtNumber, todayDateInputValue } from '@/i18n/formatters';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import RevisionExpiryCell from '@industrializacao/components/RevisionExpiryCell';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
-import { getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 import { parseValidityDays } from '@industrializacao/lib/qualityValidity';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
@@ -69,6 +72,21 @@ export default function Ensaios() {
   const [saving, setSaving] = useState(false);
   const [renewTarget, setRenewTarget] = useState(null);
   const { toast } = useToast();
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** One-time backfill: Resp. Cadastro = Marcelo Amaral for existing tests */
   useEffect(() => {
@@ -109,12 +127,25 @@ export default function Ensaios() {
   }, [catalogEntries]);
 
   const productOptions = useMemo(() => {
-    return getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name, item: r }));
-  }, [recipes]);
+    return buildIndPaSelectOptions({
+      produtos: catalogProdutos,
+      recipes,
+      currentProductName: form.product,
+    }).map((o) => ({
+      ...o,
+      // Combobox onSelect espera item com product_name/client
+      product_name: o.produto || o.value,
+      client: o.cliente_nome || o.item?.recipe?.client || '',
+    }));
+  }, [catalogProdutos, recipes, form.product]);
 
   const handleProductSelect = (selected) => {
     if (selected) {
-      setForm(prev => ({ ...prev, product: selected.product_name || prev.product, client: selected.client || prev.client }));
+      setForm((prev) => ({
+        ...prev,
+        product: selected.product_name || selected.value || prev.product,
+        client: selected.client || selected.cliente_nome || prev.client,
+      }));
     }
   };
 

@@ -4145,9 +4145,18 @@
       "form": {
         "editTitle": "Editar Tanque",
         "registerTitle": "Registrar Tanque",
+        "itkuLabel": "Código ITKU",
+        "itkuPlaceholder": "Ej: ITKU-001",
         "nameLabel": "Nombre del Tanque *",
         "namePlaceholder": "Ej: TANQUE 01",
+        "productLabel": "Producto en Uso",
+        "productPlaceholder": "Seleccione o escriba un producto",
+        "productSelectClientFirst": "Seleccione el cliente primero",
         "clientPlaceholder": "Seleccione un cliente",
+        "capacityLabel": "Capacidad (Litros)",
+        "leaseStartLabel": "Inicio de Locación",
+        "notesLabel": "Observación",
+        "notesPlaceholder": "Observaciones sobre el tanque (opcional)",
         "required": "Complete el nombre del tanque y el cliente"
       },
       "messages": {

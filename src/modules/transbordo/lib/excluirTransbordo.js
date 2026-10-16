@@ -8,6 +8,7 @@ import {
 import { restoreTankaVasilhamesAfterExclude } from "@transbordo/lib/tankaVolume";
 import { deleteEstoqueDoTransbordo } from "@transbordo/lib/transbordoEmbalado";
 import { revertTopUpsDoTransbordo } from "@transbordo/lib/persistTransbordo";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 
 function asId(value) {
   return value ? String(value) : "";
@@ -149,7 +150,7 @@ export async function reverterTransbordosDaEntrada(entradaId) {
   const [transbordos, vasilhames, isotanques, produtos] = await Promise.all([
     entities.transbordos.list(),
     entities.vasilhames.list(),
-    entities.isotanques.list(),
+    listTankas(),
     entities.produtos.list(),
   ]);
 

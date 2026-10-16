@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
+import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { Search, Eye, Pencil, Truck, X, Printer, FileText } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { SelectDot } from "@shared/components/ui/SelectDot";
@@ -306,7 +307,7 @@ export default function Vasilhames() {
 
       const [vas, prods, cliens, trans, ests, ents, saidasList] = await Promise.all([
         entities.vasilhames.list("-created_date"),
-        entities.produtos.list(),
+        listProdutos({ modulo: "ARMAZENAGEM" }),
         entities.clientes.list(),
         entities.transbordos.list(),
         entities.estoque.list(),

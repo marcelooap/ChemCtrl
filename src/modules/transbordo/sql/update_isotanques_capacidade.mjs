@@ -1,6 +1,8 @@
 /**
- * Atualiza todos os isotanques: capacidade 26000 L, início locação 2026-07-01.
+ * Atualiza todas as tankas do mestre: capacidade 26000 L, início locação 2026-07-01.
  * Uso: node src/modules/transbordo/sql/update_isotanques_capacidade.mjs
+ *
+ * Pós-049: opera em `cadastro_tanka` (não em t_isotanques).
  */
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
@@ -44,15 +46,16 @@ const supabase = createClient(url, key);
 
 const CAPACIDADE = 26000;
 const INICIO_LOCACAO = '2026-07-01';
+const TABLE = 'cadastro_tanka';
 
 async function main() {
   const { data: rows, error: listErr } = await supabase
-    .from('t_isotanques')
-    .select('id, tanka, codigo_itku, capacidade, inicio_locacao');
+    .from(TABLE)
+    .select('id, nome, codigo_itku, capacidade, inicio_locacao');
   if (listErr) throw new Error(`list: ${listErr.message}`);
 
   const list = rows || [];
-  console.log(`Isotanques encontrados: ${list.length}`);
+  console.log(`Tankas (${TABLE}) encontradas: ${list.length}`);
   if (list.length === 0) {
     console.log('Nada a atualizar.');
     return;
@@ -60,15 +63,15 @@ async function main() {
 
   const ids = list.map((r) => r.id);
   const { data: updated, error: updErr } = await supabase
-    .from('t_isotanques')
+    .from(TABLE)
     .update({ capacidade: CAPACIDADE, inicio_locacao: INICIO_LOCACAO })
     .in('id', ids)
-    .select('id, tanka, codigo_itku, capacidade, inicio_locacao');
+    .select('id, nome, codigo_itku, capacidade, inicio_locacao');
   if (updErr) throw new Error(`update: ${updErr.message}`);
 
   console.log(`Atualizados: ${updated?.length || 0}`);
   for (const r of updated || []) {
-    console.log(`  ${r.tanka || r.codigo_itku}: ${r.capacidade} L | ${r.inicio_locacao}`);
+    console.log(`  ${r.nome || r.codigo_itku}: ${r.capacidade} L | ${r.inicio_locacao}`);
   }
 }
 

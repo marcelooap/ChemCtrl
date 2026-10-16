@@ -22,6 +22,7 @@ import {
   buildIndTankaDetalhe,
   mergeTankasUnificadas,
 } from '@transbordo/lib/tankaUnificada';
+import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import VasilhamesReservaTable from '@painel/components/comercial/VasilhamesReservaTable';
 import OperacionalTankagemBoard from '@painel/components/operacional/OperacionalTankagemBoard';
@@ -65,16 +66,15 @@ export default function Estoque() {
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [ests, trans, saics, vascs, cliens, isot, indPack, indTanks, indStock] =
+      const [ests, trans, saics, vascs, cliens, tankasMestre, indPack, indStock] =
         await Promise.all([
           entities.estoque.list(),
           entities.transbordos.list(),
           entities.saidas.list(),
           entities.vasilhames.list(),
           entities.clientes.list(),
-          entities.isotanques.list(),
+          listTankas(),
           loadIndustrializacaoVasilhames(),
-          base44.entities.Tank.list('-created_date', 500).catch(() => []),
           base44.entities.RawMaterialStock.list('-created_date', 500).catch(() => []),
         ]);
 
@@ -126,9 +126,8 @@ export default function Estoque() {
       setTransbordos(trans || []);
       setUnifiedTankas(
         mergeTankasUnificadas({
-          isotanques: isot || [],
+          tankas: tankasMestre || [],
           transbordos: trans || [],
-          indTanks: indTanks || [],
           indContainers: indPack.containers || [],
           indStock: indStock || [],
         })

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
-import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -14,7 +13,13 @@ import ProductCombobox from '@shared/components/ui/ProductCombobox';
 import { PACKAGING_TYPES } from '@industrializacao/lib/packagingTypes';
 import { fmtNumber } from '@/i18n/formatters';
 import { translatePackagingType } from '@/i18n/domainMaps';
-import { getLatestRecipeForProduct, getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
+import { registrarUsoProduto } from '@transbordo/lib/cadastroProdutosCentral';
+import { ensureTankaByNome } from '@transbordo/lib/cadastroTankaCentral';
 
 const emptyForm = () => ({
   container_number: '',
@@ -40,23 +45,52 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
   const { toast } = useToast();
   const { user: internalUser } = useInternalAuth();
   const { data: recipes } = useRecipes('-updated_date', 500);
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
 
   useEffect(() => {
     if (open) setForm(emptyForm());
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const productOptions = useMemo(
-    () => getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name })).filter(o => o.value),
-    [recipes]
+    () =>
+      buildIndPaSelectOptions({
+        produtos: catalogProdutos,
+        recipes,
+        currentProductName: form.product,
+      }).filter((o) => o.value),
+    [catalogProdutos, recipes, form.product]
   );
 
   const handleProductSelect = (product) => {
-    const recipe = getLatestRecipeForProduct(recipes, product);
-    setForm(prev => ({
+    const fromOpt = productOptions.find((o) => o.value === product);
+    const recipe =
+      fromOpt?.item?.recipe || getLatestRecipeForProduct(recipes, product);
+    const catalog = fromOpt?.item?.produto;
+    setForm((prev) => ({
       ...prev,
       product,
-      client: recipe?.client || prev.client,
-      density: recipe?.density != null ? String(recipe.density) : prev.density,
+      client: catalog?.cliente_nome || recipe?.client || prev.client,
+      density:
+        catalog?.densidade && catalog.densidade !== '-'
+          ? String(catalog.densidade)
+          : recipe?.density != null
+            ? String(recipe.density)
+            : prev.density,
     }));
   };
 
@@ -82,6 +116,34 @@ export default function AddTankDialog({ open, onOpenChange, onSaved }) {
       const maxRegId = existing.reduce((max, c) => Math.max(max, c.registration_id || 0), 0);
 
       const operatorName = internalUser?.nome_completo || internalUser?.nome || '';
+      // Free-text / produto novo: garante presença no cadastro central
+      try {
+        await registrarUsoProduto({
+          codigo: form.product.trim().slice(0, 40) || form.product.trim(),
+          nome: form.product.trim(),
+          modulo: 'INDUSTRIALIZACAO',
+          attrs: {
+            cliente_nome: form.client || '',
+            densidade: form.density || '-',
+            densidade_tabelada: Boolean(form.density),
+          },
+        });
+      } catch {
+        // RPC ausente ou falha não bloqueia entrada de tanque
+      }
+      // Garante identidade física no cadastro mestre (não duplica se nome já existe)
+      if ((form.type || '') === 'Tankagem' || (form.type || '').toLowerCase().includes('tank')) {
+        try {
+          await ensureTankaByNome({
+            nome: form.container_number.trim(),
+            clienteNome: form.client || '',
+          });
+        } catch (tankErr) {
+          if (tankErr?.code !== 'TANKA_NOME_DUPLICADO') {
+            console.warn('[AddTankDialog] ensureTankaByNome:', tankErr);
+          }
+        }
+      }
       await base44.entities.Container.create({
         op_number: '',
         container_number: form.container_number,

@@ -35,7 +35,11 @@ import {
   productionOfContainer,
   containerDisplayVolume,
 } from '@industrializacao/lib/fractionalSupply';
-import { getLatestRecipeForProduct, getLatestRecipes, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
+import { getLatestRecipeForProduct, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
+import {
+  loadProdutosIndustrializacao,
+  buildIndPaSelectOptions,
+} from '@industrializacao/lib/cadastroProdutosOptions';
 import { createProductionWithUniqueOp, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
 import { deductStockBatch } from '@industrializacao/lib/stockRpc';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
@@ -136,6 +140,31 @@ export default function NovaProducao() {
   const [complementContainerId, setComplementContainerId] = useState('');
   const [saving, setSaving] = useState(false);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
+  const [catalogProdutos, setCatalogProdutos] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProdutosIndustrializacao()
+      .then((rows) => {
+        if (!cancelled) setCatalogProdutos(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProdutos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const productOptions = useMemo(
+    () =>
+      buildIndPaSelectOptions({
+        produtos: catalogProdutos,
+        recipes,
+        currentProductName: form.product,
+      }),
+    [catalogProdutos, recipes, form.product]
+  );
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);
 
@@ -335,8 +364,21 @@ export default function NovaProducao() {
 
   const handleProductSelect = (productName) => {
     if (isComplementMode) return;
-    const recipe = getLatestRecipeForProduct(recipes, productName);
-    if (!recipe) return;
+    const fromOpt = productOptions.find((o) => o.value === productName);
+    const recipe =
+      fromOpt?.item?.recipe || getLatestRecipeForProduct(recipes, productName);
+    if (!recipe) {
+      toast({
+        title: t('production.new.errors.noRecipe', {
+          defaultValue: 'Produto sem receita cadastrada',
+        }),
+        description: t('production.new.errors.noRecipeDesc', {
+          defaultValue: 'Selecione um produto que possua receita na Industrialização.',
+        }),
+        variant: 'destructive',
+      });
+      return;
+    }
     const linkedOrder = orders.find(o => orderMatchesSelectedProduct(o.product, productName, recipes));
     setForm(prev => ({
       ...prev, product: productName, client: recipe.client || '',
@@ -829,7 +871,7 @@ export default function NovaProducao() {
               <ProductCombobox
                 value={form.product}
                 onChange={handleProductSelect}
-                options={getLatestRecipes(recipes).map(r => ({ value: r.product_name, label: r.product_name }))}
+                options={productOptions}
                 placeholder={t('common.selectOption')}
               />
             )}

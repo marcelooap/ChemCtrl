@@ -404,30 +404,32 @@ export default function ProdutosTab() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
-      <div className="relative z-20 shrink-0 flex flex-wrap items-center gap-3">
-        <div className="relative w-full shrink-0 sm:w-[28rem]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por ID, código, produto, cliente, densidade ou filtrado..."
-            className="pl-10 bg-white h-9"
-            aria-label="Buscar produtos"
-          />
+      <div className="relative z-20 shrink-0 flex flex-col items-start gap-2">
+        <div className="flex w-full flex-wrap items-center gap-3">
+          <div className="relative w-full shrink-0 sm:w-[28rem]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por ID, código, produto, cliente, densidade ou filtrado..."
+              className="pl-10 bg-white h-9"
+              aria-label="Buscar produtos"
+            />
+          </div>
+          <div className="w-full shrink-0 sm:w-64">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={handleClienteFilterChange}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+              ariaLabel="Filtrar por cliente"
+              inputClassName="h-9 py-0 bg-white"
+            />
+          </div>
         </div>
-        <div className="w-full shrink-0 sm:w-64">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={handleClienteFilterChange}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-            ariaLabel="Filtrar por cliente"
-            inputClassName="h-9 py-0 bg-white"
-          />
-        </div>
-        <Button onClick={handleNew} className="gap-2 h-9 shrink-0 ml-auto">
+        <Button onClick={handleNew} className="gap-2 h-9 shrink-0">
           <Plus className="w-4 h-4" />
           Novo Produto
         </Button>

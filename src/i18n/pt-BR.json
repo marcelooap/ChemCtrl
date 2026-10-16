@@ -4367,9 +4367,18 @@
       "form": {
         "editTitle": "Editar Tanka",
         "registerTitle": "Cadastrar Tanka",
+        "itkuLabel": "Código ITKU",
+        "itkuPlaceholder": "Ex: ITKU-001",
         "nameLabel": "Nome da Tanka *",
         "namePlaceholder": "Ex: TANKA 01",
+        "productLabel": "Produto em Uso",
+        "productPlaceholder": "Selecione ou digite um produto",
+        "productSelectClientFirst": "Selecione o cliente primeiro",
         "clientPlaceholder": "Selecione um cliente",
+        "capacityLabel": "Capacidade (Litros)",
+        "leaseStartLabel": "Início da Locação",
+        "notesLabel": "Observação",
+        "notesPlaceholder": "Observações sobre a tanka (opcional)",
         "required": "Preencha o nome da Tanka e o cliente"
       },
       "messages": {

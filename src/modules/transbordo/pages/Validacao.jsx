@@ -24,6 +24,8 @@ import { useToast } from "@shared/components/ui/use-toast";
 import { Can } from "@industrializacao/lib/rbac/Can";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { entities } from "@transbordo/services/entities";
+import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
+import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
@@ -189,9 +191,9 @@ export default function Validacao() {
       const [vals, cliens, prods, ents, isos, vascs, trans] = await Promise.all([
         entities.transbordoValidacoes.list("-created_at"),
         entities.clientes.list(),
-        entities.produtos.list(),
+        listProdutos({ modulo: "ARMAZENAGEM" }),
         entities.estoque.list(),
-        entities.isotanques.list(),
+        listTankas(),
         entities.vasilhames.list(),
         entities.transbordos.list("-created_at"),
       ]);
