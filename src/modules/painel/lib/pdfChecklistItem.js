@@ -174,19 +174,22 @@ function answerMeta(answer, t) {
  * Rótulo da verificação de validade dos testes com destino, prazo e data limite
  * usados na conferência (snapshot gravado no item).
  */
-function validadeTestesLabel(base, validade, t, language) {
+function validadeTestesLabel(base, validade, t, language, def) {
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  const teste = (validade?.testes || []).find((row) => row?.key && row.key === def?.key);
+  const alvo = teste || (!Array.isArray(validade?.testes) && validade?.dias != null ? validade : null);
   const parts = [];
-  if (validade.destino) parts.push(`${t(`${prefix}.destino`)}: ${validade.destino}`);
-  if (validade.configurado === false || validade.dias == null) {
+  if (validade?.destino) parts.push(`${t(`${prefix}.destino`)}: ${validade.destino}`);
+  if (!alvo || validade?.configurado === false) {
     parts.push(t(`${prefix}.naoConfigurado`));
   } else {
-    parts.push(t(`${prefix}.prazoDias`, { dias: validade.dias }));
+    parts.push(t(`${prefix}.prazoDias`, { dias: alvo.dias }));
     parts.push(
-      `${t(`${prefix}.limiteCurto`)} ${formatDataLimiteTestes(validade.data_limite, language)}`
+      `${t(`${prefix}.limiteCurto`)} ${formatDataLimiteTestes(alvo.data_limite, language)}`
     );
   }
-  return `${base} (${parts.join(' · ')})`;
+  const nome = teste?.nome || base;
+  return parts.length ? `${nome} (${parts.join(' · ')})` : nome;
 }
 
 function eslingaColorLabel(base, colorCod, t) {
@@ -903,7 +906,7 @@ export async function generateChecklistItemPDF({
 
     const resolveLabel = (def) => {
       if (section === VALIDADE_TESTES_SECTION && item.validade_testes) {
-        return validadeTestesLabel(checkDefLabel(def, t), item.validade_testes, t, language);
+        return validadeTestesLabel(checkDefLabel(def, t), item.validade_testes, t, language, def);
       }
       if (section === ESLINGA_COLOR_SECTION && item.validade_testes?.color_cod) {
         return eslingaColorLabel(checkDefLabel(def, t), item.validade_testes.color_cod, t);

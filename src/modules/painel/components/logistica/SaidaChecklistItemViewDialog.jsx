@@ -62,6 +62,41 @@ function InfoChip({ label, value }) {
   );
 }
 
+/** Destino e, no formato antigo, o prazo único. Cada teste novo detalha a própria data na linha. */
+function ValidadeTestesResumo({ validade, t, language }) {
+  const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
+  const testes = Array.isArray(validade?.testes) ? validade.testes : [];
+  const legado = testes.length === 0 && validade?.dias != null && validade?.configurado !== false;
+  return (
+    <div className="space-y-0.5 text-xs text-muted-foreground">
+      {validade?.destino ? (
+        <p>
+          {t(`${prefix}.destino`)}:{' '}
+          <span className="font-medium text-foreground">{validade.destino}</span>
+        </p>
+      ) : null}
+      {testes.length > 0 ? null : legado ? (
+        <>
+          <p>
+            {t(`${prefix}.prazo`)}:{' '}
+            <span className="font-medium text-foreground">
+              {t(`${prefix}.prazoDias`, { dias: validade.dias })}
+            </span>
+          </p>
+          <p>
+            {t(`${prefix}.dataLimite`)}:{' '}
+            <span className="font-medium text-foreground">
+              {formatDataLimiteTestes(validade.data_limite, language)}
+            </span>
+          </p>
+        </>
+      ) : (
+        <p className="font-medium text-amber-700">{t(`${prefix}.naoConfigurado`)}</p>
+      )}
+    </div>
+  );
+}
+
 export default function SaidaChecklistItemViewDialog({
   open,
   onClose,
@@ -213,39 +248,7 @@ export default function SaidaChecklistItemViewDialog({
                 {sectionTitle(section)}
               </p>
               {section === VALIDADE_TESTES_SECTION && item.validade_testes ? (
-                <div className="space-y-0.5 text-xs text-muted-foreground">
-                  {item.validade_testes.destino ? (
-                    <p>
-                      {t('painel.comercial.agendamentos.checklist.validadeTestes.destino')}:{' '}
-                      <span className="font-medium text-foreground">
-                        {item.validade_testes.destino}
-                      </span>
-                    </p>
-                  ) : null}
-                  {item.validade_testes.configurado === false ||
-                  item.validade_testes.dias == null ? (
-                    <p className="font-medium text-amber-700">
-                      {t('painel.comercial.agendamentos.checklist.validadeTestes.naoConfigurado')}
-                    </p>
-                  ) : (
-                    <>
-                      <p>
-                        {t('painel.comercial.agendamentos.checklist.validadeTestes.prazo')}:{' '}
-                        <span className="font-medium text-foreground">
-                          {t('painel.comercial.agendamentos.checklist.validadeTestes.prazoDias', {
-                            dias: item.validade_testes.dias,
-                          })}
-                        </span>
-                      </p>
-                      <p>
-                        {t('painel.comercial.agendamentos.checklist.validadeTestes.dataLimite')}:{' '}
-                        <span className="font-medium text-foreground">
-                          {formatDataLimiteTestes(item.validade_testes.data_limite, i18n.language)}
-                        </span>
-                      </p>
-                    </>
-                  )}
-                </div>
+                <ValidadeTestesResumo validade={item.validade_testes} t={t} language={i18n.language} />
               ) : null}
               {section === ESLINGA_COLOR_SECTION && item.validade_testes?.color_cod ? (
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
@@ -271,12 +274,31 @@ export default function SaidaChecklistItemViewDialog({
                   const answer = normalizeCheckValue(item.checks?.[c.key]);
                   const meta = ANSWER_META[answer];
                   const Icon = meta?.icon;
+                  const teste =
+                    section === VALIDADE_TESTES_SECTION
+                      ? (item.validade_testes?.testes || []).find((row) => row.key === c.key)
+                      : null;
                   return (
                     <div
                       key={c.key}
                       className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <p className="text-sm leading-snug">{checkDefLabel(c, t)}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm leading-snug">{teste?.nome || checkDefLabel(c, t)}</p>
+                        {teste ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {t('painel.comercial.agendamentos.checklist.validadeTestes.prazo')}:{' '}
+                            {t('painel.comercial.agendamentos.checklist.validadeTestes.prazoDias', {
+                              dias: teste.dias,
+                            })}
+                            {' · '}
+                            {t(
+                              'painel.comercial.agendamentos.checklist.validadeTestes.dataLimiteExecucao'
+                            )}
+                            : {formatDataLimiteTestes(teste.data_limite, i18n.language)}
+                          </p>
+                        ) : null}
+                      </div>
                       {meta ? (
                         <span
                           className={cn(

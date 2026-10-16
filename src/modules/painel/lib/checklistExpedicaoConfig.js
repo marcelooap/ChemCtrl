@@ -18,9 +18,11 @@ import { isMissingRpcError } from '@painel/lib/saidaReservas';
 import { listNomesClientesIndustrializacao } from '@painel/lib/saidaClientes';
 import { buildSaidaClienteOptions } from '@painel/lib/recebimentoCatalog';
 import {
+  TESTE_LEGADO_NOME,
   VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
   normalizeColorCod,
   normalizePrazoDias,
+  normalizeTestesConfig,
   parsePrazoDias,
   validarPrazosPorDestino,
 } from '@painel/lib/validadeTestesTanque';
@@ -37,9 +39,13 @@ const CONFIG_RPC_SETUP_MESSAGE =
 const DESTINOS_RPC_SETUP_MESSAGE =
   'Execute o script 042_t_checklist_expedicao_validade_destinos.sql (e 043_t_checklist_expedicao_validade_destinos_color_cod.sql) no SQL Editor do ChemFlow para habilitar os prazos de validade por destino.';
 
+const TESTES_RPC_SETUP_MESSAGE =
+  'Execute o script 044_t_checklist_expedicao_validade_testes.sql no SQL Editor do ChemFlow para habilitar os testes de verificação por destino.';
+
 let tableAvailable = true;
 let configTableAvailable = true;
 let destinosTableAvailable = true;
+let testesColumnAvailable = true;
 
 export function isChecklistExpedicaoTableAvailable() {
   return tableAvailable;
@@ -51,6 +57,30 @@ export function isChecklistExpedicaoConfigAvailable() {
 
 export function isChecklistExpedicaoDestinosAvailable() {
   return destinosTableAvailable;
+}
+
+export function isChecklistExpedicaoTestesAvailable() {
+  return testesColumnAvailable;
+}
+
+/** A coluna `testes` só existe depois do script 044. Linhas antigas não trazem a chave. */
+function noteTestesColumn(rows) {
+  if (!rows?.length) return;
+  testesColumnAvailable = rows.some(
+    (row) => row != null && Object.prototype.hasOwnProperty.call(row, 'testes')
+  );
+}
+
+/**
+ * Testes do destino. Sem a coluna nova, o prazo único antigo vira um teste
+ * para a conferência não sumir antes da migração.
+ */
+function testesFromDestinoRow(row) {
+  if (row != null && Object.prototype.hasOwnProperty.call(row, 'testes')) {
+    return normalizeTestesConfig(row.testes);
+  }
+  const dias = parsePrazoDias(row?.prazo_validade_testes_dias);
+  return dias == null ? [] : [{ nome: TESTE_LEGADO_NOME, dias }];
 }
 
 function isMissingTableError(err, table) {
@@ -162,14 +192,15 @@ export const DEFAULT_VALIDADE_TESTES_CONFIG = Object.freeze({
   prazosPorDestino: Object.freeze([]),
 });
 
-/** Linhas de prazo por destino do banco → `[{ destino, dias, color_cod }]` na ordem de cadastro. */
+/** Linhas de destino do banco → `[{ destino, color_cod, testes }]` na ordem de cadastro. */
 function toPrazosPorDestino(rows = []) {
+  noteTestesColumn(rows);
   return [...(rows || [])]
     .sort((a, b) => String(a?.created_at || '').localeCompare(String(b?.created_at || '')))
     .map((row) => ({
       destino: String(row.destino || '').trim(),
-      dias: normalizePrazoDias(row.prazo_validade_testes_dias),
       color_cod: normalizeColorCod(row.color_cod),
+      testes: testesFromDestinoRow(row),
     }))
     .filter((row) => row.destino);
 }
@@ -202,7 +233,7 @@ async function listPrazosDestinoRows(clienteId) {
 
 /**
  * Configuração da validade dos testes de um cliente (padrão quando não há registro).
- * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>}
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }> }>}
  */
 export async function getChecklistExpedicaoConfig(clienteId) {
   const id = normalizeClienteId(clienteId);
@@ -237,10 +268,17 @@ async function savePrazosPorDestino(clienteId, items) {
     't_salvar_checklist_expedicao_validade_destinos',
     {
       p_cliente_id: clienteId,
-      p_prazos: items.map(({ destino, dias, color_cod }) => ({
+      p_prazos: items.map(({ destino, color_cod, testes }) => ({
         destino,
-        dias,
+        // Coluna legada, ainda obrigatória: guarda o maior prazo dos testes do destino.
+        dias:
+          (testes || []).reduce((max, teste) => Math.max(max, teste.dias), 0) ||
+          VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
         color_cod: color_cod || null,
+        testes: (testes || []).map(({ nome, dias }) => ({
+          nome,
+          prazo_dias: dias,
+        })),
       })),
     }
   );
@@ -250,11 +288,21 @@ async function savePrazosPorDestino(clienteId, items) {
       destinosTableAvailable = false;
       throw new Error(DESTINOS_RPC_SETUP_MESSAGE);
     }
-    throw new Error(error.message || 'Não foi possível salvar os prazos por destino.');
+    throw new Error(error.message || 'Não foi possível salvar os testes por destino.');
   }
 
   destinosTableAvailable = true;
-  return data || [];
+  const returned = data || [];
+  const sentCount = items.reduce((total, item) => total + (item.testes?.length || 0), 0);
+  const gotCount = returned.reduce(
+    (total, row) => total + (Array.isArray(row?.testes) ? row.testes.length : 0),
+    0
+  );
+  if (sentCount > 0 && gotCount === 0) {
+    testesColumnAvailable = false;
+    throw new Error(TESTES_RPC_SETUP_MESSAGE);
+  }
+  return returned;
 }
 
 /**
@@ -266,9 +314,9 @@ async function savePrazosPorDestino(clienteId, items) {
  *   clienteId: string,
  *   ativo: boolean,
  *   dias: number|string,
- *   prazosPorDestino?: Array<{ destino: string, dias: number|string, color_cod?: string|null }>,
+ *   prazosPorDestino?: Array<{ destino: string, color_cod?: string|null, testes: Array<{ nome: string, dias: number }> }>,
  * }} args
- * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>}
+ * @returns {Promise<{ ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }> }>}
  */
 export async function saveChecklistExpedicaoConfig({
   clienteId,
@@ -466,7 +514,7 @@ async function fetchDestinoRows(allIds) {
  * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
  * @returns {Promise<{
  *   checkDefs: Map<string, Array<{ key: string, label: string, section: string }>>,
- *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, dias: number, color_cod: string|null }> }>,
+ *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }> }>,
  * }>} Chaves dos mapas: id do cliente e `checkDefsNomeKey(nome)`.
  */
 export async function loadChecklistExpedicaoOperacional(clientes = []) {

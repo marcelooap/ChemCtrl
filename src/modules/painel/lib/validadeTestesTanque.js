@@ -70,23 +70,75 @@ export function normalizePrazoDias(value) {
   return parsePrazoDias(value) ?? VALIDADE_TESTES_PRAZO_PADRAO_DIAS;
 }
 
-/** Códigos de erro da validação dos prazos por destino. */
+/** Nome usado só para converter o prazo único antigo em um teste, até o cadastro ser revisado. */
+export const TESTE_LEGADO_NOME = 'Validade dos testes';
+
+/** Tamanho máximo do nome livre do teste. */
+export const TESTE_NOME_MAX = 120;
+
+/** Códigos de erro da validação dos testes por destino. */
 export const PRAZO_DESTINO_ERROR = Object.freeze({
   DESTINO_REQUIRED: 'DESTINO_REQUIRED',
   DUPLICATE_DESTINO: 'DUPLICATE_DESTINO',
   PRAZO_INVALID: 'PRAZO_INVALID',
+  TESTES_REQUIRED: 'TESTES_REQUIRED',
+  TESTE_NOME_REQUIRED: 'TESTE_NOME_REQUIRED',
+  TESTE_NOME_LONG: 'TESTE_NOME_LONG',
+  DUPLICATE_TESTE: 'DUPLICATE_TESTE',
+  TESTE_PRAZO_INVALID: 'TESTE_PRAZO_INVALID',
 });
 
+/** Nome do teste normalizado para comparação (sem acento, caixa ou espaços nas pontas). */
+export function testeNomeKey(nome) {
+  return String(nome ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 /**
- * Valida as linhas "destino + prazo + color cod" do item de validade dos testes.
- * Regras: destino obrigatório, sem repetição no mesmo item e prazo inteiro positivo.
- * Color Cod é opcional; quando informado, precisa ser um dos valores conhecidos.
+ * Chave estável da resposta do checklist para um teste.
+ * Nomes que diferem só por acento, caixa ou pontuação compartilham a mesma chave.
+ */
+export function validadeTesteCheckKey(nome) {
+  const slug = testeNomeKey(nome)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `validade_teste:${slug || 'teste'}`;
+}
+
+/**
+ * Lista persistida (`[{ nome, prazo_dias }]`) → `[{ nome, dias }]`, descartando linhas inválidas.
+ * @param {unknown} raw
+ * @returns {Array<{ nome: string, dias: number }>}
+ */
+export function normalizeTestesConfig(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((teste) => {
+      const nome = String(teste?.nome ?? '').trim();
+      const dias = parsePrazoDias(teste?.dias ?? teste?.prazo_dias);
+      if (!nome || dias == null) return null;
+      return { nome, dias };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Valida as linhas "destino + color cod + testes" da verificação.
+ * Cada destino tem um ou mais testes, com nome e prazo próprios.
+ * Color Cod continua opcional e vale para o destino inteiro.
  *
- * @param {Array<{ destino?: string, dias?: string|number, color_cod?: string|null }>} rows
+ * @param {Array<{
+ *   destino?: string,
+ *   color_cod?: string|null,
+ *   testes?: Array<{ nome?: string, dias?: string|number }>,
+ * }>} rows
  * @returns {{
  *   ok: boolean,
- *   errors: Array<{ index: number, field: 'destino'|'dias'|'color_cod', code: string }>,
- *   items: Array<{ destino: string, dias: number, color_cod: string|null }>,
+ *   errors: Array<{ index: number, testeIndex?: number, field: string, code: string }>,
+ *   items: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }>,
  * }} `items` traz apenas as linhas válidas, já normalizadas.
  */
 export function validarPrazosPorDestino(rows = []) {
@@ -107,57 +159,102 @@ export function validarPrazosPorDestino(rows = []) {
       seen.add(key);
     }
 
-    const dias = parsePrazoDias(row?.dias);
-    if (dias == null) {
-      rowErrors.push({ index, field: 'dias', code: PRAZO_DESTINO_ERROR.PRAZO_INVALID });
-    }
-
     const rawColor = String(row?.color_cod ?? '').trim();
     const color_cod = normalizeColorCod(rawColor);
     if (rawColor && !color_cod) {
       rowErrors.push({ index, field: 'color_cod', code: 'COLOR_COD_INVALID' });
     }
 
+    const testes = Array.isArray(row?.testes) ? row.testes : [];
+    const cleanTestes = [];
+    const seenTestes = new Set();
+    if (testes.length === 0) {
+      rowErrors.push({ index, field: 'testes', code: PRAZO_DESTINO_ERROR.TESTES_REQUIRED });
+    } else {
+      testes.forEach((teste, testeIndex) => {
+        const nome = String(teste?.nome ?? '').trim();
+        const nomeKey = testeNomeKey(nome);
+        const checkKey = validadeTesteCheckKey(nome);
+        let nomeOk = false;
+        if (!nomeKey) {
+          rowErrors.push({
+            index,
+            testeIndex,
+            field: 'nome',
+            code: PRAZO_DESTINO_ERROR.TESTE_NOME_REQUIRED,
+          });
+        } else if (nome.length > TESTE_NOME_MAX) {
+          rowErrors.push({
+            index,
+            testeIndex,
+            field: 'nome',
+            code: PRAZO_DESTINO_ERROR.TESTE_NOME_LONG,
+          });
+        } else if (seenTestes.has(checkKey)) {
+          rowErrors.push({
+            index,
+            testeIndex,
+            field: 'nome',
+            code: PRAZO_DESTINO_ERROR.DUPLICATE_TESTE,
+          });
+        } else {
+          seenTestes.add(checkKey);
+          nomeOk = true;
+        }
+
+        const dias = parsePrazoDias(teste?.dias);
+        if (dias == null) {
+          rowErrors.push({
+            index,
+            testeIndex,
+            field: 'dias',
+            code: PRAZO_DESTINO_ERROR.TESTE_PRAZO_INVALID,
+          });
+        } else if (nomeOk) {
+          cleanTestes.push({ nome, dias });
+        }
+      });
+    }
+
     if (rowErrors.length > 0) errors.push(...rowErrors);
-    else items.push({ destino, dias, color_cod });
+    else items.push({ destino, color_cod, testes: cleanTestes });
   });
 
   return { ok: errors.length === 0, errors, items };
 }
 
 /**
- * Prazo e Color Cod aplicáveis à solicitação: cliente + destino.
+ * Testes e Color Cod aplicáveis à solicitação: cliente + destino.
+ * Sem cadastro para o destino, `encontrado` é false e a lista de testes fica vazia.
  *
- * O prazo existe somente por destino: sem cadastro para o destino da solicitação
- * (ou sem destino informado) o prazo é `null` — nunca se reaproveita o prazo de
- * outro destino nem um valor padrão.
- *
- * @param {{ prazosPorDestino?: Array<{ destino: string, dias: number|string, color_cod?: string|null }> }} config
+ * @param {{ prazosPorDestino?: Array<{ destino: string, color_cod?: string|null, testes?: Array<{ nome: string, dias: number }> }> }} config
  * @param {string|null|undefined} destino destino da solicitação de saída
- * @returns {{ dias: number|null, destino: string, color_cod: string|null }}
+ * @returns {{ encontrado: boolean, destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }}
  */
-export function resolverPrazoValidadeTestes(config, destino) {
+export function resolverTestesPorDestino(config, destino) {
   const destinoNome = String(destino ?? '').trim();
   const prazos = Array.isArray(config?.prazosPorDestino) ? config.prazosPorDestino : [];
   const key = destinoKey(destinoNome);
   const found = key ? prazos.find((p) => destinoKey(p?.destino) === key) : null;
   return {
-    dias: found ? parsePrazoDias(found.dias) : null,
+    encontrado: Boolean(found),
     destino: destinoNome,
     color_cod: found ? normalizeColorCod(found.color_cod) : null,
+    testes: found ? normalizeTestesConfig(found.testes) : [],
   };
 }
 
 /**
- * Data limite = dia de calendário local de `base` + `dias`.
- * Ex.: 13/10/2026 + 180 dias → "2027-04-11".
+ * Data limite da execução = dia de calendário local de `base` − `dias`.
+ * A data de execução no físico deve ser maior que esta data.
+ * Ex.: 16/10/2026 − 180 dias → "2026-04-19".
  * @param {number} dias
  * @param {Date} [base]
  * @returns {string} "YYYY-MM-DD"
  */
 export function calcularDataLimiteTestes(dias, base = new Date()) {
   const prazo = normalizePrazoDias(dias);
-  const utcMs = Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) + prazo * MS_PER_DAY;
+  const utcMs = Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) - prazo * MS_PER_DAY;
   return new Date(utcMs).toISOString().slice(0, 10);
 }
 

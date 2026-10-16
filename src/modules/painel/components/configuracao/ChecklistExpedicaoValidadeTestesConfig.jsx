@@ -6,7 +6,7 @@ import ChecklistExpedicaoValidadeDestinosEditor from '@painel/components/configu
 
 /**
  * Opção "Verificação da validade dos testes" do checklist de expedição de um cliente.
- * O prazo é definido somente por destino.
+ * Os testes (nome + prazo) são definidos por destino.
  *
  * @param {{
  *   value: {

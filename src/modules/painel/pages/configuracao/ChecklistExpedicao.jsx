@@ -20,6 +20,7 @@ import {
   isChecklistExpedicaoConfigAvailable,
   isChecklistExpedicaoDestinosAvailable,
   isChecklistExpedicaoTableAvailable,
+  isChecklistExpedicaoTestesAvailable,
   listChecklistExpedicaoClientes,
   listChecklistExpedicaoItens,
   saveChecklistExpedicao,
@@ -37,10 +38,11 @@ import checklistSql from '@transbordo/sql/039_t_checklist_expedicao_itens.sql?ra
 import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config.sql?raw';
 import checklistDestinosSql from '@transbordo/sql/042_t_checklist_expedicao_validade_destinos.sql?raw';
 import checklistDestinosColorSql from '@transbordo/sql/043_t_checklist_expedicao_validade_destinos_color_cod.sql?raw';
+import checklistTestesSql from '@transbordo/sql/044_t_checklist_expedicao_validade_testes.sql?raw';
 
 /**
  * Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre).
- * `destinos`: linhas "destino + prazo" com `key` estável para a lista.
+ * `destinos`: destino, color cod e os testes (nome + prazo) daquele destino.
  */
 const DEFAULT_CONFIG_FORM = {
   ativo: DEFAULT_VALIDADE_TESTES_CONFIG.ativo,
@@ -55,8 +57,12 @@ function toConfigForm(config) {
     destinos: (config?.prazosPorDestino || []).map((p) => ({
       key: createTempItemId(),
       destino: p.destino,
-      dias: String(p.dias),
       color_cod: p.color_cod || '',
+      testes: (p.testes || []).map((teste) => ({
+        key: createTempItemId(),
+        nome: teste.nome,
+        dias: String(teste.dias),
+      })),
     })),
   };
 }
@@ -91,6 +97,7 @@ export default function ChecklistExpedicao() {
   const [tableMissing, setTableMissing] = useState(false);
   const [configMissing, setConfigMissing] = useState(false);
   const [destinosMissing, setDestinosMissing] = useState(false);
+  const [testesMissing, setTestesMissing] = useState(false);
   const [showDestinoErrors, setShowDestinoErrors] = useState(false);
   const [hadConfig, setHadConfig] = useState(false);
 
@@ -154,6 +161,7 @@ export default function ChecklistExpedicao() {
         setTableMissing(!isChecklistExpedicaoTableAvailable());
         setConfigMissing(!isChecklistExpedicaoConfigAvailable());
         setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
+        setTestesMissing(!isChecklistExpedicaoTestesAvailable());
         setConfig(toConfigForm(savedConfig));
         setItens(
           rows.map((r) => ({
@@ -255,8 +263,8 @@ export default function ChecklistExpedicao() {
         return;
       }
 
-      // Destino obrigatório, sem repetição e prazo inteiro positivo. Desativada, as linhas
-      // estão ocultas: só as completas são gravadas.
+      // Destino obrigatório, sem repetição, e cada teste com nome e prazo.
+      // Desativada, as linhas estão ocultas: só as completas são gravadas.
       const destinosValidation = validarPrazosPorDestino(config.destinos);
       if (config.ativo && !destinosValidation.ok) {
         setShowDestinoErrors(true);
@@ -291,6 +299,7 @@ export default function ChecklistExpedicao() {
           setConfigDirty(false);
           setConfigMissing(!isChecklistExpedicaoConfigAvailable());
           setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
+        setTestesMissing(!isChecklistExpedicaoTestesAvailable());
         }
 
         const saved = itensDirty
@@ -330,6 +339,9 @@ export default function ChecklistExpedicao() {
         }
         if (String(err?.message || '').includes('042_t_checklist')) {
           setDestinosMissing(true);
+        }
+        if (String(err?.message || '').includes('044_t_checklist')) {
+          setTestesMissing(true);
         }
         toast({
           title: t('painel.configuracao.checklistExpedicao.saveError'),
@@ -381,6 +393,11 @@ export default function ChecklistExpedicao() {
           missing: destinosMissing && !configMissing,
           messageKey: 'validadeTestes.destinos.tableMissingBanner',
           sql: `${checklistDestinosSql}\n\n${checklistDestinosColorSql}`,
+        },
+        {
+          missing: testesMissing && !destinosMissing && !configMissing,
+          messageKey: 'validadeTestes.testesColumnMissingBanner',
+          sql: checklistTestesSql,
         },
       ]
         .filter((banner) => banner.missing)

@@ -46,7 +46,6 @@ import {
   CHECKLIST_STATUS,
   ESLINGA_COLOR_CHECK_KEY,
   ESLINGA_COLOR_SECTION,
-  VALIDADE_TESTES_CHECK_KEY,
   VALIDADE_TESTES_SECTION,
   areAllItemsApproved,
   areAllItemsReleasable,
@@ -193,35 +192,18 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
 );
 
 /**
- * Situação dos testes conforme a regra existente: o sistema calcula a data limite
- * e o operador registra Aprovado (dentro do prazo) ou Reprovado (fora do prazo).
+ * Conferência teste a teste. A data limite é hoje menos o prazo do teste;
+ * a data de execução no físico precisa ser maior que essa data.
+ * Sem testes para o destino, a verificação fica bloqueada.
+ * Itens antigos (um prazo único, sem lista) continuam no card legado.
  */
-function validadeSituacao({ configurado, value }) {
+function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, onChange, language, t }) {
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
-  if (!configurado) {
-    return { labelKey: `${prefix}.situacaoIndefinida`, className: 'text-amber-700' };
-  }
-  if (value === CHECK_ANSWER.APROVADO) {
-    return { labelKey: `${prefix}.situacaoDentro`, className: 'text-emerald-700' };
-  }
-  if (value === CHECK_ANSWER.REPROVADO) {
-    return { labelKey: `${prefix}.situacaoFora`, className: 'text-red-700' };
-  }
-  return { labelKey: `${prefix}.situacaoPendente`, className: 'text-muted-foreground' };
-}
-
-/**
- * Validade dos testes do tanque: o prazo vem do destino da solicitação de saída
- * (configurado no Check List do cliente) e a data limite é calculada pelo sistema
- * (hoje + prazo); o operador apenas registra Aprovado/Reprovado.
- * Sem prazo configurado para o destino, a verificação fica bloqueada e sinalizada.
- */
-function ValidadeTestesSection({ validade, number, value, disabled, onChange, language, t }) {
-  const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
-  const configurado = validade.configurado !== false && validade.dias != null;
-  const situacao = validadeSituacao({ configurado, value });
-  const isRejected = value === CHECK_ANSWER.REPROVADO;
+  const testes = Array.isArray(validade?.testes) ? validade.testes : [];
+  const legado = testes.length === 0 && validade?.dias != null && validade?.configurado !== false;
+  const bloqueado = testes.length === 0 && !legado;
   const chipClass = 'border-border/60 bg-muted/30 shadow-none';
+  const testeByKey = new Map(testes.map((teste) => [teste.key, teste]));
 
   return (
     <div className="space-y-1.5">
@@ -229,14 +211,14 @@ function ValidadeTestesSection({ validade, number, value, disabled, onChange, la
         {t(`painel.comercial.agendamentos.checklist.sections.${VALIDADE_TESTES_SECTION}`)}
       </p>
 
-      {/* Card único: prazo, datas e resultado formam um só item de verificação. */}
-      <div
-        className={cn(
-          'space-y-3 rounded-lg border p-3 shadow-sm',
-          isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
-        )}
-      >
-        {!configurado ? (
+      <div className="space-y-2">
+        <InfoChip
+          className={chipClass}
+          label={t(`${prefix}.destino`)}
+          value={validade?.destino || t(`${prefix}.destinoVazio`)}
+        />
+
+        {bloqueado ? (
           <div
             role="alert"
             className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
@@ -245,55 +227,70 @@ function ValidadeTestesSection({ validade, number, value, disabled, onChange, la
             <div>
               <p className="font-semibold">{t(`${prefix}.naoConfigurado`)}</p>
               <p className="mt-0.5 text-xs">
-                {t(validade.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
+                {t(validade?.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
               </p>
             </div>
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <InfoChip
-            className={chipClass}
-            label={t(`${prefix}.destino`)}
-            value={validade.destino || t(`${prefix}.destinoVazio`)}
-          />
-          <InfoChip
-            className={chipClass}
-            label={t(`${prefix}.prazo`)}
-            value={configurado ? t(`${prefix}.prazoDias`, { dias: validade.dias }) : '—'}
-          />
-          <InfoChip
-            className={chipClass}
-            label={t(`${prefix}.dataLimite`)}
-            value={configurado ? formatDataLimiteTestes(validade.data_limite, language) : '—'}
-            valueClassName={configurado ? 'font-bold text-emerald-800' : undefined}
-          />
-          <InfoChip
-            className={chipClass}
-            label={t(`${prefix}.situacao`)}
-            value={t(situacao.labelKey)}
-            valueClassName={cn('font-semibold', situacao.className)}
-          />
-        </div>
-
-        {configurado ? (
-          <p className="text-xs text-muted-foreground">
-            {t(`${prefix}.hint`, { dias: validade.dias })}
-          </p>
-        ) : null}
-
-        <div className="border-t border-border/60 pt-3">
-          <CheckAnswerRow
-            bare
-            label={t(`${prefix}.resultado`)}
-            number={number}
-            value={value}
-            disabled={disabled || !configurado}
-            onChange={onChange}
-            options={APPROVE_REJECT_OPTIONS}
-            t={t}
-          />
-        </div>
+        {(defs || []).map((def) => {
+          const teste = testeByKey.get(def.key);
+          const value = checks?.[def.key] || '';
+          const isRejected = value === CHECK_ANSWER.REPROVADO;
+          const dataLimite = teste
+            ? formatDataLimiteTestes(teste.data_limite, language)
+            : legado
+              ? formatDataLimiteTestes(validade.data_limite, language)
+              : '—';
+          const dias = teste?.dias ?? (legado ? validade.dias : null);
+          return (
+            <div
+              key={def.key}
+              className={cn(
+                'space-y-3 rounded-lg border p-3 shadow-sm',
+                isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+              )}
+            >
+              <p className="text-sm font-semibold text-foreground">
+                {teste?.nome || (legado ? t(`${prefix}.resultado`) : checkDefLabel(def, t))}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <InfoChip
+                  className={chipClass}
+                  label={t(`${prefix}.prazo`)}
+                  value={dias != null ? t(`${prefix}.prazoDias`, { dias }) : '—'}
+                />
+                <InfoChip
+                  className={chipClass}
+                  label={t(teste ? `${prefix}.dataLimiteExecucao` : `${prefix}.dataLimite`)}
+                  value={dataLimite}
+                  valueClassName={dias != null ? 'font-bold text-emerald-800' : undefined}
+                />
+              </div>
+              {teste ? (
+                <p className="text-xs text-muted-foreground">
+                  {t(`${prefix}.execucaoHint`, { dias: teste.dias, data: dataLimite })}
+                </p>
+              ) : legado ? (
+                <p className="text-xs text-muted-foreground">
+                  {t(`${prefix}.hint`, { dias: validade.dias })}
+                </p>
+              ) : null}
+              <div className="border-t border-border/60 pt-3">
+                <CheckAnswerRow
+                  bare
+                  label={t(`${prefix}.resultado`)}
+                  number={itemNumbers.get(def.key)}
+                  value={value}
+                  disabled={disabled || bloqueado}
+                  onChange={(v) => onChange(def.key, v)}
+                  options={APPROVE_REJECT_OPTIONS}
+                  t={t}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -708,6 +705,7 @@ export default function AgendamentoCarregamentoChecklistModal({
 
   const showLacresBlock = active?.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks;
   const showEslingaColor = Boolean(active?.validade_testes?.color_cod);
+  const validadeDefs = checkDefs.filter((c) => c.section === VALIDADE_TESTES_SECTION);
   const visibleSections = sections.filter(
     (section) =>
       section !== VALIDADE_TESTES_SECTION &&
@@ -715,13 +713,13 @@ export default function AgendamentoCarregamentoChecklistModal({
       !(showLacresBlock && section === 'lacres')
   );
 
-  // Ordem de exibição = ordem de conferência: lacres, validade, eslinga e demais seções.
+  // Ordem de exibição = ordem de conferência: lacres, testes, eslinga e demais seções.
   const itemNumbers = (() => {
     const orderedKeys = [];
     if (showLacresBlock) {
       checkDefs.filter((c) => c.section === 'lacres').forEach((c) => orderedKeys.push(c.key));
     }
-    if (active?.validade_testes) orderedKeys.push(VALIDADE_TESTES_CHECK_KEY);
+    validadeDefs.forEach((c) => orderedKeys.push(c.key));
     if (showEslingaColor) orderedKeys.push(ESLINGA_COLOR_CHECK_KEY);
     visibleSections.forEach((section) => {
       checkDefs.filter((c) => c.section === section).forEach((c) => orderedKeys.push(c.key));
@@ -999,13 +997,14 @@ export default function AgendamentoCarregamentoChecklistModal({
                 </div>
               ) : null}
 
-              {active.validade_testes ? (
+              {validadeDefs.length > 0 ? (
                 <ValidadeTestesSection
                   validade={active.validade_testes}
-                  number={itemNumbers.get(VALIDADE_TESTES_CHECK_KEY)}
-                  value={active.checks?.[VALIDADE_TESTES_CHECK_KEY] || ''}
+                  defs={validadeDefs}
+                  itemNumbers={itemNumbers}
+                  checks={active.checks}
                   disabled={readOnly || saving}
-                  onChange={(v) => setAnswer(VALIDADE_TESTES_CHECK_KEY, v)}
+                  onChange={setAnswer}
                   language={i18n.language}
                   t={t}
                 />

@@ -17,10 +17,9 @@ import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 import {
   calcularDataLimiteTestes,
-  normalizePrazoDias,
-  resolverPrazoValidadeTestes,
+  resolverTestesPorDestino,
+  validadeTesteCheckKey,
 } from '@painel/lib/validadeTestesTanque';
-import { destinoKey } from '@transbordo/lib/saidaDestinos';
 
 export const CHECKLIST_STATUS = {
   PENDENTE: 'pendente',
@@ -158,10 +157,32 @@ const ESLINGA_COLOR_CHECK_DEF = Object.freeze({
 });
 
 /**
+ * Um item de checklist por teste do destino.
+ * Conferência antiga (prazo único, sem lista) continua com a verificação única.
+ * Destino da solicitação fora do cadastro gera um item bloqueado.
+ */
+export function validadeTesteDefs(validade) {
+  if (!validade) return [];
+  const testes = Array.isArray(validade.testes) ? validade.testes : null;
+  if (testes && testes.length > 0) {
+    return testes.map((teste) => ({
+      key: teste.key || validadeTesteCheckKey(teste.nome),
+      section: VALIDADE_TESTES_SECTION,
+      label: teste.nome,
+    }));
+  }
+  if (validade.dias != null && validade.configurado !== false && !testes) {
+    return [VALIDADE_TESTES_CHECK_DEF];
+  }
+  if (validade.encontrado === false) return [VALIDADE_TESTES_CHECK_DEF];
+  return [];
+}
+
+/**
  * Definições de verificação de um item: snapshot customizado do cliente
  * ou os checks padrão do kind (legado / cliente sem configuração).
- * Quando o item carrega `validade_testes`, a verificação de validade dos testes
- * é acrescentada ao final; com Color Cod cadastrado, segue a da eslinga.
+ * Quando o item carrega `validade_testes`, cada teste do destino vira uma
+ * verificação; com Color Cod cadastrado, segue a da eslinga.
  */
 export function checkDefsForItem(item) {
   const base =
@@ -169,7 +190,7 @@ export function checkDefsForItem(item) {
       ? item.check_defs
       : checksForKind(item?.kind);
   const defs = [...base];
-  if (item?.validade_testes) defs.push(VALIDADE_TESTES_CHECK_DEF);
+  defs.push(...validadeTesteDefs(item?.validade_testes));
   if (item?.validade_testes?.color_cod) defs.push(ESLINGA_COLOR_CHECK_DEF);
   return defs;
 }
@@ -269,32 +290,23 @@ function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
 }
 
 /**
- * Validade dos testes de um tanque: prazo cadastrado para o destino da solicitação e
- * data limite calculada a partir de `hoje`.
- * Sem prazo cadastrado para o destino, `configurado` é false e não há data limite.
+ * Testes do tanque para o destino da solicitação.
+ * A data limite de cada teste é hoje menos o prazo: a execução no físico
+ * precisa ser maior que essa data. Destino fora do cadastro não traz testes.
  */
 function buildValidadeTestes(config, destino, hoje) {
-  const prazo = resolverPrazoValidadeTestes(config, destino);
-  const configurado = prazo.dias != null;
+  const resolved = resolverTestesPorDestino(config, destino);
   return {
-    destino: prazo.destino,
-    configurado,
-    dias: prazo.dias,
-    data_limite: configurado ? calcularDataLimiteTestes(prazo.dias, hoje) : null,
-    color_cod: prazo.color_cod || null,
+    destino: resolved.destino,
+    encontrado: resolved.encontrado,
+    color_cod: resolved.color_cod || null,
+    testes: resolved.testes.map((teste) => ({
+      key: validadeTesteCheckKey(teste.nome),
+      nome: teste.nome,
+      dias: teste.dias,
+      data_limite: calcularDataLimiteTestes(teste.dias, hoje),
+    })),
   };
-}
-
-/**
- * A conferência já registrada continua válida enquanto o prazo que a originou não mudar.
- * Mudou o destino da solicitação (ou o prazo do destino) → a validade precisa ser reconferida.
- */
-function isValidadeSnapshotVigente(built, saved) {
-  if (!built?.configurado) return false;
-  // Registros anteriores aos prazos por destino não guardam o destino: compara só o prazo.
-  const mesmoDestino =
-    saved.destino == null || destinoKey(saved.destino) === destinoKey(built.destino);
-  return mesmoDestino && Number(saved.dias) === built.dias;
 }
 
 /** Color Cod da eslinga mudou → a verificação da eslinga precisa ser reconferida. */
@@ -696,14 +708,26 @@ export function buildChecklistPayloadV2({ items, user }) {
             section: d.section || 'verificacoes',
           }))
         : null,
-      // Prazo e data limite vigentes na conferência (histórico auditável).
+      // Testes, prazos e datas limite vigentes na conferência (histórico auditável).
       validade_testes: it.validade_testes
         ? {
-            dias: it.validade_testes.dias,
-            data_limite: it.validade_testes.data_limite,
             destino: it.validade_testes.destino || null,
-            configurado: it.validade_testes.configurado !== false,
+            encontrado: it.validade_testes.encontrado !== false,
             color_cod: it.validade_testes.color_cod || null,
+            // Conferências antigas guardam um prazo único, sem a lista de testes.
+            dias: it.validade_testes.dias ?? null,
+            data_limite: it.validade_testes.data_limite ?? null,
+            configurado: Array.isArray(it.validade_testes.testes)
+              ? it.validade_testes.testes.length > 0
+              : it.validade_testes.configurado !== false,
+            testes: Array.isArray(it.validade_testes.testes)
+              ? it.validade_testes.testes.map((teste) => ({
+                  key: teste.key,
+                  nome: teste.nome,
+                  dias: teste.dias,
+                  data_limite: teste.data_limite,
+                }))
+              : null,
           }
         : null,
       checks: { ...it.checks },
@@ -755,26 +779,34 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ? saved.check_defs
           : null;
 
-    // Data limite é calculada a partir de "hoje"; após o operador registrar o resultado,
-    // mantém a data com que a conferência foi feita (não "anda" ao reabrir) — desde que o
-    // destino/prazo que a originou continue o mesmo. Caso contrário, a validade é reconferida.
-    const answeredValidade = Boolean(normalizeCheckValue(saved.checks?.[VALIDADE_TESTES_CHECK_KEY]));
-    const keepSavedValidade = Boolean(
-      built.validade_testes &&
-        answeredValidade &&
-        saved.validade_testes?.data_limite &&
-        isValidadeSnapshotVigente(built.validade_testes, saved.validade_testes)
-    );
-    const validadeInvalidada = Boolean(built.validade_testes && answeredValidade && !keepSavedValidade);
-    const validade_testes = keepSavedValidade
-      ? {
-          ...built.validade_testes,
-          dias: normalizePrazoDias(saved.validade_testes.dias),
-          data_limite: saved.validade_testes.data_limite,
-          // Mantém o Color Cod atual do destino; a eslinga é reconferida se mudar.
-          color_cod: built.validade_testes.color_cod || null,
-        }
-      : built.validade_testes;
+    // A data limite anda com o dia até o operador responder. Depois disso, fica a data
+    // da conferência — desde que o prazo daquele teste não tenha mudado.
+    const invalidatedTesteKeys = new Set();
+    let validade_testes = built.validade_testes;
+    if (validade_testes?.testes?.length) {
+      const savedByKey = new Map(
+        (saved.validade_testes?.testes || []).map((teste) => [teste.key, teste])
+      );
+      validade_testes = {
+        ...validade_testes,
+        testes: validade_testes.testes.map((teste) => {
+          const prev = savedByKey.get(teste.key);
+          const answered = Boolean(normalizeCheckValue(saved.checks?.[teste.key]));
+          if (!answered || !prev?.data_limite) return teste;
+          if (Number(prev.dias) !== Number(teste.dias)) {
+            invalidatedTesteKeys.add(teste.key);
+            return teste;
+          }
+          return { ...teste, data_limite: prev.data_limite };
+        }),
+      };
+    }
+    const validadeInvalidada =
+      invalidatedTesteKeys.size > 0 ||
+      Boolean(
+        validade_testes?.encontrado === false &&
+          normalizeCheckValue(saved.checks?.[VALIDADE_TESTES_CHECK_KEY])
+      );
 
     const answeredEslinga = Boolean(normalizeCheckValue(saved.checks?.[ESLINGA_COLOR_CHECK_KEY]));
     const eslingaInvalidada = Boolean(
@@ -788,7 +820,8 @@ export function mergeChecklistItems(builtItems, storedItems) {
     for (const key of Object.keys(checks)) {
       checks[key] = normalizeCheckValue(saved.checks?.[key]);
     }
-    if (validadeInvalidada) checks[VALIDADE_TESTES_CHECK_KEY] = '';
+    for (const key of invalidatedTesteKeys) checks[key] = '';
+    if (validade_testes?.encontrado === false) checks[VALIDADE_TESTES_CHECK_KEY] = '';
     if (eslingaInvalidada) checks[ESLINGA_COLOR_CHECK_KEY] = '';
 
     const status = computeItemStatus({ ...mergedBase, checks });
