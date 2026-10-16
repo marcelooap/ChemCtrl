@@ -1104,6 +1104,7 @@
           "concluirBlockedHint": "Complete y valide el checklist antes de concluir la carga.",
           "attachPhotos": "Adjuntar fotos",
           "takePhoto": "Tomar foto",
+          "nextItem": "Siguiente ítem",
           "saveProgress": "Guardar progreso",
           "progressSaved": "Progreso guardado. Puede retomar la verificación más tarde.",
           "loadingDefs": "Cargando checklist...",

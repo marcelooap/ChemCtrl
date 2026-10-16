@@ -366,6 +366,7 @@ export default function AgendamentoCarregamentoChecklistModal({
   const { toast } = useToast();
   const galleryInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const bodyRef = useRef(null);
 
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
@@ -528,7 +529,9 @@ export default function AgendamentoCarregamentoChecklistModal({
     });
   }, [builtItems, open, booking?.checklist_respostas]);
 
-  const active = activeKey ? items.find((it) => it.item_key === activeKey) || null : null;
+  const activeIndex = activeKey ? items.findIndex((it) => it.item_key === activeKey) : -1;
+  const active = activeIndex >= 0 ? items[activeIndex] : null;
+  const nextItem = activeIndex >= 0 && activeIndex < items.length - 1 ? items[activeIndex + 1] : null;
   const allApproved = areAllItemsApproved(items);
   // Foto obrigatória em cada item para liberar (liberações anteriores são preservadas).
   const releaseOptions = { requirePhotos: !alreadyLiberated };
@@ -605,6 +608,12 @@ export default function AgendamentoCarregamentoChecklistModal({
     await saveIfDirty(items);
   };
 
+  const handleGoToNextItem = async () => {
+    if (!nextItem || saving || uploading) return;
+    setActiveKey(nextItem.item_key);
+    await saveIfDirty(items);
+  };
+
   const handleClose = async () => {
     if (saving) return;
     onClose();
@@ -677,6 +686,12 @@ export default function AgendamentoCarregamentoChecklistModal({
       fotos: (it.fotos || []).filter((f) => f !== url),
     }));
   };
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+  }, [activeKey]);
 
   if (!booking) return null;
 
@@ -766,7 +781,7 @@ export default function AgendamentoCarregamentoChecklistModal({
         </DialogHeader>
 
         {/* Corpo */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto">
           {defsLoading ? (
             <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1122,6 +1137,29 @@ export default function AgendamentoCarregamentoChecklistModal({
                     operador: active.conferido_por_nome || '—',
                   })}
                 </p>
+              ) : null}
+
+              {nextItem ? (
+                <button
+                  type="button"
+                  onClick={handleGoToNextItem}
+                  disabled={saving || uploading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[#2575D1]/30 bg-[#2575D1]/5 px-4 py-3 text-left shadow-sm transition-colors hover:bg-[#2575D1]/10 disabled:cursor-default disabled:opacity-60"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2575D1]">
+                      {t('painel.comercial.agendamentos.checklist.nextItem')}
+                    </p>
+                    <p className="truncate text-sm font-semibold text-foreground">{nextItem.label}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {nextItem.saida_codigo}
+                      {nextItem.produto ? ` · ${nextItem.produto}` : ''}
+                    </p>
+                  </div>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2575D1] text-white">
+                    <ChevronRight className="h-5 w-5" />
+                  </span>
+                </button>
               ) : null}
             </div>
           )}

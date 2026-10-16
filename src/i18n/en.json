@@ -1193,6 +1193,7 @@
           "saidaId": "Exit ID",
           "selectItem": "Select an item to inspect",
           "backToItems": "Back to items",
+          "nextItem": "Next item",
           "progress": "{{done}} of {{total}} items inspected",
           "checksProgress": "{{answered}}/{{total}} checks answered",
           "responsible": "Inspection responsible",

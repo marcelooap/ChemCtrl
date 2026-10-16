@@ -27,15 +27,21 @@ import {
   sumReservadoForProdutoCliente,
 } from "@painel/lib/materialReservas";
 import {
+  ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
   buildVasilhameReservaChave,
   isVasilhameReservado,
   sumReservadoVasilhamesConteudo,
 } from "@painel/lib/vasilhameReservas";
+import { containerClientMatches } from "@transbordo/lib/saidaOrigem";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
 import { formatMass, formatNum, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 import { collectEstoqueEnvioFontes } from "@transbordo/lib/estoqueEnvioProdutos";
+import {
+  collectTankIdentityNames,
+  mapIndContainersForEstoqueEnvio,
+} from "@transbordo/lib/estoqueEnvioVasilhames";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -47,26 +53,16 @@ const PRODUCT_COLORS = [
 function matchesCliente(item, clienteFilter, clientes = []) {
   if (!clienteFilter || clienteFilter === "Todos os clientes") return true;
 
-  const norm = (v) =>
-    String(v || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+  const itemNome = String(item?.cliente_nome || item?.client || "").trim();
+  if (itemNome && containerClientMatches(itemNome, clienteFilter)) return true;
 
-  const filterNome = String(clienteFilter).trim();
-  const filterKey = norm(filterNome);
-  const itemNome = String(item?.cliente_nome || "").trim();
-  if (itemNome && norm(itemNome) === filterKey) return true;
-
-  const selected = (clientes || []).find((c) => norm(c?.nome) === filterKey);
-  if (!selected) return norm(itemNome) === filterKey;
-
-  const selectedId = selected.id != null ? String(selected.id) : "";
   const itemId = item?.cliente_id != null ? String(item.cliente_id) : "";
-  if (selectedId && itemId && selectedId === itemId) return true;
+  if (!itemId) return false;
 
-  return norm(itemNome) === norm(selected.nome);
+  return (clientes || []).some((cliente) => {
+    if (cliente?.id == null || String(cliente.id) !== itemId) return false;
+    return containerClientMatches(cliente?.nome, clienteFilter);
+  });
 }
 
 function normPlacaKey(value) {
@@ -208,6 +204,9 @@ export default function EstoqueEnvio() {
   const [entradas, setEntradas] = useState([]);
   const [indTanks, setIndTanks] = useState([]);
   const [indContainers, setIndContainers] = useState([]);
+  const [indProductions, setIndProductions] = useState([]);
+  const [indRecipes, setIndRecipes] = useState([]);
+  const [indTransfers, setIndTransfers] = useState([]);
   const [indStock, setIndStock] = useState([]);
   const [indStockReady, setIndStockReady] = useState(false);
   const [clienteFilter, setClienteFilter] = useState("");
@@ -306,12 +305,22 @@ export default function EstoqueEnvio() {
             }
           };
 
-          const [tanksInd, containersInd] = await Promise.all([
-            loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
-            loadIndList(() =>
-              base44.entities.Container.list("-created_date", 2000)
-            ),
-          ]);
+          const [tanksInd, containersInd, productionsInd, recipesInd, transfersInd] =
+            await Promise.all([
+              loadIndList(() => base44.entities.Tank.list("-created_date", 500)),
+              loadIndList(() =>
+                base44.entities.Container.list("-created_date", 2000)
+              ),
+              loadIndList(() =>
+                base44.entities.Production.list("-created_date", 2000)
+              ),
+              loadIndList(() =>
+                base44.entities.Recipe.list("-updated_date", 2000)
+              ),
+              loadIndList(() =>
+                base44.entities.Transfer.list("-created_date", 2000)
+              ),
+            ]);
 
           // Saldo de MP vem de current_stock. Falha aqui não pode zerar a lista
           // e esconder o espelho: sem a carga, o consolidado segue o transbordo.
@@ -354,12 +363,18 @@ export default function EstoqueEnvio() {
 
           setIndTanks(tanksFinal);
           setIndContainers(containersInd);
+          setIndProductions(productionsInd);
+          setIndRecipes(recipesInd);
+          setIndTransfers(transfersInd);
           setIndStock(stockInd);
           setIndStockReady(stockReady);
         } catch (indErr) {
           console.warn("[EstoqueEnvio] Industrialização:", indErr);
           setIndTanks([]);
           setIndContainers([]);
+          setIndProductions([]);
+          setIndRecipes([]);
+          setIndTransfers([]);
           setIndStock([]);
           setIndStockReady(false);
         }
@@ -373,6 +388,9 @@ export default function EstoqueEnvio() {
         setEntradas([]);
         setIndTanks([]);
         setIndContainers([]);
+        setIndProductions([]);
+        setIndRecipes([]);
+        setIndTransfers([]);
         setIndStock([]);
         setIndStockReady(false);
       } finally {
@@ -492,10 +510,30 @@ export default function EstoqueEnvio() {
     vasilhames,
   ]);
 
+  const indVasilhames = useMemo(
+    () =>
+      mapIndContainersForEstoqueEnvio({
+        containers: indContainers,
+        productions: indProductions,
+        recipes: indRecipes,
+        transfers: indTransfers,
+        tankNames: collectTankIdentityNames({ indTanks, isotanques }),
+      }),
+    [indContainers, indProductions, indRecipes, indTransfers, indTanks, isotanques]
+  );
+
+  const vasilhamesConsolidados = useMemo(
+    () => [...(vasilhames || []), ...indVasilhames],
+    [vasilhames, indVasilhames]
+  );
+
   const filteredVasilhames = useMemo(() => {
-    return vasilhames
+    return vasilhamesConsolidados
       .filter((v) => {
-        if ((v.tipo || "") === "Tankagem") return false;
+        const fromInd = v.origem === ORIGEM_INDUSTRIALIZACAO;
+        // Tankagem do Transbordo fica no silo. A da Industrialização só entra
+        // aqui quando não é o enchimento de uma tanka já cadastrada.
+        if (!fromInd && (v.tipo || "") === "Tankagem") return false;
         if ((v.status || "No Pátio") !== "No Pátio") return false;
         if (!matchesCliente(v, clienteFilter, clientes)) return false;
 
@@ -515,22 +553,27 @@ export default function EstoqueEnvio() {
         return hay.includes(q);
       })
       .map((v) => {
-        const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id);
+        const origem =
+          v.origem === ORIGEM_INDUSTRIALIZACAO
+            ? ORIGEM_INDUSTRIALIZACAO
+            : ORIGEM_TRANSBORDO;
+        const chave = buildVasilhameReservaChave(origem, v.id);
         const reservado = isVasilhameReservado(reservas, chave);
         return {
           ...v,
+          origem,
           reservaChave: chave,
           reservado,
           statusReserva: reservado ? "Reservado" : "Livre",
         };
       });
-  }, [vasilhames, clienteFilter, clientes, q, reservas]);
+  }, [vasilhamesConsolidados, clienteFilter, clientes, q, reservas]);
 
   /** Resumo por produto × capacidade (e fracionados) sobre o conjunto filtrado. */
   const vasilhamesResumoPorProduto = useMemo(() => {
     // Estatísticas por placa (capacidade cadastrada + maior volume histórico)
     const placaStats = new Map();
-    for (const v of vasilhames || []) {
+    for (const v of vasilhamesConsolidados || []) {
       const placa = normPlacaKey(v?.placa);
       if (!placa) continue;
       const prev = placaStats.get(placa) || { maxCap: 0, maxVol: 0 };
@@ -605,7 +648,7 @@ export default function EstoqueEnvio() {
         sensitivity: "base",
       });
     });
-  }, [filteredVasilhames, vasilhames]);
+  }, [filteredVasilhames, vasilhamesConsolidados]);
 
   const unifiedTankas = useMemo(
     () =>
@@ -755,6 +798,12 @@ export default function EstoqueEnvio() {
       const key = nome.toLowerCase();
       if (!map.has(key)) map.set(key, { id: `ind-client:${key}`, nome });
     }
+    for (const source of [...(indContainers || []), ...(indStock || [])]) {
+      const nome = String(source?.client || "").trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (!map.has(key)) map.set(key, { id: `ind-client:${key}`, nome });
+    }
     for (const t of unifiedTankas || []) {
       const nome = String(t?.cliente_nome || "").trim();
       if (!nome) continue;
@@ -767,7 +816,7 @@ export default function EstoqueEnvio() {
         a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
       ),
     ];
-  }, [clientes, indTanks, unifiedTankas]);
+  }, [clientes, indTanks, indContainers, indStock, unifiedTankas]);
 
   const canExportPdf =
     produtosAgregados.length > 0 ||
@@ -1055,7 +1104,7 @@ export default function EstoqueEnvio() {
                     getDominantLote(v.composicao) || v.lote || "—";
                   return (
                     <tr
-                      key={v.id}
+                      key={v.reservaChave || v.id}
                       className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                         i % 2 === 1 ? "bg-muted/20" : ""
                       }`}

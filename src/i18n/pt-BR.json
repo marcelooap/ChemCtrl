@@ -1193,6 +1193,7 @@
           "saidaId": "ID da saída",
           "selectItem": "Selecione um item para conferir",
           "backToItems": "Voltar aos itens",
+          "nextItem": "Próximo item",
           "progress": "{{done}} de {{total}} itens conferidos",
           "checksProgress": "{{answered}}/{{total}} verificações respondidas",
           "responsible": "Responsável pela conferência",
