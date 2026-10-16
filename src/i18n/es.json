@@ -1347,7 +1347,7 @@
         "revertConfirm": "Revertir",
         "reverting": "Revirtiendo...",
         "revertConfirmTitle": "¿Revertir expedición?",
-        "revertConfirmDescription": "Se borrarán los datos de carga de la salida {{saida}}. El horario volverá a pendiente y la solicitud podrá editarse.",
+        "revertConfirmDescription": "Se borrarán los datos de carga de la salida {{saida}}. La conferencia y las fotos se mantienen. El horario volverá a pendiente y la solicitud podrá editarse.",
         "revertSuccess": "Expedición revertida",
         "revertErrorTitle": "No se pudo revertir",
         "revertErrorDescription": "Inténtelo de nuevo. Si persiste, recargue la página.",

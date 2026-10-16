@@ -1537,7 +1537,7 @@
         "revertConfirm": "Revert",
         "reverting": "Reverting...",
         "revertConfirmTitle": "Revert shipment?",
-        "revertConfirmDescription": "Loading data for outbound {{saida}} will be cleared. The slot will go back to pending and the request can be edited again.",
+        "revertConfirmDescription": "Loading data for outbound {{saida}} will be cleared. The inspection and photos are kept. The slot will go back to pending and the request can be edited again.",
         "revertSuccess": "Shipment reverted",
         "revertErrorTitle": "Could not revert",
         "revertErrorDescription": "Try again. If it persists, reload the page.",

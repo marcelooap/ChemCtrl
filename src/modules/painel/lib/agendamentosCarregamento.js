@@ -850,6 +850,7 @@ export async function submitCarregamentoChecklist({ bookings, respostas, user, t
 /**
  * Reverte a expedição: apaga horário/operador de carregamento e volta o slot
  * para "agendado" (card deixa de aparecer como carregado; saída volta a ser editável).
+ * A conferência permanece: respostas, fotos, operador e liberação do checklist.
  */
 export async function reverterCarregamento({ bookings }) {
   const list = normalizeBookings(bookings);
@@ -868,10 +869,6 @@ export async function reverterCarregamento({ bookings }) {
     operador_conclusao_id: null,
     operador_conclusao_nome: null,
     grupo_conclusao_id: null,
-    checklist_respostas: null,
-    checklist_validado_em: null,
-    checklist_operador_id: null,
-    checklist_operador_nome: null,
     justificativa_atraso_responsavel: null,
     justificativa_atraso_motivo: null,
   };

@@ -1347,7 +1347,7 @@
         "revertConfirm": "Annuler",
         "reverting": "Annulation...",
         "revertConfirmTitle": "Annuler l'expédition ?",
-        "revertConfirmDescription": "Les données de chargement de la sortie {{saida}} seront effacées. Le créneau redeviendra en attente et la demande pourra être modifiée.",
+        "revertConfirmDescription": "Les données de chargement de la sortie {{saida}} seront effacées. La conférence et les photos sont conservées. Le créneau redeviendra en attente et la demande pourra être modifiée.",
         "revertSuccess": "Expédition annulée",
         "revertErrorTitle": "Impossible d'annuler",
         "revertErrorDescription": "Réessayez. Si le problème persiste, rechargez la page.",
