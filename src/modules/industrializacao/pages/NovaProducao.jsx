@@ -36,10 +36,7 @@ import {
   containerDisplayVolume,
 } from '@industrializacao/lib/fractionalSupply';
 import { getLatestRecipeForProduct, getRevisionsForProduct, getRevisionNumber, orderMatchesSelectedProduct } from '@industrializacao/lib/recipeRevisions';
-import {
-  loadProdutosIndustrializacao,
-  buildIndPaSelectOptions,
-} from '@industrializacao/lib/cadastroProdutosOptions';
+import { buildRecipeProductSelectOptions } from '@industrializacao/lib/cadastroProdutosOptions';
 import { createProductionWithUniqueOp, parseOpNumber } from '@industrializacao/lib/allocateOpNumber';
 import { deductStockBatch } from '@industrializacao/lib/stockRpc';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
@@ -140,30 +137,14 @@ export default function NovaProducao() {
   const [complementContainerId, setComplementContainerId] = useState('');
   const [saving, setSaving] = useState(false);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
-  const [catalogProdutos, setCatalogProdutos] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadProdutosIndustrializacao()
-      .then((rows) => {
-        if (!cancelled) setCatalogProdutos(rows || []);
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogProdutos([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const productOptions = useMemo(
     () =>
-      buildIndPaSelectOptions({
-        produtos: catalogProdutos,
+      buildRecipeProductSelectOptions({
         recipes,
         currentProductName: form.product,
       }),
-    [catalogProdutos, recipes, form.product]
+    [recipes, form.product]
   );
 
   const orders = useMemo(() => allOrders.filter(o => o.status === 'Pendente' || o.status === 'Em produção'), [allOrders]);

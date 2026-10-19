@@ -22,11 +22,22 @@ import { emptyToNull, ensureClienteByNome } from "@transbordo/lib/ensureCliente"
 import { formatDensidade } from "@transbordo/lib/format";
 import { generatePublicToken } from "@industrializacao/lib/publicToken";
 import { deleteProdutoDocument } from "@transbordo/api/storage";
-import { registrarUsoProduto } from "@transbordo/lib/cadastroProdutosCentral";
+import {
+  registrarUsoProduto,
+  ORIGENS_POR_MODULO,
+} from "@transbordo/lib/cadastroProdutosCentral";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
 const ALL_CLIENTS_LABEL = "Todos os clientes";
+
+/** Cadastro do Transbordo: armazenagem e produtos compartilhados (AMBOS). */
+const ORIGENS_CADASTRO_TRANSBORDO = new Set(ORIGENS_POR_MODULO.ARMAZENAGEM);
+
+function isProdutoCadastroTransbordo(produto) {
+  const origem = String(produto?.origem ?? "").trim().toUpperCase();
+  return ORIGENS_CADASTRO_TRANSBORDO.has(origem);
+}
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -110,11 +121,12 @@ export default function ProdutosTab() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [prods, cliens, ests] = await Promise.all([
+      const [prodsAll, cliens, ests] = await Promise.all([
         entities.produtos.list(),
         entities.clientes.list("nome"),
         entities.estoque.list().catch(() => []),
       ]);
+      const prods = (prodsAll || []).filter(isProdutoCadastroTransbordo);
 
       // Sincroniza clientes referidos em produtos mas ainda ausentes em t_clientes
       const nomesExistentes = new Set(

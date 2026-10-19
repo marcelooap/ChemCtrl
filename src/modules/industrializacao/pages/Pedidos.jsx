@@ -27,10 +27,7 @@ import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import { fmtDate, fmtNumber, fmtCurrency, toDateInputValue, todayDateInputValue } from '@/i18n/formatters';
 import { translateOrderStatus } from '@/i18n/domainMaps';
 import { getLatestRecipeForProduct, getRevisionNumber } from '@industrializacao/lib/recipeRevisions';
-import {
-  loadProdutosIndustrializacao,
-  buildIndPaSelectOptions,
-} from '@industrializacao/lib/cadastroProdutosOptions';
+import { buildRecipeProductSelectOptions } from '@industrializacao/lib/cadastroProdutosOptions';
 import { matchesClient } from '@industrializacao/lib/permissions';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import {
@@ -110,30 +107,14 @@ export default function Pedidos() {
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const cqCancelHealRef = useRef('');
-  const [catalogProdutos, setCatalogProdutos] = useState([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadProdutosIndustrializacao()
-      .then((rows) => {
-        if (!cancelled) setCatalogProdutos(rows || []);
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogProdutos([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const productOptions = useMemo(
     () =>
-      buildIndPaSelectOptions({
-        produtos: catalogProdutos,
+      buildRecipeProductSelectOptions({
         recipes,
         currentProductName: form.product,
       }),
-    [catalogProdutos, recipes, form.product]
+    [recipes, form.product]
   );
 
   // Corrige legado: OP Cancelado apenas por CQ Reprovado → Finalizado

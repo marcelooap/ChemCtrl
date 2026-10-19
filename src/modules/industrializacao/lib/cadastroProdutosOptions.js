@@ -89,6 +89,43 @@ export function buildIndPaSelectOptions({
 }
 
 /**
+ * Produto acabado da Industrialização: somente nomes cadastrados em `receitas`.
+ * Uma opção por produto (revisão mais recente). value = product_name.
+ */
+export function buildRecipeProductSelectOptions({
+  recipes = [],
+  currentProductName = '',
+} = {}) {
+  const seen = new Set();
+  const options = [];
+
+  for (const recipe of getLatestRecipes(recipes)) {
+    const name = String(recipe?.product_name || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({
+      value: name,
+      label: name,
+      id: recipe.produto_acabado_id || '',
+      codigo: recipe.code || '',
+      produto: name,
+      cliente_nome: recipe.client || '',
+      item: { produto: null, recipe },
+    });
+  }
+
+  options.sort((a, b) =>
+    String(a.label).localeCompare(String(b.label), 'pt-BR')
+  );
+
+  return ensureGhostProdutoOption(options, currentProductName, {
+    valueMode: 'nome',
+  });
+}
+
+/**
  * Opções de MP a partir do catálogo, filtradas por cliente.
  * value = codigo (compatível com Combobox de código MP).
  */
