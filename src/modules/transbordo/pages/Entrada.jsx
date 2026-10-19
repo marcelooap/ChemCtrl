@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
-import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Printer, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
@@ -18,6 +18,8 @@ import {
 } from "@shared/components/ui/alert-dialog";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
+import EntradaEtiquetaDialog from "@transbordo/components/entrada/EntradaEtiquetaDialog";
+import { getEntradaLotes } from "@transbordo/lib/entradaEtiqueta";
 import ComunicacaoRecebimentoDialog from "@transbordo/components/entrada/ComunicacaoRecebimentoDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
@@ -52,6 +54,47 @@ function getSistemaOrigem(entrada) {
   return entrada?.origem === "industrializacao" ? "Industrialização" : "Transbordo";
 }
 
+function formatEntradaData(entrada) {
+  const raw = entrada?.data || entrada?.created_date || entrada?.created_at;
+  if (!raw) return "-";
+  const value = String(raw);
+  const date = value.includes("T")
+    ? new Date(value)
+    : new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("pt-BR");
+}
+
+function normClienteNome(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function matchesClienteFilter(entrada, clienteFilter, clientes) {
+  if (!clienteFilter || clienteFilter === "Todos os clientes") return true;
+
+  const alvo = normClienteNome(clienteFilter);
+  if (!alvo) return true;
+  if (normClienteNome(entrada?.cliente_nome) === alvo) return true;
+
+  const selecionado = (clientes || []).find(
+    (cliente) => normClienteNome(cliente?.nome) === alvo
+  );
+  const clienteId = entrada?.cliente_id;
+  if (
+    selecionado?.id != null &&
+    clienteId != null &&
+    String(selecionado.id) === String(clienteId)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 async function listAllClientes() {
   const pageSize = 1000;
   const all = [];
@@ -65,21 +108,6 @@ async function listAllClientes() {
     if (list.length < pageSize) break;
   }
   return all;
-}
-
-function getEntradaLotes(entrada) {
-  if (entrada?.lotes?.length > 0) return entrada.lotes;
-  return [
-    {
-      produto_id: entrada?.produto_id,
-      produto_codigo: entrada?.produto_codigo,
-      produto_nome: entrada?.produto_nome,
-      nota_fiscal: entrada?.nota_fiscal,
-      lote: entrada?.lote,
-      quantidade: entrada?.quantidade,
-      unidade_medida: entrada?.unidade_medida,
-    },
-  ];
 }
 
 function matchesText(value, q) {
@@ -110,6 +138,7 @@ export default function Entrada() {
   const [transbordos, setTransbordos] = useState([]);
   const [estoque, setEstoque] = useState([]);
   const [search, setSearch] = useState("");
+  const [clienteFilter, setClienteFilter] = useState("");
   const [origemFilter, setOrigemFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntrada, setEditingEntrada] = useState(null);
@@ -118,6 +147,7 @@ export default function Entrada() {
   const [viewControleLotes, setViewControleLotes] = useState([]);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const [labelEntrada, setLabelEntrada] = useState(null);
   const [loading, setLoading] = useState(true);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
@@ -251,8 +281,15 @@ export default function Entrada() {
       origemFilter === "Todas" ||
       origemFilter === sistema;
 
-    return matchSearch && matchOrigem;
+    const matchCliente = matchesClienteFilter(e, clienteFilter, clientes);
+
+    return matchSearch && matchOrigem && matchCliente;
   });
+
+  const clienteFilterOptions = [
+    { id: "all", nome: "Todos os clientes" },
+    ...(clientes || []).filter((cliente) => String(cliente?.nome || "").trim()),
+  ];
 
   const handleNew = () => {
     setEditingEntrada(null);
@@ -523,6 +560,18 @@ export default function Entrada() {
               className="pl-10 bg-white"
             />
           </div>
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Cliente"
+              ariaLabel="Filtrar por cliente"
+              inputClassName="h-9 bg-white text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
+            />
+          </div>
           <div className="w-52">
             <SearchableSelect
               value={origemFilter}
@@ -531,6 +580,7 @@ export default function Entrada() {
               getOptionLabel={(o) => o.label}
               getOptionValue={(o) => o.value}
               placeholder="Origem"
+              inputClassName="h-9 bg-white text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
             />
           </div>
         </div>
@@ -543,6 +593,7 @@ export default function Entrada() {
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-5 py-3 font-medium">ID</th>
+                <th className="px-5 py-3 font-medium">Data</th>
                 <th className="px-5 py-3 font-medium">Origem</th>
                 <th className="px-5 py-3 font-medium">Cód</th>
                 <th className="px-5 py-3 font-medium">Produto</th>
@@ -557,13 +608,13 @@ export default function Entrada() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                     Carregando recebimentos...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum recebimento encontrado.
                   </td>
                 </tr>
@@ -585,6 +636,9 @@ export default function Entrada() {
                     >
                       <td className="px-5 py-3 font-medium text-primary">
                         {idMap[e.id] || "-"}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
+                        {formatEntradaData(e)}
                       </td>
                       <td className="px-5 py-3">
                         <span
@@ -670,6 +724,12 @@ export default function Entrada() {
                           <RowActionButton onClick={() => handleView(e)} title="Visualizar">
                             <Eye />
                           </RowActionButton>
+                          <RowActionButton
+                            onClick={() => setLabelEntrada(e)}
+                            title="Imprimir etiqueta"
+                          >
+                            <Printer />
+                          </RowActionButton>
                           <Can permission="tb_entrada.edit">
                             <RowActionButton onClick={() => handleEdit(e)} title="Editar">
                               <Pencil />
@@ -741,6 +801,15 @@ export default function Entrada() {
         produtos={produtos}
         transbordos={transbordos}
         estoque={estoque}
+      />
+
+      <EntradaEtiquetaDialog
+        open={!!labelEntrada}
+        onOpenChange={(open) => {
+          if (!open) setLabelEntrada(null);
+        }}
+        entrada={labelEntrada}
+        entradaCodigo={labelEntrada ? idMap[labelEntrada.id] || "" : ""}
       />
 
       {/* Delete Confirmation */}

@@ -532,7 +532,19 @@ function openLabelWindow(vertical, t) {
   return win;
 }
 
-function printLabelPages({ title, lang, t, orientation, pages, win: existingWin }) {
+/** Imprime páginas já montadas no CSS padrão da etiqueta (105×50 ou 50×105). */
+export function printPreparedLabelPages({
+  title,
+  locale,
+  orientation = 'horizontal',
+  pages,
+  extraCss = '',
+}) {
+  const { lang, t } = getLabelLabels(locale);
+  printLabelPages({ title, lang, t, orientation, pages, extraCss });
+}
+
+function printLabelPages({ title, lang, t, orientation, pages, win: existingWin, extraCss = '' }) {
   const vertical = orientation === 'vertical';
   const labelCount = Math.max(1, pages.length);
   const win = existingWin || openLabelWindow(vertical, t);
@@ -543,7 +555,7 @@ function printLabelPages({ title, lang, t, orientation, pages, win: existingWin 
 <head>
 <meta charset="UTF-8">
 <title>${escapeHtml(title)}</title>
-<style>${labelCss(orientation, labelCount)}</style>
+<style>${labelCss(orientation, labelCount)}${extraCss}</style>
 </head>
 <body>
 ${pages.join('\n')}
