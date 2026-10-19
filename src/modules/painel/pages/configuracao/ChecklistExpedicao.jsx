@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ClipboardCheck, Copy, ListChecks } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { Label } from '@shared/components/ui/label';
+import { Switch } from '@shared/components/ui/switch';
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@shared/components/ConfirmDialog';
 import SearchableSelect from '@transbordo/components/cadastro/SearchableSelect';
@@ -20,6 +21,7 @@ import {
   isChecklistExpedicaoConfigAvailable,
   isChecklistExpedicaoDestinosAvailable,
   isChecklistExpedicaoTableAvailable,
+  isChecklistExpedicaoTanqueVazioAvailable,
   isChecklistExpedicaoTestesAvailable,
   listChecklistExpedicaoClientes,
   listChecklistExpedicaoItens,
@@ -39,6 +41,7 @@ import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config
 import checklistDestinosSql from '@transbordo/sql/042_t_checklist_expedicao_validade_destinos.sql?raw';
 import checklistDestinosColorSql from '@transbordo/sql/043_t_checklist_expedicao_validade_destinos_color_cod.sql?raw';
 import checklistTestesSql from '@transbordo/sql/044_t_checklist_expedicao_validade_testes.sql?raw';
+import checklistTanqueVazioSql from '@transbordo/sql/051_t_checklist_expedicao_tanque_vazio.sql?raw';
 
 /**
  * Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre).
@@ -98,10 +101,13 @@ export default function ChecklistExpedicao() {
   const [configMissing, setConfigMissing] = useState(false);
   const [destinosMissing, setDestinosMissing] = useState(false);
   const [testesMissing, setTestesMissing] = useState(false);
+  const [tanqueVazioMissing, setTanqueVazioMissing] = useState(false);
   const [showDestinoErrors, setShowDestinoErrors] = useState(false);
   const [hadConfig, setHadConfig] = useState(false);
+  /** false = tanque cheio; true = checklist de tanque vazio. */
+  const [tanqueVazioMode, setTanqueVazioMode] = useState(false);
 
-  const dirty = itensDirty || configDirty;
+  const dirty = itensDirty || (!tanqueVazioMode && configDirty);
   const resetDirty = useCallback(() => {
     setItensDirty(false);
     setConfigDirty(false);
@@ -143,7 +149,7 @@ export default function ChecklistExpedicao() {
   }, [loadClientes]);
 
   const loadItens = useCallback(
-    async (clienteId) => {
+    async (clienteId, { tanqueVazio = false } = {}) => {
       if (!isPersistedClienteId(clienteId)) {
         setItens([]);
         setConfig(DEFAULT_CONFIG_FORM);
@@ -155,14 +161,17 @@ export default function ChecklistExpedicao() {
       setLoadingItens(true);
       try {
         const [rows, savedConfig] = await Promise.all([
-          listChecklistExpedicaoItens(clienteId),
-          getChecklistExpedicaoConfig(clienteId),
+          listChecklistExpedicaoItens(clienteId, { tanqueVazio }),
+          tanqueVazio
+            ? Promise.resolve(DEFAULT_VALIDADE_TESTES_CONFIG)
+            : getChecklistExpedicaoConfig(clienteId),
         ]);
         setTableMissing(!isChecklistExpedicaoTableAvailable());
         setConfigMissing(!isChecklistExpedicaoConfigAvailable());
         setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
         setTestesMissing(!isChecklistExpedicaoTestesAvailable());
-        setConfig(toConfigForm(savedConfig));
+        setTanqueVazioMissing(!isChecklistExpedicaoTanqueVazioAvailable());
+        if (!tanqueVazio) setConfig(toConfigForm(savedConfig));
         setItens(
           rows.map((r) => ({
             id: r.id,
@@ -179,7 +188,7 @@ export default function ChecklistExpedicao() {
           variant: 'destructive',
         });
         setItens([]);
-        setConfig(DEFAULT_CONFIG_FORM);
+        if (!tanqueVazio) setConfig(DEFAULT_CONFIG_FORM);
         setHadConfig(false);
         resetDirty();
       } finally {
@@ -190,15 +199,24 @@ export default function ChecklistExpedicao() {
   );
 
   useEffect(() => {
-    loadItens(selected?.id);
-  }, [selected?.id, loadItens]);
+    loadItens(selected?.id, { tanqueVazio: tanqueVazioMode });
+  }, [selected?.id, tanqueVazioMode, loadItens]);
 
   const selectClient = (option) => {
     const key = clienteOptionKey(option);
     if (!key || key === String(selectedKey)) return;
     requestProceed(() => {
       resetDirty();
+      setTanqueVazioMode(false);
       setSelectedKey(key);
+    });
+  };
+
+  const handleTanqueVazioModeChange = (checked) => {
+    if (Boolean(checked) === tanqueVazioMode) return;
+    requestProceed(() => {
+      resetDirty();
+      setTanqueVazioMode(Boolean(checked));
     });
   };
 
@@ -208,6 +226,11 @@ export default function ChecklistExpedicao() {
   };
 
   const handleUseDefaults = () => {
+    if (tanqueVazioMode) {
+      setItens([{ id: createTempItemId(), descricao: '' }]);
+      setItensDirty(true);
+      return;
+    }
     const labels = getDefaultChecklistDescricoes(t);
     setItens(labels.map((descricao) => ({ id: createTempItemId(), descricao })));
     setItensDirty(true);
@@ -251,32 +274,35 @@ export default function ChecklistExpedicao() {
         max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
       };
 
-      // O prazo existe só por destino: ativa a verificação exige ao menos um destino.
-      if (config.ativo && config.destinos.length === 0) {
-        toast({
-          title: t('painel.configuracao.checklistExpedicao.saveError'),
-          description: t(
-            'painel.configuracao.checklistExpedicao.validadeTestes.destinos.requiredHint'
-          ),
-          variant: 'destructive',
-        });
-        return;
-      }
+      // Validade dos testes só no checklist de tanque cheio.
+      let destinosValidation = { ok: true, items: [] };
+      if (!tanqueVazioMode) {
+        // O prazo existe só por destino: ativa a verificação exige ao menos um destino.
+        if (config.ativo && config.destinos.length === 0) {
+          toast({
+            title: t('painel.configuracao.checklistExpedicao.saveError'),
+            description: t(
+              'painel.configuracao.checklistExpedicao.validadeTestes.destinos.requiredHint'
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
 
-      // Destino obrigatório, sem repetição, e cada teste com nome e prazo.
-      // Desativada, as linhas estão ocultas: só as completas são gravadas.
-      const destinosValidation = validarPrazosPorDestino(config.destinos);
-      if (config.ativo && !destinosValidation.ok) {
-        setShowDestinoErrors(true);
-        toast({
-          title: t('painel.configuracao.checklistExpedicao.saveError'),
-          description: t(
-            'painel.configuracao.checklistExpedicao.validadeTestes.destinos.invalidHint',
-            rangeParams
-          ),
-          variant: 'destructive',
-        });
-        return;
+        // Destino obrigatório, sem repetição, e cada teste com nome e prazo.
+        destinosValidation = validarPrazosPorDestino(config.destinos);
+        if (config.ativo && !destinosValidation.ok) {
+          setShowDestinoErrors(true);
+          toast({
+            title: t('painel.configuracao.checklistExpedicao.saveError'),
+            description: t(
+              'painel.configuracao.checklistExpedicao.validadeTestes.destinos.invalidHint',
+              rangeParams
+            ),
+            variant: 'destructive',
+          });
+          return;
+        }
       }
 
       setSaving(true);
@@ -287,7 +313,7 @@ export default function ChecklistExpedicao() {
           throw new Error(t('painel.configuracao.checklistExpedicao.selectClient'));
         }
 
-        if (configDirty) {
+        if (!tanqueVazioMode && configDirty) {
           const savedConfig = await saveChecklistExpedicaoConfig({
             clienteId: persisted.id,
             ativo: config.ativo,
@@ -299,11 +325,15 @@ export default function ChecklistExpedicao() {
           setConfigDirty(false);
           setConfigMissing(!isChecklistExpedicaoConfigAvailable());
           setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
-        setTestesMissing(!isChecklistExpedicaoTestesAvailable());
+          setTestesMissing(!isChecklistExpedicaoTestesAvailable());
         }
 
         const saved = itensDirty
-          ? await saveChecklistExpedicao({ clienteId: persisted.id, itens: validation.itens })
+          ? await saveChecklistExpedicao({
+              clienteId: persisted.id,
+              itens: validation.itens,
+              tanqueVazio: tanqueVazioMode,
+            })
           : null;
 
         const nextKey = String(persisted.id);
@@ -329,6 +359,7 @@ export default function ChecklistExpedicao() {
         }
         resetDirty();
         setTableMissing(!isChecklistExpedicaoTableAvailable());
+        setTanqueVazioMissing(!isChecklistExpedicaoTanqueVazioAvailable());
         toast({ title: t('painel.configuracao.checklistExpedicao.saved') });
       } catch (err) {
         if (String(err?.message || '').includes('039_t_checklist')) {
@@ -342,6 +373,9 @@ export default function ChecklistExpedicao() {
         }
         if (String(err?.message || '').includes('044_t_checklist')) {
           setTestesMissing(true);
+        }
+        if (String(err?.message || '').includes('051_t_checklist')) {
+          setTanqueVazioMissing(true);
         }
         toast({
           title: t('painel.configuracao.checklistExpedicao.saveError'),
@@ -399,6 +433,11 @@ export default function ChecklistExpedicao() {
           messageKey: 'validadeTestes.testesColumnMissingBanner',
           sql: checklistTestesSql,
         },
+        {
+          missing: tanqueVazioMissing && !tableMissing,
+          messageKey: 'tanqueVazio.tableMissingBanner',
+          sql: checklistTanqueVazioSql,
+        },
       ]
         .filter((banner) => banner.missing)
         .map((banner) => (
@@ -421,34 +460,71 @@ export default function ChecklistExpedicao() {
           </div>
         ))}
 
-      <div className="shrink-0 bg-card rounded-xl border border-border shadow-sm p-4">
-        <Label htmlFor="checklist-expedicao-cliente" className="text-sm font-medium">
-          {t('painel.configuracao.checklistExpedicao.clientLabel')}
-        </Label>
-        <div className="mt-1.5 max-w-lg">
-          <SearchableSelect
-            selectOnly
-            options={clientes}
-            value={selected?.nome || ''}
-            onChange={(_label, option) => {
-              if (option) selectClient(option);
-            }}
-            getOptionLabel={(o) => o.nome}
-            getOptionValue={(o) => clienteOptionKey(o)}
-            placeholder={
-              loadingClientes
-                ? t('painel.configuracao.checklistExpedicao.loading')
-                : t('painel.configuracao.checklistExpedicao.searchClient')
-            }
-            disabled={loadingClientes || saving}
-            ariaLabel={t('painel.configuracao.checklistExpedicao.clientLabel')}
-          />
+      <div className="shrink-0 bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+        <div>
+          <Label htmlFor="checklist-expedicao-cliente" className="text-sm font-medium">
+            {t('painel.configuracao.checklistExpedicao.clientLabel')}
+          </Label>
+          <div className="mt-1.5 max-w-lg">
+            <SearchableSelect
+              selectOnly
+              options={clientes}
+              value={selected?.nome || ''}
+              onChange={(_label, option) => {
+                if (option) selectClient(option);
+              }}
+              getOptionLabel={(o) => o.nome}
+              getOptionValue={(o) => clienteOptionKey(o)}
+              placeholder={
+                loadingClientes
+                  ? t('painel.configuracao.checklistExpedicao.loading')
+                  : t('painel.configuracao.checklistExpedicao.searchClient')
+              }
+              disabled={loadingClientes || saving}
+              ariaLabel={t('painel.configuracao.checklistExpedicao.clientLabel')}
+            />
+          </div>
         </div>
+        {selected ? (
+          <div
+            className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${
+              tanqueVazioMode
+                ? 'border-sky-200 bg-sky-50/80'
+                : 'border-border bg-muted/30'
+            }`}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {t('painel.configuracao.checklistExpedicao.tanqueVazio.toggle')}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {tanqueVazioMode
+                  ? t('painel.configuracao.checklistExpedicao.tanqueVazio.hintOn')
+                  : t('painel.configuracao.checklistExpedicao.tanqueVazio.hintOff')}
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2 shrink-0 cursor-pointer">
+              <Switch
+                checked={tanqueVazioMode}
+                onCheckedChange={handleTanqueVazioModeChange}
+                disabled={saving || submitBusy || loadingItens}
+                aria-label={t(
+                  'painel.configuracao.checklistExpedicao.tanqueVazio.toggle'
+                )}
+              />
+              {tanqueVazioMode ? (
+                <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                  {t('painel.configuracao.checklistExpedicao.tanqueVazio.badge')}
+                </span>
+              ) : null}
+            </label>
+          </div>
+        ) : null}
       </div>
 
       {/* Cliente fica fixo no topo; validade dos testes e itens rolam juntos. */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-1">
-        {selected && !loadingItens ? (
+        {selected && !loadingItens && !tanqueVazioMode ? (
           <ChecklistExpedicaoValidadeTestesConfig
             value={config}
             onChange={handleConfigChange}
@@ -473,12 +549,16 @@ export default function ChecklistExpedicao() {
             <div className="min-h-[16rem] bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center gap-4 p-8">
               <ListChecks className="w-10 h-10 text-muted-foreground opacity-50" />
               <p className="text-sm text-center text-muted-foreground max-w-md">
-                {t('painel.configuracao.checklistExpedicao.noConfig')}
+                {tanqueVazioMode
+                  ? t('painel.configuracao.checklistExpedicao.tanqueVazio.noConfig')
+                  : t('painel.configuracao.checklistExpedicao.noConfig')}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button type="button" variant="outline" onClick={handleUseDefaults}>
-                  {t('painel.configuracao.checklistExpedicao.useDefaults')}
-                </Button>
+                {!tanqueVazioMode ? (
+                  <Button type="button" variant="outline" onClick={handleUseDefaults}>
+                    {t('painel.configuracao.checklistExpedicao.useDefaults')}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   onClick={() =>
@@ -491,13 +571,21 @@ export default function ChecklistExpedicao() {
               </div>
             </div>
           ) : (
-            <div className="bg-card rounded-xl border border-border shadow-sm p-4">
+            <div
+              className={`bg-card rounded-xl border shadow-sm p-4 ${
+                tanqueVazioMode ? 'border-sky-200' : 'border-border'
+              }`}
+            >
               <div className="mb-3">
                 <h2 className="text-sm font-semibold text-foreground">
-                  {t('painel.configuracao.checklistExpedicao.itemsTitle')}
+                  {tanqueVazioMode
+                    ? t('painel.configuracao.checklistExpedicao.tanqueVazio.itemsTitle')
+                    : t('painel.configuracao.checklistExpedicao.itemsTitle')}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {t('painel.configuracao.checklistExpedicao.itemsHint')}
+                  {tanqueVazioMode
+                    ? t('painel.configuracao.checklistExpedicao.tanqueVazio.itemsHint')
+                    : t('painel.configuracao.checklistExpedicao.itemsHint')}
                 </p>
               </div>
               <ChecklistExpedicaoItensEditor

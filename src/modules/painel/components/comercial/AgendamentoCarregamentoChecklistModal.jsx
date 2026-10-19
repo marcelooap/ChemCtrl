@@ -374,6 +374,8 @@ export default function AgendamentoCarregamentoChecklistModal({
   const readOnly = isCarregado;
 
   const [checkDefsByCliente, setCheckDefsByCliente] = useState(null);
+  const [checkDefsTanqueVazioByCliente, setCheckDefsTanqueVazioByCliente] =
+    useState(null);
   const [validadeTestesByCliente, setValidadeTestesByCliente] = useState(null);
   const [defsLoading, setDefsLoading] = useState(false);
 
@@ -396,6 +398,7 @@ export default function AgendamentoCarregamentoChecklistModal({
   useEffect(() => {
     if (!open) {
       setCheckDefsByCliente(null);
+      setCheckDefsTanqueVazioByCliente(null);
       setValidadeTestesByCliente(null);
       setDefsLoading(false);
       return;
@@ -403,14 +406,16 @@ export default function AgendamentoCarregamentoChecklistModal({
     let cancelled = false;
     setDefsLoading(true);
     loadChecklistExpedicaoOperacional(JSON.parse(clientesKey))
-      .then(({ checkDefs, validadeTestes }) => {
+      .then(({ checkDefs, checkDefsTanqueVazio, validadeTestes }) => {
         if (cancelled) return;
         setCheckDefsByCliente(checkDefs);
+        setCheckDefsTanqueVazioByCliente(checkDefsTanqueVazio || new Map());
         setValidadeTestesByCliente(validadeTestes);
       })
       .catch(() => {
         if (cancelled) return;
         setCheckDefsByCliente(new Map());
+        setCheckDefsTanqueVazioByCliente(new Map());
         setValidadeTestesByCliente(new Map());
       })
       .finally(() => {
@@ -464,7 +469,13 @@ export default function AgendamentoCarregamentoChecklistModal({
 
   const builtItems = useMemo(
     () => {
-      if (defsLoading || checkDefsByCliente == null) return [];
+      if (
+        defsLoading ||
+        checkDefsByCliente == null ||
+        checkDefsTanqueVazioByCliente == null
+      ) {
+        return [];
+      }
       return buildChecklistItemsFromSaidas({
         bookings: list,
         saidas,
@@ -473,6 +484,7 @@ export default function AgendamentoCarregamentoChecklistModal({
         transbordos,
         containerDatasById,
         checkDefsByCliente,
+        checkDefsTanqueVazioByCliente,
         validadeTestesByCliente,
       });
     },
@@ -484,6 +496,7 @@ export default function AgendamentoCarregamentoChecklistModal({
       transbordos,
       containerDatasById,
       checkDefsByCliente,
+      checkDefsTanqueVazioByCliente,
       validadeTestesByCliente,
       defsLoading,
     ]
@@ -502,7 +515,14 @@ export default function AgendamentoCarregamentoChecklistModal({
       initializedRef.current = false;
       return;
     }
-    if (!booking || defsLoading || checkDefsByCliente == null) return;
+    if (
+      !booking ||
+      defsLoading ||
+      checkDefsByCliente == null ||
+      checkDefsTanqueVazioByCliente == null
+    ) {
+      return;
+    }
     if (initializedRef.current) return;
     initializedRef.current = true;
     const stored = parseStoredChecklist(booking.checklist_respostas);
@@ -512,7 +532,14 @@ export default function AgendamentoCarregamentoChecklistModal({
     setUploading(false);
     setError('');
     dirtyRef.current = false;
-  }, [open, booking, builtItems, defsLoading, checkDefsByCliente]);
+  }, [
+    open,
+    booking,
+    builtItems,
+    defsLoading,
+    checkDefsByCliente,
+    checkDefsTanqueVazioByCliente,
+  ]);
 
   // Reconcilia quando saídas/vasilhames carregam depois da abertura, sem perder progresso local
   useEffect(() => {
@@ -703,7 +730,12 @@ export default function AgendamentoCarregamentoChecklistModal({
   const sectionTitle = (section) =>
     t(`painel.comercial.agendamentos.checklist.sections.${section}`, { defaultValue: section });
 
-  const showLacresBlock = active?.kind === CHECKLIST_KIND.CONVENCIONAL && !hasCustomChecks;
+  const isTanqueVazioActive =
+    active?.kind === CHECKLIST_KIND.TANQUE_VAZIO || Boolean(active?.tanque_vazio);
+  const showLacresBlock =
+    active?.kind === CHECKLIST_KIND.CONVENCIONAL &&
+    !hasCustomChecks &&
+    !isTanqueVazioActive;
   const showEslingaColor = Boolean(active?.validade_testes?.color_cod);
   const validadeDefs = checkDefs.filter((c) => c.section === VALIDADE_TESTES_SECTION);
   const visibleSections = sections.filter(
@@ -802,7 +834,12 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
               {items.map((it) => {
                 const s = computeChecksSummary(it);
-                const Icon = it.kind === CHECKLIST_KIND.CONVENCIONAL ? Container : Package;
+                const Icon =
+                  it.kind === CHECKLIST_KIND.CONVENCIONAL ||
+                  it.kind === CHECKLIST_KIND.TANQUE_VAZIO ||
+                  it.tanque_vazio
+                    ? Container
+                    : Package;
                 return (
                   <button
                     key={it.item_key}
@@ -879,56 +916,93 @@ export default function AgendamentoCarregamentoChecklistModal({
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.produto')}
-                  value={active.produto}
-                />
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
-                  value={active.tipo_label}
-                />
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.quantidade')}
-                  value={active.quantidade}
-                />
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.lote')}
-                  value={active.lote}
-                />
-                {active.kind === CHECKLIST_KIND.CONVENCIONAL ? (
+                {isTanqueVazioActive ? (
                   <>
                     <InfoChip
-                      label={t('painel.comercial.agendamentos.checklist.fields.tanque')}
-                      value={
-                        [active.vasilhame_placa, active.vasilhame_barril]
-                          .filter(Boolean)
-                          .join(' / ') || '—'
-                      }
+                      label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
+                      value={active.tipo_label}
                     />
                     <InfoChip
-                      label={t('painel.comercial.agendamentos.checklist.fields.pesoLiquido')}
-                      value={
-                        active.peso_liquido != null
-                          ? `${formatMassSafe(active.peso_liquido)} kg`
-                          : '—'
-                      }
+                      label={t(
+                        'painel.comercial.agendamentos.checklist.fields.placa',
+                        { defaultValue: 'Nº da placa' }
+                      )}
+                      value={active.vasilhame_placa || '—'}
+                    />
+                    <InfoChip
+                      label={t(
+                        'painel.comercial.agendamentos.checklist.fields.barril',
+                        { defaultValue: 'Nº do barril' }
+                      )}
+                      value={active.vasilhame_barril || '—'}
                     />
                   </>
                 ) : (
-                  <InfoChip
-                    label={t('painel.comercial.agendamentos.checklist.fields.embalagens')}
-                    value={formatEmbalagens(active.quantidade_embalagens)}
-                  />
+                  <>
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.produto')}
+                      value={active.produto}
+                    />
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
+                      value={active.tipo_label}
+                    />
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.quantidade')}
+                      value={active.quantidade}
+                    />
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.lote')}
+                      value={active.lote}
+                    />
+                    {active.kind === CHECKLIST_KIND.CONVENCIONAL ? (
+                      <>
+                        <InfoChip
+                          label={t('painel.comercial.agendamentos.checklist.fields.tanque')}
+                          value={
+                            [active.vasilhame_placa, active.vasilhame_barril]
+                              .filter(Boolean)
+                              .join(' / ') || '—'
+                          }
+                        />
+                        <InfoChip
+                          label={t(
+                            'painel.comercial.agendamentos.checklist.fields.pesoLiquido'
+                          )}
+                          value={
+                            active.peso_liquido != null
+                              ? `${formatMassSafe(active.peso_liquido)} kg`
+                              : '—'
+                          }
+                        />
+                      </>
+                    ) : (
+                      <InfoChip
+                        label={t(
+                          'painel.comercial.agendamentos.checklist.fields.embalagens'
+                        )}
+                        value={formatEmbalagens(active.quantidade_embalagens)}
+                      />
+                    )}
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.fabricacao')}
+                      value={formatChecklistDate(active.data_fabricacao, i18n.language)}
+                    />
+                    <InfoChip
+                      label={t('painel.comercial.agendamentos.checklist.fields.validade')}
+                      value={formatChecklistDate(active.data_validade, i18n.language)}
+                    />
+                  </>
                 )}
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.fabricacao')}
-                  value={formatChecklistDate(active.data_fabricacao, i18n.language)}
-                />
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.validade')}
-                  value={formatChecklistDate(active.data_validade, i18n.language)}
-                />
               </div>
+
+              {isTanqueVazioActive && active.checklist_config_missing ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                  {t(
+                    'painel.configuracao.checklistExpedicao.tanqueVazio.missingConfigHint'
+                  )}
+                </div>
+              ) : null}
 
               {showLacresBlock ? (
                 <div className="space-y-3 rounded-lg border border-border bg-white p-3 shadow-sm">

@@ -34,6 +34,7 @@ import {
   isSaidaValidadaNoModulo,
   isItemValidadoParaExibicao,
   saidaTemItemPendenteNoModulo,
+  isTanqueVazioItem,
 } from "@transbordo/lib/saidaOrigem";
 import {
   findChecklistItemForSaidaLinha,
@@ -66,6 +67,7 @@ function formatQtdItem(n, unidade) {
 }
 
 function qtdSolicitada(item) {
+  if (isTanqueVazioItem(item)) return "—";
   if (item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME) {
     return `${formatVolume(item.volume_solicitado)} L`;
   }
@@ -73,6 +75,7 @@ function qtdSolicitada(item) {
 }
 
 function qtdFinalEstoque(item) {
+  if (isTanqueVazioItem(item)) return "—";
   if (item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP) {
     return formatQtdItem(item.estoque_final, item.unidade);
   }
@@ -82,7 +85,9 @@ function qtdFinalEstoque(item) {
   return "—";
 }
 
-function tipoBadgeClass(tipo) {
+function tipoBadgeClass(item) {
+  if (isTanqueVazioItem(item)) return "bg-sky-100 text-sky-800";
+  const tipo = item?.tipo ?? item;
   if (tipo === TIPO_EMBALADO) return "bg-blue-100 text-blue-700";
   if (tipo === TIPO_IND_VASILHAME) return "bg-violet-100 text-violet-700";
   if (tipo === TIPO_IND_RETORNO_MP) return "bg-yellow-100 text-yellow-800";
@@ -486,12 +491,16 @@ export default function SaidaViewDialog({
                             title="Item já validado"
                           />
                         ) : null}
-                        <span>{item.produto_nome || "—"}</span>
+                        <span>
+                          {isTanqueVazioItem(item)
+                            ? "Tanque Vazio"
+                            : item.produto_nome || "—"}
+                        </span>
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadgeClass(item.tipo)} ${
+                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadgeClass(item)} ${
                           isForeignModule ? "opacity-60" : ""
                         }`}
                       >

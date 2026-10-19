@@ -910,6 +910,17 @@
         "copySql": "Copy SQL script",
         "sqlCopied": "SQL script copied. Paste it in the Supabase SQL Editor and run it.",
         "sqlCopyError": "Could not copy the script. Open src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "tanqueVazio": {
+          "toggle": "Empty tank checklist",
+          "badge": "Empty tank",
+          "hintOff": "Editing the full / product tank checklist.",
+          "hintOn": "Editing the checklist used only for empty tank loading.",
+          "noConfig": "This customer has no empty tank checklist yet. Add the first inspection items.",
+          "itemsTitle": "Inspection items — Empty tank",
+          "itemsHint": "These checks appear only when conferring empty tanks.",
+          "tableMissingBanner": "Empty tank checklist support does not exist in the database yet. Paste the SQL script in the Supabase SQL Editor, run it and reload this page.",
+          "missingConfigHint": "No empty tank checklist is configured for this customer."
+        },
         "validadeTestes": {
           "title": "Test validity check",
           "hint": "For each destination, choose which tests go on the checklist and the verification period of each one.",
@@ -1239,6 +1250,8 @@
             "quantidade": "Quantity",
             "lote": "Lot",
             "tanque": "Tank / IBC",
+            "placa": "Plate number",
+            "barril": "Barrel number",
             "pesoLiquido": "Net weight",
             "embalagens": "Package qty",
             "fabricacao": "Manufacture date",

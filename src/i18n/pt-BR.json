@@ -910,6 +910,17 @@
         "copySql": "Copiar script SQL",
         "sqlCopied": "Script SQL copiado. Cole no SQL Editor do Supabase e execute.",
         "sqlCopyError": "Não foi possível copiar o script. Abra o arquivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "tanqueVazio": {
+          "toggle": "Checklist para Tanque Vazio",
+          "badge": "Tanque vazio",
+          "hintOff": "Editando o checklist de tanque cheio / com produto.",
+          "hintOn": "Editando o checklist exclusivo para carregamento de tanque vazio.",
+          "noConfig": "Este cliente ainda não possui checklist de tanque vazio. Adicione os primeiros itens de inspeção.",
+          "itemsTitle": "Itens de inspeção — Tanque vazio",
+          "itemsHint": "Estas verificações aparecem somente na conferência de tanques vazios.",
+          "tableMissingBanner": "O suporte a checklist de tanque vazio ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
+          "missingConfigHint": "Não há checklist de tanque vazio configurado para este cliente."
+        },
         "validadeTestes": {
           "title": "Verificação da validade dos testes",
           "hint": "Define, por destino, quais testes entram no checklist e o prazo de verificação de cada um.",
@@ -1239,6 +1250,8 @@
             "quantidade": "Quantidade",
             "lote": "Lote",
             "tanque": "Tanque / Vasilhame",
+            "placa": "Nº da placa",
+            "barril": "Nº do barril",
             "pesoLiquido": "Peso líquido",
             "embalagens": "Qtd. embalagens",
             "fabricacao": "Data de fabricação",

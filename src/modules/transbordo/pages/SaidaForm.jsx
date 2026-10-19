@@ -35,6 +35,9 @@ import {
   TIPO_IND_RETORNO_MP,
   emptySaidaItem,
   isItemSaidaVazio,
+  isTanqueVazioItem,
+  tanqueVazioTemIdentificacao,
+  newSaidaItemUid,
   resolveItemOrigem,
   itemFoiBaixado,
   saidaItemChave,
@@ -181,6 +184,8 @@ export default function SaidaForm({
                   ...emptySaidaItem(resolveItemOrigem(it)),
                   ...it,
                   origem: resolveItemOrigem(it),
+                  item_uid: String(it.item_uid || "").trim() || newSaidaItemUid(),
+                  tanque_vazio: Boolean(it.tanque_vazio),
                 }))
               : [emptySaidaItem(defaultOrigem)];
           setFormData({
@@ -404,6 +409,17 @@ export default function SaidaForm({
     for (let i = 0; i < formData.itens.length; i++) {
       const item = formData.itens[i];
       if (isItemSaidaVazio(item)) continue;
+
+      if (isTanqueVazioItem(item)) {
+        if (!tanqueVazioTemIdentificacao(item)) {
+          setError(
+            "Informe o número da placa ou o número do barril para identificar o tanque vazio."
+          );
+          return;
+        }
+        continue;
+      }
+
       const origem = resolveItemOrigem(item);
 
       if (showOrigemSelector && !origem) {
@@ -584,6 +600,35 @@ export default function SaidaForm({
       }
 
       const itensWithStock = itensPreenchidos.map((item) => {
+        if (isTanqueVazioItem(item)) {
+          return {
+            ...emptySaidaItem(resolveItemOrigem(item) || defaultOrigem),
+            item_uid: String(item.item_uid || "").trim() || newSaidaItemUid(),
+            tanque_vazio: true,
+            origem: resolveItemOrigem(item) || defaultOrigem || ORIGEM_TRANSBORDO,
+            tipo: TIPO_CONVENCIONAL,
+            vasilhame_placa: String(item.vasilhame_placa || "").trim(),
+            vasilhame_barril: String(item.vasilhame_barril || "").trim(),
+            produto_id: "",
+            produto_nome: "",
+            produto_codigo: "",
+            quantidade_solicitada: 0,
+            volume_solicitado: 0,
+            peso_liquido: 0,
+            peso_bruto: 0,
+            vasilhame_id: "",
+            container_id: "",
+            entrada_id: "",
+            stock_id: "",
+            movement_id: "",
+            reserva_id: null,
+            sem_reserva: true,
+            reserva_solicitante: null,
+            reserva_chave: null,
+            validado: item.validado,
+          };
+        }
+
         if (item.tipo === TIPO_EMBALADO) {
           const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;

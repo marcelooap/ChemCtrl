@@ -208,12 +208,29 @@ export function isSaidaValidadaNoModulo(saida, modulo) {
   return Boolean(saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal");
 }
 
+/** Item de carregamento de tanque vazio (sem produto). */
+export function isTanqueVazioItem(item) {
+  return Boolean(item?.tanque_vazio);
+}
+
+/** Gera uid estável para chave de edição/checklist (tanque vazio sem cadastro). */
+export function newSaidaItemUid() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `uid:${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /**
- * Identidade estável do item (tanque, lote ou retorno).
+ * Identidade estável do item (tanque, lote, retorno ou tanque vazio).
  * Item vazio não tem chave.
  */
 export function saidaItemChave(item) {
   if (!item || isItemSaidaVazio(item)) return "";
+  if (isTanqueVazioItem(item)) {
+    const uid = String(item.item_uid || "").trim();
+    return uid ? `vazio:${uid}` : "";
+  }
   if (
     (item.tipo === TIPO_CONVENCIONAL || item.tipo === "convencional") &&
     item.vasilhame_id
@@ -281,6 +298,8 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
   const base = {
     origem,
     tipo: origem === ORIGEM_INDUSTRIALIZACAO ? TIPO_IND_VASILHAME : TIPO_EMBALADO,
+    item_uid: newSaidaItemUid(),
+    tanque_vazio: false,
     produto_id: "",
     produto_nome: "",
     produto_codigo: "",
@@ -320,9 +339,11 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
 /**
  * Linha de produto sem nenhuma seleção/quantidade (placeholder do formulário).
  * Permite reservar o horário da saída antes de o cliente informar os tanques.
+ * Tanque vazio (toggle ligado) conta como item preenchido mesmo sem produto.
  */
 export function isItemSaidaVazio(item) {
   if (!item) return true;
+  if (isTanqueVazioItem(item)) return false;
   const semSelecao = [
     item.entrada_id,
     item.produto_id,
@@ -335,6 +356,13 @@ export function isItemSaidaVazio(item) {
   const semQuantidade =
     !Number(item.quantidade_solicitada) && !Number(item.volume_solicitado);
   return semSelecao && semQuantidade;
+}
+
+/** Placa ou barril informados no item de tanque vazio. */
+export function tanqueVazioTemIdentificacao(item) {
+  const placa = String(item?.vasilhame_placa || "").trim();
+  const barril = String(item?.vasilhame_barril || "").trim();
+  return Boolean(placa || barril);
 }
 
 export function origemLabel(origem) {
@@ -392,6 +420,7 @@ export function resolveSaidaItemLote(item, { vasilhame, preferVasilhame = false 
  * Coluna Lote na visualização de saída.
  */
 export function formatSaidaItemLote(item, { vasilhame, preferVasilhame = false } = {}) {
+  if (isTanqueVazioItem(item)) return "—";
   return resolveSaidaItemLote(item, { vasilhame, preferVasilhame }) || "—";
 }
 
@@ -415,6 +444,14 @@ function codigoEmbalagem(...values) {
 export function formatSaidaItemEmbalagem(item, { vasilhame } = {}) {
   if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
     return "-";
+  }
+
+  // Tanque vazio: só o texto digitado na solicitação (sem cadastro).
+  if (isTanqueVazioItem(item)) {
+    const placa = codigoEmbalagem(item?.vasilhame_placa);
+    const barril = codigoEmbalagem(item?.vasilhame_barril);
+    if (placa && barril) return `${placa} (${barril})`;
+    return placa || barril || "—";
   }
 
   // Cadastro do vasilhame (Transbordo: placa/barril; Industrialização:
@@ -445,6 +482,10 @@ export function formatSaidaItemInformacoes(
   item,
   { vasilhame, includeLote = true, context = "default" } = {}
 ) {
+  if (isTanqueVazioItem(item)) {
+    return formatSaidaItemEmbalagem(item);
+  }
+
   const lote = resolveSaidaItemLote(item, { vasilhame });
   const withLote = includeLote && context !== "fiscal";
 
@@ -462,6 +503,7 @@ export function formatSaidaItemInformacoes(
 }
 
 export function tipoItemLabel(item) {
+  if (isTanqueVazioItem(item)) return "Tanque Vazio";
   const tipo = item?.tipo;
   if (tipo === TIPO_EMBALADO) return "Embalado";
   if (tipo === TIPO_CONVENCIONAL) return "Vasilhame";

@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
+import { Switch } from "@shared/components/ui/switch";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
@@ -27,6 +29,9 @@ import {
   clientsMatch,
   filterContainersIndForSaida,
   sameClienteRecord,
+  isTanqueVazioItem,
+  newSaidaItemUid,
+  formatSaidaItemEmbalagem,
 } from "@transbordo/lib/saidaOrigem";
 import { buildReservaChave } from "@painel/lib/materialReservas";
 import {
@@ -176,26 +181,109 @@ export default function SaidaItemRow({
   const hasCliente = Boolean(clienteId);
   const origem = resolveItemOrigem(item) || lockedOrigem || ORIGEM_TRANSBORDO;
   const showOrigemSelector = enableMultiOrigem && !lockedOrigem;
+  const tanqueVazio = isTanqueVazioItem(item);
+  /** Rascunhos do outro modo ao alternar o toggle (não perde dados na sessão). */
+  const draftRef = useRef({ cheio: null, vazio: null });
+
+  const ensureItemUid = (row) =>
+    String(row?.item_uid || "").trim() || newSaidaItemUid();
 
   const handleTipoChange = (newTipo) => {
     onChange({
       ...emptySaidaItem(origem),
+      item_uid: ensureItemUid(item),
       tipo: newTipo,
+      tanque_vazio: false,
     });
   };
 
   const handleTipoUnificadoChange = (newTipo) => {
+    const uid = ensureItemUid(item);
     if (newTipo === TIPO_EMBALADO) {
-      onChange({ ...emptySaidaItem(ORIGEM_TRANSBORDO), tipo: TIPO_EMBALADO });
+      onChange({
+        ...emptySaidaItem(ORIGEM_TRANSBORDO),
+        item_uid: uid,
+        tipo: TIPO_EMBALADO,
+        tanque_vazio: false,
+      });
       return;
     }
     if (newTipo === TIPO_UI_VASILHAME) {
-      onChange({ ...emptySaidaItem(ORIGEM_TRANSBORDO), tipo: TIPO_CONVENCIONAL });
+      onChange({
+        ...emptySaidaItem(ORIGEM_TRANSBORDO),
+        item_uid: uid,
+        tipo: TIPO_CONVENCIONAL,
+        tanque_vazio: false,
+      });
       return;
     }
     onChange({
       ...emptySaidaItem(ORIGEM_INDUSTRIALIZACAO),
+      item_uid: uid,
       tipo: TIPO_IND_RETORNO_MP,
+      tanque_vazio: false,
+    });
+  };
+
+  const handleTanqueVazioToggle = (checked) => {
+    if (locked) return;
+    const uid = ensureItemUid(item);
+    if (checked) {
+      draftRef.current.cheio = { ...item, tanque_vazio: false };
+      const restored = draftRef.current.vazio;
+      onChange({
+        ...emptySaidaItem(origem),
+        ...(restored || {}),
+        item_uid: uid,
+        origem,
+        tanque_vazio: true,
+        tipo: TIPO_CONVENCIONAL,
+        produto_id: "",
+        produto_nome: "",
+        produto_codigo: "",
+        quantidade_solicitada: 0,
+        peso_liquido_embalagem: 0,
+        quantidade_embalagens: 0,
+        lote: "",
+        estoque_atual: 0,
+        estoque_final: 0,
+        entrada_id: "",
+        vasilhame_id: "",
+        vasilhame_placa: restored?.vasilhame_placa || "",
+        vasilhame_barril: restored?.vasilhame_barril || "",
+        volume_disponivel: 0,
+        volume_solicitado: 0,
+        saldo_final: 0,
+        peso_liquido: 0,
+        peso_bruto: 0,
+        container_id: "",
+        container_type: "",
+        stock_id: "",
+        movement_id: "",
+        reserva_id: "",
+        sem_reserva: false,
+        reserva_solicitante: "",
+        reserva_chave: "",
+      });
+      return;
+    }
+    draftRef.current.vazio = {
+      vasilhame_placa: item.vasilhame_placa || "",
+      vasilhame_barril: item.vasilhame_barril || "",
+    };
+    const restored = draftRef.current.cheio;
+    if (restored) {
+      onChange({
+        ...restored,
+        item_uid: uid,
+        tanque_vazio: false,
+      });
+      return;
+    }
+    onChange({
+      ...emptySaidaItem(origem),
+      item_uid: uid,
+      tanque_vazio: false,
     });
   };
 
@@ -949,19 +1037,21 @@ export default function SaidaItemRow({
     });
   })();
 
-  const resumoProduto =
-    item.produto_nome ||
-    ((item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME) &&
-    item.vasilhame_placa
-      ? containerLabel({
-          container_number: item.vasilhame_placa,
-          barril_number: item.vasilhame_barril,
-          type: item.container_type || item.tipo_embalagem,
-        })
-      : "—");
+  const resumoProduto = tanqueVazio
+    ? formatSaidaItemEmbalagem(item)
+    : item.produto_nome ||
+      ((item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME) &&
+      item.vasilhame_placa
+        ? containerLabel({
+            container_number: item.vasilhame_placa,
+            barril_number: item.vasilhame_barril,
+            type: item.container_type || item.tipo_embalagem,
+          })
+        : "—");
 
-  const resumoQuantidade =
-    item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+  const resumoQuantidade = tanqueVazio
+    ? "—"
+    : item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
       ? `${formatVolume(item.volume_solicitado)} L`
       : (() => {
           const u =
@@ -976,12 +1066,35 @@ export default function SaidaItemRow({
         })();
 
   return (
-    <div className="rounded-lg border border-border bg-muted/40/50 p-4 space-y-3">
+    <div
+      className={`rounded-lg border p-4 space-y-3 ${
+        tanqueVazio
+          ? "border-sky-200 bg-sky-50/40"
+          : "border-border bg-muted/40/50"
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="text-sm font-semibold text-primary shrink-0">
-            Produto {String(index + 1).padStart(2, "0")}
+            {tanqueVazio
+              ? `Tanque Vazio ${String(index + 1).padStart(2, "0")}`
+              : `Produto ${String(index + 1).padStart(2, "0")}`}
           </span>
+          <label
+            className={`inline-flex items-center gap-2 shrink-0 text-xs font-medium ${
+              locked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+            }`}
+          >
+            <Switch
+              checked={tanqueVazio}
+              onCheckedChange={handleTanqueVazioToggle}
+              disabled={locked}
+              aria-label="Tanque vazio"
+            />
+            <span className={tanqueVazio ? "text-sky-700" : "text-muted-foreground"}>
+              Tanque vazio
+            </span>
+          </label>
           {locked ? (
             <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
               Validado
@@ -989,7 +1102,7 @@ export default function SaidaItemRow({
           ) : null}
           {collapsed && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground min-w-0">
-              {lockedOrigem && (
+              {lockedOrigem && !tanqueVazio && (
                 <span className="inline-flex items-center rounded-md bg-slate-100 text-slate-700 px-2 py-0.5 font-medium">
                   {origemLabel(origem)}
                 </span>
@@ -1000,9 +1113,11 @@ export default function SaidaItemRow({
               <span className="truncate font-medium text-foreground" title={resumoProduto}>
                 {resumoProduto}
               </span>
-              <span className="shrink-0 font-semibold text-foreground">
-                {resumoQuantidade}
-              </span>
+              {!tanqueVazio && (
+                <span className="shrink-0 font-semibold text-foreground">
+                  {resumoQuantidade}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1047,6 +1162,49 @@ export default function SaidaItemRow({
 
       {!collapsed && (
         <fieldset disabled={locked} className="min-w-0 space-y-3 border-0 p-0 m-0">
+          {tanqueVazio ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor={`tanque-placa-${index}`}>Nº da placa</Label>
+                <Input
+                  id={`tanque-placa-${index}`}
+                  value={item.vasilhame_placa || ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...item,
+                      item_uid: ensureItemUid(item),
+                      tanque_vazio: true,
+                      vasilhame_placa: e.target.value,
+                    })
+                  }
+                  placeholder="Informe o número da placa"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`tanque-barril-${index}`}>Nº do barril</Label>
+                <Input
+                  id={`tanque-barril-${index}`}
+                  value={item.vasilhame_barril || ""}
+                  onChange={(e) =>
+                    onChange({
+                      ...item,
+                      item_uid: ensureItemUid(item),
+                      tanque_vazio: true,
+                      vasilhame_barril: e.target.value,
+                    })
+                  }
+                  placeholder="Informe o número do barril"
+                  autoComplete="off"
+                />
+              </div>
+              <p className="col-span-full text-xs text-muted-foreground">
+                Informe pelo menos um dos dois campos. O tanque não precisa estar
+                cadastrado no sistema.
+              </p>
+            </div>
+          ) : (
+            <>
           {showOrigemSelector ? (
             <div className="space-y-1.5">
               <Label>Tipo *</Label>
@@ -1475,6 +1633,8 @@ export default function SaidaItemRow({
                 </p>
               )}
             </div>
+          )}
+            </>
           )}
         </fieldset>
       )}

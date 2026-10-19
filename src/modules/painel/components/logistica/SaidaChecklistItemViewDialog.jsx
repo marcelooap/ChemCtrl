@@ -189,39 +189,63 @@ export default function SaidaChecklistItemViewDialog({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.produto')}
-              value={item.produto}
-            />
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
-              value={item.tipo_label}
-            />
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.quantidade')}
-              value={item.quantidade}
-            />
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.lote')}
-              value={item.lote}
-            />
-            {item.kind === CHECKLIST_KIND.CONVENCIONAL ? (
-              <InfoChip
-                label={t('painel.comercial.agendamentos.checklist.fields.tanque')}
-                value={
-                  [item.vasilhame_placa, item.vasilhame_barril].filter(Boolean).join(' / ') ||
-                  '—'
-                }
-              />
-            ) : null}
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.fabricacao')}
-              value={formatDateSafe(item.data_fabricacao, i18n.language)}
-            />
-            <InfoChip
-              label={t('painel.comercial.agendamentos.checklist.fields.validade')}
-              value={formatDateSafe(item.data_validade, i18n.language)}
-            />
+            {item.kind === CHECKLIST_KIND.TANQUE_VAZIO || item.tanque_vazio ? (
+              <>
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
+                  value={item.tipo_label}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.placa', {
+                    defaultValue: 'Nº da placa',
+                  })}
+                  value={item.vasilhame_placa || '—'}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.barril', {
+                    defaultValue: 'Nº do barril',
+                  })}
+                  value={item.vasilhame_barril || '—'}
+                />
+              </>
+            ) : (
+              <>
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.produto')}
+                  value={item.produto}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
+                  value={item.tipo_label}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.quantidade')}
+                  value={item.quantidade}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.lote')}
+                  value={item.lote}
+                />
+                {item.kind === CHECKLIST_KIND.CONVENCIONAL ? (
+                  <InfoChip
+                    label={t('painel.comercial.agendamentos.checklist.fields.tanque')}
+                    value={
+                      [item.vasilhame_placa, item.vasilhame_barril]
+                        .filter(Boolean)
+                        .join(' / ') || '—'
+                    }
+                  />
+                ) : null}
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.fabricacao')}
+                  value={formatDateSafe(item.data_fabricacao, i18n.language)}
+                />
+                <InfoChip
+                  label={t('painel.comercial.agendamentos.checklist.fields.validade')}
+                  value={formatDateSafe(item.data_validade, i18n.language)}
+                />
+              </>
+            )}
           </div>
 
           {item.kind === CHECKLIST_KIND.CONVENCIONAL && item.lacres?.length > 0 ? (

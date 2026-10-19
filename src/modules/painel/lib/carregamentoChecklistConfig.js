@@ -12,6 +12,7 @@ import {
   TIPO_IND_VASILHAME,
   formatSaidaItemLote,
   tipoItemLabel,
+  isTanqueVazioItem,
 } from '@transbordo/lib/saidaOrigem';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
@@ -31,6 +32,7 @@ export const CHECKLIST_STATUS = {
 export const CHECKLIST_KIND = {
   CONVENCIONAL: 'convencional',
   EMBALADO: 'embalado',
+  TANQUE_VAZIO: 'tanque_vazio',
 };
 
 /** Resposta de cada verificação individual. */
@@ -132,7 +134,13 @@ export function checklistKindForTipo(tipo) {
   return CHECKLIST_KIND.EMBALADO;
 }
 
+export function checklistKindForLinha(linha) {
+  if (isTanqueVazioItem(linha)) return CHECKLIST_KIND.TANQUE_VAZIO;
+  return checklistKindForTipo(linha?.tipo);
+}
+
 export function checksForKind(kind) {
+  if (kind === CHECKLIST_KIND.TANQUE_VAZIO) return [];
   return kind === CHECKLIST_KIND.CONVENCIONAL ? CONVENCIONAL_CHECKS : EMBALADO_CHECKS;
 }
 
@@ -190,6 +198,10 @@ export function checkDefsForItem(item) {
       ? item.check_defs
       : checksForKind(item?.kind);
   const defs = [...base];
+  // Tanque vazio: só as verificações configuradas para esse tipo (sem validade/eslinga).
+  if (item?.kind === CHECKLIST_KIND.TANQUE_VAZIO || item?.tanque_vazio) {
+    return defs;
+  }
   defs.push(...validadeTesteDefs(item?.validade_testes));
   if (item?.validade_testes?.color_cod) defs.push(ESLINGA_COLOR_CHECK_DEF);
   return defs;
@@ -329,6 +341,7 @@ export function buildChecklistItemsFromSaidas({
   transbordos = [],
   containerDatasById = null,
   checkDefsByCliente = null,
+  checkDefsTanqueVazioByCliente = null,
   validadeTestesByCliente = null,
 } = {}) {
   const hoje = new Date();
@@ -341,20 +354,31 @@ export function buildChecklistItemsFromSaidas({
       : checkDefsByCliente && typeof checkDefsByCliente === 'object'
         ? new Map(Object.entries(checkDefsByCliente))
         : null;
+  const defsVazioMap =
+    checkDefsTanqueVazioByCliente instanceof Map
+      ? checkDefsTanqueVazioByCliente
+      : checkDefsTanqueVazioByCliente && typeof checkDefsTanqueVazioByCliente === 'object'
+        ? new Map(Object.entries(checkDefsTanqueVazioByCliente))
+        : null;
   const items = [];
   let convencionalSeq = 0;
+  let tanqueVazioSeq = 0;
 
   for (const booking of bookings || []) {
     const saida = saidaById.get(String(booking.saida_id));
     if (!saida) continue;
     const linhas = Array.isArray(saida.itens) ? saida.itens : [];
     const clienteId = String(saida.cliente_id || booking.cliente_id || '').trim() || null;
-    const customDefs = resolveCustomCheckDefs(
+    const customDefsCheio = resolveCustomCheckDefs(
       defsMap,
       clienteId,
       saida.cliente_nome || booking.cliente_nome
     );
-    const useCustom = Array.isArray(customDefs) && customDefs.length > 0;
+    const customDefsVazio = resolveCustomCheckDefs(
+      defsVazioMap,
+      clienteId,
+      saida.cliente_nome || booking.cliente_nome
+    );
     const validadeConfig = resolveCustomCheckDefs(
       validadeTestesByCliente,
       clienteId,
@@ -362,7 +386,8 @@ export function buildChecklistItemsFromSaidas({
     );
 
     linhas.forEach((linha, idx) => {
-      const kind = checklistKindForTipo(linha.tipo);
+      const kind = checklistKindForLinha(linha);
+      const isTanqueVazio = kind === CHECKLIST_KIND.TANQUE_VAZIO;
       const vasilhame =
         (linha.vasilhame_id && vasilhameById.get(String(linha.vasilhame_id))) ||
         null;
@@ -374,32 +399,65 @@ export function buildChecklistItemsFromSaidas({
         (linha.container_id && containerDatasById?.get?.(String(linha.container_id))) ||
         null;
       // Lacres: vasilhame do Transbordo ou container da Industrialização.
-      const lacres = parseLacresFromEnvase(
-        vasilhame?.lacres || container?.lacres || linha.lacres || ''
-      );
+      const lacres = isTanqueVazio
+        ? []
+        : parseLacresFromEnvase(
+            vasilhame?.lacres || container?.lacres || linha.lacres || ''
+          );
       const isConv = kind === CHECKLIST_KIND.CONVENCIONAL;
       if (isConv) convencionalSeq += 1;
+      if (isTanqueVazio) tanqueVazioSeq += 1;
 
-      const itemKey = isConv
-        ? `conv:${saida.id}:${linha.vasilhame_id || linha.container_id || idx}`
-        : `emb:${saida.id}:${linha.entrada_id || linha.stock_id || idx}`;
+      const itemKey = isTanqueVazio
+        ? `vazio:${saida.id}:${linha.item_uid || idx}`
+        : isConv
+          ? `conv:${saida.id}:${linha.vasilhame_id || linha.container_id || idx}`
+          : `emb:${saida.id}:${linha.entrada_id || linha.stock_id || idx}`;
 
-      const { lote, data_fabricacao, data_validade } = resolveItemLoteDatas({
-        linha,
-        vasilhame,
-        estoque,
-        estoqueById,
-        transbordos,
-        container,
-      });
+      const { lote, data_fabricacao, data_validade } = isTanqueVazio
+        ? { lote: '—', data_fabricacao: null, data_validade: null }
+        : resolveItemLoteDatas({
+            linha,
+            vasilhame,
+            estoque,
+            estoqueById,
+            transbordos,
+            container,
+          });
 
-      const check_defs = useCustom ? customDefs : null;
-      // Validade dos testes: apenas tanques (convencional/vasilhame) de clientes com a opção ativa.
+      // Tanque vazio: só o checklist configurado para esse tipo (sem fallback do cheio).
+      // Tanque cheio: custom do cliente ou checks padrão do kind.
+      let check_defs = null;
+      let checklist_config_missing = false;
+      if (isTanqueVazio) {
+        const useCustomVazio =
+          Array.isArray(customDefsVazio) && customDefsVazio.length > 0;
+        if (useCustomVazio) {
+          check_defs = customDefsVazio;
+        } else {
+          check_defs = [];
+          checklist_config_missing = true;
+        }
+      } else {
+        const useCustom =
+          Array.isArray(customDefsCheio) && customDefsCheio.length > 0;
+        check_defs = useCustom ? customDefsCheio : null;
+      }
+
+      // Validade dos testes: apenas tanques cheios (convencional/vasilhame).
       const validade_testes =
         isConv && validadeConfig?.ativo
           ? buildValidadeTestes(validadeConfig, saida.destino, hoje)
           : null;
-      const defs = checkDefsForItem({ kind, check_defs, validade_testes });
+      const defs = checkDefsForItem({
+        kind,
+        check_defs,
+        validade_testes,
+        tanque_vazio: isTanqueVazio,
+      });
+
+      const placa = String(linha.vasilhame_placa || '').trim();
+      const barril = String(linha.vasilhame_barril || '').trim();
 
       items.push({
         item_key: itemKey,
@@ -407,26 +465,45 @@ export function buildChecklistItemsFromSaidas({
         saida_codigo: saida.codigo || booking.saida_codigo || '—',
         item_index: idx,
         kind,
+        tanque_vazio: isTanqueVazio,
+        checklist_config_missing,
         tipo: linha.tipo,
         tipo_label: tipoItemLabel(linha),
-        label: isConv
-          ? tanqueLabel(linha, vasilhame, convencionalSeq - 1)
-          : `${linha.produto_nome || linha.produto || 'Produto'} · ${saida.codigo || ''}`.trim(),
-        produto: linha.produto_nome || linha.produto || '—',
-        produto_codigo: linha.produto_codigo || '',
-        lote,
-        quantidade: formatQtdItem(linha),
-        quantidade_embalagens: linha.quantidade_embalagens ?? null,
-        unidade: linha.unidade || (isConv ? 'L' : 'kg'),
-        vasilhame_id: linha.vasilhame_id || null,
-        vasilhame_placa: linha.vasilhame_placa || vasilhame?.placa || '',
-        vasilhame_barril: linha.vasilhame_barril || vasilhame?.barril || '',
-        peso_liquido: linha.peso_liquido ?? vasilhame?.peso_liquido ?? null,
-        peso_bruto: linha.peso_bruto ?? vasilhame?.peso_bruto ?? null,
-        volume_solicitado: linha.volume_solicitado ?? null,
-        tipo_embalagem: linha.tipo_embalagem || '',
-        data_fabricacao,
-        data_validade,
+        label: isTanqueVazio
+          ? tanqueLabel(linha, null, tanqueVazioSeq - 1).replace(
+              /^Tanque/,
+              'Tanque Vazio'
+            )
+          : isConv
+            ? tanqueLabel(linha, vasilhame, convencionalSeq - 1)
+            : `${linha.produto_nome || linha.produto || 'Produto'} · ${saida.codigo || ''}`.trim(),
+        produto: isTanqueVazio
+          ? 'Tanque Vazio'
+          : linha.produto_nome || linha.produto || '—',
+        produto_codigo: isTanqueVazio ? '' : linha.produto_codigo || '',
+        lote: isTanqueVazio ? '—' : lote,
+        quantidade: isTanqueVazio ? '—' : formatQtdItem(linha),
+        quantidade_embalagens: isTanqueVazio
+          ? null
+          : linha.quantidade_embalagens ?? null,
+        unidade: isTanqueVazio ? '' : linha.unidade || (isConv ? 'L' : 'kg'),
+        vasilhame_id: isTanqueVazio ? null : linha.vasilhame_id || null,
+        vasilhame_placa: isTanqueVazio
+          ? placa
+          : linha.vasilhame_placa || vasilhame?.placa || '',
+        vasilhame_barril: isTanqueVazio
+          ? barril
+          : linha.vasilhame_barril || vasilhame?.barril || '',
+        peso_liquido: isTanqueVazio
+          ? null
+          : linha.peso_liquido ?? vasilhame?.peso_liquido ?? null,
+        peso_bruto: isTanqueVazio
+          ? null
+          : linha.peso_bruto ?? vasilhame?.peso_bruto ?? null,
+        volume_solicitado: isTanqueVazio ? null : linha.volume_solicitado ?? null,
+        tipo_embalagem: isTanqueVazio ? '' : linha.tipo_embalagem || '',
+        data_fabricacao: isTanqueVazio ? null : data_fabricacao,
+        data_validade: isTanqueVazio ? null : data_validade,
         lacres,
         check_defs,
         validade_testes,
@@ -649,6 +726,11 @@ export function findChecklistItemForSaidaLinha(checklistItems, saida, linha, ind
   );
   if (byIndex) return byIndex;
 
+  if (isTanqueVazioItem(linha)) {
+    const key = `vazio:${saida.id}:${linha?.item_uid || index}`;
+    return list.find((it) => it.item_key === key) || null;
+  }
+
   const isConv = isTipoConvencionalChecklist(linha?.tipo);
   const key = isConv
     ? `conv:${saida.id}:${linha?.vasilhame_id || linha?.container_id || index}`
@@ -680,6 +762,8 @@ export function buildChecklistPayloadV2({ items, user }) {
       saida_codigo: it.saida_codigo,
       item_index: it.item_index,
       kind: it.kind,
+      tanque_vazio: Boolean(it.tanque_vazio),
+      checklist_config_missing: Boolean(it.checklist_config_missing),
       tipo: it.tipo,
       tipo_label: it.tipo_label,
       label: it.label,

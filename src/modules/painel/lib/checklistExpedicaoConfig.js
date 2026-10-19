@@ -33,6 +33,15 @@ const UUID_RE =
 const RPC_SETUP_MESSAGE =
   'Execute o script 039_t_checklist_expedicao_itens.sql no SQL Editor do ChemFlow para habilitar o checklist de expedição por cliente.';
 
+const TANQUE_VAZIO_RPC_SETUP_MESSAGE =
+  'Execute o script 051_t_checklist_expedicao_tanque_vazio.sql no SQL Editor do ChemFlow para habilitar o checklist de tanque vazio.';
+
+let tanqueVazioColumnAvailable = true;
+
+export function isChecklistExpedicaoTanqueVazioAvailable() {
+  return tanqueVazioColumnAvailable;
+}
+
 const CONFIG_RPC_SETUP_MESSAGE =
   'Execute o script 040_t_checklist_expedicao_config.sql no SQL Editor do ChemFlow para habilitar a verificação da validade dos testes.';
 
@@ -116,6 +125,28 @@ function isTableMissingError(err) {
   );
 }
 
+function isTanqueVazioColumnMissingError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('tanque_vazio') &&
+    (msg.includes('column') ||
+      msg.includes('pgrst204') ||
+      msg.includes('could not find') ||
+      msg.includes('schema cache') ||
+      msg.includes('does not exist'))
+  );
+}
+
+function filterItensByTanqueVazio(rows = [], tanqueVazio = false) {
+  const want = Boolean(tanqueVazio);
+  return (rows || []).filter((row) => {
+    if (row == null || !Object.prototype.hasOwnProperty.call(row, 'tanque_vazio')) {
+      return !want;
+    }
+    return Boolean(row.tanque_vazio) === want;
+  });
+}
+
 function isPersistedId(id) {
   return typeof id === 'string' && UUID_RE.test(id);
 }
@@ -166,17 +197,40 @@ export function getDefaultChecklistDescricoes(t) {
   return out;
 }
 
-export async function listChecklistExpedicaoItens(clienteId) {
+/**
+ * Itens do checklist de um cliente.
+ * @param {string} clienteId
+ * @param {{ tanqueVazio?: boolean }} [opts]
+ */
+export async function listChecklistExpedicaoItens(clienteId, opts = {}) {
   const id = normalizeClienteId(clienteId);
   if (!id) return [];
+  const tanqueVazio = Boolean(opts.tanqueVazio);
   try {
+    if (tanqueVazioColumnAvailable) {
+      const rows = await entities.checklistExpedicaoItens.filter({
+        cliente_id: id,
+        tanque_vazio: tanqueVazio,
+      });
+      tableAvailable = true;
+      tanqueVazioColumnAvailable = true;
+      return sortByOrdem(rows);
+    }
+    if (tanqueVazio) return [];
     const rows = await entities.checklistExpedicaoItens.filter({ cliente_id: id });
     tableAvailable = true;
-    return sortByOrdem(rows);
+    return sortByOrdem(filterItensByTanqueVazio(rows, false));
   } catch (err) {
     if (isTableMissingError(err)) {
       tableAvailable = false;
       return [];
+    }
+    if (isTanqueVazioColumnMissingError(err)) {
+      tanqueVazioColumnAvailable = false;
+      if (tanqueVazio) return [];
+      const rows = await entities.checklistExpedicaoItens.filter({ cliente_id: id });
+      tableAvailable = true;
+      return sortByOrdem(rows);
     }
     throw err;
   }
@@ -514,13 +568,15 @@ async function fetchDestinoRows(allIds) {
  * @param {Array<{ id?: string|null, nome?: string|null }>} clientes
  * @returns {Promise<{
  *   checkDefs: Map<string, Array<{ key: string, label: string, section: string }>>,
+ *   checkDefsTanqueVazio: Map<string, Array<{ key: string, label: string, section: string }>>,
  *   validadeTestes: Map<string, { ativo: boolean, dias: number, prazosPorDestino: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }> }>,
  * }>} Chaves dos mapas: id do cliente e `checkDefsNomeKey(nome)`.
  */
 export async function loadChecklistExpedicaoOperacional(clientes = []) {
   const checkDefs = new Map();
+  const checkDefsTanqueVazio = new Map();
   const validadeTestes = new Map();
-  const result = { checkDefs, validadeTestes };
+  const result = { checkDefs, checkDefsTanqueVazio, validadeTestes };
 
   if (!isChemFlowConfigured || !chemflowSupabase) return result;
 
@@ -532,14 +588,22 @@ export async function loadChecklistExpedicaoOperacional(clientes = []) {
     fetchConfigRows(allIds),
     fetchDestinoRows(allIds),
   ]);
+  if (
+    itensRows.length > 0 &&
+    !Object.prototype.hasOwnProperty.call(itensRows[0], 'tanque_vazio')
+  ) {
+    tanqueVazioColumnAvailable = false;
+  }
   const itensByCliente = groupByClienteId(itensRows);
   const configByCliente = groupByClienteId(configRows);
   const destinosByCliente = groupByClienteId(destinoRows);
 
   for (const group of groups) {
-    const itens = pickLatestRows(group, itensByCliente);
-    const defs = itens ? toCheckDefs(itens) : [];
-    if (defs.length > 0) setForGroup(checkDefs, group, defs);
+    const itens = pickLatestRows(group, itensByCliente) || [];
+    const defsCheio = toCheckDefs(filterItensByTanqueVazio(itens, false));
+    if (defsCheio.length > 0) setForGroup(checkDefs, group, defsCheio);
+    const defsVazio = toCheckDefs(filterItensByTanqueVazio(itens, true));
+    if (defsVazio.length > 0) setForGroup(checkDefsTanqueVazio, group, defsVazio);
 
     // Os prazos por destino pertencem ao mesmo id de cliente da configuração escolhida.
     const config = pickLatestRows(group, configByCliente)?.[0];
@@ -560,10 +624,14 @@ export async function listChecklistExpedicaoByClientes(clientes = []) {
 }
 
 /**
- * Persiste a lista completa de itens de um cliente via RPC atômica.
- * @param {{ clienteId: string, itens: Array<{ id?: string, descricao: string }> }} args
+ * Persiste a lista de itens de um cliente via RPC atômica (um tipo por chamada).
+ * @param {{ clienteId: string, itens: Array<{ id?: string, descricao: string }>, tanqueVazio?: boolean }} args
  */
-export async function saveChecklistExpedicao({ clienteId, itens = [] } = {}) {
+export async function saveChecklistExpedicao({
+  clienteId,
+  itens = [],
+  tanqueVazio = false,
+} = {}) {
   const id = normalizeClienteId(clienteId);
   if (!id) throw new Error('Selecione um cliente.');
 
@@ -595,12 +663,21 @@ export async function saveChecklistExpedicao({ clienteId, itens = [] } = {}) {
     throw new Error(RPC_SETUP_MESSAGE);
   }
 
+  if (tanqueVazio && !tanqueVazioColumnAvailable) {
+    throw new Error(TANQUE_VAZIO_RPC_SETUP_MESSAGE);
+  }
+
   const { data, error } = await chemflowSupabase.rpc('t_salvar_checklist_expedicao', {
     p_cliente_id: id,
     p_itens: payload,
+    p_tanque_vazio: Boolean(tanqueVazio),
   });
 
   if (error) {
+    if (isTanqueVazioColumnMissingError(error) || /p_tanque_vazio|051_t_checklist/i.test(String(error.message || ''))) {
+      tanqueVazioColumnAvailable = false;
+      throw new Error(TANQUE_VAZIO_RPC_SETUP_MESSAGE);
+    }
     if (isMissingRpcError(error) || isTableMissingError(error)) {
       tableAvailable = false;
       throw new Error(RPC_SETUP_MESSAGE);
@@ -609,6 +686,7 @@ export async function saveChecklistExpedicao({ clienteId, itens = [] } = {}) {
   }
 
   tableAvailable = true;
+  tanqueVazioColumnAvailable = true;
   return sortByOrdem(data || []);
 }
 
