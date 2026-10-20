@@ -20,6 +20,7 @@ import {
   VALIDADE_TESTES_SECTION,
   checkDefLabel,
   checkDefsForItem,
+  itemHasNoConfiguredChecklist,
   normalizeCheckValue,
 } from '@painel/lib/carregamentoChecklistConfig';
 import {
@@ -176,14 +177,16 @@ export default function SaidaChecklistItemViewDialog({
             <p className="text-sm text-muted-foreground">
               {saida?.codigo || item.saida_codigo} · {item.label}
             </p>
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                STATUS_STYLE[item.status] || STATUS_STYLE.pendente
-              )}
-            >
-              {statusLabel(item.status)}
-            </span>
+            {itemHasNoConfiguredChecklist(item) ? null : (
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                  STATUS_STYLE[item.status] || STATUS_STYLE.pendente
+                )}
+              >
+                {statusLabel(item.status)}
+              </span>
+            )}
           </div>
         </DialogHeader>
 

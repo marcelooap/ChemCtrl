@@ -1224,6 +1224,7 @@
           "nextItem": "Próximo item",
           "progress": "{{done}} de {{total}} itens conferidos",
           "checksProgress": "{{answered}}/{{total}} verificações respondidas",
+          "noChecklist": "Sem checklist cadastrado",
           "responsible": "Responsável pela conferência",
           "itemValidatedAt": "Conferido em {{date}} por {{operador}}",
           "approveItem": "Aprovar item",

@@ -57,6 +57,7 @@ import {
   computeItemStatus,
   hasRejectedItem,
   isChecklistTanqueVazio,
+  itemHasNoConfiguredChecklist,
   itemHasPhotos,
   itemRequiresPhoto,
   mergeChecklistItems,
@@ -559,13 +560,19 @@ export default function AgendamentoCarregamentoChecklistModal({
   const active = activeIndex >= 0 ? items[activeIndex] : null;
   const nextItem = activeIndex >= 0 && activeIndex < items.length - 1 ? items[activeIndex + 1] : null;
   const allApproved = areAllItemsApproved(items);
+  const hasInspectedApproval = items.some(
+    (it) => !itemHasNoConfiguredChecklist(it) && it.status === CHECKLIST_STATUS.APROVADO
+  );
   // Foto obrigatória em tanque cheio e embalado. Tanque vazio libera sem foto.
   // Liberações anteriores são preservadas.
   const releaseOptions = { requirePhotos: !alreadyLiberated };
   const canRelease = areAllItemsReleasable(items, releaseOptions);
   const anyRejected = hasRejectedItem(items);
   const doneCount = items.filter(
-    (it) => it.status === CHECKLIST_STATUS.APROVADO || it.status === CHECKLIST_STATUS.REPROVADO
+    (it) =>
+      itemHasNoConfiguredChecklist(it) ||
+      it.status === CHECKLIST_STATUS.APROVADO ||
+      it.status === CHECKLIST_STATUS.REPROVADO
   ).length;
   const operadorNome =
     user?.nome || user?.full_name || user?.username || user?.email || '—';
@@ -788,7 +795,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                     total: items.length,
                   })}
                 </span>
-                {allApproved ? (
+                {allApproved && hasInspectedApproval ? (
                   <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {t('painel.comercial.agendamentos.checklist.status.aprovado')}
@@ -837,6 +844,7 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
               {items.map((it) => {
                 const s = computeChecksSummary(it);
+                const semChecklist = itemHasNoConfiguredChecklist(it);
                 const Icon =
                   it.kind === CHECKLIST_KIND.CONVENCIONAL ||
                   it.kind === CHECKLIST_KIND.TANQUE_VAZIO ||
@@ -872,18 +880,22 @@ export default function AgendamentoCarregamentoChecklistModal({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-semibold text-foreground">{it.label}</p>
-                        <StatusBadge status={it.status} label={statusLabel(it.status)} className="shrink-0" />
+                        {semChecklist ? null : (
+                          <StatusBadge status={it.status} label={statusLabel(it.status)} className="shrink-0" />
+                        )}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {it.saida_codigo} · {it.tipo_label} · {it.produto}
                         {it.lote && it.lote !== '—' ? ` · ${t('painel.comercial.agendamentos.checklist.fields.lote')} ${it.lote}` : ''}
                       </p>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {t('painel.comercial.agendamentos.checklist.checksProgress', {
-                          answered: s.answered,
-                          total: s.total,
-                        })}
-                        {releaseOptions.requirePhotos && itemRequiresPhoto(it) && !itemHasPhotos(it) ? (
+                        {semChecklist
+                          ? t('painel.comercial.agendamentos.checklist.noChecklist')
+                          : t('painel.comercial.agendamentos.checklist.checksProgress', {
+                              answered: s.answered,
+                              total: s.total,
+                            })}
+                        {!semChecklist && releaseOptions.requirePhotos && itemRequiresPhoto(it) && !itemHasPhotos(it) ? (
                           <span className="ml-2 font-medium text-amber-700">
                             · {t('painel.comercial.agendamentos.checklist.photoRequired')}
                           </span>
@@ -907,7 +919,9 @@ export default function AgendamentoCarregamentoChecklistModal({
                   <ChevronLeft className="h-4 w-4" />
                   {t('painel.comercial.agendamentos.checklist.backToItems')}
                 </button>
-                <StatusBadge status={active.status} label={statusLabel(active.status)} />
+                {itemHasNoConfiguredChecklist(active) ? null : (
+                  <StatusBadge status={active.status} label={statusLabel(active.status)} />
+                )}
               </div>
 
               <div>

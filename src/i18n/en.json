@@ -1224,6 +1224,7 @@
           "nextItem": "Next item",
           "progress": "{{done}} of {{total}} items inspected",
           "checksProgress": "{{answered}}/{{total}} checks answered",
+          "noChecklist": "No checklist configured",
           "responsible": "Inspection responsible",
           "itemValidatedAt": "Inspected on {{date}} by {{operador}}",
           "approveItem": "Approve item",

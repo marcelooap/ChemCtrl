@@ -672,7 +672,17 @@ export function computeItemStatus(kindOrItem, checksMaybe) {
   return CHECKLIST_STATUS.PENDENTE;
 }
 
+/**
+ * Tanque vazio sem verificações cadastradas para o cliente.
+ * Não há conferência a fazer: o item não fica pendente e não bloqueia a expedição.
+ */
+export function itemHasNoConfiguredChecklist(item) {
+  if (!isChecklistTanqueVazio(item)) return false;
+  return Boolean(item?.checklist_config_missing) || checkDefsForItem(item).length === 0;
+}
+
 export function isItemApproved(item) {
+  if (itemHasNoConfiguredChecklist(item)) return true;
   return item?.status === CHECKLIST_STATUS.APROVADO;
 }
 
@@ -712,7 +722,8 @@ export function countItemsMissingPhotos(items = []) {
 /**
  * Checklist apto para liberar a expedição: todos os itens aprovados e,
  * quando `requirePhotos`, cada item que exige foto com ao menos uma.
- * Tanque vazio libera sem foto. Aceita itens do modal ou do payload persistido.
+ * Tanque vazio libera sem foto. Tanque vazio sem checklist cadastrado
+ * também libera. Aceita itens do modal ou do payload persistido.
  */
 export function areAllItemsReleasable(items = [], { requirePhotos = true } = {}) {
   if (!areAllItemsApproved(items)) return false;
