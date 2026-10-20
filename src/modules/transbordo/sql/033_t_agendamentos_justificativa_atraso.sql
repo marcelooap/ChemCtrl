@@ -11,6 +11,6 @@ comment on column t_agendamentos_carregamento.data_carregamento is
 comment on column t_agendamentos_carregamento.justificativa_atraso_responsavel is
   'Responsável pelo atraso: cliente | intertank';
 comment on column t_agendamentos_carregamento.justificativa_atraso_motivo is
-  'Motivo do atraso: nota_fiscal | divergencias_conferencia | empilhadeira | aguardando_carreta';
+  'Motivo do atraso em maiúsculas. Pode ser um item da lista ou texto livre informado pelo operador.';
 
 SELECT pg_notify('pgrst', 'reload schema');

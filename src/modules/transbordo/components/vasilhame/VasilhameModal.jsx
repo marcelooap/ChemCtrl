@@ -20,6 +20,7 @@ import {
   aggregateComposicaoByLote,
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
+import { matchProdutoCliente } from "@transbordo/lib/cadastroProdutosCentral";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
@@ -196,12 +197,22 @@ export default function VasilhameModal({
       return acc;
     }, []);
 
+  const hasClienteVinculado = Boolean(
+    String(clienteId || "").trim() || String(clienteNome || "").trim()
+  );
+
   const filteredProdutos = (() => {
-    const list = produtos.filter(
-      (p) =>
-        !clienteNome ||
-        p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
-    );
+    const list = (produtos || [])
+      .filter((p) => {
+        if (!hasClienteVinculado) return true;
+        return matchProdutoCliente(p, { clienteId, clienteNome });
+      })
+      .sort((a, b) =>
+        `${a.codigo || ""} ${a.produto || ""}`.localeCompare(
+          `${b.codigo || ""} ${b.produto || ""}`,
+          "pt-BR"
+        )
+      );
     if (
       produtoId &&
       !list.some((p) => String(p.id) === String(produtoId))
@@ -244,9 +255,10 @@ export default function VasilhameModal({
 
   /**
    * Em edição:
+   * - produto (qualquer tipo): só neste tanque; a lista é a do cliente vinculado
    * - tipo Vasilhame → nº placa, nº barril, lote, volume, lacres, tara, eslinga, gps,
    *   menor teste, densidade, fabricação e validade
-   * - demais tipos → somente lote, fabricação e validade
+   * - demais tipos → lote, fabricação, validade e observação
    * O tipo não é editável (mantém o valor atual).
    * Cadastro novo: todos os campos liberados.
    */
@@ -257,7 +269,8 @@ export default function VasilhameModal({
       field === "lote" ||
       field === "data_fabricacao" ||
       field === "data_validade" ||
-      field === "observacao"
+      field === "observacao" ||
+      field === "produto"
     ) {
       return true;
     }
@@ -408,34 +421,50 @@ export default function VasilhameModal({
                 </div>
               )}
               {showField("produto") && (
-                <div className="space-y-1.5">
+                <div className={`space-y-1.5 ${showField("cliente") ? "" : "col-span-2"}`}>
                   <Label>Produto *</Label>
                   <SearchableSelect
+                    typeToSearch
                     value={produtoDisplay}
                     onChange={(label, item) => {
-                      setProdutoDisplay(label);
-                      if (item) {
-                        setProdutoId(item.id);
-                        setProdutoNome(item.produto);
-                        setProdutoCodigo(item.codigo || "");
-                        const fromCadastro = produtoTemDensidade(item);
-                        setDensidadeDoCadastro(fromCadastro);
-                        setDensidade(fromCadastro ? item.densidade || "" : "");
-                      } else {
+                      if (!item) {
+                        if (isEditing) return;
+                        setProdutoDisplay(label);
                         setProdutoId("");
                         setProdutoNome("");
                         setProdutoCodigo("");
                         setDensidade("");
                         setDensidadeDoCadastro(false);
+                        return;
                       }
+                      setProdutoDisplay(label);
+                      setProdutoId(item.id);
+                      setProdutoNome(item.produto);
+                      setProdutoCodigo(item.codigo || "");
+                      // No tanque já existente o produto físico não muda:
+                      // só a identidade comercial deste vasilhame.
+                      if (isEditing) return;
+                      const fromCadastro = produtoTemDensidade(item);
+                      setDensidadeDoCadastro(fromCadastro);
+                      setDensidade(fromCadastro ? item.densidade || "" : "");
                     }}
                     options={filteredProdutos}
                     getOptionLabel={(p) => `${p.codigo || ""} - ${p.produto}`}
                     getOptionValue={(p) => p.id}
-                    placeholder={clienteNome ? "Selecione um produto" : "Selecione um cliente primeiro"}
-                    disabled={!canEditField("produto") || !clienteNome}
+                    placeholder={
+                      hasClienteVinculado
+                        ? "Selecione um produto"
+                        : "Selecione um cliente primeiro"
+                    }
+                    disabled={!canEditField("produto") || !hasClienteVinculado}
                     inputClassName={INPUT_EDITABLE}
                   />
+                  {isEditing && (
+                    <p className="text-xs text-muted-foreground">
+                      Vale só para este tanque. A solicitação de saída passa a
+                      filtrar por este produto.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

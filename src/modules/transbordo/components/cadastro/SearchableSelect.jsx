@@ -14,6 +14,8 @@ export default function SearchableSelect({
   renderOption = null,
   selectOnly = false,
   openOnFocus = true,
+  /** Campo limpo ao focar: o que for digitado só filtra a lista. */
+  typeToSearch = false,
   ariaLabel,
 }) {
   const [open, setOpen] = useState(false);
@@ -24,11 +26,12 @@ export default function SearchableSelect({
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setOpen(false);
+        if (typeToSearch) setSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [typeToSearch]);
 
   const filtered = options.filter((o) => {
     const label = getOptionLabel(o);
@@ -47,7 +50,7 @@ export default function SearchableSelect({
   const handleInputChange = (e) => {
     if (selectOnly) return;
     setSearch(e.target.value);
-    onChange(e.target.value, null);
+    if (!typeToSearch) onChange(e.target.value, null);
     if (!open) setOpen(true);
   };
 
@@ -76,7 +79,15 @@ export default function SearchableSelect({
         <input
           type="text"
           role="combobox"
-          value={selectOnly ? value : search || value}
+          value={
+            selectOnly
+              ? value
+              : typeToSearch
+                ? open
+                  ? search
+                  : value
+                : search || value
+          }
           onChange={handleInputChange}
           onFocus={handleFocus}
           onClick={handleClick}

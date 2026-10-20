@@ -782,10 +782,9 @@ export async function concluirCarregamento({
 
   if (atrasado) {
     const responsavel = String(justificativa?.responsavel || '').trim();
-    const motivo = String(justificativa?.motivo || '').trim();
+    const motivo = normalizeMotivoAtraso(justificativa?.motivo);
     const responsavelOk = JUSTIFICATIVA_ATRASO_RESPONSAVEIS.some((o) => o.value === responsavel);
-    const motivoOk = JUSTIFICATIVA_ATRASO_MOTIVOS.some((o) => o.value === motivo);
-    if (!responsavelOk || !motivoOk) {
+    if (!responsavelOk || !motivo) {
       throw new Error(
         t?.('painel.comercial.agendamentos.justificativa.required') ||
           'Informe a justificativa do atraso.'
@@ -816,7 +815,7 @@ export async function concluirCarregamento({
     justificativa_atraso_responsavel: atrasado
       ? String(justificativa.responsavel).trim()
       : null,
-    justificativa_atraso_motivo: atrasado ? String(justificativa.motivo).trim() : null,
+    justificativa_atraso_motivo: atrasado ? normalizeMotivoAtraso(justificativa.motivo) : null,
     ...(grupoId ? { grupo_conclusao_id: grupoId } : {}),
   };
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
@@ -973,6 +972,22 @@ export const JUSTIFICATIVA_ATRASO_MOTIVOS = [
     labelKey: 'painel.comercial.agendamentos.justificativa.motivos.aguardandoCarreta',
   },
 ];
+
+const MOTIVO_ATRASO_MAX_LENGTH = 200;
+
+/** Mantém a digitação em maiúsculas sem apagar o espaço entre palavras. */
+export function toMotivoAtrasoInput(value) {
+  return String(value || '')
+    .replace(/^\s+/, '')
+    .replace(/\s+/g, ' ')
+    .toLocaleUpperCase('pt-BR')
+    .slice(0, MOTIVO_ATRASO_MAX_LENGTH);
+}
+
+/** Motivo livre do atraso, sempre em maiúsculas e sem espaços extras. */
+export function normalizeMotivoAtraso(value) {
+  return toMotivoAtrasoInput(value).trim();
+}
 
 /** Contagem de produtos distintos: "01 produto", "02 produtos". */
 export function produtosCountLabel(saidas = [], t) {

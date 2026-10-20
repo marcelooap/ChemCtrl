@@ -1007,15 +1007,15 @@ function TimeSlotButton({
 
   return (
     <div
-      className={`relative ${minH} rounded-xl border transition-all ${tone.shell} ${tone.hover}`}
+      className={`flex ${minH} rounded-xl border transition-all ${tone.shell} ${tone.hover}`}
     >
       <button
         type="button"
         onClick={interactive ? onClick : undefined}
         disabled={!interactive}
-        className={`w-full min-h-full ${minH} text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          showTruck && filled ? 'pr-14' : hasSideActions ? 'pr-10' : ''
-        } ${interactive ? '' : 'cursor-default'}`}
+        className={`min-w-0 flex-1 self-stretch text-left px-3 ${compact ? 'py-2' : 'py-2.5'} rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          interactive ? '' : 'cursor-default'
+        }`}
       >
         <span className="flex items-center gap-1.5">
           {carregado ? (
@@ -1087,7 +1087,7 @@ function TimeSlotButton({
       </button>
 
       {hasSideActions ? (
-        <div className="absolute top-1.5 right-1.5 flex flex-col gap-0.5">
+        <div className="flex shrink-0 flex-col items-end gap-0.5 self-start py-1.5 pr-1.5">
           {showTruck ? (
             <div className="flex items-center gap-0.5">
               {filled ? (

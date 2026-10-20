@@ -1183,9 +1183,9 @@
           "motivoTitle": "Motivo",
           "motivoHint": "Causa principal do atraso",
           "motivoLabel": "Motivo do atraso",
-          "motivoPlaceholder": "Selecione...",
+          "motivoPlaceholder": "Selecione ou digite...",
           "confirm": "Confirmar e liberar",
-          "required": "Selecione o responsável e o motivo do atraso.",
+          "required": "Informe o responsável e o motivo do atraso.",
           "responsaveis": {
             "cliente": "Cliente",
             "intertank": "Intertank"

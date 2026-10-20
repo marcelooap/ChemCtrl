@@ -1183,9 +1183,9 @@
           "motivoTitle": "Reason",
           "motivoHint": "Main cause of the delay",
           "motivoLabel": "Delay reason",
-          "motivoPlaceholder": "Select...",
+          "motivoPlaceholder": "Select or type...",
           "confirm": "Confirm and release",
-          "required": "Select the responsible party and the delay reason.",
+          "required": "Enter the responsible party and the delay reason.",
           "responsaveis": {
             "cliente": "Customer",
             "intertank": "Intertank"

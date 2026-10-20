@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, AlertTriangle, Building2, ClipboardList } from 'lucide-react';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { Label } from '@shared/components/ui/label';
+import Combobox from '@shared/components/ui/combobox';
 import {
   Select,
   SelectContent,
@@ -25,7 +26,9 @@ import {
   JUSTIFICATIVA_ATRASO_MOTIVOS,
   JUSTIFICATIVA_ATRASO_RESPONSAVEIS,
   normalizeBookings,
+  normalizeMotivoAtraso,
   summarizeSlotBookings,
+  toMotivoAtrasoInput,
 } from '@painel/lib/agendamentosCarregamento';
 
 export default function AgendamentoJustificativaAtrasoModal({
@@ -46,6 +49,14 @@ export default function AgendamentoJustificativaAtrasoModal({
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
   const booking = summary.first;
+  const motivoOptions = useMemo(
+    () =>
+      JUSTIFICATIVA_ATRASO_MOTIVOS.map((opt) => {
+        const label = normalizeMotivoAtraso(t(opt.labelKey));
+        return { value: label, label };
+      }),
+    [t]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +77,8 @@ export default function AgendamentoJustificativaAtrasoModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (savingRef.current) return;
-    if (!responsavel || !motivo) {
+    const motivoNormalizado = normalizeMotivoAtraso(motivo);
+    if (!responsavel || !motivoNormalizado) {
       setError(t('painel.comercial.agendamentos.justificativa.required'));
       return;
     }
@@ -77,7 +89,7 @@ export default function AgendamentoJustificativaAtrasoModal({
       await onConfirm({
         horaCarregamento: pendingPayload.horaCarregamento,
         dataCarregamento: pendingPayload.dataCarregamento,
-        justificativa: { responsavel, motivo },
+        justificativa: { responsavel, motivo: motivoNormalizado },
         quantidadesCarregadas: pendingPayload.quantidadesCarregadas || null,
       });
       onClose();
@@ -174,21 +186,18 @@ export default function AgendamentoJustificativaAtrasoModal({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>{t('painel.comercial.agendamentos.justificativa.motivoLabel')}</Label>
-              <Select value={motivo} onValueChange={setMotivo} disabled={saving}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={t('painel.comercial.agendamentos.justificativa.motivoPlaceholder')}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {JUSTIFICATIVA_ATRASO_MOTIVOS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {t(opt.labelKey)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="justificativa-motivo">
+                {t('painel.comercial.agendamentos.justificativa.motivoLabel')}
+              </Label>
+              <Combobox
+                id="justificativa-motivo"
+                value={motivo}
+                onValueChange={(value) => setMotivo(toMotivoAtrasoInput(value))}
+                options={motivoOptions}
+                placeholder={t('painel.comercial.agendamentos.justificativa.motivoPlaceholder')}
+                disabled={saving}
+                inputClassName="uppercase placeholder:normal-case"
+              />
             </div>
           </div>
 
@@ -204,7 +213,7 @@ export default function AgendamentoJustificativaAtrasoModal({
               {t('buttons.cancel')}
             </Button>
             <Can anyOf={[`${permissionPrefix}.edit`, `${permissionPrefix}.view`]}>
-              <Button type="submit" disabled={saving || !responsavel || !motivo}>
+              <Button type="submit" disabled={saving || !responsavel || !normalizeMotivoAtraso(motivo)}>
                 {saving
                   ? t('painel.comercial.agendamentos.saving')
                   : t('painel.comercial.agendamentos.justificativa.confirm')}
