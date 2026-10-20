@@ -7,6 +7,8 @@ import Home from '@industrializacao/pages/Home';
 import Dashboard from '@industrializacao/pages/Dashboard';
 import EstoqueCliente from '@industrializacao/pages/EstoqueCliente';
 import TelaClientes from '@industrializacao/pages/TelaClientes';
+import ClienteEntradas from '@industrializacao/pages/ClienteEntradas';
+import ClienteFiltracao from '@industrializacao/pages/ClienteFiltracao';
 import Estoque from '@industrializacao/pages/Estoque';
 import Pedidos from '@industrializacao/pages/Pedidos';
 import Programacao from '@industrializacao/pages/Programacao';
@@ -49,6 +51,8 @@ export default function ChemCtrlRoutes() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="estoque-cliente" element={<EstoqueCliente />} />
             <Route path="tela-clientes" element={<TelaClientes />} />
+            <Route path="clientes/entradas" element={<ClienteEntradas />} />
+            <Route path="clientes/filtracao" element={<ClienteFiltracao />} />
             <Route path="estoque" element={<Estoque />} />
             <Route path="validacao" element={<Validacao />} />
             <Route path="pedidos" element={<Pedidos />} />

@@ -77,6 +77,10 @@ export function canAccessRoute(user, path) {
   ) {
     return true;
   }
+  // Portal do cliente externo: consulta, sem entrada no catálogo de permissões internas.
+  if (path === '/clientes/entradas' || path === '/clientes/filtracao') {
+    return user.tipo === 'externo';
+  }
   if (
     (path === '/painel/home' || path === '/painel' || path === '/painel/')
     && user.tipo !== 'externo'
@@ -147,6 +151,21 @@ export function matchesClient(item, client) {
   const itemClient = (item?.client || '').trim().toLowerCase();
   const target = (client || '').trim().toLowerCase();
   return Boolean(itemClient && target && itemClient === target);
+}
+
+function foldClientName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+/** Nomes de cliente iguais, ignorando acento, caixa e espaços nas pontas. */
+export function sameClientName(a, b) {
+  const left = foldClientName(a);
+  const right = foldClientName(b);
+  return Boolean(left && right && left === right);
 }
 
 export function getDefaultRoute(user) {

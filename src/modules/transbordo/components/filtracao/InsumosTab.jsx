@@ -32,7 +32,7 @@ const formatDate = (d) => {
   return date.toLocaleDateString("pt-BR");
 };
 
-export default function InsumosTab() {
+export default function InsumosTab({ readOnly = false }) {
   const [elementos, setElementos] = useState([]);
   const [volumeMap, setVolumeMap] = useState(new Map());
   const [modalOpen, setModalOpen] = useState(false);
@@ -47,7 +47,7 @@ export default function InsumosTab() {
     try {
       const [elems, aligned] = await Promise.all([
         entities.elementos_filtrantes.list("-created_date"),
-        alignFiltracoesComVasilhames(entities),
+        alignFiltracoesComVasilhames(entities, { persist: !readOnly }),
       ]);
       setElementos(elems);
       setVolumeMap(volumeTotalPorFiltro(aligned.rows));
@@ -154,13 +154,15 @@ export default function InsumosTab() {
           {elementos.length} elemento(s) filtrante(s)
           {emUsoCount > 0 ? ` · ${emUsoCount} em uso` : ""}
         </p>
-        <Button
-          onClick={() => setModalOpen(true)}
-          className="bg-primary hover:bg-primary/90 gap-2 h-9"
-        >
-          <Plus className="w-4 h-4" />
-          Entrada de elementos
-        </Button>
+        {!readOnly && (
+          <Button
+            onClick={() => setModalOpen(true)}
+            className="bg-primary hover:bg-primary/90 gap-2 h-9"
+          >
+            <Plus className="w-4 h-4" />
+            Entrada de elementos
+          </Button>
+        )}
       </div>
 
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -174,23 +176,25 @@ export default function InsumosTab() {
                 <th className="px-4 py-3 font-medium">Data da compra</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Volume total (L)</th>
-                <th className="px-4 py-3 font-medium">Ações</th>
+                {!readOnly && <th className="px-4 py-3 font-medium">Ações</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={readOnly ? 6 : 7} className="px-4 py-8 text-center text-muted-foreground">
                     Carregando insumos...
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={readOnly ? 6 : 7} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum elemento filtrante cadastrado.
-                    <span className="block text-xs mt-1">
-                      Use &quot;Entrada de elementos&quot; para registrar cartuchos.
-                    </span>
+                    {!readOnly && (
+                      <span className="block text-xs mt-1">
+                        Use &quot;Entrada de elementos&quot; para registrar cartuchos.
+                      </span>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -229,25 +233,27 @@ export default function InsumosTab() {
                       <td className="px-4 py-3 text-foreground font-medium tabular-nums">
                         {formatVolume(vol, { empty: "0" })}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {!emUso && !descartado && (
-                            <RowActionButton
-                              tone="success"
-                              onClick={() => handleColocarEmUso(el)}
-                              title="Colocar em uso"
-                            >
-                              <CirclePlay />
+                      {!readOnly && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            {!emUso && !descartado && (
+                              <RowActionButton
+                                tone="success"
+                                onClick={() => handleColocarEmUso(el)}
+                                title="Colocar em uso"
+                              >
+                                <CirclePlay />
+                              </RowActionButton>
+                            )}
+                            <RowActionButton onClick={() => handleEdit(el)} title="Editar">
+                              <Pencil />
                             </RowActionButton>
-                          )}
-                          <RowActionButton onClick={() => handleEdit(el)} title="Editar">
-                            <Pencil />
-                          </RowActionButton>
-                          <RowActionButton tone="danger" onClick={() => setDeleteId(el.id)} title="Excluir">
-                            <Trash2 />
-                          </RowActionButton>
-                        </div>
-                      </td>
+                            <RowActionButton tone="danger" onClick={() => setDeleteId(el.id)} title="Excluir">
+                              <Trash2 />
+                            </RowActionButton>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -257,25 +263,30 @@ export default function InsumosTab() {
         </div>
       </div>
 
-      <EntradaElementosModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleEntrada}
-        saving={saving}
-        proximosPreview={generateProximosCodigosFiltro(elementos, 1)[0] || "F001"}
-      />
+      {!readOnly && (
+        <EntradaElementosModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSave={handleEntrada}
+          saving={saving}
+          proximosPreview={generateProximosCodigosFiltro(elementos, 1)[0] || "F001"}
+        />
+      )}
 
-      <ElementoEditModal
-        open={editOpen}
-        onClose={() => {
-          setEditOpen(false);
-          setEditingElemento(null);
-        }}
-        onSave={handleEditSave}
-        elemento={editingElemento}
-        saving={saving}
-      />
+      {!readOnly && (
+        <ElementoEditModal
+          open={editOpen}
+          onClose={() => {
+            setEditOpen(false);
+            setEditingElemento(null);
+          }}
+          onSave={handleEditSave}
+          elemento={editingElemento}
+          saving={saving}
+        />
+      )}
 
+      {!readOnly && (
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -296,6 +307,7 @@ export default function InsumosTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </div>
   );
 }

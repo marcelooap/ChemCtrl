@@ -6,7 +6,19 @@ import InsumosTab from "@transbordo/components/filtracao/InsumosTab";
 const TAB_TRIGGER_CLASS =
   "gap-1.5 px-4 py-2 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
-export default function Filtracao() {
+export default function Filtracao({ readOnly = false, lockedCliente = "" }) {
+  if (readOnly) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
+        <div className="shrink-0">
+          <h1 className="text-2xl font-bold text-foreground leading-tight">Filtração</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Consulta de filtrações</p>
+        </div>
+        <FiltracaoTab readOnly lockedCliente={lockedCliente} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
       <Tabs
@@ -36,13 +48,13 @@ export default function Filtracao() {
           value="filtracao"
           className="mt-3 flex flex-1 min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
-          <FiltracaoTab />
+          <FiltracaoTab readOnly={readOnly} lockedCliente={lockedCliente} />
         </TabsContent>
         <TabsContent
           value="insumos"
           className="mt-3 flex flex-1 min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
-          <InsumosTab />
+          <InsumosTab readOnly={readOnly} />
         </TabsContent>
       </Tabs>
     </div>

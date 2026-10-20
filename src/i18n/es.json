@@ -284,6 +284,8 @@
     "usersAndPermissions": "Usuarios y Permisos",
     "clientScreen": "Portal de Clientes",
     "clientStock": "Stock de Cliente",
+    "clientEntradas": "Entradas",
+    "clientFiltracao": "Filtración",
     "lockedTooltip": "Sin acceso para su nivel",
     "moduleName": "ChemCtrl",
     "appSubtitle": "Control de Producción",

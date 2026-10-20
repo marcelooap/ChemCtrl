@@ -741,6 +741,20 @@ export default function Vasilhames() {
         throw err;
       }
       saved = { ...editingVasilhame, ...payload };
+      const produtoChanged =
+        String(saved.produto_id || "") !== String(editingVasilhame.produto_id || "") ||
+        String(saved.produto_nome || "").trim() !==
+          String(editingVasilhame.produto_nome || "").trim() ||
+        String(saved.produto_codigo || "").trim() !==
+          String(editingVasilhame.produto_codigo || "").trim();
+      const produtoNovoFiltrado = (produtos || []).some(
+        (p) => p.filtrado && String(p.id) === String(saved.produto_id || "")
+      );
+      const identificacaoChanged =
+        String(saved.placa || "").trim() !==
+          String(editingVasilhame.placa || "").trim() ||
+        String(saved.barril || "").trim() !==
+          String(editingVasilhame.barril || "").trim();
       if (multiLote) {
         const renomes = lotesEditados.filter(
           (l) => String(l.lote || "").trim() !== String(l.lote_original || "").trim()
@@ -763,7 +777,14 @@ export default function Vasilhames() {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }
       }
-      if (volumeChanged || lotesRenamed || (multiLote && densChanged) || (!multiLote && newLote !== oldLote)) {
+      if (
+        volumeChanged ||
+        lotesRenamed ||
+        produtoChanged ||
+        identificacaoChanged ||
+        (multiLote && densChanged) ||
+        (!multiLote && newLote !== oldLote)
+      ) {
         try {
           const existentes = await entities.filtracoes.filter({
             vasilhame_id: editingVasilhame.id,
@@ -773,6 +794,11 @@ export default function Vasilhames() {
               existentes[0].id,
               syncFiltracaoFromVasilhame(saved)
             );
+          } else if (produtoChanged && produtoNovoFiltrado) {
+            await upsertFiltracaoForVasilhame(entities, saved, {
+              codigo: saved.codigo,
+              transbordo_id: saved.transbordo_id,
+            });
           }
         } catch (err) {
           console.error("[Transbordo] Falha ao atualizar filtração do vasilhame:", err);

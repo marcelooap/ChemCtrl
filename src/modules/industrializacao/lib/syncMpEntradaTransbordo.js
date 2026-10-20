@@ -395,8 +395,19 @@ async function resolveControleLotes(entrada) {
   }
 }
 
-/** Pesagem, destinos informados e controle de MP, para a visualização da entrada. */
-export async function prepareEntradaView(entrada) {
+function pesagemFromValidacao(entrada, row) {
+  if (granelPesagemFields(entrada)) return entrada;
+  const payload = asPayload(row?.entrada_payload);
+  const pesagem = granelPesagemFields(payload);
+  if (!pesagem) return entrada;
+  return { ...entrada, ...pesagem };
+}
+
+/**
+ * Pesagem, destinos informados e controle de MP, para a visualização da entrada.
+ * `persist: false` só enriquece em memória — usado no portal do cliente.
+ */
+export async function prepareEntradaView(entrada, { persist = true } = {}) {
   if (!entrada?.id || entrada.origem !== "industrializacao") {
     return { entrada, destinosInformados: [], controleLotes: [] };
   }
@@ -404,7 +415,9 @@ export async function prepareEntradaView(entrada) {
     findValidacaoRow(entrada),
     resolveControleLotes(entrada),
   ]);
-  const enriched = await backfillEntradaPesagem(entrada, row);
+  const enriched = persist
+    ? await backfillEntradaPesagem(entrada, row)
+    : pesagemFromValidacao(entrada, row);
   return {
     entrada: enriched,
     destinosInformados: destinosInformadosFromValidacao(row),

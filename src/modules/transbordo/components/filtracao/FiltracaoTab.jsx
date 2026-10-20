@@ -29,8 +29,19 @@ import {
   filtracaoTemSae,
 } from "@transbordo/lib/filtracao";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
+import { sameClientName } from "@industrializacao/lib/permissions";
 
-export default function FiltracaoTab() {
+function formatOperacaoData(value) {
+  if (!value) return "—";
+  const raw = String(value);
+  const date = raw.includes("T")
+    ? new Date(raw)
+    : new Date(`${raw.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("pt-BR");
+}
+
+export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
   const [filtracoes, setFiltracoes] = useState([]);
   const [elementos, setElementos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -48,8 +59,8 @@ export default function FiltracaoTab() {
     if (!silent) setLoading(true);
     try {
       const [aligned, cliens, elems] = await Promise.all([
-        alignFiltracoesComVasilhames(entities),
-        entities.clientes.list(),
+        alignFiltracoesComVasilhames(entities, { persist: !readOnly }),
+        readOnly ? Promise.resolve([]) : entities.clientes.list(),
         entities.elementos_filtrantes.list("-created_date"),
       ]);
       setFiltracoes(aligned.rows);
@@ -70,7 +81,10 @@ export default function FiltracaoTab() {
 
   const searched = useMemo(() => {
     const q = search.toLowerCase();
-    return filtracoes.filter((f) => {
+    const scoped = lockedCliente
+      ? filtracoes.filter((f) => sameClientName(f.cliente_nome, lockedCliente))
+      : filtracoes;
+    return scoped.filter((f) => {
       const matchSearch =
         !q ||
         f.codigo?.toLowerCase().includes(q) ||
@@ -83,20 +97,23 @@ export default function FiltracaoTab() {
         f.filtro_codigo?.toLowerCase().includes(q);
 
       const matchCliente =
+        Boolean(lockedCliente) ||
         !clienteFilter ||
         clienteFilter === "Todos os clientes" ||
         f.cliente_nome === clienteFilter;
 
       return matchSearch && matchCliente;
     });
-  }, [filtracoes, search, clienteFilter]);
+  }, [filtracoes, search, clienteFilter, lockedCliente]);
 
   const pendenteCount = searched.filter((f) => !filtracaoTemSae(f)).length;
   const analisadoCount = searched.length - pendenteCount;
 
-  const filtered = searched.filter((f) =>
-    resultadoFilter === "analisado" ? filtracaoTemSae(f) : !filtracaoTemSae(f)
-  );
+  const filtered = readOnly
+    ? searched
+    : searched.filter((f) =>
+        resultadoFilter === "analisado" ? filtracaoTemSae(f) : !filtracaoTemSae(f)
+      );
 
   const handleView = (f) => {
     setViewFiltracao(f);
@@ -142,25 +159,32 @@ export default function FiltracaoTab() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por ID, placa, produto, lote, filtro..."
+            placeholder={
+              readOnly
+                ? "Buscar por ID, placa, produto, lote..."
+                : "Buscar por ID, placa, produto, lote, filtro..."
+            }
             className="pl-10 bg-card h-9"
           />
         </div>
-        <div className="w-56">
-          <SearchableSelect
-            value={clienteFilter}
-            onChange={(label) => setClienteFilter(label)}
-            options={clienteFilterOptions}
-            getOptionLabel={(c) => c.nome}
-            getOptionValue={(c) => c.id}
-            placeholder="Todos os clientes"
-          />
-        </div>
+        {!lockedCliente && (
+          <div className="w-56">
+            <SearchableSelect
+              value={clienteFilter}
+              onChange={(label) => setClienteFilter(label)}
+              options={clienteFilterOptions}
+              getOptionLabel={(c) => c.nome}
+              getOptionValue={(c) => c.id}
+              placeholder="Todos os clientes"
+            />
+          </div>
+        )}
         <span className="text-sm text-muted-foreground ml-auto">
           {filtered.length} registro(s)
         </span>
       </div>
 
+      {!readOnly && (
       <div
         role="group"
         aria-label="Situação do resultado SAE"
@@ -213,6 +237,7 @@ export default function FiltracaoTab() {
           </span>
         </button>
       </div>
+      )}
 
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="overflow-auto flex-1 min-h-0">
@@ -220,12 +245,13 @@ export default function FiltracaoTab() {
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-4 py-3 font-medium">ID</th>
+                {readOnly && <th className="px-4 py-3 font-medium">Data</th>}
                 <th className="px-4 py-3 font-medium">Nº Placa</th>
                 <th className="px-4 py-3 font-medium">Nº Barril</th>
                 <th className="px-4 py-3 font-medium">Produto</th>
                 <th className="px-4 py-3 font-medium">Lote</th>
                 <th className="px-4 py-3 font-medium">Volume (L)</th>
-                <th className="px-4 py-3 font-medium">Filtro</th>
+                {!readOnly && <th className="px-4 py-3 font-medium">Filtro</th>}
                 <th className="px-4 py-3 font-medium">SAE</th>
                 {PARTICULA_TAMANHOS.map(({ key, short }) => (
                   <th key={key} className="px-3 py-3 font-medium whitespace-nowrap">
@@ -245,13 +271,17 @@ export default function FiltracaoTab() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan} className="px-4 py-8 text-center text-muted-foreground">
-                    {resultadoFilter === "pendente"
-                      ? "Nenhum tanque pendente de resultado SAE."
-                      : "Nenhum tanque com resultado SAE registrado."}
+                    {readOnly
+                      ? "Nenhuma filtração encontrada."
+                      : resultadoFilter === "pendente"
+                        ? "Nenhum tanque pendente de resultado SAE."
+                        : "Nenhum tanque com resultado SAE registrado."}
+                    {!readOnly && (
                     <span className="block text-xs mt-1">
                       Vasilhames de produtos marcados como filtrados são registrados
                       automaticamente no transbordo.
                     </span>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -274,6 +304,11 @@ export default function FiltracaoTab() {
                       <td className="px-4 py-3 font-medium text-primary">
                         {f.codigo || "-"}
                       </td>
+                      {readOnly && (
+                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                          {formatOperacaoData(f.data_operacao)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-foreground">{f.placa || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {f.barril || "—"}
@@ -297,6 +332,7 @@ export default function FiltracaoTab() {
                       <td className="px-4 py-3 text-foreground font-medium whitespace-nowrap">
                         {formatVolume(f.volume, { empty: "-" })}
                       </td>
+                      {!readOnly && (
                       <td className="px-4 py-3">
                         {f.filtro_codigo ? (
                           <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -306,6 +342,7 @@ export default function FiltracaoTab() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
+                      )}
                       <td className="px-4 py-3">
                         {!filtracaoTemSae(f) ? (
                           <span className="text-muted-foreground">—</span>
@@ -328,15 +365,19 @@ export default function FiltracaoTab() {
                           <RowActionButton onClick={() => handleView(f)} title="Visualizar">
                             <Eye />
                           </RowActionButton>
-                          <RowActionButton
-                            onClick={() => handleEdit(f)}
-                            title="Editar SAE / partículas / filtro"
-                          >
-                            <Pencil />
-                          </RowActionButton>
-                          <RowActionButton tone="danger" onClick={() => setDeleteId(f.id)} title="Excluir">
-                            <Trash2 />
-                          </RowActionButton>
+                          {!readOnly && (
+                            <>
+                              <RowActionButton
+                                onClick={() => handleEdit(f)}
+                                title="Editar SAE / partículas / filtro"
+                              >
+                                <Pencil />
+                              </RowActionButton>
+                              <RowActionButton tone="danger" onClick={() => setDeleteId(f.id)} title="Excluir">
+                                <Trash2 />
+                              </RowActionButton>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -361,6 +402,7 @@ export default function FiltracaoTab() {
         </div>
       </div>
 
+      {!readOnly && (
       <FiltracaoEditModal
         open={editOpen}
         onClose={() => {
@@ -371,6 +413,7 @@ export default function FiltracaoTab() {
         filtracao={editingFiltracao}
         elementos={elementos}
       />
+      )}
 
       <FiltracaoViewDialog
         open={viewOpen}
@@ -379,8 +422,10 @@ export default function FiltracaoTab() {
           setViewFiltracao(null);
         }}
         filtracao={viewFiltracao}
+        hideFiltro={readOnly}
       />
 
+      {!readOnly && (
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -402,6 +447,7 @@ export default function FiltracaoTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </div>
   );
 }

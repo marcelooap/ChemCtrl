@@ -4,6 +4,7 @@ import {
   LayoutDashboard, BarChart3, Package, ClipboardList, BookOpen, Plus, Factory, ListOrdered,
   Shield, FlaskConical, FileCheck, Award, Box, Cylinder, ArrowRightLeft, Truck,
   Users, Building2, Warehouse, ClipboardCheck, CalendarDays, ShieldCheck, Microscope,
+  PackagePlus, Filter,
 } from 'lucide-react';
 import {
   canAccessRoute,
@@ -86,11 +87,20 @@ export default function Sidebar({ collapsed, setCollapsed, user }) {
       });
 
     if (isExterno) {
-      return mapped.filter(
-        (i) =>
-          i.path === '/tela-clientes' ||
-          (i.children && i.children.some((c) => c.path === '/tela-clientes'))
-      );
+      const portal = mapped.filter((i) => i.path === '/tela-clientes');
+      return [
+        ...portal,
+        {
+          labelKey: 'sidebar.clientEntradas',
+          icon: PackagePlus,
+          path: '/clientes/entradas',
+        },
+        {
+          labelKey: 'sidebar.clientFiltracao',
+          icon: Filter,
+          path: '/clientes/filtracao',
+        },
+      ];
     }
     return mapped;
   }, [isExterno, navSpec, saidaCount, validacaoCount, user]);

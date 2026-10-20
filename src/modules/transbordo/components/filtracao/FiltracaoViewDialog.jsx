@@ -36,7 +36,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function FiltracaoViewDialog({ open, onClose, filtracao }) {
+export default function FiltracaoViewDialog({ open, onClose, filtracao, hideFiltro = false }) {
   if (!filtracao) return null;
 
   const loteDominante =
@@ -84,11 +84,13 @@ export default function FiltracaoViewDialog({ open, onClose, filtracao }) {
           </Section>
 
           <Section title="FILTRAÇÃO">
-            <InfoItem
-              label="Filtro"
-              value={filtracao.filtro_codigo || "—"}
-              highlight="text-primary font-bold"
-            />
+            {!hideFiltro && (
+              <InfoItem
+                label="Filtro"
+                value={filtracao.filtro_codigo || "—"}
+                highlight="text-primary font-bold"
+              />
+            )}
             <InfoItem
               label="SAE"
               value={formatParticulaCount(filtracao.sae)}
