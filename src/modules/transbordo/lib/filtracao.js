@@ -27,9 +27,12 @@ export function formatParticulaCount(v) {
   });
 }
 
-/** Filtração só registra tipo Vasilhame — exclui Tankagem e demais embalagens. */
+/**
+ * Filtração só registra tipo Vasilhame.
+ * Tanque fracionado fica de fora até ser completado (tag removida em Vasilhames).
+ */
 export function isFiltracaoElegivel(vasilhame) {
-  return (vasilhame?.tipo || "") === "Vasilhame";
+  return (vasilhame?.tipo || "") === "Vasilhame" && vasilhame?.fracionado !== true;
 }
 
 /** Monta payload de filtração a partir de um vasilhame persistido. */
@@ -284,6 +287,7 @@ export async function alignFiltracoesComVasilhames(
     });
     const transbordoId = mirrored.row?.transbordo_id || vasilhame?.transbordo_id;
     const transbordo = transbordoId ? transbordoById.get(transbordoId) : null;
+    if (vasilhame?.fracionado === true) continue;
     rows.push({
       ...mirrored.row,
       data_operacao:
@@ -325,8 +329,8 @@ export function syncFiltracaoFromVasilhame(vasilhame, ctx = {}) {
 }
 
 /**
- * Cria ou atualiza registro de filtração ligado a um vasilhame
- * (usado em top-up / fracionado). Ignora Tankagem e outros tipos.
+ * Cria ou atualiza registro de filtração ligado a um vasilhame.
+ * Ignora Tankagem, outros tipos e tanque ainda fracionado.
  */
 export async function upsertFiltracaoForVasilhame(entities, vasilhame, extras = {}) {
   if (!vasilhame?.id || !isFiltracaoElegivel(vasilhame)) return null;

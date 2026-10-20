@@ -30,6 +30,7 @@ import {
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
   collapsedPlacaHealPatch,
+  resolveFracionadoFromTransbordos,
   resolveVasilhameLoteDatas,
   applyLoteDatasToComposicao,
   rescaleComposicaoToVolume,
@@ -142,17 +143,12 @@ function resolveVasilhameMedida(vasilhame, transbordos = [], estoqueById = null)
 }
 
 function renderVolumeQuantidadeCells(vasilhame, medida) {
-  const fracionadoBadge =
-    vasilhame.fracionado &&
-    new Set(
-      (vasilhame.composicao || [])
-        .map((c) => (c.lote || "").trim())
-        .filter(Boolean)
-    ).size <= 1 ? (
-      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
-        Fracionado
-      </span>
-    ) : null;
+  // Fracionado é o destino parcial do tanque (TB), mesmo com mais de um lote na composição.
+  const fracionadoBadge = vasilhame.fracionado ? (
+    <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
+      Fracionado
+    </span>
+  ) : null;
 
   const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
@@ -376,8 +372,36 @@ export default function Vasilhames() {
         console.error("[Transbordo] Falha ao alinhar lote dos vasilhames:", err);
       }
 
+      const withFracionado = [];
+      for (const row of aligned) {
+        const noPatio =
+          (row.tipo || "Vasilhame") === "Vasilhame" &&
+          (row.status || "No Pátio") === "No Pátio" &&
+          !row.data_saida;
+        const fracionado = noPatio
+          ? resolveFracionadoFromTransbordos(row, alignedTransbordos)
+          : !!row.fracionado;
+        if (!noPatio || Boolean(row.fracionado) === fracionado) {
+          withFracionado.push(row);
+          continue;
+        }
+        const next = { ...row, fracionado };
+        try {
+          await entities.vasilhames.update(row.id, { fracionado });
+          if (!fracionado && produtoFiltrado.has(next.produto_id)) {
+            await upsertFiltracaoForVasilhame(entities, next, {
+              codigo: next.codigo,
+              transbordo_id: next.transbordo_id,
+            });
+          }
+        } catch (err) {
+          console.error("[Transbordo] Falha ao alinhar fracionado do vasilhame:", err);
+        }
+        withFracionado.push(next);
+      }
+
       setTransbordos(alignedTransbordos);
-      setVasilhames(aligned);
+      setVasilhames(withFracionado);
       setProdutos(prods);
       setClientes(cliens);
     } catch {
@@ -777,14 +801,18 @@ export default function Vasilhames() {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }
       }
-      if (
-        volumeChanged ||
-        lotesRenamed ||
-        produtoChanged ||
-        identificacaoChanged ||
-        (multiLote && densChanged) ||
-        (!multiLote && newLote !== oldLote)
-      ) {
+      const deixouDeSerFracionado =
+        editingVasilhame.fracionado === true && saved.fracionado !== true;
+      const refletirNaFiltracao =
+        saved.fracionado !== true &&
+        (deixouDeSerFracionado ||
+          volumeChanged ||
+          lotesRenamed ||
+          produtoChanged ||
+          identificacaoChanged ||
+          (multiLote && densChanged) ||
+          (!multiLote && newLote !== oldLote));
+      if (refletirNaFiltracao) {
         try {
           const existentes = await entities.filtracoes.filter({
             vasilhame_id: editingVasilhame.id,
@@ -794,7 +822,10 @@ export default function Vasilhames() {
               existentes[0].id,
               syncFiltracaoFromVasilhame(saved)
             );
-          } else if (produtoChanged && produtoNovoFiltrado) {
+          } else if (
+            produtoNovoFiltrado &&
+            (produtoChanged || deixouDeSerFracionado)
+          ) {
             await upsertFiltracaoForVasilhame(entities, saved, {
               codigo: saved.codigo,
               transbordo_id: saved.transbordo_id,

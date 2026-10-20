@@ -517,9 +517,6 @@ export function applyAdditionalDestino(
     tara != null && tara !== ""
       ? roundMass(tara)
       : roundMass(base.tara || 0);
-  const lotesPosMerge = new Set(
-    merged.map((c) => (c.lote || "").trim()).filter(Boolean)
-  );
   return {
     volume: newVol,
     composicao: merged,
@@ -527,7 +524,8 @@ export function applyAdditionalDestino(
     peso_liquido: peso,
     peso_bruto: roundMass(taraFinal + peso),
     tara: taraFinal,
-    fracionado: !!fracionado && lotesPosMerge.size <= 1,
+    // O interruptor do destino vale mesmo com vários lotes na composição.
+    fracionado: !!fracionado,
   };
 }
 
@@ -543,6 +541,32 @@ function destinoNaPlaca(destino, placa, barril) {
   const b = String(barril || "").trim().toUpperCase();
   if (b && dBarril && b !== dBarril) return false;
   return true;
+}
+
+/**
+ * Fracionado do tanque no pátio: o último destino desta placa/barril.
+ * Sem transbordo correspondente, permanece o flag já gravado no vasilhame.
+ */
+export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
+  if (!vasilhame) return false;
+  const related = (transbordos || []).filter((t) =>
+    (t.destinos || []).some((d) =>
+      destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)
+    )
+  );
+  if (related.length === 0) return !!vasilhame.fracionado;
+
+  const lastT = [...related].sort(
+    (a, b) =>
+      new Date(b.data || b.created_at || 0) -
+      new Date(a.data || a.created_at || 0)
+  )[0];
+  const destinos = (lastT?.destinos || []).filter((d) =>
+    destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)
+  );
+  const lastDest = destinos[destinos.length - 1];
+  if (!lastDest) return !!vasilhame.fracionado;
+  return lastDest.fracionado === true;
 }
 
 /** Fatias FIFO de um transbordo que caíram nesta placa. */
@@ -659,7 +683,6 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
     lote: getDominantLote(composicao) || vasilhame.lote || "",
     peso_liquido: peso,
     peso_bruto: roundMass(tara + peso),
-    fracionado: false,
   };
 }
 
@@ -857,12 +880,14 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     }
 
     volume = roundVolume(volume);
-    const lotesReais = new Set(
-      composicao.map((c) => (c.lote || "").trim()).filter(isLoteReal)
-    );
-    // Mais de um lote, ou algum registro já completo, deixa de ser fracionado.
-    const fracionado =
-      group.every((v) => v.fracionado === true) && lotesReais.size <= 1;
+    // O registro mais recente carrega a decisão do último destino (fracionado ou completo).
+    const latest = [...group].sort((a, b) => {
+      const ta = new Date(a.updated_at || a.created_at || a.created_date || 0).getTime();
+      const tb = new Date(b.updated_at || b.created_at || b.created_date || 0).getTime();
+      if (ta !== tb) return tb - ta;
+      return (b.fracionado === true) - (a.fracionado === true);
+    })[0];
+    const fracionado = latest?.fracionado === true;
     const dens =
       parseFloat(String(primary.densidade || "0").replace(",", ".")) || 0;
     const peso_liquido =
@@ -1216,31 +1241,10 @@ export async function repairVasilhameComposicao(
 
   const lote = getDominantLote(composicao) || vasilhame.lote || "";
 
-  // Tanque já recebeu mais de um aporte/lote → não é mais fracionado.
-  // Só permanece fracionado se o último destino marcou explicitamente.
-  const lotesFinais = new Set(
-    composicao.map((c) => (c.lote || "").trim()).filter(isLoteReal)
+  const fracionado = resolveFracionadoFromTransbordos(
+    { ...vasilhame, composicao, lote },
+    transbordos
   );
-  const uniqueOps = new Set(
-    composicao.map((c) => c.transbordo_codigo).filter(Boolean)
-  );
-  let fracionado = vasilhame.fracionado;
-
-  if (lotesFinais.size > 1 || uniqueOps.size > 1 || transbordosPlaca.length > 1) {
-    fracionado = false;
-  } else if (transbordosPlaca.length > 0) {
-    const lastT = [...transbordosPlaca].sort(
-      (a, b) =>
-        new Date(b.data || b.created_at || 0) -
-        new Date(a.data || a.created_at || 0)
-    )[0];
-    const lastDest = (lastT?.destinos || []).find(
-      (d) =>
-        String(d.placa || "").trim().toUpperCase() ===
-        String(vasilhame.placa || "").trim().toUpperCase()
-    );
-    fracionado = lastDest?.fracionado === true;
-  }
 
   const dens =
     parseFloat(String(vasilhame.densidade || "0").replace(",", ".")) || 0;

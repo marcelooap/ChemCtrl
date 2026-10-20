@@ -186,10 +186,7 @@ export async function syncVasilhamesFromEntradaLotes({
         lote.tara != null && lote.tara !== ""
           ? tara
           : roundMass(fracionadoPatio.tara || 0);
-      const lotesPosMerge = new Set(
-        merged.map((c) => (c.lote || "").trim()).filter(Boolean)
-      );
-      const aindaFracionado = !!lote.fracionado && lotesPosMerge.size <= 1;
+      const aindaFracionado = !!lote.fracionado;
 
       const updated = await entities.vasilhames.update(fracionadoPatio.id, {
         volume: newVol,

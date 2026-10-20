@@ -450,18 +450,10 @@ export default function Receitas() {
     return String(a.product_name || '').localeCompare(String(b.product_name || ''), 'pt-BR');
   });
 
-  const recipeLines = filtered.flatMap((recipe, groupIndex) => {
-    const mps = Array.isArray(recipe.raw_materials) ? recipe.raw_materials : [];
-    const items = mps.length ? mps : [null];
-    return items.map((mp, index) => ({
-      key: mp?.line_id || `${recipe.id}:${mp?.mp_code || 'empty'}:${index}`,
-      recipe,
-      mp,
-      seq: index + 1,
-      groupIndex,
-      isFirst: index === 0,
-    }));
-  });
+  const mpLineCount = filtered.reduce(
+    (sum, recipe) => sum + (Array.isArray(recipe.raw_materials) ? recipe.raw_materials.length : 0),
+    0,
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -831,7 +823,7 @@ export default function Receitas() {
       <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">🧪 {t('recipes.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: latestRecipes.length, lines: recipeLines.length })}</p>
+          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: latestRecipes.length, lines: mpLineCount })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setShowSimulador(true)} style={{ background: '#1a5fb4' }} className="text-white hover:opacity-90">
@@ -863,10 +855,6 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-left">{t('recipes.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.product')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.client')}</th>
-                  <th className="px-4 py-3 text-left">{t('recipes.table.mpCode')}</th>
-                  <th className="px-4 py-3 text-left">{t('recipes.table.mpName')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.percentMass')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.quantityKg')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithTax')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithoutTax')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
@@ -877,10 +865,10 @@ export default function Receitas() {
                 </tr>
               </thead>
               <tbody>
-                {recipeLines.map(({ key, recipe: r, mp, groupIndex, isFirst }) => (
+                {filtered.map((r, index) => (
                   <tr
-                    key={key}
-                    className={`border-b border-border hover:bg-accent/30 ${groupIndex % 2 === 1 ? 'bg-muted/40' : ''} ${isFirst && groupIndex > 0 ? 'border-t-2 border-border' : ''}`}
+                    key={r.id || r.product_name}
+                    className={`border-b border-border hover:bg-accent/30 ${index % 2 === 1 ? 'bg-muted/40' : ''}`}
                   >
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.product_name] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">
@@ -903,10 +891,6 @@ export default function Receitas() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs" style={{ color: '#2575D1' }}>{mp?.mp_code || '—'}</td>
-                    <td className="px-4 py-2.5 text-sm">{mp?.mp_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-right text-sm">{mp ? `${Number(mp.percentage || 0).toFixed(2)}%` : '—'}</td>
-                    <td className="px-4 py-2.5 text-right text-sm">{mp ? fmtNumber(mp.quantity_kg || 0) : '—'}</td>
                     <td className="px-4 py-2.5 text-center text-sm">
                       <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
                         {Number(r.price) ? Number(r.price).toFixed(4) : '-'}
@@ -922,20 +906,18 @@ export default function Receitas() {
                     <td className="px-4 py-2.5">
                       <RevisionExpiryCell
                         revisionDate={r.revision_date}
-                        onRenew={canEdit && isFirst ? () => setRenewTarget(r) : undefined}
+                        onRenew={canEdit ? () => setRenewTarget(r) : undefined}
                       />
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(r)}</td>
                     <td className="px-4 py-2.5 text-center">
-                      {isFirst && (
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                          {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
-                          {canDelete && getRevisionsForProduct(recipes, r.product_name).length <= 1 && (
-                            <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted" aria-label={t('buttons.view')}><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted" aria-label={t('buttons.edit')}><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                        {canDelete && getRevisionsForProduct(recipes, r.product_name).length <= 1 && (
+                          <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted" aria-label={t('buttons.delete')}><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -278,6 +278,28 @@ export async function revertTopUpsDoTransbordo({
   }
 }
 
+/** Grava no tanque do pátio o fracionado do último destino desta placa. */
+async function syncFracionadoDosDestinos(destinos = []) {
+  const byKey = new Map();
+  for (const d of destinos) {
+    if ((d?.tipo_embalagem || "") !== "Vasilhame") continue;
+    if (!String(d.placa || "").trim() && !String(d.barril || "").trim()) continue;
+    byKey.set(placaKey(d.placa, d.barril), d.fracionado === true);
+  }
+  if (byKey.size === 0) return;
+
+  const rows = await entities.vasilhames.list();
+  for (const row of rows || []) {
+    if ((row.tipo || "Vasilhame") !== "Vasilhame") continue;
+    if ((row.status || "No Pátio") !== "No Pátio" || row.data_saida) continue;
+    const key = placaKey(row.placa, row.barril);
+    if (!byKey.has(key)) continue;
+    const fracionado = byKey.get(key);
+    if (Boolean(row.fracionado) === fracionado) continue;
+    await entities.vasilhames.update(row.id, { fracionado });
+  }
+}
+
 function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp) {
   const isTankagem = d.tipo_embalagem === "Tankagem";
   const isUnitario = isDestinoEstoqueEmbalado(d.tipo_embalagem);
@@ -738,6 +760,7 @@ export async function persistTransbordo({
       // Unifica tanques duplicados no pátio (mesma placa)
       const afterSave = await entities.vasilhames.list();
       await unifyDuplicateVasilhames(afterSave, entities);
+      await syncFracionadoDosDestinos(destinos);
 
       // Origem tankagem: baixa volume + composição no vasilhame (parcial ou total)
       await syncTankaVasilhamesAfterOrigem({

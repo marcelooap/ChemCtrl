@@ -39,15 +39,9 @@ function padRegId(value) {
   return String(value).padStart(2, '0');
 }
 
-/** Mesma regra da tela Transbordo → Vasilhames. */
+/** Mesma regra da tela Transbordo → Vasilhames: o flag do tanque, mesmo com vários lotes. */
 function isTransbordoFracionado(vasilhame) {
-  if (!vasilhame?.fracionado) return false;
-  const lotes = new Set(
-    (vasilhame.composicao || [])
-      .map((c) => (c.lote || '').trim())
-      .filter(Boolean)
-  );
-  return lotes.size <= 1;
+  return vasilhame?.fracionado === true;
 }
 
 /** True quando a reserva comercial é de um vasilhame (não de estoque embalado). */

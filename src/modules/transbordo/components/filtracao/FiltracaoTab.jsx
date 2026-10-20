@@ -278,8 +278,8 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
                         : "Nenhum tanque com resultado SAE registrado."}
                     {!readOnly && (
                     <span className="block text-xs mt-1">
-                      Vasilhames de produtos marcados como filtrados são registrados
-                      automaticamente no transbordo.
+                      Vasilhames de produtos filtrados entram ao serem completados.
+                      Tanques com a tag fracionado ficam de fora até ela sair.
                     </span>
                     )}
                   </td>
