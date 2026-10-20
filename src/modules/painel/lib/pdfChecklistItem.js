@@ -394,14 +394,17 @@ function ensureSpace(doc, y, needed, ctx) {
   return drawContinuedHeader(doc, ctx);
 }
 
-function addFooter(doc, ctx) {
-  const pages = doc.internal.getNumberOfPages();
+function addFooter(doc, ctx, range) {
+  const fromPage = range?.fromPage ?? 1;
+  const toPage = range?.toPage ?? doc.internal.getNumberOfPages();
+  const total = Math.max(1, toPage - fromPage + 1);
   const footerText = hexFallback(
     ctx.t,
     'pdf.footer',
     'ChemCtrl - Sistema de Controle de Produção'
   );
-  for (let i = 1; i <= pages; i++) {
+  for (let i = fromPage; i <= toPage; i++) {
+    const local = i - fromPage + 1;
     doc.setPage(i);
     setDraw(doc, BORDER);
     doc.setLineWidth(0.25);
@@ -418,9 +421,9 @@ function addFooter(doc, ctx) {
       doc.text(clipped, PW / 2, FOOTER_Y + 5, { align: 'center' });
     }
 
-    const pageLabel = hexFallback(ctx.t, 'pdf.page', `Página ${i} de ${pages}`, {
-      current: i,
-      total: pages,
+    const pageLabel = hexFallback(ctx.t, 'pdf.page', `Página ${local} de ${total}`, {
+      current: local,
+      total,
     });
     doc.text(pageLabel, PW - M, FOOTER_Y + 5, { align: 'right' });
   }
@@ -644,22 +647,26 @@ function addCheckCard(doc, y, index, label, meta, ctx) {
 const FOTOS_POR_PAGINA = 4;
 const FOTOS_COLS = 2;
 
-/** Garante que as evidências fotográficas comecem na 3ª folha. */
-function startPhotosOnPage3(doc, ctx) {
+/**
+ * Garante que as evidências fotográficas comecem na 3ª folha deste checklist.
+ * `basePage` é a primeira página do item, para um PDF com vários checklists.
+ */
+function startPhotosOnPage3(doc, ctx, basePage = 1) {
+  const target = basePage + 2;
   const startedOn = doc.internal.getNumberOfPages();
-  if (startedOn >= 3) {
+  if (startedOn >= target) {
     doc.addPage();
     return drawContinuedHeader(doc, ctx);
   }
-  while (doc.internal.getNumberOfPages() < 3) {
+  while (doc.internal.getNumberOfPages() < target) {
     doc.addPage();
   }
-  doc.setPage(3);
+  doc.setPage(target);
   return drawContinuedHeader(doc, ctx);
 }
 
-function addPhotosSection(doc, _y, loaded, title, emptyMessage, ctx) {
-  let y = startPhotosOnPage3(doc, ctx);
+function addPhotosSection(doc, _y, loaded, title, emptyMessage, ctx, basePage = 1) {
+  let y = startPhotosOnPage3(doc, ctx, basePage);
   y = drawSectionTitle(doc, y, title);
 
   if (!loaded.length) {
@@ -825,21 +832,18 @@ function imageFormatFromMime(mime, dataUrl) {
 }
 
 /**
- * Gera PDF A4 retrato do checklist do item (layout moderno em cards).
- * Ordem: dados → lacres → validade dos testes → color cod → demais verificações.
- * Evidências fotográficas sempre a partir da 3ª folha (4 fotos por página).
+ * Desenha um checklist a partir da página atual.
+ * Fotos começam na 3ª folha deste item (`basePage` + 2).
  */
-export async function generateChecklistItemPDF({
+async function renderChecklistItem(doc, {
   item,
   saida,
   fotoUrls = [],
   t,
   language = 'pt-BR',
+  basePage = 1,
 } = {}) {
-  if (!item) return;
-
   const ctx = buildPageCtx(item, saida, t, language);
-  const doc = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
   let y = drawMainHeader(doc, ctx);
 
   const infoPairs = [
@@ -963,13 +967,95 @@ export async function generateChecklistItemPDF({
     }
   }
 
-  y = addPhotosSection(doc, y, loaded, photosTitle, emptyPhotos, ctx);
+  addPhotosSection(doc, y, loaded, photosTitle, emptyPhotos, ctx, basePage);
+  return ctx;
+}
 
-  addFooter(doc, ctx);
+function checklistFileBase(saida, item) {
+  return (
+    safePdfFilenamePart(saida?.codigo || item?.saida_codigo) ||
+    safePdfFilenamePart(item?.produto) ||
+    'checklist'
+  );
+}
 
-  const fileBase =
-    safePdfFilenamePart(ctx.saidaCodigo) ||
-    safePdfFilenamePart(item.produto) ||
-    'checklist';
-  doc.save(`${fileBase} - Checklist.pdf`);
+/**
+ * Gera PDF A4 retrato do checklist do item (layout moderno em cards).
+ * Ordem: dados → lacres → validade dos testes → color cod → demais verificações.
+ * Evidências fotográficas sempre a partir da 3ª folha (4 fotos por página).
+ */
+export async function generateChecklistItemPDF({
+  item,
+  saida,
+  fotoUrls = [],
+  t,
+  language = 'pt-BR',
+} = {}) {
+  if (!item) return;
+
+  const doc = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+  const ctx = await renderChecklistItem(doc, {
+    item,
+    saida,
+    fotoUrls,
+    t,
+    language,
+    basePage: 1,
+  });
+  addFooter(doc, ctx, { fromPage: 1, toPage: doc.internal.getNumberOfPages() });
+
+  doc.save(`${checklistFileBase(saida, item)} - Checklist.pdf`);
+}
+
+/**
+ * Um único PDF com os checklists da saída, na ordem informada.
+ * Cada item começa em página nova e mantém o layout do PDF individual.
+ */
+export async function generateChecklistCargaPDF({
+  items,
+  saida,
+  t,
+  language = 'pt-BR',
+  resolveFotoUrls,
+} = {}) {
+  const list = (items || []).filter(Boolean);
+  if (list.length === 0) return;
+
+  const doc = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+  const segments = [];
+
+  for (let i = 0; i < list.length; i++) {
+    if (i > 0) doc.addPage();
+    const fromPage = doc.internal.getNumberOfPages();
+    const item = list[i];
+    let fotoUrls = [];
+    if (typeof resolveFotoUrls === 'function') {
+      const resolved = await resolveFotoUrls(item);
+      fotoUrls = Array.isArray(resolved) ? resolved.filter(Boolean) : [];
+    }
+    const ctx = await renderChecklistItem(doc, {
+      item,
+      saida: saida || { codigo: item.saida_codigo },
+      fotoUrls,
+      t,
+      language,
+      basePage: fromPage,
+    });
+    segments.push({
+      ctx,
+      fromPage,
+      toPage: doc.internal.getNumberOfPages(),
+    });
+  }
+
+  for (const segment of segments) {
+    addFooter(doc, segment.ctx, segment);
+  }
+
+  const suffix = hexFallback(
+    t,
+    'painel.logistica.carregamentos.checklistUnifyFile',
+    'Checklists'
+  );
+  doc.save(`${checklistFileBase(saida, list[0])} - ${suffix}.pdf`);
 }

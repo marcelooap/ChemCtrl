@@ -12,10 +12,13 @@ import { Button } from "@shared/components/ui/button";
 import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
 import { entities } from "@transbordo/services/entities";
-import { Check, ClipboardList, Download, FileText, Loader2, Printer } from "lucide-react";
+import { Check, ClipboardList, Download, Files, FileText, Loader2, Printer } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
-import { generateChecklistItemPDF } from "@painel/lib/pdfChecklistItem";
+import {
+  generateChecklistCargaPDF,
+  generateChecklistItemPDF,
+} from "@painel/lib/pdfChecklistItem";
 import { getSignedFileUrl } from "@industrializacao/api/storage";
 import {
   formatQtdEmbalagens,
@@ -101,6 +104,99 @@ function quantidadeItens(items) {
   );
 }
 
+function checklistItemsProntos(checklistItems, saida, itens) {
+  const seen = new Set();
+  const ready = [];
+  (itens || []).forEach((linha, index) => {
+    const item = findChecklistItemForSaidaLinha(checklistItems, saida, linha, index);
+    if (!isChecklistItemRealizado(item)) return;
+    const key = item.item_key || `${item.saida_id}:${item.item_index ?? index}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    ready.push(item);
+  });
+  return ready;
+}
+
+async function signedChecklistFotos(item) {
+  const urls = [];
+  for (const path of item?.fotos || []) {
+    try {
+      const signed = await getSignedFileUrl(path);
+      urls.push(signed || path);
+    } catch {
+      urls.push(path);
+    }
+  }
+  return urls;
+}
+
+function formatCarregamentoQuando(agendamento) {
+  const hora = String(agendamento?.hora_carregamento || "").trim();
+  const raw = agendamento?.data_carregamento
+    ? String(agendamento.data_carregamento).slice(0, 10)
+    : "";
+  const data = raw ? formatDate(raw) : "";
+  return [hora, data !== "—" ? data : ""].filter(Boolean).join(" · ");
+}
+
+function SaidaAgendamentoResumo({ agendamento, t }) {
+  if (!agendamento) return null;
+  const transportadora = String(agendamento.transportadora || "").trim();
+  const motorista = String(agendamento.motorista || "").trim();
+  const placa = String(agendamento.placa || "").trim();
+  const hasTransporte = Boolean(transportadora || motorista || placa);
+  const carregado = agendamento.status === "concluido";
+  if (!hasTransporte && !carregado) return null;
+
+  const responsavel = String(
+    agendamento.operador_conclusao_nome || agendamento.usuario_nome || ""
+  ).trim();
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 space-y-3">
+      {hasTransporte ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("painel.logistica.carregamentos.saidaTransporteTitle")}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <InfoItem
+              label={t("painel.comercial.agendamentos.transporte.transportadora")}
+              value={transportadora}
+            />
+            <InfoItem
+              label={t("painel.comercial.agendamentos.transporte.motorista")}
+              value={motorista}
+            />
+            <InfoItem
+              label={t("painel.comercial.agendamentos.transporte.placa")}
+              value={placa}
+            />
+          </div>
+        </div>
+      ) : null}
+      {carregado ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("painel.logistica.carregamentos.saidaCarregamentoTitle")}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <InfoItem
+              label={t("painel.logistica.carregamentos.saidaCarregamentoResponsavel")}
+              value={responsavel}
+            />
+            <InfoItem
+              label={t("painel.logistica.carregamentos.saidaCarregamentoHorario")}
+              value={formatCarregamentoQuando(agendamento)}
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function findById(list, id) {
   if (!id) return null;
   const key = String(id);
@@ -128,6 +224,7 @@ export default function SaidaViewDialog({
   checklistItems = null,
   showChecklistColumn = false,
   showPrintEtiqueta = true,
+  agendamento = null,
   onSaidaChange,
 }) {
   const { t, i18n } = useTranslation();
@@ -140,6 +237,7 @@ export default function SaidaViewDialog({
   const [indLabel, setIndLabel] = useState(null);
   const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
   const [checklistDownloadingIndex, setChecklistDownloadingIndex] = useState(null);
+  const [unifyingChecklists, setUnifyingChecklists] = useState(false);
   const [containersById, setContainersById] = useState(() => new Map());
 
   useEffect(() => {
@@ -149,6 +247,7 @@ export default function SaidaViewDialog({
     setIndLabel(null);
     setIndLabelLoadingIndex(null);
     setChecklistDownloadingIndex(null);
+    setUnifyingChecklists(false);
   }, [open, saida?.id]);
 
   useEffect(() => {
@@ -190,6 +289,7 @@ export default function SaidaViewDialog({
   const isAgendamento = variant === "agendamento";
   const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
   const itens = saida.itens || [];
+  const checklistProntos = checklistItemsProntos(checklistItems, saida, itens);
   const itemPertenceAoModulo = (item) =>
     !highlightModule || resolveItemOrigem(item) === highlightModule;
   const selectableIndexes = itens
@@ -304,22 +404,13 @@ export default function SaidaViewDialog({
   };
 
   const handleDownloadChecklist = async (item, index) => {
-    if (!item || checklistDownloadingIndex != null) return;
+    if (!item || checklistDownloadingIndex != null || unifyingChecklists) return;
     setChecklistDownloadingIndex(index);
     try {
-      const fotoUrls = [];
-      for (const path of item.fotos || []) {
-        try {
-          const signed = await getSignedFileUrl(path);
-          fotoUrls.push(signed || path);
-        } catch {
-          fotoUrls.push(path);
-        }
-      }
       await generateChecklistItemPDF({
         item,
         saida,
-        fotoUrls,
+        fotoUrls: await signedChecklistFotos(item),
         t,
         language: i18n.language,
       });
@@ -331,6 +422,30 @@ export default function SaidaViewDialog({
       });
     } finally {
       setChecklistDownloadingIndex(null);
+    }
+  };
+
+  const handleUnifyChecklists = async () => {
+    if (unifyingChecklists || checklistDownloadingIndex != null || checklistProntos.length === 0) {
+      return;
+    }
+    setUnifyingChecklists(true);
+    try {
+      await generateChecklistCargaPDF({
+        items: checklistProntos,
+        saida,
+        t,
+        language: i18n.language,
+        resolveFotoUrls: signedChecklistFotos,
+      });
+    } catch (err) {
+      toast({
+        title: t("painel.logistica.carregamentos.checklistPrintError"),
+        description: err?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setUnifyingChecklists(false);
     }
   };
 
@@ -372,7 +487,7 @@ export default function SaidaViewDialog({
       }}
     >
       <DialogContent
-        className={`overflow-hidden gap-4 ${showChecklistColumn ? "max-w-6xl" : "max-w-5xl"}`}
+        className={`max-h-[90vh] overflow-y-auto gap-4 ${showChecklistColumn ? "max-w-6xl" : "max-w-5xl"}`}
       >
         <DialogHeader>
           <DialogTitle>
@@ -566,7 +681,7 @@ export default function SaidaViewDialog({
                             className="inline-flex p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-60"
                             title={t("painel.logistica.carregamentos.checklistDownload")}
                             aria-label={t("painel.logistica.carregamentos.checklistDownload")}
-                            disabled={checklistDownloadingIndex != null}
+                            disabled={checklistDownloadingIndex != null || unifyingChecklists}
                             onClick={() => handleDownloadChecklist(checklistItem, i)}
                           >
                             {checklistDownloadingIndex === i ? (
@@ -603,6 +718,8 @@ export default function SaidaViewDialog({
           </span>
         </div>
 
+        <SaidaAgendamentoResumo agendamento={agendamento} t={t} />
+
         {canSelectFiscal ? (
           <p className="text-xs text-muted-foreground -mt-1">
             {selected.size > 0
@@ -616,6 +733,23 @@ export default function SaidaViewDialog({
         ) : null}
 
         <DialogFooter>
+          {checklistProntos.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={unifyingChecklists || checklistDownloadingIndex != null}
+              title={t("painel.logistica.carregamentos.checklistUnifyHint")}
+              onClick={handleUnifyChecklists}
+            >
+              {unifyingChecklists ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Files className="w-4 h-4" />
+              )}
+              {t("painel.logistica.carregamentos.checklistUnify")}
+            </Button>
+          ) : null}
           {showRelatorio ? (
             <Button
               type="button"

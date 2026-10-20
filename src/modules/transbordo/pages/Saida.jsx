@@ -683,6 +683,11 @@ export default function Saida({
               )
             : null
         }
+        agendamento={
+          isExpedicao
+            ? findAgendamentoDisplayBySaida(agendamentos, viewSaida?.id)
+            : null
+        }
         highlightModule={isModuloOperacional ? operationalModule : null}
         onSaidaChange={(updated) => {
           if (!updated?.id) return;
