@@ -26,6 +26,7 @@ import {
   PARTICULA_TAMANHOS,
   formatParticulaCount,
   alignFiltracoesComVasilhames,
+  compareFiltracaoPorResultado,
   filtracaoTemSae,
 } from "@transbordo/lib/filtracao";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
@@ -108,11 +109,14 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
 
   const pendenteCount = searched.filter((f) => !filtracaoTemSae(f)).length;
 
-  const filtered = readOnly
-    ? searched
-    : searched.filter((f) =>
-        resultadoFilter === "analisado" ? filtracaoTemSae(f) : !filtracaoTemSae(f)
-      );
+  const filtered = useMemo(() => {
+    if (readOnly) return searched;
+    const rows = searched.filter((f) =>
+      resultadoFilter === "analisado" ? filtracaoTemSae(f) : !filtracaoTemSae(f)
+    );
+    if (resultadoFilter !== "analisado") return rows;
+    return [...rows].sort(compareFiltracaoPorResultado);
+  }, [searched, readOnly, resultadoFilter]);
 
   const handleView = (f) => {
     setViewFiltracao(f);
@@ -126,7 +130,18 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
 
   const handleSave = async (data) => {
     if (!editingFiltracao) return;
-    await entities.filtracoes.update(editingFiltracao.id, data);
+    const payload = filtracaoTemSae(data)
+      ? { ...data, resultado_lancado_em: new Date().toISOString() }
+      : data;
+    try {
+      await entities.filtracoes.update(editingFiltracao.id, payload);
+    } catch (err) {
+      const missingColumn =
+        payload.resultado_lancado_em &&
+        /resultado_lancado_em/i.test(String(err?.message || ""));
+      if (!missingColumn) throw err;
+      await entities.filtracoes.update(editingFiltracao.id, data);
+    }
     await loadData();
     setEditOpen(false);
     setEditingFiltracao(null);

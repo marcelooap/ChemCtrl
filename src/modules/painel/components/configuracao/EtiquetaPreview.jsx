@@ -121,6 +121,7 @@ export default function EtiquetaPreview({
       case 'lote':
         return v.lot || '—';
       case 'fabricacao':
+        if (convencional && !v.manufactureDate) return '';
         return formatEtiquetaDate(v.manufactureDate, dateFormat, i18n.language);
       case 'validade':
         return formatEtiquetaDate(v.expiryDate, dateFormat, i18n.language);

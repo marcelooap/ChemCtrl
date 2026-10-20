@@ -142,6 +142,31 @@ function resolveVasilhameMedida(vasilhame, transbordos = [], estoqueById = null)
   return { embalado: false, unidade: "L" };
 }
 
+/** Data da operação (transbordo) que gerou o vasilhame; senão, a data de criação. */
+function resolveVasilhameData(vasilhame, transbordos = []) {
+  if (!vasilhame) return null;
+  if (vasilhame.transbordo_id) {
+    const linked = (transbordos || []).find((t) => t.id === vasilhame.transbordo_id);
+    if (linked?.data) return linked.data;
+  }
+  const codigos = new Set(
+    [
+      vasilhame.numero_op,
+      ...(Array.isArray(vasilhame.composicao)
+        ? vasilhame.composicao.map((c) => c?.transbordo_codigo)
+        : []),
+    ]
+      .map((c) => String(c || "").trim())
+      .filter(Boolean)
+  );
+  const byCodigo = (transbordos || []).find((t) =>
+    codigos.has(String(t.codigo_transbordo || "").trim())
+  );
+  if (byCodigo?.data) return byCodigo.data;
+  const fromComp = (vasilhame.composicao || []).map((c) => c?.data).find(Boolean);
+  return fromComp || vasilhame.created_at || vasilhame.created_date || null;
+}
+
 function renderVolumeQuantidadeCells(vasilhame, medida) {
   // Fracionado é o destino parcial do tanque (TB), mesmo com mais de um lote na composição.
   const fracionadoBadge = vasilhame.fracionado ? (
@@ -455,7 +480,11 @@ export default function Vasilhames() {
 
   const formatDate = (d) => {
     if (!d) return "-";
-    const date = new Date(d + "T00:00:00");
+    const raw = String(d);
+    const date = raw.includes("T")
+      ? new Date(raw)
+      : new Date(`${raw.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return "-";
     return date.toLocaleDateString("pt-BR");
   };
 
@@ -1123,6 +1152,7 @@ export default function Vasilhames() {
                   <span className="sr-only">Selecionar</span>
                 </th>
                 <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Nº Placa</th>
                 <th className="px-4 py-3 font-medium">Nº Barril</th>
                 <th className="px-4 py-3 font-medium">Código</th>
@@ -1139,13 +1169,13 @@ export default function Vasilhames() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={14} className="px-4 py-8 text-center text-muted-foreground">
                     Carregando vasilhames...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={14} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum vasilhame encontrado.
                   </td>
                 </tr>
@@ -1187,6 +1217,9 @@ export default function Vasilhames() {
                         />
                       </td>
                       <td className="px-4 py-3 font-medium text-primary">{v.codigo || "-"}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {formatDate(resolveVasilhameData(v, transbordos))}
+                      </td>
                       <td className="px-4 py-3 text-foreground">{v.placa || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{v.barril || "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground">{v.produto_codigo || "-"}</td>
@@ -1394,11 +1427,7 @@ export default function Vasilhames() {
         contexto="convencional"
         clienteId={labelVasilhame?.cliente_id}
         clienteNome={labelVasilhame?.cliente_nome}
-        manufactureDate={
-          loteDatasEtiqueta?.data_fabricacao ||
-          labelVasilhame?.created_at ||
-          labelVasilhame?.created_date
-        }
+        manufactureDate={loteDatasEtiqueta?.data_fabricacao || undefined}
         expiryDate={loteDatasEtiqueta?.data_validade || undefined}
         resolvePublicToken={
           labelVasilhame

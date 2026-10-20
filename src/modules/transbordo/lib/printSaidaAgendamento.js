@@ -243,8 +243,7 @@ export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
   }).catch(() => null);
 
   await printContainerLabel(container, null, publicToken, {
-    manufactureDate:
-      loteDatas.data_fabricacao || vasilhame?.created_at || saida?.data_programada,
+    manufactureDate: loteDatas.data_fabricacao || null,
     expiryDate: loteDatas.data_validade || undefined,
     volume: vasilhame?.volume,
     clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
@@ -286,8 +285,7 @@ export async function printEtiquetaVasilhame(vasilhame) {
   }).catch(() => null);
 
   await printContainerLabel(container, null, publicToken, {
-    manufactureDate:
-      loteDatas.data_fabricacao || vasilhame.created_at || vasilhame.created_date,
+    manufactureDate: loteDatas.data_fabricacao || null,
     expiryDate: loteDatas.data_validade || undefined,
     volume: vasilhame.volume,
     clienteNome: vasilhame.cliente_nome,

@@ -135,6 +135,26 @@ export function filtracaoTemSae(filtracao) {
   return filtracao?.sae !== null && filtracao?.sae !== undefined && filtracao?.sae !== "";
 }
 
+/**
+ * Instante do último lançamento de resultado SAE.
+ * Sem a coluna dedicada, usa a última alteração da linha.
+ */
+export function filtracaoResultadoLancadoEm(filtracao) {
+  const raw =
+    filtracao?.resultado_lancado_em ||
+    filtracao?.updated_at ||
+    filtracao?.created_at ||
+    filtracao?.created_date ||
+    null;
+  const time = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+}
+
+/** Mais recente primeiro. Empate preserva a ordem original. */
+export function compareFiltracaoPorResultado(a, b) {
+  return filtracaoResultadoLancadoEm(b) - filtracaoResultadoLancadoEm(a);
+}
+
 function composicaoSignature(composicao) {
   return (composicao || [])
     .map((c) => {
