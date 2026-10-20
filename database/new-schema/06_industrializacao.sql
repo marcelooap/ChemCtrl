@@ -296,7 +296,6 @@ CREATE TABLE IF NOT EXISTS checklist_producao (
   op_number text,
   product text,
   recipe_id uuid REFERENCES receitas(id) ON DELETE SET NULL,
-  recipe_revision text,
   etapa text NOT NULL CHECK (etapa IN (
     'start_production', 'pause_production', 'start_filling', 'finish_filling'
   )),

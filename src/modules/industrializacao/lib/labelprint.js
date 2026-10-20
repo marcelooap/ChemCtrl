@@ -569,6 +569,14 @@ ${pages.join('\n')}
   setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
 }
 
+/** Imprime no layout padrão das etiquetas (105×50 ou 50×105). */
+export async function printStandardLabel(params) {
+  const labels = params?.t
+    ? { lang: params.lang, t: params.t }
+    : getLabelLabels(params?.locale);
+  return printConfiguredLabel({ ...params, lang: labels.lang, t: labels.t });
+}
+
 async function printConfiguredLabel(params) {
   const { lang, t, title, orientation = 'horizontal', copies = 1 } = params;
   const win = openLabelWindow(orientation === 'vertical', t);

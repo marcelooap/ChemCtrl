@@ -75,22 +75,24 @@ async function main() {
 
   // checklist_producao
   {
-    const rows = await fetchAllRows(source, 'ind_checklist_op');
-    console.log(`origem ind_checklist_op: ${rows.length}`);
+    const rows = await fetchAllRows(source, 'checklist_op');
+    console.log(`origem checklist_op: ${rows.length}`);
     const idMap = buildIdMap(
       'checklist_producao',
       rows.map((r) => r.id)
     );
-    const mapped = rows.map((row) =>
-      transformIndRow(row, {
+    const mapped = rows.map((row) => {
+      const next = transformIndRow(row, {
         idMap,
         context: 'checklist_producao',
         fks: [
           { map: producoesMap, fields: ['production_id'], required: false },
           { map: receitasMap, fields: ['recipe_id'], required: false },
         ],
-      })
-    );
+      });
+      delete next.recipe_revision;
+      return next;
+    });
     const valid = mapped.filter((r) => r.production_id);
     const dropped = mapped.length - valid.length;
     if (dropped) {

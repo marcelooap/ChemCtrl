@@ -50,7 +50,7 @@ const entityTableMap = {
   IndValidacao: 'ind_validacoes',
   StockMovement: 'ind_retornos_perdas',
   LabEquipment: 'ind_lista_equipamentoslab',
-  ProductionChecklist: 'ind_checklist_op',
+  ProductionChecklist: 'checklist_op',
   ProductionSchedule: 'ind_programacao_demanda',
 };
 export { entityTableMap };

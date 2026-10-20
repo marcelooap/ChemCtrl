@@ -29,6 +29,7 @@ const ChemFlowRoutes = lazy(() => import('@transbordo/routes'));
 const PainelRoutes = lazy(() => import('@painel/routes'));
 const ConsultaPublica = lazy(() => import('@industrializacao/pages/ConsultaPublica'));
 const ConsultaPublicaProduto = lazy(() => import('@transbordo/pages/ConsultaPublicaProduto'));
+const ConsultaPublicaEntrada = lazy(() => import('@transbordo/pages/ConsultaPublicaEntrada'));
 const ConsultaEquipamento = lazy(() => import('@industrializacao/pages/ConsultaEquipamento'));
 
 /** Bookmarks antigos `/chemblend/*` → rotas do ChemCtrl na raiz. */
@@ -82,6 +83,17 @@ const AuthenticatedApp = () => {
           <ModuleErrorBoundary title="Consulta de equipamento" homeTo="/login">
             <Suspense fallback={<ModuleLoadingFallback />}>
               <ConsultaEquipamento />
+            </Suspense>
+          </ModuleErrorBoundary>
+        }
+      />
+      {/* Público: recebimento do Transbordo (QR da etiqueta de entrada) */}
+      <Route
+        path="/consulta-entrada/:token"
+        element={
+          <ModuleErrorBoundary title="Consulta de recebimento" homeTo="/login">
+            <Suspense fallback={<ModuleLoadingFallback />}>
+              <ConsultaPublicaEntrada />
             </Suspense>
           </ModuleErrorBoundary>
         }

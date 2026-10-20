@@ -149,7 +149,7 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
 
   const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
   const volumeTotal = filtered.reduce((sum, f) => sum + (f.volume || 0), 0);
-  const colSpan = 8 + PARTICULA_TAMANHOS.length + 1;
+  const colSpan = 9 + PARTICULA_TAMANHOS.length + (readOnly ? 0 : 1);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-3">
@@ -245,7 +245,7 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-4 py-3 font-medium">ID</th>
-                {readOnly && <th className="px-4 py-3 font-medium">Data</th>}
+                <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Nº Placa</th>
                 <th className="px-4 py-3 font-medium">Nº Barril</th>
                 <th className="px-4 py-3 font-medium">Produto</th>
@@ -304,11 +304,9 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
                       <td className="px-4 py-3 font-medium text-primary">
                         {f.codigo || "-"}
                       </td>
-                      {readOnly && (
-                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                          {formatOperacaoData(f.data_operacao)}
-                        </td>
-                      )}
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {formatOperacaoData(f.data_operacao)}
+                      </td>
                       <td className="px-4 py-3 text-foreground">{f.placa || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {f.barril || "—"}

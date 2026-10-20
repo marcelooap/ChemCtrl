@@ -12,6 +12,9 @@ const getPublicHeaders = () => ({
 export const fetchPublicProdutoInfo = (publicToken) =>
   callRPC('get_public_produto_info', { p_token: publicToken });
 
+export const fetchPublicEntradaInfo = (publicToken) =>
+  callRPC('get_public_entrada_info', { p_token: publicToken });
+
 const signPublicStoragePath = async (storagePath, expiresIn = 3600) => {
   if (!storagePath) return null;
   const resp = await rateLimitedFetch(`${supabaseUrl}/storage/v1/object/sign/${storagePath}`, {

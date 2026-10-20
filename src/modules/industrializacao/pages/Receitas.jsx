@@ -7,7 +7,6 @@ import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import {
   salvarRevisaoReceita,
-  isReceitasSalvarRpcMissing,
   parseRawMaterialsField,
 } from '@industrializacao/lib/recipeComposition';
 import { Plus, Search, Eye, EyeOff, Pencil, Trash2, X, FileText, FlaskConical, Loader2, Flame, GripVertical } from 'lucide-react';
@@ -39,7 +38,6 @@ import {
   canDeleteRevision,
   getRevisionNumber,
 } from '@industrializacao/lib/recipeRevisions';
-import { registrarProdutosDaReceita } from '@transbordo/lib/cadastroProdutosCentral';
 import {
   loadProdutosIndustrializacao,
   buildIndMpSelectOptions,
@@ -272,6 +270,20 @@ export default function Receitas() {
   // Numeração RC estável por produto (não por linha), já que cada produto agora
   // pode ter múltiplas revisões; usa a data de criação da 1ª revisão do produto.
   const regNumMap = useMemo(() => {
+    const fromDb = new Map();
+    recipes.forEach((r) => {
+      const name = r.product_name;
+      const n = Number(r.registro);
+      if (!name || !Number.isFinite(n) || n <= 0) return;
+      const prev = fromDb.get(name);
+      if (prev == null || n < prev) fromDb.set(name, n);
+    });
+    if (fromDb.size > 0) {
+      const map = {};
+      fromDb.forEach((n, name) => { map[name] = n; });
+      return map;
+    }
+
     const firstSeen = new Map();
     recipes.forEach((r) => {
       const name = r.product_name;
@@ -425,7 +437,30 @@ export default function Receitas() {
 
   const filtered = latestRecipes.filter(r => {
     const q = debouncedSearch.toLowerCase();
-    return !q || [r.product_name, r.client, r.code, r.created_by].some(v => (v || '').toLowerCase().includes(q));
+    if (!q) return true;
+    const headerHit = [r.product_name, r.client, r.code, r.created_by].some(v => (v || '').toLowerCase().includes(q));
+    if (headerHit) return true;
+    return (r.raw_materials || []).some((mp) =>
+      [mp.mp_code, mp.mp_name].some((v) => (v || '').toLowerCase().includes(q))
+    );
+  }).sort((a, b) => {
+    const ra = regNumMap[a.product_name] || Number.MAX_SAFE_INTEGER;
+    const rb = regNumMap[b.product_name] || Number.MAX_SAFE_INTEGER;
+    if (ra !== rb) return ra - rb;
+    return String(a.product_name || '').localeCompare(String(b.product_name || ''), 'pt-BR');
+  });
+
+  const recipeLines = filtered.flatMap((recipe, groupIndex) => {
+    const mps = Array.isArray(recipe.raw_materials) ? recipe.raw_materials : [];
+    const items = mps.length ? mps : [null];
+    return items.map((mp, index) => ({
+      key: mp?.line_id || `${recipe.id}:${mp?.mp_code || 'empty'}:${index}`,
+      recipe,
+      mp,
+      seq: index + 1,
+      groupIndex,
+      isFirst: index === 0,
+    }));
   });
 
   const openNew = () => {
@@ -635,37 +670,14 @@ export default function Receitas() {
       };
 
       let anchorId = editing?.id || null;
-      try {
-        const saved = await salvarRevisaoReceita({
-          receitaId: editing?.receita_id || (!editing ? null : editing.id),
-          revisionNumber: data.revision_number || 1,
-          header,
-          rawMaterials: mps,
-          mode,
-        });
-        anchorId = saved?.anchor_id || anchorId;
-      } catch (rpcErr) {
-        if (!isReceitasSalvarRpcMissing(rpcErr)) throw rpcErr;
-        // Fallback pré-047: uma linha com raw_materials JSON
-        try {
-          await registrarProdutosDaReceita({
-            code: data.code,
-            product_name: data.product_name,
-            client: data.client,
-            density: data.density,
-            raw_materials: mps,
-          });
-        } catch (regErr) {
-          if (regErr?.code !== 'CADASTRO_PRODUTOS_RPC_MISSING') throw regErr;
-        }
-        if (editing && !isNewRevision) {
-          await base44.entities.Recipe.update(editing.id, data);
-          anchorId = editing.id;
-        } else {
-          const created = await base44.entities.Recipe.create(data);
-          anchorId = created?.id || null;
-        }
-      }
+      const saved = await salvarRevisaoReceita({
+        receitaId: editing?.receita_id || (!editing ? null : editing.id),
+        revisionNumber: data.revision_number || 1,
+        header,
+        rawMaterials: mps,
+        mode,
+      });
+      anchorId = saved?.anchor_id || anchorId;
 
       if (pendingFdsFile && anchorId) {
         const path = await uploadRecipeDocument(anchorId, DOC_TYPES.SDS, pendingFdsFile);
@@ -819,7 +831,7 @@ export default function Receitas() {
       <div className="shrink-0 flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">🧪 {t('recipes.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: latestRecipes.length })}</p>
+          <p className="text-sm text-muted-foreground">{t('recipes.subtitle', { count: latestRecipes.length, lines: recipeLines.length })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setShowSimulador(true)} style={{ background: '#1a5fb4' }} className="text-white hover:opacity-90">
@@ -851,19 +863,25 @@ export default function Receitas() {
                   <th className="px-4 py-3 text-left">{t('recipes.table.id')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.product')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.client')}</th>
+                  <th className="px-4 py-3 text-left">{t('recipes.table.mpCode')}</th>
+                  <th className="px-4 py-3 text-left">{t('recipes.table.mpName')}</th>
+                  <th className="px-4 py-3 text-right">{t('recipes.table.percentMass')}</th>
+                  <th className="px-4 py-3 text-right">{t('recipes.table.quantityKg')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithTax')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.priceWithoutTax')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.revision')}</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">{t('recipes.table.revisionDate')}</th>
                   <th className="px-4 py-3 text-left whitespace-nowrap">{t('common.revisionExpiry.column')}</th>
-                  <th className="px-4 py-3 text-right">{t('recipes.table.mpCount')}</th>
                   <th className="px-4 py-3 text-left">{t('recipes.table.createdBy')}</th>
                   <th className="px-4 py-3 text-center">{t('recipes.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r, idx) => (
-                  <tr key={r.id} className="border-b border-border hover:bg-accent/30">
+                {recipeLines.map(({ key, recipe: r, mp, groupIndex, isFirst }) => (
+                  <tr
+                    key={key}
+                    className={`border-b border-border hover:bg-accent/30 ${groupIndex % 2 === 1 ? 'bg-muted/40' : ''} ${isFirst && groupIndex > 0 ? 'border-t-2 border-border' : ''}`}
+                  >
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>RC{String(regNumMap[r.product_name] || 0).padStart(2, '0')}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">
                       <span className="inline-flex items-center gap-1.5">
@@ -885,6 +903,10 @@ export default function Receitas() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{r.client}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs" style={{ color: '#2575D1' }}>{mp?.mp_code || '—'}</td>
+                    <td className="px-4 py-2.5 text-sm">{mp?.mp_name || '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-sm">{mp ? `${Number(mp.percentage || 0).toFixed(2)}%` : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-sm">{mp ? fmtNumber(mp.quantity_kg || 0) : '—'}</td>
                     <td className="px-4 py-2.5 text-center text-sm">
                       <span className="inline-flex items-center justify-center text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
                         {Number(r.price) ? Number(r.price).toFixed(4) : '-'}
@@ -900,19 +922,20 @@ export default function Receitas() {
                     <td className="px-4 py-2.5">
                       <RevisionExpiryCell
                         revisionDate={r.revision_date}
-                        onRenew={canEdit ? () => setRenewTarget(r) : undefined}
+                        onRenew={canEdit && isFirst ? () => setRenewTarget(r) : undefined}
                       />
                     </td>
-                    <td className="px-4 py-2.5 text-right font-medium text-sm">{(r.raw_materials || []).length}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{resolveCreatedBy(r)}</td>
                     <td className="px-4 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                        {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
-                        {canDelete && getRevisionsForProduct(recipes, r.product_name).length <= 1 && (
-                          <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
-                        )}
-                      </div>
+                      {isFirst && (
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => openView(r)} className="p-1 rounded hover:bg-muted"><Eye className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                          {canEdit && <button onClick={() => openEdit(r)} className="p-1 rounded hover:bg-muted"><Pencil className="w-3.5 h-3.5 text-muted-foreground" /></button>}
+                          {canDelete && getRevisionsForProduct(recipes, r.product_name).length <= 1 && (
+                            <button onClick={() => remove(r)} className="p-1 rounded hover:bg-muted"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

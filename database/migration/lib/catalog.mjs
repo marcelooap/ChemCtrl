@@ -41,7 +41,7 @@ export const COUNT_PAIRS = [
   { source: 'ind_programacao_demanda', target: 'programacao_demanda' },
   { source: 'ind_lista_vasilhames', target: 'vasilhames_producao' },
   { source: 'ind_composicao_vasilhame', target: 'composicao_vasilhame_producao' },
-  { source: 'ind_checklist_op', target: 'checklist_producao' },
+  { source: 'checklist_op', target: 'checklist_producao' },
   { source: 'ind_cq_resultados', target: 'cq_resultados' },
   { source: 'ind_validacoes', target: 'validacoes_mp' },
 ];

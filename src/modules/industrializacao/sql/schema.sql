@@ -326,9 +326,9 @@ drop trigger if exists update_updated_date_ind_lista_receitas on ind_lista_recei
 create trigger update_updated_date_ind_lista_receitas before update on ind_lista_receitas for each row execute function update_updated_date();
 
 -- ============================================================================
--- 8b. ind_checklist_op (checklists operacionais obrigatórios)
+-- 8b. checklist_op (checklists operacionais obrigatórios)
 -- ============================================================================
-create table if not exists ind_checklist_op (
+create table if not exists checklist_op (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now(),
@@ -336,7 +336,6 @@ create table if not exists ind_checklist_op (
   op_number text,
   product text,
   recipe_id text,
-  recipe_revision text,
   etapa text not null
     check (etapa in (
       'start_production',
@@ -352,13 +351,13 @@ create table if not exists ind_checklist_op (
   usuario_nome text,
   answered_at timestamptz not null default now()
 );
-alter table ind_checklist_op enable row level security;
-drop policy if exists "allow_all_ind_checklist_op" on ind_checklist_op;
-create policy "allow_all_ind_checklist_op" on ind_checklist_op for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_checklist_op on ind_checklist_op;
-create trigger update_updated_date_ind_checklist_op before update on ind_checklist_op for each row execute function update_updated_date();
-create index if not exists idx_ind_checklist_op_prod_etapa on ind_checklist_op (production_id, etapa);
-create index if not exists idx_ind_checklist_op_etapa_answered on ind_checklist_op (etapa, answered_at);
+alter table checklist_op enable row level security;
+drop policy if exists "allow_all_checklist_op" on checklist_op;
+create policy "allow_all_checklist_op" on checklist_op for all using (true) with check (true);
+drop trigger if exists update_updated_date_checklist_op on checklist_op;
+create trigger update_updated_date_checklist_op before update on checklist_op for each row execute function update_updated_date();
+create index if not exists idx_checklist_op_prod_etapa on checklist_op (production_id, etapa);
+create index if not exists idx_checklist_op_etapa_answered on checklist_op (etapa, answered_at);
 
 -- ============================================================================
 -- 9. ind_cq_resultados
@@ -487,7 +486,7 @@ create publication supabase_realtime for table
   ind_composicao_vasilhame,
   ind_lista_pedidos,
   ind_lista_receitas,
-  ind_checklist_op,
+  checklist_op,
   ind_cq_resultados,
   ind_cq_esp_tec,
   ind_lista_ensaios,

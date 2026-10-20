@@ -703,7 +703,7 @@ BEGIN
   FOR v_ans IN SELECT * FROM jsonb_array_elements(COALESCE(p_answers, '[]'::jsonb))
   LOOP
     INSERT INTO checklist_producao (
-      production_id, op_number, product, recipe_id, recipe_revision,
+      production_id, op_number, product, recipe_id,
       etapa, question_key, question_label, answer, observacao,
       usuario_id, usuario_nome, answered_at
     ) VALUES (
@@ -711,7 +711,6 @@ BEGIN
       v_prod.op_number,
       v_prod.product,
       v_prod.recipe_id,
-      v_prod.recipe_revision,
       p_etapa,
       COALESCE(v_ans->>'question_key', v_ans->>'key', 'unknown'),
       COALESCE(v_ans->>'question_label', v_ans->>'label', ''),

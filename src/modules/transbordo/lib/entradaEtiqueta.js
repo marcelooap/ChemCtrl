@@ -1,22 +1,12 @@
-import { printPreparedLabelPages } from "@industrializacao/lib/labelprint";
+import { printStandardLabel } from "@industrializacao/lib/labelprint";
+import { fmtNumber } from "@/i18n/formatters";
+import { loteToLitros } from "@transbordo/lib/conversao";
 import {
   formatEtiquetaDate,
   formatEtiquetaEmbalagemPlaca,
 } from "@transbordo/lib/etiquetaConfig";
-import { formatQuantidade } from "@transbordo/lib/format";
+import { CONSULTA_ENTRADA_PATH } from "@transbordo/lib/ensureEntradaPublicToken";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
-
-const HTML_ESCAPE_MAP = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
-}
 
 /** Lotes da entrada, com fallback para o registro antigo de um único produto. */
 export function getEntradaLotes(entrada) {
@@ -30,6 +20,8 @@ export function getEntradaLotes(entrada) {
       lote: entrada?.lote,
       quantidade: entrada?.quantidade,
       unidade_medida: entrada?.unidade_medida,
+      data_fabricacao: entrada?.data_fabricacao,
+      data_validade: entrada?.data_validade,
       tipo_recebimento: entrada?.tipo_recebimento,
       embalado: entrada?.embalado,
       peso_liquido: entrada?.peso_liquido,
@@ -59,192 +51,133 @@ export function entradaEtiquetaOptionLabel(lote, index, lotes) {
   return loteNome ? `${base} · ${loteNome}` : `${base} · ${index + 1}`;
 }
 
+function positiveNumber(value) {
+  if (value == null || value === "") return null;
+  const n = Number(String(value).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function resolveEntradaEtiquetaWeights(entrada, lote) {
+  const tipo = resolveTipoRecebimento(lote);
+  const pesagemDisponivel =
+    tipo === "granel" &&
+    (entrada?.granel_pesagem ||
+      entrada?.granel_peso_liquido != null ||
+      entrada?.granel_peso_bruto != null);
+  if (pesagemDisponivel) {
+    return {
+      net: positiveNumber(entrada?.granel_peso_liquido),
+      gross: positiveNumber(entrada?.granel_peso_bruto),
+    };
+  }
+  return {
+    net: positiveNumber(lote?.peso_liquido),
+    gross: positiveNumber(lote?.peso_bruto),
+  };
+}
+
+export function resolveEntradaEtiquetaVolumeLitros(lote) {
+  const declared = positiveNumber(lote?.volume);
+  if (declared) return declared;
+  const unit = String(lote?.unidade_medida || "").trim().toLowerCase();
+  if (unit === "l" || unit === "lt" || unit === "litro" || unit === "litros") {
+    return positiveNumber(lote?.quantidade);
+  }
+  const liters = loteToLitros(lote);
+  return liters > 0 ? liters : null;
+}
+
 function embalagemDaEntrada(lote) {
   const tipo = resolveTipoRecebimento(lote);
-  if (tipo === "granel") {
-    return { granel: true, text: "GRANEL" };
-  }
+  if (tipo === "granel") return "GRANEL";
   if (tipo === "vasilhame") {
-    const placa = formatEtiquetaEmbalagemPlaca(lote?.placa, lote?.barril);
-    return { granel: false, text: placa || "Vasilhame" };
+    return formatEtiquetaEmbalagemPlaca(lote?.placa, lote?.barril) || "Vasilhame";
   }
   const named = String(lote?.tipo_embalagem || lote?.packaging_type || "").trim();
-  if (named && !/^embalado$/i.test(named)) {
-    return { granel: false, text: named };
-  }
-  return { granel: false, text: "Embalado" };
+  if (named && !/^embalado$/i.test(named)) return named;
+  return "Embalado";
 }
 
-export function origemEtiquetaLabel(entrada) {
-  return entrada?.origem === "industrializacao" ? "Industrialização" : "Armazenagem";
+/** Mantém o layout configurado do cliente e garante o QR do recebimento. */
+export function withEntradaEtiquetaCampos(campos, { hasNet, hasGross, hasVolume } = {}) {
+  return (campos || []).map((campo) => {
+    if (!campo || campo.key === "_opcoes") return campo;
+    if (campo.key === "qr") return { ...campo, enabled: true };
+    if (campo.key === "peso_liquido" && !hasNet) return { ...campo, enabled: false };
+    if (campo.key === "peso_bruto" && !hasGross) return { ...campo, enabled: false };
+    if (campo.key === "volume" && !hasVolume) return { ...campo, enabled: false };
+    return campo;
+  });
 }
 
-export function buildEntradaEtiquetaModel(
-  entrada,
-  lote,
-  { dateFormat = "dmy", language = "pt-BR", entradaCodigo = "" } = {}
-) {
-  const quantidade = formatQuantidade(lote?.quantidade, { empty: "—" });
-  const unidade = String(lote?.unidade_medida || "").trim();
-  const quantidadeTexto =
-    unidade && quantidade !== "—" ? `${quantidade} ${unidade}` : quantidade;
-  const embalagem = embalagemDaEntrada(lote);
+export function buildEntradaEtiquetaModel(entrada, lote, { entradaCodigo = "" } = {}) {
+  const weights = resolveEntradaEtiquetaWeights(entrada, lote);
   const codigo = String(entradaCodigo || entrada?.entrada_codigo || "").trim();
-
   return {
     produto: String(lote?.produto_nome || entrada?.produto_nome || "").trim() || "—",
     cliente: String(entrada?.cliente_nome || "").trim() || "—",
     lote: String(lote?.lote || "").trim() || "—",
-    data: formatEtiquetaDate(
-      entrada?.data || entrada?.created_date || entrada?.created_at,
-      dateFormat,
-      language
-    ),
-    quantidade: quantidadeTexto,
-    granel: embalagem.granel,
-    embalagem: embalagem.text,
     id: codigo || "—",
-    origem: origemEtiquetaLabel(entrada),
+    fabricacao: lote?.data_fabricacao || entrada?.data_fabricacao || null,
+    validade: lote?.data_validade || entrada?.data_validade || null,
+    netWeight: weights.net,
+    grossWeight: weights.gross,
+    volumeLitros: resolveEntradaEtiquetaVolumeLitros(lote),
+    embalagem: embalagemDaEntrada(lote),
   };
 }
 
-function fieldRow(label, value) {
-  return `<div class="field-row"><span class="lbl">${escapeHtml(label)}</span><span class="sep">•</span><span class="val">${escapeHtml(value)}</span></div>`;
+function formatWeight(value, locale) {
+  if (value == null) return "—";
+  return fmtNumber(
+    Math.round(Number(value)),
+    { minimumFractionDigits: 0, maximumFractionDigits: 0 },
+    locale
+  );
 }
 
-const ENTRADA_LABEL_CSS = `
-.label.entrada {
-  justify-content: flex-start;
-  gap: 1mm;
-  padding: 1.8mm 3.2mm 1.5mm;
-}
-.label.entrada .entrada-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 2mm;
-}
-.label.entrada .product {
-  flex: 1;
-  min-width: 0;
-  font-size: 12.5pt;
-  line-height: 1.05;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.label.entrada .entrada-id {
-  flex-shrink: 0;
-  font-size: 8pt;
-  font-weight: 800;
-  line-height: 1.1;
-  text-align: right;
-  padding-top: 0.4mm;
-}
-.label.entrada .entrada-id .lbl { text-transform: uppercase; }
-.label.entrada .entrada-id .sep { margin: 0 0.5mm; }
-.label.entrada .entrada-cliente {
-  display: flex;
-  align-items: baseline;
-  gap: 1.6mm;
-  border-top: 0.6px solid #000;
-  border-bottom: 0.6px solid #000;
-  padding: 0.8mm 0;
-}
-.label.entrada .entrada-cliente .lbl {
-  font-size: 7pt;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.label.entrada .entrada-cliente .val {
-  flex: 1;
-  min-width: 0;
-  font-size: 13pt;
-  font-weight: 800;
-  line-height: 1.05;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.label.entrada .entrada-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  column-gap: 3mm;
-  row-gap: 1.1mm;
-  align-content: space-evenly;
-}
-.label.entrada .entrada-grid .field-row { font-size: 8pt; }
-.label.entrada .footer {
-  margin-top: 0;
-  padding-top: 0.7mm;
-  border-top: 0.6px solid #000;
-  font-size: 10pt;
-}
-.label.entrada .footer .emb { font-size: 10.5pt; }
-.label.entrada.vertical {
-  padding: 2mm 2.4mm 1.8mm;
-  gap: 1.4mm;
-}
-.label.entrada.vertical .product {
-  text-align: center;
-  border-bottom: none;
-  margin: 0;
-  padding: 0;
-  font-size: 13pt;
-}
-.label.entrada.vertical .entrada-head {
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-.label.entrada.vertical .entrada-id { text-align: center; padding-top: 0; }
-.label.entrada.vertical .entrada-cliente { justify-content: center; }
-.label.entrada.vertical .entrada-cliente .val { flex: 0 1 auto; text-align: center; }
-.label.entrada.vertical .entrada-grid { grid-template-columns: 1fr; row-gap: 1.4mm; }
-`;
-
-export function buildEntradaEtiquetaHtml(model, labels, { vertical = false } = {}) {
-  const rows = [
-    fieldRow(labels.lote, model.lote),
-    fieldRow(labels.data, model.data),
-    fieldRow(labels.quantidade, model.quantidade),
-    fieldRow(labels.origem, model.origem),
-  ].join("");
-
-  const footer = model.granel
-    ? `<div class="footer"><span class="emb">${escapeHtml(model.embalagem)}</span></div>`
-    : `<div class="footer"><span>${escapeHtml(labels.embalagem)}</span><span class="sep">•</span><span class="emb">${escapeHtml(model.embalagem)}</span></div>`;
-
-  return `<div class="label entrada${vertical ? " vertical" : ""}">
-  <div class="entrada-head">
-    <div class="product">${escapeHtml(model.produto)}</div>
-    <div class="entrada-id"><span class="lbl">${escapeHtml(labels.id)}</span><span class="sep">•</span><span>${escapeHtml(model.id)}</span></div>
-  </div>
-  <div class="entrada-cliente"><span class="lbl">${escapeHtml(labels.cliente)}</span><span class="val">${escapeHtml(model.cliente)}</span></div>
-  <div class="entrada-grid">${rows}</div>
-  ${footer}
-</div>`;
+function formatVolume(value, locale) {
+  if (value == null) return "—";
+  return `${fmtNumber(value, { maximumFractionDigits: 3 }, locale)} L`;
 }
 
-export function printEntradaEtiqueta(
+export async function printEntradaEtiqueta(
   model,
-  { copies = 1, orientation = "horizontal", locale, labels } = {}
-) {
-  const vertical = orientation === "vertical";
-  const body = buildEntradaEtiquetaHtml(model, labels, { vertical });
-  const count = Math.max(1, Math.round(Number(copies) || 1));
-  printPreparedLabelPages({
-    title: model.produto && model.produto !== "—" ? model.produto : "Etiqueta",
+  {
+    copies = 1,
+    orientation = "horizontal",
     locale,
+    dateFormat = "dmy",
+    campos,
+    publicToken,
+    responsavelTecnico,
+    qrHint,
+  } = {}
+) {
+  if (!publicToken) {
+    throw new Error("Token público indisponível para o QR code.");
+  }
+
+  await printStandardLabel({
+    title: model?.produto && model.produto !== "—" ? model.produto : "Etiqueta",
+    product: model?.produto || "—",
+    refId: model?.id || "—",
+    lot: model?.lote || "—",
+    client: model?.cliente || "—",
+    fabDate: formatEtiquetaDate(model?.fabricacao, dateFormat, locale),
+    valDate: formatEtiquetaDate(model?.validade, dateFormat, locale),
+    netWeight: formatWeight(model?.netWeight, locale),
+    grossWeight: formatWeight(model?.grossWeight, locale),
+    volume: formatVolume(model?.volumeLitros, locale),
+    embalagem: model?.embalagem || "—",
+    publicToken,
+    qrHint,
+    campos,
+    responsavelTecnico: responsavelTecnico || "—",
     orientation,
-    pages: Array.from({ length: count }, () => body),
-    extraCss: ENTRADA_LABEL_CSS,
+    consultaPath: CONSULTA_ENTRADA_PATH,
+    contexto: "convencional",
+    copies: Math.max(1, Math.round(Number(copies) || 1)),
+    locale,
   });
 }

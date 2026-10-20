@@ -26,7 +26,7 @@ WHERE p.id IS NULL;
 
 -- 5.1.d — checklist_op.production_id → producoes (CRÍTICO se > 0)
 SELECT 'checklist_op.production_id' AS check_name, c.id, c.production_id AS orphan_fk
-FROM ind_checklist_op c
+FROM checklist_op c
 LEFT JOIN ind_lista_producoes p ON p.id = c.production_id
 WHERE p.id IS NULL;
 
@@ -62,7 +62,7 @@ WHERE pd.order_id IS NOT NULL AND o.id IS NULL;
 
 -- 5.1.j — checklist.recipe_id → receitas
 SELECT 'checklist.recipe_id' AS check_name, c.id, c.recipe_id AS orphan_fk
-FROM ind_checklist_op c
+FROM checklist_op c
 LEFT JOIN receitas r ON r.id = c.recipe_id
 WHERE c.recipe_id IS NOT NULL AND r.id IS NULL;
 
@@ -123,7 +123,7 @@ UNION ALL SELECT 'ind_lista_producoes', COUNT(*) FROM ind_lista_producoes
 UNION ALL SELECT 'ind_estoque_mp', COUNT(*) FROM ind_estoque_mp
 UNION ALL SELECT 'ind_lista_vasilhames', COUNT(*) FROM ind_lista_vasilhames
 UNION ALL SELECT 'ind_cq_resultados', COUNT(*) FROM ind_cq_resultados
-UNION ALL SELECT 'ind_checklist_op', COUNT(*) FROM ind_checklist_op
+UNION ALL SELECT 'checklist_op', COUNT(*) FROM checklist_op
 UNION ALL SELECT 'ind_validacoes', COUNT(*) FROM ind_validacoes
 UNION ALL SELECT 'perfis', COUNT(*) FROM perfis
 UNION ALL SELECT 'permissoes', COUNT(*) FROM permissoes

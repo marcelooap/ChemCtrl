@@ -182,6 +182,7 @@ DECLARE
   v_fds_filename text;
   v_fds_uploaded_at timestamptz;
   v_fds_uploaded_by text;
+  v_registro integer;
 BEGIN
   IF v_mode NOT IN ('create', 'replace', 'new_revision') THEN
     RAISE EXCEPTION 'mode invalido: %', p_mode;
@@ -220,6 +221,7 @@ BEGIN
   IF v_mode = 'create' THEN
     v_receita_id := coalesce(v_receita_id, gen_random_uuid()::text);
     v_rev := 1;
+    SELECT COALESCE(MAX(registro), 0) + 1 INTO v_registro FROM receitas;
   ELSIF v_mode = 'new_revision' THEN
     IF v_receita_id IS NULL THEN
       RAISE EXCEPTION 'receita_id obrigatorio para new_revision';
@@ -227,6 +229,15 @@ BEGIN
     SELECT COALESCE(MAX(revision_number), 0) + 1 INTO v_rev
     FROM receitas
     WHERE receita_id = v_receita_id;
+    SELECT registro INTO v_registro
+    FROM receitas
+    WHERE receita_id = v_receita_id
+      AND registro IS NOT NULL
+    ORDER BY revision_number ASC, linha_ordem ASC
+    LIMIT 1;
+    IF v_registro IS NULL THEN
+      SELECT COALESCE(MAX(registro), 0) + 1 INTO v_registro FROM receitas;
+    END IF;
     SELECT fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by
     INTO v_fds_url, v_fds_filename, v_fds_uploaded_at, v_fds_uploaded_by
     FROM receitas
@@ -237,13 +248,23 @@ BEGIN
     IF v_receita_id IS NULL THEN
       RAISE EXCEPTION 'receita_id obrigatorio para replace';
     END IF;
-    SELECT id, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by
-    INTO v_anchor_id, v_fds_url, v_fds_filename, v_fds_uploaded_at, v_fds_uploaded_by
+    SELECT id, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by, registro
+    INTO v_anchor_id, v_fds_url, v_fds_filename, v_fds_uploaded_at, v_fds_uploaded_by, v_registro
     FROM receitas
     WHERE receita_id = v_receita_id
       AND revision_number = v_rev
     ORDER BY linha_ordem ASC
     LIMIT 1;
+    IF v_registro IS NULL THEN
+      SELECT registro INTO v_registro
+      FROM receitas
+      WHERE receita_id = v_receita_id
+        AND registro IS NOT NULL
+      LIMIT 1;
+    END IF;
+    IF v_registro IS NULL THEN
+      SELECT COALESCE(MAX(registro), 0) + 1 INTO v_registro FROM receitas;
+    END IF;
 
     DELETE FROM receitas
     WHERE receita_id = v_receita_id
@@ -292,8 +313,8 @@ BEGIN
     INSERT INTO receitas (
       id, created_date, updated_date, created_by_id, created_by,
       code, product_name, client, density, price,
-      revision, revision_date, revision_number,
-      raw_materials, fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by,
+      revision, revision_date, revision_number, registro,
+      fds_url, fds_filename, fds_uploaded_at, fds_uploaded_by,
       necessita_n2,
       receita_id, produto_acabado_id, materia_prima_id,
       mp_code, mp_name, mp_density, percentage, quantity_kg,
@@ -301,8 +322,7 @@ BEGIN
     ) VALUES (
       v_new_id, now(), now(), v_created_by_id, v_created_by,
       nullif(v_code, ''), v_name, v_client, v_density, v_price,
-      v_revision, v_revision_date, v_rev,
-      NULL,
+      v_revision, v_revision_date, v_rev, v_registro,
       CASE WHEN v_idx = 1 THEN v_fds_url ELSE NULL END,
       CASE WHEN v_idx = 1 THEN v_fds_filename ELSE NULL END,
       CASE WHEN v_idx = 1 THEN v_fds_uploaded_at ELSE NULL END,
@@ -334,6 +354,7 @@ BEGIN
     price = v_price,
     revision = v_revision,
     revision_date = v_revision_date,
+    registro = v_registro,
     necessita_n2 = v_necessita_n2,
     produto_acabado_id = v_pa_id,
     fds_url = CASE WHEN linha_ordem = 1 THEN fds_url ELSE NULL END,

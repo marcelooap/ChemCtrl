@@ -17,73 +17,20 @@ import {
   SelectValue,
 } from "@shared/components/ui/select";
 import { useToast } from "@shared/components/ui/use-toast";
+import EtiquetaPreview from "@painel/components/configuracao/EtiquetaPreview";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { resolveEtiquetaPrintConfig } from "@transbordo/lib/etiquetaConfig";
+import {
+  resolveEtiquetaPrintConfig,
+  resolveResponsavelTecnico,
+} from "@transbordo/lib/etiquetaConfig";
+import { ensureEntradaPublicToken, CONSULTA_ENTRADA_PATH } from "@transbordo/lib/ensureEntradaPublicToken";
 import {
   buildEntradaEtiquetaModel,
   entradaEtiquetaOptionLabel,
   getEntradaLotes,
   printEntradaEtiqueta,
+  withEntradaEtiquetaCampos,
 } from "@transbordo/lib/entradaEtiqueta";
-
-function FieldRow({ label, value }) {
-  return (
-    <div className="flex items-baseline gap-1 min-w-0 text-[12px] leading-tight">
-      <span className="font-extrabold uppercase shrink-0">{label}</span>
-      <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className="font-bold min-w-0 flex-1 truncate">{value}</span>
-    </div>
-  );
-}
-
-function EtiquetaPreviewCard({ model, labels, vertical }) {
-  const footer = model.granel ? (
-    <div className="font-extrabold uppercase text-[15px] shrink-0 border-t border-black pt-1">
-      {model.embalagem}
-    </div>
-  ) : (
-    <div className="font-extrabold uppercase flex gap-1 shrink-0 min-w-0 text-[12px] items-baseline border-t border-black pt-1">
-      <span className="shrink-0">{labels.embalagem}</span>
-      <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className="font-bold min-w-0 flex-1 truncate text-[13px]">{model.embalagem}</span>
-    </div>
-  );
-
-  return (
-    <div className="overflow-x-auto rounded-lg bg-muted/40 px-2 py-2">
-      <div
-        className="mx-auto flex flex-col bg-white text-black border border-black shadow-lg overflow-hidden"
-        style={
-          vertical
-            ? { width: 200, height: 420, padding: "8px 9px", gap: 6 }
-            : { width: 420, height: 200, padding: "7px 12px", gap: 4 }
-        }
-      >
-        <div className={`flex shrink-0 gap-2 ${vertical ? "flex-col items-center text-center" : "items-start justify-between"}`}>
-          <div className={`font-extrabold leading-tight line-clamp-2 ${vertical ? "text-[16px]" : "text-[18px] min-w-0"}`}>
-            {model.produto}
-          </div>
-          <div className="font-extrabold text-[11px] leading-tight shrink-0 pt-0.5">
-            <span className="uppercase">{labels.id}</span>
-            <span className="font-bold text-black/80 mx-1">•</span>
-            <span>{model.id}</span>
-          </div>
-        </div>
-        <div className={`flex items-baseline gap-2 border-y border-black shrink-0 ${vertical ? "justify-center py-1.5" : "py-1"}`}>
-          <span className="font-extrabold uppercase text-[9px] tracking-wide shrink-0">{labels.cliente}</span>
-          <span className="font-extrabold uppercase text-[16px] leading-none truncate">{model.cliente}</span>
-        </div>
-        <div className={`grid min-h-0 flex-1 content-evenly ${vertical ? "grid-cols-1 gap-1.5" : "grid-cols-2 gap-x-4 gap-y-1"}`}>
-          <FieldRow label={labels.lote} value={model.lote} />
-          <FieldRow label={labels.data} value={model.data} />
-          <FieldRow label={labels.quantidade} value={model.quantidade} />
-          <FieldRow label={labels.origem} value={model.origem} />
-        </div>
-        {footer}
-      </div>
-    </div>
-  );
-}
 
 export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, entradaCodigo }) {
   const { t, i18n } = useTranslation();
@@ -96,12 +43,18 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
   const [printing, setPrinting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [printConfig, setPrintConfig] = useState(null);
+  const [publicToken, setPublicToken] = useState("");
+  const [responsavelTecnico, setResponsavelTecnico] = useState("");
+  const [tokenError, setTokenError] = useState("");
 
   if (sessionKey !== formSession) {
     setFormSession(sessionKey);
     setSelectedIndex(0);
     setQty(1);
     setPrintConfig(null);
+    setPublicToken("");
+    setResponsavelTecnico("");
+    setTokenError("");
     setLoading(Boolean(sessionKey));
   }
 
@@ -110,56 +63,70 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
   const multiple = lotes.length > 1;
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
 
-  const labels = {
-    cliente: t("pdf.label.client"),
-    lote: t("pdf.label.lot"),
-    data: t("common.date"),
-    quantidade: t("common.quantity"),
-    embalagem: t("pdf.label.packaging"),
-    id: "ID",
-    origem: "Origem",
-  };
-
   const model = lote
-    ? buildEntradaEtiquetaModel(entrada, lote, {
-        dateFormat: printConfig?.dateFormat || "dmy",
-        language: i18n.language,
-        entradaCodigo,
+    ? buildEntradaEtiquetaModel(entrada, lote, { entradaCodigo })
+    : null;
+
+  const etiquetaCampos = printConfig?.campos
+    ? withEntradaEtiquetaCampos(printConfig.campos, {
+        hasNet: model?.netWeight != null,
+        hasGross: model?.grossWeight != null,
+        hasVolume: model?.volumeLitros != null,
       })
     : null;
 
   useEffect(() => {
-    if (!open || !entrada) return undefined;
+    if (!open || !entrada?.id) return undefined;
     let cancelled = false;
     setLoading(true);
-    resolveEtiquetaPrintConfig({
-      clienteId: entrada.cliente_id,
-      clienteNome: entrada.cliente_nome,
-      contexto: "convencional",
-    })
-      .then((config) => {
-        if (!cancelled) setPrintConfig(config);
+    setTokenError("");
+
+    Promise.all([
+      resolveEtiquetaPrintConfig({
+        clienteId: entrada.cliente_id,
+        clienteNome: entrada.cliente_nome,
+        contexto: "convencional",
+      }),
+      resolveResponsavelTecnico({
+        clienteId: entrada.cliente_id,
+        clienteNome: entrada.cliente_nome,
+      }).catch(() => ""),
+      ensureEntradaPublicToken(entrada)
+        .then((token) => ({ token: token || "", error: "" }))
+        .catch((err) => ({ token: "", error: err?.message || t("errors.saveFailed") })),
+    ])
+      .then(([config, responsavel, tokenResult]) => {
+        if (cancelled) return;
+        setPrintConfig(config);
+        setResponsavelTecnico(responsavel || "");
+        setPublicToken(tokenResult.token);
+        setTokenError(tokenResult.error);
       })
-      .catch(() => {
-        if (!cancelled) setPrintConfig(null);
+      .catch((err) => {
+        if (!cancelled) setTokenError(err?.message || t("errors.saveFailed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [open, entrada?.id, entrada?.cliente_id, entrada?.cliente_nome]);
+  }, [open, entrada?.id, entrada?.cliente_id, entrada?.cliente_nome, entrada?.public_token, t]);
 
-  const handlePrint = () => {
-    if (!model || !qtyOk) return;
+  const handlePrint = async () => {
+    if (!model || !qtyOk || !publicToken) return;
     setPrinting(true);
     try {
-      printEntradaEtiqueta(model, {
+      await printEntradaEtiqueta(model, {
         copies: Math.round(Number(qty)),
         orientation: printConfig?.orientation || "horizontal",
         locale: i18n.language,
-        labels,
+        dateFormat: printConfig?.dateFormat || "dmy",
+        campos: etiquetaCampos,
+        publicToken,
+        responsavelTecnico,
+        qrHint: t("pdf.label.qrHintEntrada"),
       });
       onOpenChange?.(false);
     } catch (err) {
@@ -173,11 +140,26 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
     }
   };
 
-  const vertical = printConfig?.orientation === "vertical";
+  const previewValues = model
+    ? {
+        product: model.produto,
+        client: model.cliente,
+        op_number: model.id,
+        lot: model.lote,
+        manufactureDate: model.fabricacao,
+        expiryDate: model.validade,
+        net_weight: model.netWeight || 0,
+        gross_weight: model.grossWeight || 0,
+        volume: model.volumeLitros,
+        embalagem: model.embalagem,
+        publicToken: publicToken || "preview",
+        responsavel_tecnico: responsavelTecnico,
+      }
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-[520px] flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[92vh] max-w-[760px] flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>{t("containers.vasilhames.printLabelTitle")}</DialogTitle>
         </DialogHeader>
@@ -190,8 +172,28 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
                 {t("common.loading")}
               </div>
             ) : (
-              <EtiquetaPreviewCard model={model} labels={labels} vertical={vertical} />
+              <div className="overflow-x-auto rounded-lg bg-muted/40 px-3 py-4">
+                <EtiquetaPreview
+                  chrome={false}
+                  weightDecimals={0}
+                  convencional
+                  campos={etiquetaCampos}
+                  dateFormat={printConfig?.dateFormat || "dmy"}
+                  orientation={printConfig?.orientation || "horizontal"}
+                  consultaPath={CONSULTA_ENTRADA_PATH}
+                  values={previewValues}
+                />
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  {t("pdf.label.entradaPublicNote")}
+                </p>
+              </div>
             )}
+
+            {tokenError ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {tokenError}
+              </p>
+            ) : null}
 
             <div className={`grid grid-cols-1 gap-4 ${multiple ? "sm:grid-cols-2" : ""}`}>
               {multiple && (
@@ -248,7 +250,7 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
           </Button>
           <Button
             onClick={handlePrint}
-            disabled={printing || loading || !qtyOk || !model}
+            disabled={printing || loading || !qtyOk || !model || !publicToken}
             className="text-white"
             style={{ background: "#2575D1" }}
           >
