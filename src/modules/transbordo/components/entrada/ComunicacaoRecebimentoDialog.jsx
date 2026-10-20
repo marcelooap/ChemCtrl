@@ -64,7 +64,7 @@ function resolveControleProduto(lote, produtosById) {
 
 function formatDestino(d) {
   if (d.tipo_embalagem === "Tankagem") {
-    return d.tanka_codigo ? `Tanka ${d.tanka_codigo}` : "Tankagem";
+    return d.tanka_codigo || "Tankagem";
   }
 
   const isVasilhame =

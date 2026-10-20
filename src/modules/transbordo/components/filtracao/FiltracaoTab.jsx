@@ -107,7 +107,6 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
   }, [filtracoes, search, clienteFilter, lockedCliente]);
 
   const pendenteCount = searched.filter((f) => !filtracaoTemSae(f)).length;
-  const analisadoCount = searched.length - pendenteCount;
 
   const filtered = readOnly
     ? searched
@@ -225,16 +224,6 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
           )}
         >
           Analisado
-          <span
-            className={cn(
-              "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums",
-              resultadoFilter === "analisado"
-                ? "bg-white/20 text-white"
-                : "bg-emerald-100 text-emerald-800"
-            )}
-          >
-            {analisadoCount}
-          </span>
         </button>
       </div>
       )}
