@@ -261,7 +261,8 @@ export async function saveCarregamentoChecklistProgress({
     );
   }
 
-  // Foto é obrigatória para validar; checklists já liberados são preservados
+  // Foto é obrigatória para validar tanque cheio e embalado.
+  // Tanque vazio libera sem foto. Checklists já liberados são preservados
   // (edição posterior não pode invalidar uma liberação anterior).
   const alreadyValidated = list.every((row) => Boolean(row.checklist_validado_em));
   const releasable = areAllItemsReleasable(payload.items, { requirePhotos: !alreadyValidated });

@@ -48,7 +48,9 @@ import {
 } from "@transbordo/lib/tankaVolume";
 import {
   aggregateComposicaoByLote,
+  destinoLancaTanqueDuplicado,
   seedComposicaoFromVasilhame,
+  VASILHAME_EM_ESTOQUE_MSG,
 } from "@transbordo/lib/vasilhameComposicao";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import {
@@ -570,6 +572,11 @@ export default function TransbordoModal({
   // Em edição, o OP atual é excluído do histórico para não subtrair em dobro.
   const editingIdForSaldo =
     resolvedEditIdRef.current || editingTransbordo?.id || null;
+  const editingCodigoTransbordo =
+    editingTransbordo?.codigo_transbordo ||
+    (transbordos || []).find((t) => String(t.id) === String(editingIdForSaldo))
+      ?.codigo_transbordo ||
+    "";
 
   const filteredIsotanques = isotanques
     .filter(
@@ -1222,6 +1229,17 @@ export default function TransbordoModal({
       return;
     }
     if (
+      destinos.some((d) =>
+        destinoLancaTanqueDuplicado(d, vasilhames, {
+          excludeTransbordoId: editingIdForSaldo,
+          excludeTransbordoCodigo: editingCodigoTransbordo,
+        })
+      )
+    ) {
+      setError(VASILHAME_EM_ESTOQUE_MSG);
+      return;
+    }
+    if (
       destinos.some(
         (d) =>
           isDestinoEstoqueEmbalado(d.tipo_embalagem) &&
@@ -1511,6 +1529,8 @@ export default function TransbordoModal({
                           onToggleCollapse={() =>
                             toggleDestinoCollapse(globalIdx)
                           }
+                          excludeTransbordoId={editingIdForSaldo}
+                          excludeTransbordoCodigo={editingCodigoTransbordo}
                         />
                         );
                       })}

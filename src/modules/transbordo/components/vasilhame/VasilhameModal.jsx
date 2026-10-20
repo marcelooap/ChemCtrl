@@ -21,6 +21,10 @@ import {
   LOTE_APORTE_ANTERIOR,
 } from "@transbordo/lib/vasilhameComposicao";
 import { matchProdutoCliente } from "@transbordo/lib/cadastroProdutosCentral";
+import {
+  findTanqueNoPatioDuplicado,
+  VASILHAME_EM_ESTOQUE_MSG,
+} from "@transbordo/lib/vasilhameComposicao";
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
@@ -78,6 +82,7 @@ export default function VasilhameModal({
   clientes,
   produtos,
   loteDatas = null,
+  vasilhames = [],
 }) {
   const [numeroOp, setNumeroOp] = useState("Manual");
   const [placa, setPlaca] = useState("");
@@ -280,8 +285,21 @@ export default function VasilhameModal({
   const densLockedByCadastro = !isEditing && densidadeDoCadastro;
   const densEditable = canEditField("densidade") && !densLockedByCadastro;
 
+  const tipoEhTanque = !tipo || tipo === "Vasilhame" || tipo === "Contentor";
+  const tanqueNoPatio = tipoEhTanque
+    ? findTanqueNoPatioDuplicado(vasilhames, {
+        placa,
+        barril,
+        excludeId: editingVasilhame?.id,
+      })
+    : null;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (tanqueNoPatio) {
+      setError(VASILHAME_EM_ESTOQUE_MSG);
+      return;
+    }
     if (!placa) {
       setError("Nº da Placa é obrigatório.");
       return;
@@ -482,6 +500,11 @@ export default function VasilhameModal({
                     disabled={!canEditField("placa")}
                     className={INPUT_EDITABLE}
                   />
+                  {tanqueNoPatio ? (
+                    <p className="text-[11px] font-medium leading-tight text-red-600">
+                      {VASILHAME_EM_ESTOQUE_MSG}
+                    </p>
+                  ) : null}
                 </div>
               )}
               {showField("barril") && (
@@ -494,6 +517,11 @@ export default function VasilhameModal({
                     disabled={!canEditField("barril")}
                     className={INPUT_EDITABLE}
                   />
+                  {tanqueNoPatio ? (
+                    <p className="text-[11px] font-medium leading-tight text-red-600">
+                      {VASILHAME_EM_ESTOQUE_MSG}
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -794,7 +822,11 @@ export default function VasilhameModal({
               <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={saving}>
+              <Button
+                type="submit"
+                className="bg-primary hover:bg-primary/90"
+                disabled={saving || Boolean(tanqueNoPatio)}
+              >
                 {saving ? "Salvando..." : editingVasilhame ? "Salvar Alterações" : "Adicionar"}
               </Button>
             </DialogFooter>

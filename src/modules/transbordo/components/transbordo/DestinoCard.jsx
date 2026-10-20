@@ -18,6 +18,10 @@ import {
   isVasilhameLegadoEmbalado,
   labelTipoEmbalagem,
 } from "@transbordo/lib/tiposEmbalagem";
+import {
+  VASILHAME_EM_ESTOQUE_MSG,
+  destinoLancaTanqueDuplicado,
+} from "@transbordo/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -117,6 +121,8 @@ export default function DestinoCard({
   readOnly,
   collapsed = false,
   onToggleCollapse,
+  excludeTransbordoId = null,
+  excludeTransbordoCodigo = "",
 }) {
   const tipo = destino.tipo_embalagem || "";
   const tipoLabel = labelTipoEmbalagem(tipo) || tipo;
@@ -287,7 +293,12 @@ export default function DestinoCard({
     tankaCapacidade > 0 &&
     roundVolume(destino.volume || 0) > tankaVolumeDisponivel;
 
-  const destinoPreenchido = isDestinoPreenchido(destino, volumeExcedido);
+  const tanqueDuplicadoNoPatio = destinoLancaTanqueDuplicado(destino, vasilhames, {
+    excludeTransbordoId,
+    excludeTransbordoCodigo,
+  });
+  const destinoPreenchido =
+    isDestinoPreenchido(destino, volumeExcedido) && !tanqueDuplicadoNoPatio;
   const { title: destinoTitulo, subtitle: destinoSubtitulo } = buildDestinoResumo(
     destino,
     tipoLabel,
@@ -465,6 +476,11 @@ export default function DestinoCard({
                 disabled={readOnly}
                 inputClassName={INPUT_EDITABLE}
               />
+              {tanqueDuplicadoNoPatio ? (
+                <p className="text-[11px] font-medium leading-tight text-red-600">
+                  {VASILHAME_EM_ESTOQUE_MSG}
+                </p>
+              ) : null}
               {selectedFracionado && (
                 <p className="text-xs text-primary font-medium">
                   Tanque no pátio (fracionado) — volume atual:{" "}
@@ -477,6 +493,7 @@ export default function DestinoCard({
             <Field
               label="Nº do Barril"
               value={destino.barril}
+              hint={tanqueDuplicadoNoPatio ? VASILHAME_EM_ESTOQUE_MSG : ""}
               onChange={(v) => {
                 const barril = String(v || "");
                 const placa = String(destino.placa || "").trim();
@@ -707,7 +724,7 @@ export default function DestinoCard({
   );
 }
 
-function Field({ label, value, onChange, placeholder, readOnly }) {
+function Field({ label, value, onChange, placeholder, readOnly, hint }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
@@ -718,6 +735,9 @@ function Field({ label, value, onChange, placeholder, readOnly }) {
         disabled={readOnly}
         className={INPUT_EDITABLE}
       />
+      {hint ? (
+        <p className="text-[11px] font-medium leading-tight text-red-600">{hint}</p>
+      ) : null}
     </div>
   );
 }

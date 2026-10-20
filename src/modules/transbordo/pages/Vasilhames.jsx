@@ -1321,6 +1321,7 @@ export default function Vasilhames() {
         clientes={clientes}
         produtos={produtos}
         loteDatas={loteDatasEdicao}
+        vasilhames={vasilhames}
       />
 
       {/* View Dialog */}

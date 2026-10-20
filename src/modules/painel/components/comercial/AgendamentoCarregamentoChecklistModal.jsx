@@ -56,7 +56,9 @@ import {
   computeChecksSummary,
   computeItemStatus,
   hasRejectedItem,
+  isChecklistTanqueVazio,
   itemHasPhotos,
+  itemRequiresPhoto,
   mergeChecklistItems,
   parseStoredChecklist,
 } from '@painel/lib/carregamentoChecklistConfig';
@@ -557,7 +559,8 @@ export default function AgendamentoCarregamentoChecklistModal({
   const active = activeIndex >= 0 ? items[activeIndex] : null;
   const nextItem = activeIndex >= 0 && activeIndex < items.length - 1 ? items[activeIndex + 1] : null;
   const allApproved = areAllItemsApproved(items);
-  // Foto obrigatória em cada item para liberar (liberações anteriores são preservadas).
+  // Foto obrigatória em tanque cheio e embalado. Tanque vazio libera sem foto.
+  // Liberações anteriores são preservadas.
   const releaseOptions = { requirePhotos: !alreadyLiberated };
   const canRelease = areAllItemsReleasable(items, releaseOptions);
   const anyRejected = hasRejectedItem(items);
@@ -730,8 +733,8 @@ export default function AgendamentoCarregamentoChecklistModal({
   const sectionTitle = (section) =>
     t(`painel.comercial.agendamentos.checklist.sections.${section}`, { defaultValue: section });
 
-  const isTanqueVazioActive =
-    active?.kind === CHECKLIST_KIND.TANQUE_VAZIO || Boolean(active?.tanque_vazio);
+  const isTanqueVazioActive = isChecklistTanqueVazio(active);
+  const activeRequiresPhoto = releaseOptions.requirePhotos && !isTanqueVazioActive;
   const showLacresBlock =
     active?.kind === CHECKLIST_KIND.CONVENCIONAL &&
     !hasCustomChecks &&
@@ -880,7 +883,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                           answered: s.answered,
                           total: s.total,
                         })}
-                        {releaseOptions.requirePhotos && !itemHasPhotos(it) ? (
+                        {releaseOptions.requirePhotos && itemRequiresPhoto(it) && !itemHasPhotos(it) ? (
                           <span className="ml-2 font-medium text-amber-700">
                             · {t('painel.comercial.agendamentos.checklist.photoRequired')}
                           </span>
@@ -1119,11 +1122,11 @@ export default function AgendamentoCarregamentoChecklistModal({
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {t('painel.comercial.agendamentos.checklist.sections.fotos')}
-                  {releaseOptions.requirePhotos ? (
+                  {activeRequiresPhoto ? (
                     <span className="ml-1 text-red-600" aria-hidden="true">*</span>
                   ) : null}
                 </p>
-                {releaseOptions.requirePhotos && !itemHasPhotos(active) ? (
+                {activeRequiresPhoto && !itemHasPhotos(active) ? (
                   <p className="text-xs text-amber-700">
                     {t('painel.comercial.agendamentos.checklist.photoRequiredHint')}
                   </p>

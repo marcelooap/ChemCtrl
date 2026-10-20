@@ -14,6 +14,7 @@ import {
 import {
   TIPOS_NAO_VASILHAME,
   isDestinoEmbalagemUnitaria,
+  isVasilhameLegadoEmbalado,
 } from "@transbordo/lib/tiposEmbalagem";
 
 /** Rótulo sintético — só quando há residual sem lote real atribuível. */
@@ -731,6 +732,105 @@ export function preTransbordoEntries(vasilhame, transbordos = []) {
 export function removeComposicaoByTransbordo(composicao = [], codigo) {
   if (!codigo) return composicao || [];
   return (composicao || []).filter((c) => c.transbordo_codigo !== codigo);
+}
+
+export const VASILHAME_EM_ESTOQUE_MSG = "Vasilhame em estoque";
+
+function normTanqueCodigo(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+/** Status operacional de pátio. Expedido (ou com data de saída) não bloqueia novo lançamento. */
+export function isVasilhameNoPatio(vasilhame) {
+  const status = String(vasilhame?.status || "No Pátio")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  if (status === "expedido") return false;
+  if (vasilhame?.data_saida != null && String(vasilhame.data_saida).trim() !== "") {
+    return false;
+  }
+  return status === "no patio" || status === "";
+}
+
+function pertenceAoTransbordo(vasilhame, { excludeTransbordoId, excludeTransbordoCodigo } = {}) {
+  const id = String(excludeTransbordoId || "").trim();
+  const codigo = String(excludeTransbordoCodigo || "").trim();
+  if (id && String(vasilhame?.transbordo_id || "") === id) return true;
+  if (codigo && String(vasilhame?.numero_op || "").trim() === codigo) return true;
+  if (
+    codigo &&
+    (vasilhame?.composicao || []).some(
+      (c) => String(c?.transbordo_codigo || "").trim() === codigo
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Tanque já em estoque (No Pátio) com a mesma placa e o mesmo barril.
+ * Não altera o banco: só informa a tela para impedir o lançamento duplicado.
+ * Tanque expedido não entra. O registro em edição e o tanque deste OP também não.
+ */
+export function findTanqueNoPatioDuplicado(
+  vasilhames = [],
+  {
+    placa,
+    barril,
+    excludeId,
+    excludeTransbordoId,
+    excludeTransbordoCodigo,
+    ignorarFracionado = false,
+  } = {}
+) {
+  const p = normTanqueCodigo(placa);
+  const b = normTanqueCodigo(barril);
+  if (!p && !b) return null;
+
+  const skipId = String(excludeId || "").trim();
+  return (
+    (vasilhames || []).find((v) => {
+      if (!v) return false;
+      if (skipId && String(v.id) === skipId) return false;
+      if (!isVasilhameNoPatio(v)) return false;
+      if (ignorarFracionado && v.fracionado === true) return false;
+      if (
+        pertenceAoTransbordo(v, { excludeTransbordoId, excludeTransbordoCodigo })
+      ) {
+        return false;
+      }
+      if (TIPOS_NAO_VASILHAME.has(v.tipo) || isDestinoEmbalagemUnitaria(v.tipo)) {
+        return false;
+      }
+      if (isVasilhameLegadoEmbalado(v.tipo)) return false;
+      return normTanqueCodigo(v.placa) === p && normTanqueCodigo(v.barril) === b;
+    }) || null
+  );
+}
+
+/**
+ * Destino Vasilhame que criaria outro registro de um tanque que já está no pátio.
+ * Complemento de fracionado (mesmo tanque, vasilhame_existente_id) não é duplicata.
+ */
+export function destinoLancaTanqueDuplicado(destino, vasilhames = [], opts = {}) {
+  if ((destino?.tipo_embalagem || "") !== "Vasilhame") return null;
+  const found = findTanqueNoPatioDuplicado(vasilhames, {
+    placa: destino?.placa,
+    barril: destino?.barril,
+    ignorarFracionado: true,
+    ...opts,
+  });
+  if (!found) return null;
+  if (
+    destino?.vasilhame_existente_id &&
+    String(destino.vasilhame_existente_id) === String(found.id)
+  ) {
+    return null;
+  }
+  return found;
 }
 
 /** Mesmo tanque físico: placa, ou barril quando a placa está em branco. */

@@ -694,15 +694,25 @@ export function itemHasPhotos(item) {
   return Array.isArray(item?.fotos) && item.fotos.length > 0;
 }
 
-/** Itens aprovados que ainda não têm foto (obrigatória para liberar a expedição). */
+/** Tanque vazio: a foto permanece disponível, mas não bloqueia a liberação. */
+export function isChecklistTanqueVazio(item) {
+  return item?.kind === CHECKLIST_KIND.TANQUE_VAZIO || Boolean(item?.tanque_vazio);
+}
+
+/** Foto obrigatória em tanque cheio e embalado. Tanque vazio não exige foto. */
+export function itemRequiresPhoto(item) {
+  return !isChecklistTanqueVazio(item);
+}
+
+/** Itens que ainda não têm a foto exigida para liberar a expedição. */
 export function countItemsMissingPhotos(items = []) {
-  return (items || []).filter((it) => !itemHasPhotos(it)).length;
+  return (items || []).filter((it) => itemRequiresPhoto(it) && !itemHasPhotos(it)).length;
 }
 
 /**
  * Checklist apto para liberar a expedição: todos os itens aprovados e,
- * quando `requirePhotos`, cada item com ao menos uma foto.
- * Aceita itens do estado do modal ou do payload persistido.
+ * quando `requirePhotos`, cada item que exige foto com ao menos uma.
+ * Tanque vazio libera sem foto. Aceita itens do modal ou do payload persistido.
  */
 export function areAllItemsReleasable(items = [], { requirePhotos = true } = {}) {
   if (!areAllItemsApproved(items)) return false;
