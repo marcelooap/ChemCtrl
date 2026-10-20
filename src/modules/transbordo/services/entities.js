@@ -63,9 +63,10 @@ async function resolvePhysicalTable(preferredName) {
     assertConfigured(`${preferredName}.resolve`);
     const candidates = TABLE_FALLBACKS[preferredName] || [preferredName];
     for (const name of candidates) {
+      // Não assume coluna `id`: t_checklist_expedicao_config usa cliente_id como chave.
       const { error } = await chemflowSupabase
         .from(name)
-        .select('id')
+        .select('*')
         .limit(1);
       if (!error) {
         physicalTableCache.set(preferredName, name);

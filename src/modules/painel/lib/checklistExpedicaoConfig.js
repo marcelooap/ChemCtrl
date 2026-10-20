@@ -94,13 +94,15 @@ function testesFromDestinoRow(row) {
 
 function isMissingTableError(err, table) {
   const msg = String(err?.message || err || '').toLowerCase();
+  const name = String(table || '').toLowerCase();
+  if (!name || !msg.includes(name)) return false;
+  // "column … does not exist" é coluna ausente, não tabela ausente.
+  if (/\bcolumn\b/.test(msg)) return false;
   return (
-    msg.includes(table) &&
-    (msg.includes('pgrst205') ||
-      msg.includes('does not exist') ||
-      msg.includes('schema cache') ||
-      msg.includes('could not find') ||
-      msg.includes('relation'))
+    msg.includes('pgrst205') ||
+    msg.includes('could not find the table') ||
+    (msg.includes('schema cache') && msg.includes('table')) ||
+    (msg.includes('relation') && msg.includes('does not exist'))
   );
 }
 

@@ -827,7 +827,7 @@
       },
       "checklistExpedicao": {
         "title": "Check-list Expédition",
-        "subtitle": "Gérez les éléments d'inspection d'expédition spécifiques à chaque client",
+        "subtitle": "Gérez les éléments d'inspection d'expédition de chaque client, pour citerne pleine et citerne vide",
         "clientLabel": "Client",
         "searchClient": "Sélectionnez ou recherchez un client...",
         "selectClient": "Sélectionnez un client pour configurer le check-list d'expédition.",
@@ -839,8 +839,8 @@
         "saved": "Check-list d'expédition enregistré.",
         "saveError": "Impossible d'enregistrer le check-list.",
         "loadError": "Impossible de charger le check-list.",
-        "itemsTitle": "Éléments d'inspection",
-        "itemsHint": "Modifiez, réordonnez, ajoutez ou supprimez des éléments. L'ordre défini sera utilisé lors de l'inspection d'expédition.",
+        "itemsTitle": "Éléments d'inspection — Citerne pleine",
+        "itemsHint": "Modifiez, réordonnez, ajoutez ou supprimez des éléments. L'ordre défini est utilisé lors de l'inspection de citerne pleine.",
         "itemPlaceholder": "Description de l'élément d'inspection",
         "itemLabel": "Élément {{index}}",
         "reorder": "Glisser pour réordonner",
@@ -857,6 +857,21 @@
         "copySql": "Copier le script SQL",
         "sqlCopied": "Script SQL copié. Collez-le dans l'éditeur SQL de Supabase et exécutez-le.",
         "sqlCopyError": "Impossible de copier le script. Ouvrez le fichier src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "tipoCarga": {
+          "label": "Type de chargement",
+          "cheio": "Citerne pleine",
+          "vazio": "Citerne vide",
+          "hint": "Les deux check-lists restent enregistrées pour le client. Changez d'onglet pour saisir les éléments de chaque type de chargement.",
+          "unsaved": "Modifications non enregistrées sur cet onglet",
+          "count": "{{count}} éléments"
+        },
+        "tanqueVazio": {
+          "noConfig": "Ce client n'a pas encore de check-list de citerne vide. Ajoutez les premiers éléments d'inspection.",
+          "itemsTitle": "Éléments d'inspection — Citerne vide",
+          "itemsHint": "Ces vérifications n'apparaissent que lors du contrôle des citernes vides.",
+          "tableMissingBanner": "La prise en charge du check-list de citerne vide n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
+          "missingConfigHint": "Aucun check-list de citerne vide n'est configuré pour ce client."
+        },
         "validadeTestes": {
           "title": "Vérification de la validité des tests",
           "hint": "Définit, par destination, quels tests entrent dans la checklist et le délai de vérification de chacun.",

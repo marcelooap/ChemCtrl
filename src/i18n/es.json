@@ -827,7 +827,7 @@
       },
       "checklistExpedicao": {
         "title": "Check List Expedición",
-        "subtitle": "Gestione los ítems de inspección de expedición específicos de cada cliente",
+        "subtitle": "Gestione los ítems de inspección de expedición de cada cliente, para tanque lleno y tanque vacío",
         "clientLabel": "Cliente",
         "searchClient": "Seleccione o busque un cliente...",
         "selectClient": "Seleccione un cliente para configurar el checklist de expedición.",
@@ -839,8 +839,8 @@
         "saved": "Checklist de expedición guardado.",
         "saveError": "No fue posible guardar el checklist.",
         "loadError": "No fue posible cargar el checklist.",
-        "itemsTitle": "Ítems de inspección",
-        "itemsHint": "Edite, reordene, agregue o elimine ítems. El orden definido se usará en la inspección de expedición.",
+        "itemsTitle": "Ítems de inspección — Tanque lleno",
+        "itemsHint": "Edite, reordene, agregue o elimine ítems. El orden definido se usará en la inspección de tanque lleno.",
         "itemPlaceholder": "Descripción del ítem de inspección",
         "itemLabel": "Ítem {{index}}",
         "reorder": "Arrastrar para reordenar",
@@ -857,6 +857,21 @@
         "copySql": "Copiar script SQL",
         "sqlCopied": "Script SQL copiado. Péguelo en el SQL Editor de Supabase y ejecútelo.",
         "sqlCopyError": "No fue posible copiar el script. Abra el archivo src/modules/transbordo/sql/039_t_checklist_expedicao_itens.sql.",
+        "tipoCarga": {
+          "label": "Tipo de carga",
+          "cheio": "Tanque lleno",
+          "vazio": "Tanque vacío",
+          "hint": "Los dos checklists quedan registrados para el cliente. Cambie de pestaña para incluir los ítems de cada tipo de carga.",
+          "unsaved": "Cambios sin guardar en esta pestaña",
+          "count": "{{count}} ítems"
+        },
+        "tanqueVazio": {
+          "noConfig": "Este cliente aún no tiene checklist de tanque vacío. Agregue los primeros ítems de inspección.",
+          "itemsTitle": "Ítems de inspección — Tanque vacío",
+          "itemsHint": "Estas verificaciones aparecen solo en la conferencia de tanques vacíos.",
+          "tableMissingBanner": "El soporte de checklist de tanque vacío aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
+          "missingConfigHint": "No hay checklist de tanque vacío configurado para este cliente."
+        },
         "validadeTestes": {
           "title": "Verificación de la vigencia de las pruebas",
           "hint": "Define, por destino, qué pruebas entran en el checklist y el plazo de verificación de cada una.",
