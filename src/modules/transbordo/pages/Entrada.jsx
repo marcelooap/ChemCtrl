@@ -20,6 +20,7 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import EntradaEtiquetaDialog from "@transbordo/components/entrada/EntradaEtiquetaDialog";
 import { getEntradaLotes } from "@transbordo/lib/entradaEtiqueta";
+import { asLoteList } from "@transbordo/lib/lotesList";
 import ComunicacaoRecebimentoDialog from "@transbordo/components/entrada/ComunicacaoRecebimentoDialog";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conversao";
@@ -273,7 +274,7 @@ export default function Entrada() {
           matchesText(item.nota_fiscal, q) ||
           matchesText(item.nota_fiscal_troca, q) ||
           matchesText(item.lote, q) ||
-          (item.lotes || []).some(
+          asLoteList(item.lotes).some(
             (l) =>
               matchesText(l.nota_fiscal, q) ||
               matchesText(l.nota_fiscal_troca, q) ||

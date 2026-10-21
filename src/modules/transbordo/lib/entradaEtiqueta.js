@@ -7,10 +7,12 @@ import {
 } from "@transbordo/lib/etiquetaConfig";
 import { CONSULTA_ENTRADA_PATH } from "@transbordo/lib/ensureEntradaPublicToken";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
+import { asLoteList } from "@transbordo/lib/lotesList";
 
 /** Lotes da entrada, com fallback para o registro antigo de um único produto. */
 export function getEntradaLotes(entrada) {
-  if (entrada?.lotes?.length > 0) return entrada.lotes;
+  const lotes = asLoteList(entrada?.lotes);
+  if (lotes.length > 0) return lotes;
   return [
     {
       produto_id: entrada?.produto_id,

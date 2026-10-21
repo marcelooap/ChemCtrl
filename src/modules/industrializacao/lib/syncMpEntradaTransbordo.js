@@ -1,5 +1,4 @@
 import { entities } from "@transbordo/services/entities";
-import { getEntityTableName } from "@industrializacao/api/supabaseClient";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
@@ -12,7 +11,7 @@ import { resolveMpControle } from "@industrializacao/lib/mpControle";
 const LINK_PREFIX = "INDMP:";
 
 async function estoqueUnificado() {
-  return (await getEntityTableName("RawMaterialStock")) === "ep_mp";
+  return true;
 }
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);

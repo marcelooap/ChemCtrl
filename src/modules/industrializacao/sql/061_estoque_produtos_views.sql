@@ -77,22 +77,11 @@ END;
 $$;
 
 ALTER TABLE estoque_produtos
-  ADD COLUMN IF NOT EXISTS peso_bruto numeric,
   ADD COLUMN IF NOT EXISTS quantidade_nf numeric,
   ADD COLUMN IF NOT EXISTS quantidade_declarada numeric,
   ADD COLUMN IF NOT EXISTS tipo_recebimento text,
   ADD COLUMN IF NOT EXISTS tipo_embalagem text,
-  ADD COLUMN IF NOT EXISTS placa text,
-  ADD COLUMN IF NOT EXISTS barril text,
-  ADD COLUMN IF NOT EXISTS volume numeric,
-  ADD COLUMN IF NOT EXISTS tara numeric,
-  ADD COLUMN IF NOT EXISTS lacres text,
-  ADD COLUMN IF NOT EXISTS eslinga text,
-  ADD COLUMN IF NOT EXISTS gps text,
-  ADD COLUMN IF NOT EXISTS menor_teste text,
-  ADD COLUMN IF NOT EXISTS fracionado boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS vasilhame_id uuid,
-  ADD COLUMN IF NOT EXISTS vasilhame_existente_id uuid;
+  ADD COLUMN IF NOT EXISTS vasilhame_id uuid;
 
 DO $$
 BEGIN
@@ -122,23 +111,16 @@ BEGIN
         preco_unitario = COALESCE(ep.preco_unitario, ep_num(src.item, 'preco_unitario')),
         embalado = COALESCE(ep_bool(src.item, 'embalado'), ep.embalado),
         peso_liquido = COALESCE(ep.peso_liquido, ep_num(src.item, 'peso_liquido')),
-        peso_bruto = COALESCE(ep.peso_bruto, ep_num(src.item, 'peso_bruto')),
         quantidade_embalagens = COALESCE(ep.quantidade_embalagens, ep_num(src.item, 'quantidade_embalagens')),
         quantidade_nf = COALESCE(ep.quantidade_nf, ep_num(src.item, 'quantidade_nf')),
         quantidade_declarada = COALESCE(ep.quantidade_declarada, ep_num(src.item, 'quantidade_declarada')),
         tipo_recebimento = COALESCE(ep.tipo_recebimento, ep_txt(src.item, 'tipo_recebimento')),
         tipo_embalagem = COALESCE(ep.tipo_embalagem, ep_txt(src.item, 'tipo_embalagem')),
-        placa = COALESCE(ep.placa, ep_txt(src.item, 'placa')),
-        barril = COALESCE(ep.barril, ep_txt(src.item, 'barril')),
-        volume = COALESCE(ep.volume, ep_num(src.item, 'volume')),
-        tara = COALESCE(ep.tara, ep_num(src.item, 'tara')),
-        lacres = COALESCE(ep.lacres, ep_txt(src.item, 'lacres')),
-        eslinga = COALESCE(ep.eslinga, ep_txt(src.item, 'eslinga')),
-        gps = COALESCE(ep.gps, ep_txt(src.item, 'gps')),
-        menor_teste = COALESCE(ep.menor_teste, ep_txt(src.item, 'menor_teste')),
-        fracionado = COALESCE(ep_bool(src.item, 'fracionado'), ep.fracionado),
-        vasilhame_id = COALESCE(ep.vasilhame_id, ep_uuid(src.item ->> 'vasilhame_id')),
-        vasilhame_existente_id = COALESCE(ep.vasilhame_existente_id, ep_uuid(src.item ->> 'vasilhame_existente_id'))
+        vasilhame_id = COALESCE(
+          ep.vasilhame_id,
+          ep_uuid(src.item ->> 'vasilhame_id'),
+          ep_uuid(src.item ->> 'vasilhame_existente_id')
+        )
       FROM (
         SELECT id, ep_lote_item(lotes) AS item
         FROM estoque_produtos
@@ -155,8 +137,8 @@ DROP VIEW IF EXISTS ep_mp CASCADE;
 DROP INDEX IF EXISTS idx_estoque_produtos_lotes;
 ALTER TABLE estoque_produtos DROP COLUMN IF EXISTS lotes;
 
-CREATE INDEX IF NOT EXISTS idx_estoque_produtos_placa
-  ON estoque_produtos (placa) WHERE placa IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_estoque_produtos_vasilhame
+  ON estoque_produtos (vasilhame_id) WHERE vasilhame_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION ep_item_json(p estoque_produtos)
 RETURNS jsonb
@@ -181,21 +163,22 @@ AS $$
     'tipo_embalagem', p.tipo_embalagem,
     'embalado', p.embalado,
     'peso_liquido', p.peso_liquido,
-    'peso_bruto', p.peso_bruto,
     'quantidade_embalagens', p.quantidade_embalagens,
-    'placa', p.placa,
-    'barril', p.barril,
-    'volume', p.volume,
-    'tara', p.tara,
-    'lacres', p.lacres,
-    'eslinga', p.eslinga,
-    'gps', p.gps,
-    'menor_teste', p.menor_teste,
-    'fracionado', p.fracionado,
+    'placa', v.placa,
+    'barril', v.barril,
+    'volume', v.volume,
+    'tara', v.tara,
+    'lacres', v.lacres,
+    'eslinga', v.eslinga,
+    'gps', v.gps,
+    'menor_teste', v.menor_teste,
+    'fracionado', v.fracionado,
+    'peso_bruto', v.peso_bruto,
     'vasilhame_id', p.vasilhame_id,
-    'vasilhame_existente_id', p.vasilhame_existente_id,
     'ind_mp_id', p.legacy_mp_id_text
-  ));
+  ))
+  FROM (SELECT 1) AS anchor
+  LEFT JOIN t_vasilhames v ON v.id = p.vasilhame_id;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -226,25 +209,14 @@ SELECT
   custo_total,
   embalado,
   peso_liquido,
-  peso_bruto,
   quantidade_embalagens,
   quantidade_nf,
   quantidade_declarada,
   tipo_recebimento,
   tipo_embalagem,
-  placa,
-  barril,
-  volume,
-  tara,
-  lacres,
-  eslinga,
-  gps,
-  menor_teste,
-  fracionado,
   vasilhame_id,
-  vasilhame_existente_id,
   status_wms,
-  ep_item_json(estoque_produtos) AS lotes,
+  jsonb_build_array(ep_item_json(estoque_produtos)) AS lotes,
   origem,
   granel_pesagem,
   granel_ticket,
@@ -305,7 +277,43 @@ WHERE origem = 'MATERIA_PRIMA'
 
 CREATE OR REPLACE VIEW ep_entradas AS
 WITH base AS (
-  SELECT *
+  SELECT
+    id,
+    legacy_entrada_id,
+    id_entrada,
+    cliente_id,
+    cliente_nome,
+    produto_id,
+    produto_nome,
+    produto_codigo,
+    nota_fiscal,
+    lote,
+    densidade,
+    data_fabricacao,
+    data_validade,
+    unidade_medida,
+    preco_unitario,
+    embalado,
+    peso_liquido,
+    quantidade_embalagens,
+    status_wms,
+    granel_pesagem,
+    granel_ticket,
+    granel_peso_bruto,
+    granel_validacao_bruto,
+    granel_peso_liquido,
+    granel_validacao_liquido,
+    granel_erro_admissivel,
+    granel_peso_minimo,
+    granel_peso_maximo,
+    granel_margem,
+    grupo_entrada,
+    origem,
+    fornecedor,
+    comunicacao_enviada,
+    data,
+    public_token_entrada,
+    created_at
   FROM estoque_produtos
   WHERE legacy_entrada_id IS NOT NULL
     AND coalesce(grupo_entrada, '') NOT LIKE 'TB%'
@@ -533,10 +541,9 @@ BEGIN
     cliente_id, cliente_nome, data, nota_fiscal, nota_fiscal_troca,
     lote, densidade, data_fabricacao, data_validade,
     quantidade, initial_stock, unidade_medida, preco_unitario, custo_total,
-    saldo_atual, embalado, peso_liquido, peso_bruto, quantidade_embalagens,
+    saldo_atual, embalado, peso_liquido, quantidade_embalagens,
     quantidade_nf, quantidade_declarada, tipo_recebimento, tipo_embalagem,
-    placa, barril, volume, tara, lacres, eslinga, gps, menor_teste,
-    fracionado, vasilhame_id, vasilhame_existente_id, status_wms,
+    vasilhame_id, status_wms,
     granel_pesagem, granel_ticket, granel_peso_bruto, granel_validacao_bruto,
     granel_peso_liquido, granel_validacao_liquido, granel_erro_admissivel,
     granel_peso_minimo, granel_peso_maximo, granel_margem,
@@ -566,23 +573,12 @@ BEGIN
     COALESCE(NEW.saldo_atual, NEW.quantidade, 0),
     COALESCE(ep_bool(v_item, 'embalado'), NEW.embalado, false),
     COALESCE(ep_num(v_item, 'peso_liquido'), NEW.peso_liquido),
-    COALESCE(ep_num(v_item, 'peso_bruto'), NEW.peso_bruto),
     COALESCE(ep_num(v_item, 'quantidade_embalagens'), NEW.quantidade_embalagens),
     ep_num(v_item, 'quantidade_nf'),
     ep_num(v_item, 'quantidade_declarada'),
     ep_txt(v_item, 'tipo_recebimento'),
     ep_txt(v_item, 'tipo_embalagem'),
-    ep_txt(v_item, 'placa'),
-    ep_txt(v_item, 'barril'),
-    ep_num(v_item, 'volume'),
-    ep_num(v_item, 'tara'),
-    ep_txt(v_item, 'lacres'),
-    ep_txt(v_item, 'eslinga'),
-    ep_txt(v_item, 'gps'),
-    ep_txt(v_item, 'menor_teste'),
-    COALESCE(ep_bool(v_item, 'fracionado'), false),
-    ep_uuid(v_item ->> 'vasilhame_id'),
-    ep_uuid(v_item ->> 'vasilhame_existente_id'),
+    COALESCE(ep_uuid(v_item ->> 'vasilhame_id'), ep_uuid(v_item ->> 'vasilhame_existente_id')),
     COALESCE(NEW.status_wms, false),
     COALESCE(NEW.granel_pesagem, false),
     NEW.granel_ticket,
@@ -644,23 +640,16 @@ BEGIN
     saldo_atual = COALESCE(NEW.saldo_atual, saldo_atual),
     embalado = COALESCE(ep_bool(v_item, 'embalado'), NEW.embalado, embalado),
     peso_liquido = CASE WHEN v_item ? 'peso_liquido' THEN ep_num(v_item, 'peso_liquido') ELSE NEW.peso_liquido END,
-    peso_bruto = CASE WHEN v_item ? 'peso_bruto' THEN ep_num(v_item, 'peso_bruto') ELSE NEW.peso_bruto END,
     quantidade_embalagens = CASE WHEN v_item ? 'quantidade_embalagens' THEN ep_num(v_item, 'quantidade_embalagens') ELSE NEW.quantidade_embalagens END,
     quantidade_nf = CASE WHEN v_item ? 'quantidade_nf' THEN ep_num(v_item, 'quantidade_nf') ELSE quantidade_nf END,
     quantidade_declarada = CASE WHEN v_item ? 'quantidade_declarada' THEN ep_num(v_item, 'quantidade_declarada') ELSE quantidade_declarada END,
     tipo_recebimento = CASE WHEN v_item ? 'tipo_recebimento' THEN ep_txt(v_item, 'tipo_recebimento') ELSE tipo_recebimento END,
     tipo_embalagem = CASE WHEN v_item ? 'tipo_embalagem' THEN ep_txt(v_item, 'tipo_embalagem') ELSE tipo_embalagem END,
-    placa = CASE WHEN v_item ? 'placa' THEN ep_txt(v_item, 'placa') ELSE placa END,
-    barril = CASE WHEN v_item ? 'barril' THEN ep_txt(v_item, 'barril') ELSE barril END,
-    volume = CASE WHEN v_item ? 'volume' THEN ep_num(v_item, 'volume') ELSE volume END,
-    tara = CASE WHEN v_item ? 'tara' THEN ep_num(v_item, 'tara') ELSE tara END,
-    lacres = CASE WHEN v_item ? 'lacres' THEN ep_txt(v_item, 'lacres') ELSE lacres END,
-    eslinga = CASE WHEN v_item ? 'eslinga' THEN ep_txt(v_item, 'eslinga') ELSE eslinga END,
-    gps = CASE WHEN v_item ? 'gps' THEN ep_txt(v_item, 'gps') ELSE gps END,
-    menor_teste = CASE WHEN v_item ? 'menor_teste' THEN ep_txt(v_item, 'menor_teste') ELSE menor_teste END,
-    fracionado = COALESCE(ep_bool(v_item, 'fracionado'), fracionado),
-    vasilhame_id = CASE WHEN v_item ? 'vasilhame_id' THEN ep_uuid(v_item ->> 'vasilhame_id') ELSE vasilhame_id END,
-    vasilhame_existente_id = CASE WHEN v_item ? 'vasilhame_existente_id' THEN ep_uuid(v_item ->> 'vasilhame_existente_id') ELSE vasilhame_existente_id END,
+    vasilhame_id = COALESCE(
+      ep_uuid(v_item ->> 'vasilhame_id'),
+      ep_uuid(v_item ->> 'vasilhame_existente_id'),
+      vasilhame_id
+    ),
     status_wms = COALESCE(NEW.status_wms, status_wms),
     granel_pesagem = COALESCE(NEW.granel_pesagem, granel_pesagem),
     granel_ticket = NEW.granel_ticket,

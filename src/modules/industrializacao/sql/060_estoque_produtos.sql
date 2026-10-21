@@ -171,23 +171,12 @@ CREATE TABLE IF NOT EXISTS estoque_produtos (
   saldo_atual numeric NOT NULL DEFAULT 0,
   embalado boolean NOT NULL DEFAULT false,
   peso_liquido numeric,
-  peso_bruto numeric,
   quantidade_embalagens numeric,
   quantidade_nf numeric,
   quantidade_declarada numeric,
   tipo_recebimento text,
   tipo_embalagem text,
-  placa text,
-  barril text,
-  volume numeric,
-  tara numeric,
-  lacres text,
-  eslinga text,
-  gps text,
-  menor_teste text,
-  fracionado boolean NOT NULL DEFAULT false,
   vasilhame_id uuid,
-  vasilhame_existente_id uuid,
   status_wms boolean NOT NULL DEFAULT false,
   status text,
   granel_pesagem boolean NOT NULL DEFAULT false,
@@ -240,8 +229,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_produtos_public_token
   ON estoque_produtos (public_token) WHERE public_token IS NOT NULL AND btrim(public_token) <> '';
 CREATE INDEX IF NOT EXISTS idx_estoque_produtos_token_entrada
   ON estoque_produtos (public_token_entrada) WHERE public_token_entrada IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_estoque_produtos_placa
-  ON estoque_produtos (placa) WHERE placa IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_estoque_produtos_vasilhame
+  ON estoque_produtos (vasilhame_id) WHERE vasilhame_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS _entrada_id_map (
   novo_id_entrada text PRIMARY KEY,
@@ -420,10 +409,9 @@ BEGIN
       cliente_id, cliente_nome, data, nota_fiscal, nota_fiscal_troca,
       lote, densidade, data_fabricacao, data_validade, fornecedor,
       quantidade, initial_stock, unidade_medida, preco_unitario, custo_total,
-      saldo_atual, embalado, peso_liquido, peso_bruto, quantidade_embalagens,
+      saldo_atual, embalado, peso_liquido, quantidade_embalagens,
       quantidade_nf, quantidade_declarada, tipo_recebimento, tipo_embalagem,
-      placa, barril, volume, tara, lacres, eslinga, gps, menor_teste,
-      fracionado, vasilhame_id, vasilhame_existente_id,
+      vasilhame_id,
       status_wms, granel_pesagem, granel_ticket, granel_peso_bruto,
       granel_validacao_bruto, granel_peso_liquido, granel_validacao_liquido,
       granel_erro_admissivel, granel_peso_minimo, granel_peso_maximo, granel_margem,
@@ -455,23 +443,15 @@ BEGIN
       COALESCE(s.saldo_atual, 0),
       COALESCE(ep_bool(li.item, 'embalado'), s.embalado, false),
       COALESCE(s.peso_liquido, ep_num(li.item, 'peso_liquido')),
-      ep_num(li.item, 'peso_bruto'),
       COALESCE(s.quantidade_embalagens, ep_num(li.item, 'quantidade_embalagens')),
       ep_num(li.item, 'quantidade_nf'),
       ep_num(li.item, 'quantidade_declarada'),
       ep_txt(li.item, 'tipo_recebimento'),
       ep_txt(li.item, 'tipo_embalagem'),
-      ep_txt(li.item, 'placa'),
-      ep_txt(li.item, 'barril'),
-      ep_num(li.item, 'volume'),
-      ep_num(li.item, 'tara'),
-      ep_txt(li.item, 'lacres'),
-      ep_txt(li.item, 'eslinga'),
-      ep_txt(li.item, 'gps'),
-      ep_txt(li.item, 'menor_teste'),
-      COALESCE(ep_bool(li.item, 'fracionado'), false),
-      ep_uuid(li.item ->> 'vasilhame_id'),
-      ep_uuid(li.item ->> 'vasilhame_existente_id'),
+      COALESCE(
+        ep_uuid(li.item ->> 'vasilhame_id'),
+        ep_uuid(li.item ->> 'vasilhame_existente_id')
+      ),
       COALESCE(s.status_wms, false),
       COALESCE(s.granel_pesagem, en.granel_pesagem, false),
       COALESCE(s.granel_ticket, en.granel_ticket),

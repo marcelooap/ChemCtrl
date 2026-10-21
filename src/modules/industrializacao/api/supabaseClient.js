@@ -8,6 +8,7 @@ import { rateLimitedFetch } from '@industrializacao/lib/rateLimitedFetch';
 import { HttpError, parseRetryAfterHeader } from '@industrializacao/lib/HttpError';
 import { withCache, invalidate } from '@industrializacao/lib/queryCache';
 import { getCacheTtlForEntity } from '@industrializacao/lib/rateLimitConfig';
+import { createMateriaPrimaEntity } from '@transbordo/services/estoqueProdutos';
 
 const supabaseUrl = 'https://cpzibnwytukcgxeamfhp.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwemlibnd5dHVrY2d4ZWFtZmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NTcyMjksImV4cCI6MjA5NzMzMzIyOX0.28Y66Ba_u1GyQNnDpsdPXLiGHvcn_BkjGOyHsBPSqR0';
@@ -34,8 +35,7 @@ const entityTableMap = {
   Perfil: 'perfis',
   PerfilPermissao: 'perfil_permissoes',
   Production: 'ind_lista_producoes',
-  // Pós-056; resolvePhysicalTable faz fallback para ind_estoque_mp.
-  RawMaterialStock: 'estoque_mp',
+  RawMaterialStock: 'estoque_produtos',
   // Mestre único cadastro_tanka (pós-049 cutover).
   Tank: 'cadastro_tanka',
   Transfer: 'ind_transbordo_ind',
@@ -94,7 +94,7 @@ const TABLE_FALLBACKS = {
   resultados_cq: ['resultados_cq', 'ind_cq_resultados'],
   cadastro_equipamentolab: ['cadastro_equipamentolab', 'ind_lista_equipamentoslab'],
   cadastro_pedidos_ind: ['cadastro_pedidos_ind', 'ind_lista_pedidos'],
-  estoque_mp: ['ep_mp', 'estoque_mp', 'ind_estoque_mp'],
+  estoque_produtos: ['estoque_produtos'],
   inventario: ['inventario', 'ind_lista_inventario'],
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
   // Pós-049 cutover: mestre único (sem fallback ind_cadastro_tanka).
@@ -474,12 +474,59 @@ const createEntity = (entityName, preferredTableName) => {
   };
 };
 
+function materiaPrimaEntity(entityName) {
+  const api = createMateriaPrimaEntity();
+  const touch = (eventType, record, old) => {
+    invalidate(entityName);
+    emitEntityChange(entityName, { eventType, new: record || null, old: old || null });
+  };
+  return {
+    list: (...args) => api.list(...args),
+    filter: (...args) => api.filter(...args),
+    get: (...args) => api.get(...args),
+    create: async (payload) => {
+      const row = await api.create(payload);
+      touch('INSERT', row);
+      return row;
+    },
+    update: async (id, payload) => {
+      const row = await api.update(id, payload);
+      touch('UPDATE', row);
+      return row;
+    },
+    delete: async (id) => {
+      const ok = await api.delete(id);
+      touch('DELETE', null, { id });
+      return ok;
+    },
+    bulkCreate: async (rows) => {
+      const created = await api.bulkCreate(rows);
+      created.forEach((row) => touch('INSERT', row));
+      return created;
+    },
+    bulkUpdate: async (rows) => {
+      const updated = await api.bulkUpdate(rows);
+      updated.forEach((row) => touch('UPDATE', row));
+      return updated;
+    },
+    deleteMany: async (query) => {
+      const result = await api.deleteMany(query);
+      touch('REFRESH');
+      return result;
+    },
+    subscribe: api.subscribe,
+    schema: api.schema,
+  };
+}
+
 export const createSupabaseEntities = () => {
   const entities = {};
   Object.entries(entityTableMap).forEach(([entityName, tableName]) => {
     // As colunas são descobertas na primeira escrita que precisar delas (getTableColumns),
     // e não no boot — evita 22 requisições antes do primeiro render.
-    entities[entityName] = createEntity(entityName, tableName);
+    entities[entityName] = entityName === 'RawMaterialStock'
+      ? materiaPrimaEntity(entityName)
+      : createEntity(entityName, tableName);
   });
   return entities;
 };

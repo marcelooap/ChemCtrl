@@ -1,10 +1,9 @@
 /**
  * Alocação do identificador de recebimento.
  * Com estoque unificado, um recebimento inteiro compartilha um E1, E2, E3…
- * gerado no banco. Sem a vista ep_mp, cada linha continua com MP###.
+ * gerado no banco.
  */
 import { callRPC } from '@industrializacao/api/rpcClient';
-import { getEntityTableName } from '@industrializacao/api/supabaseClient';
 const MP_RE = /^MP(\d+)$/i;
 const ENTRADA_RE = /^E(\d+)$/i;
 
@@ -65,7 +64,7 @@ export function allocateMpEntryIdsFromList(stocks = [], count = 1) {
  * entry_id e estoura uq_estoque_mp_entry_id.
  */
 async function estoqueUnificado() {
-  return (await getEntityTableName('RawMaterialStock')) === 'ep_mp';
+  return true;
 }
 
 export async function allocateSharedEntradaId() {

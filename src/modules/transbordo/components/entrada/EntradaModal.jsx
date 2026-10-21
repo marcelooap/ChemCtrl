@@ -23,6 +23,7 @@ import {
   getQuantidadeNotaFiscal,
 } from "@transbordo/lib/conversao";
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
+import { asLoteList } from "@transbordo/lib/lotesList";
 import { hasProdutoInformado } from "@transbordo/lib/entradaForm";
 import { entities } from "@transbordo/services/entities";
 import {
@@ -220,9 +221,10 @@ export default function EntradaModal({
       setDataEntrada(resolveEntradaData(editingEntrada));
       setClienteId(editingEntrada.cliente_id || "");
       setClienteNome(editingEntrada.cliente_nome || "");
+      const lotesFonte = asLoteList(editingEntrada.lotes);
       const lotesCarregados =
-        editingEntrada.lotes && editingEntrada.lotes.length > 0
-          ? editingEntrada.lotes.map((l) => mapLoteFromEntrada(l, editingEntrada))
+        lotesFonte.length > 0
+          ? lotesFonte.map((l) => mapLoteFromEntrada(l, editingEntrada))
           : [
               mapLoteFromEntrada(
                 {

@@ -3,6 +3,8 @@ import {
   isChemFlowConfigured,
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
+import { withLoteList } from '@transbordo/lib/lotesList';
+import { createEntradaEntity, createEstoqueEntity } from '@transbordo/services/estoqueProdutos';
 
 /**
  * Camada de dados do módulo Transbordo.
@@ -38,12 +40,23 @@ const TABLE_FALLBACKS = {
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
   // Pós-049 cutover: mestre único (sem fallback t_isotanques).
   cadastro_tanka: ['cadastro_tanka'],
-  // 061: estoque unificado. Se a vista ainda não existe, segue na tabela antiga.
-  t_entradas: ['ep_entradas', 't_entradas'],
-  t_estoque: ['ep_estoque', 't_estoque'],
 };
 const physicalTableCache = new Map();
 const physicalTableInFlight = new Map();
+
+/** ep_estoque devolve `lotes` como objeto; o app inteiro espera array. */
+const TABLES_WITH_LOTES = new Set(['t_entradas', 't_estoque']);
+
+function presentRows(preferredTable, rows) {
+  const list = rows || [];
+  if (!TABLES_WITH_LOTES.has(preferredTable)) return list;
+  return list.map(withLoteList);
+}
+
+function presentRow(preferredTable, row) {
+  if (!row || !TABLES_WITH_LOTES.has(preferredTable)) return row;
+  return withLoteList(row);
+}
 
 function isMissingRelationError(error) {
   const msg = String(error?.message || error?.details || '');
@@ -107,7 +120,7 @@ function createEntity(preferredTable) {
       }
       const { data, error } = await builder;
       throwIfError(error, `${table}.list`);
-      return data || [];
+      return presentRows(preferredTable, data);
     },
 
     async listPage({ sort, page = 1, pageSize = 50, select = '*' } = {}) {
@@ -124,7 +137,7 @@ function createEntity(preferredTable) {
         .order(column, { ascending })
         .range(from, to);
       throwIfError(error, `${table}.listPage`);
-      return { rows: data || [], page: p, pageSize: size, total: count };
+      return { rows: presentRows(preferredTable, data), page: p, pageSize: size, total: count };
     },
 
     async get(id) {
@@ -136,7 +149,7 @@ function createEntity(preferredTable) {
         .eq('id', id)
         .maybeSingle();
       throwIfError(error, `${table}.get`);
-      return data;
+      return presentRow(preferredTable, data);
     },
 
     async filter(query = {}) {
@@ -148,7 +161,7 @@ function createEntity(preferredTable) {
       }
       const { data, error } = await builder;
       throwIfError(error, `${table}.filter`);
-      return data || [];
+      return presentRows(preferredTable, data);
     },
 
     async create(payload) {
@@ -160,7 +173,7 @@ function createEntity(preferredTable) {
         .select()
         .single();
       throwIfError(error, `${table}.create`);
-      return data;
+      return presentRow(preferredTable, data);
     },
 
     async bulkCreate(payloads) {
@@ -172,7 +185,7 @@ function createEntity(preferredTable) {
         .insert(payloads)
         .select();
       throwIfError(error, `${table}.bulkCreate`);
-      return data || [];
+      return presentRows(preferredTable, data);
     },
 
     async update(id, payload) {
@@ -185,7 +198,7 @@ function createEntity(preferredTable) {
         .select()
         .single();
       throwIfError(error, `${table}.update`);
-      return data;
+      return presentRow(preferredTable, data);
     },
 
     async bulkUpdate(records) {
@@ -198,7 +211,7 @@ function createEntity(preferredTable) {
         )
       );
       results.forEach((r) => throwIfError(r.error, `${table}.bulkUpdate`));
-      return results.map((r) => r.data);
+      return results.map((r) => presentRow(preferredTable, r.data));
     },
 
     async delete(id) {
@@ -229,8 +242,8 @@ export const entities = {
   /** Mestre único cadastro_tanka (pós-049 cutover). */
   isotanques: createEntity('cadastro_tanka'),
   descontaminacoes: createEntity('t_descontaminacoes'),
-  entradas: createEntity('t_entradas'),
-  estoque: createEntity('t_estoque'),
+  entradas: createEntradaEntity(),
+  estoque: createEstoqueEntity(),
   transbordos: createEntity('t_transbordos'),
   vasilhames: createEntity('t_vasilhames'),
   saidas: createEntity('t_saidas'),
