@@ -594,6 +594,10 @@ export function createEstoqueEntity() {
       for (const key of ['produto_id', 'cliente_id', 'vasilhame_id']) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) patch[key] = nullIfEmpty(patch[key]);
       }
+      // ARMAZENAGEM: initial_stock é snapshot da quantidade recebida na linha.
+      if (Object.prototype.hasOwnProperty.call(patch, 'quantidade')) {
+        patch.initial_stock = patch.quantidade;
+      }
       assertConfigured('estoque.update');
       const { data, error } = await chemflowSupabase
         .from(TABLE)
@@ -633,6 +637,7 @@ export function createEstoqueEntity() {
 
 function densityText(value) {
   if (value == null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return String(value);
 }
 
@@ -650,7 +655,8 @@ function toMateriaPrima(row) {
     created_by_id: row.created_by_id,
     entry_id: row.id_entrada,
     entry_date: row.data,
-    mp_code: row.mp_code || row.produto_codigo,
+    // produto_codigo é a fonte oficial; mp_code na API é só o nome lógico legado.
+    mp_code: row.produto_codigo,
     mp_name: row.produto_nome,
     client: row.cliente_nome,
     lot: row.lote,
@@ -663,7 +669,6 @@ function toMateriaPrima(row) {
     unit: row.unidade_medida,
     unit_price: row.preco_unitario,
     density: densityNumber(row.densidade),
-    status: row.status,
     status_wms: row.status_wms,
     observations: row.observations,
     tank_storage: row.tank_storage,
@@ -682,7 +687,6 @@ function rowFromMp(payload, ids) {
     origem: 'MATERIA_PRIMA',
     produto_nome: nome,
     produto_codigo: nullIfEmpty(payload.mp_code),
-    mp_code: nullIfEmpty(payload.mp_code),
     cliente_nome: nullIfEmpty(payload.client),
     data: payload.entry_date || todayISO(),
     nota_fiscal: nullIfEmpty(payload.nota_fiscal),
@@ -696,7 +700,6 @@ function rowFromMp(payload, ids) {
     unidade_medida: payload.unit || 'kg',
     preco_unitario: payload.unit_price ?? null,
     saldo_atual: Number(payload.current_stock ?? payload.initial_stock) || 0,
-    status: nullIfEmpty(payload.status),
     status_wms: Boolean(payload.status_wms),
     observations: nullIfEmpty(payload.observations),
     tank_storage: payload.tank_storage ?? null,
@@ -706,7 +709,6 @@ function rowFromMp(payload, ids) {
     packaging_quantity: payload.packaging_quantity ?? null,
     public_token: nullIfEmpty(payload.public_token),
     legacy_entrada_id: ids.legacyEntradaId,
-    legacy_mp_id: /^[0-9a-f-]{36}$/i.test(String(ids.mpId)) ? ids.mpId : null,
     legacy_mp_id_text: ids.mpId,
     legacy_mp_entry_id: ids.idEntrada,
     created_by_id: nullIfEmpty(payload.created_by_id),
@@ -740,7 +742,7 @@ function applyMpFilter(builder, query) {
     else if (key === 'client') next = next.eq('cliente_nome', value);
     else if (key === 'lot') next = next.eq('lote', value);
     else if (key === 'mp_name') next = next.eq('produto_nome', value);
-    else if (key === 'mp_code') next = next.eq('mp_code', value);
+    else if (key === 'mp_code') next = next.eq('produto_codigo', value);
     else if (key === 'supplier') next = next.eq('fornecedor', value);
     else next = next.eq(key, value);
   }
@@ -794,7 +796,6 @@ export function createMateriaPrimaEntity() {
       if (payload.mp_name != null) patch.produto_nome = payload.mp_name;
       if (payload.mp_code != null) {
         patch.produto_codigo = nullIfEmpty(payload.mp_code);
-        patch.mp_code = nullIfEmpty(payload.mp_code);
       }
       if (payload.client != null) patch.cliente_nome = nullIfEmpty(payload.client);
       if (payload.entry_date != null) patch.data = payload.entry_date;
@@ -808,7 +809,6 @@ export function createMateriaPrimaEntity() {
       if (payload.unit != null) patch.unidade_medida = payload.unit || 'kg';
       if (payload.unit_price != null) patch.preco_unitario = payload.unit_price;
       if (payload.current_stock != null) patch.saldo_atual = payload.current_stock;
-      if (payload.status != null) patch.status = nullIfEmpty(payload.status);
       if (payload.status_wms != null) patch.status_wms = Boolean(payload.status_wms);
       if (payload.observations != null) patch.observations = nullIfEmpty(payload.observations);
       if (payload.tank_storage != null) patch.tank_storage = payload.tank_storage;

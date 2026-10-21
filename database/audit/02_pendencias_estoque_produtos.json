@@ -1,0 +1,3347 @@
+{
+  "generated_at": "2026-10-21T19:08:11.713Z",
+  "row_count": 351,
+  "ref_tables": {
+    "cadastro_produtos_count": 270,
+    "t_clientes_count": 15,
+    "t_vasilhames_count": 185,
+    "refErrors": {}
+  },
+  "foreign_keys": {
+    "produto_id": {
+      "filled": 101,
+      "null": 250,
+      "orphan": [],
+      "orphan_count": 0
+    },
+    "cliente_id": {
+      "filled": 101,
+      "null": 250,
+      "orphan": [],
+      "orphan_count": 0
+    },
+    "vasilhame_id": {
+      "filled": 5,
+      "null": 346,
+      "orphan": [],
+      "orphan_count": 0
+    }
+  },
+  "initial_stock_divergence_armazenagem": [],
+  "densidade": {
+    "non_numeric_count": 0,
+    "by_normalize_kind": {},
+    "rows": []
+  },
+  "legacy_entrada_codigo": {
+    "filled": 101,
+    "same_as_id_entrada": 20,
+    "sample_diff": [
+      {
+        "id": 1,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E113",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 2,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E113",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 3,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E047",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 4,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 5,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 6,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 7,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 8,
+        "id_entrada": "E230",
+        "legacy_entrada_codigo": "E115",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 9,
+        "id_entrada": "E231",
+        "legacy_entrada_codigo": "E116",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 10,
+        "id_entrada": "E232",
+        "legacy_entrada_codigo": "E117",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 11,
+        "id_entrada": "E233",
+        "legacy_entrada_codigo": "E118",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 12,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 13,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 14,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 15,
+        "id_entrada": "E235",
+        "legacy_entrada_codigo": "E120",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 16,
+        "id_entrada": "E235",
+        "legacy_entrada_codigo": "E120",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 17,
+        "id_entrada": "E236",
+        "legacy_entrada_codigo": "E121",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 18,
+        "id_entrada": "E237",
+        "legacy_entrada_codigo": "E122",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 19,
+        "id_entrada": "E238",
+        "legacy_entrada_codigo": "E123",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 20,
+        "id_entrada": "E239",
+        "legacy_entrada_codigo": "E124",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 21,
+        "id_entrada": "E240",
+        "legacy_entrada_codigo": "E125",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 22,
+        "id_entrada": "E241",
+        "legacy_entrada_codigo": "E126",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 23,
+        "id_entrada": "E242",
+        "legacy_entrada_codigo": "E128",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 24,
+        "id_entrada": "E244",
+        "legacy_entrada_codigo": "E130",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 25,
+        "id_entrada": "E246",
+        "legacy_entrada_codigo": "E133",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 26,
+        "id_entrada": "E249",
+        "legacy_entrada_codigo": "E136",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 27,
+        "id_entrada": "E254",
+        "legacy_entrada_codigo": "E141",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 28,
+        "id_entrada": "E255",
+        "legacy_entrada_codigo": "E142",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 29,
+        "id_entrada": "E256",
+        "legacy_entrada_codigo": "E143",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 30,
+        "id_entrada": "E257",
+        "legacy_entrada_codigo": "E144",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      }
+    ],
+    "all_patterns": [
+      {
+        "id": 1,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E113",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 2,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E113",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 3,
+        "id_entrada": "E228",
+        "legacy_entrada_codigo": "E047",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 4,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 5,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 6,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 7,
+        "id_entrada": "E229",
+        "legacy_entrada_codigo": "E114",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 8,
+        "id_entrada": "E230",
+        "legacy_entrada_codigo": "E115",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 9,
+        "id_entrada": "E231",
+        "legacy_entrada_codigo": "E116",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 10,
+        "id_entrada": "E232",
+        "legacy_entrada_codigo": "E117",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 11,
+        "id_entrada": "E233",
+        "legacy_entrada_codigo": "E118",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 12,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 13,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 14,
+        "id_entrada": "E234",
+        "legacy_entrada_codigo": "E119",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 15,
+        "id_entrada": "E235",
+        "legacy_entrada_codigo": "E120",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 16,
+        "id_entrada": "E235",
+        "legacy_entrada_codigo": "E120",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 17,
+        "id_entrada": "E236",
+        "legacy_entrada_codigo": "E121",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 18,
+        "id_entrada": "E237",
+        "legacy_entrada_codigo": "E122",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 19,
+        "id_entrada": "E238",
+        "legacy_entrada_codigo": "E123",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 20,
+        "id_entrada": "E239",
+        "legacy_entrada_codigo": "E124",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 21,
+        "id_entrada": "E240",
+        "legacy_entrada_codigo": "E125",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 22,
+        "id_entrada": "E241",
+        "legacy_entrada_codigo": "E126",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 23,
+        "id_entrada": "E242",
+        "legacy_entrada_codigo": "E128",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 24,
+        "id_entrada": "E244",
+        "legacy_entrada_codigo": "E130",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 25,
+        "id_entrada": "E246",
+        "legacy_entrada_codigo": "E133",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 26,
+        "id_entrada": "E249",
+        "legacy_entrada_codigo": "E136",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 27,
+        "id_entrada": "E254",
+        "legacy_entrada_codigo": "E141",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 28,
+        "id_entrada": "E255",
+        "legacy_entrada_codigo": "E142",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 29,
+        "id_entrada": "E256",
+        "legacy_entrada_codigo": "E143",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 30,
+        "id_entrada": "E257",
+        "legacy_entrada_codigo": "E144",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 31,
+        "id_entrada": "E258",
+        "legacy_entrada_codigo": "E145",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 32,
+        "id_entrada": "E259",
+        "legacy_entrada_codigo": "E146",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 33,
+        "id_entrada": "E260",
+        "legacy_entrada_codigo": "E147",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 34,
+        "id_entrada": "E261",
+        "legacy_entrada_codigo": "E148",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 35,
+        "id_entrada": "E262",
+        "legacy_entrada_codigo": "E149",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 36,
+        "id_entrada": "E263",
+        "legacy_entrada_codigo": "E150",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 37,
+        "id_entrada": "E264",
+        "legacy_entrada_codigo": "E151",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 38,
+        "id_entrada": "E265",
+        "legacy_entrada_codigo": "E152",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 39,
+        "id_entrada": "E266",
+        "legacy_entrada_codigo": "E153",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 40,
+        "id_entrada": "E267",
+        "legacy_entrada_codigo": "E154",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 41,
+        "id_entrada": "E268",
+        "legacy_entrada_codigo": "E155",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 42,
+        "id_entrada": "E269",
+        "legacy_entrada_codigo": "E156",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 43,
+        "id_entrada": "E270",
+        "legacy_entrada_codigo": "E158",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 44,
+        "id_entrada": "E271",
+        "legacy_entrada_codigo": "E159",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 45,
+        "id_entrada": "E272",
+        "legacy_entrada_codigo": "E160",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 46,
+        "id_entrada": "E273",
+        "legacy_entrada_codigo": "E161",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 47,
+        "id_entrada": "E274",
+        "legacy_entrada_codigo": "E162",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 48,
+        "id_entrada": "E275",
+        "legacy_entrada_codigo": "E163",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 49,
+        "id_entrada": "E276",
+        "legacy_entrada_codigo": "E164",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 50,
+        "id_entrada": "E277",
+        "legacy_entrada_codigo": "E165",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 51,
+        "id_entrada": "E278",
+        "legacy_entrada_codigo": "E166",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 52,
+        "id_entrada": "E280",
+        "legacy_entrada_codigo": "E168",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 53,
+        "id_entrada": "E281",
+        "legacy_entrada_codigo": "E169",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 54,
+        "id_entrada": "E282",
+        "legacy_entrada_codigo": "E170",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 55,
+        "id_entrada": "E283",
+        "legacy_entrada_codigo": "E171",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 56,
+        "id_entrada": "E284",
+        "legacy_entrada_codigo": "E172",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 57,
+        "id_entrada": "E285",
+        "legacy_entrada_codigo": "E173",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 58,
+        "id_entrada": "E286",
+        "legacy_entrada_codigo": "E174",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 59,
+        "id_entrada": "E287",
+        "legacy_entrada_codigo": "E175",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 60,
+        "id_entrada": "E288",
+        "legacy_entrada_codigo": "E176",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 61,
+        "id_entrada": "E289",
+        "legacy_entrada_codigo": "E178",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 62,
+        "id_entrada": "E290",
+        "legacy_entrada_codigo": "E179",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 63,
+        "id_entrada": "E291",
+        "legacy_entrada_codigo": "E180",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 64,
+        "id_entrada": "E293",
+        "legacy_entrada_codigo": "E182",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 65,
+        "id_entrada": "E304",
+        "legacy_entrada_codigo": "E185",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 66,
+        "id_entrada": "E305",
+        "legacy_entrada_codigo": "E186",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 67,
+        "id_entrada": "E307",
+        "legacy_entrada_codigo": "E188",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 68,
+        "id_entrada": "E308",
+        "legacy_entrada_codigo": "E189",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 69,
+        "id_entrada": "E309",
+        "legacy_entrada_codigo": "E190",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 70,
+        "id_entrada": "E310",
+        "legacy_entrada_codigo": "E191",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 71,
+        "id_entrada": "E311",
+        "legacy_entrada_codigo": "E193",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 72,
+        "id_entrada": "E312",
+        "legacy_entrada_codigo": "E194",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 73,
+        "id_entrada": "E313",
+        "legacy_entrada_codigo": "E195",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 74,
+        "id_entrada": "E314",
+        "legacy_entrada_codigo": "E199",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 75,
+        "id_entrada": "E315",
+        "legacy_entrada_codigo": "E200",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 76,
+        "id_entrada": "E316",
+        "legacy_entrada_codigo": "E201",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 77,
+        "id_entrada": "E318",
+        "legacy_entrada_codigo": "E203",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 78,
+        "id_entrada": "E318",
+        "legacy_entrada_codigo": "E203",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 79,
+        "id_entrada": "E319",
+        "legacy_entrada_codigo": "E204",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 80,
+        "id_entrada": "E320",
+        "legacy_entrada_codigo": "E205",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 81,
+        "id_entrada": "E321",
+        "legacy_entrada_codigo": "E206",
+        "same_as_id_entrada": false,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 332,
+        "id_entrada": "E323",
+        "legacy_entrada_codigo": "E323",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 333,
+        "id_entrada": "E323",
+        "legacy_entrada_codigo": "E323",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 334,
+        "id_entrada": "E324",
+        "legacy_entrada_codigo": "E324",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 335,
+        "id_entrada": "E325",
+        "legacy_entrada_codigo": "E325",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 336,
+        "id_entrada": "E326",
+        "legacy_entrada_codigo": "E326",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 337,
+        "id_entrada": "E326",
+        "legacy_entrada_codigo": "E326",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 338,
+        "id_entrada": "E326",
+        "legacy_entrada_codigo": "E326",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 339,
+        "id_entrada": "E326",
+        "legacy_entrada_codigo": "E326",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 340,
+        "id_entrada": "E327",
+        "legacy_entrada_codigo": "E327",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 341,
+        "id_entrada": "E328",
+        "legacy_entrada_codigo": "E328",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 342,
+        "id_entrada": "E328",
+        "legacy_entrada_codigo": "E328",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 343,
+        "id_entrada": "E329",
+        "legacy_entrada_codigo": "E329",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 344,
+        "id_entrada": "E329",
+        "legacy_entrada_codigo": "E329",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 345,
+        "id_entrada": "E330",
+        "legacy_entrada_codigo": "E330",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 346,
+        "id_entrada": "E330",
+        "legacy_entrada_codigo": "E330",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 347,
+        "id_entrada": "E330",
+        "legacy_entrada_codigo": "E330",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 348,
+        "id_entrada": "E331",
+        "legacy_entrada_codigo": "E331",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 349,
+        "id_entrada": "E332",
+        "legacy_entrada_codigo": "E332",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 350,
+        "id_entrada": "E332",
+        "legacy_entrada_codigo": "E332",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      },
+      {
+        "id": 351,
+        "id_entrada": "E332",
+        "legacy_entrada_codigo": "E332",
+        "same_as_id_entrada": true,
+        "looks_legacy_mp": false,
+        "looks_e_code": true
+      }
+    ]
+  },
+  "legacy_mp_entry_id": {
+    "filled": 250,
+    "same_as_id_entrada": 0,
+    "sample_diff": [
+      {
+        "id": 82,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E1",
+        "legacy_mp_entry_id": "MP002",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 83,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E2",
+        "legacy_mp_entry_id": "MP002-DUP2",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 84,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E3",
+        "legacy_mp_entry_id": "MP003",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 85,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E4",
+        "legacy_mp_entry_id": "MP004",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 86,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E5",
+        "legacy_mp_entry_id": "MP005",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 87,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E6",
+        "legacy_mp_entry_id": "MP006",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 88,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E7",
+        "legacy_mp_entry_id": "MP007",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 89,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E8",
+        "legacy_mp_entry_id": "MP008",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 90,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E9",
+        "legacy_mp_entry_id": "MP009",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 91,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E10",
+        "legacy_mp_entry_id": "MP010",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 92,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E11",
+        "legacy_mp_entry_id": "MP011",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 93,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E12",
+        "legacy_mp_entry_id": "MP012",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 94,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E13",
+        "legacy_mp_entry_id": "MP013",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 95,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E14",
+        "legacy_mp_entry_id": "MP014",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 96,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E15",
+        "legacy_mp_entry_id": "MP015",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 97,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E16",
+        "legacy_mp_entry_id": "MP016",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 98,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E17",
+        "legacy_mp_entry_id": "MP017",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 99,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E18",
+        "legacy_mp_entry_id": "MP019",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 100,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E19",
+        "legacy_mp_entry_id": "MP020",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 101,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E20",
+        "legacy_mp_entry_id": "MP021",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 102,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E21",
+        "legacy_mp_entry_id": "MP022",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 103,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E22",
+        "legacy_mp_entry_id": "MP023",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 104,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E23",
+        "legacy_mp_entry_id": "MP024",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 105,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E24",
+        "legacy_mp_entry_id": "MP025",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 106,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E25",
+        "legacy_mp_entry_id": "MP027",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 107,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E26",
+        "legacy_mp_entry_id": "MP028",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 108,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E27",
+        "legacy_mp_entry_id": "MP029",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 109,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E28",
+        "legacy_mp_entry_id": "MP030",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 110,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E29",
+        "legacy_mp_entry_id": "MP032",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 111,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E30",
+        "legacy_mp_entry_id": "MP035",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      }
+    ],
+    "all_patterns": [
+      {
+        "id": 82,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E1",
+        "legacy_mp_entry_id": "MP002",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 83,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E2",
+        "legacy_mp_entry_id": "MP002-DUP2",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 84,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E3",
+        "legacy_mp_entry_id": "MP003",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 85,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E4",
+        "legacy_mp_entry_id": "MP004",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 86,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E5",
+        "legacy_mp_entry_id": "MP005",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 87,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E6",
+        "legacy_mp_entry_id": "MP006",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 88,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E7",
+        "legacy_mp_entry_id": "MP007",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 89,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E8",
+        "legacy_mp_entry_id": "MP008",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 90,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E9",
+        "legacy_mp_entry_id": "MP009",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 91,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E10",
+        "legacy_mp_entry_id": "MP010",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 92,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E11",
+        "legacy_mp_entry_id": "MP011",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 93,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E12",
+        "legacy_mp_entry_id": "MP012",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 94,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E13",
+        "legacy_mp_entry_id": "MP013",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 95,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E14",
+        "legacy_mp_entry_id": "MP014",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 96,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E15",
+        "legacy_mp_entry_id": "MP015",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 97,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E16",
+        "legacy_mp_entry_id": "MP016",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 98,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E17",
+        "legacy_mp_entry_id": "MP017",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 99,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E18",
+        "legacy_mp_entry_id": "MP019",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 100,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E19",
+        "legacy_mp_entry_id": "MP020",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 101,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E20",
+        "legacy_mp_entry_id": "MP021",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 102,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E21",
+        "legacy_mp_entry_id": "MP022",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 103,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E22",
+        "legacy_mp_entry_id": "MP023",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 104,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E23",
+        "legacy_mp_entry_id": "MP024",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 105,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E24",
+        "legacy_mp_entry_id": "MP025",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 106,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E25",
+        "legacy_mp_entry_id": "MP027",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 107,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E26",
+        "legacy_mp_entry_id": "MP028",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 108,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E27",
+        "legacy_mp_entry_id": "MP029",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 109,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E28",
+        "legacy_mp_entry_id": "MP030",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 110,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E29",
+        "legacy_mp_entry_id": "MP032",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 111,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E30",
+        "legacy_mp_entry_id": "MP035",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 112,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E31",
+        "legacy_mp_entry_id": "MP036",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 113,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E32",
+        "legacy_mp_entry_id": "MP037",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 114,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E33",
+        "legacy_mp_entry_id": "MP038",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 115,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E34",
+        "legacy_mp_entry_id": "MP039",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 116,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E35",
+        "legacy_mp_entry_id": "MP040",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 117,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E36",
+        "legacy_mp_entry_id": "MP041",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 118,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E37",
+        "legacy_mp_entry_id": "MP042",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 119,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E38",
+        "legacy_mp_entry_id": "MP043",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 120,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E39",
+        "legacy_mp_entry_id": "MP044",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 121,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E40",
+        "legacy_mp_entry_id": "MP045",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 122,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E41",
+        "legacy_mp_entry_id": "MP046",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 123,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E42",
+        "legacy_mp_entry_id": "MP047",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 124,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E43",
+        "legacy_mp_entry_id": "MP048",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 125,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E44",
+        "legacy_mp_entry_id": "MP049",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 126,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E45",
+        "legacy_mp_entry_id": "MP050",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 127,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E46",
+        "legacy_mp_entry_id": "MP051",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 128,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E47",
+        "legacy_mp_entry_id": "MP052",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 129,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E48",
+        "legacy_mp_entry_id": "MP053",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 130,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E49",
+        "legacy_mp_entry_id": "MP056",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 131,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E50",
+        "legacy_mp_entry_id": "MP057",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 132,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E51",
+        "legacy_mp_entry_id": "MP058",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 133,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E52",
+        "legacy_mp_entry_id": "MP059",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 134,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E53",
+        "legacy_mp_entry_id": "MP060",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 135,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E54",
+        "legacy_mp_entry_id": "MP061",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 136,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E55",
+        "legacy_mp_entry_id": "MP062",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 137,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E56",
+        "legacy_mp_entry_id": "MP063",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 138,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E57",
+        "legacy_mp_entry_id": "MP064",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 139,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E58",
+        "legacy_mp_entry_id": "MP065",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 140,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E59",
+        "legacy_mp_entry_id": "MP066",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 141,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E60",
+        "legacy_mp_entry_id": "MP076",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 142,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E61",
+        "legacy_mp_entry_id": "MP066-DUP2",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 143,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E62",
+        "legacy_mp_entry_id": "MP066-DUP3",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 144,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E63",
+        "legacy_mp_entry_id": "MP067",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 145,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E64",
+        "legacy_mp_entry_id": "MP068",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 146,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E65",
+        "legacy_mp_entry_id": "MP069",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 147,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E66",
+        "legacy_mp_entry_id": "MP070",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 148,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E67",
+        "legacy_mp_entry_id": "MP071",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 149,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E68",
+        "legacy_mp_entry_id": "MP072",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 150,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E69",
+        "legacy_mp_entry_id": "MP073",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 151,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E70",
+        "legacy_mp_entry_id": "MP074",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 152,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E71",
+        "legacy_mp_entry_id": "MP075",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 153,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E72",
+        "legacy_mp_entry_id": "MP076-DUP2",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 154,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E73",
+        "legacy_mp_entry_id": "MP077",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 155,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E74",
+        "legacy_mp_entry_id": "MP078",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 156,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E75",
+        "legacy_mp_entry_id": "MP079",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 157,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E76",
+        "legacy_mp_entry_id": "MP080",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 158,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E77",
+        "legacy_mp_entry_id": "MP081",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 159,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E78",
+        "legacy_mp_entry_id": "MP082",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 160,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E79",
+        "legacy_mp_entry_id": "MP083",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 161,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E80",
+        "legacy_mp_entry_id": "MP084",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 162,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E81",
+        "legacy_mp_entry_id": "MP085",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 163,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E82",
+        "legacy_mp_entry_id": "MP086",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 164,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E83",
+        "legacy_mp_entry_id": "MP087",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 165,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E84",
+        "legacy_mp_entry_id": "MP088",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 166,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E85",
+        "legacy_mp_entry_id": "MP089",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 167,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E86",
+        "legacy_mp_entry_id": "MP090",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 168,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E87",
+        "legacy_mp_entry_id": "MP091",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 169,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E88",
+        "legacy_mp_entry_id": "MP092",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 170,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E89",
+        "legacy_mp_entry_id": "MP093",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 171,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E90",
+        "legacy_mp_entry_id": "MP094",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 172,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E91",
+        "legacy_mp_entry_id": "MP095",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 173,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E92",
+        "legacy_mp_entry_id": "MP096",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 174,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E93",
+        "legacy_mp_entry_id": "MP097",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 175,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E94",
+        "legacy_mp_entry_id": "MP098",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 176,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E95",
+        "legacy_mp_entry_id": "MP099",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 177,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E96",
+        "legacy_mp_entry_id": "MP100",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 178,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E97",
+        "legacy_mp_entry_id": "MP101",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 179,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E98",
+        "legacy_mp_entry_id": "MP102",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 180,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E99",
+        "legacy_mp_entry_id": "MP103",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 181,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E100",
+        "legacy_mp_entry_id": "MP104",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 182,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E101",
+        "legacy_mp_entry_id": "MP105",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 183,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E102",
+        "legacy_mp_entry_id": "MP106",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 184,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E103",
+        "legacy_mp_entry_id": "MP107",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 185,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E104",
+        "legacy_mp_entry_id": "MP108",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 186,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E105",
+        "legacy_mp_entry_id": "MP109",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 187,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E106",
+        "legacy_mp_entry_id": "MP110",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 188,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E107",
+        "legacy_mp_entry_id": "MP111",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 189,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E108",
+        "legacy_mp_entry_id": "MP112",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 190,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E109",
+        "legacy_mp_entry_id": "MP113",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 191,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E110",
+        "legacy_mp_entry_id": "MP114",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 192,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E111",
+        "legacy_mp_entry_id": "MP115",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 193,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E112",
+        "legacy_mp_entry_id": "MP116",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 194,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E113",
+        "legacy_mp_entry_id": "MP117",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 195,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E114",
+        "legacy_mp_entry_id": "MP118",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 196,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E115",
+        "legacy_mp_entry_id": "MP119",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 197,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E116",
+        "legacy_mp_entry_id": "MP120",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 198,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E117",
+        "legacy_mp_entry_id": "MP121",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 199,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E118",
+        "legacy_mp_entry_id": "MP122",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 200,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E119",
+        "legacy_mp_entry_id": "MP123",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 201,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E120",
+        "legacy_mp_entry_id": "MP124",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 202,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E121",
+        "legacy_mp_entry_id": "MP125",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 203,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E122",
+        "legacy_mp_entry_id": "MP126",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 204,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E123",
+        "legacy_mp_entry_id": "MP127",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 205,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E124",
+        "legacy_mp_entry_id": "MP128",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 206,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E125",
+        "legacy_mp_entry_id": "MP129",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 207,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E126",
+        "legacy_mp_entry_id": "MP130",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 208,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E127",
+        "legacy_mp_entry_id": "MP131",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 209,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E128",
+        "legacy_mp_entry_id": "MP132",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 210,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E129",
+        "legacy_mp_entry_id": "MP133",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 211,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E130",
+        "legacy_mp_entry_id": "MP134",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 212,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E131",
+        "legacy_mp_entry_id": "MP135",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 213,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E132",
+        "legacy_mp_entry_id": "MP136",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 214,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E133",
+        "legacy_mp_entry_id": "MP137",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 215,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E134",
+        "legacy_mp_entry_id": "MP138",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 216,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E135",
+        "legacy_mp_entry_id": "MP139",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 217,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E136",
+        "legacy_mp_entry_id": "MP140",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 218,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E137",
+        "legacy_mp_entry_id": "MP141",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 219,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E138",
+        "legacy_mp_entry_id": "MP144",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 220,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E139",
+        "legacy_mp_entry_id": "MP145",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 221,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E140",
+        "legacy_mp_entry_id": "MP146",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 222,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E141",
+        "legacy_mp_entry_id": "MP147",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 223,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E142",
+        "legacy_mp_entry_id": "MP148",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 224,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E143",
+        "legacy_mp_entry_id": "MP149",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 225,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E144",
+        "legacy_mp_entry_id": "MP150",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 226,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E145",
+        "legacy_mp_entry_id": "MP150-DUP2",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 227,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E146",
+        "legacy_mp_entry_id": "MP151",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 228,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E147",
+        "legacy_mp_entry_id": "MP152",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 229,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E148",
+        "legacy_mp_entry_id": "MP153",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 230,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E149",
+        "legacy_mp_entry_id": "MP154",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 231,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E150",
+        "legacy_mp_entry_id": "MP155",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 232,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E151",
+        "legacy_mp_entry_id": "MP156",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 233,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E152",
+        "legacy_mp_entry_id": "MP157",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 234,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E153",
+        "legacy_mp_entry_id": "MP158",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 235,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E154",
+        "legacy_mp_entry_id": "MP159",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 236,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E155",
+        "legacy_mp_entry_id": "MP160",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 237,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E156",
+        "legacy_mp_entry_id": "MP161",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 238,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E157",
+        "legacy_mp_entry_id": "MP162",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 239,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E158",
+        "legacy_mp_entry_id": "MP165",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 240,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E159",
+        "legacy_mp_entry_id": "MP164",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 241,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E160",
+        "legacy_mp_entry_id": "MP167",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 242,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E161",
+        "legacy_mp_entry_id": "MP168",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 243,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E162",
+        "legacy_mp_entry_id": "MP163",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 244,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E163",
+        "legacy_mp_entry_id": "MP170",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 245,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E164",
+        "legacy_mp_entry_id": "MP166",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 246,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E165",
+        "legacy_mp_entry_id": "MP169",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 247,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E166",
+        "legacy_mp_entry_id": "MP171",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 248,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E167",
+        "legacy_mp_entry_id": "MP172",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 249,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E168",
+        "legacy_mp_entry_id": "MP173",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 250,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E169",
+        "legacy_mp_entry_id": "MP174",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 251,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E170",
+        "legacy_mp_entry_id": "MP176",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 252,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E171",
+        "legacy_mp_entry_id": "MP177",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 253,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E172",
+        "legacy_mp_entry_id": "MP179",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 254,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E173",
+        "legacy_mp_entry_id": "MP180",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 255,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E174",
+        "legacy_mp_entry_id": "MP181",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 256,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E175",
+        "legacy_mp_entry_id": "MP182",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 257,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E176",
+        "legacy_mp_entry_id": "MP183",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 258,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E177",
+        "legacy_mp_entry_id": "MP184",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 259,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E178",
+        "legacy_mp_entry_id": "MP187",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 260,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E179",
+        "legacy_mp_entry_id": "MP188",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 261,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E180",
+        "legacy_mp_entry_id": "MP189",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 262,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E181",
+        "legacy_mp_entry_id": "MP190",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 263,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E182",
+        "legacy_mp_entry_id": "MP191",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 264,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E183",
+        "legacy_mp_entry_id": "MP192",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 265,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E184",
+        "legacy_mp_entry_id": "MP193",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 266,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E185",
+        "legacy_mp_entry_id": "MP194",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 267,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E186",
+        "legacy_mp_entry_id": "MP195",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 268,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E187",
+        "legacy_mp_entry_id": "MP196",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 269,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E188",
+        "legacy_mp_entry_id": "MP197",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 270,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E189",
+        "legacy_mp_entry_id": "MP198",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 271,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E190",
+        "legacy_mp_entry_id": "MP199",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 272,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E191",
+        "legacy_mp_entry_id": "MP200",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 273,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E192",
+        "legacy_mp_entry_id": "MP201",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 274,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E193",
+        "legacy_mp_entry_id": "MP202",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 275,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E194",
+        "legacy_mp_entry_id": "MP203",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 276,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E195",
+        "legacy_mp_entry_id": "MP204",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 277,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E196",
+        "legacy_mp_entry_id": "MP205",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 278,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E197",
+        "legacy_mp_entry_id": "MP206",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 279,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E198",
+        "legacy_mp_entry_id": "MP207",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 280,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E199",
+        "legacy_mp_entry_id": "MP208",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 281,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E200",
+        "legacy_mp_entry_id": "MP209",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 282,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E201",
+        "legacy_mp_entry_id": "MP210",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 283,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E202",
+        "legacy_mp_entry_id": "MP211",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 284,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E203",
+        "legacy_mp_entry_id": "MP212",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 285,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E204",
+        "legacy_mp_entry_id": "MP213",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 286,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E205",
+        "legacy_mp_entry_id": "MP214",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 287,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E206",
+        "legacy_mp_entry_id": "MP215",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 288,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E207",
+        "legacy_mp_entry_id": "MP216",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 289,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E208",
+        "legacy_mp_entry_id": "MP218",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 290,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E209",
+        "legacy_mp_entry_id": "MP219",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 291,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E210",
+        "legacy_mp_entry_id": "MP220",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 292,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E211",
+        "legacy_mp_entry_id": "MP221",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 293,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E212",
+        "legacy_mp_entry_id": "MP223",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 294,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E213",
+        "legacy_mp_entry_id": "MP222",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 295,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E214",
+        "legacy_mp_entry_id": "MP224",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 296,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E215",
+        "legacy_mp_entry_id": "MP226",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 297,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E216",
+        "legacy_mp_entry_id": "MP225",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 298,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E217",
+        "legacy_mp_entry_id": "MP228",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 299,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E218",
+        "legacy_mp_entry_id": "MP229",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 300,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E219",
+        "legacy_mp_entry_id": "MP230",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 301,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E220",
+        "legacy_mp_entry_id": "MP227",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 302,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E221",
+        "legacy_mp_entry_id": "MP232",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 303,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E222",
+        "legacy_mp_entry_id": "MP231",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 304,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E223",
+        "legacy_mp_entry_id": "MP233",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 305,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E224",
+        "legacy_mp_entry_id": "MP236",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 306,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E225",
+        "legacy_mp_entry_id": "MP237",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 307,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E226",
+        "legacy_mp_entry_id": "MP238",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 308,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E227",
+        "legacy_mp_entry_id": "MP239",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 309,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E243",
+        "legacy_mp_entry_id": "MP240",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 310,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E245",
+        "legacy_mp_entry_id": "MP241",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 311,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E247",
+        "legacy_mp_entry_id": "MP242",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 312,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E248",
+        "legacy_mp_entry_id": "MP243",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 313,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E250",
+        "legacy_mp_entry_id": "MP244",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 314,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E251",
+        "legacy_mp_entry_id": "MP246",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 315,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E252",
+        "legacy_mp_entry_id": "MP247",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 316,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E253",
+        "legacy_mp_entry_id": "MP245",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 317,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E279",
+        "legacy_mp_entry_id": "MP248",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 318,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E292",
+        "legacy_mp_entry_id": "MP249",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 319,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E294",
+        "legacy_mp_entry_id": "MP253",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 320,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E295",
+        "legacy_mp_entry_id": "MP258",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 321,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E296",
+        "legacy_mp_entry_id": "MP255",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 322,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E297",
+        "legacy_mp_entry_id": "MP250",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 323,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E298",
+        "legacy_mp_entry_id": "MP256",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 324,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E299",
+        "legacy_mp_entry_id": "MP257",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 325,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E300",
+        "legacy_mp_entry_id": "MP251",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 326,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E301",
+        "legacy_mp_entry_id": "MP252",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 327,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E302",
+        "legacy_mp_entry_id": "MP254",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 328,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E303",
+        "legacy_mp_entry_id": "MP259",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 329,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E306",
+        "legacy_mp_entry_id": "MP260",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 330,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E317",
+        "legacy_mp_entry_id": "MP261",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      },
+      {
+        "id": 331,
+        "origem": "MATERIA_PRIMA",
+        "id_entrada": "E322",
+        "legacy_mp_entry_id": "MP262",
+        "same_as_id_entrada": false,
+        "looks_mp_prefix": true
+      }
+    ]
+  },
+  "rls_probe": {
+    "anon_select_ok": true,
+    "anon_select_status": 200,
+    "anon_update_without_session_status": 204,
+    "anon_update_allowed": true
+  },
+  "fk_ready": true
+}

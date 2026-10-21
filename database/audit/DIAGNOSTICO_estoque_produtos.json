@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-10-21T18:56:00Z",
+  "migration_066": "applied_by_user_sql_editor",
+  "verification": {
+    "drop_ok": true,
+    "columns_removed": ["mp_code", "legacy_mp_id", "status"],
+    "rows_before_backup": 348,
+    "rows_after": 351,
+    "by_origem_after": { "ARMAZENAGEM": 101, "MATERIA_PRIMA": 250 },
+    "rpc_get_public_raw_material_info": "ok",
+    "rpc_get_public_entrada_info": "ok",
+    "smoke_overall_ok": true
+  },
+  "limitations": [
+    "DATABASE_URL ausente nesta sessão: idx_scan/tamanhos de índice e RPCs adjust_* em BEGIN/ROLLBACK não executados via SQL direto",
+    "Backup JSON REST pré-066 com MD5 verificado; Pro/PITR confirmado pelo usuário",
+    "lint global falha em Tankagem.jsx preexistente; typecheck falha em UI shared preexistente; build OK"
+  ],
+  "requires_approval": [
+    "DROP legacy_entrada_codigo / legacy_mp_entry_id",
+    "Unificar initial_stock em quantidade",
+    "densidade text -> numeric (29 não numéricos)",
+    "FKs produto_id/cliente_id/vasilhame_id",
+    "Normalizar cabeçalho granel_*",
+    "RLS permissiva anon"
+  ]
+}
