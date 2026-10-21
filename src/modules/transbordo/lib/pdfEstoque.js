@@ -483,7 +483,9 @@ export function generateRelatorioEstoquePDF({
       ["Status WMS", item.status_wms ? "OK" : "NOK"],
       [
         "Origem",
-        item.origem === "industrializacao" ? "Industrialização" : "Transbordo",
+        item.origem === "industrializacao" || item.origem === "MATERIA_PRIMA"
+          ? "Matéria-prima"
+          : "Armazenagem",
       ],
       ["Recebimento", fmtDate(item.created_at || item.created_date)],
     ],

@@ -7,7 +7,69 @@ import { getClients } from './lib/client.mjs';
 import { fetchAllRows } from './lib/paginate.mjs';
 import { upsertBatch } from './lib/upsert.mjs';
 import { buildIdMap, loadMap } from './lib/id-map.mjs';
-import { transformIndRow } from './lib/remap.mjs';
+import { pickColumns, transformIndRow } from './lib/remap.mjs';
+
+const CQ_RESULTADO_COLUMNS = [
+  'id',
+  'created_at',
+  'updated_at',
+  'created_by_id',
+  'production_id',
+  'op_number',
+  'product',
+  'client',
+  'lot',
+  'date',
+  'analyst',
+  'status',
+  'observations',
+  'results',
+  'sample_photo_url',
+];
+
+/** Pós-053 a origem tem 1 linha por análise. O schema v2 ainda guarda results jsonb. */
+function collapseQualityResults(rows) {
+  const legacy = [];
+  const groups = new Map();
+  for (const row of rows) {
+    if (row?.resultado_id == null || row.resultado_id === '') {
+      legacy.push(row);
+      continue;
+    }
+    const key = String(row.resultado_id);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+
+  const collapsed = [];
+  for (const lines of groups.values()) {
+    const sorted = [...lines].sort(
+      (a, b) => (Number(a.linha_ordem) || 0) - (Number(b.linha_ordem) || 0),
+    );
+    const anchor = sorted[0];
+    const results = sorted
+      .filter((line) => (
+        String(line.analysis_name || '').trim()
+        || String(line.result || '').trim()
+        || String(line.specification || '').trim()
+      ))
+      .map((line) => ({
+        analysis_name: line.analysis_name || '',
+        methodology: line.methodology || '',
+        specification: line.specification || '',
+        unit: line.unit || '',
+        min_limit: line.min_limit ?? null,
+        max_limit: line.max_limit ?? null,
+        result: line.result ?? '',
+        status: line.analysis_status || '',
+      }));
+    collapsed.push({
+      ...anchor,
+      results: results.length ? results : (anchor.results ?? []),
+    });
+  }
+  return [...collapsed, ...legacy];
+}
 
 async function main() {
   console.log('=== 10 ind final ===');
@@ -108,20 +170,24 @@ async function main() {
 
   // cq_resultados
   {
-    const rows = await fetchAllRows(source, 'ind_cq_resultados');
-    console.log(`origem ind_cq_resultados: ${rows.length}`);
+    const sourceRows = await fetchAllRows(source, 'resultados_cq');
+    const rows = collapseQualityResults(sourceRows);
+    console.log(`origem resultados_cq: ${sourceRows.length} linha(s) -> ${rows.length} certificado(s)`);
     const idMap = buildIdMap(
       'cq_resultados',
       rows.map((r) => r.id)
     );
     const mapped = rows.map((row) =>
-      transformIndRow(row, {
-        idMap,
-        context: 'cq_resultados',
-        fks: [
-          { map: producoesMap, fields: ['production_id'], required: false },
-        ],
-      })
+      pickColumns(
+        transformIndRow(row, {
+          idMap,
+          context: 'cq_resultados',
+          fks: [
+            { map: producoesMap, fields: ['production_id'], required: false },
+          ],
+        }),
+        CQ_RESULTADO_COLUMNS,
+      )
     );
     const valid = mapped.filter((r) => r.production_id);
     const dropped = mapped.length - valid.length;

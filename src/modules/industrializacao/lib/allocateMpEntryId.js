@@ -1,10 +1,19 @@
 /**
- * Alocação de ID de registro do Estoque de MP (entry_id).
- * O próximo código sai do maior MP### já gravado, não da sequence.
+ * Alocação do identificador de recebimento.
+ * Com estoque unificado, um recebimento inteiro compartilha um E1, E2, E3…
+ * gerado no banco. Sem a vista ep_mp, cada linha continua com MP###.
  */
+import { callRPC } from '@industrializacao/api/rpcClient';
+import { getEntityTableName } from '@industrializacao/api/supabaseClient';
 const MP_RE = /^MP(\d+)$/i;
+const ENTRADA_RE = /^E(\d+)$/i;
 
 export function parseMpEntryNumber(entryId) {
+  const entrada = String(entryId || '').trim().match(ENTRADA_RE);
+  if (entrada) {
+    const n = parseInt(entrada[1], 10);
+    return Number.isFinite(n) ? n : 0;
+  }
   const m = String(entryId || '').match(MP_RE);
   if (!m) return 0;
   const n = parseInt(m[1], 10);
@@ -49,12 +58,25 @@ export function allocateMpEntryIdsFromList(stocks = [], count = 1) {
 }
 
 /**
- * Aloca N entry_ids ainda não usados em ind_estoque_mp.
+ * Aloca N entry_ids ainda não usados em estoque_mp.
  *
  * A sequence `ind_mp_entry_id_seq` fica atrás quando o estoque grava MP###
  * pelo maior código já carregado. Usar o nextval nesse caso repete um
- * entry_id e estoura uq_ind_estoque_mp_entry_id.
+ * entry_id e estoura uq_estoque_mp_entry_id.
  */
+async function estoqueUnificado() {
+  return (await getEntityTableName('RawMaterialStock')) === 'ep_mp';
+}
+
+export async function allocateSharedEntradaId() {
+  const code = await callRPC('next_entrada_id');
+  const id = String(code || '').trim().toUpperCase();
+  if (!/^E[1-9]\d*$/.test(id)) {
+    throw new Error('Não foi possível gerar o id_entrada.');
+  }
+  return id;
+}
+
 export async function allocateMpEntryIds(
   RawMaterialStockEntity,
   count = 1,
@@ -62,6 +84,10 @@ export async function allocateMpEntryIds(
 ) {
   const qty = Math.max(1, Number(count) || 1);
   const skip = Math.max(0, Number(offset) || 0);
+  if (await estoqueUnificado()) {
+    const shared = await allocateSharedEntradaId();
+    return Array.from({ length: qty }, () => shared);
+  }
   if (!RawMaterialStockEntity?.list) {
     throw new Error('RawMaterialStock indisponível para alocar ID');
   }

@@ -30,7 +30,7 @@ import {
 } from '@industrializacao/lib/mpStockForm';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
-import { allocateMpEntryIdsFromList, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
+import { allocateMpEntryIds, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
 import { printRawMaterialLabel } from '@industrializacao/lib/labelprint';
 import { ensureRawMaterialStockPublicToken } from '@industrializacao/lib/ensurePublicToken';
 import {
@@ -304,7 +304,10 @@ export default function Estoque() {
           delete data.id;
           return data;
         });
-        const entryIds = allocateMpEntryIdsFromList(items, rows.length);
+        const entryIds = await allocateMpEntryIds(
+          base44.entities.RawMaterialStock,
+          rows.length
+        );
         rows.forEach((data, i) => {
           data.entry_id = entryIds[i];
         });

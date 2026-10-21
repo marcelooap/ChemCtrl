@@ -34,23 +34,31 @@ const entityTableMap = {
   Perfil: 'perfis',
   PerfilPermissao: 'perfil_permissoes',
   Production: 'ind_lista_producoes',
-  RawMaterialStock: 'ind_estoque_mp',
+  // Pós-056; resolvePhysicalTable faz fallback para ind_estoque_mp.
+  RawMaterialStock: 'estoque_mp',
   // Mestre único cadastro_tanka (pós-049 cutover).
   Tank: 'cadastro_tanka',
   Transfer: 'ind_transbordo_ind',
   Container: 'ind_lista_vasilhames',
   ContainerOrigin: 'ind_composicao_vasilhame',
-  Order: 'ind_lista_pedidos',
+  // Pós-055; resolvePhysicalTable faz fallback para ind_lista_pedidos.
+  Order: 'cadastro_pedidos_ind',
   // Preferência pós-046; resolvePhysicalTable faz fallback para ind_lista_receitas.
   Recipe: 'receitas',
-  QualityResult: 'ind_cq_resultados',
+  // Pós-053: 1 linha por análise; a tela agrupa por resultado_id.
+  // resolvePhysicalTable faz fallback para ind_cq_resultados.
+  QualityResult: 'resultados_cq',
   // Pós-051; resolvePhysicalTable faz fallback para ind_cq_esp_tec.
   QualityTest: 'cadastro_analises',
-  QualityAnalysis: 'ind_lista_ensaios',
-  Inventory: 'ind_lista_inventario',
+  // Pós-052; resolvePhysicalTable faz fallback para ind_lista_ensaios.
+  QualityAnalysis: 'cadastro_analises_metodologia',
+  // Pós-058: 1 linha por produto; a tela agrupa por inventario_id.
+  // resolvePhysicalTable faz fallback para ind_lista_inventario.
+  Inventory: 'inventario',
   IndValidacao: 'ind_validacoes',
   StockMovement: 'ind_retornos_perdas',
-  LabEquipment: 'ind_lista_equipamentoslab',
+  // Pós-054; resolvePhysicalTable faz fallback para ind_lista_equipamentoslab.
+  LabEquipment: 'cadastro_equipamentolab',
   ProductionChecklist: 'checklist_op',
   ProductionSchedule: 'ind_programacao_demanda',
 };
@@ -82,6 +90,12 @@ const tableColumnsInFlight = new Map();
 const TABLE_FALLBACKS = {
   receitas: ['receitas', 'ind_lista_receitas'],
   cadastro_analises: ['cadastro_analises', 'ind_cq_esp_tec'],
+  cadastro_analises_metodologia: ['cadastro_analises_metodologia', 'ind_lista_ensaios'],
+  resultados_cq: ['resultados_cq', 'ind_cq_resultados'],
+  cadastro_equipamentolab: ['cadastro_equipamentolab', 'ind_lista_equipamentoslab'],
+  cadastro_pedidos_ind: ['cadastro_pedidos_ind', 'ind_lista_pedidos'],
+  estoque_mp: ['ep_mp', 'estoque_mp', 'ind_estoque_mp'],
+  inventario: ['inventario', 'ind_lista_inventario'],
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
   // Pós-049 cutover: mestre único (sem fallback ind_cadastro_tanka).
   cadastro_tanka: ['cadastro_tanka'],

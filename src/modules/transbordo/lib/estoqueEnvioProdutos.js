@@ -26,7 +26,7 @@ function clientePorNome(clientes, nome) {
  * Fontes do consolidado de produtos em Estoque Envio.
  *
  * Transbordo: saldo operacional (quantidade recebida menos saídas).
- * Matéria-prima: saldo atual de ind_estoque_mp (current_stock).
+ * Matéria-prima: saldo atual de estoque_mp (current_stock).
  * O espelho em t_estoque guarda o saldo de entrada (initial_stock) e não entra
  * na soma quando a industrialização foi carregada, para não duplicar o lote.
  */

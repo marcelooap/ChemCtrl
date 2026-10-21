@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import SignedImage from '@industrializacao/components/SignedImage';
 import { fmtDate, fmtNumber, fmtVolume } from '@/i18n/formatters';
 import { syncOrderFromProductions } from '@industrializacao/lib/orderProductionStatus';
+import { isResultadoSalvarRpcMissing, salvarResultado } from '@industrializacao/lib/qualityResultComposition';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -172,7 +173,7 @@ export default function QualityAnalysisDialog({
   const saveAndApprove = async (status) => {
     if (!production) return;
     const analystName = internalUser?.nome_completo || internalUser?.nome || '';
-    const data = {
+    const header = {
       production_id: production.id,
       op_number: production.op_number,
       product: production.product,
@@ -182,13 +183,27 @@ export default function QualityAnalysisDialog({
       analyst: analystName,
       status,
       observations: analysisForm.observations,
-      results: analysisForm.results,
       sample_photo_url: analysisForm.sample_photo_url || '',
+      created_by_id: existingResult?.created_by_id || internalUser?.id || null,
     };
+    const legacy = { ...header, results: analysisForm.results };
+    const resultadoId = existingResult
+      ? (existingResult.resultado_id || (!existingResult._is_grouped ? existingResult.id : null))
+      : null;
     setSaving(true);
     try {
-      if (existingResult?.id) await base44.entities.QualityResult.update(existingResult.id, data);
-      else await base44.entities.QualityResult.create(data);
+      try {
+        await salvarResultado({
+          resultadoId,
+          header,
+          results: analysisForm.results,
+          mode: resultadoId ? 'replace' : 'create',
+        });
+      } catch (err) {
+        if (!isResultadoSalvarRpcMissing(err) || existingResult?._is_grouped) throw err;
+        if (existingResult?.id) await base44.entities.QualityResult.update(existingResult.id, legacy);
+        else await base44.entities.QualityResult.create(legacy);
+      }
 
       const currentStatus = production.status;
       const alreadyFinished = currentStatus === 'Finalizado';

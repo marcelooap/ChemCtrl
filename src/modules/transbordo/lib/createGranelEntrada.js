@@ -30,9 +30,14 @@ export async function createGranelEntrada({ data }) {
     })),
   };
 
-  const entradaRows = await entities.entradas.list();
   const savedEntrada = await entities.entradas.create(entradaPayload);
-  const entradaCodigo = await allocateEntradaCodigo(entradaRows?.length || 0);
+  const linhasJaGravadas = await entities.estoque.filter({
+    entrada_id: savedEntrada.id,
+  });
+  const entradaCodigo =
+    linhasJaGravadas.find((row) => row?.entrada_codigo)?.entrada_codigo ||
+    savedEntrada.id_entrada ||
+    (await allocateEntradaCodigo((await entities.entradas.list())?.length || 0));
   const grupoId = data.grupo_entrada || `GRP-${Date.now()}`;
 
   const estoqueRecords = (entradaPayload.lotes || []).map((lote) => {
@@ -77,9 +82,32 @@ export async function createGranelEntrada({ data }) {
   });
 
   const savedEstoques =
-    estoqueRecords.length > 0
-      ? await entities.estoque.bulkCreate(estoqueRecords)
-      : [];
+    linhasJaGravadas.length > 0
+      ? linhasJaGravadas
+      : estoqueRecords.length > 0
+        ? await entities.estoque.bulkCreate(estoqueRecords)
+        : [];
+
+  if (savedEntrada?.id && savedEstoques.length > 0) {
+    await entities.entradas.update(savedEntrada.id, {
+      data: entradaPayload.data,
+      cliente_id: entradaPayload.cliente_id,
+      cliente_nome: data.cliente_nome || "",
+      fornecedor: data.fornecedor ?? null,
+      comunicacao_enviada: !!data.comunicacao_enviada,
+      status_wms: !!data.status_wms,
+      granel_pesagem: !!data.granel_pesagem,
+      granel_ticket: data.granel_ticket || null,
+      granel_peso_bruto: data.granel_peso_bruto ?? null,
+      granel_validacao_bruto: data.granel_validacao_bruto ?? null,
+      granel_peso_liquido: data.granel_peso_liquido ?? null,
+      granel_validacao_liquido: data.granel_validacao_liquido ?? null,
+      granel_erro_admissivel: data.granel_erro_admissivel ?? null,
+      granel_peso_minimo: data.granel_peso_minimo ?? null,
+      granel_peso_maximo: data.granel_peso_maximo ?? null,
+      granel_margem: data.granel_margem || null,
+    });
+  }
 
   return {
     savedEntrada,

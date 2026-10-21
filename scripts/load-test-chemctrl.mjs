@@ -98,7 +98,7 @@ export function readHeavy() {
   });
   group('list estoque mp', () => {
     const res = http.get(
-      `${BASE}/rest/v1/ind_estoque_mp?select=id,entry_id,current_stock&order=created_date.desc&limit=100`,
+      `${BASE}/rest/v1/estoque_mp?select=id,entry_id,current_stock&order=created_date.desc&limit=100`,
       { headers: headers() }
     );
     check(res, { 'estoque 200': (r) => r.status === 200 });

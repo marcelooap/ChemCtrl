@@ -254,7 +254,9 @@ export default function EstoqueViewDialog({
             <InfoItem
               label="Origem"
               value={
-                item.origem === "industrializacao" ? "Industrialização" : "Transbordo"
+                item.origem === "industrializacao" || item.origem === "MATERIA_PRIMA"
+                  ? "Matéria-prima"
+                  : "Armazenagem"
               }
             />
             <InfoItem

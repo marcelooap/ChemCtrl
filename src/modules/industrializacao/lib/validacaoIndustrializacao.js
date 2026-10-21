@@ -144,6 +144,7 @@ function mpRowsFromOperacao(validacao) {
 function isDuplicateMpEntryId(err) {
   const msg = String(err?.message || err || "");
   return (
+    msg.includes("uq_estoque_mp_entry_id") ||
     msg.includes("uq_ind_estoque_mp_entry_id") ||
     msg.includes("duplicate key")
   );

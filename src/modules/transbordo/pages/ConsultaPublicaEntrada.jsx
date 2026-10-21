@@ -51,7 +51,9 @@ function formatDate(value) {
 }
 
 function origemLabel(origem) {
-  return origem === "industrializacao" ? "Industrialização" : "Armazenagem";
+  return origem === "industrializacao" || origem === "MATERIA_PRIMA"
+    ? "Matéria-prima"
+    : "Armazenagem";
 }
 
 function embalagemTexto(lote) {

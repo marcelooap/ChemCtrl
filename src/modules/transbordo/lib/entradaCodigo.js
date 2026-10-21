@@ -11,12 +11,24 @@ function createdTs(row) {
  * Mapa entrada.id → "E001".
  * @param {Array} entradasList — registros da tabela `entradas`
  */
+function codigoGravado(entrada) {
+  const stored = String(entrada?.id_entrada || "").trim().toUpperCase();
+  return /^E[1-9]\d*$/.test(stored) ? stored : "";
+}
+
 export function buildEntradaCodigoById(entradasList = []) {
   const map = {};
-  [...(entradasList || [])]
+  const semCodigo = [];
+  for (const entrada of entradasList || []) {
+    if (!entrada?.id) continue;
+    const gravado = codigoGravado(entrada);
+    if (gravado) map[entrada.id] = gravado;
+    else semCodigo.push(entrada);
+  }
+  [...semCodigo]
     .sort((a, b) => createdTs(a) - createdTs(b))
-    .forEach((e, i) => {
-      if (e?.id) map[e.id] = `E${String(i + 1).padStart(3, "0")}`;
+    .forEach((entrada, index) => {
+      map[entrada.id] = `E${String(index + 1).padStart(3, "0")}`;
     });
   return map;
 }

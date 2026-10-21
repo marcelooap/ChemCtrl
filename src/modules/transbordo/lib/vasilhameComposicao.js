@@ -468,6 +468,69 @@ export function applyLoteDatasToComposicao(
   );
 }
 
+/** Capacidades de vasilhame usadas quando o cadastro não informa a capacidade. */
+const CAPACIDADES_PADRAO_L = [5000, 1500];
+const TOLERANCIA_TANQUE_CHEIO_L = 0.5;
+
+/**
+ * Tanque fechado na capacidade: o volume atingiu a capacidade cadastrada
+ * ou uma capacidade padrão (5.000 L / 1.500 L).
+ */
+export function tanqueEstaCheio(volume, capacidade) {
+  const vol = roundVolume(volume || 0);
+  if (vol <= 0) return false;
+  const cap = Number(capacidade);
+  if (Number.isFinite(cap) && cap > 0) {
+    return vol + 1e-9 >= roundVolume(cap) - TOLERANCIA_TANQUE_CHEIO_L;
+  }
+  return CAPACIDADES_PADRAO_L.some(
+    (std) => Math.abs(vol - std) <= TOLERANCIA_TANQUE_CHEIO_L
+  );
+}
+
+/** O interruptor só vale enquanto o tanque não fechou a capacidade. */
+export function fracionadoEfetivo(marcado, volume, capacidade) {
+  return !!marcado && !tanqueEstaCheio(volume, capacidade);
+}
+
+/**
+ * Volume do tanque depois deste lançamento.
+ * No complemento, soma o que já está no pátio. Na reedição do mesmo OP,
+ * tira da base a fatia que este OP já gravou para não contar duas vezes.
+ */
+export function volumeAcumuladoDoTanque(
+  destinos = [],
+  { placa, barril, vasilhames = [], codigoOp = "" } = {}
+) {
+  const slices = (destinos || []).filter(
+    (d) =>
+      (d?.tipo_embalagem || "") === "Vasilhame" &&
+      sameTanqueIdentity(d.placa, d.barril, placa, barril)
+  );
+  if (slices.length === 0) return 0;
+  const soma = roundVolume(
+    slices.reduce(
+      (s, d) => s + roundVolume(d.volume_total || d.volume || 0),
+      0
+    )
+  );
+  const id = slices.map((d) => d.vasilhame_existente_id).find(Boolean);
+  const patio = id
+    ? (vasilhames || []).find((v) => String(v.id) === String(id))
+    : null;
+  let base = roundVolume(patio?.volume || 0);
+  const code = String(codigoOp || "").trim();
+  if (patio && code) {
+    const deste = roundVolume(
+      (patio.composicao || [])
+        .filter((c) => String(c.transbordo_codigo || "").trim() === code)
+        .reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
+    );
+    if (deste > 0) base = Math.max(0, roundVolume(base - deste));
+  }
+  return roundVolume(base + soma);
+}
+
 /** Lote de maior volume na composição (para coluna da listagem). */
 export function getDominantLote(composicao = []) {
   const agg = aggregateComposicaoByLote(composicao).filter((r) =>
@@ -526,7 +589,8 @@ export function applyAdditionalDestino(
     peso_bruto: roundMass(taraFinal + peso),
     tara: taraFinal,
     // O interruptor do destino vale mesmo com vários lotes na composição.
-    fracionado: !!fracionado,
+    // Tanque que fechou a capacidade deixa de ser fracionado.
+    fracionado: fracionadoEfetivo(fracionado, newVol, base.capacidade),
   };
 }
 
@@ -547,6 +611,7 @@ function destinoNaPlaca(destino, placa, barril) {
 /**
  * Fracionado do tanque no pátio: o último destino desta placa/barril.
  * Sem transbordo correspondente, permanece o flag já gravado no vasilhame.
+ * Volume na capacidade (cadastrada ou 1.500/5.000 L) nunca fica fracionado.
  */
 export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
   if (!vasilhame) return false;
@@ -555,7 +620,13 @@ export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
       destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)
     )
   );
-  if (related.length === 0) return !!vasilhame.fracionado;
+  if (related.length === 0) {
+    return fracionadoEfetivo(
+      vasilhame.fracionado,
+      vasilhame.volume,
+      vasilhame.capacidade
+    );
+  }
 
   const lastT = [...related].sort(
     (a, b) =>
@@ -566,8 +637,18 @@ export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
     destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)
   );
   const lastDest = destinos[destinos.length - 1];
-  if (!lastDest) return !!vasilhame.fracionado;
-  return lastDest.fracionado === true;
+  if (!lastDest) {
+    return fracionadoEfetivo(
+      vasilhame.fracionado,
+      vasilhame.volume,
+      vasilhame.capacidade
+    );
+  }
+  return fracionadoEfetivo(
+    lastDest.fracionado === true,
+    vasilhame.volume,
+    vasilhame.capacidade
+  );
 }
 
 /** Fatias FIFO de um transbordo que caíram nesta placa. */
@@ -987,7 +1068,11 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
       if (ta !== tb) return tb - ta;
       return (b.fracionado === true) - (a.fracionado === true);
     })[0];
-    const fracionado = latest?.fracionado === true;
+    const fracionado = fracionadoEfetivo(
+      latest?.fracionado === true,
+      volume,
+      primary.capacidade || latest?.capacidade
+    );
     const dens =
       parseFloat(String(primary.densidade || "0").replace(",", ".")) || 0;
     const peso_liquido =

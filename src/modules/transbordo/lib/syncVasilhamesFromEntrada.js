@@ -16,6 +16,7 @@ import {
   getDominantLote,
   placaKey,
   applyAdditionalDestino,
+  fracionadoEfetivo,
 } from "@transbordo/lib/vasilhameComposicao";
 import {
   upsertFiltracaoForVasilhame,
@@ -177,7 +178,11 @@ export async function syncVasilhamesFromEntradaLotes({
         eslinga: lote.eslinga || "",
         gps: lote.gps || "",
         menor_teste: lote.menor_teste || null,
-        fracionado: lote.fracionado || false,
+        fracionado: fracionadoEfetivo(
+          lote.fracionado,
+          volume,
+          existingById.capacidade
+        ),
         produto_id: lote.produto_id || null,
         produto_nome: lote.produto_nome || "",
         produto_codigo: lote.produto_codigo || "",
@@ -218,7 +223,11 @@ export async function syncVasilhamesFromEntradaLotes({
         lote.tara != null && lote.tara !== ""
           ? tara
           : roundMass(fracionadoPatio.tara || 0);
-      const aindaFracionado = !!lote.fracionado;
+      const aindaFracionado = fracionadoEfetivo(
+        lote.fracionado,
+        newVol,
+        fracionadoPatio.capacidade
+      );
 
       const updated = await entities.vasilhames.update(fracionadoPatio.id, {
         volume: newVol,
@@ -288,7 +297,7 @@ export async function syncVasilhamesFromEntradaLotes({
       gps: lote.gps || "",
       menor_teste: nullIfEmpty(lote.menor_teste),
       status: "No Pátio",
-      fracionado: lote.fracionado || false,
+      fracionado: fracionadoEfetivo(lote.fracionado, volume, null),
       composicao,
     });
 

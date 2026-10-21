@@ -1,4 +1,5 @@
 import { entities } from "@transbordo/services/entities";
+import { getEntityTableName } from "@industrializacao/api/supabaseClient";
 import { createEntradaCompleta } from "@transbordo/lib/createEntradaCompleta";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
@@ -9,6 +10,10 @@ import { base44 } from "@industrializacao/api/base44Client";
 import { resolveMpControle } from "@industrializacao/lib/mpControle";
 
 const LINK_PREFIX = "INDMP:";
+
+async function estoqueUnificado() {
+  return (await getEntityTableName("RawMaterialStock")) === "ep_mp";
+}
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -349,7 +354,12 @@ function destinosInformadosFromValidacao(row) {
  * Recupera os pesos na validação e grava na entrada e no estoque.
  */
 export async function backfillEntradaPesagem(entrada, validacaoRow = undefined) {
-  if (!entrada?.id || entrada.origem !== "industrializacao") return entrada;
+  if (
+    !entrada?.id ||
+    (entrada.origem !== "industrializacao" && entrada.origem !== "MATERIA_PRIMA")
+  ) {
+    return entrada;
+  }
   if (granelPesagemFields(entrada)) return entrada;
 
   const row = validacaoRow === undefined ? await findValidacaoRow(entrada) : validacaoRow;
@@ -408,7 +418,10 @@ function pesagemFromValidacao(entrada, row) {
  * `persist: false` só enriquece em memória — usado no portal do cliente.
  */
 export async function prepareEntradaView(entrada, { persist = true } = {}) {
-  if (!entrada?.id || entrada.origem !== "industrializacao") {
+  if (
+    !entrada?.id ||
+    (entrada.origem !== "industrializacao" && entrada.origem !== "MATERIA_PRIMA")
+  ) {
     return { entrada, destinosInformados: [], controleLotes: [] };
   }
   const [row, controleLotes] = await Promise.all([
@@ -447,9 +460,23 @@ async function alignEstoqueStatusWms(savedEstoques, mpRows) {
  * Espelha vários MPs lançados juntos (Adicionar MP) numa única entrada do Transbordo.
  * Cada MP continua um registro próprio no estoque de matéria-prima; aqui viram linhas da mesma entrada.
  */
+async function gravarPesagemNoRecebimento(mpRows) {
+  const code = (mpRows || []).map((row) => row?.entry_id).find(Boolean);
+  const pesagem = granelPesagemFields(mpRows?.[0]);
+  if (!code || !pesagem) return;
+  const entradas = await entities.entradas.filter({ id_entrada: code });
+  if (entradas?.[0]?.id) {
+    await entities.entradas.update(entradas[0].id, pesagem);
+  }
+}
+
 export async function createEntradaFromMpRows(mpRows) {
   const rows = (mpRows || []).filter((mp) => mp?.id);
   if (rows.length === 0) return null;
+  if (await estoqueUnificado()) {
+    await gravarPesagemNoRecebimento(rows);
+    return null;
+  }
   if (rows.length === 1) return createEntradaFromMp(rows[0]);
 
   const created = await createEntradaCompleta({
@@ -463,6 +490,7 @@ export async function createEntradaFromMpRows(mpRows) {
 /** Cria ou atualiza a entrada do Transbordo espelhada neste registro de MP. */
 export async function upsertEntradaFromMp(mp) {
   if (!mp?.id) return null;
+  if (await estoqueUnificado()) return null;
   const linked = await findLinkedEntrada(mp.id);
   if (!linked) return createEntradaFromMp(mp);
   if (linked.scope === "lote") return updateLoteEntrada(linked.entrada, mp);
@@ -477,6 +505,7 @@ async function deleteEntradaRecord(entradaId) {
 /** Remove a entrada (ou o lote) do Transbordo ligado a este MP. */
 export async function deleteEntradaLinkedToMp(mpId) {
   if (!mpId) return;
+  if (await estoqueUnificado()) return;
   const linked = await findLinkedEntrada(mpId);
   if (!linked) return;
 
@@ -519,6 +548,28 @@ export async function deleteEntradaLinkedToMp(mpId) {
  */
 export async function linkExistingEntradaToMp(entradaId, mpRows) {
   if (!entradaId || !mpRows?.length) return null;
+  if (await estoqueUnificado()) {
+    const entrada = await entities.entradas.get(entradaId);
+    if (!entrada) return null;
+    const grupo =
+      mpRows.length === 1 && mpRows[0]?.id ? mpEntradaGrupo(mpRows[0].id) : null;
+    if (grupo) await entities.entradas.update(entradaId, { grupo_entrada: grupo });
+    const estoques = sortByCreated(
+      await entities.estoque.filter({ entrada_id: entradaId })
+    );
+    const updates = estoques.map((row, index) => ({
+      id: row.id,
+      ...(grupo ? { grupo_entrada: grupo } : {}),
+      lotes: [
+        {
+          ...(row.lotes?.[0] || {}),
+          ind_mp_id: mpRows[index]?.id || row.lotes?.[0]?.ind_mp_id || null,
+        },
+      ],
+    }));
+    if (updates.length > 0) await entities.estoque.bulkUpdate(updates);
+    return entities.entradas.get(entradaId);
+  }
   const entrada = await entities.entradas.get(entradaId);
   if (!entrada) return null;
 

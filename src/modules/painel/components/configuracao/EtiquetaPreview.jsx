@@ -17,8 +17,11 @@ function FieldRow({ label, value, wrap = false, stacked = false, fill = false, e
   }
 
   if (flow) {
+    const size = fill
+      ? (emphasis ? 'text-[14px] leading-snug' : 'text-[12px] leading-snug')
+      : (emphasis ? 'text-[12px] leading-tight' : 'text-[10px] leading-snug');
     return (
-      <p className={`w-full min-w-0 text-left font-extrabold leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}`}>
+      <p className={`w-full min-w-0 text-left font-extrabold ${size}`}>
         <span className="uppercase">{label}</span>
         <span className="font-bold text-black/80"> • </span>
         <span className="font-bold">{value}</span>
@@ -160,7 +163,7 @@ export default function EtiquetaPreview({
         wrap={wrapKey(row.key)}
         emphasis={emphasis}
         center={convencionalVertical && row.key === 'cliente'}
-        flow={convencionalVertical && row.key === 'responsavel_tecnico'}
+        flow={row.key === 'responsavel_tecnico'}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />

@@ -265,21 +265,6 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     word-break: break-word;
     overflow-wrap: anywhere;
   }
-  .label.vertical:not(.ind) .field-row.flow {
-    display: block;
-    width: 100%;
-    text-align: left;
-  }
-  .label.vertical:not(.ind) .field-row.flow .lbl,
-  .label.vertical:not(.ind) .field-row.flow .sep,
-  .label.vertical:not(.ind) .field-row.flow .val {
-    display: inline;
-    flex: none;
-    width: auto;
-    white-space: normal;
-    word-break: normal;
-    overflow-wrap: break-word;
-  }
   .label.vertical:not(.ind) .field-row.center-only {
     display: block;
     width: 100%;
@@ -334,6 +319,38 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .label.ind.vertical .product { font-size: 14.5pt; }
   .label.ind.vertical .footer,
   .label.ind.vertical .footer .emb { font-size: 11pt; }
+  .label .field-row.rt-flow,
+  .label.vertical .field-row.rt-flow,
+  .label.ind .field-row.rt-flow {
+    display: block;
+    width: 100%;
+    overflow: visible;
+    text-align: left;
+  }
+  .label .field-row.rt-flow .lbl,
+  .label .field-row.rt-flow .sep,
+  .label .field-row.rt-flow .val,
+  .label.vertical .field-row.rt-flow .lbl,
+  .label.vertical .field-row.rt-flow .sep,
+  .label.vertical .field-row.rt-flow .val,
+  .label.ind .field-row.rt-flow .lbl,
+  .label.ind .field-row.rt-flow .sep,
+  .label.ind .field-row.rt-flow .val {
+    display: inline;
+    flex: none;
+    width: auto;
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+  .label .field-row.rt-flow .sep,
+  .label.vertical .field-row.rt-flow .sep,
+  .label.ind .field-row.rt-flow .sep { margin: 0 0.45mm; }
   .label.ind.dense.label-equipment .product {
     font-size: 15pt;
     line-height: 1.05;
@@ -413,8 +430,8 @@ async function buildConfiguredLabelBody({
     if (convencionalVertical && row.key === 'cliente') {
       return `<div class="field-row center-only"><span class="val">${escapeHtml(val)}</span></div>`;
     }
-    if (convencionalVertical && row.key === 'responsavel_tecnico') {
-      return `<div class="field-row flow"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep"> • </span><span class="val">${escapeHtml(val)}</span></div>`;
+    if (row.key === 'responsavel_tecnico') {
+      return `<div class="field-row rt-flow"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep">•</span><span class="val">${escapeHtml(val)}</span></div>`;
     }
     const wrap = forceWrap || wrapKeys.has(row.key) ? ' wrap' : '';
     return `<div class="field-row${wrap}"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep">•</span><span class="val">${escapeHtml(val)}</span></div>`;

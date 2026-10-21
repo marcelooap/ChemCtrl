@@ -9,11 +9,15 @@ export function entradaByIdMap(entradas) {
 }
 
 /**
- * Espelho de ind_estoque_mp em t_estoque.
+ * Espelho de estoque_mp em t_estoque.
  * Pertence ao módulo Industrialização e não deve aparecer nas telas de estoque do Transbordo.
  */
+function origemMateriaPrima(origem) {
+  return origem === "industrializacao" || origem === "MATERIA_PRIMA";
+}
+
 export function isMateriaPrimaIndustrializacao(item, entrada) {
-  if (item?.origem === "industrializacao" || entrada?.origem === "industrializacao") {
+  if (origemMateriaPrima(item?.origem) || origemMateriaPrima(entrada?.origem)) {
     return true;
   }
   if (

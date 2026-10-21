@@ -38,6 +38,9 @@ const TABLE_FALLBACKS = {
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
   // Pós-049 cutover: mestre único (sem fallback t_isotanques).
   cadastro_tanka: ['cadastro_tanka'],
+  // 061: estoque unificado. Se a vista ainda não existe, segue na tabela antiga.
+  t_entradas: ['ep_entradas', 't_entradas'],
+  t_estoque: ['ep_estoque', 't_estoque'],
 };
 const physicalTableCache = new Map();
 const physicalTableInFlight = new Map();

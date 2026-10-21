@@ -1531,6 +1531,7 @@ export default function TransbordoModal({
                           }
                           excludeTransbordoId={editingIdForSaldo}
                           excludeTransbordoCodigo={editingCodigoTransbordo}
+                          todosDestinos={destinos}
                         />
                         );
                       })}

@@ -9,6 +9,12 @@ import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { fmtDateTime, fmtNumber } from '@/i18n/formatters';
+import {
+  loadInventoryDocument,
+  salvarInventario,
+  isInventarioSalvarRpcMissing,
+  inventoryScopeText,
+} from '@industrializacao/lib/inventoryComposition';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
 
@@ -28,7 +34,7 @@ export default function InventarioConferencia() {
 
   useEffect(() => {
     let cancelled = false;
-    base44.entities.Inventory.get(id).then(inv => {
+    loadInventoryDocument(id).then(inv => {
       if (cancelled) return;
       setInventory(inv);
       setItems(parseArr(inv?.items));
@@ -62,10 +68,53 @@ export default function InventarioConferencia() {
     }));
   };
 
+  const persistInventory = async (extra = {}) => {
+    if (inventory?._is_grouped && inventory.inventario_id) {
+      const header = {
+        inventory_number: inventory.inventory_number,
+        opening_date: inventory.opening_date,
+        start_date: inventory.start_date,
+        closing_date: inventory.closing_date,
+        opened_by: inventory.opened_by,
+        started_by: inventory.started_by,
+        closed_by: inventory.closed_by,
+        clients: inventory.clients,
+        products: inventory.products,
+        lots: inventory.lots,
+        status: inventory.status,
+        created_by_id: inventory.created_by_id,
+        ...extra,
+      };
+      try {
+        await salvarInventario({
+          inventarioId: inventory.inventario_id,
+          mode: 'replace',
+          header,
+          items,
+        });
+        return;
+      } catch (err) {
+        if (!isInventarioSalvarRpcMissing(err)) throw err;
+      }
+      await Promise.all(items.map((it) => base44.entities.Inventory.update(it.line_id, {
+        physical_packages: it.physical_packages,
+        fractional_qty: it.fractional_qty,
+        physical_total: it.physical_total,
+        difference: it.difference,
+        difference_pct: it.difference_pct,
+      })));
+      if (Object.keys(extra).length) {
+        await base44.entities.Inventory.updateMany({ inventario_id: inventory.inventario_id }, extra);
+      }
+      return;
+    }
+    await base44.entities.Inventory.update(id, { items, ...extra });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await base44.entities.Inventory.update(id, { items });
+      await persistInventory();
       toast({ title: t('inventory.messages.saved') });
     } catch (e) {
       toast({ title: t('inventory.conferencePage.saveError'), variant: 'destructive' });
@@ -77,8 +126,7 @@ export default function InventarioConferencia() {
   const handleFinish = async () => {
     try {
       const userName = authUser?.nome || authUser?.full_name || t('common.notAvailable');
-      await base44.entities.Inventory.update(id, {
-        items,
+      await persistInventory({
         status: 'Finalizado',
         closing_date: new Date().toISOString(),
         closed_by: userName,
@@ -93,8 +141,10 @@ export default function InventarioConferencia() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" /></div>;
   if (!inventory) return <div className="p-8 text-center text-muted-foreground">{t('inventory.conferencePage.notFound')}</div>;
 
-  const clients = inventory.clients === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inventory.clients).join(', ');
-  const products = inventory.products === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inventory.products).join(', ');
+  const clientsLabel = inventoryScopeText(inventory, 'clients');
+  const productsLabel = inventoryScopeText(inventory, 'products');
+  const clients = clientsLabel === 'TODOS' ? formatFilterValue('TODOS') : clientsLabel;
+  const products = productsLabel === 'TODOS' ? formatFilterValue('TODOS') : productsLabel;
 
   const totalRegistered = items.reduce((s, it) => s + (it.registered_stock || 0), 0);
   const totalPhysical = items.reduce((s, it) => s + calcPhysicalTotal(it), 0);

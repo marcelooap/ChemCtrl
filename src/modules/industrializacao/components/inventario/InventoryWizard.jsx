@@ -8,13 +8,13 @@ import { Checkbox } from '@shared/components/ui/checkbox';
 import { Check, ChevronRight, ChevronLeft, Users, Package, Layers } from 'lucide-react';
 import { useToast } from '@shared/components/ui/use-toast';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
+import { salvarInventario, isInventarioSalvarRpcMissing } from '@industrializacao/lib/inventoryComposition';
 
-export default function InventoryWizard({ open, onOpenChange, onCreated }) {
+export default function InventoryWizard({ open, onOpenChange, onCreated, inventories = [] }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user: authUser } = useInternalAuth();
   const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
-  const { data: inventories } = useRealtimeEntity('Inventory', () => base44.entities.Inventory.list('-created_date', 500));
 
   const [step, setStep] = useState(0);
   const [selectedClients, setSelectedClients] = useState([]);
@@ -92,7 +92,7 @@ export default function InventoryWizard({ open, onOpenChange, onCreated }) {
         difference_pct: 0,
       }));
 
-      const data = {
+      const header = {
         inventory_number,
         opening_date: new Date().toISOString(),
         opened_by: userName,
@@ -100,10 +100,14 @@ export default function InventoryWizard({ open, onOpenChange, onCreated }) {
         products: selectedProducts.length === 0 ? 'TODOS' : JSON.stringify(selectedProducts),
         lots: selectedLots.length === 0 ? 'TODOS' : JSON.stringify(selectedLots),
         status: 'Aberto',
-        items,
       };
 
-      await base44.entities.Inventory.create(data);
+      try {
+        await salvarInventario({ mode: 'create', header, items });
+      } catch (err) {
+        if (!isInventarioSalvarRpcMissing(err)) throw err;
+        await base44.entities.Inventory.create({ ...header, items });
+      }
       reset();
       onOpenChange(false);
       onCreated && onCreated();

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useQualityResults } from '@industrializacao/hooks/useQualityResults';
 import { useQualityTests } from '@industrializacao/hooks/useQualityTests';
 import { Search, FileCheck } from 'lucide-react';
 import { Input } from '@shared/components/ui/input';
@@ -14,7 +15,7 @@ export default function ProducoesCQ() {
   const { t } = useTranslation();
   const { data: allProds, loading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: tests } = useQualityTests();
-  const { data: results, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500));
+  const { data: results, reload: load } = useQualityResults();
   const [search, setSearch] = useState('');
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [selectedProd, setSelectedProd] = useState(null);

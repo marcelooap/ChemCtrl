@@ -46,12 +46,18 @@ import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScr
 
 const ORIGEM_OPTIONS = [
   { value: "all", label: "Todas" },
-  { value: "convencional", label: "Transbordo" },
-  { value: "industrializacao", label: "Industrialização" },
+  { value: "ARMAZENAGEM", label: "Armazenagem" },
+  { value: "MATERIA_PRIMA", label: "Matéria-prima" },
 ];
 
+function origemOperacional(entrada) {
+  const origem = entrada?.origem;
+  if (origem === "MATERIA_PRIMA" || origem === "industrializacao") return "MATERIA_PRIMA";
+  return "ARMAZENAGEM";
+}
+
 function getSistemaOrigem(entrada) {
-  return entrada?.origem === "industrializacao" ? "Industrialização" : "Transbordo";
+  return origemOperacional(entrada) === "MATERIA_PRIMA" ? "Matéria-prima" : "Armazenagem";
 }
 
 function formatEntradaData(entrada) {
@@ -278,7 +284,9 @@ export default function Entrada() {
     const sistema = getSistemaOrigem(e);
     const matchOrigem =
       !origemFilter ||
+      origemFilter === "all" ||
       origemFilter === "Todas" ||
+      origemFilter === origemOperacional(e) ||
       origemFilter === sistema;
 
     const matchCliente = matchesClienteFilter(e, clienteFilter, clientes);

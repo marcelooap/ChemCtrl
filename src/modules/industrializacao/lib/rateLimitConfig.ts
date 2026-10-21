@@ -141,11 +141,14 @@ export const RPC_WRITE = new Set<string>([
   'allocate_tb_number',
   'allocate_transbordo_codigo',
   'allocate_entrada_codigo',
+  'next_entrada_id',
   'allocate_saida_codigo',
   'allocate_filtro_codigos',
   'cadastro_produtos_registrar_uso',
   'cadastro_produtos_promover_ids',
   'receitas_salvar_revisao',
+  'resultados_cq_salvar',
+  'inventario_salvar',
 ]);
 
 export function classifyRpc(functionName: string): RateLimitKind {

@@ -17,6 +17,7 @@ import {
   applyAdditionalDestino,
   placaKey,
   sameTanqueIdentity,
+  fracionadoEfetivo,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
 import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
@@ -294,7 +295,11 @@ async function syncFracionadoDosDestinos(destinos = []) {
     if ((row.status || "No Pátio") !== "No Pátio" || row.data_saida) continue;
     const key = placaKey(row.placa, row.barril);
     if (!byKey.has(key)) continue;
-    const fracionado = byKey.get(key);
+    const fracionado = fracionadoEfetivo(
+      byKey.get(key),
+      row.volume,
+      row.capacidade
+    );
     if (Boolean(row.fracionado) === fracionado) continue;
     await entities.vasilhames.update(row.id, { fracionado });
   }
@@ -377,7 +382,9 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
     observacao: cleanObservacao(d.observacao),
     status: "No Pátio",
     responsavel: (data.operadores || []).join(", "),
-    fracionado: isUnitario ? false : d.fracionado || false,
+    fracionado: isUnitario
+      ? false
+      : fracionadoEfetivo(d.fracionado, volume, null),
     composicao,
     destino_index: destinoIndex,
   };

@@ -88,9 +88,9 @@ drop trigger if exists update_updated_date_ind_lista_producoes on ind_lista_prod
 create trigger update_updated_date_ind_lista_producoes before update on ind_lista_producoes for each row execute function update_updated_date();
 
 -- ============================================================================
--- 3. ind_estoque_mp
+-- 3. estoque_mp (antes: ind_estoque_mp)
 -- ============================================================================
-create table if not exists ind_estoque_mp (
+create table if not exists estoque_mp (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -120,13 +120,13 @@ create table if not exists ind_estoque_mp (
   packaging_quantity numeric,
   public_token text
 );
-create index if not exists idx_ind_estoque_mp_status_wms on ind_estoque_mp (status_wms);
-create unique index if not exists idx_ind_estoque_mp_public_token on ind_estoque_mp (public_token) where public_token is not null;
-alter table ind_estoque_mp enable row level security;
-drop policy if exists "allow_all_ind_estoque_mp" on ind_estoque_mp;
-create policy "allow_all_ind_estoque_mp" on ind_estoque_mp for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_estoque_mp on ind_estoque_mp;
-create trigger update_updated_date_ind_estoque_mp before update on ind_estoque_mp for each row execute function update_updated_date();
+create index if not exists idx_estoque_mp_status_wms on estoque_mp (status_wms);
+create unique index if not exists idx_estoque_mp_public_token on estoque_mp (public_token) where public_token is not null;
+alter table estoque_mp enable row level security;
+drop policy if exists "allow_all_estoque_mp" on estoque_mp;
+create policy "allow_all_estoque_mp" on estoque_mp for all using (true) with check (true);
+drop trigger if exists update_updated_date_estoque_mp on estoque_mp;
+create trigger update_updated_date_estoque_mp before update on estoque_mp for each row execute function update_updated_date();
 
 -- ============================================================================
 -- 4. ind_cadastro_tanka
@@ -238,9 +238,9 @@ drop policy if exists "allow_all_ind_composicao_vasilhame" on ind_composicao_vas
 create policy "allow_all_ind_composicao_vasilhame" on ind_composicao_vasilhame for all using (true) with check (true);
 
 -- ============================================================================
--- 7. ind_lista_pedidos
+-- 7. cadastro_pedidos_ind (antes: ind_lista_pedidos)
 -- ============================================================================
-create table if not exists ind_lista_pedidos (
+create table if not exists cadastro_pedidos_ind (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -258,11 +258,11 @@ create table if not exists ind_lista_pedidos (
   status text default 'Pendente',
   observations text
 );
-alter table ind_lista_pedidos enable row level security;
-drop policy if exists "allow_all_ind_lista_pedidos" on ind_lista_pedidos;
-create policy "allow_all_ind_lista_pedidos" on ind_lista_pedidos for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_lista_pedidos on ind_lista_pedidos;
-create trigger update_updated_date_ind_lista_pedidos before update on ind_lista_pedidos for each row execute function update_updated_date();
+alter table cadastro_pedidos_ind enable row level security;
+drop policy if exists "allow_all_cadastro_pedidos_ind" on cadastro_pedidos_ind;
+create policy "allow_all_cadastro_pedidos_ind" on cadastro_pedidos_ind for all using (true) with check (true);
+drop trigger if exists update_updated_date_cadastro_pedidos_ind on cadastro_pedidos_ind;
+create trigger update_updated_date_cadastro_pedidos_ind before update on cadastro_pedidos_ind for each row execute function update_updated_date();
 
 -- Cascade client_order do pedido para OPs vinculadas
 create or replace function sync_order_client_order_to_productions()
@@ -281,9 +281,9 @@ begin
   return new;
 end;
 $$;
-drop trigger if exists trg_sync_order_client_order on ind_lista_pedidos;
+drop trigger if exists trg_sync_order_client_order on cadastro_pedidos_ind;
 create trigger trg_sync_order_client_order
-  after update of client_order on ind_lista_pedidos
+  after update of client_order on cadastro_pedidos_ind
   for each row
   execute function sync_order_client_order_to_productions();
 
@@ -360,9 +360,12 @@ create index if not exists idx_checklist_op_prod_etapa on checklist_op (producti
 create index if not exists idx_checklist_op_etapa_answered on checklist_op (etapa, answered_at);
 
 -- ============================================================================
--- 9. ind_cq_resultados
+-- 9. resultados_cq (antes: ind_cq_resultados)
+-- NOTA (053): 1 linha por análise. resultado_id agrupa o certificado.
+-- status é o parecer geral; analysis_status é o parecer da análise.
+-- results jsonb fica nulo. Ver 053_ind_cq_resultados_linhas.sql
 -- ============================================================================
-create table if not exists ind_cq_resultados (
+create table if not exists resultados_cq (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -376,13 +379,24 @@ create table if not exists ind_cq_resultados (
   analyst text,
   status text default 'Pendente',
   observations text,
-  results jsonb
+  sample_photo_url text,
+  results jsonb,
+  resultado_id text,
+  linha_ordem integer not null default 1,
+  analysis_name text,
+  methodology text,
+  specification text,
+  unit text,
+  min_limit numeric,
+  max_limit numeric,
+  result text,
+  analysis_status text
 );
-alter table ind_cq_resultados enable row level security;
-drop policy if exists "allow_all_ind_cq_resultados" on ind_cq_resultados;
-create policy "allow_all_ind_cq_resultados" on ind_cq_resultados for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_cq_resultados on ind_cq_resultados;
-create trigger update_updated_date_ind_cq_resultados before update on ind_cq_resultados for each row execute function update_updated_date();
+alter table resultados_cq enable row level security;
+drop policy if exists "allow_all_resultados_cq" on resultados_cq;
+create policy "allow_all_resultados_cq" on resultados_cq for all using (true) with check (true);
+drop trigger if exists update_updated_date_resultados_cq on resultados_cq;
+create trigger update_updated_date_resultados_cq before update on resultados_cq for each row execute function update_updated_date();
 
 -- ============================================================================
 -- 10. cadastro_analises (antes: ind_cq_esp_tec)
@@ -410,9 +424,9 @@ drop trigger if exists update_updated_date_cadastro_analises on cadastro_analise
 create trigger update_updated_date_cadastro_analises before update on cadastro_analises for each row execute function update_updated_date();
 
 -- ============================================================================
--- 10b. ind_lista_ensaios (catálogo Lista de Ensaios)
+-- 10b. cadastro_analises_metodologia (catálogo Lista de Ensaios)
 -- ============================================================================
-create table if not exists ind_lista_ensaios (
+create table if not exists cadastro_analises_metodologia (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -422,18 +436,20 @@ create table if not exists ind_lista_ensaios (
   unit text,
   is_active boolean not null default true,
   created_by text,
-  constraint ind_lista_ensaios_name_unique unique (analysis_name)
+  constraint cadastro_analises_metodologia_name_unique unique (analysis_name)
 );
-alter table ind_lista_ensaios enable row level security;
-drop policy if exists "allow_all_ind_lista_ensaios" on ind_lista_ensaios;
-create policy "allow_all_ind_lista_ensaios" on ind_lista_ensaios for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_lista_ensaios on ind_lista_ensaios;
-create trigger update_updated_date_ind_lista_ensaios before update on ind_lista_ensaios for each row execute function update_updated_date();
+alter table cadastro_analises_metodologia enable row level security;
+drop policy if exists "allow_all_cadastro_analises_metodologia" on cadastro_analises_metodologia;
+create policy "allow_all_cadastro_analises_metodologia" on cadastro_analises_metodologia for all using (true) with check (true);
+drop trigger if exists update_updated_date_cadastro_analises_metodologia on cadastro_analises_metodologia;
+create trigger update_updated_date_cadastro_analises_metodologia before update on cadastro_analises_metodologia for each row execute function update_updated_date();
 
 -- ============================================================================
--- 11. ind_lista_inventario
+-- 11. inventario (antes: ind_lista_inventario)
+-- Pós-058: 1 produto por linha. inventario_id se repete. item = produto da linha.
+-- O snapshot deixa inventario_id anulável; a 058 define NOT NULL depois da conversão.
 -- ============================================================================
-create table if not exists ind_lista_inventario (
+create table if not exists inventario (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -449,13 +465,30 @@ create table if not exists ind_lista_inventario (
   products text,
   lots text,
   status text default 'Aberto',
-  items jsonb default '[]'::jsonb
+  items jsonb default '[]'::jsonb,
+  inventario_id text,
+  linha_ordem integer not null default 1,
+  stock_id text,
+  item text,
+  client text,
+  product text,
+  lot text,
+  unit text,
+  packaging_type text,
+  packaging_capacity numeric,
+  registered_stock numeric,
+  registered_quantity numeric,
+  physical_packages numeric,
+  fractional_qty numeric,
+  physical_total numeric,
+  difference numeric,
+  difference_pct numeric
 );
-alter table ind_lista_inventario enable row level security;
-drop policy if exists "allow_all_ind_lista_inventario" on ind_lista_inventario;
-create policy "allow_all_ind_lista_inventario" on ind_lista_inventario for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_lista_inventario on ind_lista_inventario;
-create trigger update_updated_date_ind_lista_inventario before update on ind_lista_inventario for each row execute function update_updated_date();
+alter table inventario enable row level security;
+drop policy if exists "allow_all_inventario" on inventario;
+create policy "allow_all_inventario" on inventario for all using (true) with check (true);
+drop trigger if exists update_updated_date_inventario on inventario;
+create trigger update_updated_date_inventario before update on inventario for each row execute function update_updated_date();
 
 -- ============================================================================
 -- Indexes for common queries
@@ -464,11 +497,11 @@ create index if not exists idx_ind_lista_usuarios_usuario on ind_lista_usuarios(
 create index if not exists idx_ind_lista_producoes_status on ind_lista_producoes(status);
 create index if not exists idx_ind_lista_producoes_op_number on ind_lista_producoes(op_number);
 create index if not exists idx_ind_lista_vasilhames_status on ind_lista_vasilhames(status);
-create index if not exists idx_ind_lista_pedidos_status on ind_lista_pedidos(status);
-create index if not exists idx_ind_estoque_mp_mp_code on ind_estoque_mp(mp_code);
-create index if not exists idx_ind_cq_resultados_production_id on ind_cq_resultados(production_id);
-create index if not exists idx_ind_lista_inventario_status on ind_lista_inventario(status);
-create index if not exists idx_ind_lista_inventario_inventory_number on ind_lista_inventario(inventory_number);
+create index if not exists idx_cadastro_pedidos_ind_status on cadastro_pedidos_ind(status);
+create index if not exists idx_estoque_mp_mp_code on estoque_mp(mp_code);
+create index if not exists idx_resultados_cq_production_id on resultados_cq(production_id);
+create index if not exists idx_inventario_status on inventario(status);
+create index if not exists idx_inventario_inventory_number on inventario(inventory_number);
 
 -- ============================================================================
 -- Supabase Realtime — enable postgres_changes on all tables
@@ -481,17 +514,17 @@ drop publication if exists supabase_realtime;
 create publication supabase_realtime for table
   ind_lista_usuarios,
   ind_lista_producoes,
-  ind_estoque_mp,
+  estoque_mp,
   ind_retornos_perdas,
   ind_cadastro_tanka,
   ind_transbordo_ind,
   ind_lista_vasilhames,
   ind_composicao_vasilhame,
-  ind_lista_pedidos,
+  cadastro_pedidos_ind,
   ind_lista_receitas,
   checklist_op,
-  ind_cq_resultados,
+  resultados_cq,
   cadastro_analises,
-  ind_lista_ensaios,
-  ind_lista_inventario,
-  ind_lista_equipamentoslab;
+  cadastro_analises_metodologia,
+  inventario,
+  cadastro_equipamentolab;

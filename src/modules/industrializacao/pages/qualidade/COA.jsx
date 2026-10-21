@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useQualityResults } from '@industrializacao/hooks/useQualityResults';
 import { useQualityTests } from '@industrializacao/hooks/useQualityTests';
 import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useOutletContext } from 'react-router-dom';
@@ -31,8 +32,7 @@ export default function COA() {
   const { isReadOnly } = useOutletContext();
   const { hasPermission } = usePermissions();
   const canIssue = !isReadOnly && hasPermission('quality_coa.issue_coa');
-  const parseResults = (r) => ({ ...r, results: parseArr(r.results) });
-  const { data: results, loading, reload: load } = useRealtimeEntity('QualityResult', () => base44.entities.QualityResult.list('-created_date', 500), [], parseResults);
+  const { data: results, loading, reload: load } = useQualityResults();
   const { data: recipes } = useRecipes('-created_date', 500);
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));

@@ -17,14 +17,16 @@ import RawMaterialViewDialog from '@industrializacao/components/estoque/RawMater
 
 const ORIGEM_OPTIONS = [
   { value: 'all', label: 'Todas' },
-  { value: 'convencional', label: 'Transbordo' },
-  { value: 'industrializacao', label: 'Industrialização' },
+  { value: 'ARMAZENAGEM', label: 'Armazenagem' },
+  { value: 'MATERIA_PRIMA', label: 'Matéria-prima' },
 ];
 
 const LINK_PREFIX = 'INDMP:';
 
 function getSistemaOrigem(entrada) {
-  return entrada?.origem === 'industrializacao' ? 'Industrialização' : 'Transbordo';
+  return entrada?.origem === 'industrializacao' || entrada?.origem === 'MATERIA_PRIMA'
+    ? 'Matéria-prima'
+    : 'Armazenagem';
 }
 
 function formatEntradaData(entrada) {
@@ -270,7 +272,7 @@ export default function ClienteEntradas() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Entradas</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Recebimentos de {cliente} — produtos do transbordo e matéria-prima da industrialização
+            Recebimentos de {cliente} — armazenagem e matéria-prima
           </p>
         </div>
 

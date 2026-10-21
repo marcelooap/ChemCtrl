@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
-import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Plus, Search, Eye, Play, FileText } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -10,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@shared/components/ui/use-toast';
 import InventoryWizard from '@industrializacao/components/inventario/InventoryWizard';
 import { generateInventoryPDF } from '@industrializacao/lib/pdfReports';
+import { inventoryScopeText } from '@industrializacao/lib/inventoryComposition';
 import { fmtDateTime } from '@/i18n/formatters';
 import { translateInventoryStatus } from '@/i18n/domainMaps';
 
 const parseArr = (v) => { if (!v) return []; if (Array.isArray(v)) return v; try { const p = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(p) ? p : []; } catch { return []; } };
 
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
+import { useInventories } from '@industrializacao/hooks/useInventories';
 
 export default function Inventario() {
   const { t, i18n } = useTranslation();
@@ -25,7 +26,7 @@ export default function Inventario() {
   const canEdit = !isReadOnly && hasPermission('inventory.edit');
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: inventories, loading, reload } = useRealtimeEntity('Inventory', () => base44.entities.Inventory.list('-created_date', 500));
+  const { data: inventories, loading, reload } = useInventories();
   const [search, setSearch] = useState('');
   const [showWizard, setShowWizard] = useState(false);
   const [statusFilter, setStatusFilter] = useState('todos');
@@ -33,7 +34,13 @@ export default function Inventario() {
 
   const filtered = inventories.filter(inv => {
     const q = search.toLowerCase();
-    const matchesSearch = !q || [inv.inventory_number, inv.clients, inv.products, inv.lots, inv.opened_by].some(v => (v || '').toLowerCase().includes(q));
+    const matchesSearch = !q || [
+      inv.inventory_number,
+      inventoryScopeText(inv, 'clients'),
+      inventoryScopeText(inv, 'products'),
+      inventoryScopeText(inv, 'lots'),
+      inv.opened_by,
+    ].some(v => (v || '').toLowerCase().includes(q));
     const matchesStatus = statusFilter === 'todos' || inv.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -48,25 +55,37 @@ export default function Inventario() {
     return value;
   };
 
+  const inventoryRouteId = (inv) => inv?.inventario_id || inv?.id;
+
   const handleStart = async (inv) => {
     try {
       const userName = user?.nome || user?.full_name || t('common.notAvailable');
-      await base44.entities.Inventory.update(inv.id, {
+      const patch = {
         status: 'Em andamento',
         start_date: new Date().toISOString(),
         started_by: userName,
-      });
-      navigate(`/inventario/${inv.id}`);
+      };
+      if (inv._is_grouped && inv.inventario_id) {
+        await base44.entities.Inventory.updateMany({ inventario_id: inv.inventario_id }, patch);
+      } else {
+        await base44.entities.Inventory.update(inv.id, patch);
+      }
+      navigate(`/inventario/${inventoryRouteId(inv)}`);
     } catch (e) {
       toast({ title: t('inventory.page.startError'), description: e?.message || String(e), variant: 'destructive' });
     }
   };
 
-  const handlePDF = async (inv) => {
+  const handlePDF = (inv) => {
     setGeneratingPDF(inv.id);
     try {
-      const full = await base44.entities.Inventory.get(inv.id);
-      generateInventoryPDF({ ...full, items: parseArr(full.items), clients: parseArr(full.clients), products: parseArr(full.products), lots: parseArr(full.lots) });
+      generateInventoryPDF({
+        ...inv,
+        items: parseArr(inv.items),
+        clients: inventoryScopeText(inv, 'clients'),
+        products: inventoryScopeText(inv, 'products'),
+        lots: inventoryScopeText(inv, 'lots'),
+      });
     } catch (e) {
       toast({ title: t('inventory.page.pdfError'), variant: 'destructive' });
     } finally {
@@ -125,8 +144,10 @@ export default function Inventario() {
                 {filtered.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-8 text-sm text-muted-foreground">{t('inventory.page.noResults')}</td></tr>
                 ) : filtered.map(inv => {
-                  const clients = inv.clients === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inv.clients).join(', ');
-                  const products = inv.products === 'TODOS' ? formatFilterValue('TODOS') : parseArr(inv.products).join(', ');
+                  const clientsLabel = inventoryScopeText(inv, 'clients');
+                  const productsLabel = inventoryScopeText(inv, 'products');
+                  const clients = clientsLabel === 'TODOS' ? formatFilterValue('TODOS') : clientsLabel;
+                  const products = productsLabel === 'TODOS' ? formatFilterValue('TODOS') : productsLabel;
                   const isFinished = inv.status === 'Finalizado';
                   const canStart = inv.status === 'Aberto' && canEdit;
                   return (
@@ -139,7 +160,7 @@ export default function Inventario() {
                       <td className="px-4 py-3 text-center">{statusBadge(inv.status)}</td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => navigate(`/inventario/${inv.id}`)} className="p-1.5 rounded hover:bg-accent" title={t('inventory.page.view')}>
+                          <button onClick={() => navigate(`/inventario/${inventoryRouteId(inv)}`)} className="p-1.5 rounded hover:bg-accent" title={t('inventory.page.view')}>
                             <Eye className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                           </button>
                           {canStart && (
@@ -171,7 +192,7 @@ export default function Inventario() {
         </div>
       </div>
 
-      <InventoryWizard open={showWizard} onOpenChange={setShowWizard} onCreated={reload} />
+      <InventoryWizard open={showWizard} onOpenChange={setShowWizard} onCreated={reload} inventories={inventories} />
     </div>
   );
 }

@@ -610,6 +610,7 @@ export default function OrdemTransbordo() {
       moduloValidacaoRef.current === "industrializacao" ||
       produtoIndustrializacao ||
       granelPayload?.origem === "industrializacao" ||
+      granelPayload?.origem === "MATERIA_PRIMA" ||
       String(produtoId).startsWith("ind-")
         ? "industrializacao"
         : "convencional";

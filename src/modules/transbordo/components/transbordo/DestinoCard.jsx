@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Input } from "@shared/components/ui/input";
 import { Textarea } from "@shared/components/ui/textarea";
 import { Label } from "@shared/components/ui/label";
@@ -21,6 +22,8 @@ import {
 import {
   VASILHAME_EM_ESTOQUE_MSG,
   destinoLancaTanqueDuplicado,
+  tanqueEstaCheio,
+  volumeAcumuladoDoTanque,
 } from "@transbordo/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
@@ -123,6 +126,7 @@ export default function DestinoCard({
   onToggleCollapse,
   excludeTransbordoId = null,
   excludeTransbordoCodigo = "",
+  todosDestinos = [],
 }) {
   const tipo = destino.tipo_embalagem || "";
   const tipoLabel = labelTipoEmbalagem(tipo) || tipo;
@@ -241,6 +245,30 @@ export default function DestinoCard({
     recalc(updated);
     onChange(updated);
   };
+
+  const volumeAcumulado =
+    tipo === "Vasilhame"
+      ? volumeAcumuladoDoTanque(
+          todosDestinos.length > 0 ? todosDestinos : [destino],
+          {
+            placa: destino.placa,
+            barril: destino.barril,
+            vasilhames,
+            codigoOp: excludeTransbordoCodigo,
+          }
+        )
+      : 0;
+  const capacidadeTanque =
+    selectedFracionado?.capacidade ??
+    vasilhames.find((v) => v.id && v.id === destino.vasilhame_existente_id)
+      ?.capacidade;
+  const tanqueCheio =
+    tipo === "Vasilhame" && tanqueEstaCheio(volumeAcumulado, capacidadeTanque);
+
+  useEffect(() => {
+    if (readOnly || !tanqueCheio || !destino.fracionado) return;
+    updateField("fracionado", false);
+  }, [tanqueCheio, destino.fracionado, readOnly]);
 
   const handleTipoChange = (label, item) => {
     const tipoValue = item?.value || label;
@@ -591,22 +619,25 @@ export default function DestinoCard({
           <div className="rounded-md border border-border/80 bg-background/60 px-3 py-3 space-y-1">
             <div className="flex items-center gap-2">
               <Switch
-                checked={destino.fracionado || false}
+                checked={!tanqueCheio && (destino.fracionado || false)}
                 onCheckedChange={(checked) => updateField("fracionado", checked)}
-                disabled={readOnly}
+                disabled={readOnly || tanqueCheio}
               />
               <Label
-                className="cursor-pointer font-medium"
+                className={`font-medium ${tanqueCheio || readOnly ? "" : "cursor-pointer"}`}
                 onClick={() =>
-                  !readOnly && updateField("fracionado", !destino.fracionado)
+                  !readOnly &&
+                  !tanqueCheio &&
+                  updateField("fracionado", !destino.fracionado)
                 }
               >
                 Destino fracionado
               </Label>
             </div>
             <p className="text-xs text-muted-foreground pl-0 sm:pl-[2.25rem]">
-              Permite registrar o destino antes de completar sua capacidade.
-              Desmarque ao completar o tanque.
+              {tanqueCheio
+                ? "Tanque completo. A tag de fracionado sai ao fechar a capacidade (1.500 L ou 5.000 L)."
+                : "Permite registrar o destino antes de completar sua capacidade. Desmarque ao completar o tanque."}
             </p>
           </div>
 

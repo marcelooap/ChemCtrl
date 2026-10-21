@@ -15,12 +15,12 @@ WHERE p.recipe_id IS NOT NULL AND r.id IS NULL;
 -- 5.1.b — producoes.order_id → pedidos
 SELECT 'producoes.order_id' AS check_name, p.id, p.order_id AS orphan_fk
 FROM ind_lista_producoes p
-LEFT JOIN ind_lista_pedidos o ON o.id = p.order_id
+LEFT JOIN cadastro_pedidos_ind o ON o.id = p.order_id
 WHERE p.order_id IS NOT NULL AND o.id IS NULL;
 
 -- 5.1.c — cq_resultados.production_id → producoes (CRÍTICO se > 0)
 SELECT 'cq_resultados.production_id' AS check_name, q.id, q.production_id AS orphan_fk
-FROM ind_cq_resultados q
+FROM resultados_cq q
 LEFT JOIN ind_lista_producoes p ON p.id = q.production_id
 WHERE p.id IS NULL;
 
@@ -51,13 +51,13 @@ WHERE c.production_id IS NOT NULL AND p.id IS NULL;
 -- 5.1.h — movimentos.stock_id → estoque_mp
 SELECT 'movimentos.stock_id' AS check_name, m.id, m.stock_id AS orphan_fk
 FROM ind_retornos_perdas m
-LEFT JOIN ind_estoque_mp e ON e.id = m.stock_id
+LEFT JOIN estoque_mp e ON e.id = m.stock_id
 WHERE m.stock_id IS NOT NULL AND e.id IS NULL;
 
 -- 5.1.i — programacao.order_id → pedidos
 SELECT 'programacao.order_id' AS check_name, pd.id, pd.order_id AS orphan_fk
 FROM ind_programacao_demanda pd
-LEFT JOIN ind_lista_pedidos o ON o.id = pd.order_id
+LEFT JOIN cadastro_pedidos_ind o ON o.id = pd.order_id
 WHERE pd.order_id IS NOT NULL AND o.id IS NULL;
 
 -- 5.1.j — checklist.recipe_id → receitas
@@ -97,7 +97,7 @@ GROUP BY product_name, revision_number
 HAVING COUNT(*) > 1;
 
 SELECT analysis_name, COUNT(*) AS dupes
-FROM ind_lista_ensaios
+FROM cadastro_analises_metodologia
 GROUP BY analysis_name
 HAVING COUNT(*) > 1;
 
@@ -118,11 +118,11 @@ UNION ALL SELECT 't_vasilhames', COUNT(*) FROM t_vasilhames
 UNION ALL SELECT 't_saidas', COUNT(*) FROM t_saidas
 UNION ALL SELECT 't_transbordo_validacoes', COUNT(*) FROM t_transbordo_validacoes
 UNION ALL SELECT 'receitas', COUNT(*) FROM receitas
-UNION ALL SELECT 'ind_lista_pedidos', COUNT(*) FROM ind_lista_pedidos
+UNION ALL SELECT 'cadastro_pedidos_ind', COUNT(*) FROM cadastro_pedidos_ind
 UNION ALL SELECT 'ind_lista_producoes', COUNT(*) FROM ind_lista_producoes
-UNION ALL SELECT 'ind_estoque_mp', COUNT(*) FROM ind_estoque_mp
+UNION ALL SELECT 'estoque_mp', COUNT(*) FROM estoque_mp
 UNION ALL SELECT 'ind_lista_vasilhames', COUNT(*) FROM ind_lista_vasilhames
-UNION ALL SELECT 'ind_cq_resultados', COUNT(*) FROM ind_cq_resultados
+UNION ALL SELECT 'resultados_cq', COUNT(*) FROM resultados_cq
 UNION ALL SELECT 'checklist_op', COUNT(*) FROM checklist_op
 UNION ALL SELECT 'ind_validacoes', COUNT(*) FROM ind_validacoes
 UNION ALL SELECT 'perfis', COUNT(*) FROM perfis
