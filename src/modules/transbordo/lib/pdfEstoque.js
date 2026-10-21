@@ -17,28 +17,30 @@ import {
   getTipoRecebimentoLabel,
 } from "@transbordo/lib/tipoRecebimento";
 import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
-
-const M = 14;
-const PW = 210;
-const PH = 297;
-const CW = PW - 2 * M;
-
-const BLUE_DARK = [28, 53, 91];
-const BLUE_MID = [37, 99, 195];
-const GRAY_LABEL = [130, 140, 155];
-const GRAY_ROW = [248, 249, 251];
-const GRAY_BORDER = [220, 224, 230];
-const BLACK = [30, 30, 30];
-
-function setColor(doc, rgb) {
-  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-}
-function setFill(doc, rgb) {
-  doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-}
-function setDraw(doc, rgb) {
-  doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
-}
+import {
+  M,
+  CW,
+  BLUE as BLUE_MID,
+  BLUE,
+  BLUE_DARK,
+  BLUE_SOFT,
+  BG_SOFT as GRAY_ROW,
+  BORDER as GRAY_BORDER,
+  TEXT as BLACK,
+  MUTED as GRAY_LABEL,
+  setColor,
+  setFill,
+  setDraw,
+  drawMainHeader,
+  drawSectionTitle,
+  addInfoCards,
+  paintFooter,
+  ensurePdfSpace,
+  contentLimit,
+  paintHeaderBand,
+  closeTableCard,
+  nextPage,
+} from "@transbordo/lib/pdfReportLayout";
 
 function fmtDate(d) {
   if (!d) return "-";
@@ -87,19 +89,7 @@ function formatPdfFileDate(date = new Date()) {
 }
 
 function addPageTitle(doc, title, subtitle) {
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M, 22);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  setColor(doc, GRAY_LABEL);
-  doc.text(subtitle || "", M, 29);
-  setDraw(doc, BLUE_MID);
-  doc.setLineWidth(0.6);
-  doc.line(M, 33, PW - M, 33);
-  doc.setLineWidth(0.2);
-  return 44;
+  return drawMainHeader(doc, { title, subtitle });
 }
 
 function pageBox(doc) {
@@ -110,116 +100,19 @@ function pageBox(doc) {
 }
 
 function addFooter(doc) {
-  const pages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    const { w, h } = pageBox(doc);
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.3);
-    doc.line(M, h - 13, w - M, h - 13);
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "normal");
-    setColor(doc, GRAY_LABEL);
-    doc.text("ChemCtrl - Sistema de Controle de Produção", M, h - 8);
-    doc.text(`Página ${i} de ${pages}`, w - M, h - 8, { align: "right" });
-  }
+  paintFooter(doc);
 }
 
 function addSectionTitle(doc, y, title) {
-  setFill(doc, BLUE_MID);
-  doc.rect(M, y, 2.5, 7, "F");
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M + 5, y + 5.5);
-  setColor(doc, BLACK);
-  return y + 11;
+  return drawSectionTitle(doc, y, title);
 }
 
 function addInfoGrid(doc, y, pairs, cols = 3) {
-  const colW = CW / cols;
-  const rowsData = [];
-  let currentRow = [];
-  let usedCols = 0;
-  for (const p of pairs) {
-    const span = p[2] || 1;
-    if (usedCols + span > cols && currentRow.length > 0) {
-      rowsData.push(currentRow);
-      currentRow = [];
-      usedCols = 0;
-    }
-    currentRow.push({ label: p[0], value: p[1], span });
-    usedCols += span;
-    if (usedCols >= cols) {
-      rowsData.push(currentRow);
-      currentRow = [];
-      usedCols = 0;
-    }
-  }
-  if (currentRow.length > 0) rowsData.push(currentRow);
-
-  const rowHeights = rowsData.map((row) => {
-    let maxH = 14;
-    row.forEach((cell) => {
-      const cellW = colW * cell.span - 6;
-      const lines = doc.splitTextToSize(
-        String(cell.value != null ? cell.value : "-"),
-        cellW
-      );
-      const textH = 5 + lines.length * 4.5 + 4;
-      if (textH > maxH) maxH = textH;
-    });
-    return maxH;
-  });
-  const totalH = rowHeights.reduce((a, b) => a + b, 0);
-
-  setDraw(doc, GRAY_BORDER);
-  doc.setLineWidth(0.3);
-  doc.rect(M, y, CW, totalH);
-
-  let yy = y;
-  rowsData.forEach((row, ri) => {
-    const rowH = rowHeights[ri];
-    let x = M;
-    row.forEach((cell) => {
-      const cellW = colW * cell.span;
-      if (x > M) {
-        setDraw(doc, GRAY_BORDER);
-        doc.setLineWidth(0.3);
-        doc.line(x, yy, x, yy + rowH);
-      }
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      setColor(doc, GRAY_LABEL);
-      doc.text(String(cell.label).toUpperCase(), x + 3, yy + 4.5);
-      doc.setFontSize(9.5);
-      doc.setFont("helvetica", "bold");
-      setColor(doc, BLACK);
-      const lines = doc.splitTextToSize(
-        String(cell.value != null ? cell.value : "-"),
-        cellW - 6
-      );
-      doc.text(lines, x + 3, yy + 10);
-      x += cellW;
-    });
-    if (ri < rowsData.length - 1) {
-      setDraw(doc, GRAY_BORDER);
-      doc.setLineWidth(0.3);
-      doc.line(M, yy + rowH, M + CW, yy + rowH);
-    }
-    yy += rowH;
-  });
-
-  setColor(doc, BLACK);
-  return y + totalH + 5;
+  return addInfoCards(doc, y, pairs, cols);
 }
 
 function ensureSpace(doc, y, needed) {
-  if (y + needed > PH - 20) {
-    doc.addPage();
-    return 20;
-  }
-  return y;
+  return ensurePdfSpace(doc, y, needed);
 }
 
 function measurePdfText(doc, value, fontSize, fontStyle) {
@@ -381,9 +274,8 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     const maxLines = Math.max(1, ...headerLines.map((l) => l.length));
     const h = Math.max(8, maxLines * 3.8 + 3);
 
-    setFill(doc, BLUE_DARK);
-    doc.rect(M, yy, CW, h, "F");
-    setColor(doc, [255, 255, 255]);
+    paintHeaderBand(doc, yy, h);
+    setColor(doc, GRAY_LABEL);
     let x = M;
     headerLines.forEach((lines, i) => {
       const blockH = lines.length * 3.8;
@@ -396,17 +288,10 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
       });
       x += widths[i];
     });
-    return yy + h;
-  };
-
-  const drawVLines = (yy, h) => {
     setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.1);
-    let xLine = M;
-    for (let i = 0; i < headers.length - 1; i++) {
-      xLine += widths[i];
-      doc.line(xLine, yy, xLine, yy + h);
-    }
+    doc.setLineWidth(0.2);
+    doc.line(M + 1.2, yy + h, M + CW - 1.2, yy + h);
+    return yy + h;
   };
 
   const drawBadgeAt = (label, cx, cy, maxW) => {
@@ -422,6 +307,7 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     doc.text(safe, cx, cy, { align: "center", baseline: "middle" });
   };
 
+  let segmentTop = y;
   y = drawHeader(y);
   doc.setFontSize(dataFs);
   doc.setFont("helvetica", "normal");
@@ -429,12 +315,6 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
 
   if (!rows.length) {
     const rowH = 8;
-    setFill(doc, GRAY_ROW);
-    doc.rect(M, y, CW, rowH, "F");
-    drawVLines(y, rowH);
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.15);
-    doc.line(M, y + rowH, M + CW, y + rowH);
     doc.setFontSize(8);
     setColor(doc, GRAY_LABEL);
     doc.text("Nenhum registro", cellCenterX(M, CW), y + rowH / 2, {
@@ -442,7 +322,9 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
       baseline: "middle",
     });
     setColor(doc, BLACK);
-    return y + rowH + 4;
+    y += rowH;
+    closeTableCard(doc, segmentTop, y);
+    return y + 4;
   }
 
   rows.forEach((r, ri) => {
@@ -450,9 +332,10 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     const maxLines = Math.max(1, ...cellLines.map((lines) => lines.length));
     const rowH = Math.max(7.5, maxLines * lineH + rowPad * 2);
 
-    if (y + rowH > PH - 28) {
-      doc.addPage();
-      y = 20;
+    if (y + rowH > contentLimit(doc) && y > segmentTop + 8) {
+      closeTableCard(doc, segmentTop, y);
+      y = nextPage(doc);
+      segmentTop = y;
       y = drawHeader(y);
       doc.setFontSize(dataFs);
       doc.setFont("helvetica", "normal");
@@ -460,12 +343,11 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     }
     if (ri % 2 === 0) {
       setFill(doc, GRAY_ROW);
-      doc.rect(M, y, CW, rowH, "F");
+      doc.rect(M + 0.45, y, CW - 0.9, rowH, "F");
     }
-    drawVLines(y, rowH);
     setDraw(doc, GRAY_BORDER);
     doc.setLineWidth(0.15);
-    doc.line(M, y + rowH, M + CW, y + rowH);
+    doc.line(M + 1.5, y + rowH, M + CW - 1.5, y + rowH);
 
     let x = M;
     cellLines.forEach((lines, i) => {
@@ -505,16 +387,16 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     });
     const maxLines = Math.max(1, ...totalLines.map((l) => Math.max(1, l.length)));
     const rowH = Math.max(8, maxLines * lineH + rowPad * 2);
-    if (y + rowH > PH - 28) {
-      doc.addPage();
-      y = 20;
+    if (y + rowH > contentLimit(doc) && y > segmentTop + 8) {
+      closeTableCard(doc, segmentTop, y);
+      y = nextPage(doc);
+      segmentTop = y;
     }
-    setFill(doc, [235, 240, 250]);
-    doc.rect(M, y, CW, rowH, "F");
-    drawVLines(y, rowH);
+    setFill(doc, BLUE_SOFT);
+    doc.rect(M + 0.45, y, CW - 0.9, rowH, "F");
     setDraw(doc, BLUE_MID);
-    doc.setLineWidth(0.4);
-    doc.line(M, y, M + CW, y);
+    doc.setLineWidth(0.35);
+    doc.line(M + 1.5, y, M + CW - 1.5, y);
     doc.setLineWidth(0.2);
     doc.setFontSize(dataFs);
     doc.setFont("helvetica", "bold");
@@ -536,13 +418,14 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     y += rowH;
   }
 
+  closeTableCard(doc, segmentTop, y);
   setColor(doc, BLACK);
   return y + 6;
 }
 
 /**
  * Relatório completo do item de estoque (A4).
- * Layout alinhado ao Relatório Fiscal e demais PDFs do ChemCtrl.
+ * Layout no padrão visual do PDF de checklist.
  */
 export function generateRelatorioEstoquePDF({
   item,
@@ -866,22 +749,25 @@ function addTankaSiloPages(doc, tanks = []) {
     const { w, h } = pageBox(doc);
     const slice = tanks.slice(page * perPage, (page + 1) * perPage);
 
-    doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    setColor(doc, GRAY_LABEL);
+    doc.text("ChemCtrl", M, 12);
+    doc.setFontSize(15);
     setColor(doc, BLUE_DARK);
-    doc.text("Tankas", M, 16);
-    doc.setFontSize(10);
+    doc.text("Tankas", M, 20);
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
     setColor(doc, GRAY_LABEL);
     const continuation =
       pageCount > 1 ? ` · folha ${page + 1} de ${pageCount}` : "";
-    doc.text(`${tanks.length} tanka(s)${continuation}`, M, 22);
+    doc.text(`${tanks.length} tanka(s)${continuation}`, M, 26);
     doc.setFont("helvetica", "bold");
     setColor(doc, BLACK);
-    doc.text(`${fmtVolume(totalVolume)} L`, w - M, 18, { align: "right" });
-    setDraw(doc, BLUE_MID);
-    doc.setLineWidth(0.6);
-    doc.line(M, 26, w - M, 26);
+    doc.text(`${fmtVolume(totalVolume)} L`, w - M, 20, { align: "right" });
+    setDraw(doc, BLUE);
+    doc.setLineWidth(0.5);
+    doc.line(M, 30, w - M, 30);
     doc.setLineWidth(0.2);
 
     if (slice.length === 0) {
@@ -892,8 +778,8 @@ function addTankaSiloPages(doc, tanks = []) {
       continue;
     }
 
-    const top = 34;
-    const bottom = h - 18;
+    const top = 36;
+    const bottom = h - 24;
     const gridW = w - 2 * M;
     const gridH = bottom - top;
     const slotW = gridW / cols;
@@ -959,7 +845,7 @@ function addTankaSiloPages(doc, tanks = []) {
 
 /**
  * Relatório consolidado de Estoque Envio (produtos + vasilhames + tankas).
- * Layout alinhado ao PDF de Estoque Cliente (industrialização).
+ * Layout no padrão visual do PDF de checklist.
  * A última folha é paisagem, com os silos coloridos do filtro.
  */
 export function generateEstoqueEnvioPDF({

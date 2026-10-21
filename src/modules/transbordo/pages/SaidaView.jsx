@@ -7,6 +7,21 @@ import { Button } from "@shared/components/ui/button";
 import { Switch } from "@shared/components/ui/switch";
 import { Label } from "@shared/components/ui/label";
 import { formatVolume, formatMass, formatNum } from "@transbordo/lib/format";
+import {
+  M,
+  CW,
+  BLUE_DARK,
+  MUTED,
+  BORDER,
+  setColor,
+  setDraw,
+  drawMainHeader,
+  addInfoCards,
+  drawSectionTitle,
+  drawSoftTable,
+  paintFooter,
+  ensurePdfSpace,
+} from "@transbordo/lib/pdfReportLayout";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   TIPO_EMBALADO,
@@ -48,175 +63,104 @@ const formatDateTime = (d) => {
 function gerarSaidaPDF(saida) {
   import("jspdf").then(({ jsPDF }) => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageW = 210;
-    const margin = 14;
-    let y = 16;
-
-    // ── Cabeçalho da empresa ──
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, pageW, 22, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont(undefined, "bold");
-    doc.text("Transbordo", margin, 12);
-    doc.setFontSize(8);
-    doc.setFont(undefined, "normal");
-    doc.text("Controle Operacional", margin, 17);
-    doc.setFontSize(10);
-    doc.setFont(undefined, "bold");
-    doc.text("SOLICITAÇÃO DE SAÍDA", pageW - margin, 12, { align: "right" });
-    doc.setFontSize(9);
-    doc.setFont(undefined, "normal");
-    doc.text(`Nº ${saida.codigo || "—"}`, pageW - margin, 17, { align: "right" });
-    y = 30;
-
-    // ── Dados da solicitação ──
-    doc.setTextColor(60, 60, 60);
-    doc.setFontSize(7);
-    doc.setFont(undefined, "bold");
-    doc.text("CLIENTE", margin, y);
-    doc.text("DESTINO", margin + 58, y);
-    doc.text("DATA DA SOLICITAÇÃO", margin + 108, y);
-    doc.text("DATA PROGRAMADA", margin + 155, y);
-    y += 4;
-    doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
-    doc.setTextColor(20, 20, 20);
-    doc.text(saida.cliente_nome || "—", margin, y, { maxWidth: 54 });
-    doc.text(saida.destino || "—", margin + 58, y, { maxWidth: 46 });
-    doc.text(formatDate(saida.data_solicitacao), margin + 108, y);
-    doc.text(formatDate(saida.data_programada), margin + 155, y);
-    y += 6;
-
-    // Linha separadora
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.3);
-    doc.line(margin, y, pageW - margin, y);
-    y += 6;
-
-    // ── Tabela de produtos ──
-    const headers = ["Tipo", "Produto", "Lote", "Qtd. (kg)", "Peso Líq.", "Qtd. Emb.", "Tanque", "Vol. (L)", "Est. Antes", "Est. Depois"];
-    const colWidths = [20, 30, 18, 16, 16, 14, 18, 16, 18, 18];
-    const tableW = colWidths.reduce((a, b) => a + b, 0);
-    let x = margin;
-
-    // Header da tabela
-    doc.setFillColor(45, 86, 162);
-    doc.rect(x, y - 4, tableW, 6, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(6);
-    doc.setFont(undefined, "bold");
-    colWidths.forEach((w, i) => {
-      doc.text(headers[i], x + 1, y, { maxWidth: w - 2 });
-      x += w;
-    });
-    y += 5;
-
-    // Linhas
-    doc.setFontSize(6.5);
-    doc.setFont(undefined, "normal");
-    doc.setTextColor(30, 30, 30);
-    (saida.itens || []).forEach((item, idx) => {
-      if (y > 270) {
-        doc.addPage();
-        y = 16;
-      }
-      x = margin;
-      if (idx % 2 === 1) {
-        doc.setFillColor(245, 247, 250);
-        doc.rect(x, y - 3.5, tableW, 5, "F");
-      }
-      const row = [
-        tipoItemLabel(item).substring(0, 18),
-        (item.produto_nome || "—").substring(0, 28),
-        (item.lote || "—").substring(0, 16),
-        formatMass(item.quantidade_solicitada, { empty: EMPTY }),
-        formatMass(
-          item.tipo === TIPO_EMBALADO ? item.peso_liquido_embalagem : item.peso_liquido,
-          { empty: EMPTY }
-        ),
-        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
-          ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY })
-          : "—",
-        item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-          ? item.vasilhame_placa || "—"
-          : "—",
-        item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-          ? formatVolume(item.volume_solicitado, { empty: EMPTY })
-          : "—",
-        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-          ? formatMass(item.estoque_atual, { empty: EMPTY })
-          : formatVolume(item.volume_disponivel, { empty: EMPTY }),
-        item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-          ? formatMass(item.estoque_final, { empty: EMPTY })
-          : formatVolume(item.saldo_final, { empty: EMPTY }),
-      ];
-      colWidths.forEach((w, i) => {
-        doc.text(row[i], x + 1, y, { maxWidth: w - 2 });
-        x += w;
-      });
-      y += 5;
-      doc.setDrawColor(230, 230, 230);
-      doc.setLineWidth(0.1);
-      doc.line(margin, y - 3.5, margin + tableW, y - 3.5);
+    const codigo = saida.codigo || "—";
+    let y = drawMainHeader(doc, {
+      title: "Solicitação de Saída",
+      subtitle: `Nº ${codigo} · Transbordo · Controle Operacional`,
+      badge: saida.codigo || "",
+      footerCenter: `Gerado em ${new Date().toLocaleString("pt-BR")}`,
     });
 
-    // Total
+    y = addInfoCards(
+      doc,
+      y,
+      [
+        ["Cliente", saida.cliente_nome || "—", 2],
+        ["Destino", saida.destino || "—", 2],
+        ["Data da Solicitação", formatDate(saida.data_solicitacao)],
+        ["Data Programada", formatDate(saida.data_programada)],
+      ],
+      2
+    );
+
+    y = drawSectionTitle(doc, y, "Produtos");
+    const headers = [
+      "Tipo",
+      "Produto",
+      "Lote",
+      "Qtd. (kg)",
+      "Peso Líq.",
+      "Qtd. Emb.",
+      "Tanque",
+      "Vol. (L)",
+      "Est. Antes",
+      "Est. Depois",
+    ];
+    const rows = (saida.itens || []).map((item) => [
+      tipoItemLabel(item),
+      item.produto_nome || "—",
+      item.lote || "—",
+      formatMass(item.quantidade_solicitada, { empty: EMPTY }),
+      formatMass(
+        item.tipo === TIPO_EMBALADO ? item.peso_liquido_embalagem : item.peso_liquido,
+        { empty: EMPTY }
+      ),
+      item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
+        ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY })
+        : "—",
+      item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+        ? item.vasilhame_placa || "—"
+        : "—",
+      item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+        ? formatVolume(item.volume_solicitado, { empty: EMPTY })
+        : "—",
+      item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+        ? formatMass(item.estoque_atual, { empty: EMPTY })
+        : formatVolume(item.volume_disponivel, { empty: EMPTY }),
+      item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+        ? formatMass(item.estoque_final, { empty: EMPTY })
+        : formatVolume(item.saldo_final, { empty: EMPTY }),
+    ]);
+    y = drawSoftTable(doc, y, {
+      headers,
+      rows,
+      widths: [20, 30, 18, 16, 16, 14, 18, 16, 18, 18],
+      fontSize: 6.5,
+      headerSize: 5.8,
+      lineH: 3.1,
+    });
+
     y += 2;
-    doc.setFont(undefined, "bold");
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(20, 20, 20);
+    setColor(doc, BLUE_DARK);
     doc.text(
       `QUANTIDADE TOTAL: ${formatMass(saida.quantidade_total, { empty: EMPTY })} kg`,
-      margin + tableW - 50,
-      y
+      M + CW,
+      y,
+      { align: "right" }
     );
     y += 8;
 
-    // ── Observações ──
     if (saida.observacoes) {
-      doc.setFontSize(7);
-      doc.setFont(undefined, "bold");
-      doc.setTextColor(100, 100, 100);
-      doc.text("OBSERVAÇÕES:", margin, y);
-      y += 4;
-      doc.setFont(undefined, "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(30, 30, 30);
-      const obsLines = doc.splitTextToSize(saida.observacoes, pageW - margin * 2);
-      doc.text(obsLines, margin, y);
-      y += obsLines.length * 4 + 4;
+      y = ensurePdfSpace(doc, y, 18);
+      y = addInfoCards(doc, y, [["Observações", saida.observacoes, 2]], 2);
     }
 
-    // ── Assinaturas ──
-    if (y > 240) {
-      doc.addPage();
-      y = 30;
-    }
-    y += 10;
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.3);
+    y = ensurePdfSpace(doc, y + 8, 16);
     const sigW = 70;
-    const gap = (pageW - margin * 2 - sigW * 2) / 1;
-    doc.line(margin, y, margin + sigW, y);
-    doc.line(margin + sigW + gap, y, margin + sigW * 2 + gap, y);
+    const gap = CW - sigW * 2;
+    setDraw(doc, BORDER);
+    doc.setLineWidth(0.3);
+    doc.line(M, y, M + sigW, y);
+    doc.line(M + sigW + gap, y, M + sigW * 2 + gap, y);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(80, 80, 80);
-    doc.text("Solicitante", margin + sigW / 2, y + 4, { align: "center" });
-    doc.text("Responsável", margin + sigW + gap + sigW / 2, y + 4, {
-      align: "center",
-    });
+    setColor(doc, MUTED);
+    doc.text("Solicitante", M + sigW / 2, y + 4, { align: "center" });
+    doc.text("Responsável", M + sigW + gap + sigW / 2, y + 4, { align: "center" });
 
-    // ── Rodapé ──
-    doc.setFontSize(6);
-    doc.setTextColor(160, 160, 160);
-    doc.text(
-      `Gerado em ${new Date().toLocaleString("pt-BR")} | Transbordo - Controle Operacional`,
-      pageW / 2,
-      290,
-      { align: "center" }
-    );
-
+    paintFooter(doc);
     doc.save(`saida-${saida.codigo || saida.id}.pdf`);
   });
 }

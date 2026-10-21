@@ -8,6 +8,13 @@ import {
   import { Button } from "@shared/components/ui/button";
   import { Package, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { formatMass, formatVolume, formatDensidade, formatQuantidade } from "@transbordo/lib/format";
+import {
+  drawMainHeader,
+  addInfoCards,
+  drawSectionTitle,
+  drawSoftTable,
+  paintFooter,
+} from "@transbordo/lib/pdfReportLayout";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
   
@@ -69,31 +76,38 @@ import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
   
     const handleGerarPDF = async () => {
       const { jsPDF } = await import("jspdf");
-      const doc = new jsPDF();
-      let y = 20;
-  
-      doc.setFontSize(14);
-      doc.setTextColor(0, 82, 204);
-      doc.text(`Entrada ${entradaId || entrada.id}`, 14, y);
-      y += 8;
-  
-      doc.setFontSize(9);
-      doc.setTextColor(94, 108, 132);
-      doc.text(`Cliente: ${entrada.cliente_nome || "-"}`, 14, y); y += 5;
-      doc.text(`Data: ${formatDate(entrada.data || entrada.created_date || entrada.created_at)}`, 14, y); y += 5;
-      doc.text(`Nota Fiscal: ${entrada.nota_fiscal || "-"}`, 14, y); y += 10;
-  
-      doc.setFontSize(11);
-      doc.setTextColor(23, 43, 77);
-      doc.text("Produtos", 14, y); y += 6;
-      doc.setFontSize(8);
-      doc.setTextColor(94, 108, 132);
-      lotes.forEach((l) => {
-        doc.text(`${l.produto_nome || "-"} | ${formatQuantidade(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), { empty: "-" })} ${l.unidade_medida || ""} | Lote: ${l.lote || "-"}`, 14, y);
-        y += 5;
+      const doc = new jsPDF({ format: "a4", orientation: "portrait", unit: "mm" });
+      const entradaRef = entradaId || entrada.id || "-";
+      let y = drawMainHeader(doc, {
+        title: `Entrada ${entradaRef}`,
+        subtitle: entrada.cliente_nome || "-",
+        badge: entradaRef !== "-" ? String(entradaRef) : "",
       });
-  
-      doc.save(`entrada-${entradaId || entrada.id}.pdf`);
+      y = addInfoCards(
+        doc,
+        y,
+        [
+          ["Cliente", entrada.cliente_nome || "-"],
+          ["Data", formatDate(entrada.data || entrada.created_date || entrada.created_at)],
+          ["Nota Fiscal", entrada.nota_fiscal || "-"],
+        ],
+        3
+      );
+      y = drawSectionTitle(doc, y, "Produtos");
+      drawSoftTable(doc, y, {
+        headers: ["Produto", "Quantidade", "Lote"],
+        widths: [92, 46, 44],
+        aligns: ["left", "center", "center"],
+        rows: lotes.map((l) => {
+          const qtd = formatQuantidade(getQuantidadeNotaFiscal(l, entrada, { lotesCount }), {
+            empty: "-",
+          });
+          const unidade = l.unidade_medida || "";
+          return [l.produto_nome || "-", unidade ? `${qtd} ${unidade}` : qtd, l.lote || "-"];
+        }),
+      });
+      paintFooter(doc);
+      doc.save(`entrada-${entradaRef}.pdf`);
     };
   
     return (

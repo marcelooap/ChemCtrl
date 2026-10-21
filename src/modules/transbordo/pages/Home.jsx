@@ -160,7 +160,7 @@ export default function Home() {
   const cards = [
     {
       title: "VOLUME TRANSBORDADO NO MÊS",
-      value: loading ? "..." : `${formatVolume(volumeTransbordadoMes)} L`,
+      value: loading ? "..." : `${formatNum(volumeTransbordadoMes, 0)} L`,
       subtitle: loading
         ? "Carregando..."
         : `${transbordosMes.length} transbordo(s) registrado(s)`,
@@ -188,7 +188,7 @@ export default function Home() {
         ? null
         : {
             primary: "Volume do dia atual",
-            secondary: `Acumulado no mês: ${formatVolume(volumeTransbordadoMes)} L`,
+            secondary: `Acumulado no mês: ${formatNum(volumeTransbordadoMes, 0)} L`,
           },
       icon: ArrowLeftRight,
       color: "#10B981",
@@ -217,14 +217,9 @@ export default function Home() {
   const { monday: semanaInicio, saturday: semanaFim } = getWeekRangeMonSat();
   const periodoSemana = `${formatDateBr(semanaInicio)} – ${formatDateBr(semanaFim)}`;
 
-  const transbordosSemana = transbordos
-    .filter((t) => isInWeekMonSat(t.data, semanaInicio, semanaFim))
-    .slice()
-    .sort((a, b) => {
-      const byData = String(b.data || "").localeCompare(String(a.data || ""));
-      if (byData !== 0) return byData;
-      return new Date(b.created_date || 0) - new Date(a.created_date || 0);
-    });
+  const transbordosSemana = transbordos.filter((t) =>
+    isInWeekMonSat(t.data, semanaInicio, semanaFim)
+  );
 
   const volumeSemana = transbordosSemana.reduce(
     (sum, t) => sum + (t.volume_total || 0),
@@ -242,7 +237,11 @@ export default function Home() {
     return { label, volume };
   });
 
-  const operacoes = transbordosSemana.map((t) => ({
+  const transbordosDoDia = transbordosHoje.slice().sort((a, b) => {
+    return new Date(b.created_date || 0) - new Date(a.created_date || 0);
+  });
+
+  const operacoes = transbordosDoDia.map((t) => ({
     numero: t.codigo_transbordo || "-",
     produto: t.produto_nome || "-",
     cliente: t.cliente_nome || "-",
@@ -322,7 +321,7 @@ export default function Home() {
         })}
       </div>
 
-      {/* Operations Table — semana atual (Seg–Sáb) */}
+      {/* Resumo da semana (Seg–Sáb); a tabela lista só o dia atual */}
       <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border flex-wrap">
           <div className="min-w-0">
@@ -373,7 +372,7 @@ export default function Home() {
               ) : operacoes.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">
-                    Nenhum transbordo nesta semana.
+                    Nenhum transbordo hoje.
                   </td>
                 </tr>
               ) : (

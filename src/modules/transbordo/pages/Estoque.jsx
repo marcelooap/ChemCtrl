@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Search, Eye, Pencil, Trash2, Droplets, Package, Container, ChevronDown, MapPin, ExternalLink } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Switch } from "@shared/components/ui/switch";
@@ -246,11 +246,10 @@ export default function Estoque() {
     return estoque
       .filter((e) => {
         const tipo = resolveTipoRecebimentoEstoque(e);
-        // Recebimento em vasilhame é saldo de estoque. A aba Granel é a
-        // listagem principal, então esses lotes aparecem junto com o granel.
+        // Recebimento em vasilhame continua no pátio (tela de Vasilhames)
+        // e o saldo permanece na aba Granel.
         if (tipoFilter === "granel" && tipo !== "granel" && tipo !== "vasilhame") return false;
         if (tipoFilter === "embalado" && tipo !== "embalado") return false;
-        if (tipoFilter === "vasilhame" && tipo !== "vasilhame") return false;
 
         const entradaLabel = (
           e?.entrada_id && entradaIdMap[e.entrada_id]
@@ -459,13 +458,7 @@ export default function Estoque() {
             <h1 className="text-2xl font-bold text-foreground leading-tight">Estoque</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {filtered.length} registro(s) em estoque
-              {tipoFilter === "granel"
-                ? " · Granel e vasilhame"
-                : tipoFilter === "embalado"
-                  ? " · Embalado"
-                  : tipoFilter === "vasilhame"
-                    ? " · Vasilhame"
-                    : ""}
+              {tipoFilter === "embalado" ? " · Embalado" : " · Granel"}
             </p>
           </div>
           <Tabs value={tipoFilter} onValueChange={setTipoFilter}>
@@ -477,10 +470,6 @@ export default function Estoque() {
               <TabsTrigger value="embalado" className={TIPO_TAB_TRIGGER_CLASS}>
                 <Package className="w-4 h-4" />
                 Embalado
-              </TabsTrigger>
-              <TabsTrigger value="vasilhame" className={TIPO_TAB_TRIGGER_CLASS}>
-                <Container className="w-4 h-4" />
-                Vasilhame
               </TabsTrigger>
             </TabsList>
           </Tabs>

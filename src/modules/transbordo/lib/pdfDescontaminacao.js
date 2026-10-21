@@ -1,101 +1,47 @@
 import { jsPDF } from "jspdf";
 import { formatDateBr, periodLabel } from "./descontaminacao.js";
-
-const M = 14;
-const PW = 210;
-const PH = 297;
-const CW = PW - 2 * M;
-
-const BLUE_DARK = [28, 53, 91];
-const BLUE_MID = [37, 99, 195];
-const GRAY_LABEL = [130, 140, 155];
-const GRAY_ROW = [248, 249, 251];
-const GRAY_BORDER = [220, 224, 230];
-const BLACK = [30, 30, 30];
-
-function setColor(doc, rgb) {
-  doc.setTextColor(rgb[0], rgb[1], rgb[2]);
-}
-function setFill(doc, rgb) {
-  doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-}
-function setDraw(doc, rgb) {
-  doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
-}
+import {
+  M,
+  CW,
+  BG_SOFT as GRAY_ROW,
+  BORDER as GRAY_BORDER,
+  TEXT as BLACK,
+  MUTED as GRAY_LABEL,
+  setColor,
+  setFill,
+  setDraw,
+  drawMainHeader,
+  drawSectionTitle,
+  addInfoCards,
+  paintFooter,
+  setPdfFooter,
+  contentLimit,
+  paintHeaderBand,
+  closeTableCard,
+  nextPage,
+} from "@transbordo/lib/pdfReportLayout";
 
 function addPageTitle(doc, title, subtitle) {
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M, 22);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  setColor(doc, GRAY_LABEL);
-  const lines = doc.splitTextToSize(subtitle || "", CW);
-  doc.text(lines, M, 29);
-  const lineY = 29 + Math.max(0, lines.length - 1) * 4.5 + 4;
-  setDraw(doc, BLUE_MID);
-  doc.setLineWidth(0.6);
-  doc.line(M, lineY, PW - M, lineY);
-  doc.setLineWidth(0.2);
-  return lineY + 10;
+  return drawMainHeader(doc, { title, subtitle });
 }
 
 function addFooter(doc, emitidoPor) {
-  const pages = doc.internal.getNumberOfPages();
   const nome = String(emitidoPor || "").trim() || "-";
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    setColor(doc, BLACK);
-    doc.text(`Emitido por: ${nome}`, M, PH - 18);
-
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.3);
-    doc.line(M, PH - 13, PW - M, PH - 13);
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "normal");
-    setColor(doc, GRAY_LABEL);
-    doc.text("ChemCtrl - Sistema de Controle de Produção", M, PH - 8);
-    doc.text(`Página ${i} de ${pages}`, PW - M, PH - 8, { align: "right" });
-  }
+  setPdfFooter(doc, { center: `Emitido por: ${nome}` });
+  paintFooter(doc);
 }
 
 function addSectionTitle(doc, y, title) {
-  setFill(doc, BLUE_MID);
-  doc.rect(M, y, 2.5, 7, "F");
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  setColor(doc, BLUE_DARK);
-  doc.text(title, M + 5, y + 5.5);
-  setColor(doc, BLACK);
-  return y + 11;
+  return drawSectionTitle(doc, y, title);
 }
 
 function addInfoGrid(doc, y, pairs) {
-  const cols = pairs.length;
-  const colW = CW / cols;
-  const rowH = 16;
-  setDraw(doc, GRAY_BORDER);
-  doc.setLineWidth(0.3);
-  doc.rect(M, y, CW, rowH);
-  pairs.forEach((cell, i) => {
-    const x = M + i * colW;
-    if (i > 0) {
-      doc.line(x, y, x, y + rowH);
-    }
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    setColor(doc, GRAY_LABEL);
-    doc.text(String(cell.label).toUpperCase(), x + 3, y + 5);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    setColor(doc, BLACK);
-    const lines = doc.splitTextToSize(String(cell.value ?? "-"), colW - 6);
-    doc.text(lines.slice(0, 2), x + 3, y + 11);
-  });
-  return y + rowH + 6;
+  return addInfoCards(
+    doc,
+    y,
+    (pairs || []).map((cell) => [cell.label, cell.value]),
+    Math.max(1, pairs?.length || 1)
+  );
 }
 
 function normalizeColWidths(widths) {
@@ -128,9 +74,8 @@ function addTable(doc, y, headers, rows, colWidths) {
     );
     const maxLines = Math.max(1, ...headerLines.map((l) => l.length));
     const h = Math.max(8, maxLines * 3.6 + 3.2);
-    setFill(doc, BLUE_DARK);
-    doc.rect(M, yy, CW, h, "F");
-    setColor(doc, [255, 255, 255]);
+    paintHeaderBand(doc, yy, h);
+    setColor(doc, GRAY_LABEL);
     let x = M;
     headerLines.forEach((lines, i) => {
       const blockH = lines.length * 3.6;
@@ -143,28 +88,17 @@ function addTable(doc, y, headers, rows, colWidths) {
       });
       x += widths[i];
     });
+    setDraw(doc, GRAY_BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(M + 1.2, yy + h, M + CW - 1.2, yy + h);
     return yy + h;
   };
 
-  const drawVLines = (yy, h) => {
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.1);
-    let xLine = M;
-    for (let i = 0; i < headers.length - 1; i++) {
-      xLine += widths[i];
-      doc.line(xLine, yy, xLine, yy + h);
-    }
-  };
-
+  let segmentTop = y;
   y = drawHeader(y);
 
   if (!rows.length) {
     const rowH = 10;
-    setFill(doc, GRAY_ROW);
-    doc.rect(M, y, CW, rowH, "F");
-    setDraw(doc, GRAY_BORDER);
-    doc.setLineWidth(0.15);
-    doc.line(M, y + rowH, M + CW, y + rowH);
     doc.setFontSize(8);
     setColor(doc, GRAY_LABEL);
     doc.text("Nenhuma descontaminação no período", M + CW / 2, y + rowH / 2, {
@@ -172,7 +106,9 @@ function addTable(doc, y, headers, rows, colWidths) {
       baseline: "middle",
     });
     setColor(doc, BLACK);
-    return y + rowH + 4;
+    y += rowH;
+    closeTableCard(doc, segmentTop, y);
+    return y + 4;
   }
 
   rows.forEach((row, ri) => {
@@ -186,20 +122,20 @@ function addTable(doc, y, headers, rows, colWidths) {
     const maxLines = Math.max(1, ...cellLines.map((lines) => lines.length));
     const rowH = Math.max(8, maxLines * lineH + 3.2);
 
-    if (y + rowH > PH - 30) {
-      doc.addPage();
-      y = 18;
+    if (y + rowH > contentLimit(doc) && y > segmentTop + 8) {
+      closeTableCard(doc, segmentTop, y);
+      y = nextPage(doc);
+      segmentTop = y;
       y = drawHeader(y);
     }
 
     if (ri % 2 === 0) {
       setFill(doc, GRAY_ROW);
-      doc.rect(M, y, CW, rowH, "F");
+      doc.rect(M + 0.45, y, CW - 0.9, rowH, "F");
     }
-    drawVLines(y, rowH);
     setDraw(doc, GRAY_BORDER);
     doc.setLineWidth(0.15);
-    doc.line(M, y + rowH, M + CW, y + rowH);
+    doc.line(M + 1.5, y + rowH, M + CW - 1.5, y + rowH);
 
     let x = M;
     cellLines.forEach((lines, i) => {
@@ -220,6 +156,7 @@ function addTable(doc, y, headers, rows, colWidths) {
     y += rowH;
   });
 
+  closeTableCard(doc, segmentTop, y);
   setColor(doc, BLACK);
   return y + 4;
 }

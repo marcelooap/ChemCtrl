@@ -28,6 +28,7 @@ import {
   deleteTanka,
   normalizeTankaRow,
 } from '@transbordo/lib/cadastroTankaCentral';
+import { tankaUsadaNaIndustrializacao } from '@industrializacao/lib/tankaIndustrializacao';
 
 function todayISODate() {
   const d = new Date();
@@ -61,6 +62,17 @@ const CLIENT_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
   '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
 ];
+
+const CLIENT_DISPLAY_ORDER = ['clariant', 'arkema', 'vibra'];
+
+function clientDisplayRank(client) {
+  const key = String(client || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const index = CLIENT_DISPLAY_ORDER.findIndex((name) => key.includes(name));
+  return index === -1 ? CLIENT_DISPLAY_ORDER.length : index;
+}
 
 function getClientColor(client) {
   if (!client) return '#6B7280';
@@ -101,6 +113,7 @@ export default function Tankagem() {
     inicio_locacao: todayISODate(),
   }));
   const [produtos, setProdutos] = useState([]);
+  const [produtosLoading, setProdutosLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -110,12 +123,16 @@ export default function Tankagem() {
 
   useEffect(() => {
     let cancelled = false;
+    setProdutosLoading(true);
     loadProdutosIndustrializacao()
       .then((rows) => {
         if (!cancelled) setProdutos(Array.isArray(rows) ? rows : []);
       })
       .catch(() => {
         if (!cancelled) setProdutos([]);
+      })
+      .finally(() => {
+        if (!cancelled) setProdutosLoading(false);
       });
     return () => {
       cancelled = true;
@@ -124,17 +141,16 @@ export default function Tankagem() {
 
   const clientOptions = useMemo(() => {
     const clients = new Map();
-    recipes.forEach(r => { if (r.client && !clients.has(r.client)) clients.set(r.client, true); });
-    tanks.forEach(item => { if (item.client && !clients.has(item.client)) clients.set(item.client, true); });
-    stockEntries.forEach(s => { if (s.client && !clients.has(s.client)) clients.set(s.client, true); });
-    produtos.forEach((p) => {
-      const nome = p.cliente_nome || p.client;
-      if (nome && !clients.has(nome)) clients.set(nome, true);
-    });
+    const add = (nome) => {
+      const value = String(nome || '').trim();
+      if (value && !clients.has(value)) clients.set(value, true);
+    };
+    recipes.forEach((r) => add(r.client));
+    produtos.forEach((p) => add(p.cliente_nome || p.client));
     return Array.from(clients.keys()).sort((a, b) =>
       a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
     );
-  }, [recipes, tanks, stockEntries, produtos]);
+  }, [recipes, produtos]);
 
   /** Produtos do cliente selecionado, sem duplicar por nome normalizado. */
   const produtoOptions = useMemo(() => {
@@ -251,10 +267,18 @@ export default function Tankagem() {
     });
   }, [tanks, stockEntries, containers]);
 
+  const industrialTanks = useMemo(
+    () =>
+      tanksWithData.filter((tank) =>
+        tankaUsadaNaIndustrializacao(tank, produtos, recipes)
+      ),
+    [tanksWithData, produtos, recipes]
+  );
+
   const filteredTanks = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return tanksWithData;
-    return tanksWithData.filter((tank) => {
+    if (!q) return industrialTanks;
+    return industrialTanks.filter((tank) => {
       const haystack = [
         tank.name,
         tank.codigo_itku,
@@ -269,16 +293,20 @@ export default function Tankagem() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [tanksWithData, search]);
+  }, [industrialTanks, search]);
 
   const tanksByClient = useMemo(() => {
-    const groups = {};
-    filteredTanks.forEach(item => {
+    const groups = new Map();
+    filteredTanks.forEach((item) => {
       const client = item.client || t('containers.tankagePage.noClient');
-      if (!groups[client]) groups[client] = [];
-      groups[client].push(item);
+      if (!groups.has(client)) groups.set(client, []);
+      groups.get(client).push(item);
     });
-    return groups;
+    return [...groups.entries()].sort(([a], [b]) => {
+      const rank = clientDisplayRank(a) - clientDisplayRank(b);
+      if (rank !== 0) return rank;
+      return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+    });
   }, [filteredTanks, t]);
 
   const totalVolume = filteredTanks.reduce((s, item) => s + (item.current_volume || 0), 0);
@@ -407,7 +435,7 @@ export default function Tankagem() {
         </Button>
       </div>
 
-      {tanks.length > 0 && (
+      {industrialTanks.length > 0 && (
         <div className="shrink-0 relative mb-4 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -420,11 +448,11 @@ export default function Tankagem() {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {loading ? (
+        {loading || produtosLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-border border-t-[#2575D1] rounded-full animate-spin" />
           </div>
-        ) : tanks.length === 0 ? (
+        ) : industrialTanks.length === 0 ? (
           <div className="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
             <Cylinder className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
             <p className="text-lg font-medium text-muted-foreground">{t('containers.tankagePage.emptyTitle')}</p>
@@ -439,7 +467,7 @@ export default function Tankagem() {
         ) : (
           <div className="bg-card rounded-xl shadow-sm border border-border p-6">
             <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide mb-4">{t('containers.tankagePage.overviewTitle')}</h2>
-            {Object.entries(tanksByClient).map(([client, clientTanks]) => {
+            {tanksByClient.map(([client, clientTanks]) => {
               const clientColor = getClientColor(client);
               return (
                 <div key={client} className="mb-6 last:mb-0">
