@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -5,179 +7,7 @@ import {
   DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import {
-  formatVolume,
-  formatMass,
-  formatDensidade,
-  parseDensidade,
-} from "@transbordo/lib/format";
-import {
-  normalizeUnidadeEntrada,
-  isUnidadeMassaEntrada,
-  isUnidadeVolumeEntrada,
-  getEstoqueUnidadeEntrada,
-  isEstoqueEmbalado,
-} from "@transbordo/lib/estoqueSaldo";
-import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
-
-const formatDate = (d) => {
-  if (!d) return "-";
-  const date = new Date(d + "T00:00:00");
-  return date.toLocaleDateString("pt-BR");
-};
-
-const LABEL_ORIGEM_EMBALADO = "IBC / BOMBONA / TAMBOR";
-
-function isOrigemEmbalado(origem, entradas = []) {
-  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
-  if (
-    tipo === "embalado" ||
-    tipo === "ibc" ||
-    tipo === "bombona" ||
-    tipo === "tambor" ||
-    origem?.embalado
-  ) {
-    return true;
-  }
-  if (!origem?.entrada_id) return false;
-  return isEstoqueEmbalado(entradas.find((e) => e.id === origem.entrada_id));
-}
-
-/** Rótulo da origem: código da tanka, Granel ou IBC / Bombona / Tambor. */
-function labelOrigemLinha(origem, isotanques = [], entradas = []) {
-  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
-  if (tipo === "tanka") return origemTankaCodigo(origem, isotanques) || "-";
-  if (isOrigemEmbalado(origem, entradas)) return LABEL_ORIGEM_EMBALADO;
-  if (tipo === "vasilhame") return "Vasilhame";
-  return "Granel";
-}
-
-/** Código da tanka em rótulos como "TANKA 46 - PRODUTO (1.234 L)". */
-function origemTankaCodigo(origem, isotanques = []) {
-  if (origem?.tanka_codigo) return String(origem.tanka_codigo).trim();
-  const byId = (isotanques || []).find((i) => i.id && i.id === origem?.entrada_id);
-  const fromCadastro = byId?.tanka || byId?.codigo_itku || "";
-  if (fromCadastro) return String(fromCadastro).trim();
-  const codigo = String(origem?.entrada_codigo || "")
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .trim();
-  const sep = codigo.indexOf(" - ");
-  if (sep > 0) return codigo.slice(0, sep).trim();
-  return codigo;
-}
-
-/** Remove o lote do rótulo; a coluna Lote já exibe esse dado. */
-function stripLoteDoRotulo(nome) {
-  return String(nome || "")
-    .replace(/\s*[—–-]\s*Lote\s+.+$/i, "")
-    .replace(/\s*\(\s*Lote\s+[^)]*\)\s*$/i, "")
-    .trim();
-}
-
-/** Extrai só o nome do produto de rótulos como "TANKA 46 - PRODUTO (1.234 L)". */
-function origemProdutoNome(origem, fallbackProduto) {
-  const granel = !origem?.tipo_origem || origem.tipo_origem === "entrada";
-  const codigo = origem?.entrada_codigo || "";
-  if (codigo) {
-    const withoutVol = codigo.replace(/\s*\([^)]*\)\s*$/, "").trim();
-    const sep = withoutVol.indexOf(" - ");
-    if (sep >= 0) {
-      const nome = withoutVol.slice(sep + 3).trim();
-      if (nome) return granel ? stripLoteDoRotulo(nome) || nome : nome;
-    }
-    if (granel) {
-      const semLote = stripLoteDoRotulo(withoutVol);
-      if (semLote && semLote !== withoutVol) return semLote;
-    }
-  }
-  return fallbackProduto || "-";
-}
-
-function labelUnidade(unidade) {
-  const um = normalizeUnidadeEntrada(unidade);
-  if (um === "kg") return "kg";
-  if (um === "lb") return "lb";
-  if (um === "gal") return "gal";
-  return "L";
-}
-
-function resolveUnidadeTransbordo(transbordo, produtos = [], entradas = []) {
-  const origens = transbordo?.origens || [];
-
-  for (const o of origens) {
-    if (o?.unidade_medida) return normalizeUnidadeEntrada(o.unidade_medida);
-  }
-
-  for (const o of origens) {
-    const entrada = entradas.find((e) => e.id === o.entrada_id);
-    if (!entrada) continue;
-    const um = getEstoqueUnidadeEntrada(entrada);
-    if (um) return normalizeUnidadeEntrada(um);
-  }
-
-  const produto =
-    produtos.find((p) => p.id === transbordo?.produto_id) ||
-    produtos.find(
-      (p) =>
-        p.codigo &&
-        transbordo?.produto_codigo &&
-        String(p.codigo) === String(transbordo.produto_codigo)
-    );
-  if (produto?.unidade_medida) {
-    return normalizeUnidadeEntrada(produto.unidade_medida);
-  }
-
-  // Embalado sem UOM explícita: se houver indício de massa operacional, assume kg.
-  const origemEmbalada = origens.some(
-    (o) =>
-      o.tipo_origem === "embalado" ||
-      o.embalado ||
-      (o.entrada_id &&
-        isEstoqueEmbalado(entradas.find((e) => e.id === o.entrada_id)))
-  );
-  if (origemEmbalada) return "kg";
-
-  return "l";
-}
-
-function resolveDensidadeDisplay(transbordo, produtos = [], entradas = []) {
-  const dens = parseDensidade(transbordo?.densidade);
-  if (!dens || dens <= 0) return "-";
-
-  const produto =
-    produtos.find((p) => p.id === transbordo?.produto_id) ||
-    produtos.find(
-      (p) =>
-        p.codigo &&
-        transbordo?.produto_codigo &&
-        String(p.codigo) === String(transbordo.produto_codigo)
-    );
-
-  // Densidade tabelada do cadastro do produto
-  if (produto?.densidade_tabelada) {
-    return formatDensidade(dens);
-  }
-
-  // Densidade registrada na entrada (lotes)
-  const entradaIds = new Set(
-    (transbordo?.origens || []).map((o) => o.entrada_id).filter(Boolean)
-  );
-  const densEntrada = entradas
-    .filter((e) => entradaIds.has(e.id))
-    .flatMap((e) => [e.densidade, ...(e.lotes || []).map((l) => l.densidade)])
-    .map((v) => parseDensidade(v))
-    .find((d) => d > 0);
-
-  if (densEntrada > 0) {
-    return formatDensidade(dens);
-  }
-
-  return "-";
-}
-
-function isDestinoTanquePatio(tipo) {
-  return tipo === "Vasilhame" || tipo === "Tankagem";
-}
+import { buildTransbordoViewModel } from "@transbordo/lib/transbordoViewData";
 
 export default function TransbordoViewDialog({
   open,
@@ -186,29 +16,38 @@ export default function TransbordoViewDialog({
   produtos = [],
   entradas = [],
   isotanques = [],
+  vasilhames = [],
 }) {
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   if (!transbordo) return null;
 
-  const produtoNome = transbordo.produto_nome || "";
-  const unidade = resolveUnidadeTransbordo(transbordo, produtos, entradas);
-  const unidadeLabel = labelUnidade(unidade);
-  const isMassa = isUnidadeMassaEntrada(unidade);
-  const isVolume = isUnidadeVolumeEntrada(unidade);
-  const densDisplay = resolveDensidadeDisplay(transbordo, produtos, entradas);
+  const view = buildTransbordoViewModel({
+    transbordo,
+    produtos,
+    entradas,
+    isotanques,
+    vasilhames,
+  });
 
-  const origens = transbordo.origens || [];
-  const destinos = transbordo.destinos || [];
-  const showPlacaBarril = destinos.some((d) =>
-    isDestinoTanquePatio(d.tipo_embalagem)
-  );
-  const showQtdEmbalagens = destinos.some((d) =>
-    isDestinoEstoqueEmbalado(d.tipo_embalagem)
-  );
-
-  const formatQtyOperacional = (valor) =>
-    isMassa
-      ? formatMass(valor, { empty: "-" })
-      : formatVolume(valor, { empty: "-" });
+  const handlePdf = async () => {
+    setGeneratingPdf(true);
+    try {
+      const { downloadTransbordoViewPdf } = await import(
+        "@transbordo/lib/pdfTransbordoView"
+      );
+      downloadTransbordoViewPdf({
+        transbordo,
+        produtos,
+        entradas,
+        isotanques,
+        vasilhames,
+      });
+    } catch (err) {
+      window.alert(err?.message || "Não foi possível gerar o PDF.");
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -220,23 +59,19 @@ export default function TransbordoViewDialog({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Dados Gerais */}
           <div>
             <h3 className="text-sm font-semibold text-primary mb-2">
               Dados Gerais
             </h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <Info label="Data" value={formatDate(transbordo.data)} />
-              <Info
-                label="Produto"
-                value={`${transbordo.produto_codigo || ""} - ${transbordo.produto_nome || ""}`}
-              />
-              <Info label="Cliente" value={transbordo.cliente_nome || "-"} />
-              <Info label="Densidade" value={densDisplay} />
+              <Info label="Data" value={view.data} />
+              <Info label="Produto" value={view.produto} />
+              <Info label="Cliente" value={view.cliente} />
+              <Info label="Densidade" value={view.densidade} />
               <div className="col-span-2">
                 <p className="text-xs text-muted-foreground mb-1">Operadores</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {(transbordo.operadores || []).map((op) => (
+                  {view.operadores.map((op) => (
                     <span
                       key={op}
                       className="inline-flex px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
@@ -246,20 +81,17 @@ export default function TransbordoViewDialog({
                   ))}
                 </div>
               </div>
-              {transbordo.observacoes && (
+              {view.observacoes && (
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground mb-1">
                     Observações
                   </p>
-                  <p className="text-sm text-foreground">
-                    {transbordo.observacoes}
-                  </p>
+                  <p className="text-sm text-foreground">{view.observacoes}</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Origens */}
           <div>
             <h3 className="text-sm font-semibold text-primary mb-2">Origens</h3>
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -276,89 +108,30 @@ export default function TransbordoViewDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {origens.flatMap((o, i) => {
-                    const origemLabel = labelOrigemLinha(o, isotanques, entradas);
-                    const lotes = (o.lotes_retirados || []).filter(
-                      (l) => (l.volume_retirado || 0) > 0
-                    );
-                    const produtoOrigem = origemProdutoNome(o, produtoNome);
-                    const umOrigem = normalizeUnidadeEntrada(
-                      o.unidade_medida || unidade
-                    );
-                    const origemEmMassa = isUnidadeMassaEntrada(umOrigem);
-                    const dens = parseDensidade(transbordo.densidade);
-
-                    if (lotes.length > 1) {
-                      return lotes.map((l, li) => {
-                        const vol = l.volume_retirado || 0;
-                        const massa = origemEmMassa
-                          ? vol
-                          : dens > 0
-                            ? vol * dens
-                            : o.massa_retirada;
-                        return (
-                          <tr
-                            key={`${i}-${li}`}
-                            className="border-b border-border last:border-0"
-                          >
-                            <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
-                              {origemLabel}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-foreground whitespace-nowrap">
-                              {produtoOrigem}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                              {l.lote || "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
-                              {origemEmMassa
-                                ? "-"
-                                : formatVolume(vol, { empty: "-" })}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                              {formatMass(massa, { empty: "-" })}
-                            </td>
-                          </tr>
-                        );
-                      });
-                    }
-
-                    const vol = o.volume_retirado || 0;
-                    const massa = origemEmMassa
-                      ? o.massa_retirada ?? vol
-                      : o.massa_retirada;
-
-                    return [
-                      <tr
-                        key={i}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
-                          {origemLabel}
-                        </td>
-                        <td className="px-3 py-2 text-center align-middle text-foreground whitespace-nowrap">
-                          {produtoOrigem}
-                        </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                          {o.lote || "-"}
-                        </td>
-                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
-                          {origemEmMassa
-                            ? "-"
-                            : formatVolume(vol, { empty: "-" })}
-                        </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                          {formatMass(massa, { empty: "-" })}
-                        </td>
-                      </tr>,
-                    ];
-                  })}
+                  {view.origemRows.map((row, i) => (
+                    <tr key={i} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
+                        {row.origem}
+                      </td>
+                      <td className="px-3 py-2 text-center align-middle text-foreground whitespace-nowrap">
+                        {row.produto}
+                      </td>
+                      <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
+                        {row.lote}
+                      </td>
+                      <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
+                        {row.volume}
+                      </td>
+                      <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
+                        {row.massa}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* Destinos */}
           <div>
             <h3 className="text-sm font-semibold text-primary mb-2">
               Destinos
@@ -367,81 +140,70 @@ export default function TransbordoViewDialog({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-center text-xs text-muted-foreground border-b border-border bg-muted/40/50 uppercase">
-                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Tipo</th>
-                    {showPlacaBarril && (
-                      <>
-                        <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Nº Placa</th>
-                        <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Nº Barril</th>
-                      </>
+                    {view.showEmbalagem && (
+                      <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">
+                        Embalagem
+                      </th>
                     )}
-                    {showQtdEmbalagens && (
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Lote</th>
+                    {view.showQtd && (
                       <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Qtd. Embalagens</th>
                     )}
                     <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Volume (L)</th>
                     <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Massa (kg)</th>
+                    <th className="px-3 py-2 font-medium align-middle whitespace-nowrap">Lacre</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {destinos.map((d, i) => {
-                    const tipo = d.tipo_embalagem || "";
-                    const tanque = isDestinoTanquePatio(tipo);
-                    const embalado = isDestinoEstoqueEmbalado(tipo);
-                    const placa =
-                      tipo === "Tankagem"
-                        ? d.tanka_codigo || "-"
-                        : d.placa || "-";
-                    const barril = d.barril || "-";
-                    const qtdEmb =
-                      d.quantidade_embalagens != null &&
-                      d.quantidade_embalagens !== ""
-                        ? Math.round(Number(d.quantidade_embalagens) || 0)
-                        : null;
-                    const volume =
-                      tipo === "Tankagem" ? d.volume : d.volume_total;
-                    const dens = parseDensidade(transbordo.densidade);
-                    const massa = isMassa
-                      ? d.peso_liquido ?? volume
-                      : d.peso_liquido != null
-                        ? d.peso_liquido
-                        : dens > 0
-                          ? (volume || 0) * dens
-                          : null;
-
+                  {view.destinoRows.map((row, i) => {
+                    const mixed = row.groupSize > 1;
+                    const firstOfGroup = row.groupIndex === 0;
+                    const lastOfGroup = row.groupIndex === row.groupSize - 1;
+                    const groupLastIndex = i + row.groupSize - row.groupIndex - 1;
+                    const groupIsLast = groupLastIndex === view.destinoRows.length - 1;
+                    const divider =
+                      lastOfGroup && !groupIsLast ? "border-b border-border" : "";
                     return (
-                      <tr
-                        key={i}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap">
-                          {tipo || "-"}
-                        </td>
-                        {showPlacaBarril && (
-                          <>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                              {tanque ? placa : "-"}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                              {tanque && tipo === "Vasilhame" ? barril : "-"}
-                            </td>
-                          </>
-                        )}
-                        {showQtdEmbalagens && (
-                          <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                            {embalado
-                              ? qtdEmb != null
-                                ? String(qtdEmb)
-                                : "-"
-                              : "-"}
+                      <tr key={`${row.groupId}-${row.groupIndex}`}>
+                        {view.showEmbalagem && (
+                          <td
+                            className={`px-3 py-2 text-center align-middle text-foreground font-medium whitespace-nowrap ${divider}`}
+                          >
+                            {row.embalagem}
                           </td>
                         )}
-                        <td className="px-3 py-2 text-center align-middle text-primary font-medium whitespace-nowrap">
-                          {isVolume
-                            ? formatVolume(volume, { empty: "-" })
-                            : "-"}
+                        <td
+                          className={`px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap ${divider}`}
+                        >
+                          {row.lote}
                         </td>
-                        <td className="px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap">
-                          {formatMass(massa, { empty: "-" })}
+                        {view.showQtd && (
+                          <td
+                            className={`px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap ${divider}`}
+                          >
+                            {row.qtd}
+                          </td>
+                        )}
+                        <td
+                          className={`px-3 py-2 text-center align-middle text-primary font-medium whitespace-nowrap ${divider}`}
+                        >
+                          {row.volume}
                         </td>
+                        <td
+                          className={`px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap ${divider}`}
+                        >
+                          {row.massa}
+                        </td>
+                        {(!mixed || firstOfGroup) && (
+                          <td
+                            rowSpan={mixed ? row.groupSize : undefined}
+                            className={`px-3 py-2 text-center align-middle text-muted-foreground whitespace-nowrap ${
+                              groupIsLast ? "" : "border-b border-border"
+                            }`}
+                          >
+                            {row.lacre}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -450,30 +212,32 @@ export default function TransbordoViewDialog({
             </div>
           </div>
 
-          {/* Totais */}
           <div className="rounded-lg border border-border bg-muted/40 p-4 flex justify-between text-sm">
             <span className="text-muted-foreground">
               Volume Total:{" "}
-              <span className="font-bold text-foreground">
-                {isVolume
-                  ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
-                  : "-"}
-              </span>
+              <span className="font-bold text-foreground">{view.volumeTotal}</span>
             </span>
             <span className="text-muted-foreground">
-              {isMassa ? "Quantidade Total:" : "Massa Total:"}{" "}
-              <span className="font-bold text-foreground">
-                {isMassa
-                  ? `${formatQtyOperacional(
-                      transbordo.massa_total ?? transbordo.volume_total
-                    )} ${unidadeLabel}`
-                  : `${formatMass(transbordo.massa_total, { empty: "-" })} kg`}
-              </span>
+              {view.massaCaption}:{" "}
+              <span className="font-bold text-foreground">{view.massaTotal}</span>
             </span>
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            type="button"
+            className="gap-2"
+            onClick={handlePdf}
+            disabled={generatingPdf}
+          >
+            {generatingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            Gerar PDF
+          </Button>
           <Button variant="ghost" onClick={onClose}>
             Fechar
           </Button>

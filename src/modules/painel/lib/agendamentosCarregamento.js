@@ -9,7 +9,11 @@ import {
 } from '@painel/lib/saidaReservas';
 import { areAllItemsReleasable } from '@painel/lib/carregamentoChecklistConfig';
 import { entities } from '@transbordo/services/entities';
-import { isItemSaidaVazio } from '@transbordo/lib/saidaOrigem';
+import {
+  formatSaidaItemEmbalagem,
+  isItemSaidaVazio,
+  isTanqueVazioItem,
+} from '@transbordo/lib/saidaOrigem';
 
 export const ENCAIXE_HORARIO = 'encaixe';
 export const SLOT_STEP_MINUTES = 30;
@@ -164,6 +168,48 @@ export function produtosLabel(saida) {
   if (count === 0) return '—';
   if (count === 1) return [...distinct.values()][0];
   return `${String(count).padStart(2, '0')} produtos`;
+}
+
+const SEM_NUMERO_VASILHAME = new Set(['', '-', '—', '–', '−']);
+
+/** Massa em kg do item. A quantidade solicitada entra no total da saída; o peso líquido cobre o vasilhame. */
+function quantidadeItemKg(item) {
+  if (!item || isTanqueVazioItem(item)) return null;
+  const qtd = Number(item.quantidade_solicitada);
+  const peso = Number(item.peso_liquido);
+  if (Number.isFinite(qtd) && qtd > 0) return qtd;
+  if (Number.isFinite(peso) && peso > 0) return peso;
+  return Number.isFinite(qtd) ? qtd : null;
+}
+
+function produtoDoItem(item) {
+  const nome = String(item?.produto_nome || '').trim();
+  if (nome) return nome;
+  if (isTanqueVazioItem(item)) return 'Tanque vazio';
+  return '—';
+}
+
+function vasilhameDoItem(item) {
+  const label = String(formatSaidaItemEmbalagem(item) || '').trim();
+  return SEM_NUMERO_VASILHAME.has(label) ? '—' : label;
+}
+
+/**
+ * Uma linha por item da saída: produto, vasilhame e quantidade daquele item.
+ * Saída ainda sem itens entra como uma linha vazia.
+ */
+export function listLinhasSlotSaida(saida) {
+  const itens = (Array.isArray(saida?.itens) ? saida.itens : []).filter(
+    (item) => item && !isItemSaidaVazio(item)
+  );
+  if (itens.length === 0) {
+    return [{ produto: '—', vasilhame: '—', quantidade: null }];
+  }
+  return itens.map((item) => ({
+    produto: produtoDoItem(item),
+    vasilhame: vasilhameDoItem(item),
+    quantidade: quantidadeItemKg(item),
+  }));
 }
 
 /**

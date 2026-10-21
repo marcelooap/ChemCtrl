@@ -661,6 +661,7 @@ export default function Transbordo() {
         produtos={produtos}
         entradas={entradas}
         isotanques={isotanques}
+        vasilhames={vasilhames}
       />
 
       {/* Delete Confirmation */}

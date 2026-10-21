@@ -1166,6 +1166,8 @@
           "cliente": "Cliente",
           "dataProgramada": "Fecha programada",
           "produtos": "Productos",
+          "produto": "Producto",
+          "vasilhame": "Vasilhame",
           "quantidade": "Cant. (kg)"
         },
         "modal": {

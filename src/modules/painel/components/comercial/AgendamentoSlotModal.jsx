@@ -16,7 +16,7 @@ import {
   ENCAIXE_HORARIO,
   formatDateBR,
   normalizeBookings,
-  produtosLabel,
+  listLinhasSlotSaida,
   summarizeSlotBookings,
 } from '@painel/lib/agendamentosCarregamento';
 
@@ -74,7 +74,14 @@ export default function AgendamentoSlotModal({
     const q = search.trim().toLowerCase();
     if (!q) return base;
     return base.filter((s) => {
-      const hay = `${s.codigo || ''} ${s.cliente_nome || ''} ${produtosLabel(s)}`.toLowerCase();
+      const linhas = listLinhasSlotSaida(s);
+      const hay = [
+        s.codigo,
+        s.cliente_nome,
+        ...linhas.flatMap((linha) => [linha.produto, linha.vasilhame]),
+      ]
+        .join(' ')
+        .toLowerCase();
       return hay.includes(q);
     });
   }, [availableSaidas, search, occupied, slotSaidaIds]);
@@ -119,7 +126,7 @@ export default function AgendamentoSlotModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !saving && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {occupied
@@ -182,10 +189,10 @@ export default function AgendamentoSlotModal({
                     {t('painel.comercial.agendamentos.columns.cliente')}
                   </th>
                   <th className="px-3 py-2 font-medium">
-                    {t('painel.comercial.agendamentos.columns.dataProgramada')}
+                    {t('painel.comercial.agendamentos.columns.produto')}
                   </th>
-                  <th className="px-3 py-2 font-medium">
-                    {t('painel.comercial.agendamentos.columns.produtos')}
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">
+                    {t('painel.comercial.agendamentos.columns.vasilhame')}
                   </th>
                   <th className="px-3 py-2 font-medium text-right">
                     {t('painel.comercial.agendamentos.columns.quantidade')}
@@ -200,19 +207,19 @@ export default function AgendamentoSlotModal({
                     </td>
                   </tr>
                 ) : (
-                  filteredSaidas.map((s) => {
+                  filteredSaidas.flatMap((s) => {
                     const checked = selectedIds.has(String(s.id));
-                    return (
+                    const lines = listLinhasSlotSaida(s);
+                    const rowTone = occupied
+                      ? ''
+                      : checked
+                        ? 'cursor-pointer bg-primary/5'
+                        : 'cursor-pointer hover:bg-muted/40';
+                    return lines.map((linha, index) => (
                       <tr
-                        key={s.id}
+                        key={`${s.id}-${linha.vasilhame}-${index}`}
                         onClick={occupied ? undefined : () => toggleSaida(s.id)}
-                        className={`border-b border-border last:border-0 transition-colors ${
-                          occupied
-                            ? ''
-                            : checked
-                              ? 'cursor-pointer bg-primary/5'
-                              : 'cursor-pointer hover:bg-muted/40'
-                        }`}
+                        className={`border-b border-border last:border-0 transition-colors ${rowTone}`}
                       >
                         {occupied ? null : (
                           <td className="px-3 py-2.5">
@@ -228,15 +235,19 @@ export default function AgendamentoSlotModal({
                         )}
                         <td className="px-3 py-2.5 font-medium text-primary">{s.codigo || '—'}</td>
                         <td className="px-3 py-2.5 text-foreground">{s.cliente_nome || '—'}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground tabular-nums">
-                          {formatDateBR(s.data_programada)}
+                        <td className="px-3 py-2.5 text-muted-foreground">{linha.produto}</td>
+                        <td
+                          className={`px-3 py-2.5 whitespace-nowrap ${
+                            linha.vasilhame === '—' ? 'text-muted-foreground' : 'text-foreground'
+                          }`}
+                        >
+                          {linha.vasilhame}
                         </td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{produtosLabel(s)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
-                          {formatMass(s.quantidade_total, { empty: '—' })}
+                          {formatMass(linha.quantidade, { empty: '—' })}
                         </td>
                       </tr>
-                    );
+                    ));
                   })
                 )}
               </tbody>

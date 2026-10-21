@@ -1348,6 +1348,8 @@
           "cliente": "Cliente",
           "dataProgramada": "Data programada",
           "produtos": "Produtos",
+          "produto": "Produto",
+          "vasilhame": "Vasilhame",
           "quantidade": "Qtd. (kg)"
         },
         "modal": {

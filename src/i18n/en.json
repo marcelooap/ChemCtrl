@@ -1348,6 +1348,8 @@
           "cliente": "Client",
           "dataProgramada": "Scheduled date",
           "produtos": "Products",
+          "produto": "Product",
+          "vasilhame": "Container",
           "quantidade": "Qty (kg)"
         },
         "modal": {
