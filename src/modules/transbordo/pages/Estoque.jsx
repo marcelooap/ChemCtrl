@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
-import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Droplets, Package, Container, ChevronDown, MapPin, ExternalLink } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Switch } from "@shared/components/ui/switch";
@@ -44,6 +44,7 @@ import {
 import {
   resolveTipoRecebimentoEstoque,
 } from "@transbordo/lib/tipoRecebimento";
+import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
@@ -156,11 +157,27 @@ export default function Estoque() {
         entities.entradas.list(),
         entities.vasilhames.list(),
       ]);
+      let estoqueRows = ests;
+      let vasilhameRows = vascs;
+      try {
+        const healed = await reconcileVasilhamesFromEntradas({
+          entradas: ents,
+          estoque: ests,
+          vasilhames: vascs,
+          produtos: prods,
+        });
+        if (healed.changed) {
+          estoqueRows = healed.estoque;
+          vasilhameRows = healed.vasilhames;
+        }
+      } catch (err) {
+        console.error("[Transbordo] Falha ao registrar vasilhames da entrada:", err);
+      }
       const volumes = applyDeclaredVolumeDecimals({
-        estoque: ests,
+        estoque: estoqueRows,
         entradas: ents,
         transbordos: trans,
-        vasilhames: vascs,
+        vasilhames: vasilhameRows,
       });
       void persistDeclaredVolumeDecimals(volumes);
 
@@ -229,8 +246,11 @@ export default function Estoque() {
     return estoque
       .filter((e) => {
         const tipo = resolveTipoRecebimentoEstoque(e);
-        if (tipoFilter === "granel" && tipo !== "granel") return false;
+        // Recebimento em vasilhame é saldo de estoque. A aba Granel é a
+        // listagem principal, então esses lotes aparecem junto com o granel.
+        if (tipoFilter === "granel" && tipo !== "granel" && tipo !== "vasilhame") return false;
         if (tipoFilter === "embalado" && tipo !== "embalado") return false;
+        if (tipoFilter === "vasilhame" && tipo !== "vasilhame") return false;
 
         const entradaLabel = (
           e?.entrada_id && entradaIdMap[e.entrada_id]
@@ -440,10 +460,12 @@ export default function Estoque() {
             <p className="text-sm text-muted-foreground mt-0.5">
               {filtered.length} registro(s) em estoque
               {tipoFilter === "granel"
-                ? " · Granel"
+                ? " · Granel e vasilhame"
                 : tipoFilter === "embalado"
                   ? " · Embalado"
-                  : ""}
+                  : tipoFilter === "vasilhame"
+                    ? " · Vasilhame"
+                    : ""}
             </p>
           </div>
           <Tabs value={tipoFilter} onValueChange={setTipoFilter}>
@@ -455,6 +477,10 @@ export default function Estoque() {
               <TabsTrigger value="embalado" className={TIPO_TAB_TRIGGER_CLASS}>
                 <Package className="w-4 h-4" />
                 Embalado
+              </TabsTrigger>
+              <TabsTrigger value="vasilhame" className={TIPO_TAB_TRIGGER_CLASS}>
+                <Container className="w-4 h-4" />
+                Vasilhame
               </TabsTrigger>
             </TabsList>
           </Tabs>

@@ -1,6 +1,14 @@
 import { entities } from "@transbordo/services/entities";
 import { roundMass, roundVolume } from "@transbordo/lib/format";
-import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
+import {
+  loteQuantidadeEstoque,
+  loteUnidadeEstoque,
+} from "@transbordo/lib/conversao";
+import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
+import {
+  resolveTipoRecebimento,
+  resolveTipoRecebimentoEstoque,
+} from "@transbordo/lib/tipoRecebimento";
 import {
   findFracionadoNoPatio,
   mergeComposicao,
@@ -16,6 +24,22 @@ import {
 
 function parseDensidade(v) {
   return parseFloat(String(v || "0").replace(",", ".")) || 0;
+}
+
+const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+
+function vasilhamePertenceEntrada(vasilhame, entradaId, entradaCodigo) {
+  if (!vasilhame) return false;
+  if (entradaCodigo && String(vasilhame.codigo || "") === String(entradaCodigo)) {
+    return true;
+  }
+  return (vasilhame.composicao || []).some(
+    (item) => item?.entrada_id && item.entrada_id === entradaId
+  );
+}
+
+function isVasilhameLote(lote) {
+  return resolveTipoRecebimento(lote) === "vasilhame" && !!String(lote?.placa || "").trim();
 }
 
 /**
@@ -75,11 +99,19 @@ export async function syncVasilhamesFromEntradaLotes({
     const linkedId = lote.vasilhame_id;
     const plateKey = placaKey(lote.placa, lote.barril);
     const touched = touchedByPlaca.get(plateKey) || null;
-    const existingById = touched
+    const linkedById = touched
       ? vasilhamesAtuais.find((v) => v.id === touched.id) || touched
       : linkedId
         ? vasilhamesAtuais.find((v) => v.id === linkedId)
         : null;
+    const jaDestaEntrada = linkedById
+      ? null
+      : vasilhamesAtuais.find(
+          (v) =>
+            placaKey(v.placa, v.barril) === plateKey &&
+            vasilhamePertenceEntrada(v, savedEntrada.id, entradaCodigo)
+        );
+    const existingById = linkedById || jaDestaEntrada || null;
     const fracionadoPatio = existingById
       ? null
       : findFracionadoNoPatio(vasilhamesAtuais, {
@@ -230,8 +262,47 @@ export async function syncVasilhamesFromEntradaLotes({
       continue;
     }
 
-    // Cadastro de vasilhame foi descontinuado: placa nova não gera registro.
-    continue;
+    const composicao = mergeComposicao([], [compItem], {
+      data: savedEntrada.data || null,
+    });
+    const created = await entities.vasilhames.create({
+      codigo: entradaCodigo,
+      origem: "manual",
+      numero_op: entradaCodigo || null,
+      placa: lote.placa || "",
+      barril: lote.barril || "",
+      tipo: "Vasilhame",
+      produto_id: nullIfEmpty(lote.produto_id),
+      produto_nome: lote.produto_nome || "",
+      produto_codigo: lote.produto_codigo || "",
+      cliente_id: clienteId || null,
+      cliente_nome: clienteNome || "",
+      lote: lote.lote || getDominantLote(composicao),
+      densidade: lote.densidade || "",
+      volume,
+      tara,
+      peso_liquido: pesoLiquido,
+      peso_bruto: pesoBruto,
+      lacres: lote.lacres || "",
+      eslinga: lote.eslinga || "",
+      gps: lote.gps || "",
+      menor_teste: nullIfEmpty(lote.menor_teste),
+      status: "No Pátio",
+      fracionado: lote.fracionado || false,
+      composicao,
+    });
+
+    if (created?.id) {
+      const row = { ...created, composicao, volume };
+      vasilhamesAtuais.push(row);
+      touchedByPlaca.set(plateKey, row);
+      updatedLotes[i] = { ...lote, vasilhame_id: created.id };
+      if (produtoFiltrado && isFiltracaoElegivel(created)) {
+        await upsertFiltracaoForVasilhame(entities, created, {
+          codigo: entradaCodigo,
+        });
+      }
+    }
   }
 
   const changed = updatedLotes.some(
@@ -264,4 +335,149 @@ export async function syncVasilhamesFromEntradaLotes({
       ],
     });
   }
+}
+
+function estoqueDaEntrada(estoque, entradaId) {
+  return (estoque || []).filter((row) => row?.entrada_id === entradaId);
+}
+
+function loteJaNoPatio(lote, entrada, patioRows, entradaCodigo) {
+  return (patioRows || []).some((v) => {
+    if (lote.vasilhame_id && v.id === lote.vasilhame_id) return true;
+    if (placaKey(v.placa, v.barril) !== placaKey(lote.placa, lote.barril)) return false;
+    return vasilhamePertenceEntrada(v, entrada.id, entradaCodigo);
+  });
+}
+
+/** Reserva um estoque já gravado para este lote (placa, senão lote ainda não usado). */
+function takeEstoqueForLote(pool, used, lote) {
+  const byPlaca = pool.findIndex((row, index) => {
+    if (used.has(index)) return false;
+    const emb = row?.lotes?.[0] || {};
+    return (
+      emb.placa &&
+      lote.placa &&
+      placaKey(emb.placa, emb.barril) === placaKey(lote.placa, lote.barril)
+    );
+  });
+  if (byPlaca >= 0) {
+    used.add(byPlaca);
+    return pool[byPlaca];
+  }
+
+  const byLote = pool.findIndex((row, index) => {
+    if (used.has(index)) return false;
+    const emb = row?.lotes?.[0] || {};
+    if (
+      emb.placa &&
+      lote.placa &&
+      placaKey(emb.placa, emb.barril) !== placaKey(lote.placa, lote.barril)
+    ) {
+      return false;
+    }
+    if (resolveTipoRecebimentoEstoque(row) !== "vasilhame") return false;
+    return String(emb.lote || row.lote || "") === String(lote.lote || "");
+  });
+  if (byLote >= 0) {
+    used.add(byLote);
+    return pool[byLote];
+  }
+  return null;
+}
+
+function buildEstoqueFromLote(lote, entrada, entradaCodigo) {
+  const loteQtd = loteQuantidadeEstoque(lote);
+  const lotePreco = Number(lote.preco_unitario) || Number(entrada.preco_unitario) || 0;
+  return {
+    entrada_id: entrada.id,
+    entrada_codigo: entradaCodigo || null,
+    grupo_entrada: entrada.grupo_entrada || null,
+    cliente_id: nullIfEmpty(entrada.cliente_id),
+    cliente_nome: entrada.cliente_nome || "",
+    produto_id: nullIfEmpty(lote.produto_id || entrada.produto_id),
+    produto_nome: lote.produto_nome || entrada.produto_nome || "",
+    produto_codigo: lote.produto_codigo || entrada.produto_codigo || "",
+    nota_fiscal: lote.nota_fiscal || "",
+    lote: lote.lote || "",
+    densidade: lote.densidade || "",
+    data_fabricacao: nullIfEmpty(lote.data_fabricacao),
+    data_validade: nullIfEmpty(lote.data_validade),
+    quantidade: loteQtd,
+    unidade_medida: loteUnidadeEstoque(lote),
+    saldo_atual: loteQtd,
+    preco_unitario: lotePreco,
+    custo_total: loteQtd * lotePreco,
+    embalado: false,
+    peso_liquido: lote.peso_liquido ?? null,
+    quantidade_embalagens: null,
+    status_wms: !!entrada.status_wms,
+    origem: entrada.origem || "convencional",
+    lotes: [{ ...lote, tipo_recebimento: "vasilhame" }],
+  };
+}
+
+/**
+ * Entradas já gravadas como vasilhame que não geraram pátio nem estoque.
+ * Idempotente: não duplica tanque nem saldo quando o vínculo já existe.
+ */
+export async function reconcileVasilhamesFromEntradas({
+  entradas = [],
+  estoque = [],
+  vasilhames = [],
+  produtos = [],
+} = {}) {
+  const codigoById = buildEntradaCodigoById(entradas);
+  let estoqueRows = [...(estoque || [])];
+  let patioRows = [...(vasilhames || [])];
+  let changed = false;
+
+  for (const entrada of entradas || []) {
+    if (!entrada?.id) continue;
+    const lotes = Array.isArray(entrada.lotes) ? entrada.lotes : [];
+    const vasilhameLotes = lotes.filter(isVasilhameLote);
+    if (vasilhameLotes.length === 0) continue;
+
+    const entradaCodigo = codigoById[entrada.id] || "";
+    const pool = estoqueDaEntrada(estoqueRows, entrada.id);
+    const used = new Set();
+    const aligned = lotes.map((lote) =>
+      isVasilhameLote(lote) ? takeEstoqueForLote(pool, used, lote) : null
+    );
+    const missing = [];
+    lotes.forEach((lote, index) => {
+      if (!isVasilhameLote(lote) || aligned[index]) return;
+      missing.push(buildEstoqueFromLote(lote, entrada, entradaCodigo));
+    });
+
+    if (missing.length > 0) {
+      const created = await entities.estoque.bulkCreate(missing);
+      estoqueRows = [...estoqueRows, ...(created || [])];
+      changed = true;
+      const createdQueue = [...(created || [])];
+      for (let i = 0; i < aligned.length; i++) {
+        if (aligned[i] || !isVasilhameLote(lotes[i])) continue;
+        aligned[i] = createdQueue.shift() || null;
+      }
+    }
+
+    const needsPatio = vasilhameLotes.some(
+      (lote) => !loteJaNoPatio(lote, entrada, patioRows, entradaCodigo)
+    );
+    if (!needsPatio) continue;
+
+    await syncVasilhamesFromEntradaLotes({
+      lotes,
+      savedEntrada: entrada,
+      savedEstoques: aligned,
+      entradaCodigo,
+      clienteId: nullIfEmpty(entrada.cliente_id),
+      clienteNome: entrada.cliente_nome || "",
+      produtos,
+    });
+    changed = true;
+    patioRows = await entities.vasilhames.list();
+    estoqueRows = await entities.estoque.list();
+  }
+
+  return { changed, vasilhames: patioRows, estoque: estoqueRows };
 }

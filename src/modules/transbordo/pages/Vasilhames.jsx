@@ -69,6 +69,7 @@ import {
   buildVasilhameYardRestorePatch,
   resolveVasilhameExpedidoDisplay,
 } from "@transbordo/lib/vasilhamePatio";
+import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
 
 /** Chave de agrupamento por cliente (id, com fallback para o nome). */
 function clienteKeyOf(vasilhame) {
@@ -335,12 +336,28 @@ export default function Vasilhames() {
         entities.entradas.list(),
         entities.saidas.list("-created_date").catch(() => []),
       ]);
+      let vasilhameRows = vas;
+      let estoqueRows = ests;
+      try {
+        const healed = await reconcileVasilhamesFromEntradas({
+          entradas: ents,
+          estoque: ests,
+          vasilhames: vas,
+          produtos: prods,
+        });
+        if (healed.changed) {
+          vasilhameRows = healed.vasilhames;
+          estoqueRows = healed.estoque;
+        }
+      } catch (err) {
+        console.error("[Transbordo] Falha ao registrar vasilhames da entrada:", err);
+      }
       setSaidas(saidasList || []);
       const volumes = applyDeclaredVolumeDecimals({
-        estoque: ests,
+        estoque: estoqueRows,
         entradas: ents,
         transbordos: trans,
-        vasilhames: vas,
+        vasilhames: vasilhameRows,
       });
       void persistDeclaredVolumeDecimals(volumes);
       const vasById = new Map(

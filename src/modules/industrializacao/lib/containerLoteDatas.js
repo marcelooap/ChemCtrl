@@ -3,6 +3,7 @@ import { toDateInputValue } from '@/i18n/formatters';
 import { productionOfContainer } from '@industrializacao/lib/fractionalSupply';
 import { resolveValidityDays } from '@industrializacao/lib/recipeRevisions';
 import { resolveQualityValidityDays } from '@industrializacao/lib/qualityValidity';
+import { groupQualityTestRows } from '@industrializacao/lib/qualitySpecComposition';
 import { calcValidityDate } from '@industrializacao/lib/labelprint';
 import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 
@@ -19,7 +20,9 @@ export async function resolveValidityDaysForContainer(
   const cqProduct = container?.product || production?.product;
   const cqClient = container?.client || production?.client;
   try {
-    const list = tests || (await base44.entities.QualityTest.list('-updated_date', 500));
+    const list = groupQualityTestRows(
+      tests || (await base44.entities.QualityTest.list('-updated_date', 2000)),
+    );
     const fromCq = resolveQualityValidityDays(list || [], cqProduct, cqClient);
     if (fromCq != null) return fromCq;
   } catch { /* Cadastro CQ indisponível: usa a receita como fallback */ }
@@ -73,7 +76,9 @@ export async function loadContainerLoteDatasMap(containerIds = []) {
     import('@industrializacao/hooks/useRecipes')
       .then(({ listRecipesGrouped }) => listRecipesGrouped('-updated_date', 2000))
       .catch(() => []),
-    base44.entities.QualityTest.list('-updated_date', 500).catch(() => null),
+    base44.entities.QualityTest.list('-updated_date', 2000)
+      .then((rows) => groupQualityTestRows(rows || []))
+      .catch(() => null),
   ]);
 
   const selected = (containers || []).filter((c) => wanted.has(String(c.id)));

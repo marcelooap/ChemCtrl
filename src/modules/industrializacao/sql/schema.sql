@@ -385,9 +385,12 @@ drop trigger if exists update_updated_date_ind_cq_resultados on ind_cq_resultado
 create trigger update_updated_date_ind_cq_resultados before update on ind_cq_resultados for each row execute function update_updated_date();
 
 -- ============================================================================
--- 10. ind_cq_esp_tec
+-- 10. cadastro_analises (antes: ind_cq_esp_tec)
+-- NOTA (051): em produção a tabela é renomeada e passa a ter 1 linha por
+-- análise, com codigo_en (EN01). Este CREATE é o formato legado (analyses jsonb).
+-- Ver src/modules/industrializacao/sql/051_cq_esp_tec_linhas.sql
 -- ============================================================================
-create table if not exists ind_cq_esp_tec (
+create table if not exists cadastro_analises (
   id text primary key default gen_random_uuid()::text,
   created_date timestamptz default now(),
   updated_date timestamptz default now(),
@@ -400,11 +403,11 @@ create table if not exists ind_cq_esp_tec (
   validity_days numeric,
   analyses jsonb
 );
-alter table ind_cq_esp_tec enable row level security;
-drop policy if exists "allow_all_ind_cq_esp_tec" on ind_cq_esp_tec;
-create policy "allow_all_ind_cq_esp_tec" on ind_cq_esp_tec for all using (true) with check (true);
-drop trigger if exists update_updated_date_ind_cq_esp_tec on ind_cq_esp_tec;
-create trigger update_updated_date_ind_cq_esp_tec before update on ind_cq_esp_tec for each row execute function update_updated_date();
+alter table cadastro_analises enable row level security;
+drop policy if exists "allow_all_cadastro_analises" on cadastro_analises;
+create policy "allow_all_cadastro_analises" on cadastro_analises for all using (true) with check (true);
+drop trigger if exists update_updated_date_cadastro_analises on cadastro_analises;
+create trigger update_updated_date_cadastro_analises before update on cadastro_analises for each row execute function update_updated_date();
 
 -- ============================================================================
 -- 10b. ind_lista_ensaios (catálogo Lista de Ensaios)
@@ -488,7 +491,7 @@ create publication supabase_realtime for table
   ind_lista_receitas,
   checklist_op,
   ind_cq_resultados,
-  ind_cq_esp_tec,
+  cadastro_analises,
   ind_lista_ensaios,
   ind_lista_inventario,
   ind_lista_equipamentoslab;

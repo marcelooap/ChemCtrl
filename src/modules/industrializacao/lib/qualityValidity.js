@@ -12,7 +12,7 @@ export function parseValidityDays(value) {
 }
 
 /**
- * Dias de validade do Cadastro CQ (ind_cq_esp_tec).
+ * Dias de validade do Cadastro CQ (cadastro_analises).
  * Prioriza o ensaio do mesmo produto e cliente; se não houver, o do produto.
  * Em empate, usa o registro mais recente.
  */

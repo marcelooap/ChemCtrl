@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useQualityTests } from '@industrializacao/hooks/useQualityTests';
 import { useRecipes } from '@industrializacao/hooks/useRecipes';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Pencil, FileText, Camera, Eye } from 'lucide-react';
@@ -35,7 +36,7 @@ export default function COA() {
   const { data: recipes } = useRecipes('-created_date', 500);
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
   const { data: productions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
-  const { data: tests } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500));
+  const { data: tests } = useQualityTests();
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('all');
   const [showEdit, setShowEdit] = useState(false);

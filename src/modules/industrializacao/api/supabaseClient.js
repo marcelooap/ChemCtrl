@@ -44,7 +44,8 @@ const entityTableMap = {
   // Preferência pós-046; resolvePhysicalTable faz fallback para ind_lista_receitas.
   Recipe: 'receitas',
   QualityResult: 'ind_cq_resultados',
-  QualityTest: 'ind_cq_esp_tec',
+  // Pós-051; resolvePhysicalTable faz fallback para ind_cq_esp_tec.
+  QualityTest: 'cadastro_analises',
   QualityAnalysis: 'ind_lista_ensaios',
   Inventory: 'ind_lista_inventario',
   IndValidacao: 'ind_validacoes',
@@ -80,6 +81,7 @@ const tableColumnsInFlight = new Map();
 /** Fallbacks durante rollout da migration 046 (rename de tabelas). */
 const TABLE_FALLBACKS = {
   receitas: ['receitas', 'ind_lista_receitas'],
+  cadastro_analises: ['cadastro_analises', 'ind_cq_esp_tec'],
   cadastro_produtos: ['cadastro_produtos', 't_produtos'],
   // Pós-049 cutover: mestre único (sem fallback ind_cadastro_tanka).
   cadastro_tanka: ['cadastro_tanka'],

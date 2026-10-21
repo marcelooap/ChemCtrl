@@ -792,7 +792,20 @@ export function isVasilhameFromEntradaDireta(vasilhame, estoqueItem) {
   if (!vasilhame?.id || !estoqueItem?.id) return false;
 
   const lote = estoqueItem.lotes?.[0];
-  if (lote?.vasilhame_id && lote.vasilhame_id === vasilhame.id) return true;
+  const composicao = Array.isArray(vasilhame.composicao)
+    ? vasilhame.composicao
+    : [];
+  const estoqueIds = composicao.map((c) => c?.estoque_id).filter(Boolean);
+
+  // Dois lotes da mesma entrada geram dois tanques. A composição já aponta
+  // o estoque de cada um; o irmão não entra no local deste saldo.
+  if (estoqueIds.length > 0) {
+    return estoqueIds.some((id) => idsEqual(id, estoqueItem.id));
+  }
+
+  if (lote?.vasilhame_id && idsEqual(lote.vasilhame_id, vasilhame.id)) {
+    return true;
+  }
 
   const tipo =
     lote?.tipo_recebimento || estoqueItem.tipo_recebimento || "";
@@ -801,15 +814,7 @@ export function isVasilhameFromEntradaDireta(vasilhame, estoqueItem) {
   const entradaId = estoqueItem.entrada_id;
   if (
     entradaId &&
-    (vasilhame.composicao || []).some(
-      (c) => c.entrada_id === entradaId || c.estoque_id === estoqueItem.id
-    )
-  ) {
-    return true;
-  }
-
-  if (
-    (vasilhame.composicao || []).some((c) => c.estoque_id === estoqueItem.id)
+    composicao.some((c) => c?.entrada_id && idsEqual(c.entrada_id, entradaId))
   ) {
     return true;
   }

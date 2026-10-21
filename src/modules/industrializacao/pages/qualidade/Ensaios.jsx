@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
-import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
 import { useRecipes } from '@industrializacao/hooks/useRecipes';
+import { useQualityTests } from '@industrializacao/hooks/useQualityTests';
 import { useQualityAnalysisCatalog } from '@industrializacao/hooks/useQualityAnalysisCatalog';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, X, FileText, Loader2 } from 'lucide-react';
@@ -22,6 +22,11 @@ import {
   buildIndPaSelectOptions,
 } from '@industrializacao/lib/cadastroProdutosOptions';
 import { parseValidityDays } from '@industrializacao/lib/qualityValidity';
+import {
+  displayEnsaioCode,
+  isCqEspTecSalvarRpcMissing,
+  salvarEnsaio,
+} from '@industrializacao/lib/qualitySpecComposition';
 
 const emptyAnalysis = { analysis_name: '', methodology: '', specification: '', unit: '', min_limit: null, max_limit: null };
 const DEFAULT_CREATED_BY = 'Marcelo Amaral';
@@ -39,8 +44,7 @@ export default function Ensaios() {
   const { t, i18n } = useTranslation();
   const { user } = useInternalAuth();
   const currentUserName = user?.nome_completo || user?.nome || user?.full_name || '';
-  const parseAnalyses = (item) => ({ ...item, analyses: parseArr(item.analyses) });
-  const { data: tests, loading, reload: load } = useRealtimeEntity('QualityTest', () => base44.entities.QualityTest.list('-created_date', 500), [], parseAnalyses);
+  const { data: tests, loading, reload: load } = useQualityTests();
   const { data: recipes } = useRecipes('-created_date', 500);
   const { options: analysisNameOptions, entries: catalogEntries, findByName } = useQualityAnalysisCatalog(tests);
   const [search, setSearch] = useState('');
@@ -102,7 +106,14 @@ export default function Ensaios() {
       try {
         for (const row of toUpdate) {
           try {
-            await base44.entities.QualityTest.update(row.id, { created_by: DEFAULT_CREATED_BY });
+            if (row.ensaio_id && row._is_grouped) {
+              await base44.entities.QualityTest.updateMany(
+                { ensaio_id: row.ensaio_id },
+                { created_by: DEFAULT_CREATED_BY },
+              );
+            } else {
+              await base44.entities.QualityTest.update(row.id, { created_by: DEFAULT_CREATED_BY });
+            }
           } catch {
             // ignore row-level failures (e.g. column not migrated yet)
           }
@@ -229,21 +240,43 @@ export default function Ensaios() {
       toast({ title: t('quality.ensaios.messages.validityRequired'), variant: 'destructive' });
       return;
     }
+    const header = {
+      product: form.product,
+      client: form.client || '',
+      revision: form.revision || '',
+      revision_date: form.revision_date || null,
+      validity_days: validityDays,
+      created_by: editing
+        ? (editing.created_by || DEFAULT_CREATED_BY)
+        : (currentUserName || DEFAULT_CREATED_BY),
+      created_by_id: editing ? (editing.created_by_id || null) : (user?.id || null),
+    };
+    const legacyBody = {
+      product: header.product,
+      client: header.client,
+      revision: header.revision,
+      revision_date: header.revision_date,
+      validity_days: header.validity_days,
+      analyses: form.analyses,
+      created_by: header.created_by,
+      created_by_id: header.created_by_id,
+    };
     setSaving(true);
     try {
-      if (editing) {
-        await base44.entities.QualityTest.update(editing.id, {
-          ...form,
-          validity_days: validityDays,
-          created_by: editing.created_by || DEFAULT_CREATED_BY,
+      try {
+        await salvarEnsaio({
+          ensaioId: editing?.ensaio_id || null,
+          header,
+          analyses: form.analyses,
+          mode: editing ? 'replace' : 'create',
         });
-      } else {
-        await base44.entities.QualityTest.create({
-          ...form,
-          validity_days: validityDays,
-          created_by: currentUserName || DEFAULT_CREATED_BY,
-          created_by_id: user?.id || null,
-        });
+      } catch (err) {
+        if (!isCqEspTecSalvarRpcMissing(err) || editing?._is_grouped) throw err;
+        if (editing) {
+          await base44.entities.QualityTest.update(editing.id, legacyBody);
+        } else {
+          await base44.entities.QualityTest.create(legacyBody);
+        }
       }
       setShowForm(false); load();
       toast({ title: editing ? t('quality.ensaios.messages.updated') : t('quality.ensaios.messages.created') });
@@ -257,7 +290,14 @@ export default function Ensaios() {
   const confirmRenewRevision = async () => {
     if (!renewTarget?.id) return;
     const revision_date = todayDateInputValue();
-    await base44.entities.QualityTest.update(renewTarget.id, { revision_date });
+    if (renewTarget.ensaio_id && renewTarget._is_grouped) {
+      await base44.entities.QualityTest.updateMany(
+        { ensaio_id: renewTarget.ensaio_id },
+        { revision_date },
+      );
+    } else {
+      await base44.entities.QualityTest.update(renewTarget.id, { revision_date });
+    }
     if (editing?.id === renewTarget.id) {
       setEditing((prev) => (prev ? { ...prev, revision_date } : prev));
       setForm((prev) => ({ ...prev, revision_date }));
@@ -271,7 +311,11 @@ export default function Ensaios() {
   const remove = async (item) => {
     if (!confirm(t('quality.ensaios.messages.deleteConfirm'))) return;
     try {
-      await base44.entities.QualityTest.delete(item.id);
+      if (item.ensaio_id && item._is_grouped) {
+        await base44.entities.QualityTest.deleteMany({ ensaio_id: item.ensaio_id });
+      } else {
+        await base44.entities.QualityTest.delete(item.id);
+      }
       load();
       toast({ title: t('quality.ensaios.messages.deleted') });
     } catch (err) {
@@ -306,7 +350,7 @@ export default function Ensaios() {
               <tbody>
                 {filtered.map((item) => (
                   <tr key={item.id} className="border-b border-border hover:bg-accent/30">
-                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>EN{String(regNumMap[item.id] || 0).padStart(2, '0')}</td>
+                    <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{displayEnsaioCode(item, regNumMap)}</td>
                     <td className="px-4 py-2.5 font-medium text-sm">{item.product}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.client}</td>
                     <td className="px-4 py-2.5 text-sm">{item.revision}</td>

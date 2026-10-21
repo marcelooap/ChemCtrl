@@ -1,7 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
-import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
+import { useQualityTests } from '@industrializacao/hooks/useQualityTests';
+import {
+  propagateAnalysisOnSpecs,
+  removeAnalysisFromSpecs,
+} from '@industrializacao/lib/qualitySpecComposition';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
@@ -10,14 +14,6 @@ import { Switch } from '@shared/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { useToast } from '@shared/components/ui/use-toast';
 import { cn } from '@shared/lib/utils';
-
-const parseArr = (v) => {
-  if (Array.isArray(v)) return v;
-  if (typeof v === 'string') {
-    try { return JSON.parse(v); } catch { return []; }
-  }
-  return [];
-};
 
 const normalizeName = (name) => (name || '').trim();
 const nameKey = (name) => normalizeName(name).toLocaleUpperCase('pt-BR');
@@ -46,21 +42,15 @@ const emptyForm = { analysis_name: '', methodology: '', unit: '' };
 const DEFAULT_CREATED_BY = 'Marcelo Amaral';
 
 /**
- * Aggregates unique analyses from Cadastro CQ (quality_tests.analyses)
- * and keeps a master catalog in quality_analyses when the table exists.
+ * Catálogo da Lista de Ensaios. O uso por produto vem do Cadastro CQ
+ * (cadastro_analises), já agrupado: uma ficha por ensaio, com analyses[].
  */
 export default function ListaEnsaios() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useInternalAuth();
   const currentUserName = user?.nome_completo || user?.nome || user?.full_name || '';
-  const parseAnalyses = useCallback((item) => ({ ...item, analyses: parseArr(item.analyses) }), []);
-  const { data: tests, loading: loadingTests, reload: reloadTests } = useRealtimeEntity(
-    'QualityTest',
-    () => base44.entities.QualityTest.list('-created_date', 500),
-    [],
-    parseAnalyses,
-  );
+  const { data: tests, rows: specRows, loading: loadingTests, reload: reloadTests } = useQualityTests();
 
   const [catalog, setCatalog] = useState([]);
   const [catalogAvailable, setCatalogAvailable] = useState(false);
@@ -312,47 +302,9 @@ export default function ListaEnsaios() {
     setShowView(true);
   };
 
-  const propagateToTests = async (originalName, next) => {
-    const originalKey = nameKey(originalName);
-    const updates = [];
+  const propagateToTests = (originalName, next) => propagateAnalysisOnSpecs(specRows, originalName, next);
 
-    for (const test of tests) {
-      const analyses = parseArr(test.analyses);
-      let changed = false;
-      const nextAnalyses = analyses.map((a) => {
-        if (nameKey(a.analysis_name) !== originalKey) return a;
-        changed = true;
-        return {
-          ...a,
-          analysis_name: next.analysis_name,
-          methodology: next.methodology,
-          unit: next.unit,
-        };
-      });
-      if (changed) {
-        updates.push(base44.entities.QualityTest.update(test.id, { ...test, analyses: nextAnalyses }));
-      }
-    }
-
-    if (updates.length) await Promise.all(updates);
-    return updates.length;
-  };
-
-  const removeFromTests = async (analysisName) => {
-    const key = nameKey(analysisName);
-    const updates = [];
-
-    for (const test of tests) {
-      const analyses = parseArr(test.analyses);
-      const nextAnalyses = analyses.filter((a) => nameKey(a.analysis_name) !== key);
-      if (nextAnalyses.length !== analyses.length) {
-        updates.push(base44.entities.QualityTest.update(test.id, { ...test, analyses: nextAnalyses }));
-      }
-    }
-
-    if (updates.length) await Promise.all(updates);
-    return updates.length;
-  };
+  const removeFromTests = (analysisName) => removeAnalysisFromSpecs(specRows, analysisName);
 
   const persistLocalStatus = (key, active) => {
     setLocalStatuses((prev) => {
