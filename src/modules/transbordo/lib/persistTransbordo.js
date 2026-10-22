@@ -4,6 +4,7 @@ import {
   roundVolume,
   roundMass,
   parseDensidade,
+  litrosFromMassaKg,
 } from '@transbordo/lib/format';
 import { calculateFIFOAllocation, expandOrigensForFifo } from '@transbordo/lib/fifo';
 import {
@@ -325,17 +326,20 @@ function buildVasilhameBase(
   const isTankagem = d.tipo_embalagem === "Tankagem";
   const isUnitario = isDestinoEstoqueEmbalado(d.tipo_embalagem);
   const dens = parseDensidade(data.densidade);
-  const volume = roundVolume(d.volume_total || d.volume || 0);
+  let volume = roundVolume(d.volume_total || d.volume || 0);
   const qtdEmb = Math.max(0, Math.round(d.quantidade_embalagens || 0));
   const volPorEmb = roundVolume(
     d.volume_por_embalagem || (qtdEmb > 0 ? volume / qtdEmb : 0)
   );
-  const pesoLiquido =
+  let pesoLiquido =
     d.peso_liquido != null && d.peso_liquido !== ""
       ? roundMass(d.peso_liquido)
-      : dens > 0
+      : dens > 0 && volume > 0
       ? roundMass(volume * dens)
       : 0;
+  if (volume <= 0 && dens > 0 && pesoLiquido > 0) {
+    volume = roundVolume(litrosFromMassaKg(pesoLiquido, dens));
+  }
   const composicaoBase = mergeComposicao([], comp, {
     transbordo_codigo: codigo,
     data: data.data || null,

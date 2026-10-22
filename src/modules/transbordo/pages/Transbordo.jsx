@@ -25,6 +25,8 @@ import TransbordoViewDialog from "@transbordo/components/transbordo/TransbordoVi
 import {
   formatVolume,
   formatMass,
+  parseDensidade,
+  resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
@@ -140,29 +142,55 @@ function renderTransbordoVolumeQuantidade(transbordo) {
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
   const vol = Number(transbordo?.volume_total) || 0;
   const mass = Number(transbordo?.massa_total) || 0;
+  const densidade = transbordo?.densidade;
 
   if (isEmbalado && !umIsVolume) {
-    const qtd = vol > 0 ? vol : mass;
+    const massKg = mass > 0 ? mass : vol;
+    const { volume: volL } = resolveVolumeMassaOperacional({
+      massa: massKg,
+      densidade,
+    });
     return {
-      volume: "-",
+      volume:
+        volL > 0 ? `${formatVolume(volL, { empty: "-" })} L` : "-",
       quantidade:
-        qtd > 0
-          ? `${formatMass(qtd, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
+        massKg > 0
+          ? `${formatMass(massKg, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
           : "-",
     };
   }
 
   if (isEmbalado && umIsVolume) {
-    const qtdTxt =
-      vol > 0
-        ? `${formatVolume(vol, { empty: "-" })} ${umLabel || "L"}`
+    const qtdVol = vol > 0 ? vol : mass;
+    const resolved = resolveVolumeMassaOperacional({
+      volume: qtdVol,
+      densidade,
+    });
+    const volTxt =
+      qtdVol > 0
+        ? `${formatVolume(qtdVol, { empty: "-" })} ${umLabel || "L"}`
         : "-";
-    return { volume: qtdTxt, quantidade: qtdTxt };
+    const qtdTxt =
+      parseDensidade(densidade) > 0 && resolved.massa > 0
+        ? `${formatMass(resolved.massa, { empty: "-" })} kg`
+        : volTxt;
+    return { volume: volTxt, quantidade: qtdTxt };
   }
 
+  const resolved = resolveVolumeMassaOperacional({
+    volume: vol,
+    massa: mass,
+    densidade,
+  });
   return {
-    volume: vol > 0 ? `${formatVolume(vol, { empty: "-" })} L` : "-",
-    quantidade: mass > 0 ? `${formatMass(mass, { empty: "-" })} kg` : "-",
+    volume:
+      resolved.volume > 0
+        ? `${formatVolume(resolved.volume, { empty: "-" })} L`
+        : "-",
+    quantidade:
+      resolved.massa > 0
+        ? `${formatMass(resolved.massa, { empty: "-" })} kg`
+        : "-",
   };
 }
 

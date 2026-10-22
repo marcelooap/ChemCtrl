@@ -189,6 +189,27 @@ export function litrosFromMassaKg(kg, densidade) {
 }
 
 /**
+ * Par volume (L) e massa (kg) operacionais, derivando o faltante pela densidade.
+ */
+export function resolveVolumeMassaOperacional({
+  volume = 0,
+  massa = 0,
+  densidade,
+} = {}) {
+  let vol = roundVolume(volume);
+  let kg = roundMass(massa);
+  const dens = parseDensidade(densidade);
+  if (dens > 0) {
+    if (vol <= 0 && kg > 0) {
+      vol = roundVolume(litrosFromMassaKg(kg, dens));
+    } else if (kg <= 0 && vol > 0) {
+      kg = roundMass(vol * dens);
+    }
+  }
+  return { volume: vol, massa: kg };
+}
+
+/**
  * Converte quantidade de estoque (kg) → litros inteiros, preservando
  * o total quando há vários lotes (soma das partes = total).
  *

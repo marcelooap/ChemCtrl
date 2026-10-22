@@ -8,7 +8,11 @@ import {
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
 import { FileDown, FileText } from "lucide-react";
-import { formatVolume, formatMass } from "@transbordo/lib/format";
+import {
+  formatVolume,
+  formatMass,
+  resolveVolumeMassaOperacional,
+} from "@transbordo/lib/format";
 import { generateBoletaPDF } from "@transbordo/lib/pdfBoleta";
 import { generateRelatorioFiscalPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -102,10 +106,20 @@ const formatDate = (d) => {
 
     const display = useMemo(() => {
       if (!vasilhame) return null;
-      return resolveVasilhameExpedidoDisplay(vasilhame, {
+      const base = resolveVasilhameExpedidoDisplay(vasilhame, {
         linkedItems: collectConvencionalItemsForVasilhame(saidas, vasilhame.id),
         transbordos,
       });
+      const resolved = resolveVolumeMassaOperacional({
+        volume: Number(base.volume) || 0,
+        massa: Number(base.peso_liquido) || 0,
+        densidade: base.densidade,
+      });
+      return {
+        ...base,
+        volume: resolved.volume,
+        peso_liquido: resolved.massa,
+      };
     }, [vasilhame, saidas, transbordos]);
 
     if (!vasilhame || !display) return null;

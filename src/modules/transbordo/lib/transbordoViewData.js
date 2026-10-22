@@ -5,6 +5,8 @@ import {
   parseDensidade,
   roundVolume,
   distributeByWeights,
+  litrosFromMassaKg,
+  resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
 import {
   normalizeUnidadeEntrada,
@@ -262,6 +264,17 @@ function massaDestino(destino, volume, densidade, isMassa) {
   return null;
 }
 
+function volumeLitrosDisplay(valor, densidade, isMassa) {
+  const n = Number(valor) || 0;
+  if (n <= 0) return "-";
+  if (isMassa) {
+    const dens = parseDensidade(densidade);
+    if (dens <= 0) return "-";
+    return `${formatVolume(litrosFromMassaKg(n, dens), { empty: "-" })} L`;
+  }
+  return `${formatVolume(n, { empty: "-" })} L`;
+}
+
 function buildDestinoLinhas(destino, composicao, densidade, isMassa) {
   const tipo = destino?.tipo_embalagem || "";
   const volume = tipo === "Tankagem" ? destino?.volume : destino?.volume_total;
@@ -316,7 +329,9 @@ function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome, unidad
           origem,
           produto,
           lote: l.lote || "-",
-          volume: origemEmMassa ? "-" : formatVolume(vol, { empty: "-" }),
+          volume: origemEmMassa
+            ? volumeLitrosDisplay(vol, transbordo?.densidade, true)
+            : formatVolume(vol, { empty: "-" }),
           massa: formatMass(massa, { empty: "-" }),
         });
       }
@@ -329,7 +344,9 @@ function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome, unidad
       origem,
       produto,
       lote: o.lote || "-",
-      volume: origemEmMassa ? "-" : formatVolume(vol, { empty: "-" }),
+      volume: origemEmMassa
+        ? volumeLitrosDisplay(vol, transbordo?.densidade, true)
+        : formatVolume(vol, { empty: "-" }),
       massa: formatMass(massa, { empty: "-" }),
     });
   }
@@ -362,7 +379,9 @@ function buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }) {
         embalagem: tanque ? embalagemDestinoLabel(d) : "-",
         lote: linha.lote || "-",
         qtd: embalado ? (qtdEmb != null ? String(qtdEmb) : "-") : "-",
-        volume: isVolume ? formatVolume(linha.volume, { empty: "-" }) : "-",
+        volume: isVolume
+          ? formatVolume(linha.volume, { empty: "-" })
+          : volumeLitrosDisplay(linha.volume, densOperacao, isMassa),
         massa: formatMass(linha.massa, { empty: "-" }),
         lacre,
         groupId: i,
@@ -400,6 +419,14 @@ export function buildTransbordoViewModel({
   const destinos = transbordo.destinos || [];
   const formatQtyOperacional = (valor) =>
     isMassa ? formatMass(valor, { empty: "-" }) : formatVolume(valor, { empty: "-" });
+  const totaisResolvidos = resolveVolumeMassaOperacional({
+    volume: isVolume ? transbordo.volume_total : 0,
+    massa:
+      transbordo.massa_total ??
+      (isMassa ? transbordo.volume_total : 0) ??
+      0,
+    densidade: transbordo.densidade,
+  });
 
   const codigo = String(transbordo.codigo_transbordo || "").trim();
 
@@ -427,10 +454,21 @@ export function buildTransbordoViewModel({
     destinoRows: buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }),
     volumeTotal: isVolume
       ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
-      : "-",
+      : isMassa
+        ? volumeLitrosDisplay(
+            transbordo.massa_total ?? transbordo.volume_total,
+            transbordo.densidade,
+            true
+          )
+        : totaisResolvidos.volume > 0
+          ? `${formatVolume(totaisResolvidos.volume, { empty: "-" })} L`
+          : "-",
     massaCaption: isMassa ? "Quantidade Total" : "Massa Total",
     massaTotal: isMassa
       ? `${formatQtyOperacional(transbordo.massa_total ?? transbordo.volume_total)} ${unidadeLabel}`
-      : `${formatMass(transbordo.massa_total, { empty: "-" })} kg`,
+      : `${formatMass(
+          totaisResolvidos.massa || transbordo.massa_total,
+          { empty: "-" }
+        )} kg`,
   };
 }

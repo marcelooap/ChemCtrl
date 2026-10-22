@@ -20,7 +20,14 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import VasilhameModal from "@transbordo/components/vasilhame/VasilhameModal";
 import VasilhameViewDialog from "@transbordo/components/vasilhame/VasilhameViewDialog";
-import { formatVolume, formatMass, parseDensidade, roundVolume, roundMass } from "@transbordo/lib/format";
+import {
+  formatVolume,
+  formatMass,
+  parseDensidade,
+  roundVolume,
+  roundMass,
+  resolveVolumeMassaOperacional,
+} from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
@@ -179,18 +186,25 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
   const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
+  const densidade = vasilhame?.densidade;
 
   if (isEmbalado && !umIsVolume) {
-    const qtd =
-      Number(vasilhame.volume) > 0
-        ? Number(vasilhame.volume)
-        : Number(vasilhame.peso_liquido) || 0;
+    const massKg =
+      Number(vasilhame.peso_liquido) > 0
+        ? Number(vasilhame.peso_liquido)
+        : Number(vasilhame.volume) || 0;
+    const { volume: volL } = resolveVolumeMassaOperacional({
+      massa: massKg,
+      densidade,
+    });
     const qtdTxt =
-      qtd > 0
-        ? `${formatMass(qtd, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
+      massKg > 0
+        ? `${formatMass(massKg, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
         : "-";
+    const volTxt =
+      volL > 0 ? `${formatVolume(volL, { empty: "-" })} L` : "-";
     return {
-      volume: <span className="text-muted-foreground">-</span>,
+      volume: <span className="whitespace-nowrap">{volTxt}</span>,
       quantidade: (
         <span className="inline-flex items-center whitespace-nowrap">
           {qtdTxt}
@@ -201,11 +215,19 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
   }
 
   if (isEmbalado && umIsVolume) {
-    const qtd = Number(vasilhame.volume) || 0;
+    const qtdVol = Number(vasilhame.volume) || 0;
+    const resolved = resolveVolumeMassaOperacional({
+      volume: qtdVol,
+      densidade,
+    });
     const volTxt =
-      qtd > 0
-        ? `${formatVolume(qtd, { empty: "-" })} ${umLabel || "L"}`
+      qtdVol > 0
+        ? `${formatVolume(qtdVol, { empty: "-" })} ${umLabel || "L"}`
         : "-";
+    const qtdTxt =
+      parseDensidade(densidade) > 0 && resolved.massa > 0
+        ? `${formatMass(resolved.massa, { empty: "-" })} kg`
+        : volTxt;
     return {
       volume: (
         <span className="inline-flex items-center whitespace-nowrap">
@@ -213,23 +235,30 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
           {fracionadoBadge}
         </span>
       ),
-      quantidade: <span className="whitespace-nowrap">{volTxt}</span>,
+      quantidade: <span className="whitespace-nowrap">{qtdTxt}</span>,
     };
   }
 
   // Granel: volume em L + quantidade em kg
-  const vol = Number(vasilhame.volume) || 0;
-  const mass = Number(vasilhame.peso_liquido) || 0;
+  const resolved = resolveVolumeMassaOperacional({
+    volume: Number(vasilhame.volume) || 0,
+    massa: Number(vasilhame.peso_liquido) || 0,
+    densidade,
+  });
   return {
     volume: (
       <span className="inline-flex items-center whitespace-nowrap">
-        {vol > 0 ? `${formatVolume(vol, { empty: "-" })} L` : "-"}
+        {resolved.volume > 0
+          ? `${formatVolume(resolved.volume, { empty: "-" })} L`
+          : "-"}
         {fracionadoBadge}
       </span>
     ),
     quantidade: (
       <span className="whitespace-nowrap">
-        {mass > 0 ? `${formatMass(mass, { empty: "-" })} kg` : "-"}
+        {resolved.massa > 0
+          ? `${formatMass(resolved.massa, { empty: "-" })} kg`
+          : "-"}
       </span>
     ),
   };

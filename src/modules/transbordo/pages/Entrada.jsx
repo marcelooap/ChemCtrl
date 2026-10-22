@@ -631,7 +631,7 @@ export default function Entrada() {
                 filtered.map((e, i) => {
                   const lotes = getEntradaLotes(e);
                   const sistema = getSistemaOrigem(e);
-                  const isIndustrializacao = sistema === "Industrialização";
+                  const isMateriaPrima = origemOperacional(e) === "MATERIA_PRIMA";
                   const unidades = lotes.map((l) => l.unidade_medida || "-");
                   const unidadesDistintas = [...new Set(unidades.filter((u) => u && u !== "-"))];
                   const showUnidadesStacked = unidadesDistintas.length > 1;
@@ -652,7 +652,7 @@ export default function Entrada() {
                       <td className="px-5 py-3">
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                            isIndustrializacao
+                            isMateriaPrima
                               ? "bg-orange-100 text-orange-800"
                               : "bg-primary/10 text-primary"
                           }`}
