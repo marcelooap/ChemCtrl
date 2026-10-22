@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cylinder, Eye, Package, Pencil, Power, Search } from 'lucide-react';
+import { Cylinder, Eye, Package, Pencil, Search } from 'lucide-react';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
-import { Switch } from '@shared/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import SearchableSelect from '@transbordo/components/cadastro/SearchableSelect';
@@ -51,7 +50,7 @@ export default function ReservarMaterial() {
   const [statusFilter, setStatusFilter] = useState('');
   const [editRow, setEditRow] = useState(null);
   const [viewRow, setViewRow] = useState(null);
-  const [mostrarSaidos, setMostrarSaidos] = useState(true);
+  const [patioScope, setPatioScope] = useState('patio');
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -167,7 +166,7 @@ export default function ReservarMaterial() {
       if (!matchesCliente(row.clienteNome)) return false;
       if (!matchesStatus((Number(row.saldoReservado) || 0) > 0)) return false;
       if (!q) return true;
-      const hay = `${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
+      const hay = `${row.entradaDisplay || ''} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
         .toLowerCase();
       return hay.includes(q);
     });
@@ -176,15 +175,15 @@ export default function ReservarMaterial() {
   const filteredVasilhames = useMemo(() => {
     const q = search.trim().toLowerCase();
     return vasilhameRows.filter((row) => {
-      if (!mostrarSaidos && row.emPatio === false) return false;
+      if (patioScope === 'patio' && row.emPatio === false) return false;
       if (!matchesCliente(row.clienteNome)) return false;
       if (!matchesStatus(Boolean(row.reservado))) return false;
       if (!q) return true;
-      const hay = `${row.displayId} ${row.placa} ${row.barril} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote}`
+      const hay = `${row.displayId} ${row.placa} ${row.barril} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.observacao || ''}`
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [vasilhameRows, search, mostrarSaidos, matchesCliente, matchesStatus]);
+  }, [vasilhameRows, search, patioScope, matchesCliente, matchesStatus]);
 
   const clienteOptions = useMemo(() => {
     const byName = new Map();
@@ -215,6 +214,23 @@ export default function ReservarMaterial() {
     ],
     [t]
   );
+
+  const patioOptions = useMemo(
+    () => [
+      {
+        id: 'patio',
+        nome: t('painel.comercial.reservarMaterial.vasilhames.filterPatio.noPatio'),
+      },
+      {
+        id: 'todos',
+        nome: t('painel.comercial.reservarMaterial.vasilhames.filterPatio.all'),
+      },
+    ],
+    [t]
+  );
+
+  const patioFilterLabel =
+    patioOptions.find((o) => o.id === patioScope)?.nome ?? patioOptions[0]?.nome ?? '';
 
   const syncEditRow = (data, chave) => {
     if (!chave) return;
@@ -292,38 +308,48 @@ export default function ReservarMaterial() {
             </TabsTrigger>
           </TabsList>
 
-          {tab === 'vasilhames' ? (
-            <div
-              className="inline-flex w-fit items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm cursor-pointer select-none"
-              onClick={() => setMostrarSaidos((current) => !current)}
-            >
-              <Power
-                className={`h-4 w-4 ${mostrarSaidos ? 'text-emerald-600' : 'text-muted-foreground'}`}
-                aria-hidden
-              />
-              <Switch
-                checked={mostrarSaidos}
-                onCheckedChange={setMostrarSaidos}
-                onClick={(event) => event.stopPropagation()}
-                aria-label={
-                  mostrarSaidos
-                    ? t('painel.comercial.reservarMaterial.vasilhames.includeExitsOn')
-                    : t('painel.comercial.reservarMaterial.vasilhames.includeExitsOff')
-                }
-                title={
-                  mostrarSaidos
-                    ? t('painel.comercial.reservarMaterial.vasilhames.includeExitsOn')
-                    : t('painel.comercial.reservarMaterial.vasilhames.includeExitsOff')
-                }
-                className={mostrarSaidos ? 'data-[state=checked]:bg-emerald-500' : undefined}
-              />
-              <span>{t('painel.comercial.reservarMaterial.vasilhames.includeExits')}</span>
+          <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex w-full flex-wrap items-center gap-4 sm:flex-1 sm:min-w-0">
+              {tab === 'vasilhames' ? (
+                <div className="w-full min-w-[12rem] sm:w-48 sm:shrink-0">
+                  <SearchableSelect
+                    value={patioFilterLabel}
+                    onChange={(label) => {
+                      const opt = patioOptions.find((o) => o.nome === label);
+                      if (opt) setPatioScope(opt.id);
+                    }}
+                    options={patioOptions}
+                    getOptionLabel={(o) => o.nome}
+                    getOptionValue={(o) => o.id}
+                    placeholder={t(
+                      'painel.comercial.reservarMaterial.vasilhames.filterPatio.placeholder'
+                    )}
+                  />
+                </div>
+              ) : null}
+              <div className="w-full min-w-[12rem] sm:w-64 sm:shrink-0">
+                <SearchableSelect
+                  value={clienteFilter}
+                  onChange={(label) => setClienteFilter(label)}
+                  options={clienteOptions}
+                  getOptionLabel={(c) => c.nome}
+                  getOptionValue={(c) => c.id}
+                  placeholder={t('painel.comercial.reservarMaterial.filterClient')}
+                />
+              </div>
+              <div className="w-full min-w-[12rem] sm:w-48 sm:shrink-0">
+                <SearchableSelect
+                  value={statusFilter}
+                  onChange={(label) => setStatusFilter(label)}
+                  options={statusOptions}
+                  getOptionLabel={(o) => o.nome}
+                  getOptionValue={(o) => o.id}
+                  placeholder={t('painel.comercial.reservarMaterial.filterStatus')}
+                />
+              </div>
             </div>
-          ) : null}
-
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px] max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="relative w-full shrink-0 sm:ml-4 sm:w-80 lg:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -332,27 +358,7 @@ export default function ReservarMaterial() {
                     ? t('painel.comercial.reservarMaterial.vasilhames.searchPlaceholder')
                     : t('painel.comercial.reservarMaterial.searchPlaceholder')
                 }
-                className="pl-10 bg-card"
-              />
-            </div>
-            <div className="w-full sm:w-64">
-              <SearchableSelect
-                value={clienteFilter}
-                onChange={(label) => setClienteFilter(label)}
-                options={clienteOptions}
-                getOptionLabel={(c) => c.nome}
-                getOptionValue={(c) => c.id}
-                placeholder={t('painel.comercial.reservarMaterial.filterClient')}
-              />
-            </div>
-            <div className="w-full sm:w-48">
-              <SearchableSelect
-                value={statusFilter}
-                onChange={(label) => setStatusFilter(label)}
-                options={statusOptions}
-                getOptionLabel={(o) => o.nome}
-                getOptionValue={(o) => o.id}
-                placeholder={t('painel.comercial.reservarMaterial.filterStatus')}
+                className="pl-10 bg-card w-full min-w-0"
               />
             </div>
           </div>
@@ -382,7 +388,7 @@ export default function ReservarMaterial() {
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                       <th className="px-4 py-3 font-medium">
-                        {t('painel.comercial.reservarMaterial.columns.cliente')}
+                        {t('painel.comercial.reservarMaterial.columns.entradaId')}
                       </th>
                       <th className="px-4 py-3 font-medium">
                         {t('painel.comercial.reservarMaterial.columns.cod')}
@@ -391,13 +397,16 @@ export default function ReservarMaterial() {
                         {t('painel.comercial.reservarMaterial.columns.produto')}
                       </th>
                       <th className="px-4 py-3 font-medium">
+                        {t('painel.comercial.reservarMaterial.columns.cliente')}
+                      </th>
+                      <th className="px-4 py-3 font-medium">
                         {t('painel.comercial.reservarMaterial.columns.lote')}
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         {t('painel.comercial.reservarMaterial.columns.saldoAtual')}
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
-                        {t('painel.comercial.reservarMaterial.columns.saldoReservado')}
+                        {t('painel.comercial.reservarMaterial.columns.reservado')}
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         {t('painel.comercial.reservarMaterial.columns.saldoFinal')}
@@ -418,9 +427,12 @@ export default function ReservarMaterial() {
                           i % 2 === 1 ? 'bg-muted/20' : ''
                         }`}
                       >
-                        <td className="px-4 py-3 font-medium text-foreground">{row.clienteNome}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-primary">
+                          {row.entradaDisplay}
+                        </td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
                         <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.clienteNome}</td>
                         <td className="px-4 py-3 font-mono">{row.lote}</td>
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="blue">
@@ -470,7 +482,7 @@ export default function ReservarMaterial() {
             reservas={reservas}
             user={user}
             onReload={loadData}
-            showDataSaida={mostrarSaidos}
+            showDataSaida={patioScope === 'todos'}
           />
         </TabsContent>
       </Tabs>

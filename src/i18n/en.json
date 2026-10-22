@@ -1416,6 +1416,11 @@
           "includeExits": "Include departures",
           "includeExitsOn": "On: shows every container, including those that already left",
           "includeExitsOff": "Off: shows only containers in the yard",
+          "filterPatio": {
+            "placeholder": "Location",
+            "noPatio": "In the yard",
+            "all": "All"
+          },
           "searchPlaceholder": "Search ID, plate, barrel, client, code, product or lot...",
           "empty": "No containers in stock for the selected filter.",
           "emptyAll": "No containers found for the selected filter.",
@@ -1434,6 +1439,7 @@
             "barril": "Barrel No.",
             "volume": "Volume",
             "massa": "Mass",
+            "observacao": "Notes",
             "status": "Status",
             "dataSaida": "Departure date"
           },
@@ -1442,7 +1448,7 @@
             "reservado": "Reserved"
           },
           "origem": {
-            "transbordo": "Transshipment",
+            "transbordo": "Conventional",
             "industrializacao": "Industrialization"
           },
           "actions": {
@@ -1489,12 +1495,14 @@
         "loadErrorTitle": "Failed to load stock",
         "loadErrorDescription": "Check ChemFlow connectivity and whether t_material_reservas was created.",
         "columns": {
+          "entradaId": "ID",
           "cliente": "Client",
           "cod": "Code",
           "produto": "Product",
           "lote": "Lot",
           "saldoAtual": "Current balance",
           "saldoReservado": "Reserved balance",
+          "reservado": "Reserved",
           "saldoFinal": "Final balance",
           "unidade": "Unit"
         },

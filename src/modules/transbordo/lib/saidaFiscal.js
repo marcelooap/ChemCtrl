@@ -134,11 +134,11 @@ export async function applySaidaFiscalToggle(
       : itensEscopo;
   const movimentoRefs = new Set(itensMovimento);
   const itens = itensMovimento;
-  // Data de registro da expedição = dia local em que o fiscal marca como enviado
-  // (não usar data_programada nem toISOString UTC, que atrasa/avança o dia no BR).
+  // Data de saída registrada nos vasilhames/containers = data programada da saída.
+  // Fallback para a data local atual caso data_programada não esteja preenchida.
   const dataSaidaRegistro = todayDateInputValue();
   const dataSaidaProgramada = saida.data_programada || "";
-  const dataSaida = dataSaidaRegistro || dataSaidaProgramada;
+  const dataSaida = dataSaidaProgramada || dataSaidaRegistro;
 
   const validacaoModulos = mergeValidacaoModulos(
     saida,
@@ -382,7 +382,7 @@ export async function applySaidaFiscalToggle(
     } else {
       patch = {
         status: "Expedido",
-        departure_date: dataSaidaRegistro || null,
+        departure_date: dataSaida || null,
       };
     }
 

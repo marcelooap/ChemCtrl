@@ -736,7 +736,6 @@ export default function SaidaViewDialog({
           {checklistProntos.length > 0 ? (
             <Button
               type="button"
-              variant="outline"
               className="gap-2"
               disabled={unifyingChecklists || checklistDownloadingIndex != null}
               title={t("painel.logistica.carregamentos.checklistUnifyHint")}

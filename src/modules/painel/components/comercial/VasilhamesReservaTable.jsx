@@ -14,7 +14,7 @@ import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Can } from '@industrializacao/lib/rbac/Can';
-import { formatMass, formatVolume } from '@transbordo/lib/format';
+import { formatVolume } from '@transbordo/lib/format';
 import { useToast } from '@shared/components/ui/use-toast';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import {
@@ -134,6 +134,15 @@ export default function VasilhamesReservaTable({
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.id')}
                   </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
+                    {t('painel.comercial.reservarMaterial.columns.cod')}
+                  </th>
+                  <th className="px-4 py-3 font-medium bg-muted/40">
+                    {t('painel.comercial.reservarMaterial.columns.produto')}
+                  </th>
+                  <th className="px-4 py-3 font-medium bg-muted/40">
+                    {t('painel.comercial.reservarMaterial.columns.cliente')}
+                  </th>
+                  <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}
                   </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
@@ -143,22 +152,13 @@ export default function VasilhamesReservaTable({
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.barril')}
                   </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
-                    {t('painel.comercial.reservarMaterial.columns.cliente')}
-                  </th>
-                  <th className="px-4 py-3 font-medium bg-muted/40">
-                    {t('painel.comercial.reservarMaterial.columns.cod')}
-                  </th>
-                  <th className="px-4 py-3 font-medium bg-muted/40">
-                    {t('painel.comercial.reservarMaterial.columns.produto')}
+                    {t('painel.comercial.reservarMaterial.columns.lote')}
                   </th>
                   <th className="px-4 py-3 font-medium text-right bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.volume')}
                   </th>
-                  <th className="px-4 py-3 font-medium text-right bg-muted/40">
-                    {t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
-                  </th>
-                  <th className="px-4 py-3 font-medium bg-muted/40">
-                    {t('painel.comercial.reservarMaterial.columns.lote')}
+                  <th className="px-4 py-3 font-medium bg-muted/40 min-w-[120px]">
+                    {t('painel.comercial.reservarMaterial.vasilhames.columns.observacao')}
                   </th>
                   <th className="px-4 py-3 font-medium text-center bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.status')}
@@ -181,9 +181,12 @@ export default function VasilhamesReservaTable({
                       i % 2 === 1 ? 'bg-muted/20' : ''
                     } ${row.emPatio === false ? 'text-muted-foreground' : ''}`}
                   >
-                    <td className="px-4 py-3 font-mono font-medium text-primary">
+                    <td className="px-4 py-3 font-mono font-bold text-primary">
                       {row.displayId}
                     </td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{row.clienteNome}</td>
                     <td className="px-4 py-3">
                       <OrigemBadge origem={row.origem} />
                     </td>
@@ -193,19 +196,19 @@ export default function VasilhamesReservaTable({
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {row.barril}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.clienteNome}</td>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
-                    <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>
+                    <td className="px-4 py-3 font-mono">{row.lote}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span className="inline-flex items-center justify-end whitespace-nowrap">
                         {row.fracionado ? <FracionadoBadge /> : null}
                         {formatVolume(row.volume, { empty: '—' })}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {formatMass(row.massa, { empty: '—' })}
+                    <td
+                      className="px-4 py-3 text-muted-foreground max-w-[220px] truncate"
+                      title={row.observacao !== '—' ? row.observacao : undefined}
+                    >
+                      {row.observacao}
                     </td>
-                    <td className="px-4 py-3 font-mono">{row.lote}</td>
                     <td className="px-4 py-3 text-center">
                       <StatusBadge reservado={row.reservado} />
                     </td>

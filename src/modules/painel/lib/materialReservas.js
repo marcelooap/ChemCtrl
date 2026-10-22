@@ -96,10 +96,14 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       unidade,
     });
 
+    const entradaCodigo = String(item.entrada_codigo ?? '').trim();
     const prev = map.get(chave);
     if (prev) {
       prev.saldoAtual += saldo;
       prev.estoqueIds.push(item.id);
+      if (entradaCodigo && !prev.entradaCodigos.includes(entradaCodigo)) {
+        prev.entradaCodigos.push(entradaCodigo);
+      }
       if (!prev.produtoId && item.produto_id) prev.produtoId = item.produto_id;
       if (!prev.clienteId && item.cliente_id) prev.clienteId = item.cliente_id;
       if (prev.lote === '—' && lote !== '—') prev.lote = lote;
@@ -116,6 +120,7 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
         unidade,
         saldoAtual: saldo,
         estoqueIds: item.id ? [item.id] : [],
+        entradaCodigos: entradaCodigo ? [entradaCodigo] : [],
         densidade: item.densidade || item.lotes?.[0]?.densidade || null,
       });
     }
@@ -149,6 +154,7 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       unidade: sample.unidade_medida || 'kg',
       saldoAtual: 0,
       estoqueIds: [],
+      entradaCodigos: [],
       densidade: null,
     });
   }
@@ -159,8 +165,19 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       const saldoAtual = Math.round(row.saldoAtual || 0);
       const bloqueioPendente = sumBloqueioPendenteChave(saidas, row.chave);
       const saldoFinal = Math.max(0, saldoAtual - saldoReservado - bloqueioPendente);
+      const entradaCodigos = [...(row.entradaCodigos || [])].sort((a, b) =>
+        String(a).localeCompare(String(b), 'pt-BR', { numeric: true })
+      );
+      const entradaDisplay =
+        entradaCodigos.length === 0
+          ? '—'
+          : entradaCodigos.length === 1
+            ? entradaCodigos[0]
+            : entradaCodigos.join(', ');
       return {
         ...row,
+        entradaCodigos,
+        entradaDisplay,
         saldoAtual,
         saldoReservado,
         saldoFinal,

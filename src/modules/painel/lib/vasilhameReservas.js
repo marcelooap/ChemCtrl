@@ -148,6 +148,7 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
     fracionado: isTransbordoFracionado(vasilhame),
     emPatio: transbordoStatus(vasilhame) === 'No Pátio',
     dataSaida: exitDateOrNull(vasilhame.data_saida),
+    observacao: dash(vasilhame.observacao),
     source: display,
   };
 }
@@ -184,6 +185,7 @@ export function mapIndContainer(
     fracionado: isContainerFractional(container, production, transfers),
     emPatio: (container.status || '') === 'No Pátio',
     dataSaida: exitDateOrNull(container.departure_date),
+    observacao: dash(container.observations),
     source: container,
     // Referências (sem cópia) usadas para calcular pesos/volume da boleta.
     boletaContext: { productions, recipes },

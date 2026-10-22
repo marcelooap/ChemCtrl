@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart3,
   ArrowLeftRight,
   Package,
+  Search,
 } from "lucide-react";
 import { formatVolume, formatMass, formatCurrency, formatNum } from "@transbordo/lib/format";
 import {
@@ -217,13 +218,39 @@ export default function Home() {
       : "-",
   }));
 
+  const [fracionadosSearch, setFracionadosSearch] = useState("");
+
   const fracionados = vasilhames.filter(
     (v) =>
       v.fracionado === true &&
       (v.status || "No Pátio") === "No Pátio"
   );
 
-  const estoqueNok = estoque.filter((e) => !e.status_wms);
+  const fracionadosFiltrados = useMemo(() => {
+    const q = fracionadosSearch.trim().toLowerCase();
+    if (!q) return fracionados;
+    return fracionados.filter(
+      (v) =>
+        v.produto_nome?.toLowerCase().includes(q) ||
+        v.codigo?.toLowerCase().includes(q) ||
+        v.placa?.toLowerCase().includes(q) ||
+        v.barril?.toLowerCase().includes(q)
+    );
+  }, [fracionados, fracionadosSearch]);
+
+  const getDataEnvase = (v) => {
+    const fromComp = (v.composicao || []).map((c) => c?.data).find(Boolean);
+    return fromComp || v.created_date || v.created_at || null;
+  };
+
+  const calcDiasNoPatio = (v) => {
+    const dataEnvase = getDataEnvase(v);
+    if (!dataEnvase) return null;
+    const envase = new Date(String(dataEnvase).slice(0, 10) + "T00:00:00");
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return Math.floor((hoje - envase) / (1000 * 60 * 60 * 24));
+  };
 
   return (
     <div className="h-full min-h-0 overflow-y-auto space-y-6">
@@ -372,147 +399,108 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col min-h-0">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Vasilhames fracionados
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Em estoque no pátio
-              </p>
+      <div className="bg-card rounded-xl border border-border shadow-sm">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-border flex-wrap">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-foreground">
+              Vasilhames fracionados
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">Em estoque no pátio</p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={fracionadosSearch}
+                onChange={(e) => setFracionadosSearch(e.target.value)}
+                placeholder="Buscar produto ou vasilhame..."
+                className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60 transition-all w-56"
+              />
             </div>
             <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800">
-              {loading ? "..." : fracionados.length}
+              {loading ? "..." : fracionadosFiltrados.length}
+              {fracionadosSearch && fracionadosFiltrados.length !== fracionados.length && (
+                <span className="ml-1 text-blue-500">/ {fracionados.length}</span>
+              )}
             </span>
           </div>
-          <div className="overflow-auto max-h-[320px]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                  <th className="px-4 py-3 font-medium">Código</th>
-                  <th className="px-4 py-3 font-medium">Produto</th>
-                  <th className="px-4 py-3 font-medium">Lote</th>
-                  <th className="px-4 py-3 font-medium">Volume</th>
-                  <th className="px-4 py-3 font-medium">Massa</th>
+        </div>
+        <div className="overflow-auto max-h-[calc(100vh-360px)]">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                <th className="px-5 py-3 font-medium">ID</th>
+                <th className="px-5 py-3 font-medium">N° Placa</th>
+                <th className="px-5 py-3 font-medium">N° Barril</th>
+                <th className="px-5 py-3 font-medium">Produto</th>
+                <th className="px-5 py-3 font-medium">Lote</th>
+                <th className="px-5 py-3 font-medium">Volume</th>
+                <th className="px-5 py-3 font-medium">Massa</th>
+                <th className="px-5 py-3 font-medium">Dias no Pátio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                    Carregando vasilhames...
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </td>
-                  </tr>
-                ) : fracionados.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Nenhum vasilhame fracionado no pátio.
-                    </td>
-                  </tr>
-                ) : (
-                  fracionados.map((v) => (
+              ) : fracionadosFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-muted-foreground">
+                    {fracionadosSearch
+                      ? "Nenhum vasilhame encontrado para a busca."
+                      : "Nenhum vasilhame fracionado no pátio."}
+                  </td>
+                </tr>
+              ) : (
+                fracionadosFiltrados.map((v, i) => {
+                  const dias = calcDiasNoPatio(v);
+                  return (
                     <tr
                       key={v.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
+                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${i % 2 === 1 ? "bg-muted/20" : ""}`}
                     >
-                      <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
+                      <td className="px-5 py-3 font-medium text-primary whitespace-nowrap">
                         {v.codigo || "-"}
                       </td>
-                      <td className="px-4 py-3 text-foreground">
+                      <td className="px-5 py-3 text-foreground whitespace-nowrap">
+                        {v.placa || "-"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">
+                        {v.barril || "-"}
+                      </td>
+                      <td className="px-5 py-3 text-foreground">
                         {v.produto_nome || "-"}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">
                         {getDominantLote(v.composicao) || v.lote || "-"}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-5 py-3 whitespace-nowrap">
                         <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
                           {formatVolume(v.volume, { empty: "-" })} L
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-foreground whitespace-nowrap">
+                      <td className="px-5 py-3 text-foreground whitespace-nowrap">
                         {formatMass(v.peso_liquido, { empty: "-" })} kg
                       </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col min-h-0">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Estoque - Status WMS
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Itens com status WMS NOK
-              </p>
-            </div>
-            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-700">
-              {loading ? "..." : estoqueNok.length}
-            </span>
-          </div>
-          <div className="overflow-auto max-h-[320px]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                  <th className="px-4 py-3 font-medium">Código</th>
-                  <th className="px-4 py-3 font-medium">Produto</th>
-                  <th className="px-4 py-3 font-medium">NF Origem</th>
-                  <th className="px-4 py-3 font-medium">Lote</th>
-                  <th className="px-4 py-3 font-medium">Qtd.</th>
-                  <th className="px-4 py-3 font-medium">Unidade</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                      Carregando...
-                    </td>
-                  </tr>
-                ) : estoqueNok.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                      Nenhum item com status WMS NOK.
-                    </td>
-                  </tr>
-                ) : (
-                  estoqueNok.map((e) => (
-                    <tr
-                      key={e.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
-                        {e.produto_codigo || "-"}
-                      </td>
-                      <td className="px-4 py-3 text-foreground">
-                        {e.produto_nome || "-"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                          {e.nota_fiscal || "-"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {e.lote || "-"}
-                      </td>
-                      <td className="px-4 py-3 text-foreground whitespace-nowrap">
-                        {formatMass(e.saldo_atual, { empty: "-" })}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {e.unidade_medida || "-"}
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        {dias === null ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                            {dias} dia{dias !== 1 ? "s" : ""}
+                          </span>
+                        )}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

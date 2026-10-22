@@ -1416,6 +1416,11 @@
           "includeExits": "Incluir saídas",
           "includeExitsOn": "Ligado: mostra todos os vasilhames, inclusive os que já saíram",
           "includeExitsOff": "Desligado: mostra somente os vasilhames no pátio",
+          "filterPatio": {
+            "placeholder": "Localização",
+            "noPatio": "No pátio",
+            "all": "Todos"
+          },
           "searchPlaceholder": "Buscar ID, placa, barril, cliente, código, produto ou lote...",
           "empty": "Nenhum vasilhame em estoque para o filtro selecionado.",
           "emptyAll": "Nenhum vasilhame encontrado para o filtro selecionado.",
@@ -1434,6 +1439,7 @@
             "barril": "Nº Barril",
             "volume": "Volume",
             "massa": "Massa",
+            "observacao": "Observação",
             "status": "Status",
             "dataSaida": "Data de saída"
           },
@@ -1442,7 +1448,7 @@
             "reservado": "Reservado"
           },
           "origem": {
-            "transbordo": "Transbordo",
+            "transbordo": "Convencional",
             "industrializacao": "Industrialização"
           },
           "actions": {
@@ -1489,12 +1495,14 @@
         "loadErrorTitle": "Erro ao carregar estoque",
         "loadErrorDescription": "Verifique a conexão com o ChemFlow e se a tabela t_material_reservas foi criada.",
         "columns": {
+          "entradaId": "ID",
           "cliente": "Cliente",
           "cod": "Cód.",
           "produto": "Produto",
           "lote": "Lote",
           "saldoAtual": "Saldo atual",
           "saldoReservado": "Saldo reservado",
+          "reservado": "Reservado",
           "saldoFinal": "Saldo final",
           "unidade": "Unidade"
         },

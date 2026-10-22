@@ -1232,6 +1232,11 @@
           "includeExits": "Inclure les sorties",
           "includeExitsOn": "Activé : affiche tous les contenants, y compris ceux déjà sortis",
           "includeExitsOff": "Désactivé : affiche seulement les contenants dans la cour",
+          "filterPatio": {
+            "placeholder": "Emplacement",
+            "noPatio": "Dans la cour",
+            "all": "Tous"
+          },
           "searchPlaceholder": "Rechercher ID, plaque, fût, client, code, produit ou lot...",
           "empty": "Aucun contenant en stock pour le filtre sélectionné.",
           "emptyAll": "Aucun contenant trouvé pour le filtre sélectionné.",
@@ -1250,6 +1255,7 @@
             "barril": "Nº Fût",
             "volume": "Volume",
             "massa": "Masse",
+            "observacao": "Observation",
             "status": "Statut",
             "dataSaida": "Date de sortie"
           },
@@ -1258,7 +1264,7 @@
             "reservado": "Réservé"
           },
           "origem": {
-            "transbordo": "Transbordement",
+            "transbordo": "Conventionnel",
             "industrializacao": "Industrialisation"
           },
           "actions": {
@@ -1305,12 +1311,14 @@
         "loadErrorTitle": "Erreur de chargement du stock",
         "loadErrorDescription": "Vérifiez la connexion ChemFlow et si la table t_material_reservas a été créée.",
         "columns": {
+          "entradaId": "ID",
           "cliente": "Client",
           "cod": "Code",
           "produto": "Produit",
           "lote": "Lot",
           "saldoAtual": "Solde actuel",
           "saldoReservado": "Solde réservé",
+          "reservado": "Réservé",
           "saldoFinal": "Solde final",
           "unidade": "Unité"
         },

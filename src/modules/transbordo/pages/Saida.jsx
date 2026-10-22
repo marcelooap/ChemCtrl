@@ -227,10 +227,25 @@ export default function Saida({
     return matchSearch && matchStatus && matchCliente;
   });
 
+  const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
   const formatDate = (d) => {
     if (!d) return "-";
     const date = new Date(d + "T00:00:00");
     return date.toLocaleDateString("pt-BR");
+  };
+
+  const formatDateWithWeekday = (d) => {
+    if (!d) return "-";
+    const date = new Date(d + "T00:00:00");
+    const dateStr = date.toLocaleDateString("pt-BR");
+    const weekday = DIAS_SEMANA[date.getDay()];
+    return (
+      <span className="flex flex-col gap-0.5 leading-tight">
+        <span>{dateStr}</span>
+        <span className="text-xs font-medium text-primary">{weekday}</span>
+      </span>
+    );
   };
 
   const calcDias = (dataProgramada) => {
@@ -392,8 +407,8 @@ export default function Saida({
       if (enviar && trackNewFromPainel) {
         markAsRead(saida.id);
       }
-      // Atualiza caches locais de estoque/vasilhames
-      await loadData();
+      // Atualiza caches locais de estoque/vasilhames em background (sem piscar a tela)
+      await loadData({ silent: true });
     } catch (err) {
       setFiscalError(
         err?.message ||
@@ -538,10 +553,10 @@ export default function Saida({
                       {s.usuario_criador || "-"}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {formatDate(s.data_solicitacao)}
+                      {formatDateWithWeekday(s.data_solicitacao)}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {formatDate(s.data_programada)}
+                      {formatDateWithWeekday(s.data_programada)}
                     </td>
                     <td className="px-5 py-3">
                       {hideDias ? "-" : renderDias(s.data_programada)}
@@ -556,7 +571,13 @@ export default function Saida({
                     {isExpedicao && (
                       <td className="px-5 py-3">
                         {agendamento ? (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap bg-green-50 text-green-700 border-green-300">
+                          <span
+                            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${
+                              agendamento.tipo === 'encaixe' || agendamento.horario === 'encaixe'
+                                ? 'bg-gray-100 text-gray-500 border-gray-300'
+                                : 'bg-green-50 text-green-700 border-green-300'
+                            }`}
+                          >
                             {formatSlotRef(agendamento)}
                           </span>
                         ) : (

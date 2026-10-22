@@ -100,7 +100,7 @@ export default function SearchableSelect({
           aria-autocomplete="list"
           aria-readonly={selectOnly || undefined}
           className={cn(
-            "w-full px-3 py-2 pr-9 rounded-md border bg-card text-sm transition-colors focus:outline-none",
+            "w-full px-3 py-2 pr-9 rounded-md border bg-card text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none",
             disabled
               ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed"
               : open
