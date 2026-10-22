@@ -339,6 +339,8 @@ export function drawSoftTable(doc, y, options = {}) {
   const lineH = options.lineH ?? 3.6;
   const cellPadX = 1.8;
   const emptyText = options.emptyText ?? "—";
+  const darkHeader = options.headerTone === "dark";
+  const stripeRow = (ri) => (darkHeader ? ri % 2 === 1 : ri % 2 === 0);
 
   const textX = (x, w, align) => {
     if (align === "left") return x + cellPadX;
@@ -361,11 +363,23 @@ export function drawSoftTable(doc, y, options = {}) {
   );
   const headerH = Math.max(8, Math.max(...headerLines.map((l) => l.length)) * 3.2 + 3.2);
 
-  const drawHeader = (yy) => {
-    paintHeaderBand(doc, yy, headerH);
+  const drawHeader = (yy, segmentStart = false) => {
+    if (darkHeader) {
+      const r = Math.min(CARD_R, headerH / 2);
+      setFill(doc, BLUE_DARK);
+      if (segmentStart) {
+        doc.roundedRect(M, yy, CW, headerH, r, r, "F");
+        if (headerH > r) doc.rect(M, yy + headerH - r, CW, r, "F");
+      } else {
+        doc.rect(M, yy, CW, headerH, "F");
+      }
+      setColor(doc, WHITE);
+    } else {
+      paintHeaderBand(doc, yy, headerH);
+      setColor(doc, MUTED);
+    }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(hdrFs);
-    setColor(doc, MUTED);
     let x = M;
     headerLines.forEach((lines, i) => {
       const blockH = lines.length * 3.2;
@@ -385,7 +399,7 @@ export function drawSoftTable(doc, y, options = {}) {
   };
 
   let segmentTop = y;
-  y = drawHeader(y);
+  y = drawHeader(y, true);
 
   const close = (bottom) => closeTableCard(doc, segmentTop, bottom);
 
@@ -414,10 +428,10 @@ export function drawSoftTable(doc, y, options = {}) {
       close(y);
       y = nextPage(doc);
       segmentTop = y;
-      y = drawHeader(y);
+      y = drawHeader(y, true);
     }
 
-    if (ri % 2 === 0) {
+    if (stripeRow(ri)) {
       setFill(doc, BG_SOFT);
       doc.rect(M + 0.45, y, CW - 0.9, rowH, "F");
     }

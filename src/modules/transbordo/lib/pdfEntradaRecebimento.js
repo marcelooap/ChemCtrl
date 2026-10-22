@@ -10,6 +10,8 @@ import {
 } from "@transbordo/lib/pdfReportLayout";
 import { drawOrgaoControladoBanner } from "@transbordo/lib/pdfOrgaoControladoBanner";
 
+const TABLE_HEADER = { headerTone: "dark" };
+
 export async function buildEntradaRecebimentoPdfDoc(input = {}) {
   const view = buildEntradaRecebimentoViewModel(input);
   if (!view) return null;
@@ -47,6 +49,7 @@ export async function buildEntradaRecebimentoPdfDoc(input = {}) {
     prodWidths.push(26);
   }
   y = drawSoftTable(doc, y, {
+    ...TABLE_HEADER,
     headers: prodHeaders,
     widths: prodWidths,
     rows: view.produtosRows.map((r) => {
@@ -65,6 +68,7 @@ export async function buildEntradaRecebimentoPdfDoc(input = {}) {
 
   y = drawSectionTitle(doc, y, "Controle de Qualidade");
   y = drawSoftTable(doc, y, {
+    ...TABLE_HEADER,
     headers: ["Lote", "Fabricação", "Validade", "Densidade"],
     widths: [38, 38, 38, 38],
     rows: view.qualidadeRows.map((r) => [
@@ -91,6 +95,7 @@ export async function buildEntradaRecebimentoPdfDoc(input = {}) {
     pesRow.push(p.margem);
 
     y = drawSoftTable(doc, y, {
+      ...TABLE_HEADER,
       headers: pesHeaders,
       widths: pesWidths,
       rows: [pesRow],
@@ -123,6 +128,7 @@ export async function buildEntradaRecebimentoPdfDoc(input = {}) {
     ]);
     rows.push(["Total", "", view.transbordo.totalVolume, view.transbordo.totalMassa]);
     y = drawSoftTable(doc, y, {
+      ...TABLE_HEADER,
       headers: ["OP", "Destino", "Volume (L)", "Massa (kg)"],
       widths: [28, 78, 34, 34],
       rows,
