@@ -114,6 +114,16 @@ export default function Home() {
     0
   );
 
+  const { monday: semanaInicio, saturday: semanaFim } = getWeekRangeMonSat();
+  const dataDia = formatDateBr(new Date());
+  const transbordosSemana = transbordos.filter((t) =>
+    isInWeekMonSat(t.data, semanaInicio, semanaFim)
+  );
+  const volumeTransbordadoSemana = transbordosSemana.reduce(
+    (sum, t) => sum + (t.volume_total || 0),
+    0
+  );
+
   const totalEmEstoque = estoque.reduce(
     (sum, e) => sum + (e.saldo_atual || 0),
     0
@@ -146,15 +156,15 @@ export default function Home() {
       accentClass: "border-b-blue-500",
     },
     {
-      title: "TRANSBORDADO HOJE",
-      value: loading ? "..." : `${formatVolume(volumeTransbordadoHoje)} L`,
+      title: "TRANSBORDADO NA SEMANA",
+      value: loading ? "..." : `${formatNum(volumeTransbordadoSemana, 0)} L`,
       subtitle: loading
         ? "Carregando..."
-        : `${transbordosHoje.length} transbordo(s) no dia`,
+        : `${transbordosSemana.length} transbordo(s) na semana`,
       footer: loading
         ? null
         : {
-            primary: "Volume do dia atual",
+            primary: "Volume da semana (seg. a sáb.)",
             secondary: `Acumulado no mês: ${formatNum(volumeTransbordadoMes, 0)} L`,
           },
       icon: ArrowLeftRight,
@@ -180,18 +190,6 @@ export default function Home() {
       accentClass: "border-b-amber-500",
     },
   ];
-
-  const { monday: semanaInicio, saturday: semanaFim } = getWeekRangeMonSat();
-  const periodoSemana = `${formatDateBr(semanaInicio)} – ${formatDateBr(semanaFim)}`;
-
-  const transbordosSemana = transbordos.filter((t) =>
-    isInWeekMonSat(t.data, semanaInicio, semanaFim)
-  );
-
-  const volumeSemana = transbordosSemana.reduce(
-    (sum, t) => sum + (t.volume_total || 0),
-    0
-  );
 
   const DIAS_SEMANA_LABELS = ["Seg.", "Ter.", "Qua.", "Qui.", "Sex.", "Sab."];
   const volumePorDia = DIAS_SEMANA_LABELS.map((label, offset) => {
@@ -287,17 +285,10 @@ export default function Home() {
       <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border flex-wrap">
           <div className="min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-base font-semibold text-foreground">
-                Transbordos recentes
-              </h2>
-              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary">
-                {loading ? "..." : `${formatVolume(volumeSemana)} L`}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Período: {periodoSemana} (segunda a sábado)
-            </p>
+            <h2 className="text-base font-semibold text-foreground">
+              Transbordo do dia
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">{dataDia}</p>
           </div>
           <div className="flex items-start gap-1.5 sm:gap-2 shrink-0 overflow-x-auto">
             {volumePorDia.map((dia) => (
@@ -306,7 +297,7 @@ export default function Home() {
                   {dia.label}
                 </span>
                 <span className="inline-flex items-center justify-center w-full px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary tabular-nums">
-                  {loading ? "..." : `${formatVolume(dia.volume)} L`}
+                  {loading ? "..." : `${formatNum(dia.volume, 0)} L`}
                 </span>
               </div>
             ))}

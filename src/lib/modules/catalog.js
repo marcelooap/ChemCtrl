@@ -36,6 +36,15 @@ export function getModuleById(moduleId) {
   return APP_MODULES.find((m) => m.id === moduleId) || null;
 }
 
+/** Rótulo curto no topo (barra do terminal/clima). */
+export function getModuleHeaderLabel(pathname) {
+  const mod = getModuleByRoute(pathname);
+  if (!mod) return null;
+  if (mod.id === MODULE_IDS.TRANSBORDO) return 'Armazenagem';
+  if (mod.id === MODULE_IDS.INDUSTRIALIZACAO) return 'Industrialização';
+  return null;
+}
+
 export function getModuleByRoute(pathname) {
   if (!pathname) return null;
   if (pathname === '/' || pathname === '') {

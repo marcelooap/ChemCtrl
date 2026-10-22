@@ -20,6 +20,7 @@ import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 import {
   M,
   CW,
+  CARD_R,
   BLUE as BLUE_MID,
   BLUE,
   BLUE_DARK,
@@ -28,6 +29,7 @@ import {
   BORDER as GRAY_BORDER,
   TEXT as BLACK,
   MUTED as GRAY_LABEL,
+  WHITE,
   setColor,
   setFill,
   setDraw,
@@ -37,7 +39,6 @@ import {
   paintFooter,
   ensurePdfSpace,
   contentLimit,
-  paintHeaderBand,
   closeTableCard,
   nextPage,
 } from "@transbordo/lib/pdfReportLayout";
@@ -231,6 +232,7 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     colWidths || headers.map(() => CW / headers.length)
   );
   const badgeSet = new Set(badgeCols);
+  const badgeTones = options.badgeTones || {};
   const aligns = options.align || headers.map(() => "center");
 
   const cellCenterX = (x, w) => x + w / 2;
@@ -273,9 +275,12 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     });
     const maxLines = Math.max(1, ...headerLines.map((l) => l.length));
     const h = Math.max(8, maxLines * 3.8 + 3);
+    const r = Math.min(CARD_R, h / 2);
 
-    paintHeaderBand(doc, yy, h);
-    setColor(doc, GRAY_LABEL);
+    setFill(doc, BLUE_DARK);
+    doc.roundedRect(M, yy, CW, h, r, r, "F");
+    if (h > r) doc.rect(M, yy + h - r, CW, r, "F");
+    setColor(doc, WHITE);
     let x = M;
     headerLines.forEach((lines, i) => {
       const blockH = lines.length * 3.8;
@@ -305,6 +310,33 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     setColor(doc, [21, 128, 61]);
     const safe = doc.splitTextToSize(label, bw - 3)[0] || label;
     doc.text(safe, cx, cy, { align: "center", baseline: "middle" });
+  };
+
+  const drawAmberBadge = (lines, cellX, cellW, rowY, rowH) => {
+    const content = (lines || [])
+      .map((line) => String(line || "").trim())
+      .filter((line) => line && line !== "-");
+    if (!content.length) return false;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    const padX = 2.2;
+    const padY = 1.05;
+    const textW = Math.max(...content.map((line) => doc.getTextWidth(line)));
+    const bw = Math.min(Math.max(cellW - 1.8, 8), Math.max(textW + padX * 2, 12));
+    const bh = Math.max(4.8, content.length * lineH + padY * 2);
+    const bx = cellX + (cellW - bw) / 2;
+    const by = rowY + (rowH - bh) / 2;
+
+    setFill(doc, [254, 249, 195]);
+    doc.roundedRect(bx, by, bw, bh, 1.3, 1.3, "F");
+    setColor(doc, [120, 53, 15]);
+    content.forEach((line, li) => {
+      const cy =
+        by + bh / 2 - ((content.length - 1) * lineH) / 2 + li * lineH;
+      doc.text(line, bx + bw / 2, cy, { align: "center", baseline: "middle" });
+    });
+    return true;
   };
 
   let segmentTop = y;
@@ -341,7 +373,7 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
       doc.setFont("helvetica", "normal");
       setColor(doc, BLACK);
     }
-    if (ri % 2 === 0) {
+    if (ri % 2 === 1) {
       setFill(doc, GRAY_ROW);
       doc.rect(M + 0.45, y, CW - 0.9, rowH, "F");
     }
@@ -351,6 +383,11 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
 
     let x = M;
     cellLines.forEach((lines, i) => {
+      if (badgeTones[i] === "amber" && drawAmberBadge(lines, x, widths[i], y, rowH)) {
+        x += widths[i];
+        return;
+      }
+
       const align = aligns[i] || "center";
       const blockH = lines.length * lineH;
       const startY = y + (rowH - blockH) / 2 + lineH / 2;
@@ -1082,7 +1119,8 @@ export function generateEstoqueEnvioPDF({
       vasilhameTotals,
       [],
       {
-        align: ["center", "left", "center", "center", "center", "left"],
+        align: ["center", "left", "center", "center", "center", "center"],
+        badgeTones: { 5: "amber" },
       }
     );
   }

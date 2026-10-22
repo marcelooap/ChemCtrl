@@ -1,4 +1,6 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
+import { getModuleHeaderLabel } from '@/lib/modules/catalog';
 import {
   Cloud,
   CloudDrizzle,
@@ -61,6 +63,8 @@ function WeatherConditionIcon({
 }
 
 export function TerminalWeatherInfo() {
+  const { pathname } = useLocation();
+  const moduleLabel = getModuleHeaderLabel(pathname);
   const { weather, error, loading } = useMacaeWeather();
 
   let weatherContent: React.ReactNode;
@@ -96,14 +100,21 @@ export function TerminalWeatherInfo() {
   }
 
   return (
-    <div className="hidden sm:block min-w-0 text-left pr-3">
-      <p className="flex items-center gap-1.5 text-sm font-medium text-foreground truncate leading-tight">
-        <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2575D1]" aria-hidden />
-        <span className="truncate">Terminal Imboassica, Macaé – RJ</span>
-      </p>
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
-        {weatherContent}
-      </p>
+    <div className="hidden sm:flex items-start gap-3 min-w-0 text-left pr-3">
+      {moduleLabel ? (
+        <p className="shrink-0 text-sm font-semibold text-foreground leading-tight pt-0.5 pr-3 border-r border-border">
+          {moduleLabel}
+        </p>
+      ) : null}
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-foreground truncate leading-tight">
+          <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2575D1]" aria-hidden />
+          <span className="truncate">Terminal Imboassica, Macaé – RJ</span>
+        </p>
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground truncate leading-tight mt-0.5">
+          {weatherContent}
+        </p>
+      </div>
     </div>
   );
 }
