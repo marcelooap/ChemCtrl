@@ -956,7 +956,7 @@ function TimeSlotButton({
   const checklistValidado = isChecklistValidado(list);
   const interactive = typeof onClick === 'function' && !carregado;
   const showEye = occupied && showViewSaida;
-  const showTruck = occupied && !carregado && Boolean(onEditTransporte);
+  const showTruck = occupied && Boolean(onEditTransporte);
   const showChecklistBtn = occupied && !carregado && Boolean(onChecklist);
   const showCheck = occupied && !carregado && checklistValidado && Boolean(onConcluir);
   const filled = hasTransporte(summary.first);
@@ -1104,9 +1104,11 @@ function TimeSlotButton({
                 variant="ghost"
                 size="icon"
                 className={`h-7 w-7 ${
-                  filled
-                    ? 'text-red-800 hover:text-red-950 hover:bg-red-200/70'
-                    : 'text-red-600 hover:text-red-800 hover:bg-red-200/70'
+                  carregado
+                    ? tone.eye
+                    : filled
+                      ? 'text-red-800 hover:text-red-950 hover:bg-red-200/70'
+                      : 'text-red-600 hover:text-red-800 hover:bg-red-200/70'
                 }`}
                 title={transporteLabel}
                 aria-label={transporteLabel}
