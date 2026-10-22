@@ -468,13 +468,12 @@ export function applyLoteDatasToComposicao(
   );
 }
 
-/** Capacidades de vasilhame usadas quando o cadastro não informa a capacidade. */
-const CAPACIDADES_PADRAO_L = [5000, 1500];
 const TOLERANCIA_TANQUE_CHEIO_L = 0.5;
 
 /**
- * Tanque fechado na capacidade: o volume atingiu a capacidade cadastrada
- * ou uma capacidade padrão (5.000 L / 1.500 L).
+ * Tanque fechado na capacidade cadastrada (ex.: 5.000 L).
+ * Sem capacidade no cadastro, não infere “cheio” só pelo volume — evita
+ * bloquear fracionado com 1.500 L em tanque de 5.000 L.
  */
 export function tanqueEstaCheio(volume, capacidade) {
   const vol = roundVolume(volume || 0);
@@ -483,9 +482,7 @@ export function tanqueEstaCheio(volume, capacidade) {
   if (Number.isFinite(cap) && cap > 0) {
     return vol + 1e-9 >= roundVolume(cap) - TOLERANCIA_TANQUE_CHEIO_L;
   }
-  return CAPACIDADES_PADRAO_L.some(
-    (std) => Math.abs(vol - std) <= TOLERANCIA_TANQUE_CHEIO_L
-  );
+  return false;
 }
 
 /** O interruptor só vale enquanto o tanque não fechou a capacidade. */
@@ -611,7 +608,7 @@ function destinoNaPlaca(destino, placa, barril) {
 /**
  * Fracionado do tanque no pátio: o último destino desta placa/barril.
  * Sem transbordo correspondente, permanece o flag já gravado no vasilhame.
- * Volume na capacidade (cadastrada ou 1.500/5.000 L) nunca fica fracionado.
+ * Volume na capacidade cadastrada nunca fica fracionado.
  */
 export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
   if (!vasilhame) return false;

@@ -305,7 +305,23 @@ async function syncFracionadoDosDestinos(destinos = []) {
   }
 }
 
-function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp) {
+function capacidadeCadastroVasilhame(placa, barril, vasilhames = []) {
+  const row = (vasilhames || []).find((v) =>
+    sameTanqueIdentity(v.placa, v.barril, placa, barril)
+  );
+  const cap = Number(row?.capacidade);
+  return Number.isFinite(cap) && cap > 0 ? cap : null;
+}
+
+function buildVasilhameBase(
+  data,
+  codigo,
+  savedTransbordo,
+  d,
+  destinoIndex,
+  comp,
+  cadastroCapacidade = null
+) {
   const isTankagem = d.tipo_embalagem === "Tankagem";
   const isUnitario = isDestinoEstoqueEmbalado(d.tipo_embalagem);
   const dens = parseDensidade(data.densidade);
@@ -384,7 +400,8 @@ function buildVasilhameBase(data, codigo, savedTransbordo, d, destinoIndex, comp
     responsavel: (data.operadores || []).join(", "),
     fracionado: isUnitario
       ? false
-      : fracionadoEfetivo(d.fracionado, volume, null),
+      : fracionadoEfetivo(d.fracionado, volume, cadastroCapacidade),
+    capacidade: cadastroCapacidade,
     composicao,
     destino_index: destinoIndex,
   };
@@ -724,13 +741,22 @@ export async function persistTransbordo({
           }
         }
 
+        const cadastroCapacidade =
+          d.tipo_embalagem === "Vasilhame"
+            ? capacidadeCadastroVasilhame(
+                d.placa,
+                d.barril,
+                vasilhamesAtuais
+              )
+            : null;
         const createdBase = buildVasilhameBase(
           payload,
           codigo,
           savedTransbordo,
           d,
           destinoIndex,
-          comp
+          comp,
+          cadastroCapacidade
         );
         vasilhameRecords.push(createdBase);
         if (d.tipo_embalagem === "Vasilhame" && (d.placa || d.barril)) {

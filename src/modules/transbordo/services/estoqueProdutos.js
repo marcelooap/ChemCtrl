@@ -8,6 +8,7 @@ import {
   isChemFlowConfigured,
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
+import { parseDensidade } from '@transbordo/lib/format';
 
 const TABLE = 'estoque_produtos';
 
@@ -26,6 +27,15 @@ function throwIfError(error, context) {
 function nullIfEmpty(value) {
   if (value === '' || value === undefined) return null;
   return value;
+}
+
+/** Converte densidade exibida em PT-BR para numeric do Postgres. */
+function densidadeForDb(value) {
+  if (value == null || value === '') return null;
+  const s = String(value).trim();
+  if (!s || s === '-') return null;
+  const n = parseDensidade(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function todayISO() {
@@ -297,7 +307,7 @@ function rowFromEstoquePayload(payload, ids) {
     nota_fiscal: nullIfEmpty(lote.nota_fiscal ?? payload.nota_fiscal),
     nota_fiscal_troca: nullIfEmpty(payload.nota_fiscal_troca),
     lote: nullIfEmpty(lote.lote ?? payload.lote),
-    densidade: nullIfEmpty(lote.densidade ?? payload.densidade),
+    densidade: densidadeForDb(lote.densidade ?? payload.densidade),
     data_fabricacao: nullIfEmpty(lote.data_fabricacao ?? payload.data_fabricacao),
     data_validade: nullIfEmpty(lote.data_validade ?? payload.data_validade),
     fornecedor: nullIfEmpty(payload.fornecedor),
@@ -576,7 +586,8 @@ export function createEstoqueEntity() {
         'grupo_entrada', 'codigo_estoque',
       ];
       for (const key of copy) {
-        if (Object.prototype.hasOwnProperty.call(payload, key)) patch[key] = payload[key];
+        if (!Object.prototype.hasOwnProperty.call(payload, key)) continue;
+        patch[key] = key === 'densidade' ? densidadeForDb(payload[key]) : payload[key];
       }
       Object.assign(patch, headerPatch(payload));
       if (lote) {
@@ -636,14 +647,13 @@ export function createEstoqueEntity() {
 }
 
 function densityText(value) {
-  if (value == null || value === '') return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return String(value);
+  return densidadeForDb(value);
 }
 
 function densityNumber(value) {
   if (value == null || value === '') return null;
-  const n = Number(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const n = parseDensidade(value);
   return Number.isFinite(n) ? n : null;
 }
 

@@ -258,10 +258,14 @@ export default function DestinoCard({
           }
         )
       : 0;
+  const cadastroTanque = findVasilhameCadastro(destino.placa, vasilhames);
   const capacidadeTanque =
     selectedFracionado?.capacidade ??
-    vasilhames.find((v) => v.id && v.id === destino.vasilhame_existente_id)
-      ?.capacidade;
+    (destino.vasilhame_existente_id
+      ? vasilhames.find((v) => v.id === destino.vasilhame_existente_id)
+          ?.capacidade
+      : undefined) ??
+    cadastroTanque?.capacidade;
   const tanqueCheio =
     tipo === "Vasilhame" && tanqueEstaCheio(volumeAcumulado, capacidadeTanque);
 
@@ -636,7 +640,7 @@ export default function DestinoCard({
             </div>
             <p className="text-xs text-muted-foreground pl-0 sm:pl-[2.25rem]">
               {tanqueCheio
-                ? "Tanque completo. A tag de fracionado sai ao fechar a capacidade (1.500 L ou 5.000 L)."
+                ? "Tanque completo. A tag de fracionado sai ao atingir a capacidade cadastrada."
                 : "Permite registrar o destino antes de completar sua capacidade. Desmarque ao completar o tanque."}
             </p>
           </div>
