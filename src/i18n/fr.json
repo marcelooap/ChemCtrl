@@ -2296,7 +2296,13 @@
       "view": "Visualiser",
       "downloadPdf": "Télécharger PDF",
       "pdfAfterFinish": "PDF disponible après finalisation",
-      "allItems": "TOUS"
+      "allItems": "TOUS",
+      "productsCount": "{{count}} Produits",
+      "deleteConfirm": {
+        "title": "Supprimer l'inventaire",
+        "message": "Supprimer l'inventaire {{number}} ? Cette action est irréversible."
+      },
+      "deleteError": "Erreur lors de la suppression de l'inventaire"
     },
     "conferencePage": {
       "notFound": "Inventaire introuvable.",

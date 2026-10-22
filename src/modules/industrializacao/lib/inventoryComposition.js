@@ -178,23 +178,31 @@ function lotsOf(item) {
   return one ? [one] : [];
 }
 
-/** Texto da tela: junta os valores das linhas. A célula no banco guarda só um. */
-export function inventoryScopeText(inv, field) {
+/** Valores únicos de cliente, produto ou lote (ordem estável). */
+export function inventoryScopeValues(inv, field) {
   const items = Array.isArray(inv?.items) ? inv.items : parseItemsField(inv?.items);
   const fromLines = uniqueTexts(items.map((item) => {
     if (field === 'products') return item?.product || item?.item;
     if (field === 'lots') return item?.lot;
     return item?.client;
   }));
-  if (fromLines.length) return fromLines.join(', ');
+  if (fromLines.length) return fromLines;
 
   const raw = inv?.[field];
-  if (raw == null || raw === '') return '';
-  if (raw === 'TODOS') return 'TODOS';
-  if (Array.isArray(raw)) return uniqueTexts(raw).join(', ');
+  if (raw == null || raw === '') return [];
+  if (raw === 'TODOS') return ['TODOS'];
+  if (Array.isArray(raw)) return uniqueTexts(raw);
   const parsed = parseItemsField(raw);
-  if (parsed.length) return uniqueTexts(parsed).join(', ');
-  return String(raw);
+  if (parsed.length) return uniqueTexts(parsed);
+  const one = textOrEmpty(raw);
+  return one ? [one] : [];
+}
+
+/** Texto da tela: junta os valores das linhas. A célula no banco guarda só um. */
+export function inventoryScopeText(inv, field) {
+  const values = inventoryScopeValues(inv, field);
+  if (!values.length) return '';
+  return values.join(', ');
 }
 
 export function normalizeInventoryItems(items) {

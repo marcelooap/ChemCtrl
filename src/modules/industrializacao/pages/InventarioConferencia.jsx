@@ -142,9 +142,7 @@ export default function InventarioConferencia() {
   if (!inventory) return <div className="p-8 text-center text-muted-foreground">{t('inventory.conferencePage.notFound')}</div>;
 
   const clientsLabel = inventoryScopeText(inventory, 'clients');
-  const productsLabel = inventoryScopeText(inventory, 'products');
   const clients = clientsLabel === 'TODOS' ? formatFilterValue('TODOS') : clientsLabel;
-  const products = productsLabel === 'TODOS' ? formatFilterValue('TODOS') : productsLabel;
 
   const totalRegistered = items.reduce((s, it) => s + (it.registered_stock || 0), 0);
   const totalPhysical = items.reduce((s, it) => s + calcPhysicalTotal(it), 0);
@@ -160,7 +158,8 @@ export default function InventarioConferencia() {
           <div>
             <h1 className="text-2xl font-bold">{inventory.inventory_number}</h1>
             <p className="text-sm text-muted-foreground">
-              {clients} · {products} · {t('inventory.conferencePage.openedBy', {
+              {clients} ·{' '}
+              {t('inventory.conferencePage.openedBy', {
                 user: inventory.opened_by || t('common.notAvailable'),
                 date: fmtDateTime(inventory.opening_date, undefined, i18n.language),
               })}

@@ -130,21 +130,31 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
 
   const handleSave = async (data) => {
     if (!editingFiltracao) return;
-    const payload = filtracaoTemSae(data)
+    const id = editingFiltracao.id;
+    let payload = filtracaoTemSae(data)
       ? { ...data, resultado_lancado_em: new Date().toISOString() }
       : data;
+    const snap = peekScrollAnchor();
     try {
-      await entities.filtracoes.update(editingFiltracao.id, payload);
-    } catch (err) {
-      const missingColumn =
-        payload.resultado_lancado_em &&
-        /resultado_lancado_em/i.test(String(err?.message || ""));
-      if (!missingColumn) throw err;
-      await entities.filtracoes.update(editingFiltracao.id, data);
+      try {
+        await entities.filtracoes.update(id, payload);
+      } catch (err) {
+        const missingColumn =
+          payload.resultado_lancado_em &&
+          /resultado_lancado_em/i.test(String(err?.message || ""));
+        if (!missingColumn) throw err;
+        payload = data;
+        await entities.filtracoes.update(id, data);
+      }
+      setEditOpen(false);
+      setEditingFiltracao(null);
+      setFiltracoes((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, ...payload } : f))
+      );
+      await loadData({ silent: true });
+    } finally {
+      scheduleScrollRestore(snap);
     }
-    await loadData();
-    setEditOpen(false);
-    setEditingFiltracao(null);
   };
 
   const handleDelete = async () => {

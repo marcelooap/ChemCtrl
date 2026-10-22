@@ -2554,7 +2554,13 @@
       "view": "View",
       "downloadPdf": "Download PDF",
       "pdfAfterFinish": "PDF available after completion",
-      "allItems": "ALL"
+      "allItems": "ALL",
+      "productsCount": "{{count}} Products",
+      "deleteConfirm": {
+        "title": "Delete inventory",
+        "message": "Delete inventory {{number}}? This action cannot be undone."
+      },
+      "deleteError": "Failed to delete inventory"
     },
     "conferencePage": {
       "notFound": "Inventory not found.",

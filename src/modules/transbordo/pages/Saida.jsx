@@ -53,6 +53,7 @@ import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConf
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
+import { loadTransbordoWorkspaceLists } from "@transbordo/services/transbordoWorkspace";
 
 const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
@@ -119,19 +120,20 @@ export default function Saida({
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [saics, cliens, ents, vascs, expedidas, agends, trans, entradasDoc] =
+      const [workspace, saics, cliens, expedidas, agends, entradasDoc] =
         await Promise.all([
+        loadTransbordoWorkspaceLists(),
         entities.saidas.list("-created_date"),
         entities.clientes.list(),
-        entities.estoque.list(),
-        entities.vasilhames.list(),
         isExpedicao ? listSaidaIdsExpedidas() : Promise.resolve(new Set()),
         isExpedicao
           ? entities.agendamentosCarregamento.list("-created_at").catch(() => [])
           : Promise.resolve([]),
-        entities.transbordos.list(),
         entities.entradas.list(),
       ]);
+      const ents = workspace.estoque;
+      const vascs = workspace.vasilhames;
+      const trans = workspace.transbordos;
       const volumes = applyDeclaredVolumeDecimals({
         estoque: ents,
         entradas: entradasDoc,

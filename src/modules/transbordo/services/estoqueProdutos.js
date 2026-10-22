@@ -216,9 +216,13 @@ function toEstoque(row, tanks) {
   };
 }
 
-async function mapEstoque(rows) {
-  const tanks = await vasilhamesById(rows.map((row) => row.vasilhame_id));
-  return rows.map((row) => toEstoque(row, tanks));
+async function mapEstoque(rows, options = {}) {
+  let tanks = options.tanksById;
+  if (!tanks && !options.skipTankHydration) {
+    tanks = await vasilhamesById(rows.map((row) => row.vasilhame_id));
+  }
+  const tankMap = tanks instanceof Map ? tanks : new Map();
+  return rows.map((row) => toEstoque(row, tankMap));
 }
 
 function toEntrada(lines, tanks) {
@@ -540,7 +544,10 @@ export function createEstoqueEntity() {
         (q) => q.eq('origem', 'ARMAZENAGEM').not('legacy_estoque_id', 'is', null).order(column, { ascending }),
         { limit: options.limit }
       );
-      return mapEstoque(rows);
+      return mapEstoque(rows, {
+        skipTankHydration: options.skipTankHydration,
+        tanksById: options.tanksById,
+      });
     },
     async get(id) {
       const rows = await fetchAll((q) => q.eq('legacy_estoque_id', id), { limit: 1 });

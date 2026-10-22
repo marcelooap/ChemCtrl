@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { entities } from "@transbordo/services/entities";
+import { useMemo } from "react";
 import {
   BarChart3,
   ArrowLeftRight,
@@ -8,18 +7,13 @@ import {
 import { formatVolume, formatMass, formatCurrency, formatNum } from "@transbordo/lib/format";
 import {
   computeEstoqueSaldo,
+  createEstoqueSaldoContext,
   getEstoqueQuantidade,
   getEstoqueUnidade,
 } from "@transbordo/lib/estoqueSaldo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
-import {
-  applyDeclaredVolumeDecimals,
-  persistDeclaredVolumeDecimals,
-} from "@transbordo/lib/declaredVolume";
-import {
-  entradaByIdMap,
-  isMateriaPrimaIndustrializacao,
-} from "@transbordo/lib/materiaPrimaIndustrializacao";
+import { isMateriaPrimaIndustrializacao } from "@transbordo/lib/materiaPrimaIndustrializacao";
+import { useTransbordoWorkspace } from "@transbordo/hooks/useTransbordoWorkspace";
 
 const isSameMonth = (dateStr) => {
   if (!dateStr) return false;
@@ -74,66 +68,39 @@ const isInWeekMonSat = (dateStr, monday, saturday) => {
 };
 
 export default function Home() {
-  const [transbordos, setTransbordos] = useState([]);
-  const [estoque, setEstoque] = useState([]);
-  const [vasilhames, setVasilhames] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: workspace, isLoading: loading } = useTransbordoWorkspace();
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [trans, ests, saics, vas, ents] = await Promise.all([
-          entities.transbordos.list(),
-          entities.estoque.list(),
-          entities.saidas.list(),
-          entities.vasilhames.list("-created_date"),
-          entities.entradas.list(),
-        ]);
-        const volumes = applyDeclaredVolumeDecimals({
-          estoque: ests,
-          entradas: ents,
-          transbordos: trans,
-          vasilhames: vas,
-        });
-        void persistDeclaredVolumeDecimals(volumes);
+  const { transbordos, estoque, vasilhames } = useMemo(() => {
+    const transbordos = workspace?.transbordos ?? [];
+    const vasilhames = workspace?.vasilhames ?? [];
+    const rawEstoque = workspace?.estoque ?? [];
+    const saidas = workspace?.saidas ?? [];
 
-        // Saldo = quantidade − saídas fiscais (embalado + convencional via origem)
-        // Matéria-prima da Industrialização fica só na tela de Industrialização.
-        const entradasPorId = entradaByIdMap(ents);
-        const estoqueWithSaldo = volumes.estoque
-          .filter(
-            (e) =>
-              !isMateriaPrimaIndustrializacao(
-                e,
-                entradasPorId.get(String(e?.entrada_id))
-              )
-          )
-          .map((e) => {
-          const quantidade = getEstoqueQuantidade(e);
-          const unidade_medida = getEstoqueUnidade(e);
-          return {
-            ...e,
-            quantidade,
-            unidade_medida,
-            saldo_atual: computeEstoqueSaldo(
-              { ...e, quantidade },
-              volumes.transbordos,
-              saics,
-              volumes.vasilhames
-            ),
-          };
-        });
+    if (!workspace) {
+      return { transbordos: [], estoque: [], vasilhames: [] };
+    }
 
-        setTransbordos(volumes.transbordos);
-        setEstoque(estoqueWithSaldo);
-        setVasilhames(volumes.vasilhames);
-      } catch {
-        // ignore
-      }
-      setLoading(false);
-    };
-    loadData();
-  }, []);
+    const saldoCtx = createEstoqueSaldoContext(transbordos, saidas, vasilhames);
+    const estoqueWithSaldo = rawEstoque
+      .filter((e) => !isMateriaPrimaIndustrializacao(e, null))
+      .map((e) => {
+        const quantidade = getEstoqueQuantidade(e);
+        const unidade_medida = getEstoqueUnidade(e);
+        const itemOp = { ...e, quantidade, unidade_medida };
+        return {
+          ...itemOp,
+          saldo_atual: computeEstoqueSaldo(
+            itemOp,
+            transbordos,
+            saidas,
+            vasilhames,
+            saldoCtx
+          ),
+        };
+      });
+
+    return { transbordos, estoque: estoqueWithSaldo, vasilhames };
+  }, [workspace]);
 
   const transbordosMes = transbordos.filter((t) => isSameMonth(t.data));
   const volumeTransbordadoMes = transbordosMes.reduce(
@@ -252,25 +219,21 @@ export default function Home() {
       : "-",
   }));
 
-  // Vasilhames fracionados ainda no pátio (em estoque operacional)
   const fracionados = vasilhames.filter(
     (v) =>
       v.fracionado === true &&
       (v.status || "No Pátio") === "No Pátio"
   );
 
-  // Itens de estoque com Status WMS = NOK
   const estoqueNok = estoque.filter((e) => !e.status_wms);
 
   return (
     <div className="h-full min-h-0 overflow-y-auto space-y-6">
-      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Home</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Visão geral do sistema</p>
       </div>
 
-      {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {cards.map((card, i) => {
           const Icon = card.icon;
@@ -321,7 +284,6 @@ export default function Home() {
         })}
       </div>
 
-      {/* Resumo da semana (Seg–Sáb); a tabela lista só o dia atual */}
       <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border flex-wrap">
           <div className="min-w-0">
@@ -419,9 +381,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Fracionados + Estoque NOK */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Vasilhames fracionados */}
         <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col min-h-0">
           <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
             <div>
@@ -491,7 +451,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Estoque WMS NOK */}
         <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col min-h-0">
           <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
             <div>

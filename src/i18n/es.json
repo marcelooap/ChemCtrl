@@ -2296,7 +2296,13 @@
       "view": "Visualizar",
       "downloadPdf": "Descargar PDF",
       "pdfAfterFinish": "PDF disponible después de finalización",
-      "allItems": "TODOS"
+      "allItems": "TODOS",
+      "productsCount": "{{count}} Productos",
+      "deleteConfirm": {
+        "title": "Eliminar inventario",
+        "message": "¿Eliminar el inventario {{number}}? Esta acción no se puede deshacer."
+      },
+      "deleteError": "Error al eliminar inventario"
     },
     "conferencePage": {
       "notFound": "Inventario no encontrado.",

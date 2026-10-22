@@ -2538,6 +2538,30 @@
       "countedQty": "Qtd. Contada",
       "diff": "Diferença"
     },
+    "page": {
+      "subtitle": "Controle de inventário físico · {{count}} registro(s)",
+      "openInventory": "Abrir Inventário",
+      "searchPlaceholder": "Buscar por número, cliente, produto...",
+      "openingDate": "Data de Abertura",
+      "user": "Usuário",
+      "noResults": "Nenhum inventário encontrado.",
+      "totalCount": "Total: {{count}}",
+      "openCount": "Abertos: {{count}}",
+      "inProgressCount": "Em andamento: {{count}}",
+      "finishedCount": "Finalizados: {{count}}",
+      "startError": "Erro ao iniciar inventário",
+      "pdfError": "Erro ao gerar PDF",
+      "view": "Visualizar",
+      "downloadPdf": "Baixar PDF",
+      "pdfAfterFinish": "PDF disponível após finalização",
+      "allItems": "TODOS",
+      "productsCount": "{{count}} Produtos",
+      "deleteConfirm": {
+        "title": "Excluir inventário",
+        "message": "Deseja excluir o inventário {{number}}? Esta ação não pode ser desfeita."
+      },
+      "deleteError": "Erro ao excluir inventário"
+    },
     "conferencePage": {
       "notFound": "Inventário não encontrado.",
       "openedBy": "Aberto por {{user}} em {{date}}",

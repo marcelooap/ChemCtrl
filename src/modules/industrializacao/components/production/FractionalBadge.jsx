@@ -6,6 +6,8 @@ export default function FractionalBadge({
   production,
   container,
   transfers,
+  /** Quando definido, evita recalcular isContainerFractional (listas grandes). */
+  fractional,
   variant = 'pending',
   className = '',
 }) {
@@ -13,7 +15,11 @@ export default function FractionalBadge({
   const pending = isComplementPending(production);
 
   if (variant === 'container') {
-    if (!isContainerFractional(container, production, transfers)) return null;
+    const isFrac =
+      typeof fractional === 'boolean'
+        ? fractional
+        : isContainerFractional(container, production, transfers);
+    if (!isFrac) return null;
     return (
       <span
         className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground ${className}`.trim()}

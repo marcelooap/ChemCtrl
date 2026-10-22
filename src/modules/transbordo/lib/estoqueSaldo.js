@@ -860,16 +860,98 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
  * físico — não debita (evita saldo errado quando a saída fiscal existe mas o
  * vasilhame foi mantido/restaurado no pátio).
  */
+function buildFiscalVasilhameIds(saidas) {
+  const fiscalVasilhameIds = new Set();
+  (saidas || []).forEach((saida) => {
+    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
+    (saida.itens || []).forEach((item) => {
+      if (item.validado === false) return;
+      if (item.tipo === "convencional" && item.vasilhame_id) {
+        fiscalVasilhameIds.add(item.vasilhame_id);
+      }
+    });
+  });
+  return fiscalVasilhameIds;
+}
+
+function buildEmbaladoByEstoqueId(saidas) {
+  const index = new Map();
+  (saidas || []).forEach((saida) => {
+    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
+    (saida.itens || []).forEach((item) => {
+      if (item.validado === false) return;
+      if (item.tipo !== "embalado" || item.entrada_id == null) return;
+      const id = String(item.entrada_id);
+      const entry = index.get(id) || { litros: 0, massa: 0 };
+      const litros =
+        Number(item.quantidade_carregada) ||
+        Number(item.volume_solicitado) ||
+        Number(item.quantidade_solicitada) ||
+        0;
+      const massa =
+        item.quantidade_carregada != null && item.quantidade_carregada !== ""
+          ? Number(item.quantidade_carregada) || 0
+          : Number(item.quantidade_solicitada) || 0;
+      entry.litros += litros;
+      entry.massa += massa;
+      index.set(id, entry);
+    });
+  });
+  return index;
+}
+
+/**
+ * Índices reutilizáveis para calcular saldo de muitos itens sem varrer saídas/vasilhames a cada linha.
+ */
+export function createEstoqueSaldoContext(
+  transbordos = [],
+  saidas = [],
+  vasilhames = []
+) {
+  return {
+    transbordos,
+    saidas,
+    vasilhames,
+    vasilhameById: new Map((vasilhames || []).map((v) => [v.id, v])),
+    fiscalVasilhameIds: buildFiscalVasilhameIds(saidas),
+    embaladoByEstoqueId: buildEmbaladoByEstoqueId(saidas),
+  };
+}
+
+function saidasEmbaladoFromContext(ctx, estoqueItem) {
+  const id = estoqueItem?.id;
+  if (!id || !ctx?.embaladoByEstoqueId) return null;
+  const entry = ctx.embaladoByEstoqueId.get(String(id));
+  if (!entry) return 0;
+  return estoqueOperaEmLitros(estoqueItem) ? entry.litros : entry.massa;
+}
+
+export function mapEstoqueListWithSaldo(
+  estoqueList,
+  transbordos,
+  saidas,
+  vasilhames = []
+) {
+  const ctx = createEstoqueSaldoContext(transbordos, saidas, vasilhames);
+  return (estoqueList || []).map((item) => ({
+    ...item,
+    saldo_atual: computeEstoqueSaldo(item, transbordos, saidas, vasilhames, ctx),
+  }));
+}
+
 export function calcSaidasConvencional(
   estoqueItem,
   saidas,
   vasilhames = [],
-  transbordos = []
+  transbordos = [],
+  saldoCtx = null
 ) {
   const id = estoqueItem?.id;
   if (!id) return 0;
 
-  const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
+  const vasilhameById =
+    saldoCtx?.vasilhameById ??
+    new Map((vasilhames || []).map((v) => [v.id, v]));
 
   return (saidas || []).reduce((sum, saida) => {
     if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return sum;
@@ -1109,21 +1191,14 @@ export function calcVasilhamesExpedidosPatio(
   estoqueItem,
   vasilhames = [],
   transbordos = [],
-  saidas = []
+  saidas = [],
+  saldoCtx = null
 ) {
   const id = estoqueItem?.id;
   if (!id) return 0;
 
-  const fiscalVasilhameIds = new Set();
-  (saidas || []).forEach((saida) => {
-    if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
-    (saida.itens || []).forEach((item) => {
-      if (item.validado === false) return;
-      if (item.tipo === "convencional" && item.vasilhame_id) {
-        fiscalVasilhameIds.add(item.vasilhame_id);
-      }
-    });
-  });
+  const fiscalVasilhameIds =
+    saldoCtx?.fiscalVasilhameIds ?? buildFiscalVasilhameIds(saidas);
 
   const usaQtdOrigemOp =
     estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem);
@@ -1341,21 +1416,26 @@ export function computeEstoqueSaldo(
   estoqueItem,
   transbordos,
   saidas,
-  vasilhames = []
+  vasilhames = [],
+  saldoCtx = null
 ) {
   const quantidade = getEstoqueQuantidade(estoqueItem);
-  const saidoEmb = calcSaidasEmbalado(estoqueItem, saidas);
+  const saidoEmb = saldoCtx
+    ? saidasEmbaladoFromContext(saldoCtx, estoqueItem) ?? 0
+    : calcSaidasEmbalado(estoqueItem, saidas);
   const saidoConv = calcSaidasConvencional(
     estoqueItem,
     saidas,
     vasilhames,
-    transbordos
+    transbordos,
+    saldoCtx
   );
   const saidoPatio = calcVasilhamesExpedidosPatio(
     estoqueItem,
     vasilhames,
     transbordos,
-    saidas
+    saidas,
+    saldoCtx
   );
   return Math.max(
     0,

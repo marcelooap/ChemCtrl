@@ -1,4 +1,5 @@
 import { entities } from '@transbordo/services/entities';
+import { invalidateTransbordoWorkspaceCache } from '@transbordo/services/transbordoWorkspace';
 import { syncEstoqueSaldos, isUnidadeMassaEntrada } from '@transbordo/lib/estoqueSaldo';
 import {
   roundVolume,
@@ -834,5 +835,6 @@ export async function persistTransbordo({
         console.error("[Transbordo] Falha ao alinhar volume das filtrações:", err);
       }
 
+  invalidateTransbordoWorkspaceCache();
   return savedTransbordo;
 }

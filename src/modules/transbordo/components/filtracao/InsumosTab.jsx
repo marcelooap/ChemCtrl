@@ -111,23 +111,35 @@ export default function InsumosTab({ readOnly = false }) {
 
   const handleEditSave = async (data) => {
     if (!editingElemento) return;
+    const id = editingElemento.id;
+    const snap = peekScrollAnchor();
     setSaving(true);
     try {
+      let nextRow = { ...editingElemento, ...data };
       if (data.status === "Em uso" && editingElemento.status !== "Em uso") {
-        await promoverFiltroEmUso(entities, editingElemento.id, elementos);
-        await entities.elementos_filtrantes.update(editingElemento.id, {
+        await promoverFiltroEmUso(entities, id, elementos);
+        nextRow = {
+          ...nextRow,
+          status: "Em uso",
+          marca: data.marca,
+          tipo: data.tipo,
+          data_compra: data.data_compra,
+        };
+        await entities.elementos_filtrantes.update(id, {
           marca: data.marca,
           tipo: data.tipo,
           data_compra: data.data_compra,
         });
       } else {
-        await entities.elementos_filtrantes.update(editingElemento.id, data);
+        await entities.elementos_filtrantes.update(id, data);
       }
-      await loadData();
       setEditOpen(false);
       setEditingElemento(null);
+      setElementos((prev) => prev.map((el) => (el.id === id ? nextRow : el)));
+      await loadData({ silent: true });
     } finally {
       setSaving(false);
+      scheduleScrollRestore(snap);
     }
   };
 

@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { Plus, Search, Eye, Play, FileText } from 'lucide-react';
+import { Plus, Search, Eye, Play, FileText, Trash2 } from 'lucide-react';
+import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import InventoryWizard from '@industrializacao/components/inventario/InventoryWizard';
 import { generateInventoryPDF } from '@industrializacao/lib/pdfReports';
-import { inventoryScopeText } from '@industrializacao/lib/inventoryComposition';
+import { inventoryScopeText, inventoryScopeValues } from '@industrializacao/lib/inventoryComposition';
 import { fmtDateTime } from '@/i18n/formatters';
 import { translateInventoryStatus } from '@/i18n/domainMaps';
 
@@ -24,6 +25,7 @@ export default function Inventario() {
   const { hasPermission } = usePermissions();
   const canCreate = !isReadOnly && hasPermission('inventory.create');
   const canEdit = !isReadOnly && hasPermission('inventory.edit');
+  const canDelete = !isReadOnly && hasPermission('inventory.delete');
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: inventories, loading, reload } = useInventories();
@@ -31,6 +33,8 @@ export default function Inventario() {
   const [showWizard, setShowWizard] = useState(false);
   const [statusFilter, setStatusFilter] = useState('todos');
   const [generatingPDF, setGeneratingPDF] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = inventories.filter(inv => {
     const q = search.toLowerCase();
@@ -55,6 +59,16 @@ export default function Inventario() {
     return value;
   };
 
+  const formatProductColumn = (inv) => {
+    const names = inventoryScopeValues(inv, 'products');
+    if (!names.length) return t('common.notAvailable');
+    if (names.length === 1 && names[0] === 'TODOS') return formatFilterValue('TODOS');
+    if (names.length === 1) return names[0];
+    return t('inventory.page.productsCount', {
+      count: String(names.length).padStart(2, '0'),
+    });
+  };
+
   const inventoryRouteId = (inv) => inv?.inventario_id || inv?.id;
 
   const handleStart = async (inv) => {
@@ -73,6 +87,31 @@ export default function Inventario() {
       navigate(`/inventario/${inventoryRouteId(inv)}`);
     } catch (e) {
       toast({ title: t('inventory.page.startError'), description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      if (deleteTarget._is_grouped && deleteTarget.inventario_id) {
+        await base44.entities.Inventory.deleteMany({
+          inventario_id: deleteTarget.inventario_id,
+        });
+      } else {
+        await base44.entities.Inventory.delete(deleteTarget.id);
+      }
+      toast({ title: t('success.deleted') });
+      setDeleteTarget(null);
+      reload();
+    } catch (e) {
+      toast({
+        title: t('inventory.page.deleteError'),
+        description: e?.message || String(e),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -145,9 +184,8 @@ export default function Inventario() {
                   <tr><td colSpan={7} className="text-center py-8 text-sm text-muted-foreground">{t('inventory.page.noResults')}</td></tr>
                 ) : filtered.map(inv => {
                   const clientsLabel = inventoryScopeText(inv, 'clients');
-                  const productsLabel = inventoryScopeText(inv, 'products');
                   const clients = clientsLabel === 'TODOS' ? formatFilterValue('TODOS') : clientsLabel;
-                  const products = productsLabel === 'TODOS' ? formatFilterValue('TODOS') : productsLabel;
+                  const products = formatProductColumn(inv);
                   const isFinished = inv.status === 'Finalizado';
                   const canStart = inv.status === 'Aberto' && canEdit;
                   return (
@@ -174,6 +212,16 @@ export default function Inventario() {
                               ? <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                               : <FileText className="w-4 h-4 text-muted-foreground hover:text-foreground" />}
                           </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(inv)}
+                              className="p-1.5 rounded hover:bg-accent"
+                              title={t('buttons.delete')}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -193,6 +241,18 @@ export default function Inventario() {
       </div>
 
       <InventoryWizard open={showWizard} onOpenChange={setShowWizard} onCreated={reload} inventories={inventories} />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}
+        title={t('inventory.page.deleteConfirm.title')}
+        message={t('inventory.page.deleteConfirm.message', {
+          number: deleteTarget?.inventory_number || '',
+        })}
+        confirmLabel={t('buttons.delete')}
+        confirmColor="#DC2626"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

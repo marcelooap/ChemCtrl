@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
@@ -24,7 +24,6 @@ import {
   getOriginalPackageQty,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtDate, fmtNumber, todayDateInputValue, toDateInputValue } from '@/i18n/formatters';
-import { entities as chemflowEntities } from '@transbordo/services/entities';
 import {
   buildContainerYardRestorePatch,
   collectIndVasilhameItemsForContainer,
@@ -38,7 +37,6 @@ import {
   containerDisplayVolume,
   containerDisplayNetWeight,
   containerDisplayGrossWeight,
-  isContainerFractional,
 } from '@industrializacao/lib/fractionalSupply';
 import {
   resolveRecipeForContainer as resolveRecipeFromList,
@@ -48,6 +46,14 @@ import { effectiveOriginsOfContainer, applyProportionalOriginReduction } from '@
 import { initialVolumeForProductionPackaging } from '@industrializacao/lib/productionViewUtils';
 import { appendPackageExit, listIndContainerExitHistory } from '@industrializacao/lib/packageExitHistory';
 import PackageExitHistory from '@industrializacao/components/vasilhames/PackageExitHistory';
+import { createTransferRelationLookup } from '@industrializacao/lib/containerTransferIndex';
+import { loadChemflowSaidasCached } from '@industrializacao/lib/chemflowSaidasCache';
+import {
+  buildContainerRowIndex,
+  buildFractionalTransferContainerIds,
+  buildProductionMaps,
+  containerMatchesFractionalKeyword,
+} from '@industrializacao/lib/vasilhamesListIndex';
 
 const CONTAINER_STATUS_KEYS = {
   'No Pátio': 'containers.status.yard',
@@ -55,51 +61,6 @@ const CONTAINER_STATUS_KEYS = {
 };
 
 const parseArr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return []; } })() : []);
-
-/** YYYY-MM-DD for comparing transfer vs container lifecycle (avoids timezone edge cases). */
-const toDay = (v) => {
-  if (!v) return null;
-  const s = String(v);
-  return s.length >= 10 ? s.slice(0, 10) : s;
-};
-
-// Finds the transfer (transbordo) related to a container, whether it's an origin or a destination.
-const findTransferForContainer = (container, transfers) => {
-  if (!container || !transfers) return null;
-  // Destination: created from a transbordo, op_number === transfer_number
-  if (container.op_number && container.op_number.startsWith('TB')) {
-    const t = transfers.find(tr => tr.transfer_number === container.op_number);
-    if (t) return { transfer: t, role: 'destino' };
-  }
-  // Origin: its id appears in origins[].container_id
-  const asOrigin = transfers.find(tr => {
-    const origins = parseArr(tr.origins);
-    return origins.some(o => o.container_id === container.id);
-  });
-  if (asOrigin) return { transfer: asOrigin, role: 'origem' };
-  // Destination: patio tank that received a later TB (volume merged into existing row).
-  // Only match transfers during THIS container record's life — recycled plates
-  // (manual re-entry) must not inherit older transfer history of the same placa.
-  const cn = (container.container_number || '').trim().toLowerCase();
-  const bn = (container.barril_number || '').trim().toLowerCase();
-  if (cn) {
-    const createdDay = toDay(container.created_date);
-    const departedDay = toDay(container.departure_date);
-    const asDest = transfers.find((tr) => {
-      const trDay = toDay(tr.date) || toDay(tr.created_date);
-      if (createdDay && trDay && trDay < createdDay) return false;
-      if (departedDay && trDay && trDay > departedDay) return false;
-      const dests = parseArr(tr.destinations);
-      return dests.some((d) =>
-        (d.type || tr.destination_type) === 'Transbordo'
-        && (d.placa || '').trim().toLowerCase() === cn
-        && (d.barril || '').trim().toLowerCase() === bn
-      );
-    });
-    if (asDest) return { transfer: asDest, role: 'destino' };
-  }
-  return null;
-};
 
 export default function Vasilhames() {
   const { t, i18n } = useTranslation();
@@ -148,10 +109,42 @@ export default function Vasilhames() {
 
   const canDelete = canDeleteContainer;
 
-  const clients = Array.from(new Set(containers.map(c => c.client).filter(Boolean))).sort();
+  const deferredSearch = useDeferredValue(search);
+  const deferredClientFilter = useDeferredValue(clientFilter);
+
+  const clients = useMemo(
+    () => Array.from(new Set(containers.map((c) => c.client).filter(Boolean))).sort(),
+    [containers]
+  );
+
+  const productionMaps = useMemo(
+    () => buildProductionMaps(productions || []),
+    [productions]
+  );
+
+  const transferLookup = useMemo(
+    () => createTransferRelationLookup(transfers || []),
+    [transfers]
+  );
+
+  const rowIndex = useMemo(
+    () =>
+      buildContainerRowIndex({
+        containers,
+        productions: productions || [],
+        transfers: transfers || [],
+        containerOrigins: containerOrigins || [],
+      }),
+    [containers, productions, transfers, containerOrigins]
+  );
+
+  const fractionalTransferIds = useMemo(
+    () => buildFractionalTransferContainerIds(transfers || []),
+    [transfers]
+  );
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
+    const q = deferredSearch.toLowerCase().trim();
     const fractionalKeywords = new Set([
       'fracionado',
       'frac',
@@ -161,37 +154,37 @@ export default function Vasilhames() {
     ].filter(Boolean));
     const isFractionalKeyword = Boolean(q && fractionalKeywords.has(q));
 
-    const productionsList = productions || [];
-    const transfersList = transfers || [];
-    const byId = new Map();
-    const byOp = new Map();
-    for (const p of productionsList) {
-      if (p?.id) byId.set(p.id, p);
-      if (p?.op_number) byOp.set(p.op_number, p);
-    }
-    const productionOf = (c) => {
-      if (!c) return null;
-      if (c.production_id) return byId.get(c.production_id) || null;
-      if (c.op_number) return byOp.get(c.op_number) || null;
-      return null;
-    };
-
     return containers.filter((c) => {
       let matchSearch;
       if (!q) {
         matchSearch = true;
       } else if (isFractionalKeyword) {
-        const prod = productionOf(c);
-        matchSearch = isContainerFractional(c, prod, transfersList) && c.status === 'No Pátio';
+        const prod = productionMaps.resolve(c);
+        matchSearch = containerMatchesFractionalKeyword(
+          c,
+          prod,
+          transfers,
+          fractionalTransferIds
+        );
       } else {
         matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot]
           .some((v) => (v || '').toLowerCase().includes(q));
       }
       const matchStatus = statusFilter === 'all' || c.status === statusFilter;
-      const matchClient = clientFilter === 'all' || c.client === clientFilter;
+      const matchClient =
+        deferredClientFilter === 'all' || c.client === deferredClientFilter;
       return matchSearch && matchStatus && matchClient;
     });
-  }, [containers, search, productions, transfers, t, statusFilter, clientFilter]);
+  }, [
+    containers,
+    deferredSearch,
+    deferredClientFilter,
+    productionMaps,
+    transfers,
+    fractionalTransferIds,
+    t,
+    statusFilter,
+  ]);
 
   const productCodeOf = (c) => {
     const production = productionOfContainer(c, productions || []);
@@ -261,7 +254,7 @@ export default function Vasilhames() {
   const restoreContainerToYard = async (container) => {
     let linked = [];
     try {
-      const saidas = await chemflowEntities.saidas.list('-created_date');
+      const saidas = await loadChemflowSaidasCached();
       linked = collectIndVasilhameItemsForContainer(saidas, container.id).filter(
         ({ saida }) => saida?.enviado_ao_fiscal || saida?.status === 'enviado_fiscal'
       );
@@ -456,9 +449,22 @@ export default function Vasilhames() {
     return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c[s] || 'bg-muted'}`}>{translateContainerStatus(s)}</span>;
   };
 
-  const filteredYard = filtered.filter(c => c.status === 'No Pátio');
-  const noPatioCount = filteredYard.reduce((s, c) => s + getContainerPackageQty(c), 0);
-  const noPatioVolume = filteredYard.reduce((s, c) => s + containerDisplayVolume(c, productions), 0);
+  const filteredYard = useMemo(
+    () => filtered.filter((c) => c.status === 'No Pátio'),
+    [filtered]
+  );
+  const noPatioCount = useMemo(
+    () => filteredYard.reduce((s, c) => s + getContainerPackageQty(c), 0),
+    [filteredYard]
+  );
+  const noPatioVolume = useMemo(
+    () =>
+      filteredYard.reduce(
+        (s, c) => s + (rowIndex.get(c.id)?.displayVolume ?? containerDisplayVolume(c, productions)),
+        0
+      ),
+    [filteredYard, rowIndex, productions]
+  );
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -489,8 +495,7 @@ export default function Vasilhames() {
     }
     let cancelled = false;
     setLoadingViewSaidas(true);
-    chemflowEntities.saidas
-      .list('-created_date')
+    loadChemflowSaidasCached()
       .then((list) => {
         if (!cancelled) setViewSaidas(list || []);
       })
@@ -504,6 +509,21 @@ export default function Vasilhames() {
       cancelled = true;
     };
   }, [showView, viewing?.id, viewing?.type, viewing?.container_number]);
+
+  const viewExitHistoryRows = useMemo(() => {
+    if (!viewing?.id || !isUnitPackagingLike(viewing.type, viewing.container_number)) {
+      return [];
+    }
+    const saidasForContainer = (viewSaidas || []).filter((s) =>
+      (s.itens || []).some((item) => item?.container_id === viewing.id)
+    );
+    return listIndContainerExitHistory({
+      container: containers.find((c) => c.id === viewing.id) || viewing,
+      origins: containerOrigins,
+      saidas: saidasForContainer,
+      production: prodOf(viewing),
+    });
+  }, [viewing, viewSaidas, containerOrigins, containers, productions]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -567,7 +587,8 @@ export default function Vasilhames() {
               </tr></thead>
               <tbody>
                 {filtered.map(c => {
-                  const prod = prodOf(c);
+                  const rowMeta = rowIndex.get(c.id);
+                  const prod = rowMeta?.production ?? prodOf(c);
                   const isHighlighted = highlightId === c.id;
                   return (
                   <tr
@@ -582,9 +603,9 @@ export default function Vasilhames() {
                       {c.op_number ? (
                         <span className="inline-flex items-center gap-1">
                           {c.op_number}
-                          {effectiveOriginsOfContainer(containerOrigins, c).length > 1 && (
+                          {(rowMeta?.extraOriginCount ?? 0) > 0 && (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                              +{effectiveOriginsOfContainer(containerOrigins, c).length - 1}
+                              +{rowMeta.extraOriginCount}
                             </span>
                           )}
                         </span>
@@ -595,17 +616,17 @@ export default function Vasilhames() {
                     <td className="px-4 py-2.5 text-sm font-medium">
                       <span className="inline-flex items-center gap-1">
                         {c.container_number}
-                        {(() => {
-                          const rel = findTransferForContainer(c, transfers);
-                          if (!rel) return null;
-                          return (
+                        {rowMeta?.transferRel && (
                             <ArrowUpRight
                               className="w-3.5 h-3.5"
                               style={{ color: '#4B0082' }}
-                              title={rel.role === 'origem' ? t('containers.vasilhames.transferOrigin') : t('containers.vasilhames.transferDest')}
+                              title={
+                                rowMeta.transferRel.role === 'origem'
+                                  ? t('containers.vasilhames.transferOrigin')
+                                  : t('containers.vasilhames.transferDest')
+                              }
                             />
-                          );
-                        })()}
+                          )}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-sm font-medium">{c.barril_number || na}</td>
@@ -614,8 +635,14 @@ export default function Vasilhames() {
                     <td className="px-4 py-2.5 text-sm">{c.lot}</td>
                     <td className="px-4 py-2.5 text-right text-sm font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        <FractionalBadge production={prod} container={c} transfers={transfers} variant="container" />
-                        {fmt(containerDisplayVolume(c, productions))}
+                        <FractionalBadge
+                          production={prod}
+                          container={c}
+                          transfers={transfers}
+                          fractional={rowMeta?.showFractionalBadge}
+                          variant="container"
+                        />
+                        {fmt(rowMeta?.displayVolume ?? containerDisplayVolume(c, productions))}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center">{statusBadge(c.status)}</td>
@@ -744,12 +771,7 @@ export default function Vasilhames() {
               {isUnitPackagingLike(viewing.type, viewing.container_number) && (
                 <PackageExitHistory
                   loading={loadingViewSaidas}
-                  rows={listIndContainerExitHistory({
-                    container: containers.find((c) => c.id === viewing.id) || viewing,
-                    origins: containerOrigins,
-                    saidas: viewSaidas,
-                    production: prodOf(viewing),
-                  })}
+                  rows={viewExitHistoryRows}
                 />
               )}
 
@@ -767,7 +789,7 @@ export default function Vasilhames() {
               </div>
 
               {(() => {
-                const rel = findTransferForContainer(viewing, transfers);
+                const rel = transferLookup(viewing);
                 if (!rel) return null;
                 const { transfer, role } = rel;
                 const origins = parseArr(transfer.origins);

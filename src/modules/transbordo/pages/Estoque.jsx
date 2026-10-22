@@ -29,6 +29,7 @@ import {
 import {
   computeEstoqueSaldo,
   computeEstoqueQuantidadesPorLocal,
+  createEstoqueSaldoContext,
   getEstoqueQuantidade,
   getEstoqueUnidade,
   getEstoqueUnidadeEntrada,
@@ -36,6 +37,10 @@ import {
   isUnidadeVolumeEntrada,
   hydrateEstoqueFiscal,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  invalidateTransbordoWorkspaceCache,
+  loadTransbordoWorkspaceLists,
+} from "@transbordo/services/transbordoWorkspace";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
   entradaByIdMap,
@@ -148,22 +153,22 @@ export default function Estoque() {
       // Migrações one-shot removidas do mount (Onda 1): rodar via script SQL/scripts,
       // não a cada abertura de tela com N usuários concorrentes.
 
-      const [ests, prods, cliens, trans, saics, ents, vascs] = await Promise.all([
-        entities.estoque.list(),
+      invalidateTransbordoWorkspaceCache();
+      const [workspace, prods, cliens, ents] = await Promise.all([
+        loadTransbordoWorkspaceLists({ force: true }),
         entities.produtos.list(),
         entities.clientes.list(),
-        entities.transbordos.list(),
-        entities.saidas.list(),
         entities.entradas.list(),
-        entities.vasilhames.list(),
       ]);
-      let estoqueRows = ests;
-      let vasilhameRows = vascs;
+      const trans = workspace.transbordos;
+      const saics = workspace.saidas;
+      let estoqueRows = workspace.estoque;
+      let vasilhameRows = workspace.vasilhames;
       try {
         const healed = await reconcileVasilhamesFromEntradas({
           entradas: ents,
-          estoque: ests,
-          vasilhames: vascs,
+          estoque: estoqueRows,
+          vasilhames: vasilhameRows,
           produtos: prods,
         });
         if (healed.changed) {
@@ -185,6 +190,11 @@ export default function Estoque() {
       // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
       // Matéria-prima da Industrialização fica só no módulo Industrialização.
       const entradasPorId = entradaByIdMap(ents);
+      const saldoCtx = createEstoqueSaldoContext(
+        volumes.transbordos,
+        saics,
+        volumes.vasilhames
+      );
       const estoqueWithSaldo = volumes.estoque
         .filter((e) => !isEstoqueEmbalagemUnitaria(e))
         .filter(
@@ -205,7 +215,8 @@ export default function Estoque() {
             itemOp,
             volumes.transbordos,
             saics,
-            volumes.vasilhames
+            volumes.vasilhames,
+            saldoCtx
           ),
         };
       });
