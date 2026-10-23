@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { entities } from '@transbordo/services/entities';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
-import { Plus, Search, Eye, Pencil, Printer, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Printer, Trash2, Upload } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
@@ -18,6 +18,7 @@ import {
 } from "@shared/components/ui/alert-dialog";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
+import EntradaImportModal from "@transbordo/components/entrada/EntradaImportModal";
 import EntradaEtiquetaDialog from "@transbordo/components/entrada/EntradaEtiquetaDialog";
 import { getEntradaLotes } from "@transbordo/lib/entradaEtiqueta";
 import { asLoteList } from "@transbordo/lib/lotesList";
@@ -148,6 +149,7 @@ export default function Entrada() {
   const [clienteFilter, setClienteFilter] = useState("");
   const [origemFilter, setOrigemFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingEntrada, setEditingEntrada] = useState(null);
   const [viewEntrada, setViewEntrada] = useState(null);
   const [viewDestinos, setViewDestinos] = useState([]);
@@ -551,10 +553,21 @@ export default function Entrada() {
             </p>
           </div>
           <Can permission="tb_entrada.create">
-            <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
-              <Plus className="w-4 h-4" />
-              Nova Entrada
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+                className="gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Importar
+              </Button>
+              <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
+                <Plus className="w-4 h-4" />
+                Nova Entrada
+              </Button>
+            </div>
           </Can>
         </div>
 
@@ -797,6 +810,15 @@ export default function Entrada() {
         produtos={produtos}
         transbordos={transbordos}
         estoque={estoque}
+      />
+
+      <EntradaImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        produtos={produtos}
+        onImported={async () => {
+          await loadData({ silent: true });
+        }}
       />
 
       {/* View Dialog */}
