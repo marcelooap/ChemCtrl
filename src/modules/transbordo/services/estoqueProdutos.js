@@ -55,6 +55,116 @@ function isSharedEntradaId(value) {
   return /^E[1-9]\d*$/.test(String(value || '').trim().toUpperCase());
 }
 
+function isMateriaPrimaRow(row) {
+  return origemCanon(row?.origem) === 'MATERIA_PRIMA';
+}
+
+/** Quantidade recebida: em MP o campo canônico é initial_stock. */
+function receivedQty(row) {
+  if (isMateriaPrimaRow(row) && row?.initial_stock != null && row.initial_stock !== '') {
+    return row.initial_stock;
+  }
+  return row?.quantidade;
+}
+
+function loteIdentityKey(row) {
+  return [
+    String(row?.lote || '').trim().toLowerCase(),
+    String(row?.produto_codigo || '').trim().toLowerCase(),
+    String(row?.produto_nome || '').trim().toLowerCase(),
+  ].join('|');
+}
+
+function findUnifiableMpRow(existing, hint) {
+  const key = loteIdentityKey(hint);
+  const candidates = (existing || []).filter((row) => {
+    if (String(row.grupo_entrada || '').startsWith('TB')) return false;
+    if (!isMateriaPrimaRow(row)) return false;
+    return loteIdentityKey(row) === key;
+  });
+  if (candidates.length === 0 && !String(hint?.lote || '').trim()) {
+    const onlyMp = (existing || []).filter(
+      (row) => isMateriaPrimaRow(row) && !String(row.grupo_entrada || '').startsWith('TB')
+    );
+    return onlyMp.length === 1 ? onlyMp[0] : null;
+  }
+  return (
+    candidates.find((row) => row.legacy_mp_id_text) ||
+    candidates[0] ||
+    null
+  );
+}
+
+/**
+ * Pares inválidos: linha de MP + espelho da mesma entrada/lote.
+ * Vários itens de armazenagem com o mesmo lote (tanques/embalagens) não entram aqui.
+ */
+async function collapseMpMirrors(lines) {
+  const byKey = new Map();
+  for (const row of lines || []) {
+    const key = loteIdentityKey(row);
+    const list = byKey.get(key) || [];
+    list.push(row);
+    byKey.set(key, list);
+  }
+  const kept = [];
+  for (const list of byKey.values()) {
+    const mpRows = list.filter((row) => row.legacy_mp_id_text);
+    const mirrors = list.filter((row) => !row.legacy_mp_id_text && isMateriaPrimaRow(row));
+    if (mpRows.length !== 1 || mirrors.length === 0) {
+      kept.push(...list);
+      continue;
+    }
+    const keep = { ...mpRows[0] };
+    for (const ghost of mirrors) {
+      const patch = {};
+      if (!keep.legacy_estoque_id && ghost.legacy_estoque_id) {
+        patch.legacy_estoque_id = ghost.legacy_estoque_id;
+      }
+      if (!keep.vasilhame_id && ghost.vasilhame_id) {
+        patch.vasilhame_id = ghost.vasilhame_id;
+      }
+      if (Object.keys(patch).length > 0) {
+        if (ghost.legacy_estoque_id && patch.legacy_estoque_id) {
+          const { error: clearError } = await chemflowSupabase
+            .from(TABLE)
+            .update(stamp({ legacy_estoque_id: null }))
+            .eq('id', ghost.id);
+          throwIfError(clearError, 'collapse.clear_estoque_id');
+        }
+        const { data, error } = await chemflowSupabase
+          .from(TABLE)
+          .update(stamp(patch))
+          .eq('id', keep.id)
+          .select()
+          .single();
+        throwIfError(error, 'collapse.keep');
+        Object.assign(keep, data || patch);
+      }
+      const { error: deleteError } = await chemflowSupabase.from(TABLE).delete().eq('id', ghost.id);
+      throwIfError(deleteError, 'collapse.delete');
+    }
+    kept.push(keep);
+  }
+  return kept;
+}
+
+async function linesForEntrada(lines) {
+  try {
+    return await collapseMpMirrors(lines);
+  } catch (err) {
+    console.error('[estoque_produtos] collapse mirrors:', err);
+    const mpKeys = new Set(
+      (lines || []).filter((row) => row.legacy_mp_id_text).map(loteIdentityKey)
+    );
+    return (lines || []).filter((row) => {
+      if (row.legacy_mp_id_text) return true;
+      if (!isMateriaPrimaRow(row)) return true;
+      return !mpKeys.has(loteIdentityKey(row));
+    });
+  }
+}
+
 async function nextEntradaId() {
   assertConfigured('next_entrada_id');
   const { data, error } = await chemflowSupabase.rpc('next_entrada_id');
@@ -131,7 +241,7 @@ function loteFromRow(row, tank) {
     nota_fiscal: row.nota_fiscal,
     lote: row.lote,
     densidade: row.densidade,
-    quantidade: row.quantidade,
+    quantidade: receivedQty(row),
     quantidade_nf: row.quantidade_nf,
     quantidade_declarada: row.quantidade_declarada,
     unidade_medida: row.unidade_medida,
@@ -165,7 +275,7 @@ function loteFromRow(row, tank) {
 function toEstoque(row, tanks) {
   const tank = row.vasilhame_id ? tanks.get(row.vasilhame_id) : null;
   return {
-    id: row.legacy_estoque_id,
+    id: row.legacy_estoque_id || row.legacy_mp_id_text,
     codigo_estoque: row.codigo_estoque,
     entrada_id: row.legacy_entrada_id,
     entrada_codigo: row.id_entrada,
@@ -230,6 +340,7 @@ function toEntrada(lines, tanks) {
   const first = ordered[0];
   const lotes = ordered.map((row) => loteFromRow(row, row.vasilhame_id ? tanks.get(row.vasilhame_id) : null));
   const sum = (key) => ordered.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
+  const sumQuantidade = ordered.reduce((acc, row) => acc + (Number(receivedQty(row)) || 0), 0);
   return {
     id: first.legacy_entrada_id,
     id_entrada: first.id_entrada,
@@ -243,7 +354,7 @@ function toEntrada(lines, tanks) {
     densidade: first.densidade,
     data_fabricacao: first.data_fabricacao,
     data_validade: first.data_validade,
-    quantidade: sum('quantidade'),
+    quantidade: sumQuantidade,
     unidade_medida: first.unidade_medida,
     preco_unitario: first.preco_unitario,
     custo_total: sum('custo_total'),
@@ -287,7 +398,11 @@ async function groupEntradas(rows) {
     list.push(row);
     groups.set(row.legacy_entrada_id, list);
   }
-  return [...groups.values()].map((lines) => toEntrada(lines, tanks));
+  const grouped = [];
+  for (const lines of groups.values()) {
+    grouped.push(toEntrada(await linesForEntrada(lines), tanks));
+  }
+  return grouped;
 }
 
 function firstLote(payload) {
@@ -412,15 +527,41 @@ async function resolveCodigo(legacyEntradaId, hinted) {
 }
 
 function applyEstoqueFilter(builder, query) {
-  let next = builder.eq('origem', 'ARMAZENAGEM').not('legacy_estoque_id', 'is', null);
+  const byEntrada = Boolean(query?.entrada_id || query?.entrada_codigo);
+  let next = builder;
+  if (!byEntrada) {
+    next = next.eq('origem', 'ARMAZENAGEM').not('legacy_estoque_id', 'is', null);
+  }
   for (const [key, value] of Object.entries(query || {})) {
     if (key === 'id') next = next.eq('legacy_estoque_id', value);
     else if (key === 'entrada_id') next = next.eq('legacy_entrada_id', value);
     else if (key === 'entrada_codigo') next = next.eq('id_entrada', value);
-    else if (key === 'origem') continue;
-    else next = next.eq(key, value);
+    else if (key === 'origem') {
+      if (!byEntrada) continue;
+      const origem = origemCanon(value);
+      if (origem) next = next.eq('origem', origem);
+    } else next = next.eq(key, value);
   }
   return next;
+}
+
+async function updateByLegacyId(id, patch, context) {
+  const { data, error } = await chemflowSupabase
+    .from(TABLE)
+    .update(stamp(patch))
+    .eq('legacy_estoque_id', id)
+    .select()
+    .maybeSingle();
+  throwIfError(error, context);
+  if (data) return data;
+  const retry = await chemflowSupabase
+    .from(TABLE)
+    .update(stamp(patch))
+    .eq('legacy_mp_id_text', String(id))
+    .select()
+    .maybeSingle();
+  throwIfError(retry.error, context);
+  return retry.data || null;
 }
 
 export function createEntradaEntity() {
@@ -550,26 +691,59 @@ export function createEstoqueEntity() {
       });
     },
     async get(id) {
-      const rows = await fetchAll((q) => q.eq('legacy_estoque_id', id), { limit: 1 });
+      let rows = await fetchAll((q) => q.eq('legacy_estoque_id', id), { limit: 1 });
+      if (!rows[0]) {
+        rows = await fetchAll((q) => q.eq('legacy_mp_id_text', String(id)), { limit: 1 });
+      }
       const mapped = await mapEstoque(rows);
       return mapped[0] || null;
     },
     async filter(query = {}) {
       const rows = await fetchAll((q) => applyEstoqueFilter(q, query));
-      return mapEstoque(rows);
+      const collapsed = query.entrada_id || query.entrada_codigo
+        ? await linesForEntrada(rows)
+        : rows;
+      return mapEstoque(collapsed);
     },
     async create(payload) {
       const legacyEntradaId = payload.entrada_id || crypto.randomUUID();
       const legacyEstoqueId = payload.id || crypto.randomUUID();
       const idEntrada = await resolveCodigo(payload.entrada_id, payload.entrada_codigo);
+      const lote = firstLote(payload) || {};
+      const existing = legacyEntradaId
+        ? await fetchAll((q) => q.eq('legacy_entrada_id', legacyEntradaId))
+        : [];
+      const reusable = findUnifiableMpRow(existing, {
+        lote: lote.lote || payload.lote,
+        produto_codigo: lote.produto_codigo || payload.produto_codigo,
+        produto_nome: lote.produto_nome || payload.produto_nome,
+      });
       assertConfigured('estoque.create');
+      const body = rowFromEstoquePayload(payload, {
+        idEntrada,
+        legacyEntradaId,
+        legacyEstoqueId,
+      });
+      if (reusable) {
+        const { data, error } = await chemflowSupabase
+          .from(TABLE)
+          .update(stamp({
+            ...body,
+            origem: reusable.origem || body.origem,
+            legacy_mp_id_text: reusable.legacy_mp_id_text,
+            legacy_mp_entry_id: reusable.legacy_mp_entry_id,
+            legacy_estoque_id: reusable.legacy_estoque_id || legacyEstoqueId,
+          }))
+          .eq('id', reusable.id)
+          .select()
+          .single();
+        throwIfError(error, 'estoque.create');
+        const mapped = await mapEstoque([data]);
+        return mapped[0];
+      }
       const { data, error } = await chemflowSupabase
         .from(TABLE)
-        .insert(rowFromEstoquePayload(payload, {
-          idEntrada,
-          legacyEntradaId,
-          legacyEstoqueId,
-        }))
+        .insert(body)
         .select()
         .single();
       throwIfError(error, 'estoque.create');
@@ -617,13 +791,7 @@ export function createEstoqueEntity() {
         patch.initial_stock = patch.quantidade;
       }
       assertConfigured('estoque.update');
-      const { data, error } = await chemflowSupabase
-        .from(TABLE)
-        .update(stamp(patch))
-        .eq('legacy_estoque_id', id)
-        .select()
-        .maybeSingle();
-      throwIfError(error, 'estoque.update');
+      const data = await updateByLegacyId(id, patch, 'estoque.update');
       if (!data) return null;
       const mapped = await mapEstoque([data]);
       return mapped[0];
@@ -638,8 +806,19 @@ export function createEstoqueEntity() {
     },
     async delete(id) {
       assertConfigured('estoque.delete');
-      const { error } = await chemflowSupabase.from(TABLE).delete().eq('legacy_estoque_id', id);
-      throwIfError(error, 'estoque.delete');
+      const first = await chemflowSupabase
+        .from(TABLE)
+        .delete()
+        .eq('legacy_estoque_id', id)
+        .select('id');
+      throwIfError(first.error, 'estoque.delete');
+      if (first.data?.length) return true;
+      const retry = await chemflowSupabase
+        .from(TABLE)
+        .delete()
+        .eq('legacy_mp_id_text', String(id))
+        .select('id');
+      throwIfError(retry.error, 'estoque.delete');
       return true;
     },
     async deleteMany(query = {}) {
@@ -726,6 +905,7 @@ function rowFromMp(payload, ids) {
     packaging_quantity: payload.packaging_quantity ?? null,
     public_token: nullIfEmpty(payload.public_token),
     legacy_entrada_id: ids.legacyEntradaId,
+    legacy_estoque_id: ids.legacyEstoqueId || null,
     legacy_mp_id_text: ids.mpId,
     legacy_mp_entry_id: ids.idEntrada,
     created_by_id: nullIfEmpty(payload.created_by_id),
@@ -766,6 +946,36 @@ function applyMpFilter(builder, query) {
   return next;
 }
 
+async function syncEntradaMirrorsFromMp(canonical, patch) {
+  if (!canonical?.legacy_entrada_id || !patch || Object.keys(patch).length === 0) return;
+  const mirrors = await fetchAll(
+    (q) => q.eq('legacy_entrada_id', canonical.legacy_entrada_id).is('legacy_mp_id_text', null)
+  );
+  const siblings = (mirrors || []).filter((row) => Number(row.id) !== Number(canonical.id));
+  if (siblings.length === 0) return;
+  const lote = String(canonical.lote || '').trim();
+  const targets = siblings.filter((row) => {
+    if (siblings.length === 1) return true;
+    return String(row.lote || '').trim() === lote;
+  });
+  if (targets.length === 0) return;
+  const mirrorPatch = {};
+  for (const key of [
+    'produto_nome', 'produto_codigo', 'cliente_nome', 'nota_fiscal', 'lote',
+    'densidade', 'data_fabricacao', 'data_validade', 'fornecedor',
+    'quantidade', 'initial_stock', 'unidade_medida', 'preco_unitario',
+    'saldo_atual', 'status_wms',
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) mirrorPatch[key] = patch[key];
+  }
+  if (Object.keys(mirrorPatch).length === 0) return;
+  const { error } = await chemflowSupabase
+    .from(TABLE)
+    .update(stamp(mirrorPatch))
+    .in('id', targets.map((row) => row.id));
+  throwIfError(error, 'mp.sync_mirrors');
+}
+
 export function createMateriaPrimaEntity() {
   return {
     async list(sort, limit) {
@@ -794,10 +1004,33 @@ export function createMateriaPrimaEntity() {
       const idEntrada = isSharedEntradaId(hinted) ? hinted : await nextEntradaId();
       const legacyEntradaId = await sharedEntradaUuid(idEntrada);
       const mpId = payload.id || crypto.randomUUID();
+      const legacyEstoqueId = crypto.randomUUID();
+      const existing = await fetchAll((q) => q.eq('legacy_entrada_id', legacyEntradaId));
+      const reusable = findUnifiableMpRow(existing, {
+        lote: payload.lot,
+        produto_codigo: payload.mp_code,
+        produto_nome: payload.mp_name || payload.produto_nome,
+      });
       assertConfigured('mp.create');
+      const body = rowFromMp(payload, {
+        idEntrada,
+        legacyEntradaId,
+        mpId: reusable?.legacy_mp_id_text || mpId,
+        legacyEstoqueId: reusable?.legacy_estoque_id || legacyEstoqueId,
+      });
+      if (reusable) {
+        const { data, error } = await chemflowSupabase
+          .from(TABLE)
+          .update(stamp(body))
+          .eq('id', reusable.id)
+          .select()
+          .single();
+        throwIfError(error, 'mp.create');
+        return toMateriaPrima(data);
+      }
       const { data, error } = await chemflowSupabase
         .from(TABLE)
-        .insert(rowFromMp(payload, { idEntrada, legacyEntradaId, mpId }))
+        .insert(body)
         .select()
         .single();
       throwIfError(error, 'mp.create');
@@ -822,7 +1055,13 @@ export function createMateriaPrimaEntity() {
       if (payload.manufacture_date != null) patch.data_fabricacao = nullIfEmpty(payload.manufacture_date);
       if (payload.expiry_date != null) patch.data_validade = nullIfEmpty(payload.expiry_date);
       if (payload.supplier != null) patch.fornecedor = nullIfEmpty(payload.supplier);
-      if (payload.initial_stock != null) patch.initial_stock = payload.initial_stock;
+      if (payload.initial_stock != null) {
+        patch.initial_stock = payload.initial_stock;
+        // quantidade deve sempre refletir o estoque inicial registrado.
+        // A tela de Entradas (Transbordo) lê este campo para exibir a quantidade;
+        // sem essa atribuição, uma edição em Estoque MP não aparece em Entradas.
+        patch.quantidade = payload.initial_stock;
+      }
       if (payload.unit != null) patch.unidade_medida = payload.unit || 'kg';
       if (payload.unit_price != null) patch.preco_unitario = payload.unit_price;
       if (payload.current_stock != null) patch.saldo_atual = payload.current_stock;
@@ -843,6 +1082,7 @@ export function createMateriaPrimaEntity() {
         .maybeSingle();
       throwIfError(error, 'mp.update');
       if (!data) throw new Error('Registro não encontrado');
+      await syncEntradaMirrorsFromMp(data, patch);
       return toMateriaPrima(data);
     },
     async bulkUpdate(items) {
