@@ -608,11 +608,19 @@ export default function EntradaModal({
       densidade: firstLote.densidade,
       data_fabricacao: firstLote.data_fabricacao,
       data_validade: firstLote.data_validade,
+      saldo_inicial: qtdKgEfetiva,
       quantidade: qtdKgEfetiva,
       unidade_medida: "kg",
       preco_unitario: firstLote.preco_unitario,
       custo_total: custoTotalEfetivo,
-      saldo_atual: editingEntrada?.saldo_atual ?? qtdKgEfetiva,
+      saldo_final:
+        editingEntrada?.saldo_final ??
+        editingEntrada?.saldo_atual ??
+        qtdKgEfetiva,
+      saldo_atual:
+        editingEntrada?.saldo_final ??
+        editingEntrada?.saldo_atual ??
+        qtdKgEfetiva,
       embalado: firstLote.embalado,
       peso_liquido:
         firstLote.embalado || firstLote.tipo_recebimento === "vasilhame"

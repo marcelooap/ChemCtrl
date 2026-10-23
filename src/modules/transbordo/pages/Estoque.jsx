@@ -1,11 +1,9 @@
-import { useState, useEffect, useMemo, Fragment } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { entities } from '@transbordo/services/entities';
-import { Search, Eye, Pencil, Trash2, Droplets, Package, ChevronDown, MapPin, ExternalLink } from "lucide-react";
+import { Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Switch } from "@shared/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@shared/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,15 +38,13 @@ import {
 import {
   invalidateTransbordoWorkspaceCache,
   loadTransbordoWorkspaceLists,
+  peekTransbordoWorkspaceLists,
 } from "@transbordo/services/transbordoWorkspace";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
   entradaByIdMap,
   isMateriaPrimaIndustrializacao,
 } from "@transbordo/lib/materiaPrimaIndustrializacao";
-import {
-  resolveTipoRecebimentoEstoque,
-} from "@transbordo/lib/tipoRecebimento";
 import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
@@ -58,9 +54,6 @@ const STATUS_OPTIONS = [
   { value: "ok", label: "OK" },
   { value: "nok", label: "NOK" },
 ];
-
-const TIPO_TAB_TRIGGER_CLASS =
-  "gap-2 px-5 py-2.5 text-sm font-semibold bg-white text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -72,11 +65,88 @@ function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
   return formatQuantidade(valor, { empty: "-" });
 }
 
+/**
+ * Monta as linhas da tela a partir do workspace: reaplica casas decimais
+ * declaradas, remove embalagens unitárias / MP da Industrialização e calcula
+ * o saldo de cada registro uma única vez (contexto compartilhado).
+ */
+function buildEstoqueView(workspace, entradas = []) {
+  const volumes = applyDeclaredVolumeDecimals({
+    estoque: workspace.estoque,
+    entradas,
+    transbordos: workspace.transbordos,
+    vasilhames: workspace.vasilhames,
+  });
+  const saidas = workspace.saidas || [];
+  const entradasPorId = entradaByIdMap(entradas);
+  const saldoCtx = createEstoqueSaldoContext(
+    volumes.transbordos,
+    saidas,
+    volumes.vasilhames
+  );
+
+  // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
+  // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
+  // Matéria-prima da Industrialização fica só no módulo Industrialização.
+  const estoque = volumes.estoque
+    .filter((e) => !isEstoqueEmbalagemUnitaria(e))
+    .filter(
+      (e) =>
+        !isMateriaPrimaIndustrializacao(
+          e,
+          entradasPorId.get(String(e?.entrada_id))
+        )
+    )
+    .map((e) => {
+      const hydrated = hydrateEstoqueFiscal(e);
+      const quantidade = getEstoqueQuantidade(hydrated);
+      const unidade_medida = getEstoqueUnidade(hydrated);
+      const itemOp = { ...hydrated, quantidade, unidade_medida };
+      const saldo_final = computeEstoqueSaldo(
+        itemOp,
+        volumes.transbordos,
+        saidas,
+        volumes.vasilhames,
+        saldoCtx
+      );
+      return {
+        ...itemOp,
+        saldo_inicial: quantidade,
+        saldo_final,
+        saldo_atual: saldo_final,
+        expedido: Math.max(0, quantidade - saldo_final),
+      };
+    });
+
+  return {
+    estoque,
+    transbordos: volumes.transbordos,
+    saidas,
+    vasilhames: volumes.vasilhames,
+    volumes,
+  };
+}
+
+const SKELETON_ROWS = 6;
+
+function LoadingRows({ columns }) {
+  return Array.from({ length: SKELETON_ROWS }, (_, i) => (
+    <tr key={`sk-${i}`} className="border-b border-border last:border-0" aria-hidden="true">
+      {Array.from({ length: columns }, (__, j) => (
+        <td key={j} className="px-5 py-3">
+          <div className="h-4 w-full max-w-[9rem] rounded bg-muted animate-pulse" />
+        </td>
+      ))}
+    </tr>
+  ));
+}
+
 function SaldoBadge({ children, tone }) {
   const tones = {
     blue: "bg-sky-100 text-sky-800",
     red: "bg-red-100 text-red-700",
     green: "bg-green-100 text-green-700",
+    muted: "bg-muted text-muted-foreground",
   };
   return (
     <span
@@ -89,46 +159,8 @@ function SaldoBadge({ children, tone }) {
   );
 }
 
-function LocalArmazenamentoCard({
-  title,
-  quantidade,
-  unidade,
-  estoqueItem,
-  onNavigate,
-  navigateLabel,
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2.5 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </p>
-        {onNavigate && (
-          <button
-            type="button"
-            onClick={onNavigate}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
-            title={navigateLabel || "Abrir tela filtrada"}
-          >
-            Ver
-            <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
-      </div>
-      <p className="text-sm font-semibold tabular-nums text-foreground">
-        {formatValorNaUnidadeEntrada(estoqueItem, quantidade)}{" "}
-        <span className="text-xs font-medium text-muted-foreground">
-          {unidade || ""}
-        </span>
-      </p>
-    </div>
-  );
-}
-
 export default function Estoque() {
-  const navigate = useNavigate();
   const [estoque, setEstoque] = useState([]);
-  const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
@@ -137,104 +169,107 @@ export default function Estoque() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
-  const [tipoFilter, setTipoFilter] = useState("granel");
   const [editOpen, setEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [viewItem, setViewItem] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [expandedLocais, setExpandedLocais] = useState({});
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
 
-  const loadData = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
+  // Sequência de carga: descarta respostas de cargas antigas (ex.: reload silencioso
+  // disparado por uma edição enquanto o auto-reparo ainda estava em andamento).
+  const loadSeqRef = useRef(0);
+  const entradasRef = useRef([]);
+  entradasRef.current = entradas;
+
+  const applyView = (view) => {
+    setEstoque(view.estoque);
+    setTransbordos(view.transbordos);
+    setSaidas(view.saidas);
+    setVasilhames(view.vasilhames);
+  };
+
+  /**
+   * Fora do caminho crítico: códigos E00N / filtro MP (entradas) e auto-reparo
+   * de vasilhames de entrada. A tela já está visível quando isto roda.
+   */
+  async function syncEntradasInBackground(workspace, seq) {
+    const isCurrent = () => seq === loadSeqRef.current;
     try {
-      // Migrações one-shot removidas do mount (Onda 1): rodar via script SQL/scripts,
-      // não a cada abertura de tela com N usuários concorrentes.
-
-      invalidateTransbordoWorkspaceCache();
-      const [workspace, prods, cliens, ents] = await Promise.all([
-        loadTransbordoWorkspaceLists({ force: true }),
-        entities.produtos.list(),
-        entities.clientes.list(),
+      const [ents, prods] = await Promise.all([
         entities.entradas.list(),
+        entities.produtos.list(),
       ]);
-      const trans = workspace.transbordos;
-      const saics = workspace.saidas;
-      let estoqueRows = workspace.estoque;
-      let vasilhameRows = workspace.vasilhames;
-      try {
-        const healed = await reconcileVasilhamesFromEntradas({
-          entradas: ents,
-          estoque: estoqueRows,
-          vasilhames: vasilhameRows,
-          produtos: prods,
-        });
-        if (healed.changed) {
-          estoqueRows = healed.estoque;
-          vasilhameRows = healed.vasilhames;
-        }
-      } catch (err) {
-        console.error("[Transbordo] Falha ao registrar vasilhames da entrada:", err);
-      }
-      const volumes = applyDeclaredVolumeDecimals({
-        estoque: estoqueRows,
-        entradas: ents,
-        transbordos: trans,
-        vasilhames: vasilhameRows,
-      });
-      void persistDeclaredVolumeDecimals(volumes);
+      if (!isCurrent()) return;
+      setEntradas(ents);
 
-      // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
-      // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
-      // Matéria-prima da Industrialização fica só no módulo Industrialização.
+      // Safety net: espelhos de MP identificados só pela entrada-pai.
       const entradasPorId = entradaByIdMap(ents);
-      const saldoCtx = createEstoqueSaldoContext(
-        volumes.transbordos,
-        saics,
-        volumes.vasilhames
-      );
-      const estoqueWithSaldo = volumes.estoque
-        .filter((e) => !isEstoqueEmbalagemUnitaria(e))
-        .filter(
+      setEstoque((prev) => {
+        const next = prev.filter(
           (e) =>
             !isMateriaPrimaIndustrializacao(
               e,
               entradasPorId.get(String(e?.entrada_id))
             )
-        )
-        .map((e) => {
-        const hydrated = hydrateEstoqueFiscal(e);
-        const quantidade = getEstoqueQuantidade(hydrated);
-        const unidade_medida = getEstoqueUnidade(hydrated);
-        const itemOp = { ...hydrated, quantidade, unidade_medida };
-        return {
-          ...itemOp,
-          saldo_atual: computeEstoqueSaldo(
-            itemOp,
-            volumes.transbordos,
-            saics,
-            volumes.vasilhames,
-            saldoCtx
-          ),
-        };
+        );
+        return next.length === prev.length ? prev : next;
       });
 
-      // Sync de saldo: apenas em memória na listagem.
-      // Persistência de saldo_atual fica a cargo das RPCs/fluxos de escrita (não no mount).
+      const healed = await reconcileVasilhamesFromEntradas({
+        entradas: ents,
+        estoque: workspace.estoque,
+        vasilhames: workspace.vasilhames,
+        produtos: prods,
+      });
+      if (healed.changed && isCurrent()) {
+        await loadData({ silent: true, reconcile: false });
+      }
+    } catch (err) {
+      console.error("[Transbordo] Falha ao sincronizar entradas/vasilhames:", err);
+    }
+  }
 
-      setEstoque(estoqueWithSaldo);
-      setProdutos(prods);
+  const loadData = async ({ silent = false, reconcile = true } = {}) => {
+    const seq = ++loadSeqRef.current;
+    const isCurrent = () => seq === loadSeqRef.current;
+
+    // 1) Dispara a busca de dados frescos antes de qualquer cálculo. Gravações de
+    //    outras telas não invalidam o cache do workspace, então a listagem
+    //    sempre revalida ao abrir.
+    const cached = silent ? null : peekTransbordoWorkspaceLists();
+    invalidateTransbordoWorkspaceCache();
+    const request = Promise.all([
+      loadTransbordoWorkspaceLists({ force: true }),
+      entities.clientes.list(),
+    ]);
+
+    // 2) Enquanto a rede responde, pinta com o último snapshot do módulo
+    //    (stale-while-revalidate) em vez de deixar a tela vazia.
+    if (cached) {
+      applyView(buildEstoqueView(cached, entradasRef.current));
+      setLoading(false);
+    } else if (!silent) {
+      setLoading(true);
+    }
+
+    try {
+      const [workspace, cliens] = await request;
+      if (!isCurrent()) return;
+
+      const view = buildEstoqueView(workspace, entradasRef.current);
+      void persistDeclaredVolumeDecimals(view.volumes);
+      applyView(view);
       setClientes(cliens);
-      setTransbordos(volumes.transbordos);
-      setSaidas(saics);
-      setEntradas(ents);
-      setVasilhames(volumes.vasilhames);
+      setLoading(false);
+
+      // 3) Entradas + auto-reparo sem bloquear a tela.
+      if (reconcile) void syncEntradasInBackground(workspace, seq);
     } catch {
-      if (!silent) setEstoque([]);
+      if (!silent && isCurrent() && !cached) setEstoque([]);
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && isCurrent()) setLoading(false);
     }
   };
 
@@ -256,12 +291,6 @@ export default function Estoque() {
     const q = search.toLowerCase().trim();
     return estoque
       .filter((e) => {
-        const tipo = resolveTipoRecebimentoEstoque(e);
-        // Recebimento em vasilhame continua no pátio (tela de Vasilhames)
-        // e o saldo permanece na aba Granel.
-        if (tipoFilter === "granel" && tipo !== "granel" && tipo !== "vasilhame") return false;
-        if (tipoFilter === "embalado" && tipo !== "embalado") return false;
-
         const entradaLabel = (
           e?.entrada_id && entradaIdMap[e.entrada_id]
             ? entradaIdMap[e.entrada_id]
@@ -299,13 +328,58 @@ export default function Estoque() {
         if (ca !== cb) return cb - ca; // mais novo (maior ID) no topo
         return String(b.id || "").localeCompare(String(a.id || ""));
       });
-  }, [estoque, search, statusFilter, clienteFilter, tipoFilter, entradaIdMap]);
+  }, [estoque, search, statusFilter, clienteFilter, entradaIdMap]);
 
-  const totalSaldo = filtered.reduce((sum, e) => sum + (e.saldo_atual || 0), 0);
-  const totalCusto = filtered.reduce(
-    (sum, e) => sum + (e.saldo_atual || 0) * (e.preco_unitario || 0),
-    0
+  const { totalSaldo, totalCusto } = useMemo(
+    () =>
+      filtered.reduce(
+        (acc, e) => {
+          const saldo = e.saldo_atual || 0;
+          acc.totalSaldo += saldo;
+          acc.totalCusto += saldo * (e.preco_unitario || 0);
+          return acc;
+        },
+        { totalSaldo: 0, totalCusto: 0 }
+      ),
+    [filtered]
   );
+
+  const saldoCtx = useMemo(
+    () => createEstoqueSaldoContext(transbordos, saidas, vasilhames),
+    [transbordos, saidas, vasilhames]
+  );
+
+  /**
+   * Saldos por local (embalado/pátio, tanque/vasilhame, tanka) para todas as
+   * linhas. Calculado por objeto de linha e reaproveitado enquanto
+   * transbordos/vasilhames/saídas não mudarem — filtrar, buscar ou alternar o
+   * WMS de uma linha não recalcula a lista inteira.
+   */
+  const locaisCacheRef = useRef({ deps: null, byRow: new WeakMap() });
+  const locaisMap = useMemo(() => {
+    const store = locaisCacheRef.current;
+    const deps = [transbordos, vasilhames, saidas];
+    if (!store.deps || store.deps.some((d, i) => d !== deps[i])) {
+      store.deps = deps;
+      store.byRow = new WeakMap();
+    }
+    const map = new Map();
+    for (const e of estoque) {
+      let locais = store.byRow.get(e);
+      if (!locais) {
+        locais = computeEstoqueQuantidadesPorLocal(e, {
+          transbordos,
+          vasilhames,
+          saidas,
+          saldo: e.saldo_atual,
+          saldoCtx,
+        });
+        store.byRow.set(e, locais);
+      }
+      map.set(e.id, locais);
+    }
+    return map;
+  }, [estoque, transbordos, vasilhames, saidas, saldoCtx]);
 
   const handleEdit = (item) => {
     setEditingItem(item);
@@ -367,28 +441,32 @@ export default function Estoque() {
 
     const provisional = {
       ...item,
+      saldo_inicial: quantidade,
       quantidade,
       unidade_medida: data.unidade_medida,
       lotes,
     };
-    const saldo_atual = computeEstoqueSaldo(
+    const saldo_final = computeEstoqueSaldo(
       provisional,
       transbordos,
       saidas,
-      vasilhames
+      vasilhames,
+      saldoCtx
     );
 
     const payload = {
       nota_fiscal: data.nota_fiscal,
       nota_fiscal_troca: nullIfEmpty(data.nota_fiscal_troca),
       lote: data.lote,
+      saldo_inicial: quantidade,
       quantidade,
       unidade_medida: data.unidade_medida,
       data_fabricacao: nullIfEmpty(data.data_fabricacao),
       data_validade: nullIfEmpty(data.data_validade),
       preco_unitario: preco,
-      custo_total: saldo_atual * preco,
-      saldo_atual,
+      custo_total: saldo_final * preco,
+      saldo_final,
+      saldo_atual: saldo_final,
       peso_liquido: item.embalado ? data.peso_liquido : null,
       quantidade_embalagens: item.embalado ? data.quantidade_embalagens : null,
       lotes,
@@ -417,7 +495,14 @@ export default function Estoque() {
     setEstoque((prev) =>
       prev.map((e) =>
         e.id === item.id
-          ? hydrateEstoqueFiscal({ ...e, ...payload, quantidade, saldo_atual })
+          ? hydrateEstoqueFiscal({
+              ...e,
+              ...payload,
+              saldo_inicial: quantidade,
+              quantidade,
+              saldo_final,
+              saldo_atual: saldo_final,
+            })
           : e
       )
     );
@@ -469,21 +554,8 @@ export default function Estoque() {
             <h1 className="text-2xl font-bold text-foreground leading-tight">Estoque</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {filtered.length} registro(s) em estoque
-              {tipoFilter === "embalado" ? " · Embalado" : " · Granel"}
             </p>
           </div>
-          <Tabs value={tipoFilter} onValueChange={setTipoFilter}>
-            <TabsList className="h-auto p-1 gap-1 bg-muted/80 border border-border shadow-sm w-fit shrink-0">
-              <TabsTrigger value="granel" className={TIPO_TAB_TRIGGER_CLASS}>
-                <Droplets className="w-4 h-4" />
-                Granel
-              </TabsTrigger>
-              <TabsTrigger value="embalado" className={TIPO_TAB_TRIGGER_CLASS}>
-                <Package className="w-4 h-4" />
-                Embalado
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
         </div>
 
         {/* Filters */}
@@ -532,7 +604,9 @@ export default function Estoque() {
                 <th className="px-5 py-3 font-medium whitespace-nowrap">Cliente</th>
                 <th className="px-5 py-3 font-medium">Lote</th>
                 <th className="px-5 py-3 font-medium text-center align-middle">Saldo Inicial</th>
-                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Expedido</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Embalado</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Tanque</th>
+                <th className="px-5 py-3 font-medium text-center align-middle">Saldo Tanka</th>
                 <th className="px-5 py-3 font-medium text-center align-middle">Saldo Atual</th>
                 <th className="px-5 py-3 font-medium">Unidade</th>
                 <th className="px-5 py-3 font-medium">Status WMS</th>
@@ -541,47 +615,37 @@ export default function Estoque() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
-                    Carregando estoque...
-                  </td>
-                </tr>
+                <LoadingRows columns={13} />
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
+                  <td colSpan={13} className="px-5 py-8 text-center text-muted-foreground">
                     Nenhum registro de estoque encontrado.
                   </td>
                 </tr>
               ) : (
                 filtered.map((e, i) => {
                   const saldoZerado = Number(e.saldo_atual) === 0;
-                  // Recalcula na renderização (não depende de saldo_atual stale após HMR)
+                  // Saldo já calculado em buildEstoqueView (contexto compartilhado);
+                  // recalcular aqui custava O(transbordos × vasilhames) por linha a cada render.
                   const qtdOp = getEstoqueQuantidade(e);
-                  const saldoAtualOp = computeEstoqueSaldo(
-                    e,
-                    transbordos,
-                    saidas,
-                    vasilhames
-                  );
-                  const saldoExpedidoOp = Math.max(0, qtdOp - saldoAtualOp);
+                  const saldoAtualOp = Number(e.saldo_atual) || 0;
                   const saldoInicialEntrada = valorNaUnidadeEntrada(e, qtdOp);
-                  const saldoExpedidoEntrada = valorNaUnidadeEntrada(
-                    e,
-                    saldoExpedidoOp
-                  );
                   const saldoAtualEntrada = valorNaUnidadeEntrada(e, saldoAtualOp);
                   const unidadeEntrada = getEstoqueUnidadeEntrada(e);
-                  const isExpanded = !!expandedLocais[e.id];
-                  const locais = isExpanded
-                    ? computeEstoqueQuantidadesPorLocal(e, {
-                        transbordos,
-                        vasilhames,
-                        saidas,
-                      })
-                    : null;
+                  // Usa locais pré-computados para as colunas de breakdown
+                  const locais = locaisMap.get(e.id) ?? null;
+                  const isEmbalado = isEstoqueEmbalagemUnitaria(e);
+                  // Para itens granel, locais.patio é a parcela não rastreável via
+                  // composicao (gap de litros sem kg/densidade). Soma ao tanque para
+                  // não dividir incorretamente um item que está inteiro em vasilhame.
+                  // Para embalado, locais.patio são embalagens soltas no pátio.
+                  const saldoEmbaladoEntrada = isEmbalado ? (locais?.patio ?? 0) : 0;
+                  const saldoTanqueEntrada = isEmbalado
+                    ? (locais?.vasilhames ?? 0)
+                    : ((locais?.vasilhames ?? 0) + (locais?.patio ?? 0));
+                  const saldoTankaEntrada = locais?.tankas ?? 0;
                   return (
-                  <Fragment key={e.id}>
-                  <tr
+                  <tr key={e.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       i % 2 === 1 ? "bg-muted/40/30" : ""
                     } ${saldoZerado ? "opacity-50" : ""}`}
@@ -599,6 +663,7 @@ export default function Estoque() {
                     </td>
                     <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">{e.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">{e.lote || "-"}</td>
+                    {/* Saldo Inicial */}
                     <td className="px-5 py-3 text-center align-middle">
                       <div className="flex items-center justify-center">
                         <SaldoBadge tone="blue">
@@ -606,13 +671,37 @@ export default function Estoque() {
                         </SaldoBadge>
                       </div>
                     </td>
+                    {/* Saldo Embalado (pátio) */}
                     <td className="px-5 py-3 text-center align-middle">
                       <div className="flex items-center justify-center">
-                        <SaldoBadge tone="red">
-                          {formatValorNaUnidadeEntrada(e, saldoExpedidoEntrada)}
+                        <SaldoBadge tone={saldoEmbaladoEntrada > 0 ? "blue" : "muted"}>
+                          {saldoEmbaladoEntrada > 0
+                            ? formatValorNaUnidadeEntrada(e, saldoEmbaladoEntrada)
+                            : "—"}
                         </SaldoBadge>
                       </div>
                     </td>
+                    {/* Saldo Tanque (vasilhames) */}
+                    <td className="px-5 py-3 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <SaldoBadge tone={saldoTanqueEntrada > 0 ? "blue" : "muted"}>
+                          {saldoTanqueEntrada > 0
+                            ? formatValorNaUnidadeEntrada(e, saldoTanqueEntrada)
+                            : "—"}
+                        </SaldoBadge>
+                      </div>
+                    </td>
+                    {/* Saldo Tanka (isotanques) */}
+                    <td className="px-5 py-3 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <SaldoBadge tone={saldoTankaEntrada > 0 ? "blue" : "muted"}>
+                          {saldoTankaEntrada > 0
+                            ? formatValorNaUnidadeEntrada(e, saldoTankaEntrada)
+                            : "—"}
+                        </SaldoBadge>
+                      </div>
+                    </td>
+                    {/* Saldo Atual */}
                     <td className="px-5 py-3 text-center align-middle">
                       <div className="flex items-center justify-center">
                         <SaldoBadge tone="green">
@@ -646,23 +735,6 @@ export default function Estoque() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1">
-                        <RowActionButton
-                          onClick={() =>
-                            setExpandedLocais((prev) => ({
-                              ...prev,
-                              [e.id]: !prev[e.id],
-                            }))
-                          }
-                          className={isExpanded ? "text-primary" : undefined}
-                          title={
-                            isExpanded
-                              ? "Ocultar locais de armazenamento"
-                              : "Locais de armazenamento"
-                          }
-                          aria-expanded={isExpanded}
-                        >
-                          <MapPin />
-                        </RowActionButton>
                         <RowActionButton onClick={() => handleView(e)} title="Visualizar">
                           <Eye />
                         </RowActionButton>
@@ -675,61 +747,6 @@ export default function Estoque() {
                       </div>
                     </td>
                   </tr>
-                  {isExpanded && locais && (
-                    <tr className="border-b border-border bg-muted/20">
-                      <td colSpan={11} className="px-5 py-3">
-                        <div className="flex items-center gap-2 mb-2.5">
-                          <ChevronDown className="w-3.5 h-3.5 text-primary rotate-180" />
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Locais de armazenamento
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <LocalArmazenamentoCard
-                            title="Vasilhames"
-                            quantidade={locais.vasilhames}
-                            unidade={locais.unidade}
-                            estoqueItem={e}
-                            navigateLabel="Abrir Vasilhames filtrado por este estoque"
-                            onNavigate={() =>
-                              navigate("/chemflow/vasilhames", {
-                                state: {
-                                  estoqueId: e.id,
-                                  estoqueCodigo:
-                                    formatEstoqueCodigo(e.codigo_estoque) ||
-                                    e.id,
-                                },
-                              })
-                            }
-                          />
-                          <LocalArmazenamentoCard
-                            title="Tankas"
-                            quantidade={locais.tankas}
-                            unidade={locais.unidade}
-                            estoqueItem={e}
-                            navigateLabel="Abrir Tankagem filtrada por este estoque"
-                            onNavigate={() =>
-                              navigate("/chemflow/tankagem", {
-                                state: {
-                                  estoqueId: e.id,
-                                  estoqueCodigo:
-                                    formatEstoqueCodigo(e.codigo_estoque) ||
-                                    e.id,
-                                },
-                              })
-                            }
-                          />
-                          <LocalArmazenamentoCard
-                            title="Armazenagem pátio"
-                            quantidade={locais.patio}
-                            unidade={locais.unidade}
-                            estoqueItem={e}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
                   );
                 })
               )}

@@ -1,5 +1,6 @@
 import { queryClientInstance } from '@/lib/query-client';
 import { entities } from '@transbordo/services/entities';
+import { hydrateEstoqueTankFields } from '@transbordo/services/estoqueProdutos';
 
 const CACHE_TTL_MS = 45_000;
 
@@ -18,6 +19,29 @@ const cache = {
  * @property {Array} vasilhames
  */
 
+async function fetchWorkspace() {
+  // As 4 listas em paralelo: o estoque é hidratado com os vasilhames em memória
+  // (antes esperava a lista de vasilhames terminar para só então ser buscado).
+  const [vasilhames, transbordos, saidas, estoqueRaw] = await Promise.all([
+    entities.vasilhames.list('-created_date'),
+    entities.transbordos.list(),
+    entities.saidas.list(),
+    entities.estoque.list(null, { skipTankHydration: true }),
+  ]);
+  const tanksById = new Map(
+    (vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
+  );
+  const estoque = hydrateEstoqueTankFields(estoqueRaw || [], tanksById);
+
+  /** @type {TransbordoWorkspaceData} */
+  return {
+    transbordos: transbordos || [],
+    estoque,
+    saidas: saidas || [],
+    vasilhames: vasilhames || [],
+  };
+}
+
 /**
  * Carrega listas centrais do Transbordo reutilizando vasilhames entre estoque e pátio.
  * Cache curto evita refetch ao navegar entre telas do módulo.
@@ -27,45 +51,40 @@ export async function loadTransbordoWorkspaceLists({ force = false } = {}) {
   if (!force && cache.data && now < cache.expiresAt) {
     return cache.data;
   }
-  if (!force && cache.promise) {
+  if (cache.promise) {
+    // Já existe uma busca em andamento (mesmo com `force`): reaproveita em vez
+    // de disparar uma segunda rodada idêntica de queries.
     return cache.promise;
   }
 
-  cache.promise = (async () => {
-    const [vasilhames, transbordos, saidas] = await Promise.all([
-      entities.vasilhames.list('-created_date'),
-      entities.transbordos.list(),
-      entities.saidas.list(),
-    ]);
-    const tanksById = new Map(
-      (vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
-    );
-    const estoque = await entities.estoque.list(null, {
-      tanksById,
-      skipTankHydration: !tanksById.size,
-    });
-
-    /** @type {TransbordoWorkspaceData} */
-    const data = {
-      transbordos: transbordos || [],
-      estoque: estoque || [],
-      saidas: saidas || [],
-      vasilhames,
-    };
-    cache.data = data;
-    cache.expiresAt = Date.now() + CACHE_TTL_MS;
-    return data;
-  })()
+  const request = fetchWorkspace()
+    .then((data) => {
+      cache.data = data;
+      cache.expiresAt = Date.now() + CACHE_TTL_MS;
+      return data;
+    })
     .catch((err) => {
       cache.data = null;
       cache.expiresAt = 0;
       throw err;
     })
     .finally(() => {
-      cache.promise = null;
+      // Só limpa se ainda for a busca corrente (uma invalidação pode ter
+      // iniciado outra enquanto esta terminava).
+      if (cache.promise === request) cache.promise = null;
     });
 
-  return cache.promise;
+  cache.promise = request;
+  return request;
+}
+
+/**
+ * Último snapshot conhecido (mesmo que expirado), sem disparar rede.
+ * Permite pintar a tela imediatamente e revalidar em segundo plano.
+ * @returns {TransbordoWorkspaceData | null}
+ */
+export function peekTransbordoWorkspaceLists() {
+  return cache.data;
 }
 
 /** Invalida cache após gravações (create/update/delete). */

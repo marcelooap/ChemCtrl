@@ -483,7 +483,8 @@ export function generateRelatorioEstoquePDF({
     estoqueCodigo || formatEstoqueCodigo(item.codigo_estoque);
   const idEntrada = displayId || item.entrada_codigo || "-";
   const custoTotal =
-    (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
+    (Number(item.saldo_final ?? item.saldo_atual) || 0) *
+    (Number(item.preco_unitario) || 0);
 
   const title =
     codigo !== "-"
@@ -546,7 +547,10 @@ export function generateRelatorioEstoquePDF({
 
   const estoquePairs = [
     ["Quantidade", `${formatQuantidade(item.quantidade, { empty: "0" })} ${unidade}`],
-    ["Saldo Atual", `${formatQuantidade(item.saldo_atual, { empty: "0" })} ${unidade}`],
+    [
+      "Saldo Final",
+      `${formatQuantidade(item.saldo_final ?? item.saldo_atual, { empty: "0" })} ${unidade}`,
+    ],
     ["Unidade", unidade],
     ["Preço Unitário", formatCurrency(item.preco_unitario)],
     ["Custo Total", formatCurrency(custoTotal)],
@@ -928,31 +932,63 @@ export function generateEstoqueEnvioPDF({
     doc.text("Nenhum produto com saldo no filtro.", M, y);
     y += 8;
   } else {
-    // Produto recebe a maior fatia; demais colunas compactas e proporcionais
+    const totalProdutoEmbalado = products.reduce((s, p) => s + (Number(p.saldoEmbalado) || 0), 0);
+    const totalProdutoTanque  = products.reduce((s, p) => s + (Number(p.saldoTanque)  || 0), 0);
+    const totalProdutoTanka   = products.reduce((s, p) => s + (Number(p.saldoTanka)   || 0), 0);
+
+    /**
+     * Formata um valor numérico respeitando a unidade de medida de entrada do produto.
+     * Unidades de volume (L/lt/litro/litros/gal) → decimais; demais → inteiro.
+     */
+    const fmtProdQtd = (value, unidade) => {
+      if (!Number.isFinite(Number(value)) || Number(value) <= 0) return "-";
+      const u = String(unidade || "kg").toLowerCase();
+      const isVol = u === "l" || u === "lt" || u === "litro" || u === "litros" || u === "gal";
+      return isVol ? fmtVolume(value) : fmtNum(value, 0);
+    };
+
+    // 9 colunas: auto-fit com PRODUTO flexível para absorver espaço restante
+    const produtoHeaders = [
+      "CÓDIGO", "PRODUTO",
+      "EMBALADO", "TANQUE", "TANKA",
+      "SALDO ATUAL", "RESERVADO", "SALDO FINAL", "UN.",
+    ];
+    const produtoRows = products.map((p) => [
+      p.codigo || "-",
+      p.produto || "-",
+      fmtProdQtd(p.saldoEmbalado, p.unidade),
+      fmtProdQtd(p.saldoTanque,   p.unidade),
+      fmtProdQtd(p.saldoTanka,    p.unidade),
+      fmtNum(p.saldo, 3),
+      fmtNum(p.saldoReservado, 0),
+      fmtNum(p.saldoFinal ?? p.saldo, 3),
+      p.unidade || "-",
+    ]);
+    const produtoTotals = [
+      "TOTAL", "", "-", "-", "-",
+      fmtNum(totalProdutoSaldo, 3),
+      fmtNum(totalProdutoReservado, 0),
+      fmtNum(totalProdutoFinal, 3),
+      "",
+    ];
+    const produtoWidths = fitColWidths(doc, produtoHeaders, produtoRows, produtoTotals, {
+      flexCols: [1],   // PRODUTO absorve o espaço livre
+      flexMin: 28,     // mínimo para PRODUTO não ficar ilegível
+      dataFs: 8,
+      hdrFs: 7,
+    });
     y = addTable(
       doc,
       y,
-      ["CÓDIGO", "PRODUTO", "SALDO ATUAL", "RESERVADO", "SALDO FINAL", "UN."],
-      products.map((p) => [
-        p.codigo || "-",
-        p.produto || "-",
-        fmtNum(p.saldo, 3),
-        fmtNum(p.saldoReservado, 0),
-        fmtNum(p.saldoFinal ?? p.saldo, 3),
-        p.unidade || "-",
-      ]),
-      [22, 78, 24, 22, 24, 12],
-      [
-        "TOTAL",
-        "",
-        fmtNum(totalProdutoSaldo, 3),
-        fmtNum(totalProdutoReservado, 0),
-        fmtNum(totalProdutoFinal, 3),
-        "",
-      ],
+      produtoHeaders,
+      produtoRows,
+      produtoWidths,
+      produtoTotals,
       [],
       {
-        align: ["center", "left", "center", "center", "center", "center"],
+        align: ["center", "left", "center", "center", "center", "center", "center", "center", "center"],
+        dataFs: 8,
+        hdrFs: 7,
       }
     );
   }

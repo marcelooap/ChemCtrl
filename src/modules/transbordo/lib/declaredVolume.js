@@ -31,7 +31,9 @@ function hasFraction(n) {
 /** Litros declarados no lote, quando a entrada foi em volume e tem fração. */
 function declaredLiters(lote, row) {
   const um = lote?.unidade_medida || row?.unidade_medida;
-  const qtd = roundQuantidade(lote?.quantidade ?? row?.quantidade);
+  const qtd = roundQuantidade(
+    lote?.quantidade ?? row?.saldo_inicial ?? row?.quantidade
+  );
   if (!(qtd > 0) || !hasFraction(qtd)) return 0;
   if (isLiterUnit(um)) return qtd;
   if (isGallonUnit(um)) return roundQuantidade(qtd * GAL_TO_L);
@@ -280,7 +282,7 @@ export function applyDeclaredVolumeDecimals({
   const nextEstoque = (estoque || []).map((row) => {
     const declared = row?.id ? declaredByKey.get(String(row.id)) || 0 : 0;
     if (!(declared > 0)) return row;
-    const stored = roundQuantidade(row.quantidade);
+    const stored = roundQuantidade(row.saldo_inicial ?? row.quantidade);
     const quantidade = restoreDeclaredVolume(stored, declared);
     let lotes = row.lotes;
     let lotesChanged = false;
@@ -292,19 +294,21 @@ export function applyDeclaredVolumeDecimals({
       }
     }
     if (Math.abs(quantidade - stored) < 0.0005 && !lotesChanged) return row;
-    const saldo = roundQuantidade(row.saldo_atual);
+    const saldo = roundQuantidade(row.saldo_final ?? row.saldo_atual);
     const patch = { id: row.id };
     const next = { ...row };
     if (Math.abs(quantidade - stored) >= 0.0005) {
-      patch.quantidade = quantidade;
+      patch.saldo_inicial = quantidade;
+      next.saldo_inicial = quantidade;
       next.quantidade = quantidade;
     }
     if (lotesChanged) {
       patch.lotes = lotes;
       next.lotes = lotes;
     }
-    if (Math.abs(saldo - stored) < 0.0005 && patch.quantidade != null) {
-      patch.saldo_atual = quantidade;
+    if (Math.abs(saldo - stored) < 0.0005 && patch.saldo_inicial != null) {
+      patch.saldo_final = quantidade;
+      next.saldo_final = quantidade;
       next.saldo_atual = quantidade;
     }
     estoquePatches.push(patch);

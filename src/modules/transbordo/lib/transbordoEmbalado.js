@@ -185,8 +185,10 @@ export function buildEstoqueEmbaladoFromDestino({
     data_validade: nullIfEmpty(
       origemEstoque?.data_validade || origemLote?.data_validade
     ),
+    saldo_inicial: pesoTotal,
     quantidade: pesoTotal,
     unidade_medida: "kg",
+    saldo_final: pesoTotal,
     saldo_atual: pesoTotal,
     preco_unitario: preco,
     custo_total: roundMass(pesoTotal * preco),
@@ -394,8 +396,8 @@ export async function migrateEstoqueEmbaladoParaVasilhames() {
       eslinga: "",
       gps: "",
       menor_teste: null,
-      status: Number(e.saldo_atual) > 0 ? "No Pátio" : "Expedido",
-      data_saida: Number(e.saldo_atual) > 0 ? null : null,
+      status: Number(e.saldo_final ?? e.saldo_atual) > 0 ? "No Pátio" : "Expedido",
+      data_saida: Number(e.saldo_final ?? e.saldo_atual) > 0 ? null : null,
       responsavel: "",
       fracionado: false,
       composicao: [

@@ -13,6 +13,7 @@ import {
   getEstoqueQuantidade,
   getEstoqueUnidade,
   hydrateEstoqueFiscal,
+  isUnidadeVolumeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
@@ -35,9 +36,19 @@ import {
 } from "@painel/lib/vasilhameReservas";
 import { containerClientMatches } from "@transbordo/lib/saidaOrigem";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
-import { formatMass, formatNum, formatVolume, roundVolume, parseNumero } from "@transbordo/lib/format";
+import {
+  formatMass,
+  formatNum,
+  formatVolume,
+  roundVolume,
+  parseNumero,
+  parseDensidade,
+} from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
-import { collectEstoqueEnvioFontes } from "@transbordo/lib/estoqueEnvioProdutos";
+import {
+  collectEstoqueEnvioFontes,
+  estoqueEnvioGrupoKey,
+} from "@transbordo/lib/estoqueEnvioProdutos";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import {
   collectTankIdentityNames,
@@ -131,6 +142,27 @@ function matchesCapacidadePadrao(cap, target) {
   if (n <= 0) return false;
   const tol = Math.max(5, target * 0.02);
   return Math.abs(n - target) <= tol;
+}
+
+/** Quantidade do vasilhame na UOM do produto (kg → peso/composição, não capacidade em L). */
+/**
+ * Quantidade do vasilhame na UOM de entrada do produto.
+ * Massa: prefere peso_liquido / composição em kg; só converte L×densidade
+ * quando não há massa gravada (nunca trata litros como kg sem densidade).
+ */
+function quantidadeVasilhameNaUnidade(v, unidade, densKgPorL = 0) {
+  if (isUnidadeVolumeEntrada(unidade)) {
+    return Number(v.volume) || 0;
+  }
+  const peso = Number(v.peso_liquido) || 0;
+  if (peso > 0) return peso;
+  const comp = Array.isArray(v.composicao) ? v.composicao : [];
+  const sumKg = comp.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0);
+  if (sumKg > 0) return sumKg;
+  const sumL = comp.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0);
+  const volL = sumL > 0 ? sumL : Number(v.volume) || 0;
+  if (volL > 0 && densKgPorL > 0) return volL * densKgPorL;
+  return 0;
 }
 
 function formatSaldo(value, unidade) {
@@ -416,13 +448,12 @@ export default function EstoqueEnvio() {
       const codigo = e.codigo || "—";
       const produto = e.produto || "—";
       const unidade = e.unidade || "kg";
-      // Diferencia pelo nome/descrição (mesmo código pode ser Bombona vs IBC)
-      const key = [
+      const key = estoqueEnvioGrupoKey({
         codigo,
-        normProdutoKey(produto),
-        unidade,
-        e.cliente_id || normProdutoKey(e.cliente_nome) || "",
-      ].join("||");
+        produto,
+        cliente_id: e.cliente_id,
+        cliente_nome: e.cliente_nome,
+      });
 
       if (q) {
         const hay = `${codigo} ${produto} ${e.cliente_nome || ""}`.toLowerCase();
@@ -432,7 +463,20 @@ export default function EstoqueEnvio() {
       const prev = map.get(key);
       if (prev) {
         prev.saldo += saldo;
+        if (e.embalado) prev.saldoEmbalado = (prev.saldoEmbalado || 0) + saldo;
         if (!prev.clienteId && e.cliente_id) prev.clienteId = e.cliente_id;
+        // Mantém kg quando o grupo misturar UOM (após filtro de espelhos, raro)
+        if (
+          !isUnidadeVolumeEntrada(prev.unidade) &&
+          isUnidadeVolumeEntrada(unidade)
+        ) {
+          /* prev já em massa */
+        } else if (
+          isUnidadeVolumeEntrada(prev.unidade) &&
+          !isUnidadeVolumeEntrada(unidade)
+        ) {
+          prev.unidade = unidade;
+        }
       } else {
         map.set(key, {
           id: key,
@@ -440,6 +484,7 @@ export default function EstoqueEnvio() {
           produto,
           unidade,
           saldo,
+          saldoEmbalado: e.embalado ? saldo : 0,
           cliente_nome: e.cliente_nome || "",
           clienteId: e.cliente_id || null,
         });
@@ -477,6 +522,7 @@ export default function EstoqueEnvio() {
           saldo: saldoAtual,
           saldoReservado,
           saldoFinal,
+          saldoEmbalado: roundVolume(row.saldoEmbalado || 0),
         };
       })
       .sort((a, b) => {
@@ -671,6 +717,155 @@ export default function EstoqueEnvio() {
       );
   }, [unifiedTankas, clienteFilter, clientes, q]);
 
+  /**
+   * Enriquece produtosAgregados com o saldo em vasilhames (Tanque) e tankas (TANKA).
+   *
+   * Tankas guardam volume em Litros. Para UOM de massa (kg…): L × densidade = kg.
+   * Densidade: tanka → estoque → indStock (MP). Sem densidade válida, não converte
+   * litros como se fossem kg (evita Tanka 43.241 L aparecer como 43.241 kg).
+   *
+   * Embalado: só o que entrou como embalado no pátio (saldoEmbalado das fontes).
+   * Diferença entre saldo atual e (tanque+tanka) NÃO vai para Embalado.
+   */
+  const produtosComBreakdown = useMemo(() => {
+    const densidadeByCode = new Map();
+    const densidadeByNome = new Map();
+
+    const rememberDens = (cod, nome, raw) => {
+      const den = parseDensidade(raw);
+      if (!(Number.isFinite(den) && den > 0)) return;
+      if (cod && !densidadeByCode.has(cod)) densidadeByCode.set(cod, den);
+      if (nome && !densidadeByNome.has(nome)) densidadeByNome.set(nome, den);
+    };
+
+    for (const e of estoque) {
+      rememberDens(
+        normProdutoKey(e.produto_codigo || ""),
+        normProdutoKey(e.produto_nome || ""),
+        e.densidade
+      );
+    }
+    for (const mp of indStock || []) {
+      rememberDens(
+        normProdutoKey(mp.mp_code || ""),
+        normProdutoKey(mp.mp_name || ""),
+        mp.density
+      );
+    }
+
+    /** Densidade do produto (kg/L). 0 = desconhecida (não inventar 1,0). */
+    function getDensidade(codigoKey, nomeKey) {
+      if (codigoKey) {
+        const d = densidadeByCode.get(codigoKey);
+        if (d > 0) return d;
+      }
+      if (nomeKey) {
+        const d = densidadeByNome.get(nomeKey);
+        if (d > 0) return d;
+      }
+      return 0;
+    }
+
+    /**
+     * Converte litros para a UOM de entrada.
+     * Massa sem densidade → 0 (não tratar L como kg).
+     */
+    function litrosParaUnidadeEntrada(litros, unidade, densKgPorL) {
+      if (!(litros > 0)) return 0;
+      if (isUnidadeVolumeEntrada(unidade)) return litros;
+      if (!(densKgPorL > 0)) return 0;
+      return litros * densKgPorL;
+    }
+
+    const resolveUnidadeProduto = (codigoKeyV, nomeKeyV, clienteKeyV) => {
+      const hit = produtosAgregados.find((p) => {
+        if (normProdutoKey(p.cliente_nome || "") !== clienteKeyV) return false;
+        if (
+          codigoKeyV &&
+          normProdutoKey(p.codigo === "—" ? "" : p.codigo) === codigoKeyV
+        ) {
+          return true;
+        }
+        return nomeKeyV && normProdutoKey(p.produto) === nomeKeyV;
+      });
+      return hit?.unidade || "kg";
+    };
+
+    // ── Acumuladores já na UOM de entrada por produto+cliente ──────────────
+    const vasilhameByCode = new Map();
+    const vasilhameByNome = new Map();
+    for (const v of filteredVasilhames) {
+      const codigoKey = normProdutoKey(v.produto_codigo || "");
+      const nomeKey = normProdutoKey(v.produto_nome || "");
+      const clienteKey = normProdutoKey(v.cliente_nome || "");
+      const unidadeV = resolveUnidadeProduto(codigoKey, nomeKey, clienteKey);
+      const dens = getDensidade(codigoKey, nomeKey) || parseDensidade(v.densidade);
+      const vol = quantidadeVasilhameNaUnidade(v, unidadeV, dens);
+      if (vol <= 0) continue;
+      if (codigoKey) {
+        const k = `${codigoKey}||${clienteKey}`;
+        vasilhameByCode.set(k, (vasilhameByCode.get(k) || 0) + vol);
+      }
+      if (nomeKey) {
+        const k = `${nomeKey}||${clienteKey}`;
+        vasilhameByNome.set(k, (vasilhameByNome.get(k) || 0) + vol);
+      }
+    }
+
+    // Converte cada tanka (L → UOM) com a densidade da própria tanka quando houver.
+    const tankaByNome = new Map();
+    for (const t of filteredTankas) {
+      const volL = Number(t.volumeAtual) || 0;
+      if (volL <= 0) continue;
+      const nomeKey = normProdutoKey(t.produto || "");
+      const clienteKey = normProdutoKey(t.cliente_nome || "");
+      if (!nomeKey) continue;
+      const unidadeT = resolveUnidadeProduto("", nomeKey, clienteKey);
+      const densTanka = parseDensidade(t.densidade);
+      const dens =
+        densTanka > 0 ? densTanka : getDensidade("", nomeKey);
+      const qtd = litrosParaUnidadeEntrada(volL, unidadeT, dens);
+      if (qtd <= 0) continue;
+      const k = `${nomeKey}||${clienteKey}`;
+      tankaByNome.set(k, (tankaByNome.get(k) || 0) + qtd);
+    }
+
+    return produtosAgregados.map((p) => {
+      const clienteKey = normProdutoKey(p.cliente_nome || "");
+      const codigoKey = normProdutoKey(p.codigo === "—" ? "" : p.codigo);
+      const nomeKey = normProdutoKey(p.produto || "");
+
+      const vasilhameQtd =
+        (codigoKey ? vasilhameByCode.get(`${codigoKey}||${clienteKey}`) || 0 : 0) ||
+        (nomeKey ? vasilhameByNome.get(`${nomeKey}||${clienteKey}`) || 0 : 0);
+      const tankaQtd = nomeKey
+        ? tankaByNome.get(`${nomeKey}||${clienteKey}`) || 0
+        : 0;
+
+      let saldoTanque = roundVolume(vasilhameQtd);
+      let saldoTanka = roundVolume(tankaQtd);
+
+      const saldoAtual = p.saldo;
+
+      // Tanque + tanka não podem exceder o saldo de livro (divergência de dados).
+      const totalFisico = saldoTanque + saldoTanka;
+      if (totalFisico > saldoAtual + 0.001 && totalFisico > 0) {
+        const scale = saldoAtual / totalFisico;
+        saldoTanque = roundVolume(saldoTanque * scale);
+        saldoTanka = roundVolume(saldoTanka * scale);
+      }
+
+      // Embalado = porção do saldo de entrada embalada que NÃO foi transferida
+      // para tanque/tanka. Se o produto inteiro migrou para vasilhame, zera.
+      const saldoEmbaladoBruto = roundVolume(p.saldoEmbalado || 0);
+      const saldoEmbalado = roundVolume(
+        Math.max(0, saldoEmbaladoBruto - saldoTanque - saldoTanka)
+      );
+
+      return { ...p, saldoTanque, saldoTanka, saldoEmbalado };
+    });
+  }, [produtosAgregados, filteredVasilhames, filteredTankas, estoque, indStock]);
+
   const productColorMap = useMemo(() => {
     const map = {};
     let colorIndex = 0;
@@ -713,7 +908,7 @@ export default function EstoqueEnvio() {
 
   const handlePDF = () => {
     const hasData =
-      produtosAgregados.length > 0 ||
+      produtosComBreakdown.length > 0 ||
       filteredVasilhames.length > 0 ||
       filteredTankas.length > 0;
     if (!hasData) {
@@ -759,7 +954,7 @@ export default function EstoqueEnvio() {
 
       generateEstoqueEnvioPDF({
         client: hasClientFilter ? clienteFilter : "Todos os clientes",
-        products: produtosAgregados,
+        products: produtosComBreakdown,
         containers,
         containersSummary: vasilhamesResumoPorProduto,
         tanks,
@@ -810,7 +1005,7 @@ export default function EstoqueEnvio() {
   }, [clientes, isotanques, indContainers, indStock, unifiedTankas]);
 
   const canExportPdf =
-    produtosAgregados.length > 0 ||
+    produtosComBreakdown.length > 0 ||
     filteredVasilhames.length > 0 ||
     filteredTankas.length > 0;
 
@@ -873,10 +1068,10 @@ export default function EstoqueEnvio() {
             Estoque de produtos
           </h3>
           <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-            {produtosAgregados.length}
+            {produtosComBreakdown.length}
           </span>
         </div>
-        {produtosAgregados.length === 0 ? (
+        {produtosComBreakdown.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             Nenhum produto com saldo para o filtro selecionado.
           </div>
@@ -890,6 +1085,9 @@ export default function EstoqueEnvio() {
                   {!hasClientFilter && (
                     <th className="px-4 py-3 font-medium">Cliente</th>
                   )}
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Embalado</th>
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Tanque</th>
+                  <th className="px-4 py-3 font-medium text-right whitespace-nowrap">TANKA</th>
                   <th className="px-4 py-3 font-medium text-right">Saldo Atual</th>
                   <th className="px-4 py-3 font-medium text-right">Reservado</th>
                   <th className="px-4 py-3 font-medium text-right">Saldo Final</th>
@@ -899,9 +1097,9 @@ export default function EstoqueEnvio() {
               <tbody>
                 {(() => {
                   let groupIndex = 0;
-                  return produtosAgregados.map((p, i) => {
+                  return produtosComBreakdown.map((p, i) => {
                     const prevCodigo =
-                      i > 0 ? produtosAgregados[i - 1].codigo : null;
+                      i > 0 ? produtosComBreakdown[i - 1].codigo : null;
                     const isNewCodigoGroup = p.codigo !== prevCodigo;
                     if (isNewCodigoGroup && i > 0) groupIndex += 1;
 
@@ -936,6 +1134,30 @@ export default function EstoqueEnvio() {
                             {p.cliente_nome || "—"}
                           </td>
                         )}
+                        {/* Embalado: saldo dos itens recebidos como embalado */}
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge tone={p.saldoEmbalado > 0 ? "blue" : "muted"}>
+                            {p.saldoEmbalado > 0
+                              ? formatSaldo(p.saldoEmbalado, p.unidade)
+                              : "—"}
+                          </SaldoBadge>
+                        </td>
+                        {/* Tanque: quantidade em vasilhames no pátio, na unidade de entrada do produto */}
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge tone={p.saldoTanque > 0 ? "blue" : "muted"}>
+                            {p.saldoTanque > 0
+                              ? formatSaldo(p.saldoTanque, p.unidade)
+                              : "—"}
+                          </SaldoBadge>
+                        </td>
+                        {/* TANKA: quantidade armazenada nas tankas, na unidade de entrada do produto */}
+                        <td className="px-4 py-3 text-right">
+                          <SaldoBadge tone={p.saldoTanka > 0 ? "blue" : "muted"}>
+                            {p.saldoTanka > 0
+                              ? formatSaldo(p.saldoTanka, p.unidade)
+                              : "—"}
+                          </SaldoBadge>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="blue">
                             {formatNum(p.saldo, 3, { empty: "-" })}

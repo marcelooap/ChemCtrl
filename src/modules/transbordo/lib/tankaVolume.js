@@ -34,6 +34,24 @@ export function sortTransbordosChrono(transbordos = []) {
   });
 }
 
+/** @type {WeakMap<Array, Array>} */
+const sortedChronoCache = new WeakMap();
+
+/**
+ * Versão memoizada por identidade do array (somente leitura).
+ * Os cálculos de saldo chamam esta função centenas de vezes para a mesma lista;
+ * reordenar O(T log T) a cada chamada era um dos gargalos da tela de Estoque.
+ */
+function sortedChronoReadOnly(transbordos) {
+  if (!Array.isArray(transbordos) || transbordos.length === 0) return [];
+  let sorted = sortedChronoCache.get(transbordos);
+  if (!sorted) {
+    sorted = sortTransbordosChrono(transbordos);
+    sortedChronoCache.set(transbordos, sorted);
+  }
+  return sorted;
+}
+
 /** True se destino/origem se refere à tanka (por id ou código). */
 export function matchesTanka(ref, isotanqueId, tankaCodigo) {
   if (!ref) return false;
@@ -223,7 +241,7 @@ export function computeTankaLotesDisponiveis({
 }) {
   const map = new Map();
 
-  const sorted = sortTransbordosChrono(transbordos);
+  const sorted = sortedChronoReadOnly(transbordos);
 
   for (const t of sorted) {
     if (excludeTransbordoId && t.id === excludeTransbordoId) continue;
@@ -268,7 +286,7 @@ export function computeTankaLotesDisponiveis({
  */
 function collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo) {
   const meta = new Map();
-  const sorted = sortTransbordosChrono(transbordos);
+  const sorted = sortedChronoReadOnly(transbordos);
 
   for (const t of sorted) {
     const destinos = t.destinos || [];

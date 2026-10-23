@@ -59,12 +59,37 @@ function isMateriaPrimaRow(row) {
   return origemCanon(row?.origem) === 'MATERIA_PRIMA';
 }
 
-/** Quantidade recebida: em MP o campo canônico é initial_stock. */
+/** Quantidade recebida na entrada (saldo_inicial canônico). */
 function receivedQty(row) {
+  if (row?.saldo_inicial != null && row.saldo_inicial !== '') return row.saldo_inicial;
+  // Legado pré-071 (aliases / colunas antigas ainda no payload)
   if (isMateriaPrimaRow(row) && row?.initial_stock != null && row.initial_stock !== '') {
     return row.initial_stock;
   }
   return row?.quantidade;
+}
+
+/** Resolve saldo_inicial a partir do payload (aceita aliases legados). */
+function resolveSaldoInicial(payload, lote = {}) {
+  const raw =
+    payload?.saldo_inicial ??
+    payload?.quantidade ??
+    payload?.initial_stock ??
+    lote?.quantidade ??
+    lote?.saldo_inicial;
+  return Number(raw) || 0;
+}
+
+/** Resolve saldo_final a partir do payload (aceita aliases legados). */
+function resolveSaldoFinal(payload, lote = {}, fallbackInicial = 0) {
+  const raw =
+    payload?.saldo_final ??
+    payload?.saldo_atual ??
+    payload?.current_stock ??
+    lote?.saldo_final ??
+    lote?.saldo_atual;
+  if (raw != null && raw !== '') return Number(raw) || 0;
+  return fallbackInicial;
 }
 
 function loteIdentityKey(row) {
@@ -233,6 +258,33 @@ async function vasilhamesById(ids) {
   return map;
 }
 
+/** Campos do lote que vêm do vasilhame vinculado (t_vasilhames). */
+const TANK_LOTE_FIELDS = [
+  'placa', 'barril', 'volume', 'tara', 'lacres',
+  'eslinga', 'gps', 'menor_teste', 'fracionado', 'peso_bruto',
+];
+
+function tankFieldsFor(tank) {
+  const out = {};
+  for (const field of TANK_LOTE_FIELDS) out[field] = tank?.[field] ?? null;
+  return out;
+}
+
+/**
+ * Preenche os campos de tanque do 1º lote a partir de um mapa de vasilhames
+ * já carregado. Permite listar estoque em paralelo com vasilhames
+ * (`skipTankHydration: true`) e hidratar depois, sem query extra.
+ */
+export function hydrateEstoqueTankFields(items, tanksById) {
+  if (!(tanksById instanceof Map) || tanksById.size === 0) return items || [];
+  return (items || []).map((item) => {
+    const tank = item?.vasilhame_id ? tanksById.get(item.vasilhame_id) : null;
+    const lote = item?.lotes?.[0];
+    if (!tank || !lote) return item;
+    return { ...item, lotes: [{ ...lote, ...tankFieldsFor(tank) }, ...item.lotes.slice(1)] };
+  });
+}
+
 function loteFromRow(row, tank) {
   return {
     produto_id: row.produto_id,
@@ -242,8 +294,6 @@ function loteFromRow(row, tank) {
     lote: row.lote,
     densidade: row.densidade,
     quantidade: receivedQty(row),
-    quantidade_nf: row.quantidade_nf,
-    quantidade_declarada: row.quantidade_declarada,
     unidade_medida: row.unidade_medida,
     data_fabricacao: row.data_fabricacao,
     data_validade: row.data_validade,
@@ -259,16 +309,7 @@ function loteFromRow(row, tank) {
         ? row.legacy_mp_id_text || null
         : null,
     vasilhame_id: row.vasilhame_id || null,
-    placa: tank?.placa ?? null,
-    barril: tank?.barril ?? null,
-    volume: tank?.volume ?? null,
-    tara: tank?.tara ?? null,
-    lacres: tank?.lacres ?? null,
-    eslinga: tank?.eslinga ?? null,
-    gps: tank?.gps ?? null,
-    menor_teste: tank?.menor_teste ?? null,
-    fracionado: tank?.fracionado ?? null,
-    peso_bruto: tank?.peso_bruto ?? null,
+    ...tankFieldsFor(tank),
   };
 }
 
@@ -291,16 +332,18 @@ function toEstoque(row, tanks) {
     densidade: row.densidade,
     data_fabricacao: row.data_fabricacao,
     data_validade: row.data_validade,
-    quantidade: row.quantidade,
+    saldo_inicial: row.saldo_inicial,
     unidade_medida: row.unidade_medida,
-    saldo_atual: row.saldo_atual,
+    saldo_final: row.saldo_final,
+    expedido: row.expedido,
+    // Aliases legados — consumidores ainda não migrados
+    quantidade: row.saldo_inicial,
+    saldo_atual: row.saldo_final,
     preco_unitario: row.preco_unitario,
     custo_total: row.custo_total,
     embalado: row.embalado,
     peso_liquido: row.peso_liquido,
     quantidade_embalagens: row.quantidade_embalagens,
-    quantidade_nf: row.quantidade_nf,
-    quantidade_declarada: row.quantidade_declarada,
     tipo_recebimento: row.tipo_recebimento,
     tipo_embalagem: row.tipo_embalagem,
     vasilhame_id: row.vasilhame_id,
@@ -354,11 +397,14 @@ function toEntrada(lines, tanks) {
     densidade: first.densidade,
     data_fabricacao: first.data_fabricacao,
     data_validade: first.data_validade,
+    saldo_inicial: sumQuantidade,
     quantidade: sumQuantidade,
     unidade_medida: first.unidade_medida,
     preco_unitario: first.preco_unitario,
     custo_total: sum('custo_total'),
-    saldo_atual: sum('saldo_atual'),
+    saldo_final: sum('saldo_final'),
+    saldo_atual: sum('saldo_final'),
+    expedido: sum('expedido'),
     embalado: first.embalado,
     peso_liquido: first.peso_liquido,
     quantidade_embalagens: first.quantidade_embalagens,
@@ -430,17 +476,14 @@ function rowFromEstoquePayload(payload, ids) {
     data_fabricacao: nullIfEmpty(lote.data_fabricacao ?? payload.data_fabricacao),
     data_validade: nullIfEmpty(lote.data_validade ?? payload.data_validade),
     fornecedor: nullIfEmpty(payload.fornecedor),
-    quantidade: Number(payload.quantidade ?? lote.quantidade) || 0,
-    initial_stock: Number(payload.quantidade ?? lote.quantidade) || 0,
+    saldo_inicial: resolveSaldoInicial(payload, lote),
     unidade_medida: lote.unidade_medida || payload.unidade_medida || 'kg',
     preco_unitario: payload.preco_unitario ?? lote.preco_unitario ?? null,
     custo_total: payload.custo_total ?? null,
-    saldo_atual: Number(payload.saldo_atual ?? payload.quantidade ?? lote.quantidade) || 0,
+    saldo_final: resolveSaldoFinal(payload, lote, resolveSaldoInicial(payload, lote)),
     embalado: Boolean(lote.embalado ?? payload.embalado),
     peso_liquido: lote.peso_liquido ?? payload.peso_liquido ?? null,
     quantidade_embalagens: lote.quantidade_embalagens ?? payload.quantidade_embalagens ?? null,
-    quantidade_nf: lote.quantidade_nf ?? null,
-    quantidade_declarada: lote.quantidade_declarada ?? null,
     tipo_recebimento: nullIfEmpty(lote.tipo_recebimento),
     tipo_embalagem: nullIfEmpty(lote.tipo_embalagem),
     vasilhame_id: nullIfEmpty(lote.vasilhame_id || lote.vasilhame_existente_id),
@@ -762,13 +805,32 @@ export function createEstoqueEntity() {
       const copy = [
         'produto_id', 'produto_nome', 'produto_codigo', 'cliente_id', 'cliente_nome',
         'nota_fiscal', 'nota_fiscal_troca', 'lote', 'densidade', 'data_fabricacao',
-        'data_validade', 'quantidade', 'unidade_medida', 'preco_unitario', 'custo_total',
-        'saldo_atual', 'embalado', 'peso_liquido', 'quantidade_embalagens', 'status_wms',
+        'data_validade', 'saldo_inicial', 'unidade_medida', 'preco_unitario', 'custo_total',
+        'saldo_final', 'embalado', 'peso_liquido', 'quantidade_embalagens', 'status_wms',
         'grupo_entrada', 'codigo_estoque',
       ];
       for (const key of copy) {
         if (!Object.prototype.hasOwnProperty.call(payload, key)) continue;
         patch[key] = key === 'densidade' ? densidadeForDb(payload[key]) : payload[key];
+      }
+      // Aliases legados → colunas canônicas
+      if (
+        !Object.prototype.hasOwnProperty.call(patch, 'saldo_inicial') &&
+        (Object.prototype.hasOwnProperty.call(payload, 'quantidade') ||
+          Object.prototype.hasOwnProperty.call(payload, 'initial_stock'))
+      ) {
+        patch.saldo_inicial = resolveSaldoInicial(payload, lote || {});
+      }
+      if (
+        !Object.prototype.hasOwnProperty.call(patch, 'saldo_final') &&
+        (Object.prototype.hasOwnProperty.call(payload, 'saldo_atual') ||
+          Object.prototype.hasOwnProperty.call(payload, 'current_stock'))
+      ) {
+        patch.saldo_final = resolveSaldoFinal(
+          payload,
+          lote || {},
+          patch.saldo_inicial ?? resolveSaldoInicial(payload, lote || {})
+        );
       }
       Object.assign(patch, headerPatch(payload));
       if (lote) {
@@ -786,10 +848,8 @@ export function createEstoqueEntity() {
       for (const key of ['produto_id', 'cliente_id', 'vasilhame_id']) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) patch[key] = nullIfEmpty(patch[key]);
       }
-      // ARMAZENAGEM: initial_stock é snapshot da quantidade recebida na linha.
-      if (Object.prototype.hasOwnProperty.call(patch, 'quantidade')) {
-        patch.initial_stock = patch.quantidade;
-      }
+      // Nunca gravar coluna gerada
+      delete patch.expedido;
       assertConfigured('estoque.update');
       const data = await updateByLegacyId(id, patch, 'estoque.update');
       if (!data) return null;
@@ -860,8 +920,8 @@ function toMateriaPrima(row) {
     supplier: row.fornecedor,
     manufacture_date: row.data_fabricacao,
     expiry_date: row.data_validade,
-    initial_stock: row.initial_stock,
-    current_stock: row.saldo_atual,
+    initial_stock: row.saldo_inicial,
+    current_stock: row.saldo_final,
     unit: row.unidade_medida,
     unit_price: row.preco_unitario,
     density: densityNumber(row.densidade),
@@ -891,11 +951,10 @@ function rowFromMp(payload, ids) {
     data_fabricacao: nullIfEmpty(payload.manufacture_date),
     data_validade: nullIfEmpty(payload.expiry_date),
     fornecedor: nullIfEmpty(payload.supplier),
-    quantidade: Number(payload.initial_stock ?? payload.current_stock) || 0,
-    initial_stock: payload.initial_stock ?? null,
+    saldo_inicial: Number(payload.initial_stock ?? payload.current_stock) || 0,
     unidade_medida: payload.unit || 'kg',
     preco_unitario: payload.unit_price ?? null,
-    saldo_atual: Number(payload.current_stock ?? payload.initial_stock) || 0,
+    saldo_final: Number(payload.current_stock ?? payload.initial_stock) || 0,
     status_wms: Boolean(payload.status_wms),
     observations: nullIfEmpty(payload.observations),
     tank_storage: payload.tank_storage ?? null,
@@ -925,7 +984,8 @@ const MP_ORDER = {
   updated_date: 'updated_at',
   entry_date: 'data',
   entry_id: 'id_entrada',
-  current_stock: 'saldo_atual',
+  current_stock: 'saldo_final',
+  initial_stock: 'saldo_inicial',
   mp_name: 'produto_nome',
   lot: 'lote',
   client: 'cliente_nome',
@@ -963,8 +1023,8 @@ async function syncEntradaMirrorsFromMp(canonical, patch) {
   for (const key of [
     'produto_nome', 'produto_codigo', 'cliente_nome', 'nota_fiscal', 'lote',
     'densidade', 'data_fabricacao', 'data_validade', 'fornecedor',
-    'quantidade', 'initial_stock', 'unidade_medida', 'preco_unitario',
-    'saldo_atual', 'status_wms',
+    'saldo_inicial', 'unidade_medida', 'preco_unitario',
+    'saldo_final', 'status_wms',
   ]) {
     if (Object.prototype.hasOwnProperty.call(patch, key)) mirrorPatch[key] = patch[key];
   }
@@ -1056,15 +1116,12 @@ export function createMateriaPrimaEntity() {
       if (payload.expiry_date != null) patch.data_validade = nullIfEmpty(payload.expiry_date);
       if (payload.supplier != null) patch.fornecedor = nullIfEmpty(payload.supplier);
       if (payload.initial_stock != null) {
-        patch.initial_stock = payload.initial_stock;
-        // quantidade deve sempre refletir o estoque inicial registrado.
-        // A tela de Entradas (Transbordo) lê este campo para exibir a quantidade;
-        // sem essa atribuição, uma edição em Estoque MP não aparece em Entradas.
-        patch.quantidade = payload.initial_stock;
+        // saldo_inicial é o estoque recebido; Entradas lê via receivedQty/saldo_inicial.
+        patch.saldo_inicial = payload.initial_stock;
       }
       if (payload.unit != null) patch.unidade_medida = payload.unit || 'kg';
       if (payload.unit_price != null) patch.preco_unitario = payload.unit_price;
-      if (payload.current_stock != null) patch.saldo_atual = payload.current_stock;
+      if (payload.current_stock != null) patch.saldo_final = payload.current_stock;
       if (payload.status_wms != null) patch.status_wms = Boolean(payload.status_wms);
       if (payload.observations != null) patch.observations = nullIfEmpty(payload.observations);
       if (payload.tank_storage != null) patch.tank_storage = payload.tank_storage;

@@ -59,7 +59,9 @@ export function buildGranelPrefillFromPayload(granelPayload) {
     produto_codigo: lote.produto_codigo || granelPayload.produto_codigo,
     lote: lote.lote || "",
     densidade: lote.densidade || granelPayload.densidade,
+    saldo_inicial: lote.quantidade || 0,
     quantidade: lote.quantidade || 0,
+    saldo_final: lote.quantidade || 0,
     saldo_atual: lote.quantidade || 0,
     lotes: [
       {

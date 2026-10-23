@@ -78,6 +78,12 @@ async function resolvePhysicalTable(preferredName) {
   const request = (async () => {
     assertConfigured(`${preferredName}.resolve`);
     const candidates = TABLE_FALLBACKS[preferredName] || [preferredName];
+    // Sem fallback não há o que resolver: evita um round-trip de sondagem
+    // por tabela na primeira consulta (a query real já reporta erro se faltar).
+    if (candidates.length === 1) {
+      physicalTableCache.set(preferredName, candidates[0]);
+      return candidates[0];
+    }
     for (const name of candidates) {
       // Não assume coluna `id`: t_checklist_expedicao_config usa cliente_id como chave.
       const { error } = await chemflowSupabase

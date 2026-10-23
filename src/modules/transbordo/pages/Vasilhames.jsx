@@ -50,6 +50,7 @@ import {
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromVasilhame,
+  isVasilhameExpedido,
   isVasilhameLinkedToEstoque,
   findTransbordosForVasilhame,
   isEstoqueEmbalado,
@@ -330,6 +331,7 @@ export default function Vasilhames() {
       setEstoqueFilterItem(null);
       return;
     }
+    setStatusFilter("No Pátio");
     let cancelled = false;
     entities.estoque
       .list()
@@ -491,6 +493,9 @@ export default function Vasilhames() {
 
     if (estoqueFilterId) {
       if (!estoqueFilterItem) return false;
+      // Saldo no pátio: tanque já expedido não compõe o estoque atual,
+      // mesmo que o lote do cadastro tenha sido alterado depois.
+      if (isVasilhameExpedido(v)) return false;
       if (
         !isVasilhameLinkedToEstoque(v, estoqueFilterItem, {
           transbordos,

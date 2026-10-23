@@ -12,6 +12,12 @@ import {
 import { entities } from "@transbordo/services/entities";
 import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
 import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
+import {
+  EMPTY_PLACA_KEY,
+  getTransbordoIndex,
+  getVasilhameIndex,
+  placaBarrilKey,
+} from "@transbordo/lib/transbordoIndexes";
 
 /**
  * Quantidade original do registro de estoque (unidade operacional).
@@ -24,7 +30,7 @@ export function getEstoqueQuantidade(estoqueItem) {
   if (isUnidadeVolumeEntrada(getEstoqueUnidadeEntrada(estoqueItem))) {
     const declaredL = loteToLitros(lote);
     const umOp = normalizeUnidadeEntrada(estoqueItem?.unidade_medida);
-    const qtd = Number(estoqueItem?.quantidade) || 0;
+    const qtd = Number(estoqueItem?.saldo_inicial ?? estoqueItem?.quantidade) || 0;
 
     // Já migrado / persistido em litros. Se a coluna foi inteira, recupera
     // a fração ainda presente no lote da entrada (ex.: 19.849 → 19.848,5).
@@ -47,7 +53,7 @@ export function getEstoqueQuantidade(estoqueItem) {
     if (embalado && qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
   }
 
-  const qtd = Number(estoqueItem?.quantidade) || 0;
+  const qtd = Number(estoqueItem?.saldo_inicial ?? estoqueItem?.quantidade) || 0;
   if (qtd > 0) return quantidadeComDecimalDoLote(lote, qtd);
 
   if (lote) {
@@ -210,7 +216,10 @@ export function getEstoqueQuantidadeEntrada(estoqueItem) {
  * Com entrada em L/gal o saldo operacional já está em litros.
  */
 export function getEstoqueSaldoEntrada(estoqueItem) {
-  return valorNaUnidadeEntrada(estoqueItem, Number(estoqueItem?.saldo_atual) || 0);
+  return valorNaUnidadeEntrada(
+    estoqueItem,
+    Number(estoqueItem?.saldo_final ?? estoqueItem?.saldo_atual) || 0
+  );
 }
 
 /**
@@ -273,23 +282,29 @@ function origemMatchesEstoque(origem, estoqueItem) {
   return false;
 }
 
-function placaBarrilKey(placa, barril) {
-  return `${String(placa || "").trim().toUpperCase()}||${String(barril || "")
-    .trim()
-    .toUpperCase()}`;
+function addInListOrder(target, candidates, order) {
+  if (candidates.size === 0) return;
+  const sorted =
+    candidates.size === 1
+      ? [...candidates]
+      : [...candidates].sort((a, b) => order.get(a) - order.get(b));
+  for (const t of sorted) if (!target.has(t.id)) target.set(t.id, t);
 }
 
-/** Transbordos relacionados a um vasilhame (id, código OP ou placa/barril). */
+/**
+ * Transbordos relacionados a um vasilhame (id, código OP ou placa/barril).
+ * Usa índices memoizados — custo O(k) por chamada em vez de O(T).
+ * Ordem preservada: vínculo direto (transbordo_id), depois casados por código
+ * OP e por fim por placa/barril — cada grupo na ordem da lista original.
+ */
 export function findTransbordosForVasilhame(vasilhame, transbordos = []) {
   if (!vasilhame) return [];
+  const index = getTransbordoIndex(transbordos);
   const byId = new Map();
-  const add = (t) => {
-    if (t?.id) byId.set(t.id, t);
-  };
 
   if (vasilhame.transbordo_id) {
-    const t = (transbordos || []).find((x) => x.id === vasilhame.transbordo_id);
-    if (t) add(t);
+    const t = index.byId.get(vasilhame.transbordo_id);
+    if (t) byId.set(t.id, t);
   }
 
   const codigos = new Set(
@@ -298,18 +313,16 @@ export function findTransbordosForVasilhame(vasilhame, transbordos = []) {
       ...((vasilhame.composicao || []).map((c) => c.transbordo_codigo) || []),
     ].filter(Boolean)
   );
-  (transbordos || []).forEach((t) => {
-    if (codigos.has(t.codigo_transbordo)) add(t);
-  });
+  const byCodigo = new Set();
+  for (const codigo of codigos) {
+    for (const t of index.byCodigo.get(codigo) || []) byCodigo.add(t);
+  }
+  addInListOrder(byId, byCodigo, index.order);
 
   const key = placaBarrilKey(vasilhame.placa, vasilhame.barril);
-  if (key !== "||") {
-    (transbordos || []).forEach((t) => {
-      const hit = (t.destinos || []).some(
-        (d) => placaBarrilKey(d.placa || d.tanka_codigo, d.barril) === key
-      );
-      if (hit) add(t);
-    });
+  if (key !== EMPTY_PLACA_KEY) {
+    const byPlaca = new Set(index.byDestinoPlacaKey.get(key) || []);
+    addInListOrder(byId, byPlaca, index.order);
   }
 
   return [...byId.values()];
@@ -340,8 +353,9 @@ function collectEmbalagemKeysFromDestino(destino, transbordoId, vasilhames = [])
   if (pb !== "||") keys.add(`placa:${pb}`);
 
   if (transbordoId) {
-    (vasilhames || []).forEach((v) => {
-      if (v.transbordo_id !== transbordoId) return;
+    const doTransbordo =
+      getVasilhameIndex(vasilhames).byTransbordoId.get(transbordoId) || [];
+    doTransbordo.forEach((v) => {
       const vPb = placaBarrilKey(v.placa, v.barril);
       if (pb !== "||" && vPb === pb) {
         if (v.id) keys.add(`vasilhame:${v.id}`);
@@ -377,7 +391,7 @@ function origemMatchesEmbalagemKeys(origem, keys, vasilhames = []) {
     if (origem.entrada_id && keys.has(`vasilhame:${origem.entrada_id}`)) {
       return true;
     }
-    const v = (vasilhames || []).find((x) => x.id === origem.entrada_id);
+    const v = getVasilhameIndex(vasilhames).byId.get(origem.entrada_id);
     if (v) {
       const pb = placaBarrilKey(v.placa, v.barril);
       if (pb !== "||" && keys.has(`placa:${pb}`)) return true;
@@ -407,7 +421,7 @@ function labelOrigemTransbordo(origem, vasilhames = []) {
     return origem.tanka_codigo || "Tanka";
   }
   if (tipo === "vasilhame" && origem.entrada_id) {
-    const v = (vasilhames || []).find((x) => x.id === origem.entrada_id);
+    const v = getVasilhameIndex(vasilhames).byId.get(origem.entrada_id);
     if (v) {
       return [v.placa, v.barril].filter(Boolean).join(" / ") || v.codigo || "Vasilhame";
     }
@@ -933,10 +947,18 @@ export function mapEstoqueListWithSaldo(
   vasilhames = []
 ) {
   const ctx = createEstoqueSaldoContext(transbordos, saidas, vasilhames);
-  return (estoqueList || []).map((item) => ({
-    ...item,
-    saldo_atual: computeEstoqueSaldo(item, transbordos, saidas, vasilhames, ctx),
-  }));
+  return (estoqueList || []).map((item) => {
+    const saldo_final = computeEstoqueSaldo(item, transbordos, saidas, vasilhames, ctx);
+    return {
+      ...item,
+      saldo_final,
+      saldo_atual: saldo_final,
+      expedido: Math.max(
+        0,
+        (Number(item?.saldo_inicial ?? item?.quantidade) || 0) - saldo_final
+      ),
+    };
+  });
 }
 
 export function calcSaidasConvencional(
@@ -950,8 +972,7 @@ export function calcSaidasConvencional(
   if (!id) return 0;
 
   const vasilhameById =
-    saldoCtx?.vasilhameById ??
-    new Map((vasilhames || []).map((v) => [v.id, v]));
+    saldoCtx?.vasilhameById ?? getVasilhameIndex(vasilhames).byId;
 
   return (saidas || []).reduce((sum, saida) => {
     if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return sum;
@@ -1038,17 +1059,16 @@ export function resolveVolumeVasilhameParaBaixa(vasilhame, transbordos = []) {
 /** Localiza o vasilhame gerado/associado a um destino de OP. */
 function resolveVasilhameFromDestino(destino, transbordo, vasilhames = []) {
   if (!destino) return null;
-  const list = vasilhames || [];
+  const index = getVasilhameIndex(vasilhames);
 
   if (destino.vasilhame_existente_id) {
-    const byId = list.find((v) => v.id === destino.vasilhame_existente_id);
+    const byId = index.byId.get(destino.vasilhame_existente_id);
     if (byId) return byId;
   }
 
   const key = placaBarrilKey(destino.placa || destino.tanka_codigo, destino.barril);
-  if (key !== "||") {
-    const byPlaca = list.find((v) => {
-      if (placaBarrilKey(v.placa, v.barril) !== key) return false;
+  if (key !== EMPTY_PLACA_KEY) {
+    const byPlaca = (index.byPlacaKey.get(key) || []).find((v) => {
       if (transbordo?.id && v.transbordo_id && v.transbordo_id !== transbordo.id) {
         return false;
       }
@@ -1059,10 +1079,8 @@ function resolveVasilhameFromDestino(destino, transbordo, vasilhames = []) {
 
   if (transbordo?.id) {
     return (
-      list.find(
-        (v) =>
-          v.transbordo_id === transbordo.id &&
-          (key === "||" || placaBarrilKey(v.placa, v.barril) === key)
+      (index.byTransbordoId.get(transbordo.id) || []).find(
+        (v) => key === EMPTY_PLACA_KEY || placaBarrilKey(v.placa, v.barril) === key
       ) || null
     );
   }
@@ -1236,6 +1254,45 @@ export function calcVasilhamesExpedidosPatio(
         // Destinos sem volume informado: se há expedido, conta a origem integral
         total += origemVol;
       }
+    }
+
+    // Produto que passou por tanka (ou outro vasilhame) antes do envase.
+    // A baixa usa o lote do transbordo, não o lote atual do tanque: um
+    // lote_manual (ex.: OF-1417-26 renomeado para OS-1831-26) não pode
+    // esconder o volume já expedido.
+    const chainRows = listHistoricoTransbordosEncadeados(
+      estoqueItem,
+      transbordos,
+      vasilhames
+    );
+    const fatias = indexFatiasEstoquePorVasilhame(
+      chainRows,
+      transbordos,
+      vasilhames
+    );
+    const vasilhameById = getVasilhameIndex(vasilhames).byId;
+    for (const [vasId, vol] of fatias) {
+      if (!(vol > 0) || countedDirect.has(vasId)) continue;
+      const v = vasilhameById.get(vasId);
+      if (!v || !isVasilhameExpedido(v)) continue;
+      if (fiscalVasilhameIds.has(v.id)) {
+        const weights = getEstoqueWeightsForVasilhame(
+          v,
+          transbordos,
+          estoqueItem
+        );
+        let w = Number(weights.get(id)) || 0;
+        if (w <= 0) {
+          for (const [k, weight] of weights) {
+            if (!idsEqual(k, id)) continue;
+            w = Number(weight) || 0;
+            break;
+          }
+        }
+        // Saída fiscal já debita quando o peso aponta para este estoque.
+        if (w > 0) continue;
+      }
+      total += vol;
     }
 
     // Entrada direta como vasilhame (sem OP)
@@ -1534,14 +1591,39 @@ function collectVasilhameKeys(vasilhame) {
 }
 
 /**
+ * Volume deste estoque em cada vasilhame, pela fatia FIFO/cadeia.
+ * Ignora o lote reescrito no cadastro do tanque.
+ */
+function indexFatiasEstoquePorVasilhame(rows, transbordos = [], vasilhames = []) {
+  const map = new Map();
+  const transbordoById = getTransbordoIndex(transbordos).byId;
+  for (const row of rows || []) {
+    const destino = row?.rawDestino;
+    if (!destino || destino.tipo_embalagem === "Tankagem") continue;
+    const vol = Number(row.volume) || 0;
+    if (vol <= 0) continue;
+    const transbordo = transbordoById.get(row.transbordoId) || {
+      id: row.transbordoId,
+    };
+    const vasilhame = resolveVasilhameFromDestino(destino, transbordo, vasilhames);
+    if (!vasilhame?.id) continue;
+    map.set(vasilhame.id, (map.get(vasilhame.id) || 0) + vol);
+  }
+  return map;
+}
+
+/**
  * Quantidade deste registro de estoque ainda presente em um vasilhame No Pátio.
- * Prioridade: composicao.estoque_id → lote lastreado (FIFO/cadeia) → vínculo OP/produto.
+ * Prioridade: composicao.estoque_id → fatia FIFO/cadeia → vínculo OP/produto.
+ * A fatia da cadeia prevalece sobre o volume cheio do tanque quando o
+ * vasilhame mistura outros lotes.
  */
 function resolveQuantidadeEstoqueNoVasilhame(
   estoqueItem,
   vasilhame,
   transbordos,
-  trackedKeys
+  trackedKeys,
+  fatiaPorVasilhame = null
 ) {
   if (!estoqueItem?.id || !vasilhame) return 0;
 
@@ -1564,6 +1646,9 @@ function resolveQuantidadeEstoqueNoVasilhame(
     )
   );
   if (byEstoqueId > 0) return byEstoqueId;
+
+  const fatia = Number(fatiaPorVasilhame?.get(vasilhame.id)) || 0;
+  if (fatia > 0) return roundOp(estoqueItem, fatia);
 
   const vKeys = collectVasilhameKeys(vasilhame);
   const linkedByTrack = [...vKeys].some((k) => trackedKeys.has(k));
@@ -1593,6 +1678,10 @@ function resolveQuantidadeEstoqueNoVasilhame(
     linkedByTrack || linkedDirect || share > 0 || linkedByOp;
 
   if (linked) {
+    // O rastro só diz que o tanque participou da cadeia. Sem fatia nem
+    // participação, o volume cheio inclui lotes de outros estoques.
+    if (linkedByTrack && share <= 0 && !linkedDirect && !linkedByOp) return 0;
+
     const qtdTotal = resolveQuantidadeVasilhameParaBaixa(
       estoqueItem,
       vasilhame,
@@ -1610,10 +1699,19 @@ function resolveQuantidadeEstoqueNoVasilhame(
 /**
  * Quantidades ainda no pátio, por tipo de armazenamento, na UOM da entrada.
  * Todo vínculo é lastreado pelo id do registro de estoque (FIFO + cadeia + composicao.estoque_id).
+ *
+ * @param {object} estoqueItem
+ * @param {object} deps
+ * @param {Array} [deps.transbordos]
+ * @param {Array} [deps.vasilhames]
+ * @param {Array} [deps.saidas]
+ * @param {number} [deps.saldo] Saldo operacional já calculado para o item
+ *   (evita recomputar `computeEstoqueSaldo` quando a tela já o possui).
+ * @param {object} [deps.saldoCtx] Contexto de `createEstoqueSaldoContext`.
  */
 export function computeEstoqueQuantidadesPorLocal(
   estoqueItem,
-  { transbordos = [], vasilhames = [], saidas = [] } = {}
+  { transbordos = [], vasilhames = [], saidas = [], saldo, saldoCtx = null } = {}
 ) {
   const empty = {
     vasilhames: 0,
@@ -1638,6 +1736,11 @@ export function computeEstoqueQuantidadesPorLocal(
       vasilhames
     ).forEach((k) => trackedKeys.add(k));
   }
+  const fatias = indexFatiasEstoquePorVasilhame(
+    [...fifoRows, ...chainRows],
+    transbordos,
+    vasilhames
+  );
 
   let qtyVasilhamesOp = 0;
   let qtyTankasOp = 0;
@@ -1653,7 +1756,8 @@ export function computeEstoqueQuantidadesPorLocal(
       estoqueItem,
       v,
       transbordos,
-      trackedKeys
+      trackedKeys,
+      fatias
     );
     if (qtd <= 0) continue;
 
@@ -1669,11 +1773,12 @@ export function computeEstoqueQuantidadesPorLocal(
     }
   }
 
-  // Garante fatias FIFO cujo destino ainda não entrou pelo vínculo do vasilhame
-  for (const row of fifoRows) {
+  // Garante fatias FIFO/cadeia cujo destino ainda não entrou pelo vínculo do vasilhame
+  const transbordoById = getTransbordoIndex(transbordos).byId;
+  for (const row of [...fifoRows, ...chainRows]) {
     const d = row?.rawDestino;
     if (!d || d.tipo_embalagem === "Tankagem") continue;
-    const t = (transbordos || []).find((x) => x.id === row.transbordoId) || {
+    const t = transbordoById.get(row.transbordoId) || {
       id: row.transbordoId,
     };
     const v = resolveVasilhameFromDestino(d, t, vasilhames);
@@ -1730,15 +1835,34 @@ export function computeEstoqueQuantidadesPorLocal(
     qtyTankasOp += litrosParaQuantidadeOperacional(estoqueItem, litros);
   }
 
-  if (isEstoqueEmbalado(estoqueItem)) {
-    const saldo = computeEstoqueSaldo(
-      estoqueItem,
-      transbordos,
-      saidas,
-      vasilhames
-    );
-    const jaAlocado = qtyVasilhamesOp + qtyTankasOp;
-    qtyPatioOp = Math.max(0, roundOp(estoqueItem, saldo - jaAlocado));
+  const saldoOp = Number.isFinite(saldo)
+    ? saldo
+    : computeEstoqueSaldo(estoqueItem, transbordos, saidas, vasilhames, saldoCtx);
+  const gap = Math.max(
+    0,
+    roundOp(estoqueItem, saldoOp - (qtyVasilhamesOp + qtyTankasOp))
+  );
+  if (gap > 0) {
+    const tipoRecebimento =
+      estoqueItem?.tipo_recebimento ||
+      estoqueItem?.lotes?.[0]?.tipo_recebimento ||
+      "";
+    const teveEnvase =
+      fifoRows.length > 0 ||
+      chainRows.length > 0 ||
+      tankaKeys.size > 0;
+
+    if (isEstoqueEmbalado(estoqueItem)) {
+      // Embalado fora de vasilhame / bombona no pátio
+      qtyPatioOp = gap;
+    } else if (tipoRecebimento === "granel" && !teveEnvase) {
+      // Granel recebido e ainda sem OP de envase
+      qtyPatioOp = gap;
+    } else {
+      // Já passou por envase (TANKA → vasilhame/tanque): o saldo restante
+      // está nos vasilhames no pátio, não na isotanque TANKA.
+      qtyVasilhamesOp += gap;
+    }
   }
 
   qtyVasilhamesOp = roundOp(estoqueItem, qtyVasilhamesOp);
@@ -1778,12 +1902,19 @@ export function isVasilhameLinkedToEstoque(
     ).forEach((k) => trackedKeys.add(k));
   }
 
+  const fatias = indexFatiasEstoquePorVasilhame(
+    [...fifoRows, ...chainRows],
+    transbordos,
+    vasilhames
+  );
+
   return (
     resolveQuantidadeEstoqueNoVasilhame(
       estoqueItem,
       vasilhame,
       transbordos,
-      trackedKeys
+      trackedKeys,
+      fatias
     ) > 0
   );
 }
@@ -1839,29 +1970,37 @@ export async function syncEstoqueSaldos(estoqueIds) {
 
   const updates = [];
   const withSaldo = targets.map((item) => {
-    const quantidade = getEstoqueQuantidade(item);
+    const saldo_inicial = getEstoqueQuantidade(item);
     const unidade_medida = getEstoqueUnidade(item);
-    const saldo_atual = computeEstoqueSaldo(
+    const saldo_final = computeEstoqueSaldo(
       item,
       allTransbordos,
       allSaidas,
       allVasilhames
     );
-    const patch = { id: item.id, saldo_atual };
-    if ((Number(item.quantidade) || 0) <= 0 && quantidade > 0) {
-      patch.quantidade = quantidade;
+    const patch = { id: item.id, saldo_final };
+    if ((Number(item.saldo_inicial ?? item.quantidade) || 0) <= 0 && saldo_inicial > 0) {
+      patch.saldo_inicial = saldo_inicial;
     }
     if (item.unidade_medida !== unidade_medida) {
       patch.unidade_medida = unidade_medida;
     }
     if (
-      Math.abs((item.saldo_atual || 0) - saldo_atual) > 0.001 ||
-      patch.quantidade != null ||
+      Math.abs((Number(item.saldo_final ?? item.saldo_atual) || 0) - saldo_final) > 0.001 ||
+      patch.saldo_inicial != null ||
       patch.unidade_medida != null
     ) {
       updates.push(patch);
     }
-    return { ...item, quantidade, unidade_medida, saldo_atual };
+    return {
+      ...item,
+      saldo_inicial,
+      quantidade: saldo_inicial,
+      unidade_medida,
+      saldo_final,
+      saldo_atual: saldo_final,
+      expedido: Math.max(0, saldo_inicial - saldo_final),
+    };
   });
 
   if (updates.length > 0) {

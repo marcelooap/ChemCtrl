@@ -153,6 +153,7 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
   let produto = "";
   let cliente = "";
   let lote = "";
+  let densidade = 0;
 
   for (const s of stockEntries || []) {
     if (!s?.tank_storage) continue;
@@ -167,6 +168,8 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
           if (s.mp_name) produto = s.mp_name;
           if (s.client) cliente = s.client;
           if (s.lot) lote = s.lot;
+          const dens = parseDensity(s.density ?? s.densidade);
+          if (dens > 0) densidade = dens;
         }
       }
     } else if (matches(s.tank_name) && s.tank_volume) {
@@ -177,6 +180,8 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
         if (s.mp_name) produto = s.mp_name;
         if (s.client) cliente = s.client;
         if (s.lot) lote = s.lot;
+        const dens = parseDensity(s.density ?? s.densidade);
+        if (dens > 0) densidade = dens;
       }
     }
   }
@@ -188,7 +193,7 @@ export function computeIndTankState(tankName, stockEntries = [], containers = []
     produto,
     cliente,
     lote,
-    densidade: "",
+    densidade: densidade > 0 ? densidade : "",
     lotes: [
       {
         lote: lote || "—",
@@ -439,6 +444,7 @@ export function mergeTankasUnificadas({
         cliente_nome =
           indState.cliente || indCadastroCliente || row.clienteTb || "";
         lote = indState.lote || indCadastroLote || "";
+        if (indState.densidade) densidade = indState.densidade;
         volumeSource = "ind_stock";
       } else {
         volumeAtual = 0;

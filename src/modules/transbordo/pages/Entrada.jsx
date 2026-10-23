@@ -424,10 +424,12 @@ export default function Entrada() {
         densidade: lote.densidade,
         data_fabricacao: nullIfEmpty(lote.data_fabricacao),
         data_validade: nullIfEmpty(lote.data_validade),
+        saldo_inicial: loteQtd,
         quantidade: loteQtd,
         unidade_medida: loteUnidadeEstoque(lote),
-        // saldo_atual recalculado por syncEstoqueSaldos após persistir
-        saldo_atual: prev?.saldo_atual ?? loteQtd,
+        // saldo_final recalculado por syncEstoqueSaldos após persistir
+        saldo_final: prev?.saldo_final ?? prev?.saldo_atual ?? loteQtd,
+        saldo_atual: prev?.saldo_final ?? prev?.saldo_atual ?? loteQtd,
         preco_unitario: lotePreco,
         custo_total: loteQtd * lotePreco,
         embalado: lote.embalado || false,

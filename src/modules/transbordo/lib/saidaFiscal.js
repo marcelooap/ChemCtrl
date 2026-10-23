@@ -193,7 +193,7 @@ export async function applySaidaFiscalToggle(
     }
     if (item.tipo === "embalado" && item.entrada_id) {
       const e = estoqueById.get(item.entrada_id);
-      const estoqueAtual = e?.saldo_atual || 0;
+      const estoqueAtual = e?.saldo_final ?? e?.saldo_atual ?? 0;
       const qtdBaixa =
         item.quantidade_carregada != null && item.quantidade_carregada !== ""
           ? Number(item.quantidade_carregada) || 0
@@ -482,7 +482,7 @@ function sumVolByVasilhame(itens = []) {
 /**
  * Após editar/salvar uma saída já validada (fiscal):
  * - ajusta volumes dos vasilhames Transbordo (itens removidos/alterados)
- * - recalcula saldo_atual do estoque embalado + origens convencionais
+ * - recalcula saldo_final do estoque embalado + origens convencionais
  *
  * Não altera containers nem estoque da Industrialização.
  */

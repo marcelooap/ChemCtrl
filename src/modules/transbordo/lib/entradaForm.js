@@ -208,10 +208,12 @@ export function buildEntradaPayload({
     densidade: firstLote.densidade,
     data_fabricacao: firstLote.data_fabricacao,
     data_validade: firstLote.data_validade,
+    saldo_inicial: qtdKgEfetiva,
     quantidade: qtdKgEfetiva,
     unidade_medida: "kg",
     preco_unitario: firstLote.preco_unitario,
     custo_total: custoTotalEfetivo,
+    saldo_final: qtdKgEfetiva,
     saldo_atual: qtdKgEfetiva,
     embalado: firstLote.embalado,
     peso_liquido:

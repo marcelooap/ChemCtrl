@@ -239,7 +239,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
       const updatedItens = itens.map((item) => {
         if (item.tipo === "embalado" && item.entrada_id) {
           const e = entradas.find((e) => e.id === item.entrada_id);
-          const estoqueAtual = e?.saldo_atual || 0;
+          const estoqueAtual = e?.saldo_final ?? e?.saldo_atual ?? 0;
           return {
             ...item,
             estoque_atual: estoqueAtual,
@@ -271,7 +271,8 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
 
       const estoqueUpdates = Object.entries(estoqueAdjustments).map(([eid, adj]) => {
         const e = entradas.find((e) => e.id === eid);
-        return { id: eid, saldo_atual: Math.max(0, (e?.saldo_atual || 0) + adj) };
+        const base = Number(e?.saldo_final ?? e?.saldo_atual) || 0;
+        return { id: eid, saldo_final: Math.max(0, base + adj) };
       });
       if (estoqueUpdates.length > 0) {
         await entities.estoque.bulkUpdate(estoqueUpdates);
@@ -280,9 +281,15 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             estoqueAdjustments[e.id]
               ? {
                   ...e,
+                  saldo_final: Math.max(
+                    0,
+                    (Number(e.saldo_final ?? e.saldo_atual) || 0) +
+                      estoqueAdjustments[e.id]
+                  ),
                   saldo_atual: Math.max(
                     0,
-                    (e.saldo_atual || 0) + estoqueAdjustments[e.id]
+                    (Number(e.saldo_final ?? e.saldo_atual) || 0) +
+                      estoqueAdjustments[e.id]
                   ),
                 }
               : e
