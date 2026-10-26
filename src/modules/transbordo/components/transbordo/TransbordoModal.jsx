@@ -30,6 +30,7 @@ import {
   roundVolume,
   roundMass,
   kgLotesToLitrosInteiros,
+  qtdEmbalagensFromVolume,
 } from "@transbordo/lib/format";
 import { loteToKg, loteToLitros, saldoKgToLitros, applyPesoLiquidoForaMargem } from "@transbordo/lib/conversao";
 import {
@@ -46,6 +47,7 @@ import {
   computeTankaSaldo,
   computeTankaLotesDisponiveis,
 } from "@transbordo/lib/tankaVolume";
+import { matchesProdutoOperacional } from "@transbordo/lib/produtoMatch";
 import {
   aggregateComposicaoByLote,
   destinoLancaTanqueDuplicado,
@@ -578,12 +580,16 @@ export default function TransbordoModal({
       ?.codigo_transbordo ||
     "";
 
+  const produtoCtx = {
+    produtoId,
+    produtoNome,
+    produtoCodigo,
+    clienteId,
+    clienteNome,
+  };
+
   const filteredIsotanques = isotanques
-    .filter(
-      (i) =>
-        i.produto_id === produtoId ||
-        i.produto_nome?.toLowerCase() === produtoNome?.toLowerCase()
-    )
+    .filter((i) => matchesProdutoOperacional(i, produtoCtx))
     .map((i) => {
       const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
       const saldo = computeTankaSaldo({
@@ -602,24 +608,26 @@ export default function TransbordoModal({
       };
     });
 
-  const tankasComSaldo = filteredIsotanques
-    .map((i) => {
-      const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
-      const lotesDisponiveis = computeTankaLotesDisponiveis({
-        isotanqueId: i.id,
-        tankaCodigo,
-        transbordos,
-        excludeTransbordoId: editingIdForSaldo,
-      });
-      return {
-        ...i,
-        unidade_medida: "L",
-        lote: lotesDisponiveis[0]?.lote || "",
-        lotes_disponiveis: lotesDisponiveis,
-        display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(i.saldo_atual || 0)} L)`,
-      };
-    })
-    .filter((i) => (i.saldo_atual || 0) > 0);
+  const tankasOperacionais = filteredIsotanques.map((i) => {
+    const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
+    const lotesDisponiveis = computeTankaLotesDisponiveis({
+      isotanqueId: i.id,
+      tankaCodigo,
+      transbordos,
+      excludeTransbordoId: editingIdForSaldo,
+    });
+    return {
+      ...i,
+      unidade_medida: "L",
+      lote: lotesDisponiveis[0]?.lote || "",
+      lotes_disponiveis: lotesDisponiveis,
+      display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(i.saldo_atual || 0)} L)`,
+    };
+  });
+
+  const tankasComSaldo = tankasOperacionais.filter(
+    (i) => (i.saldo_atual || 0) > 0
+  );
 
   // Vasilhames No Pátio (com composição por lote quando houver)
   const vasilhamesNoPatio = vasilhames
@@ -698,7 +706,11 @@ export default function TransbordoModal({
     }
   });
 
-  const adjustOptionsForOrigem = (options, currentOrigem) => {
+  const adjustOptionsForOrigem = (
+    options,
+    currentOrigem,
+    { keepZeroSaldo = false } = {}
+  ) => {
     // Volumes/lotes desta origem não entram no consumo (já estão no card)
     const selfVol = roundVolume(currentOrigem.volume_retirado || 0);
     const selfLotes = {};
@@ -732,7 +744,16 @@ export default function TransbordoModal({
         const available = keepEntryUom
           ? Math.max(0, Math.round(saldoOp - consumedL))
           : roundVolume(saldoOp - consumedL);
-        if (!isSelf && available <= 0) return null;
+        if (!isSelf && available <= 0) {
+          if (!keepZeroSaldo) return null;
+          return {
+            ...opt,
+            saldo_atual: 0,
+            unidade_medida: keepEntryUom ? unid : "L",
+            embalado: keepEntryUom || opt.embalado,
+            lotes_disponiveis: [],
+          };
+        }
 
         const baseLotes = opt.lotes_disponiveis || [];
         if (baseLotes.length === 0) {
@@ -1108,12 +1129,16 @@ export default function TransbordoModal({
 
     const destinosNorm = destinosOrdered.map((d) => {
       const volume_total = roundVolume(d.volume_total || d.volume || 0);
+      const volume_por_embalagem = roundVolume(d.volume_por_embalagem || 0);
+      const quantidade_embalagens = isDestinoEstoqueEmbalado(d.tipo_embalagem)
+        ? qtdEmbalagensFromVolume(volume_total, volume_por_embalagem)
+        : roundVolume(d.quantidade_embalagens || 0);
       return {
         ...d,
         volume: roundVolume(d.volume || volume_total),
         volume_total,
-        volume_por_embalagem: roundVolume(d.volume_por_embalagem || 0),
-        quantidade_embalagens: Math.round(d.quantidade_embalagens || 0),
+        volume_por_embalagem,
+        quantidade_embalagens,
         tara: roundMass(d.tara || 0),
         peso_liquido: roundMass(
           d.peso_liquido || (densidade > 0 ? volume_total * densidade : 0)
@@ -1243,11 +1268,14 @@ export default function TransbordoModal({
       destinos.some(
         (d) =>
           isDestinoEstoqueEmbalado(d.tipo_embalagem) &&
-          (!(d.quantidade_embalagens > 0) || !(d.volume_por_embalagem > 0))
+          (!(
+            roundVolume(d.volume_total || d.volume || 0) > 0 &&
+            roundVolume(d.volume_por_embalagem || 0) > 0
+          ))
       )
     ) {
       setError(
-        "Informe quantidade de embalagens e volume por embalagem nos destinos IBC/Bombona/Tambor."
+        "Informe volume total e volume por embalagem nos destinos IBC/Bombona/Tambor."
       );
       return;
     }
@@ -1473,8 +1501,9 @@ export default function TransbordoModal({
                         origem
                       )}
                       tankaOptions={adjustOptionsForOrigem(
-                        tankasComSaldo,
-                        origem
+                        tankasOperacionais,
+                        origem,
+                        { keepZeroSaldo: true }
                       )}
                       vasilhameOptions={adjustOptionsForOrigem(
                         vasilhamesNoPatio,
@@ -1513,7 +1542,7 @@ export default function TransbordoModal({
                           key={`${d.origem_uid || "d"}-${globalIdx}`}
                           index={localIdx}
                           destino={d}
-                          isotanques={filteredIsotanques}
+                          isotanques={tankasOperacionais}
                           vasilhames={vasilhames}
                           produtoId={produtoId}
                           produtoNome={produtoNome}

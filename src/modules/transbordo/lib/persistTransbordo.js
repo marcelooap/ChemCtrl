@@ -6,6 +6,7 @@ import {
   roundMass,
   parseDensidade,
   litrosFromMassaKg,
+  qtdEmbalagensFromVolume,
 } from '@transbordo/lib/format';
 import { calculateFIFOAllocation, expandOrigensForFifo } from '@transbordo/lib/fifo';
 import {
@@ -328,10 +329,11 @@ function buildVasilhameBase(
   const isUnitario = isDestinoEstoqueEmbalado(d.tipo_embalagem);
   const dens = parseDensidade(data.densidade);
   let volume = roundVolume(d.volume_total || d.volume || 0);
-  const qtdEmb = Math.max(0, Math.round(d.quantidade_embalagens || 0));
-  const volPorEmb = roundVolume(
-    d.volume_por_embalagem || (qtdEmb > 0 ? volume / qtdEmb : 0)
-  );
+  const volPorEmb = roundVolume(d.volume_por_embalagem || 0);
+  const qtdEmb = isUnitario
+    ? qtdEmbalagensFromVolume(volume, volPorEmb) ||
+      Math.max(0, roundVolume(d.quantidade_embalagens || 0))
+    : Math.max(0, roundVolume(d.quantidade_embalagens || 0));
   let pesoLiquido =
     d.peso_liquido != null && d.peso_liquido !== ""
       ? roundMass(d.peso_liquido)
@@ -499,7 +501,9 @@ export async function persistTransbordo({
             : roundVolume(d.volume || 0),
           volume_total,
           volume_por_embalagem: roundVolume(d.volume_por_embalagem || 0),
-          quantidade_embalagens: Math.round(d.quantidade_embalagens || 0),
+          quantidade_embalagens: isDestinoEstoqueEmbalado(d.tipo_embalagem)
+            ? qtdEmbalagensFromVolume(volume_total, roundVolume(d.volume_por_embalagem || 0))
+            : roundVolume(d.quantidade_embalagens || 0),
           tara: roundMass(d.tara || 0),
           peso_liquido: roundMass(d.peso_liquido || pesoAuto),
           peso_bruto: roundMass(d.peso_bruto || 0),

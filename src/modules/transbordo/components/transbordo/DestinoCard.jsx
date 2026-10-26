@@ -9,8 +9,10 @@ import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
   formatVolume,
   formatMass,
+  formatQuantidade,
   roundVolume,
   roundMass,
+  qtdEmbalagensFromVolume,
 } from "@transbordo/lib/format";
 import {
   TIPOS_EMBALAGEM_DESTINO,
@@ -43,7 +45,7 @@ function findVasilhameCadastro(placa, vasilhames = []) {
 /**
  * Critérios alinhados à validação por destino em TransbordoModal.handleSubmit:
  * - tipo obrigatório
- * - IBC/Bombona/Tambor: qtd e volume por embalagem > 0
+ * - IBC/Bombona/Tambor: volume total e volume por embalagem > 0 (qtd auto)
  * - demais: volume_total > 0 (necessário para a conferência fechar)
  */
 function isDestinoPreenchido(destino, volumeExcedido) {
@@ -52,8 +54,9 @@ function isDestinoPreenchido(destino, volumeExcedido) {
   if (volumeExcedido) return false;
   if (isDestinoEstoqueEmbalado(tipo)) {
     return (
-      Number(destino.quantidade_embalagens) > 0 &&
-      Number(destino.volume_por_embalagem) > 0
+      roundVolume(destino.volume_total || destino.volume || 0) > 0 &&
+      roundVolume(destino.volume_por_embalagem || 0) > 0 &&
+      Number(destino.quantidade_embalagens) > 0
     );
   }
   return roundVolume(destino.volume_total || destino.volume || 0) > 0;
@@ -81,11 +84,12 @@ function buildDestinoResumo(destino, tipoLabel, index) {
     };
   }
   if (isDestinoEstoqueEmbalado(tipo)) {
-    const qtd = Math.round(destino.quantidade_embalagens || 0);
+    const qtd = roundVolume(destino.quantidade_embalagens || 0);
+    const qtdLabel = formatQuantidade(qtd, { empty: "" });
     return {
       title:
         qtd > 0
-          ? `${tipoLabel} · ${qtd} ${qtd === 1 ? "unidade" : "unidades"}`
+          ? `${tipoLabel} · ${qtdLabel} ${qtd === 1 ? "embalagem" : "embalagens"}`
           : tipoLabel || fallback,
       subtitle: tipoLabel || "",
     };
@@ -231,10 +235,12 @@ export default function DestinoCard({
       d.volume_total = d.volume;
       d.peso_liquido = pesoFromQty(d.volume);
     } else {
-      d.quantidade_embalagens = Math.round(d.quantidade_embalagens || 0);
       d.volume_por_embalagem = roundVolume(d.volume_por_embalagem);
-      d.volume_total = roundVolume(
-        (d.quantidade_embalagens || 0) * (d.volume_por_embalagem || 0)
+      d.volume_total = roundVolume(d.volume_total ?? d.volume ?? 0);
+      d.volume = d.volume_total;
+      d.quantidade_embalagens = qtdEmbalagensFromVolume(
+        d.volume_total,
+        d.volume_por_embalagem
       );
       d.peso_liquido = pesoFromQty(d.volume_total);
     }
@@ -294,10 +300,12 @@ export default function DestinoCard({
 
   const handleTankaChange = (label, item) => {
     if (item) {
+      const codigo =
+        item.nome || item.tanka || item.codigo_itku || label || "";
       const updated = {
         ...destino,
         tanka_id: item.id,
-        tanka_codigo: label,
+        tanka_codigo: codigo,
       };
       recalc(updated);
       onChange(updated);
@@ -669,6 +677,13 @@ export default function DestinoCard({
               onChange={handleTankaChange}
               options={isotanques}
               getOptionLabel={(i) => i.nome || i.tanka || i.codigo_itku || ""}
+              renderOption={(i) =>
+                i.display_label ||
+                i.nome ||
+                i.tanka ||
+                i.codigo_itku ||
+                ""
+              }
               getOptionValue={(i) => i.id}
               placeholder="Selecionar tanka"
               disabled={readOnly}
@@ -708,16 +723,21 @@ export default function DestinoCard({
       {isDestinoEstoqueEmbalado(tipo) && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
           <IntegerField
-            label="Qtd. Embalagens"
-            value={destino.quantidade_embalagens}
-            onChange={(v) => updateField("quantidade_embalagens", v)}
+            label={
+              preserveEntryMass
+                ? `Quantidade Total (${unidadeLabel}) *`
+                : "Volume Total (L) *"
+            }
+            value={destino.volume_total ?? destino.volume ?? ""}
+            onChange={(v) => updateField("volume_total", v)}
             readOnly={readOnly}
+            decimals={3}
           />
           <IntegerField
             label={
               preserveEntryMass
-                ? `Quantidade por Embalagem (${unidadeLabel})`
-                : "Volume por Embalagem (L)"
+                ? `Quantidade por Embalagem (${unidadeLabel}) *`
+                : "Volume por Embalagem (L) *"
             }
             value={destino.volume_por_embalagem}
             onChange={(v) => updateField("volume_por_embalagem", v)}
@@ -725,17 +745,11 @@ export default function DestinoCard({
             decimals={3}
           />
           <div className="space-y-1.5">
-            <Label>
-              {preserveEntryMass
-                ? `Quantidade Total (${unidadeLabel}) - auto`
-                : "Volume Total (L) - auto"}
-            </Label>
+            <Label>Qtd. Embalagens - auto</Label>
             <Input
-              value={
-                preserveEntryMass
-                  ? formatMass(destino.volume_total || 0)
-                  : formatVolume(destino.volume_total || 0)
-              }
+              value={formatQuantidade(destino.quantidade_embalagens || 0, {
+                empty: "0",
+              })}
               disabled
               className="bg-card font-medium"
             />

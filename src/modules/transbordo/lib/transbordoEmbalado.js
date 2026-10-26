@@ -4,7 +4,12 @@
  * Funções de estoque embalado legado são mantidas para compatibilidade.
  */
 
-import { roundMass, roundVolume, parseDensidade } from "@transbordo/lib/format";
+import {
+  roundMass,
+  roundVolume,
+  parseDensidade,
+  qtdEmbalagensFromVolume,
+} from "@transbordo/lib/format";
 import { calculateFIFOAllocation } from "@transbordo/lib/fifo";
 import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
 import { entities } from "@transbordo/services/entities";
@@ -93,8 +98,11 @@ export function buildEstoqueEmbaladoFromDestino({
   estoqueById = new Map(),
 }) {
   const dens = parseDensidade(payload.densidade);
-  const qtdEmb = Math.max(0, Math.round(destino.quantidade_embalagens || 0));
   const volumeTotal = roundVolume(destino.volume_total || destino.volume || 0);
+  const volPorEmb = roundVolume(destino.volume_por_embalagem || 0);
+  const qtdEmb =
+    qtdEmbalagensFromVolume(volumeTotal, volPorEmb) ||
+    Math.max(0, roundVolume(destino.quantidade_embalagens || 0));
   const pesoTotal =
     destino.peso_liquido != null && destino.peso_liquido !== ""
       ? roundMass(destino.peso_liquido)

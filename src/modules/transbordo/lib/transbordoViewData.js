@@ -1,6 +1,7 @@
 import {
   formatVolume,
   formatMass,
+  formatQuantidade,
   formatDensidade,
   parseDensidade,
   roundVolume,
@@ -370,7 +371,7 @@ function buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }) {
     const embalado = isDestinoEstoqueEmbalado(tipo);
     const qtdEmb =
       d.quantidade_embalagens != null && d.quantidade_embalagens !== ""
-        ? Math.round(Number(d.quantidade_embalagens) || 0)
+        ? formatQuantidade(Number(d.quantidade_embalagens) || 0, { empty: "" })
         : null;
     const linhas = buildDestinoLinhas(d, destinoCompositions[i], densOperacao, isMassa);
     const lacre = lacreDoDestino(d, transbordo, vasilhames);

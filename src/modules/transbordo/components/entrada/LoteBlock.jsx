@@ -438,10 +438,10 @@ export default function LoteBlock({
                 Densidade {densidadeTabelada ? "(Tabelada)" : "*"}
               </Label>
               <NumberInputBr
-                decimals={3}
+                decimals={4}
                 value={lote.densidade || ""}
                 onChange={(v) => update("densidade", v === "" ? "" : v)}
-                placeholder={densidadeTabelada ? "Automático" : "Ex: 1,025"}
+                placeholder={densidadeTabelada ? "Automático" : "Ex: 0,7900"}
                 disabled={readOnly || densidadeTabelada}
                 className={densidadeTabelada ? "bg-muted/40" : INPUT_EDITABLE}
               />
@@ -489,7 +489,7 @@ export default function LoteBlock({
             Densidade {densidadeTabelada ? "(Tabelada)" : "*"}
           </Label>
           <NumberInputBr
-            decimals={3}
+            decimals={4}
             value={lote.densidade || ""}
             onChange={(v) => {
               const dens =
@@ -503,7 +503,7 @@ export default function LoteBlock({
                 )
               );
             }}
-            placeholder={densidadeTabelada ? "Automático" : "Ex: 1,025"}
+            placeholder={densidadeTabelada ? "Automático" : "Ex: 0,7900"}
             disabled={readOnly || densidadeTabelada}
             className={densidadeTabelada ? "bg-muted/40" : INPUT_EDITABLE}
           />

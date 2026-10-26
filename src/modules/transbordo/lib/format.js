@@ -43,6 +43,14 @@ export function roundVolume(v) {
   return Math.round(n * 1000) / 1000;
 }
 
+/** Qtd. de embalagens (permite fração, ex.: 2,126 IBC). */
+export function qtdEmbalagensFromVolume(total, volumePorEmbalagem) {
+  const t = roundVolume(total);
+  const per = roundVolume(volumePorEmbalagem);
+  if (!(t > 0) || !(per > 0)) return 0;
+  return roundVolume(t / per);
+}
+
 /** Alias semântico para massas operacionais. */
 export function roundMass(v) {
   return Math.round(parseNumero(v));
@@ -142,9 +150,10 @@ export function formatQuantidade(v, opts = {}) {
   return text.replace(/,(\d*?)0+$/, (_, digits) => (digits ? `,${digits}` : ""));
 }
 
-/** Densidade — até 3 casas decimais PT-BR (ex.: 0,858). */
+/** Densidade — até 4 casas decimais PT-BR (ex.: 0,7900). */
 export function formatDensidade(v, opts = {}) {
-  return formatNum(v, 3, { empty: opts.empty ?? "-" });
+  const decimals = opts.decimals ?? 4;
+  return formatNum(v, decimals, { empty: opts.empty ?? "-" });
 }
 
 /** Percentual PT-BR (ex.: 12,5). */
