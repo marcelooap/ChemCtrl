@@ -1,3 +1,4 @@
+import { productsMatch } from "@industrializacao/lib/recipeRevisions";
 import {
   getEstoqueSaldoEntrada,
   getEstoqueUnidadeEntrada,
@@ -22,6 +23,27 @@ function clientePorNome(clientes, nome) {
   const key = normNome(nome);
   if (!key) return null;
   return (clientes || []).find((c) => normNome(c?.nome) === key) || null;
+}
+
+/**
+ * Produto acabado (ou físico) já coberto por uma linha agregada de livro/MP.
+ */
+export function agregadoCoversPhysicalSlot(agregados, slot) {
+  const clienteSlot = normNome(slot?.cliente_nome);
+  if (!clienteSlot) return false;
+
+  return (agregados || []).some((p) => {
+    if (normNome(p?.cliente_nome) !== clienteSlot) return false;
+
+    const codP = String(p?.codigo === "—" ? "" : p?.codigo || "").trim();
+    const codS = String(slot?.codigo || "").trim();
+    if (codP && codS && normNome(codP) === normNome(codS)) return true;
+
+    const prodP = String(p?.produto || "").trim();
+    const prodS = String(slot?.produto || "").trim();
+    if (prodP && prodS && productsMatch(prodP, prodS)) return true;
+    return normNome(prodP) === normNome(prodS);
+  });
 }
 
 /**

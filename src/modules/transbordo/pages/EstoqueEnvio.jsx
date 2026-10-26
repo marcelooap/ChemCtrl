@@ -46,13 +46,19 @@ import {
 } from "@transbordo/lib/format";
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 import {
+  agregadoCoversPhysicalSlot,
   collectEstoqueEnvioFontes,
   estoqueEnvioGrupoKey,
 } from "@transbordo/lib/estoqueEnvioProdutos";
+import {
+  getLatestRecipeForProduct,
+  normalizeProductMatchKey,
+} from "@industrializacao/lib/recipeRevisions";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import {
   collectTankIdentityNames,
   mapIndContainersForEstoqueEnvio,
+  resolveQuantidadeFisicaVasilhame,
 } from "@transbordo/lib/estoqueEnvioVasilhames";
 
 const PRODUCT_COLORS = [
@@ -752,6 +758,13 @@ export default function EstoqueEnvio() {
         mp.density
       );
     }
+    for (const recipe of indRecipes || []) {
+      rememberDens(
+        normProdutoKey(recipe.code || ""),
+        normProdutoKey(recipe.product_name || ""),
+        recipe.density
+      );
+    }
 
     /** Densidade do produto (kg/L). 0 = desconhecida (não inventar 1,0). */
     function getDensidade(codigoKey, nomeKey) {
@@ -763,8 +776,48 @@ export default function EstoqueEnvio() {
         const d = densidadeByNome.get(nomeKey);
         if (d > 0) return d;
       }
+      const matchKey = normalizeProductMatchKey(nomeKey);
+      if (matchKey) {
+        for (const [nome, dens] of densidadeByNome) {
+          if (normalizeProductMatchKey(nome) === matchKey && dens > 0) {
+            return dens;
+          }
+        }
+      }
       return 0;
     }
+
+    const physicalUnidadeByKey = new Map();
+
+    const rememberPhysicalUnidade = (prodKey, clienteKey, unidade) => {
+      if (!prodKey || !clienteKey || !unidade) return;
+      const k = `${prodKey}||${clienteKey}`;
+      const prev = physicalUnidadeByKey.get(k);
+      if (!prev) {
+        physicalUnidadeByKey.set(k, unidade);
+        return;
+      }
+      if (prev !== "L") return;
+      if (unidade !== "L") physicalUnidadeByKey.set(k, unidade);
+    };
+
+    const lookupPhysicalMap = (map, codigoKey, produtoNome, clienteKey) => {
+      const prodKey = normalizeProductMatchKey(produtoNome || "");
+      if (codigoKey) {
+        const byCode = map.get(`${codigoKey}||${clienteKey}`);
+        if (byCode > 0) return byCode;
+      }
+      if (prodKey) {
+        const direct = map.get(`${prodKey}||${clienteKey}`);
+        if (direct > 0) return direct;
+        for (const [k, val] of map) {
+          if (!k.endsWith(`||${clienteKey}`) || !(val > 0)) continue;
+          const pk = k.slice(0, -(`||${clienteKey}`).length);
+          if (pk === prodKey || pk === codigoKey) return val;
+        }
+      }
+      return 0;
+    };
 
     /**
      * Converte litros para a UOM de entrada.
@@ -777,8 +830,8 @@ export default function EstoqueEnvio() {
       return litros * densKgPorL;
     }
 
-    const resolveUnidadeProduto = (codigoKeyV, nomeKeyV, clienteKeyV) => {
-      const hit = produtosAgregados.find((p) => {
+    const resolveUnidadeProduto = (codigoKeyV, nomeKeyV, clienteKeyV, baseRows) => {
+      const hit = (baseRows || produtosAgregados).find((p) => {
         if (normProdutoKey(p.cliente_nome || "") !== clienteKeyV) return false;
         if (
           codigoKeyV &&
@@ -791,23 +844,70 @@ export default function EstoqueEnvio() {
       return hit?.unidade || "kg";
     };
 
+    const rememberOrphanSlot = (slot, orphanByKey) => {
+      if (agregadoCoversPhysicalSlot(produtosAgregados, slot)) return;
+      const codigo = String(slot.codigo || "").trim();
+      const produto = String(slot.produto || "").trim();
+      const clienteNome = String(slot.cliente_nome || "").trim();
+      if (!produto || !clienteNome) return;
+
+      const cliente =
+        (clientes || []).find(
+          (c) =>
+            String(c?.nome || "")
+              .trim()
+              .toLowerCase() === clienteNome.toLowerCase()
+        ) || null;
+
+      const key = estoqueEnvioGrupoKey({
+        codigo: codigo || "—",
+        produto,
+        cliente_id: cliente?.id || null,
+        cliente_nome: clienteNome,
+      });
+
+      const prev = orphanByKey.get(key);
+      if (!prev || (!prev.codigo && codigo)) {
+        orphanByKey.set(key, {
+          codigo,
+          produto,
+          cliente_nome: clienteNome,
+          cliente_id: cliente?.id || null,
+        });
+      }
+    };
+
     // ── Acumuladores já na UOM de entrada por produto+cliente ──────────────
+    const orphanByKey = new Map();
     const vasilhameByCode = new Map();
     const vasilhameByNome = new Map();
     for (const v of filteredVasilhames) {
       const codigoKey = normProdutoKey(v.produto_codigo || "");
-      const nomeKey = normProdutoKey(v.produto_nome || "");
+      const prodKey = normalizeProductMatchKey(v.produto_nome || "");
       const clienteKey = normProdutoKey(v.cliente_nome || "");
-      const unidadeV = resolveUnidadeProduto(codigoKey, nomeKey, clienteKey);
-      const dens = getDensidade(codigoKey, nomeKey) || parseDensidade(v.densidade);
-      const vol = quantidadeVasilhameNaUnidade(v, unidadeV, dens);
+      const unidadeV = resolveUnidadeProduto(codigoKey, normProdutoKey(v.produto_nome || ""), clienteKey);
+      const dens = getDensidade(codigoKey, normProdutoKey(v.produto_nome || "")) || parseDensidade(v.densidade);
+      const { quantidade: vol, unidade: unidadeFisica } = resolveQuantidadeFisicaVasilhame(
+        v,
+        unidadeV,
+        dens
+      );
       if (vol <= 0) continue;
+      rememberOrphanSlot(
+        {
+          codigo: v.produto_codigo,
+          produto: v.produto_nome,
+          cliente_nome: v.cliente_nome,
+        },
+        orphanByKey
+      );
+      rememberPhysicalUnidade(prodKey, clienteKey, unidadeFisica);
       if (codigoKey) {
         const k = `${codigoKey}||${clienteKey}`;
         vasilhameByCode.set(k, (vasilhameByCode.get(k) || 0) + vol);
       }
-      if (nomeKey) {
-        const k = `${nomeKey}||${clienteKey}`;
+      if (prodKey) {
+        const k = `${prodKey}||${clienteKey}`;
         vasilhameByNome.set(k, (vasilhameByNome.get(k) || 0) + vol);
       }
     }
@@ -820,36 +920,133 @@ export default function EstoqueEnvio() {
       const nomeKey = normProdutoKey(t.produto || "");
       const clienteKey = normProdutoKey(t.cliente_nome || "");
       if (!nomeKey) continue;
+      const recipe = getLatestRecipeForProduct(indRecipes, t.produto);
+      rememberOrphanSlot(
+        {
+          codigo: recipe?.code || "",
+          produto: t.produto,
+          cliente_nome: t.cliente_nome,
+        },
+        orphanByKey
+      );
       const unidadeT = resolveUnidadeProduto("", nomeKey, clienteKey);
       const densTanka = parseDensidade(t.densidade);
       const dens =
         densTanka > 0 ? densTanka : getDensidade("", nomeKey);
-      const qtd = litrosParaUnidadeEntrada(volL, unidadeT, dens);
+      let qtd = litrosParaUnidadeEntrada(volL, unidadeT, dens);
+      let unidadeFisica = unidadeT;
+      if (qtd <= 0 && volL > 0) {
+        if (isUnidadeVolumeEntrada(unidadeT)) {
+          qtd = volL;
+        } else if (dens > 0) {
+          qtd = volL * dens;
+        } else {
+          qtd = volL;
+          unidadeFisica = "L";
+        }
+      }
       if (qtd <= 0) continue;
-      const k = `${nomeKey}||${clienteKey}`;
+      const prodKey = normalizeProductMatchKey(t.produto || "");
+      rememberPhysicalUnidade(prodKey, clienteKey, unidadeFisica);
+      const k = `${prodKey || nomeKey}||${clienteKey}`;
       tankaByNome.set(k, (tankaByNome.get(k) || 0) + qtd);
     }
 
-    return produtosAgregados.map((p) => {
+    const orphanAgregados = [...orphanByKey.values()]
+      .map((slot) => {
+        const codigo = String(slot.codigo || "").trim() || "—";
+        const produto = String(slot.produto || "").trim() || "—";
+        const clienteNome = slot.cliente_nome || "";
+        const clienteId = slot.cliente_id || null;
+        const key = estoqueEnvioGrupoKey({
+          codigo,
+          produto,
+          cliente_id: clienteId,
+          cliente_nome: clienteNome,
+        });
+        const codigoKey = normProdutoKey(codigo === "—" ? "" : codigo);
+        const nomeKey = normProdutoKey(produto);
+        const prodKey = normalizeProductMatchKey(produto);
+        const clienteKey = normProdutoKey(clienteNome);
+        const unidadeFisica = physicalUnidadeByKey.get(`${prodKey}||${clienteKey}`);
+        const unidade =
+          unidadeFisica ||
+          resolveUnidadeProduto(codigoKey, nomeKey, clienteKey);
+
+        const reservadoEmbalado = sumReservadoForProdutoCliente(reservas, {
+          clienteId,
+          clienteNome,
+          produtoCodigo: codigo,
+          produtoNome: produto,
+          unidade,
+        });
+        const reservadoVasilhame = sumReservadoVasilhamesConteudo(
+          vasilhames,
+          reservas,
+          {
+            clienteId,
+            clienteNome,
+            produtoCodigo: codigo,
+            produtoNome: produto,
+            unidade,
+          }
+        );
+        const saldoReservado = Math.round(
+          reservadoEmbalado + reservadoVasilhame
+        );
+
+        return {
+          id: key,
+          codigo,
+          produto,
+          unidade,
+          saldo: 0,
+          saldoEmbalado: 0,
+          cliente_nome: clienteNome,
+          clienteId,
+          saldoReservado,
+          saldoFinal: 0,
+          orphanPhysical: true,
+        };
+      })
+      .filter((row) => {
+        if (q) {
+          const hay = `${row.codigo} ${row.produto} ${row.cliente_nome || ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+    const allAgregados = [...produtosAgregados, ...orphanAgregados];
+
+    const rows = allAgregados.map((p) => {
       const clienteKey = normProdutoKey(p.cliente_nome || "");
       const codigoKey = normProdutoKey(p.codigo === "—" ? "" : p.codigo);
       const nomeKey = normProdutoKey(p.produto || "");
 
+      const prodKey = normalizeProductMatchKey(p.produto || "");
       const vasilhameQtd =
-        (codigoKey ? vasilhameByCode.get(`${codigoKey}||${clienteKey}`) || 0 : 0) ||
-        (nomeKey ? vasilhameByNome.get(`${nomeKey}||${clienteKey}`) || 0 : 0);
-      const tankaQtd = nomeKey
-        ? tankaByNome.get(`${nomeKey}||${clienteKey}`) || 0
-        : 0;
+        lookupPhysicalMap(vasilhameByCode, codigoKey, p.produto, clienteKey) ||
+        lookupPhysicalMap(vasilhameByNome, "", p.produto, clienteKey);
+      const tankaQtd = lookupPhysicalMap(tankaByNome, "", p.produto, clienteKey);
+      const unidadeFisica = physicalUnidadeByKey.get(`${prodKey}||${clienteKey}`);
+      const unidadeRow = unidadeFisica || p.unidade;
 
       let saldoTanque = roundVolume(vasilhameQtd);
       let saldoTanka = roundVolume(tankaQtd);
 
-      const saldoAtual = p.saldo;
+      const isOrphan = p.orphanPhysical === true;
+      let saldoAtual = isOrphan
+        ? roundVolume(saldoTanque + saldoTanka)
+        : p.saldo;
 
       // Tanque + tanka não podem exceder o saldo de livro (divergência de dados).
       const totalFisico = saldoTanque + saldoTanka;
-      if (totalFisico > saldoAtual + 0.001 && totalFisico > 0) {
+      if (
+        !isOrphan &&
+        totalFisico > saldoAtual + 0.001 &&
+        totalFisico > 0
+      ) {
         const scale = saldoAtual / totalFisico;
         saldoTanque = roundVolume(saldoTanque * scale);
         saldoTanka = roundVolume(saldoTanka * scale);
@@ -862,9 +1059,47 @@ export default function EstoqueEnvio() {
         Math.max(0, saldoEmbaladoBruto - saldoTanque - saldoTanka)
       );
 
-      return { ...p, saldoTanque, saldoTanka, saldoEmbalado };
+      const saldoReservado = p.saldoReservado || 0;
+      const saldoFinal = isOrphan
+        ? Math.max(0, roundVolume(saldoAtual - saldoReservado))
+        : p.saldoFinal;
+
+      return {
+        ...p,
+        unidade: unidadeRow,
+        saldo: saldoAtual,
+        saldoTanque,
+        saldoTanka,
+        saldoEmbalado,
+        saldoFinal,
+      };
     });
-  }, [produtosAgregados, filteredVasilhames, filteredTankas, estoque, indStock]);
+
+    return rows
+      .filter((p) => (Number(p.saldo) || 0) > 0)
+      .sort((a, b) => {
+        const byCod = a.codigo.localeCompare(b.codigo, "pt-BR", {
+          numeric: true,
+        });
+        if (byCod !== 0) return byCod;
+        const byNome = a.produto.localeCompare(b.produto, "pt-BR", {
+          sensitivity: "base",
+        });
+        if (byNome !== 0) return byNome;
+        return String(a.unidade).localeCompare(String(b.unidade), "pt-BR");
+      });
+  }, [
+    produtosAgregados,
+    filteredVasilhames,
+    filteredTankas,
+    estoque,
+    indStock,
+    indRecipes,
+    clientes,
+    reservas,
+    vasilhames,
+    q,
+  ]);
 
   const productColorMap = useMemo(() => {
     const map = {};
