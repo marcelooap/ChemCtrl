@@ -86,6 +86,7 @@ export const PRAZO_DESTINO_ERROR = Object.freeze({
   TESTE_NOME_LONG: 'TESTE_NOME_LONG',
   DUPLICATE_TESTE: 'DUPLICATE_TESTE',
   TESTE_PRAZO_INVALID: 'TESTE_PRAZO_INVALID',
+  TESTE_VALIDADE_INVALID: 'TESTE_VALIDADE_INVALID',
 });
 
 /** Nome do teste normalizado para comparação (sem acento, caixa ou espaços nas pontas). */
@@ -109,9 +110,11 @@ export function validadeTesteCheckKey(nome) {
 }
 
 /**
- * Lista persistida (`[{ nome, prazo_dias }]`) → `[{ nome, dias }]`, descartando linhas inválidas.
+ * Lista persistida (`[{ nome, prazo_dias, validade_dias }]`) → `[{ nome, dias, validade? }]`.
+ * Linhas sem nome ou sem prazo são descartadas. Validade ausente (cadastro antigo)
+ * fica de fora: a conferência continua com a conta anterior até o campo ser preenchido.
  * @param {unknown} raw
- * @returns {Array<{ nome: string, dias: number }>}
+ * @returns {Array<{ nome: string, dias: number, validade?: number }>}
  */
 export function normalizeTestesConfig(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -120,25 +123,26 @@ export function normalizeTestesConfig(raw) {
       const nome = String(teste?.nome ?? '').trim();
       const dias = parsePrazoDias(teste?.dias ?? teste?.prazo_dias);
       if (!nome || dias == null) return null;
-      return { nome, dias };
+      const validade = parsePrazoDias(teste?.validade ?? teste?.validade_dias);
+      return validade == null ? { nome, dias } : { nome, dias, validade };
     })
     .filter(Boolean);
 }
 
 /**
  * Valida as linhas "destino + color cod + testes" da verificação.
- * Cada destino tem um ou mais testes, com nome e prazo próprios.
+ * Cada destino tem um ou mais testes, com nome, validade e prazo próprios.
  * Color Cod continua opcional e vale para o destino inteiro.
  *
  * @param {Array<{
  *   destino?: string,
  *   color_cod?: string|null,
- *   testes?: Array<{ nome?: string, dias?: string|number }>,
+ *   testes?: Array<{ nome?: string, dias?: string|number, validade?: string|number }>,
  * }>} rows
  * @returns {{
  *   ok: boolean,
  *   errors: Array<{ index: number, testeIndex?: number, field: string, code: string }>,
- *   items: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }>,
+ *   items: Array<{ destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number, validade: number }> }>,
  * }} `items` traz apenas as linhas válidas, já normalizadas.
  */
 export function validarPrazosPorDestino(rows = []) {
@@ -203,6 +207,7 @@ export function validarPrazosPorDestino(rows = []) {
         }
 
         const dias = parsePrazoDias(teste?.dias);
+        const validade = parsePrazoDias(teste?.validade);
         if (dias == null) {
           rowErrors.push({
             index,
@@ -210,8 +215,17 @@ export function validarPrazosPorDestino(rows = []) {
             field: 'dias',
             code: PRAZO_DESTINO_ERROR.TESTE_PRAZO_INVALID,
           });
-        } else if (nomeOk) {
-          cleanTestes.push({ nome, dias });
+        }
+        if (validade == null) {
+          rowErrors.push({
+            index,
+            testeIndex,
+            field: 'validade',
+            code: PRAZO_DESTINO_ERROR.TESTE_VALIDADE_INVALID,
+          });
+        }
+        if (dias != null && validade != null && nomeOk) {
+          cleanTestes.push({ nome, dias, validade });
         }
       });
     }
@@ -229,7 +243,7 @@ export function validarPrazosPorDestino(rows = []) {
  *
  * @param {{ prazosPorDestino?: Array<{ destino: string, color_cod?: string|null, testes?: Array<{ nome: string, dias: number }> }> }} config
  * @param {string|null|undefined} destino destino da solicitação de saída
- * @returns {{ encontrado: boolean, destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number }> }}
+ * @returns {{ encontrado: boolean, destino: string, color_cod: string|null, testes: Array<{ nome: string, dias: number, validade?: number }> }}
  */
 export function resolverTestesPorDestino(config, destino) {
   const destinoNome = String(destino ?? '').trim();
@@ -245,16 +259,22 @@ export function resolverTestesPorDestino(config, destino) {
 }
 
 /**
- * Data limite da execução = dia de calendário local de `base` − `dias`.
- * A data de execução no físico deve ser maior que esta data.
- * Ex.: 16/10/2026 − 180 dias → "2026-04-19".
- * @param {number} dias
+ * Prazo mínimo da data de realização de um teste.
+ * Com validade: dia local de `base` + prazo de verificação − validade.
+ * Sem validade (cadastro antigo): dia local de `base` − prazo.
+ * A data de execução no físico deve ser igual ou posterior a este dia.
+ * Ex.: 26/10/2026 + 170 − 365 → "2026-04-14".
+ * @param {number} dias prazo de verificação, em dias
  * @param {Date} [base]
+ * @param {number|string|null} [validade] validade do teste, em dias
  * @returns {string} "YYYY-MM-DD"
  */
-export function calcularDataLimiteTestes(dias, base = new Date()) {
+export function calcularDataLimiteTestes(dias, base = new Date(), validade = null) {
   const prazo = normalizePrazoDias(dias);
-  const utcMs = Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) - prazo * MS_PER_DAY;
+  const validadeDias = parsePrazoDias(validade);
+  const deltaDias = validadeDias == null ? -prazo : prazo - validadeDias;
+  const utcMs =
+    Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) + deltaDias * MS_PER_DAY;
   return new Date(utcMs).toISOString().slice(0, 10);
 }
 

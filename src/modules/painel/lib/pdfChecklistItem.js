@@ -183,9 +183,14 @@ function validadeTestesLabel(base, validade, t, language, def) {
   if (!alvo || validade?.configurado === false) {
     parts.push(t(`${prefix}.naoConfigurado`));
   } else {
-    parts.push(t(`${prefix}.prazoDias`, { dias: alvo.dias }));
+    if (alvo.validade != null) {
+      parts.push(
+        `${t(`${prefix}.validade`)}: ${t(`${prefix}.prazoDias`, { dias: alvo.validade })}`
+      );
+    }
+    parts.push(`${t(`${prefix}.prazo`)}: ${t(`${prefix}.prazoDias`, { dias: alvo.dias })}`);
     parts.push(
-      `${t(`${prefix}.limiteCurto`)} ${formatDataLimiteTestes(alvo.data_limite, language)}`
+      `${t(alvo.validade != null ? `${prefix}.prazoMinimoCurto` : `${prefix}.limiteCurto`)} ${formatDataLimiteTestes(alvo.data_limite, language)}`
     );
   }
   const nome = teste?.nome || base;

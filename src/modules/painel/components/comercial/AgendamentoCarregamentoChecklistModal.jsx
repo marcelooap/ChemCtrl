@@ -195,8 +195,8 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
 );
 
 /**
- * Conferência teste a teste. A data limite é hoje menos o prazo do teste;
- * a data de execução no físico precisa ser maior que essa data.
+ * Conferência teste a teste. O prazo mínimo da realização é hoje + prazo − validade.
+ * Sem validade cadastrada, permanece hoje − prazo.
  * Sem testes para o destino, a verificação fica bloqueada.
  * Itens antigos (um prazo único, sem lista) continuam no card legado.
  */
@@ -246,6 +246,7 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
               ? formatDataLimiteTestes(validade.data_limite, language)
               : '—';
           const dias = teste?.dias ?? (legado ? validade.dias : null);
+          const validadeDias = teste?.validade ?? null;
           return (
             <div
               key={def.key}
@@ -257,7 +258,19 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
               <p className="text-sm font-semibold text-foreground">
                 {teste?.nome || (legado ? t(`${prefix}.resultado`) : checkDefLabel(def, t))}
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                className={cn(
+                  'grid gap-2',
+                  validadeDias != null ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'
+                )}
+              >
+                {validadeDias != null ? (
+                  <InfoChip
+                    className={chipClass}
+                    label={t(`${prefix}.validade`)}
+                    value={t(`${prefix}.prazoDias`, { dias: validadeDias })}
+                  />
+                ) : null}
                 <InfoChip
                   className={chipClass}
                   label={t(`${prefix}.prazo`)}
@@ -265,14 +278,26 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
                 />
                 <InfoChip
                   className={chipClass}
-                  label={t(teste ? `${prefix}.dataLimiteExecucao` : `${prefix}.dataLimite`)}
+                  label={t(
+                    validadeDias != null
+                      ? `${prefix}.prazoMinimo`
+                      : teste
+                        ? `${prefix}.dataLimiteExecucao`
+                        : `${prefix}.dataLimite`
+                  )}
                   value={dataLimite}
                   valueClassName={dias != null ? 'font-bold text-emerald-800' : undefined}
                 />
               </div>
               {teste ? (
                 <p className="text-xs text-muted-foreground">
-                  {t(`${prefix}.execucaoHint`, { dias: teste.dias, data: dataLimite })}
+                  {validadeDias != null
+                    ? t(`${prefix}.execucaoHintValidade`, {
+                        validade: validadeDias,
+                        prazo: teste.dias,
+                        data: dataLimite,
+                      })
+                    : t(`${prefix}.execucaoHint`, { dias: teste.dias, data: dataLimite })}
                 </p>
               ) : legado ? (
                 <p className="text-xs text-muted-foreground">

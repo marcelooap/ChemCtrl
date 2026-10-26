@@ -876,14 +876,16 @@
         },
         "validadeTestes": {
           "title": "Vérification de la validité des tests",
-          "hint": "Définit, par destination, quels tests entrent dans la checklist et le délai de vérification de chacun.",
+          "hint": "Définit, par destination, quels tests entrent dans la checklist, la validité et le délai de vérification de chacun.",
           "enable": "Activer la vérification des tests",
           "prazoInvalid": "Indiquez un délai entier compris entre {{min}} et {{max}} jours.",
+          "validadeInvalid": "Indiquez une validité entière comprise entre {{min}} et {{max}} jours.",
+          "validadeRpcMissingBanner": "La validité de chaque test n'est pas encore enregistrée. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le, puis enregistrez à nouveau.",
           "tableMissingBanner": "La configuration de la validité des tests n'existe pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
           "testesColumnMissingBanner": "Les tests par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
           "destinos": {
             "title": "Tests par destination",
-            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom et le délai de vérification, en jours. La date limite est aujourd'hui moins ce délai.",
+            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom, la validité et le délai de vérification, en jours. La date minimale d'exécution est aujourd'hui plus le délai de vérification, moins la validité.",
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Sélectionnez la destination...",
             "prazoLabel": "Délai de validité (jours)",
@@ -901,6 +903,7 @@
             "testesTitle": "Tests à vérifier",
             "testeNomeLabel": "Nom du test",
             "testeNomePlaceholder": "Ex. : Test hydrostatique",
+            "testeValidadeLabel": "Validité (jours)",
             "testePrazoLabel": "Délai de vérification (jours)",
             "addTeste": "Ajouter un test",
             "removeTeste": "Retirer le test",
@@ -912,7 +915,7 @@
             "requiredHint": "Enregistrez au moins une destination avec les tests à vérifier, ou désactivez la vérification.",
             "destinoRequired": "Sélectionnez une destination.",
             "duplicateDestino": "Cette destination est déjà enregistrée dans cet élément.",
-            "invalidHint": "Vérifiez les destinations : sélectionnez la destination, sans répétition, et indiquez le nom et le délai de chaque test (entre {{min}} et {{max}} jours).",
+            "invalidHint": "Vérifiez les destinations : sélectionnez la destination, sans répétition, et indiquez le nom, la validité et le délai de chaque test (entre {{min}} et {{max}} jours).",
             "tableMissingBanner": "Les délais par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page."
           }
         }

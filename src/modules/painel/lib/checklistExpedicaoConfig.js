@@ -51,6 +51,9 @@ const DESTINOS_RPC_SETUP_MESSAGE =
 const TESTES_RPC_SETUP_MESSAGE =
   'Execute o script 044_t_checklist_expedicao_validade_testes.sql no SQL Editor do ChemFlow para habilitar os testes de verificação por destino.';
 
+const VALIDADE_RPC_SETUP_MESSAGE =
+  'Execute o script 054_t_checklist_expedicao_validade_testes_validade.sql no SQL Editor do ChemFlow para gravar a validade de cada teste.';
+
 let tableAvailable = true;
 let configTableAvailable = true;
 let destinosTableAvailable = true;
@@ -331,9 +334,10 @@ async function savePrazosPorDestino(clienteId, items) {
           (testes || []).reduce((max, teste) => Math.max(max, teste.dias), 0) ||
           VALIDADE_TESTES_PRAZO_PADRAO_DIAS,
         color_cod: color_cod || null,
-        testes: (testes || []).map(({ nome, dias }) => ({
+        testes: (testes || []).map(({ nome, dias, validade }) => ({
           nome,
           prazo_dias: dias,
+          validade_dias: validade,
         })),
       })),
     }
@@ -358,7 +362,35 @@ async function savePrazosPorDestino(clienteId, items) {
     testesColumnAvailable = false;
     throw new Error(TESTES_RPC_SETUP_MESSAGE);
   }
+  if (!validadeFoiPersistida(items, returned)) {
+    throw new Error(VALIDADE_RPC_SETUP_MESSAGE);
+  }
   return returned;
+}
+
+/**
+ * A função antiga grava só nome e prazo e descarta `validade_dias`.
+ * Se o valor enviado não voltar, o script 054 ainda não foi executado.
+ */
+function validadeFoiPersistida(items, returned) {
+  const savedByKey = new Map();
+  for (const row of returned || []) {
+    const destino = String(row?.destino || '').trim().toLowerCase();
+    for (const teste of Array.isArray(row?.testes) ? row.testes : []) {
+      savedByKey.set(`${destino}|${String(teste?.nome || '').trim().toLowerCase()}`, teste);
+    }
+  }
+  for (const item of items || []) {
+    const destino = String(item?.destino || '').trim().toLowerCase();
+    for (const teste of item.testes || []) {
+      if (teste?.validade == null) continue;
+      const saved = savedByKey.get(
+        `${destino}|${String(teste?.nome || '').trim().toLowerCase()}`
+      );
+      if (parsePrazoDias(saved?.validade_dias) !== teste.validade) return false;
+    }
+  }
+  return true;
 }
 
 /**

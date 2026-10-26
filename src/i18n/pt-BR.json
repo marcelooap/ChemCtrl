@@ -929,14 +929,16 @@
         },
         "validadeTestes": {
           "title": "Verificação da validade dos testes",
-          "hint": "Define, por destino, quais testes entram no checklist e o prazo de verificação de cada um.",
+          "hint": "Define, por destino, quais testes entram no checklist, a validade e o prazo de verificação de cada um.",
           "enable": "Ativar verificação dos testes",
           "prazoInvalid": "Informe um prazo inteiro entre {{min}} e {{max}} dias.",
+          "validadeInvalid": "Informe uma validade inteira entre {{min}} e {{max}} dias.",
+          "validadeRpcMissingBanner": "A validade de cada teste ainda não é gravada no banco. Cole o script SQL no Editor SQL do Supabase, execute e salve de novo.",
           "tableMissingBanner": "A configuração da validade dos testes ainda não existe no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
           "testesColumnMissingBanner": "Os testes por destino ainda não existem no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
           "destinos": {
             "title": "Testes por destino",
-            "hint": "Para cada destino, cadastre só os testes que devem ser conferidos. Informe o nome e o prazo de verificação, em dias. A data limite da conferência é a data de hoje menos esse prazo.",
+            "hint": "Para cada destino, cadastre só os testes que devem ser conferidos. Informe o nome, a validade e o prazo de verificação, em dias. A data mínima de execução é a data de hoje mais o prazo de verificação, menos a validade.",
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Selecione o destino...",
             "prazoLabel": "Prazo de validade (dias)",
@@ -954,6 +956,7 @@
             "testesTitle": "Testes a verificar",
             "testeNomeLabel": "Nome do teste",
             "testeNomePlaceholder": "Ex.: Teste hidrostático",
+            "testeValidadeLabel": "Validade (dias)",
             "testePrazoLabel": "Prazo de verificação (dias)",
             "addTeste": "Adicionar teste",
             "removeTeste": "Remover teste",
@@ -965,7 +968,7 @@
             "requiredHint": "Cadastre ao menos um destino com os testes que devem ser verificados, ou desative a verificação.",
             "destinoRequired": "Selecione um destino.",
             "duplicateDestino": "Este destino já foi cadastrado neste item.",
-            "invalidHint": "Revise os destinos: selecione o destino, sem repetir, e informe o nome e o prazo de cada teste (entre {{min}} e {{max}} dias).",
+            "invalidHint": "Revise os destinos: selecione o destino, sem repetir, e informe o nome, a validade e o prazo de cada teste (entre {{min}} e {{max}} dias).",
             "tableMissingBanner": "Os prazos por destino ainda não existem no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página."
           }
         }
@@ -1288,9 +1291,13 @@
           "validadeTestes": {
             "dataLimite": "Data limite de vencimento dos testes",
             "dataLimiteExecucao": "Data limite",
+            "prazoMinimo": "Prazo mínimo da realização",
+            "prazoMinimoCurto": "mínimo",
             "limiteCurto": "limite",
             "hint": "Prazo de {{dias}} dias a partir de hoje. Confira se o vencimento dos testes do tanque é igual ou posterior a esta data.",
             "execucaoHint": "A data limite é hoje menos {{dias}} dias. A data de execução no físico deve ser maior que {{data}}.",
+            "execucaoHintValidade": "A data mínima de execução é hoje + {{prazo}} dias de verificação − {{validade}} dias de validade. A data de execução no físico deve ser igual ou posterior a {{data}}.",
+            "validade": "Validade",
             "resultado": "Resultado da verificação",
             "destino": "Destino",
             "destinoVazio": "Não informado",

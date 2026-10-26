@@ -929,14 +929,16 @@
         },
         "validadeTestes": {
           "title": "Test validity check",
-          "hint": "For each destination, choose which tests go on the checklist and the verification period of each one.",
+          "hint": "For each destination, choose which tests go on the checklist and the validity and verification period of each one.",
           "enable": "Enable test validity check",
           "prazoInvalid": "Enter a whole number of days between {{min}} and {{max}}.",
+          "validadeInvalid": "Enter a validity as a whole number of days between {{min}} and {{max}}.",
+          "validadeRpcMissingBanner": "Each test's validity is not stored in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and save again.",
           "tableMissingBanner": "The test validity configuration does not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page.",
           "testesColumnMissingBanner": "Tests by destination do not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page.",
           "destinos": {
             "title": "Tests by destination",
-            "hint": "For each destination, register only the tests that must be checked. Enter the name and the verification period, in days. The check cut-off date is today minus that period.",
+            "hint": "For each destination, register only the tests that must be checked. Enter the name, the validity and the verification period, in days. The earliest execution date is today plus the verification period, minus the validity.",
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Select the destination...",
             "prazoLabel": "Validity period (days)",
@@ -954,6 +956,7 @@
             "testesTitle": "Tests to check",
             "testeNomeLabel": "Test name",
             "testeNomePlaceholder": "E.g. Hydrostatic test",
+            "testeValidadeLabel": "Validity (days)",
             "testePrazoLabel": "Verification period (days)",
             "addTeste": "Add test",
             "removeTeste": "Remove test",
@@ -965,7 +968,7 @@
             "requiredHint": "Register at least one destination with the tests to verify, or turn off the check.",
             "destinoRequired": "Select a destination.",
             "duplicateDestino": "This destination is already registered in this item.",
-            "invalidHint": "Review the destinations: select each destination once, and enter a name and a period ({{min}} to {{max}} days) for every test.",
+            "invalidHint": "Review the destinations: select each destination once, and enter a name, a validity and a period ({{min}} to {{max}} days) for every test.",
             "tableMissingBanner": "The periods by destination do not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page."
           }
         }
@@ -1288,9 +1291,13 @@
           "validadeTestes": {
             "dataLimite": "Test expiry cut-off date",
             "dataLimiteExecucao": "Cut-off date",
+            "prazoMinimo": "Earliest execution date",
+            "prazoMinimoCurto": "earliest",
             "limiteCurto": "cut-off",
             "hint": "{{dias}}-day period from today. Check that the tank tests expire on or after this date.",
             "execucaoHint": "The cut-off date is today minus {{dias}} days. The execution date on the physical record must be later than {{data}}.",
+            "execucaoHintValidade": "The earliest execution date is today + {{prazo}} days of verification − {{validade}} days of validity. The execution date on the physical record must be on or after {{data}}.",
+            "validade": "Validity",
             "resultado": "Check result",
             "destino": "Destination",
             "destinoVazio": "Not informed",

@@ -27,19 +27,19 @@ import {
 const COLOR_NONE = '__none__';
 
 function emptyTeste() {
-  return { key: createTempItemId(), nome: '', dias: '' };
+  return { key: createTempItemId(), nome: '', validade: '', dias: '' };
 }
 
 /**
  * Destinos da verificação, cada um com Color Cod e a lista de testes
- * (nome + prazo em dias) que o checklist deve conferir.
+ * (nome, validade e prazo de verificação, em dias) que o checklist deve conferir.
  *
  * @param {{
  *   rows: Array<{
  *     key: string,
  *     destino: string,
  *     color_cod?: string,
- *     testes: Array<{ key: string, nome: string, dias: string|number }>,
+ *     testes: Array<{ key: string, nome: string, validade: string|number, dias: string|number }>,
  *   }>,
  *   onChange: (next: Array<object>) => void,
  *   disabled?: boolean,
@@ -62,11 +62,13 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
       const teste = err.testeIndex == null ? null : rows[err.index]?.testes?.[err.testeIndex];
       const typedNome = String(teste?.nome ?? '').trim() !== '';
       const typedPrazo = String(teste?.dias ?? '').trim() !== '';
+      const typedValidade = String(teste?.validade ?? '').trim() !== '';
       const visible =
         err.code === PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO ||
         err.code === PRAZO_DESTINO_ERROR.DUPLICATE_TESTE ||
         showErrors ||
         (err.code === PRAZO_DESTINO_ERROR.TESTE_PRAZO_INVALID && typedPrazo) ||
+        (err.code === PRAZO_DESTINO_ERROR.TESTE_VALIDADE_INVALID && typedValidade) ||
         (err.code === PRAZO_DESTINO_ERROR.TESTE_NOME_LONG && typedNome);
       if (!visible) continue;
       const mapKey =
@@ -244,15 +246,23 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                     <ul className="space-y-2">
                       {testes.map((teste, testeIndex) => {
                         const nomeError = errorsByRow.get(`${index}:${testeIndex}:nome`);
+                        const validadeError = errorsByRow.get(`${index}:${testeIndex}:validade`);
                         const prazoError = errorsByRow.get(`${index}:${testeIndex}:dias`);
                         const nomeId = `${baseId}-nome-${teste.key}`;
+                        const validadeId = `${baseId}-validade-${teste.key}`;
                         const prazoId = `${baseId}-prazo-${teste.key}`;
                         const labelClass =
-                          testeIndex === 0 ? 'text-xs font-medium' : 'text-xs font-medium sm:sr-only';
+                          testeIndex === 0
+                            ? 'text-xs font-medium sm:flex sm:min-h-8 sm:items-end'
+                            : 'text-xs font-medium sm:sr-only';
+                        const fieldClass = cn(
+                          'h-9',
+                          testeIndex === 0 ? 'mt-1.5' : 'mt-1.5 sm:mt-0'
+                        );
                         return (
                           <li
                             key={teste.key}
-                            className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-start"
+                            className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_9.5rem_auto] sm:items-start"
                           >
                             <div className="min-w-0">
                               <Label htmlFor={nomeId} className={labelClass}>
@@ -268,15 +278,43 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                                   updateTeste(row.key, teste.key, { nome: e.target.value })
                                 }
                                 aria-invalid={Boolean(nomeError)}
-                                className={cn(
-                                  'h-9',
-                                  testeIndex === 0 ? 'mt-1.5' : 'mt-1.5 sm:mt-0',
-                                  nomeError && 'border-destructive'
-                                )}
+                                className={cn(fieldClass, nomeError && 'border-destructive')}
                               />
                               {nomeError ? (
                                 <p role="alert" className="mt-1 text-xs text-destructive">
                                   {testeNomeErrorText(nomeError)}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div>
+                              <Label htmlFor={validadeId} className={labelClass}>
+                                {t(`${prefix}.testeValidadeLabel`)}
+                              </Label>
+                              <Input
+                                id={validadeId}
+                                type="number"
+                                inputMode="numeric"
+                                min={VALIDADE_TESTES_PRAZO_MIN_DIAS}
+                                max={VALIDADE_TESTES_PRAZO_MAX_DIAS}
+                                step={1}
+                                value={teste.validade ?? ''}
+                                disabled={disabled}
+                                onChange={(e) =>
+                                  updateTeste(row.key, teste.key, { validade: e.target.value })
+                                }
+                                aria-invalid={Boolean(validadeError)}
+                                className={cn(fieldClass, validadeError && 'border-destructive')}
+                              />
+                              {validadeError ? (
+                                <p role="alert" className="mt-1 text-xs text-destructive">
+                                  {t(
+                                    'painel.configuracao.checklistExpedicao.validadeTestes.validadeInvalid',
+                                    {
+                                      min: VALIDADE_TESTES_PRAZO_MIN_DIAS,
+                                      max: VALIDADE_TESTES_PRAZO_MAX_DIAS,
+                                    }
+                                  )}
                                 </p>
                               ) : null}
                             </div>
@@ -298,11 +336,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                                   updateTeste(row.key, teste.key, { dias: e.target.value })
                                 }
                                 aria-invalid={Boolean(prazoError)}
-                                className={cn(
-                                  'h-9',
-                                  testeIndex === 0 ? 'mt-1.5' : 'mt-1.5 sm:mt-0',
-                                  prazoError && 'border-destructive'
-                                )}
+                                className={cn(fieldClass, prazoError && 'border-destructive')}
                               />
                               {prazoError ? (
                                 <p role="alert" className="mt-1 text-xs text-destructive">
@@ -323,7 +357,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                               size="icon"
                               className={cn(
                                 'shrink-0 justify-self-end text-muted-foreground hover:text-destructive',
-                                testeIndex === 0 && 'sm:mt-[1.625rem]'
+                                testeIndex === 0 && 'sm:mt-[2.375rem]'
                               )}
                               disabled={disabled}
                               onClick={() => removeTeste(row.key, teste.key)}

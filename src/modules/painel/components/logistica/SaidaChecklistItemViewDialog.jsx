@@ -314,13 +314,26 @@ export default function SaidaChecklistItemViewDialog({
                         <p className="text-sm leading-snug">{teste?.nome || checkDefLabel(c, t)}</p>
                         {teste ? (
                           <p className="mt-0.5 text-xs text-muted-foreground">
+                            {teste.validade != null ? (
+                              <>
+                                {t('painel.comercial.agendamentos.checklist.validadeTestes.validade')}
+                                :{' '}
+                                {t(
+                                  'painel.comercial.agendamentos.checklist.validadeTestes.prazoDias',
+                                  { dias: teste.validade }
+                                )}
+                                {' · '}
+                              </>
+                            ) : null}
                             {t('painel.comercial.agendamentos.checklist.validadeTestes.prazo')}:{' '}
                             {t('painel.comercial.agendamentos.checklist.validadeTestes.prazoDias', {
                               dias: teste.dias,
                             })}
                             {' · '}
                             {t(
-                              'painel.comercial.agendamentos.checklist.validadeTestes.dataLimiteExecucao'
+                              teste.validade != null
+                                ? 'painel.comercial.agendamentos.checklist.validadeTestes.prazoMinimo'
+                                : 'painel.comercial.agendamentos.checklist.validadeTestes.dataLimiteExecucao'
                             )}
                             : {formatDataLimiteTestes(teste.data_limite, i18n.language)}
                           </p>

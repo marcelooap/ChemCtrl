@@ -303,8 +303,8 @@ function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
 
 /**
  * Testes do tanque para o destino da solicitação.
- * A data limite de cada teste é hoje menos o prazo: a execução no físico
- * precisa ser maior que essa data. Destino fora do cadastro não traz testes.
+ * O prazo mínimo da realização é hoje + prazo de verificação − validade.
+ * Sem validade cadastrada, permanece hoje − prazo. Destino fora do cadastro não traz testes.
  */
 function buildValidadeTestes(config, destino, hoje) {
   const resolved = resolverTestesPorDestino(config, destino);
@@ -316,9 +316,18 @@ function buildValidadeTestes(config, destino, hoje) {
       key: validadeTesteCheckKey(teste.nome),
       nome: teste.nome,
       dias: teste.dias,
-      data_limite: calcularDataLimiteTestes(teste.dias, hoje),
+      validade: teste.validade ?? null,
+      data_limite: calcularDataLimiteTestes(teste.dias, hoje, teste.validade),
     })),
   };
+}
+
+/** Prazo e validade iguais aos da conferência já respondida — a data mínima fica congelada. */
+function testePrazoConferenciaIgual(prev, teste) {
+  if (Number(prev?.dias) !== Number(teste?.dias)) return false;
+  const prevValidade = prev?.validade == null || prev.validade === '' ? null : Number(prev.validade);
+  const nextValidade = teste?.validade == null || teste.validade === '' ? null : Number(teste.validade);
+  return prevValidade === nextValidade;
 }
 
 /** Color Cod da eslinga mudou → a verificação da eslinga precisa ser reconferida. */
@@ -830,6 +839,7 @@ export function buildChecklistPayloadV2({ items, user }) {
                   key: teste.key,
                   nome: teste.nome,
                   dias: teste.dias,
+                  validade: teste.validade ?? null,
                   data_limite: teste.data_limite,
                 }))
               : null,
@@ -884,8 +894,8 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ? saved.check_defs
           : null;
 
-    // A data limite anda com o dia até o operador responder. Depois disso, fica a data
-    // da conferência — desde que o prazo daquele teste não tenha mudado.
+    // A data mínima anda com o dia até o operador responder. Depois disso, fica a data
+    // da conferência — desde que validade e prazo daquele teste não tenham mudado.
     const invalidatedTesteKeys = new Set();
     let validade_testes = built.validade_testes;
     if (validade_testes?.testes?.length) {
@@ -898,7 +908,7 @@ export function mergeChecklistItems(builtItems, storedItems) {
           const prev = savedByKey.get(teste.key);
           const answered = Boolean(normalizeCheckValue(saved.checks?.[teste.key]));
           if (!answered || !prev?.data_limite) return teste;
-          if (Number(prev.dias) !== Number(teste.dias)) {
+          if (!testePrazoConferenciaIgual(prev, teste)) {
             invalidatedTesteKeys.add(teste.key);
             return teste;
           }

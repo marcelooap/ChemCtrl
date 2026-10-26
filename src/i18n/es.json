@@ -876,14 +876,16 @@
         },
         "validadeTestes": {
           "title": "Verificación de la vigencia de las pruebas",
-          "hint": "Define, por destino, qué pruebas entran en el checklist y el plazo de verificación de cada una.",
+          "hint": "Define, por destino, qué pruebas entran en el checklist, la vigencia y el plazo de verificación de cada una.",
           "enable": "Activar verificación de las pruebas",
           "prazoInvalid": "Indique un plazo entero entre {{min}} y {{max}} días.",
+          "validadeInvalid": "Indique una vigencia entera entre {{min}} y {{max}} días.",
+          "validadeRpcMissingBanner": "La vigencia de cada prueba aún no se guarda en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y guarde de nuevo.",
           "tableMissingBanner": "La configuración de la vigencia de las pruebas aún no existe en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
           "testesColumnMissingBanner": "Las pruebas por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
           "destinos": {
             "title": "Pruebas por destino",
-            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre y el plazo de verificación, en días. La fecha límite es hoy menos ese plazo.",
+            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre, la vigencia y el plazo de verificación, en días. La fecha mínima de ejecución es hoy más el plazo de verificación, menos la vigencia.",
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Seleccione el destino...",
             "prazoLabel": "Plazo de vigencia (días)",
@@ -901,6 +903,7 @@
             "testesTitle": "Pruebas a verificar",
             "testeNomeLabel": "Nombre de la prueba",
             "testeNomePlaceholder": "Ej.: Prueba hidrostática",
+            "testeValidadeLabel": "Vigencia (días)",
             "testePrazoLabel": "Plazo de verificación (días)",
             "addTeste": "Agregar prueba",
             "removeTeste": "Quitar prueba",
@@ -912,7 +915,7 @@
             "requiredHint": "Registre al menos un destino con las pruebas a verificar, o desactive la verificación.",
             "destinoRequired": "Seleccione un destino.",
             "duplicateDestino": "Este destino ya fue registrado en este ítem.",
-            "invalidHint": "Revise los destinos: seleccione el destino, sin repetir, e indique el nombre y el plazo de cada prueba (entre {{min}} y {{max}} días).",
+            "invalidHint": "Revise los destinos: seleccione el destino, sin repetir, e indique el nombre, la vigencia y el plazo de cada prueba (entre {{min}} y {{max}} días).",
             "tableMissingBanner": "Los plazos por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página."
           }
         }

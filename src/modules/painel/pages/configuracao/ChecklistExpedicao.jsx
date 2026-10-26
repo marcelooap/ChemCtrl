@@ -41,11 +41,12 @@ import checklistConfigSql from '@transbordo/sql/040_t_checklist_expedicao_config
 import checklistDestinosSql from '@transbordo/sql/042_t_checklist_expedicao_validade_destinos.sql?raw';
 import checklistDestinosColorSql from '@transbordo/sql/043_t_checklist_expedicao_validade_destinos_color_cod.sql?raw';
 import checklistTestesSql from '@transbordo/sql/044_t_checklist_expedicao_validade_testes.sql?raw';
+import checklistValidadeTestesSql from '@transbordo/sql/054_t_checklist_expedicao_validade_testes_validade.sql?raw';
 import checklistTanqueVazioSql from '@transbordo/sql/051_t_checklist_expedicao_tanque_vazio.sql?raw';
 
 /**
  * Estado de edição da validade dos testes (`dias` como texto para permitir digitação livre).
- * `destinos`: destino, color cod e os testes (nome + prazo) daquele destino.
+ * `destinos`: destino, color cod e os testes (nome, validade e prazo) daquele destino.
  */
 const DEFAULT_CONFIG_FORM = {
   ativo: DEFAULT_VALIDADE_TESTES_CONFIG.ativo,
@@ -64,6 +65,7 @@ function toConfigForm(config) {
       testes: (p.testes || []).map((teste) => ({
         key: createTempItemId(),
         nome: teste.nome,
+        validade: teste.validade != null ? String(teste.validade) : '',
         dias: String(teste.dias),
       })),
     })),
@@ -113,6 +115,7 @@ export default function ChecklistExpedicao() {
   const [configMissing, setConfigMissing] = useState(false);
   const [destinosMissing, setDestinosMissing] = useState(false);
   const [testesMissing, setTestesMissing] = useState(false);
+  const [validadeRpcMissing, setValidadeRpcMissing] = useState(false);
   const [tanqueVazioMissing, setTanqueVazioMissing] = useState(false);
   const [showDestinoErrors, setShowDestinoErrors] = useState(false);
   const [hadItensCheio, setHadItensCheio] = useState(false);
@@ -346,6 +349,7 @@ export default function ChecklistExpedicao() {
           setConfigMissing(!isChecklistExpedicaoConfigAvailable());
           setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
           setTestesMissing(!isChecklistExpedicaoTestesAvailable());
+          setValidadeRpcMissing(false);
         }
 
         if (itensCheioDirty) {
@@ -403,6 +407,9 @@ export default function ChecklistExpedicao() {
         }
         if (String(err?.message || '').includes('044_t_checklist')) {
           setTestesMissing(true);
+        }
+        if (String(err?.message || '').includes('054_t_checklist')) {
+          setValidadeRpcMissing(true);
         }
         if (String(err?.message || '').includes('051_t_checklist')) {
           setTanqueVazioMissing(true);
@@ -475,6 +482,11 @@ export default function ChecklistExpedicao() {
           missing: testesMissing && !destinosMissing && !configMissing,
           messageKey: 'validadeTestes.testesColumnMissingBanner',
           sql: checklistTestesSql,
+        },
+        {
+          missing: validadeRpcMissing && !testesMissing && !destinosMissing && !configMissing,
+          messageKey: 'validadeTestes.validadeRpcMissingBanner',
+          sql: checklistValidadeTestesSql,
         },
         {
           missing: tanqueVazioMissing && !tableMissing,
