@@ -36,6 +36,7 @@ import {
 } from "@painel/lib/vasilhameReservas";
 import { containerClientMatches } from "@transbordo/lib/saidaOrigem";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
+import { relinkSaidasVasilhameIds } from "@transbordo/lib/vasilhameSaidaLink";
 import {
   formatMass,
   formatNum,
@@ -274,10 +275,13 @@ export default function EstoqueEnvio() {
         // Corrige volumes inflados (duplicata de OP / unificação) pelo histórico real
         let vasilhamesOk = Array.isArray(vascs) ? vascs : [];
         try {
-          const { kept, deletedIds } = await unifyDuplicateVasilhames(
+          const { kept, deletedIds, replacements } = await unifyDuplicateVasilhames(
             vasilhamesOk,
             entities
           );
+          if (replacements?.length) {
+            await relinkSaidasVasilhameIds(replacements);
+          }
           vasilhamesOk =
             deletedIds.length > 0
               ? kept

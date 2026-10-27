@@ -25,6 +25,7 @@ import {
   isOrigemEmbaladoMassa,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
+import { relinkSaidasVasilhameIds } from '@transbordo/lib/vasilhameSaidaLink';
 import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
 import {
   buildFiltracaoFromVasilhame,
@@ -638,6 +639,7 @@ export async function persistTransbordo({
         editingTransbordo ||
         (editingId ? transbordos.find((t) => t.id === editingId) : null);
 
+      let previousOwned = [];
       if (editingId && existingForEdit) {
         codigo = existingForEdit.codigo_transbordo;
         // Reverte top-ups de fracionados feitos por este transbordo antes de reaplicar
@@ -650,6 +652,10 @@ export async function persistTransbordo({
         });
 
         savedTransbordo = await saveTransbordoRow(payload, editingId);
+        // Ids atuais, antes de recriar: saídas já validadas apontam para eles.
+        previousOwned = (vasilhames || []).filter(
+          (v) => v?.transbordo_id && v.transbordo_id === editingId
+        );
         // Remove apenas registros CRIADOS por este transbordo (não os top-ups)
         // Filtrações ligadas caem via ON DELETE CASCADE em vasilhame_id
         await entities.vasilhames.deleteMany({ transbordo_id: editingId });
@@ -838,6 +844,18 @@ export async function persistTransbordo({
         } catch (err) {
           rethrowIfMissingObservacao(err);
         }
+        const replacements = [];
+        for (const old of previousOwned || []) {
+          const created = (createdVasilhames || []).find((row) =>
+            sameTanqueIdentity(row.placa, row.barril, old.placa, old.barril)
+          );
+          if (created && created.id !== old.id) {
+            replacements.push({ from: old.id, to: created.id });
+          }
+        }
+        if (replacements.length > 0) {
+          await relinkSaidasVasilhameIds(replacements);
+        }
         if (produtoFiltrado && createdVasilhames.length > 0) {
           const filtracaoRecords = createdVasilhames
             .filter(isFiltracaoElegivel)
@@ -856,7 +874,10 @@ export async function persistTransbordo({
 
       // Unifica tanques duplicados no pátio (mesma placa)
       const afterSave = await entities.vasilhames.list();
-      await unifyDuplicateVasilhames(afterSave, entities);
+      const unified = await unifyDuplicateVasilhames(afterSave, entities);
+      if (unified?.replacements?.length) {
+        await relinkSaidasVasilhameIds(unified.replacements);
+      }
       await syncFracionadoDosDestinos(destinosOperacionais);
 
       // Origem tankagem: baixa volume + composição no vasilhame (parcial ou total)

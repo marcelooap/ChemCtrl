@@ -33,6 +33,11 @@ import {
   rpcAbaterReservasSaida,
   rpcEstornarReservasSaida,
 } from "@painel/lib/saidaReservas";
+import {
+  alignSaidaItensVasilhames,
+  resolveVasilhameDaSaida,
+  saidaItemSemVasilhame,
+} from "@transbordo/lib/vasilhameSaidaLink";
 
 function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
@@ -108,12 +113,25 @@ export async function applySaidaFiscalToggle(
 ) {
   if (!saida?.id) throw new Error("Saída inválida");
 
-  const itensAll = saida.itens || [];
-  if (checked && itensAll.length === 0) {
+  const rawItens = saida.itens || [];
+  if (checked && rawItens.length === 0) {
     throw new Error(
       "Não é possível validar uma saída sem produtos. Edite a saída e adicione os tanques/produtos."
     );
   }
+
+  // Regravação do transbordo cria outro id para o mesmo tanque. A saída
+  // antiga ainda aponta para o id removido; a placa localiza o registro atual.
+  let vasilhameRows = vasilhames || [];
+  if (rawItens.some((item) => saidaItemSemVasilhame(item, vasilhameRows, { preferPatio: checked }))) {
+    const fresh = await entities.vasilhames.list();
+    const merged = new Map(vasilhameRows.map((row) => [String(row.id), row]));
+    for (const row of fresh || []) merged.set(String(row.id), row);
+    vasilhameRows = [...merged.values()];
+  }
+  const itensAll = alignSaidaItensVasilhames(rawItens, vasilhameRows, {
+    preferPatio: checked,
+  });
   const scope =
     isSaidaModuloPainel(saida) &&
     (moduleScope === ORIGEM_TRANSBORDO ||
@@ -163,7 +181,7 @@ export async function applySaidaFiscalToggle(
   };
 
   const estoqueById = new Map((estoque || []).map((e) => [e.id, e]));
-  const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
+  const vasilhameById = new Map(vasilhameRows.map((v) => [v.id, v]));
   const allTransbordos =
     transbordos || (await entities.transbordos.list());
 
@@ -247,7 +265,20 @@ export async function applySaidaFiscalToggle(
     return { ...item, validado: checked };
   });
 
-  await entities.saidas.update(saida.id, { ...updates, itens: updatedItens });
+  if (checked) {
+    const lost = itens.find(
+      (item) =>
+        item?.tipo === "convencional" &&
+        (item.vasilhame_id || item.vasilhame_placa || item.vasilhame_barril) &&
+        !vasilhameById.get(item.vasilhame_id)
+    );
+    if (lost) {
+      const label = lost.vasilhame_placa || lost.vasilhame_barril || "selecionado";
+      throw new Error(
+        `Não foi possível registrar a data de saída do vasilhame ${label}. Atualize a página e tente novamente.`
+      );
+    }
+  }
 
   // Convencional Transbordo: expedir / retornar ao pátio ANTES do sync de estoque.
   // Se o sync rodar com vasilhame ainda "Expedido" após reverter o fiscal,
@@ -329,6 +360,10 @@ export async function applySaidaFiscalToggle(
     });
     await entities.vasilhames.bulkUpdate(vasilhameUpdates);
   }
+
+  // Status da saída só depois dos tanques. Se a gravação do vasilhame falhar,
+  // a validação não fica marcada sem data de saída.
+  await entities.saidas.update(saida.id, { ...updates, itens: updatedItens });
 
   // Estoque Transbordo: embalado + convencional (após ajustar vasilhames)
   const embaladoIds = itens
@@ -513,14 +548,27 @@ export async function resyncTransbordoStockAfterSaidaEdit(
 
   if (vasilhameIds.size > 0) {
     const patches = [];
+    const seenTargets = new Set();
     for (const vid of vasilhameIds) {
-      const v = vasilhameById.get(vid);
-      if (!v) continue;
+      const item = newConv.itemById[vid] || oldConv.itemById[vid];
+      const v =
+        vasilhameById.get(vid) ||
+        resolveVasilhameDaSaida(
+          {
+            tipo: "convencional",
+            vasilhame_id: vid,
+            vasilhame_placa: item?.vasilhame_placa,
+            vasilhame_barril: item?.vasilhame_barril,
+          },
+          vasilhames,
+          { preferPatio: true }
+        );
+      if (!v || seenTargets.has(v.id)) continue;
+      seenTargets.add(v.id);
       const oldVol = oldConv.map[vid] || 0;
       const newVolTaken = newConv.map[vid] || 0;
       // Estado atual já reflete a baixa do item antigo → devolve o delta
       const volAdj = oldVol - newVolTaken;
-      const item = newConv.itemById[vid] || oldConv.itemById[vid];
       const currentVol = Number(v.volume) || 0;
       const nextVol = Math.max(0, roundVolume(currentVol + volAdj));
       const dens = resolveDensidade(v, item);
@@ -539,7 +587,7 @@ export async function resyncTransbordoStockAfterSaidaEdit(
           : Math.max(0, roundMass((Number(v.peso_liquido) || 0) + pesoAdj));
 
       const patch = {
-        id: vid,
+        id: v.id,
         volume: nextVol,
         peso_liquido: newPesoLiq,
         peso_bruto: roundMass((Number(v.tara) || 0) + newPesoLiq),

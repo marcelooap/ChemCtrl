@@ -1423,6 +1423,7 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
   }
 
   const deletedIds = [];
+  const replacements = [];
   const kept = [];
 
   for (const [, group] of groups) {
@@ -1529,6 +1530,7 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     for (const o of others) {
       await entitiesApi.vasilhames.delete(o.id);
       deletedIds.push(o.id);
+      replacements.push({ from: o.id, to: primary.id });
     }
 
     kept.push(
@@ -1548,7 +1550,7 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     }
   }
 
-  return { kept, deletedIds };
+  return { kept, deletedIds, replacements };
 }
 
 /**

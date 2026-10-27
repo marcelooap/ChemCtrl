@@ -212,9 +212,20 @@ function createEntity(preferredTable) {
       assertConfigured(`${table}.bulkUpdate`);
       if (!records || records.length === 0) return [];
       const results = await Promise.all(
-        records.map(({ id, ...changes }) =>
-          chemflowSupabase.from(table).update(changes).eq('id', id).select().single()
-        )
+        records.map(async ({ id, ...changes }) => {
+          if (!id) return { error: { message: 'Registro sem id' } };
+          const { data, error } = await chemflowSupabase
+            .from(table)
+            .update(changes)
+            .eq('id', id)
+            .select();
+          if (error) return { error };
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!row) {
+            return { error: { message: `Registro não encontrado (${id})` } };
+          }
+          return { data: row };
+        })
       );
       results.forEach((r) => throwIfError(r.error, `${table}.bulkUpdate`));
       return results.map((r) => presentRow(preferredTable, r.data));
