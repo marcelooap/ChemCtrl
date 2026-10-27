@@ -17,6 +17,7 @@ import {
   placaKey,
   applyAdditionalDestino,
   fracionadoEfetivo,
+  capacidadeOperacionalDoTanque,
 } from "@transbordo/lib/vasilhameComposicao";
 import {
   upsertFiltracaoForVasilhame,
@@ -226,7 +227,10 @@ export async function syncVasilhamesFromEntradaLotes({
       const aindaFracionado = fracionadoEfetivo(
         lote.fracionado,
         newVol,
-        fracionadoPatio.capacidade
+        capacidadeOperacionalDoTanque(
+          { ...fracionadoPatio, volume: newVol },
+          newVol
+        )
       );
 
       const updated = await entities.vasilhames.update(fracionadoPatio.id, {

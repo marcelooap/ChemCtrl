@@ -32,9 +32,6 @@ export const isOrigemEmbaladoMassa = (origem) => {
   return isUnidadeMassaEntrada(origem?.unidade_medida || "kg");
 };
 
-/** @deprecated use isOrigemEmbaladoMassa */
-const isMassaOrigem = isOrigemEmbaladoMassa;
-
 const placaKey = (placa, barril) =>
   `${String(placa || "").trim().toUpperCase()}||${String(barril || "").trim().toUpperCase()}`;
 
@@ -138,10 +135,90 @@ export function seedComposicaoFromVasilhame(v) {
   return raw;
 }
 
+/** Só absorve residual de arredondamento — nunca inventa milhares de litros. */
+const ALIGN_VOLUME_TOLERANCIA_L = 1;
+const TOLERANCIA_TANQUE_CHEIO_L = 0.5;
+
+function fifoEntryKey(e) {
+  return `${String(e.transbordo_codigo || "").trim()}|${e.destino_index ?? ""}|${(e.lote || "").trim()}|${roundVolume(e.quantidade_l || 0)}`;
+}
+
+function dedupeFifoEntries(entries = []) {
+  const seen = new Set();
+  const out = [];
+  for (const e of entries || []) {
+    const key = fifoEntryKey(e);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
+}
+
 /**
- * Reconstrói composição a partir dos transbordos que enviaram volume a esta placa.
- * @param {{ alignToVolume?: boolean }} options — se false, não padra entries ao volume do tanque
- *   (útil ao corrigir volume inflado por "Aporte anterior" sintético).
+ * Capacidade operacional do tanque. Vasilhame padrão é 5.000 L; 10.000 L no
+ * cadastro é o caso típico de volume duplicado, não um tanque real de 10 m³.
+ */
+export function capacidadeOperacionalDoTanque(vasilhame, fifoSum = 0) {
+  const cap = Number(vasilhame?.capacidade);
+  const stored = roundVolume(vasilhame?.volume || 0);
+  const hasCap = Number.isFinite(cap) && cap > 0;
+  const looksLikeTanque5000 =
+    Math.abs(stored - 10000) < 1 ||
+    Math.abs(fifoSum - 10000) < 1 ||
+    Math.abs(stored - 5000) < 1 ||
+    Math.abs(fifoSum - 5000) < 1;
+
+  if (hasCap && Math.abs(cap - 10000) < 1 && looksLikeTanque5000) {
+    return 5000;
+  }
+  if (hasCap) return roundVolume(cap);
+  if (looksLikeTanque5000) return 5000;
+  return 0;
+}
+
+/**
+ * Quando vários OPs apontam para a mesma placa e a soma ultrapassa a
+ * capacidade, os destinos mais antigos costumam ter o volume acumulado
+ * (tanque cheio) em vez do incremento. Recorta do fim para o começo.
+ */
+function clipFifoEntriesToCapacidade(entries = [], capacidade, dens = 0) {
+  const cap = roundVolume(capacidade || 0);
+  if (!(cap > 0) || entries.length === 0) return entries;
+  const sum = roundVolume(entries.reduce((s, e) => s + (e.quantidade_l || 0), 0));
+  if (sum <= cap + TOLERANCIA_TANQUE_CHEIO_L) return entries;
+
+  let remaining = cap;
+  const kept = [];
+  for (let i = entries.length - 1; i >= 0 && remaining > 0; i--) {
+    const e = entries[i];
+    const take = roundVolume(Math.min(e.quantidade_l || 0, remaining));
+    if (take <= 0) continue;
+    const kg =
+      dens > 0
+        ? roundMass(take * dens)
+        : (e.quantidade_l || 0) > 0
+          ? roundMass(((e.quantidade_kg || 0) * take) / e.quantidade_l)
+          : roundMass(e.quantidade_kg || 0);
+    kept.push({ ...e, quantidade_l: take, quantidade_kg: kg });
+    remaining = roundVolume(remaining - take);
+  }
+  return kept.reverse();
+}
+
+function composicaoSignature(list = []) {
+  return (list || [])
+    .map(
+      (c) =>
+        `${String(c.transbordo_codigo || "").trim()}|${(c.lote || "").trim()}|${roundVolume(c.quantidade_l || 0)}`
+    )
+    .join(";");
+}
+
+/**
+ * Reconstrói composição a partir dos destinos FIFO que caíram nesta placa.
+ * @param {{ alignToVolume?: boolean }} options — se true, só alinha residual de arredondamento
+ *   (|diff| ≤ 1 L). Nunca padra a composição a um volume inflado do cadastro.
  */
 export function rebuildComposicaoFromTransbordos(
   vasilhame,
@@ -151,86 +228,34 @@ export function rebuildComposicaoFromTransbordos(
   const { alignToVolume = true } = options;
   if (!vasilhame?.placa) return seedComposicaoFromVasilhame(vasilhame);
 
-  const placa = String(vasilhame.placa).trim().toUpperCase();
-  const barril = String(vasilhame.barril || "").trim().toUpperCase();
-  const entries = [];
-
   const sorted = [...(transbordos || [])].sort((a, b) => {
     const ta = new Date(a.created_at || a.created_date || a.data || 0).getTime();
     const tb = new Date(b.created_at || b.created_date || b.data || 0).getTime();
     return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
   });
 
+  const entries = [];
   for (const t of sorted) {
-    const dens =
-      parseFloat(
-        String(t.densidade || vasilhame.densidade || "0").replace(",", ".")
-      ) || 0;
-    (t.destinos || []).forEach((d, destinoIndex) => {
-      if (d.tipo_embalagem && d.tipo_embalagem !== "Vasilhame") return;
-      const dPlaca = String(d.placa || "").trim().toUpperCase();
-      if (dPlaca !== placa) return;
-      const dBarril = String(d.barril || "").trim().toUpperCase();
-      if (barril && dBarril && barril !== dBarril) return;
+    const fifo = composicaoFifoNaPlaca(t, vasilhame.placa, vasilhame.barril);
+    if (fifo.length > 0) {
+      entries.push(...fifo);
+      continue;
+    }
 
+    const dens =
+      parseDensidade(t.densidade) || parseDensidade(vasilhame.densidade);
+    (t.destinos || []).forEach((d, destinoIndex) => {
+      if (!destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)) return;
       const volDest = roundVolume(d.volume_total || d.volume || 0);
       if (volDest <= 0) return;
-
-      const origens = t.origens || [];
-      const totalOrig = roundVolume(
-        origens.reduce((s, o) => s + (o.volume_retirado || 0), 0)
-      );
-
-      if (origens.length === 0) {
-        entries.push({
-          lote: "",
-          quantidade_l: volDest,
-          quantidade_kg: dens > 0 ? roundMass(volDest * dens) : 0,
-          transbordo_codigo: t.codigo_transbordo || null,
-          data: t.data || null,
-          destino_index: destinoIndex,
-        });
-        return;
-      }
-
-      let remaining = volDest;
-      origens.forEach((o, oi) => {
-        if (remaining <= 0) return;
-        const oVol = roundVolume(o.volume_retirado || 0);
-        const share =
-          oi === origens.length - 1
-            ? remaining
-            : Math.min(
-                remaining,
-                totalOrig > 0
-                  ? roundVolume((oVol / totalOrig) * volDest)
-                  : oVol
-              );
-        if (share <= 0) return;
-        const estoqueId = o.estoque_id || o.entrada_id || null;
-        const massaEmbalado = isMassaOrigem(o);
-        entries.push({
-          lote: o.lote || "",
-          origem_index: oi,
-          estoque_id: estoqueId,
-          entrada_id: estoqueId,
-          quantidade_l: share,
-          quantidade_kg: massaEmbalado
-            ? roundMass(share)
-            : dens > 0
-              ? roundMass(share * dens)
-              : roundMass(o.massa_retirada || 0),
-          transbordo_codigo: t.codigo_transbordo || null,
-          data: t.data || null,
-          destino_index: destinoIndex,
-        });
-        remaining -= share;
+      entries.push({
+        lote: d.lote || t.lote || "",
+        quantidade_l: volDest,
+        quantidade_kg: dens > 0 ? roundMass(volDest * dens) : 0,
+        transbordo_codigo: t.codigo_transbordo || null,
+        data: t.data || null,
+        destino_index: destinoIndex,
       });
-      if (remaining > 0 && entries.length > 0) {
-        entries[entries.length - 1].quantidade_l = roundVolume(
-          entries[entries.length - 1].quantidade_l + remaining
-        );
-      }
     });
   }
 
@@ -238,17 +263,29 @@ export function rebuildComposicaoFromTransbordos(
     return seedComposicaoFromVasilhame(vasilhame);
   }
 
-  const sum = roundVolume(entries.reduce((s, e) => s + e.quantidade_l, 0));
+  const unique = dedupeFifoEntries(entries);
+  const dens =
+    parseDensidade(vasilhame.densidade) ||
+    parseDensidade(sorted.find((t) => parseDensidade(t.densidade))?.densidade);
+  const fifoSum = roundVolume(
+    unique.reduce((s, e) => s + (e.quantidade_l || 0), 0)
+  );
+  const cap = capacidadeOperacionalDoTanque(vasilhame, fifoSum);
+  const clipped = clipFifoEntriesToCapacidade(unique, cap, dens);
+
+  const sum = roundVolume(clipped.reduce((s, e) => s + e.quantidade_l, 0));
   const vol = roundVolume(vasilhame.volume || 0);
-  if (alignToVolume && vol > 0 && sum !== vol && entries.length > 0) {
+  if (alignToVolume && vol > 0 && sum !== vol && clipped.length > 0) {
     const diff = vol - sum;
-    entries[entries.length - 1].quantidade_l = Math.max(
-      0,
-      roundVolume(entries[entries.length - 1].quantidade_l + diff)
-    );
+    if (Math.abs(diff) <= ALIGN_VOLUME_TOLERANCIA_L) {
+      clipped[clipped.length - 1].quantidade_l = Math.max(
+        0,
+        roundVolume(clipped[clipped.length - 1].quantidade_l + diff)
+      );
+    }
   }
 
-  return entries.filter((e) => e.quantidade_l > 0);
+  return clipped.filter((e) => e.quantidade_l > 0);
 }
 
 /** Agrega composição por lote (soma L e kg). */
@@ -464,8 +501,6 @@ export function applyLoteDatasToComposicao(
   );
 }
 
-const TOLERANCIA_TANQUE_CHEIO_L = 0.5;
-
 /**
  * Tanque fechado na capacidade cadastrada (ex.: 5.000 L).
  * Sem capacidade no cadastro, não infere “cheio” só pelo volume — evita
@@ -583,7 +618,11 @@ export function applyAdditionalDestino(
     tara: taraFinal,
     // O interruptor do destino vale mesmo com vários lotes na composição.
     // Tanque que fechou a capacidade deixa de ser fracionado.
-    fracionado: fracionadoEfetivo(fracionado, newVol, base.capacidade),
+    fracionado: fracionadoEfetivo(
+      fracionado,
+      newVol,
+      capacidadeOperacionalDoTanque({ ...base, volume: newVol }, newVol)
+    ),
   };
 }
 
@@ -608,17 +647,17 @@ function destinoNaPlaca(destino, placa, barril) {
  */
 export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
   if (!vasilhame) return false;
+  const cap = capacidadeOperacionalDoTanque(
+    vasilhame,
+    roundVolume(vasilhame.volume || 0)
+  );
   const related = (transbordos || []).filter((t) =>
     (t.destinos || []).some((d) =>
       destinoNaPlaca(d, vasilhame.placa, vasilhame.barril)
     )
   );
   if (related.length === 0) {
-    return fracionadoEfetivo(
-      vasilhame.fracionado,
-      vasilhame.volume,
-      vasilhame.capacidade
-    );
+    return fracionadoEfetivo(vasilhame.fracionado, vasilhame.volume, cap);
   }
 
   const lastT = [...related].sort(
@@ -631,16 +670,12 @@ export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
   );
   const lastDest = destinos[destinos.length - 1];
   if (!lastDest) {
-    return fracionadoEfetivo(
-      vasilhame.fracionado,
-      vasilhame.volume,
-      vasilhame.capacidade
-    );
+    return fracionadoEfetivo(vasilhame.fracionado, vasilhame.volume, cap);
   }
   return fracionadoEfetivo(
     lastDest.fracionado === true,
     vasilhame.volume,
-    vasilhame.capacidade
+    cap
   );
 }
 
@@ -774,23 +809,25 @@ function sameTransbordoDoVasilhame(vasilhame, transbordo) {
 
 function destinoMatchesVasilhame(destino, vasilhame, transbordo, destIndex) {
   if (!destino || !vasilhame) return false;
+  if (destinoNaPlaca(destino, vasilhame.placa, vasilhame.barril)) return true;
+
+  const destinoTemPlaca = Boolean(String(destino.placa || "").trim());
+  // Destino sem placa, apontando explicitamente para este tanque.
   if (
+    !destinoTemPlaca &&
     destino.vasilhame_existente_id &&
     destino.vasilhame_existente_id === vasilhame.id
   ) {
     return true;
   }
-  if (destinoNaPlaca(destino, vasilhame.placa, vasilhame.barril)) return true;
   if (!sameTransbordoDoVasilhame(vasilhame, transbordo)) return false;
+  if (destinoTemPlaca) return false;
   if (
     vasilhame.destino_index != null &&
     Number(vasilhame.destino_index) === destIndex
   ) {
     return true;
   }
-  const vLote = String(vasilhame.lote || "").trim();
-  const dLote = String(destino.lote || "").trim();
-  if (vLote && dLote && vLote === dLote) return true;
   return false;
 }
 
@@ -851,7 +888,12 @@ function destinosDoVasilhame(vasilhame, transbordos = []) {
       hits.push(...matched);
       continue;
     }
-    if (destinos.length === 1 && sameTransbordoDoVasilhame(vasilhame, t)) {
+    if (
+      destinos.length === 1 &&
+      sameTransbordoDoVasilhame(vasilhame, t) &&
+      (!String(destinos[0]?.placa || "").trim() ||
+        destinoNaPlaca(destinos[0], vasilhame.placa, vasilhame.barril))
+    ) {
       hits.push({ dest: destinos[0], transbordo: t, destIndex: 0 });
     }
   }
@@ -860,6 +902,29 @@ function destinosDoVasilhame(vasilhame, transbordos = []) {
 
 /** Volume/massa esperados pelos destinos do transbordo. Null se não houver vínculo. */
 export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
+  if ((vasilhame?.tipo || "Vasilhame") === "Vasilhame" && vasilhame?.placa) {
+    const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
+      alignToVolume: false,
+    }).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
+    const volume = roundVolume(
+      history.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+    );
+    if (volume > 0) {
+      const dens =
+        parseDensidade(vasilhame?.densidade) ||
+        parseDensidade(
+          (transbordos || []).find((t) => parseDensidade(t?.densidade))
+            ?.densidade
+        );
+      const massaFromComp = roundMass(
+        history.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
+      );
+      const massa =
+        dens > 0 ? roundMass(volume * dens) : massaFromComp;
+      return { volume, massa, densidade: dens };
+    }
+  }
+
   const hits = destinosDoVasilhame(vasilhame, transbordos);
   if (hits.length === 0) return null;
 
@@ -910,10 +975,124 @@ export function resolveVasilhameOperacionalPar(vasilhame, opts = {}) {
 }
 
 /**
+ * Restaura volume, peso e composição FIFO a partir dos destinos reais da placa.
+ * Idempotente: só grava quando o cadastro diverge dos envases.
+ *
+ * Cobre o caso de tanque completado por vários OPs (ex.: T087 + T100)
+ * cujo volume foi duplicado (10.000 L em tanque de 5.000 L).
+ */
+export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
+  if (!vasilhame?.id) return null;
+  if ((vasilhame.tipo || "Vasilhame") !== "Vasilhame") return null;
+  if ((vasilhame.status || "No Pátio") !== "No Pátio" || vasilhame.data_saida) {
+    return null;
+  }
+
+  const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
+    alignToVolume: false,
+  }).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
+  const historySum = roundVolume(
+    history.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  if (historySum <= 0) return null;
+
+  const pre = preTransbordoEntries(vasilhame, transbordos).filter(
+    (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
+  );
+  const preSum = roundVolume(
+    pre.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  const keepManual =
+    vasilhame.origem === "manual" && preSum > 0;
+  const composicao = keepManual ? [...pre, ...history] : history;
+  const volume = roundVolume(
+    composicao.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  if (volume <= 0) return null;
+
+  if (
+    vasilhame.origem === "manual" &&
+    preSum <= 0 &&
+    roundVolume(vasilhame.volume || 0) > volume + 0.01
+  ) {
+    return null;
+  }
+
+  const storedVol = roundVolume(vasilhame.volume || 0);
+  // Tanque já baixado como origem: não devolve o volume dos destinos.
+  if (storedVol + 0.01 < volume) return null;
+
+  const storedComp = Array.isArray(vasilhame.composicao)
+    ? vasilhame.composicao.filter(
+        (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
+      )
+    : [];
+  const expected = expectedVolumeFromDestinos(vasilhame, transbordos);
+  const dens =
+    parseDensidade(vasilhame.densidade) ||
+    parseDensidade(expected?.densidade);
+  const peso =
+    dens > 0
+      ? roundMass(volume * dens)
+      : expected?.massa > 0
+        ? expected.massa
+        : roundMass(
+            composicao.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
+          );
+  const storedKg = roundMass(vasilhame.peso_liquido || 0);
+  const lote = getDominantLote(composicao) || vasilhame.lote || "";
+  const next = {
+    ...vasilhame,
+    volume,
+    composicao,
+    lote,
+    peso_liquido: peso,
+  };
+  const fracionado = resolveFracionadoFromTransbordos(next, transbordos);
+  const sameVolume = Math.abs(storedVol - volume) < 0.01;
+  const sameComp =
+    composicaoSignature(storedComp) === composicaoSignature(composicao);
+  const sameKg = storedKg <= 0 || Math.abs(storedKg - peso) < 1;
+  const sameFracionado = Boolean(fracionado) === Boolean(vasilhame.fracionado);
+  const sameLote = lote === (vasilhame.lote || "");
+  const tara = roundMass(vasilhame.tara || 0);
+  const cap = capacidadeOperacionalDoTanque(next, volume);
+  const sameCap =
+    cap > 0
+      ? Math.abs(Number(vasilhame.capacidade || 0) - cap) < 0.01
+      : true;
+  if (
+    sameVolume &&
+    sameComp &&
+    sameKg &&
+    sameFracionado &&
+    sameLote &&
+    sameCap
+  ) {
+    return null;
+  }
+
+  return {
+    volume,
+    composicao,
+    lote,
+    peso_liquido: peso,
+    peso_bruto: roundMass(tara + peso),
+    fracionado,
+    ...(cap > 0 && Math.abs(Number(vasilhame.capacidade || 0) - cap) >= 0.01
+      ? { capacidade: cap }
+      : {}),
+  };
+}
+
+/**
  * Restaura volume/peso do tanque a partir dos destinos do transbordo.
  * Idempotente: só grava quando o cadastro diverge do OP.
  */
 export function repairEmbaladoKgStoredAsLitersPatch(vasilhame, transbordos = []) {
+  const fromDestinos = repairVolumeFromDestinosPatch(vasilhame, transbordos);
+  if (fromDestinos) return fromDestinos;
+
   if (!vasilhame?.id) return null;
   if ((vasilhame.status || "No Pátio") !== "No Pátio" || vasilhame.data_saida) {
     return null;
@@ -1156,6 +1335,53 @@ export function findFracionadoNoPatio(vasilhames = [], { placa, barril, id } = {
 }
 
 /**
+ * Tanque no pátio que deve receber o complemento (top-up).
+ * Inclui tanque incompleto mesmo se a tag fracionado estiver desligada.
+ */
+export function findTanquePatioParaComplemento(
+  vasilhames = [],
+  { placa, barril, id } = {}
+) {
+  const fracionado = findFracionadoNoPatio(vasilhames, { placa, barril, id });
+  if (fracionado) return fracionado;
+
+  const noPatio = (vasilhames || []).filter(
+    (v) =>
+      (v.status || "No Pátio") === "No Pátio" &&
+      !v.data_saida &&
+      !TIPOS_NAO_VASILHAME.has(v.tipo || "Vasilhame") &&
+      !isDestinoEmbalagemUnitaria(v.tipo) &&
+      !isVasilhameLegadoEmbalado(v.tipo)
+  );
+
+  if (id) {
+    const byId = noPatio.find((v) => v.id === id);
+    if (
+      byId &&
+      !tanqueEstaCheio(
+        byId.volume,
+        capacidadeOperacionalDoTanque(byId, byId.volume)
+      )
+    ) {
+      return byId;
+    }
+  }
+
+  const same = noPatio.filter((v) =>
+    sameTanqueIdentity(v.placa, v.barril, placa, barril)
+  );
+  const incomplete = same.filter(
+    (v) =>
+      !tanqueEstaCheio(
+        v.volume,
+        capacidadeOperacionalDoTanque(v, v.volume)
+      )
+  );
+  if (incomplete.length === 0) return null;
+  return [...incomplete].sort((a, b) => (b.volume || 0) - (a.volume || 0))[0];
+}
+
+/**
  * Unifica vasilhames duplicados No Pátio (mesma placa+barril).
  */
 export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
@@ -1223,17 +1449,30 @@ export async function unifyDuplicateVasilhames(vasilhames, entitiesApi) {
     const seenSlices = new Set();
     const primaryOp = opKeyOf(primary);
     if (primaryOp) seenSlices.add(`${primaryOp}::${sliceKeyOf(primary)}`);
+    const codesOf = (v) =>
+      new Set(
+        seedComposicaoFromVasilhame(v)
+          .map((c) => String(c.transbordo_codigo || "").trim())
+          .filter((c) => c && c.toLowerCase() !== "manual")
+      );
+    const seenCodes = codesOf(primary);
 
     for (const o of others) {
       const ok = opKeyOf(o);
       const slice = ok ? `${ok}::${sliceKeyOf(o)}` : "";
-      if (ok && seenSlices.has(slice)) {
+      const otherCodes = codesOf(o);
+      const alreadyInPrimary =
+        otherCodes.size > 0 && [...otherCodes].every((c) => seenCodes.has(c));
+      if (alreadyInPrimary || (ok && seenSlices.has(slice))) {
         volume = Math.max(volume, roundVolume(o.volume || 0));
         const otherComp = seedComposicaoFromVasilhame(o);
-        if (otherComp.length > composicao.length) composicao = otherComp;
+        if (otherComp.length > composicao.length && !alreadyInPrimary) {
+          composicao = otherComp;
+        }
         continue;
       }
       if (slice) seenSlices.add(slice);
+      for (const c of otherCodes) seenCodes.add(c);
       volume += roundVolume(o.volume || 0);
       composicao = mergeComposicao(composicao, seedComposicaoFromVasilhame(o));
     }
@@ -1659,6 +1898,146 @@ export async function repairVasilhameComposicao(
       ? { volume, peso_liquido, peso_bruto }
       : {}),
   });
+}
+
+function saidaItemEhTanque(item) {
+  const tipo = String(item?.tipo || "");
+  return (
+    tipo === "convencional" ||
+    tipo === "Vasilhame" ||
+    tipo === "ind_vasilhame"
+  );
+}
+
+function volumeTanqueParaSaida(vasilhame, transbordos = []) {
+  if (!vasilhame) return 0;
+  const expected = expectedVolumeFromDestinos(vasilhame, transbordos);
+  const stored = roundVolume(vasilhame.volume || 0);
+  const cap = capacidadeOperacionalDoTanque(
+    vasilhame,
+    expected?.volume || stored
+  );
+  const candidates = [expected?.volume, stored].filter((v) => v > 0);
+  if (cap > 0) {
+    const fitting = candidates.filter(
+      (v) => v <= cap + TOLERANCIA_TANQUE_CHEIO_L
+    );
+    if (fitting.length > 0) return roundVolume(Math.max(...fitting));
+    return cap;
+  }
+  if (expected?.volume > 0) return expected.volume;
+  return stored;
+}
+
+/**
+ * Corrige item de saída cujo volume foi gravado com o tanque duplicado
+ * (10.000 L em tanque de 5.000 L).
+ */
+export function alignSaidaItemVolumeToVasilhame(
+  item,
+  vasilhame,
+  transbordos = []
+) {
+  if (!saidaItemEhTanque(item) || !vasilhame) return item;
+  const tankVol = volumeTanqueParaSaida(vasilhame, transbordos);
+  if (!(tankVol > 0)) return item;
+  const asked = roundVolume(item.volume_solicitado || 0);
+  if (!(asked > 0)) return item;
+  const doubled =
+    Math.abs(asked - 2 * tankVol) < 1 ||
+    (Math.abs(asked - 10000) < 1 && Math.abs(tankVol - 5000) < 1);
+  const exceeds = asked > tankVol + 1;
+  if (!doubled && !exceeds) return item;
+
+  const dens = parseDensidade(vasilhame.densidade);
+  const massa =
+    dens > 0
+      ? roundMass(tankVol * dens)
+      : roundMass(
+          ((Number(item.peso_liquido) || 0) * tankVol) / (asked || tankVol)
+        );
+  const disp = roundVolume(item.volume_disponivel || 0);
+  return {
+    ...item,
+    volume_solicitado: tankVol,
+    volume_disponivel:
+      Math.abs(disp - 2 * tankVol) < 1 ||
+      Math.abs(disp - 10000) < 1 ||
+      disp > tankVol + 1
+        ? tankVol
+        : disp > 0
+          ? Math.min(disp, tankVol)
+          : tankVol,
+    peso_liquido: massa,
+    quantidade_solicitada: massa,
+    saldo_final: 0,
+  };
+}
+
+/**
+ * Alinha volumes de saídas pendentes ao volume real dos tanques.
+ */
+export async function healSaidaVolumesFromVasilhames({
+  saidas = [],
+  vasilhames = [],
+  transbordos = [],
+  entitiesApi,
+} = {}) {
+  const byId = new Map(
+    (vasilhames || []).filter((v) => v?.id).map((v) => [String(v.id), v])
+  );
+  const byPlaca = new Map();
+  for (const v of vasilhames || []) {
+    const p = String(v.placa || "").trim().toUpperCase();
+    if (!p) continue;
+    const prev = byPlaca.get(p);
+    if (!prev) {
+      byPlaca.set(p, v);
+      continue;
+    }
+    const prevPatio =
+      (prev.status || "No Pátio") === "No Pátio" && !prev.data_saida;
+    const nextPatio =
+      (v.status || "No Pátio") === "No Pátio" && !v.data_saida;
+    if (nextPatio && !prevPatio) byPlaca.set(p, v);
+  }
+
+  const updates = [];
+  const nextSaidas = [];
+
+  for (const saida of saidas || []) {
+    let changed = false;
+    const itens = (saida.itens || []).map((item) => {
+      const v =
+        (item.vasilhame_id ? byId.get(String(item.vasilhame_id)) : null) ||
+        byPlaca.get(
+          String(item.vasilhame_placa || "").trim().toUpperCase()
+        );
+      const aligned = alignSaidaItemVolumeToVasilhame(item, v, transbordos);
+      if (aligned !== item) changed = true;
+      return aligned;
+    });
+    if (!changed) {
+      nextSaidas.push(saida);
+      continue;
+    }
+    const quantidade_total = roundMass(
+      itens.reduce(
+        (s, it) =>
+          s +
+          (Number(it.peso_liquido) || Number(it.quantidade_solicitada) || 0),
+        0
+      )
+    );
+    updates.push({ id: saida.id, itens, quantidade_total });
+    nextSaidas.push({ ...saida, itens, quantidade_total });
+  }
+
+  if (entitiesApi?.saidas?.bulkUpdate && updates.length > 0) {
+    await entitiesApi.saidas.bulkUpdate(updates);
+  }
+
+  return { saidas: nextSaidas, updates };
 }
 
 export { placaKey };

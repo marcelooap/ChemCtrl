@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
 import {
@@ -13,7 +13,8 @@ import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
 import { entities } from "@transbordo/services/entities";
 import { Check, ClipboardList, Download, Files, FileText, Loader2, Printer } from "lucide-react";
-import { formatMass, formatVolume } from "@transbordo/lib/format";
+import { formatMass, formatVolume, roundMass } from "@transbordo/lib/format";
+import { alignSaidaItemVolumeToVasilhame } from "@transbordo/lib/vasilhameComposicao";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
   generateChecklistCargaPDF,
@@ -239,6 +240,13 @@ function findById(list, id) {
 function resolveEmbalagemSource(item, vasilhames, containersById) {
   const vasilhame = findById(vasilhames, item?.vasilhame_id);
   if (vasilhame) return vasilhame;
+  const placa = String(item?.vasilhame_placa || "").trim().toUpperCase();
+  if (placa) {
+    const byPlaca = (vasilhames || []).find(
+      (row) => String(row?.placa || "").trim().toUpperCase() === placa
+    );
+    if (byPlaca) return byPlaca;
+  }
   if (!item?.container_id) return null;
   return containersById.get(String(item.container_id)) || null;
 }
@@ -248,6 +256,7 @@ export default function SaidaViewDialog({
   onClose,
   saida,
   vasilhames = [],
+  transbordos = [],
   entradas = [],
   variant = "default",
   showRelatorioFiscal = true,
@@ -316,11 +325,36 @@ export default function SaidaViewDialog({
     };
   }, [open, saida]);
 
+  const displayItens = useMemo(() => {
+    if (!saida) return [];
+    return (saida.itens || []).map((item) => {
+      const vasilhame = resolveEmbalagemSource(
+        item,
+        vasilhames,
+        containersById
+      );
+      return alignSaidaItemVolumeToVasilhame(item, vasilhame, transbordos);
+    });
+  }, [saida, vasilhames, containersById, transbordos]);
+
+  const displayQuantidadeTotal = useMemo(
+    () =>
+      roundMass(
+        displayItens.reduce(
+          (s, it) =>
+            s +
+            (Number(it.peso_liquido) || Number(it.quantidade_solicitada) || 0),
+          0
+        )
+      ),
+    [displayItens]
+  );
+
   if (!saida) return null;
 
   const isAgendamento = variant === "agendamento";
   const hasChecklist = Array.isArray(checklistItems) && checklistItems.length > 0;
-  const itens = saida.itens || [];
+  const itens = displayItens;
   const checklistProntos = checklistItemsProntos(checklistItems, saida, itens);
   const itemPertenceAoModulo = (item) =>
     !highlightModule || resolveItemOrigem(item) === highlightModule;
@@ -745,7 +779,7 @@ export default function SaidaViewDialog({
           <span>
             Qtd. total:{" "}
             <span className="font-medium text-foreground">
-              {formatMass(saida.quantidade_total)} kg
+              {formatMass(displayQuantidadeTotal || saida.quantidade_total)} kg
             </span>
           </span>
         </div>

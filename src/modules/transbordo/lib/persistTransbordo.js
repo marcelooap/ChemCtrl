@@ -10,7 +10,7 @@ import {
 } from '@transbordo/lib/format';
 import { calculateFIFOAllocation, expandOrigensForFifo } from '@transbordo/lib/fifo';
 import {
-  findFracionadoNoPatio,
+  findTanquePatioParaComplemento,
   mergeComposicao,
   getDominantLote,
   removeComposicaoByTransbordo,
@@ -21,6 +21,7 @@ import {
   placaKey,
   sameTanqueIdentity,
   fracionadoEfetivo,
+  capacidadeOperacionalDoTanque,
   isOrigemEmbaladoMassa,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
@@ -247,7 +248,7 @@ export async function revertTopUpsDoTransbordo({
 
   for (const d of transbordo.destinos || []) {
     if (d.tipo_embalagem !== "Vasilhame" || !(d.placa || d.barril)) continue;
-    const existing = findFracionadoNoPatio(vasilhamesList, {
+    const existing = findTanquePatioParaComplemento(vasilhamesList, {
       placa: d.placa,
       barril: d.barril,
       id: d.vasilhame_existente_id,
@@ -339,7 +340,7 @@ async function syncFracionadoDosDestinos(destinos = []) {
     const fracionado = fracionadoEfetivo(
       byKey.get(key),
       row.volume,
-      row.capacidade
+      capacidadeOperacionalDoTanque(row, row.volume)
     );
     if (Boolean(row.fracionado) === fracionado) continue;
     await entities.vasilhames.update(row.id, { fracionado });
@@ -445,8 +446,19 @@ function buildVasilhameBase(
     responsavel: (data.operadores || []).join(", "),
     fracionado: isUnitario
       ? false
-      : fracionadoEfetivo(d.fracionado, volume, cadastroCapacidade),
-    capacidade: cadastroCapacidade,
+      : fracionadoEfetivo(
+          d.fracionado,
+          volume,
+          capacidadeOperacionalDoTanque(
+            { capacidade: cadastroCapacidade, volume },
+            volume
+          )
+        ),
+    capacidade:
+      capacidadeOperacionalDoTanque(
+        { capacidade: cadastroCapacidade, volume },
+        volume
+      ) || cadastroCapacidade,
     composicao,
     destino_index: destinoIndex,
   };
@@ -726,7 +738,7 @@ export async function persistTransbordo({
           const existing =
             session?.kind === "existing"
               ? session.row
-              : findFracionadoNoPatio(vasilhamesAtuais, {
+              : findTanquePatioParaComplemento(vasilhamesAtuais, {
                   placa: d.placa,
                   barril: d.barril,
                   id: d.vasilhame_existente_id,

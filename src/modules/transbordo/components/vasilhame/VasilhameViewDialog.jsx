@@ -20,6 +20,8 @@ import {
   getDominantLote,
   getLoteEnvaseDate,
   LOTE_APORTE_ANTERIOR,
+  repairVolumeFromDestinosPatch,
+  resolveFracionadoFromTransbordos,
 } from "@transbordo/lib/vasilhameComposicao";
 import { isDestinoEmbalagemUnitaria, isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import { entities } from "@transbordo/services/entities";
@@ -106,8 +108,12 @@ const formatDate = (d) => {
 
     const display = useMemo(() => {
       if (!vasilhame) return null;
-      const base = resolveVasilhameExpedidoDisplay(vasilhame, {
-        linkedItems: collectConvencionalItemsForVasilhame(saidas, vasilhame.id),
+      const destinosPatch = repairVolumeFromDestinosPatch(vasilhame, transbordos);
+      const aligned = destinosPatch
+        ? { ...vasilhame, ...destinosPatch }
+        : vasilhame;
+      const base = resolveVasilhameExpedidoDisplay(aligned, {
+        linkedItems: collectConvencionalItemsForVasilhame(saidas, aligned.id),
         transbordos,
       });
       const resolved = resolveVolumeMassaOperacional({
@@ -124,12 +130,13 @@ const formatDate = (d) => {
 
     if (!vasilhame || !display) return null;
     const status = vasilhame.status || (vasilhame.data_saida ? "Expedido" : "No Pátio");
+    const composicaoAtual = display.composicao || vasilhame.composicao || [];
     const loteDominante =
-      getDominantLote(vasilhame.composicao) || vasilhame.lote || "—";
-    const composicaoAgg = aggregateComposicaoByLote(vasilhame.composicao || []).filter(
+      getDominantLote(composicaoAtual) || display.lote || vasilhame.lote || "—";
+    const composicaoAgg = aggregateComposicaoByLote(composicaoAtual).filter(
       (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
     );
-    const historico = (vasilhame.composicao || []).filter(
+    const historico = composicaoAtual.filter(
       (c) =>
         (c.quantidade_l || 0) > 0 &&
         (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
@@ -187,7 +194,7 @@ const formatDate = (d) => {
                 <p className="text-xs text-muted-foreground">Volume (L)</p>
                 <p className="text-sm font-medium text-primary font-bold inline-flex items-center gap-2 flex-wrap">
                   <span>{formatVolume(display.volume, { empty: "—" })}</span>
-                  {vasilhame.fracionado && (
+                  {resolveFracionadoFromTransbordos(display, transbordos) && (
                     <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
                       Fracionado
                     </span>

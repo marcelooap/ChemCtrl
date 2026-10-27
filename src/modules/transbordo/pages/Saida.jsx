@@ -53,6 +53,10 @@ import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConf
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
+import {
+  healSaidaVolumesFromVasilhames,
+  repairVolumeFromDestinosPatch,
+} from "@transbordo/lib/vasilhameComposicao";
 import { loadTransbordoWorkspaceLists } from "@transbordo/services/transbordoWorkspace";
 
 const STATUS_OPTIONS_VALIDACAO = [
@@ -101,6 +105,7 @@ export default function Saida({
   const [clientes, setClientes] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [transbordos, setTransbordos] = useState([]);
   const [expedidasIds, setExpedidasIds] = useState(() => new Set());
   const [agendamentos, setAgendamentos] = useState([]);
   const [search, setSearch] = useState("");
@@ -155,6 +160,43 @@ export default function Saida({
       } catch (err) {
         console.error("[Transbordo] Falha ao alinhar lote das saídas:", err);
       }
+      try {
+        const repaired = [];
+        for (const row of vasilhamesAlinhados || []) {
+          const patch = repairVolumeFromDestinosPatch(
+            row,
+            volumes.transbordos
+          );
+          if (!patch) {
+            repaired.push(row);
+            continue;
+          }
+          try {
+            const updated = await entities.vasilhames.update(row.id, patch);
+            repaired.push({ ...row, ...(updated || {}), ...patch });
+          } catch (err) {
+            console.error(
+              "[Transbordo] Falha ao restaurar volume do vasilhame:",
+              err
+            );
+            repaired.push(row);
+          }
+        }
+        vasilhamesAlinhados = repaired;
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar volume dos vasilhames:", err);
+      }
+      try {
+        const volHealed = await healSaidaVolumesFromVasilhames({
+          saidas: list,
+          vasilhames: vasilhamesAlinhados,
+          transbordos: volumes.transbordos,
+          entitiesApi: entities,
+        });
+        list = volHealed.saidas || list;
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
+      }
       if (onlyIndustrializacao) {
         list = list.filter(saidaHasIndustrializacaoItems);
       } else if (!isExpedicao) {
@@ -167,6 +209,7 @@ export default function Saida({
       setClientes(cliens);
       setEntradas(volumes.estoque);
       setVasilhames(vasilhamesAlinhados);
+      setTransbordos(volumes.transbordos || []);
       setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
       setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {
@@ -695,6 +738,7 @@ export default function Saida({
         onClose={() => setViewSaida(null)}
         saida={viewSaida}
         vasilhames={vasilhames}
+        transbordos={transbordos}
         entradas={entradas}
         showRelatorioFiscal={!isExpedicao}
         showChecklistColumn={isExpedicao}

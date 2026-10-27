@@ -38,6 +38,8 @@ import {
   LOTE_APORTE_ANTERIOR,
   collapsedPlacaHealPatch,
   repairEmbaladoKgStoredAsLitersPatch,
+  repairVolumeFromDestinosPatch,
+  healSaidaVolumesFromVasilhames,
   resolveVasilhameOperacionalPar,
   resolveFracionadoFromTransbordos,
   resolveVasilhameLoteDatas,
@@ -190,7 +192,10 @@ function renderVolumeQuantidadeCells(vasilhame, medida, transbordos = []) {
   };
 
   // Fracionado é o destino parcial do tanque (TB), mesmo com mais de um lote na composição.
-  const fracionadoBadge = vasilhame.fracionado ? (
+  const fracionadoBadge = resolveFracionadoFromTransbordos(
+    vasilhame,
+    transbordos
+  ) ? (
     <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
       Fracionado
     </span>
@@ -416,15 +421,20 @@ export default function Vasilhames() {
       const list = [];
       for (const raw of vas || []) {
         const source = vasById.get(raw.id) || raw;
+        const patchDestinos = repairVolumeFromDestinosPatch(
+          source,
+          volumes.transbordos
+        );
         const patchPlaca = collapsedPlacaHealPatch(source, volumes.transbordos);
         const patchKgL = repairEmbaladoKgStoredAsLitersPatch(
           source,
           volumes.transbordos
         );
         const patch =
-          patchPlaca || patchKgL
+          patchDestinos ||
+          (patchPlaca || patchKgL
             ? { ...(patchPlaca || {}), ...(patchKgL || {}) }
-            : null;
+            : null);
         if (!patch) {
           list.push(normalizeVasilhameLote(source));
           continue;
@@ -493,8 +503,22 @@ export default function Vasilhames() {
         withFracionado.push(next);
       }
 
+      let saidasAlinhadas = saidasList || [];
+      try {
+        const volHealed = await healSaidaVolumesFromVasilhames({
+          saidas: saidasAlinhadas,
+          vasilhames: withFracionado,
+          transbordos: alignedTransbordos,
+          entitiesApi: entities,
+        });
+        saidasAlinhadas = volHealed.saidas || saidasAlinhadas;
+      } catch (err) {
+        console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
+      }
+
       setTransbordos(alignedTransbordos);
       setVasilhames(withFracionado);
+      setSaidas(saidasAlinhadas);
       setProdutos(prods);
       setClientes(cliens);
     } catch {
