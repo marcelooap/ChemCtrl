@@ -35,6 +35,7 @@ import {
 import {
   normalizeVasilhameLote,
   getDominantLote,
+  loteExibidoDoVasilhame,
   LOTE_APORTE_ANTERIOR,
   collapsedPlacaHealPatch,
   repairEmbaladoKgStoredAsLitersPatch,
@@ -614,10 +615,7 @@ export default function Vasilhames() {
     ? {
         id: labelResolved.id,
         product: labelResolved.produto_nome || "—",
-        lot:
-          String(labelResolved.lote || "").trim() ||
-          getDominantLote(labelResolved.composicao) ||
-          "—",
+        lot: loteExibidoDoVasilhame(labelResolved) || "—",
         client: labelResolved.cliente_nome,
         op_number: labelResolved.codigo || "—",
         container_number: labelResolved.placa || "",
@@ -1323,10 +1321,7 @@ export default function Vasilhames() {
                       <td className="px-4 py-3 text-muted-foreground">{v.cliente_nome || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {(() => {
-                          const displayLote =
-                            (v.lote || "").trim() ||
-                            getDominantLote(v.composicao) ||
-                            "-";
+                          const displayLote = loteExibidoDoVasilhame(v) || "-";
                           const uniqueLotes = new Set(
                             (v.composicao || [])
                               .map((c) => (c.lote || "").trim())

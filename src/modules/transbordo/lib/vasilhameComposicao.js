@@ -725,6 +725,7 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
   if ((vasilhame.tipo || "Vasilhame") !== "Vasilhame") return null;
   if ((vasilhame.status || "No Pátio") !== "No Pátio") return null;
   if (vasilhame.data_saida) return null;
+  if (composicaoTemLoteManual(vasilhame.composicao)) return null;
 
   const codigo = String(vasilhame.numero_op || vasilhame.codigo || "").trim();
   const op = (transbordos || []).find((t) => {
@@ -974,6 +975,22 @@ export function resolveVasilhameOperacionalPar(vasilhame, opts = {}) {
   };
 }
 
+/** Edição do lote na tela de vasilhames. O reparo FIFO não pode desfazer esse nome. */
+export function composicaoTemLoteManual(composicao) {
+  return (composicao || []).some((entry) => entry?.lote_manual);
+}
+
+/**
+ * Lote da listagem e da etiqueta.
+ * Lote editado no cadastro prevalece sobre o lote dominante da composição.
+ */
+export function loteExibidoDoVasilhame(vasilhame) {
+  if (!vasilhame) return "";
+  const header = String(vasilhame.lote || "").trim();
+  if (composicaoTemLoteManual(vasilhame.composicao) && header) return header;
+  return getDominantLote(vasilhame.composicao) || header || "";
+}
+
 /**
  * Restaura volume, peso e composição FIFO a partir dos destinos reais da placa.
  * Idempotente: só grava quando o cadastro diverge dos envases.
@@ -987,6 +1004,8 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   if ((vasilhame.status || "No Pátio") !== "No Pátio" || vasilhame.data_saida) {
     return null;
   }
+  // Lote alterado no cadastro é a fonte da tela e da etiqueta.
+  if (composicaoTemLoteManual(vasilhame.composicao)) return null;
 
   const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
     alignToVolume: false,
@@ -1092,6 +1111,7 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
 export function repairEmbaladoKgStoredAsLitersPatch(vasilhame, transbordos = []) {
   const fromDestinos = repairVolumeFromDestinosPatch(vasilhame, transbordos);
   if (fromDestinos) return fromDestinos;
+  if (composicaoTemLoteManual(vasilhame.composicao)) return null;
 
   if (!vasilhame?.id) return null;
   if ((vasilhame.status || "No Pátio") !== "No Pátio" || vasilhame.data_saida) {
@@ -1643,13 +1663,14 @@ export function applyEditedLotesToComposicao(composicao = [], edits = [], densid
           : sum > 0
             ? roundMass(((prev.quantidade_kg || 0) * qL) / (prev.quantidade_l || 1))
             : roundMass(prev.quantidade_kg || 0);
-      base[entryIndex] = {
+      const next = {
         ...prev,
         lote: nextLote,
-        lote_manual: true,
         quantidade_l: qL,
         quantidade_kg: kg,
       };
+      if (nextLote !== original) next.lote_manual = true;
+      base[entryIndex] = next;
     });
   }
 
@@ -1658,6 +1679,10 @@ export function applyEditedLotesToComposicao(composicao = [], edits = [], densid
 
 export function normalizeVasilhameLote(v) {
   if (!v) return v;
+  // Lote gravado na edição não volta para o lote dominante do FIFO.
+  if (composicaoTemLoteManual(v.composicao) && String(v.lote || "").trim()) {
+    return v;
+  }
   const dominant = getDominantLote(v.composicao);
   if (dominant && dominant !== v.lote) {
     return { ...v, lote: dominant };
@@ -1681,6 +1706,9 @@ export async function repairVasilhameComposicao(
   entitiesApi
 ) {
   if (!vasilhame) return vasilhame;
+  if (composicaoTemLoteManual(vasilhame.composicao)) {
+    return normalizeVasilhameLote(vasilhame);
+  }
   const rawHasFake = hasAporteAnterior(vasilhame.composicao);
   const seeded = seedComposicaoFromVasilhame(vasilhame);
   const seededHasFake = hasAporteAnterior(seeded);

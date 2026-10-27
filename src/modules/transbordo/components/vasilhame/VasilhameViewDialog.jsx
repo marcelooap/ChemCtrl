@@ -17,7 +17,7 @@ import { generateBoletaPDF } from "@transbordo/lib/pdfBoleta";
 import { generateRelatorioFiscalPDF } from "@transbordo/lib/pdfFiscal";
 import {
   aggregateComposicaoByLote,
-  getDominantLote,
+  loteExibidoDoVasilhame,
   getLoteEnvaseDate,
   LOTE_APORTE_ANTERIOR,
   repairVolumeFromDestinosPatch,
@@ -132,7 +132,9 @@ const formatDate = (d) => {
     const status = vasilhame.status || (vasilhame.data_saida ? "Expedido" : "No Pátio");
     const composicaoAtual = display.composicao || vasilhame.composicao || [];
     const loteDominante =
-      getDominantLote(composicaoAtual) || display.lote || vasilhame.lote || "—";
+      loteExibidoDoVasilhame(display) ||
+      loteExibidoDoVasilhame(vasilhame) ||
+      "—";
     const composicaoAgg = aggregateComposicaoByLote(composicaoAtual).filter(
       (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
     );
