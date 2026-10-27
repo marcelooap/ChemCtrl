@@ -1,5 +1,11 @@
 import { jsPDF } from "jspdf";
-import { formatNum, formatVolume, roundVolume, roundMass } from "@transbordo/lib/format";
+import {
+  formatNum,
+  formatVolume,
+  roundVolume,
+  roundMass,
+  roundQuantidade,
+} from "@transbordo/lib/format";
 import {
   aggregateComposicaoByLote,
   getDominantLote,
@@ -463,6 +469,51 @@ export function generateRelatorioFiscalPDF(vasilhame) {
 }
 
 /**
+ * Reparte a massa líquida da saída pelos volumes de cada lote, em kg com
+ * 3 casas. A última linha absorve o resto para a soma bater exatamente
+ * com a massa do item — arredondar cada lote para inteiro gera +1 kg
+ * quando o volume da mistura é fracionado.
+ */
+function distributeKgByVolume(totalKg, volumes) {
+  const total = roundQuantidade(totalKg);
+  const vols = (volumes || []).map((v) => Math.max(0, Number(v) || 0));
+  if (vols.length === 0) return [];
+  const sumVol = vols.reduce((s, v) => s + v, 0);
+  if (!(sumVol > 0) || !(total > 0)) return vols.map(() => 0);
+  if (vols.length === 1) return [total];
+
+  const parts = vols.map((v, i) =>
+    i === vols.length - 1 ? 0 : roundQuantidade((total * v) / sumVol)
+  );
+  const assigned = roundQuantidade(
+    parts.slice(0, -1).reduce((s, n) => s + n, 0)
+  );
+  parts[parts.length - 1] = roundQuantidade(total - assigned);
+  return parts;
+}
+
+/** Massa da linha de saída (kg). A quantidade solicitada é a que fecha o total do relatório. */
+function resolveMassaFiscal(item, vasilhame, composicao, scale) {
+  const qtd = Number(item?.quantidade_solicitada) || 0;
+  if (qtd > 0) return roundQuantidade(qtd);
+
+  const fator = scale || 1;
+  const pesoItem = Number(item?.peso_liquido) || 0;
+  const pesoVasilhame = Number(vasilhame?.peso_liquido) || 0;
+  const comp = (composicao || []).reduce((s, c) => s + (Number(c.massa) || 0), 0);
+  const cheio = pesoVasilhame > 0 ? pesoVasilhame : comp;
+
+  if (pesoItem > 0) {
+    const pesoEhDoTanqueCheio =
+      fator !== 1 && cheio > 0 && Math.abs(pesoItem - cheio) <= 1;
+    return roundQuantidade(pesoEhDoTanqueCheio ? pesoItem * fator : pesoItem);
+  }
+
+  if (pesoVasilhame > 0) return roundQuantidade(pesoVasilhame * fator);
+  return roundQuantidade(comp * fator);
+}
+
+/**
  * Monta linhas de lote a partir do vasilhame (composição / mistura).
  * Uma linha por lote. Se o volume solicitado for parcial, proporcionaliza.
  */
@@ -516,7 +567,9 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
         ),
         lote,
         volume: volumeAlvo,
-        massa: roundMass(item.peso_liquido || item.quantidade_solicitada || 0),
+        massa: roundQuantidade(
+          item.quantidade_solicitada || item.peso_liquido || 0
+        ),
         tara,
       },
     ];
@@ -528,7 +581,13 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
       ? volumeAlvo / totalVol
       : 1;
 
-  return composicao.map((c) => {
+  const volumes = composicao.map((c) => roundVolume((c.volume || 0) * scale));
+  const massas = distributeKgByVolume(
+    resolveMassaFiscal(item, vasilhame, composicao, scale),
+    volumes
+  );
+
+  return composicao.map((c, i) => {
     const lote = c.lote || item.lote || "-";
     return {
       codigo,
@@ -538,8 +597,8 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
         { vasilhame, includeLote: false, context: "fiscal" }
       ),
       lote,
-      volume: roundVolume((c.volume || 0) * scale),
-      massa: roundMass((c.massa || 0) * scale),
+      volume: volumes[i],
+      massa: massas[i],
       tara,
     };
   });
@@ -696,7 +755,7 @@ function drawItensFiscaisTables(doc, startY, { embaladoRows, convencionalRows })
       r.informacoes || r.embalagem || "-",
       r.lote || "-",
       fmtVolume(r.volume),
-      fmtNum(r.massa, 0),
+      fmtNum(r.massa, 3),
       fmtNum(r.tara, 0),
     ]);
     const totalVol = convencionalRows.reduce((s, r) => s + (r.volume || 0), 0);
@@ -707,7 +766,7 @@ function drawItensFiscaisTables(doc, startY, { embaladoRows, convencionalRows })
       "",
       "",
       fmtVolume(totalVol) + " L",
-      fmtNum(totalMass, 0) + " kg",
+      fmtNum(totalMass, 3) + " kg",
       "",
     ];
     drawTypedTable(
@@ -763,7 +822,7 @@ export function generateRelatorioFiscalVasilhamesPDF(
       ["Cliente", list[0].cliente_nome || "-", 2],
       ["Data Emissão", fmtDate(new Date())],
       ["Vasilhames", codigos.join(", "), 2],
-      ["Qtd. Total", fmtNum(totalMassa, 0) + " kg"],
+      ["Qtd. Total", fmtNum(totalMassa, 3) + " kg"],
       ["Responsável", responsavel || "-", 3],
     ],
     3
