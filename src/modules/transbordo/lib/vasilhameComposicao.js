@@ -6,7 +6,12 @@ import {
   parseDensidade,
   roundVolume,
   roundMass,
+  litrosFromMassaKg,
 } from "@transbordo/lib/format";
+import {
+  isUnidadeMassaEntrada,
+  findTransbordosForVasilhame,
+} from "@transbordo/lib/estoqueSaldo";
 import {
   calculateFIFOAllocation,
   expandOrigensForFifo,
@@ -20,24 +25,15 @@ import {
 /** Rótulo sintético — só quando há residual sem lote real atribuível. */
 export const LOTE_APORTE_ANTERIOR = "Aporte anterior";
 
-const isMassaOrigem = (origem) => {
+export const isOrigemEmbaladoMassa = (origem) => {
   const embalado =
     origem?.tipo_origem === "embalado" || Boolean(origem?.embalado);
-  const u = String(origem?.unidade_medida || (embalado ? "kg" : ""))
-    .trim()
-    .toLowerCase();
-  return (
-    embalado &&
-    (u === "kg" ||
-      u === "kgs" ||
-      u === "quilo" ||
-      u === "quilos" ||
-      u === "lb" ||
-      u === "lbs" ||
-      u === "libra" ||
-      u === "libras")
-  );
+  if (!embalado) return false;
+  return isUnidadeMassaEntrada(origem?.unidade_medida || "kg");
 };
+
+/** @deprecated use isOrigemEmbaladoMassa */
+const isMassaOrigem = isOrigemEmbaladoMassa;
 
 const placaKey = (placa, barril) =>
   `${String(placa || "").trim().toUpperCase()}||${String(barril || "").trim().toUpperCase()}`;
@@ -762,6 +758,191 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
     lote: getDominantLote(composicao) || vasilhame.lote || "",
     peso_liquido: peso,
     peso_bruto: roundMass(tara + peso),
+  };
+}
+
+function sameTransbordoDoVasilhame(vasilhame, transbordo) {
+  if (!vasilhame || !transbordo) return false;
+  if (vasilhame.transbordo_id && vasilhame.transbordo_id === transbordo.id) {
+    return true;
+  }
+  const codigo = String(vasilhame.numero_op || vasilhame.codigo || "").trim();
+  return Boolean(
+    codigo && codigo === String(transbordo.codigo_transbordo || "").trim()
+  );
+}
+
+function destinoMatchesVasilhame(destino, vasilhame, transbordo, destIndex) {
+  if (!destino || !vasilhame) return false;
+  if (
+    destino.vasilhame_existente_id &&
+    destino.vasilhame_existente_id === vasilhame.id
+  ) {
+    return true;
+  }
+  if (destinoNaPlaca(destino, vasilhame.placa, vasilhame.barril)) return true;
+  if (!sameTransbordoDoVasilhame(vasilhame, transbordo)) return false;
+  if (
+    vasilhame.destino_index != null &&
+    Number(vasilhame.destino_index) === destIndex
+  ) {
+    return true;
+  }
+  const vLote = String(vasilhame.lote || "").trim();
+  const dLote = String(destino.lote || "").trim();
+  if (vLote && dLote && vLote === dLote) return true;
+  return false;
+}
+
+/**
+ * Destino de origem embalada em kg: a UI grava a quantidade em kg no volume.
+ * Só converte kg→L quando o peso é o próprio kg (não quando peso = L × densidade).
+ */
+function destinoToLitrosKg(destino, origens = [], densidade, transbordo = null) {
+  const dens = parseDensidade(densidade);
+  const qty = roundVolume(destino?.volume_total || destino?.volume || 0);
+  const peso = roundMass(destino?.peso_liquido || 0);
+  const origemLinked = (origens || []).find(
+    (o) => o?._uid && o._uid === destino?.origem_uid
+  );
+  const massaOrigem =
+    isOrigemEmbaladoMassa(origemLinked) ||
+    (origens || []).some(isOrigemEmbaladoMassa);
+
+  if (massaOrigem && dens > 0 && qty > 0) {
+    const origMass = roundMass(
+      origemLinked?.massa_retirada || transbordo?.massa_total || 0
+    );
+    if (peso > 0 && Math.abs(peso - roundMass(qty)) <= 1) {
+      return {
+        volume: roundVolume(litrosFromMassaKg(qty, dens)),
+        massa: peso,
+      };
+    }
+    if (
+      origMass > 0 &&
+      Math.abs(qty - origMass) <= 1 &&
+      Math.abs(peso - roundMass(qty * dens)) <= 2
+    ) {
+      return {
+        volume: roundVolume(litrosFromMassaKg(qty, dens)),
+        massa: origMass,
+      };
+    }
+  }
+
+  return {
+    volume: qty,
+    massa: peso > 0 ? peso : dens > 0 ? roundMass(qty * dens) : 0,
+  };
+}
+
+function destinosDoVasilhame(vasilhame, transbordos = []) {
+  const related = findTransbordosForVasilhame(vasilhame, transbordos);
+  const hits = [];
+  for (const t of related) {
+    const destinos = t.destinos || [];
+    const matched = destinos
+      .map((d, i) => ({ dest: d, transbordo: t, destIndex: i }))
+      .filter(({ dest, destIndex }) =>
+        destinoMatchesVasilhame(dest, vasilhame, t, destIndex)
+      );
+    if (matched.length > 0) {
+      hits.push(...matched);
+      continue;
+    }
+    if (destinos.length === 1 && sameTransbordoDoVasilhame(vasilhame, t)) {
+      hits.push({ dest: destinos[0], transbordo: t, destIndex: 0 });
+    }
+  }
+  return hits;
+}
+
+/** Volume/massa esperados pelos destinos do transbordo. Null se não houver vínculo. */
+export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
+  const hits = destinosDoVasilhame(vasilhame, transbordos);
+  if (hits.length === 0) return null;
+
+  const dens =
+    parseDensidade(vasilhame?.densidade) ||
+    parseDensidade(hits.find((h) => h.transbordo?.densidade)?.transbordo?.densidade);
+  let volume = 0;
+  let massa = 0;
+  for (const { dest, transbordo } of hits) {
+    const par = destinoToLitrosKg(
+      dest,
+      transbordo?.origens || [],
+      dens || transbordo?.densidade,
+      transbordo
+    );
+    volume += par.volume;
+    massa += par.massa;
+  }
+  volume = roundVolume(volume);
+  massa = roundMass(massa);
+  if (!(volume > 0)) return null;
+  if (!(massa > 0) && dens > 0) massa = roundMass(volume * dens);
+  return { volume, massa, densidade: dens };
+}
+
+/** Volume/massa operacionais: destinos do OP prevalecem sobre o campo corrompido. */
+export function resolveVasilhameOperacionalPar(vasilhame, opts = {}) {
+  const fromDest = expectedVolumeFromDestinos(
+    vasilhame,
+    opts.transbordos || []
+  );
+  const dens =
+    parseDensidade(opts.densidade) ||
+    parseDensidade(fromDest?.densidade) ||
+    parseDensidade(vasilhame?.densidade);
+  if (fromDest) {
+    return {
+      volume: fromDest.volume,
+      massa: fromDest.massa,
+      densidade: dens,
+    };
+  }
+  return {
+    volume: roundVolume(vasilhame?.volume || 0),
+    massa: roundMass(vasilhame?.peso_liquido || 0),
+    densidade: dens,
+  };
+}
+
+/**
+ * Restaura volume/peso do tanque a partir dos destinos do transbordo.
+ * Idempotente: só grava quando o cadastro diverge do OP.
+ */
+export function repairEmbaladoKgStoredAsLitersPatch(vasilhame, transbordos = []) {
+  if (!vasilhame?.id) return null;
+  if ((vasilhame.status || "No Pátio") !== "No Pátio" || vasilhame.data_saida) {
+    return null;
+  }
+
+  const expected = expectedVolumeFromDestinos(vasilhame, transbordos);
+  if (!expected) return null;
+
+  const storedVol = roundVolume(vasilhame.volume || 0);
+  const storedKg = roundMass(vasilhame.peso_liquido || 0);
+  if (
+    Math.abs(storedVol - expected.volume) < 0.01 &&
+    (storedKg <= 0 || Math.abs(storedKg - expected.massa) < 1)
+  ) {
+    return null;
+  }
+
+  const dens = expected.densidade || parseDensidade(vasilhame.densidade);
+  const composicao = rescaleComposicaoToVolume(
+    Array.isArray(vasilhame.composicao) ? vasilhame.composicao : [],
+    expected.volume,
+    dens
+  );
+  const tara = roundMass(vasilhame.tara || 0);
+  return {
+    volume: expected.volume,
+    peso_liquido: expected.massa,
+    peso_bruto: roundMass(tara + expected.massa),
+    ...(composicao.length > 0 ? { composicao } : {}),
   };
 }
 

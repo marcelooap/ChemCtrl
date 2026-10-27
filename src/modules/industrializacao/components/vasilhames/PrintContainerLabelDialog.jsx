@@ -4,6 +4,7 @@ import { Loader2, Printer } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -70,11 +71,33 @@ export default function PrintContainerLabelDialog({
   const [printing, setPrinting] = useState(false);
   const [meta, setMeta] = useState(null);
 
-  if (sessionKey !== formSession) {
+  const dialogOpen = Boolean(open && container);
+
+  useEffect(() => {
+    if (!dialogOpen || !container) return;
+    if (sessionKey === formSession) return;
     setFormSession(sessionKey);
-    setVolume(sessionKey ? defaultVolumeForContainer(container, productions) : '');
+    setVolume(defaultVolumeForContainer(container, productions));
     setQty(1);
-  }
+  }, [dialogOpen, sessionKey, formSession, container, productions]);
+
+  useEffect(() => {
+    if (dialogOpen) return;
+    setFormSession('');
+    setVolume('');
+    setQty(1);
+    setPrinting(false);
+    setMeta(null);
+  }, [dialogOpen]);
+
+  const handleOpenChange = (nextOpen) => {
+    if (nextOpen) {
+      onOpenChange?.(true);
+      return;
+    }
+    setPrinting(false);
+    onOpenChange?.(false);
+  };
 
   const manualVolume = labelRequiresManualVolume(container);
   const production = useMemo(
@@ -101,7 +124,7 @@ export default function PrintContainerLabelDialog({
   const volumePlaceholder = suggestLabelVolumePlaceholder(container?.type || container?.tipo);
 
   useEffect(() => {
-    if (!open || !container) return undefined;
+    if (!dialogOpen || !container) return undefined;
 
     let cancelled = false;
     setMeta(null);
@@ -143,7 +166,7 @@ export default function PrintContainerLabelDialog({
     })();
 
     return () => { cancelled = true; };
-  }, [open, container?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dialogOpen, container?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePrint = async () => {
     if (!container || !volumeOk || !qtyOk) {
@@ -173,7 +196,7 @@ export default function PrintContainerLabelDialog({
         orientation: meta?.printConfig?.orientation,
         responsavelTecnico: meta?.responsavelTecnico,
       });
-      onOpenChange?.(false);
+      handleOpenChange(false);
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
     } finally {
@@ -199,7 +222,7 @@ export default function PrintContainerLabelDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-[760px] flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>{t('containers.vasilhames.printLabelTitle')}</DialogTitle>
@@ -286,10 +309,13 @@ export default function PrintContainerLabelDialog({
         )}
 
         <DialogFooter className="mt-2 shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange?.(false)} disabled={printing}>
-            {t('buttons.cancel')}
-          </Button>
+          <DialogClose asChild>
+            <Button type="button" variant="outline" disabled={printing}>
+              {t('buttons.cancel')}
+            </Button>
+          </DialogClose>
           <Button
+            type="button"
             onClick={handlePrint}
             disabled={printing || loading || !volumeOk || !qtyOk}
             className="text-white"

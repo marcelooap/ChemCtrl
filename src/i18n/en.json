@@ -967,6 +967,7 @@
             "empty": "No destination registered. Add a destination and the tests shipping must check.",
             "requiredHint": "Register at least one destination with the tests to verify, or turn off the check.",
             "destinoRequired": "Select a destination.",
+            "destinoInvalid": "Select a destination from the list (same as Exit Request).",
             "duplicateDestino": "This destination is already registered in this item.",
             "invalidHint": "Review the destinations: select each destination once, and enter a name, a validity and a period ({{min}} to {{max}} days) for every test.",
             "tableMissingBanner": "The periods by destination do not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page."
@@ -1598,6 +1599,7 @@
         "saidaCarregamentoTitle": "Loading",
         "saidaCarregamentoResponsavel": "Responsible",
         "saidaCarregamentoHorario": "Time",
+        "saidaJustificativaTitle": "Delay justification",
         "produtoCountOne": "{{count}} product",
         "produtoCountMany": "{{count}} products",
         "loadErrorTitle": "Error loading loadings",

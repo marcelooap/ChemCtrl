@@ -37,7 +37,7 @@ export default function Dashboard() {
   const { t } = useTranslation();
 
   return (
-    <div className="w-full space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('painel.dashboard.title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t('painel.dashboard.subtitle')}</p>

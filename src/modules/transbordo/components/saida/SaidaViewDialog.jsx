@@ -43,6 +43,11 @@ import {
   findChecklistItemForSaidaLinha,
   isChecklistItemRealizado,
 } from "@painel/lib/carregamentoChecklistConfig";
+import {
+  formatJustificativaAtrasoMotivo,
+  formatJustificativaAtrasoResponsavel,
+  getAgendamentoPontualidade,
+} from "@painel/lib/agendamentosCarregamento";
 import SaidaChecklistItemViewDialog from "@painel/components/logistica/SaidaChecklistItemViewDialog";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { loadIndContainerLabelContext } from "@transbordo/lib/saidaIndEtiqueta";
@@ -152,6 +157,16 @@ function SaidaAgendamentoResumo({ agendamento, t }) {
   const responsavel = String(
     agendamento.operador_conclusao_nome || agendamento.usuario_nome || ""
   ).trim();
+  const pontualidade = getAgendamentoPontualidade(agendamento);
+  const showJustificativa = pontualidade === "fora";
+  const justificativaResponsavel = formatJustificativaAtrasoResponsavel(
+    agendamento.justificativa_atraso_responsavel,
+    t
+  );
+  const justificativaMotivo = formatJustificativaAtrasoMotivo(
+    agendamento.justificativa_atraso_motivo,
+    t
+  );
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 space-y-3">
@@ -189,6 +204,23 @@ function SaidaAgendamentoResumo({ agendamento, t }) {
             <InfoItem
               label={t("painel.logistica.carregamentos.saidaCarregamentoHorario")}
               value={formatCarregamentoQuando(agendamento)}
+            />
+          </div>
+        </div>
+      ) : null}
+      {showJustificativa ? (
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("painel.logistica.carregamentos.saidaJustificativaTitle")}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <InfoItem
+              label={t("painel.comercial.agendamentos.justificativa.responsavelLabel")}
+              value={justificativaResponsavel}
+            />
+            <InfoItem
+              label={t("painel.comercial.agendamentos.justificativa.motivoLabel")}
+              value={justificativaMotivo}
             />
           </div>
         </div>

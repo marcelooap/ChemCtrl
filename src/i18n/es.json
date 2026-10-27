@@ -914,6 +914,7 @@
             "empty": "Ningún destino registrado. Agregue un destino y las pruebas que la expedición debe verificar.",
             "requiredHint": "Registre al menos un destino con las pruebas a verificar, o desactive la verificación.",
             "destinoRequired": "Seleccione un destino.",
+            "destinoInvalid": "Seleccione un destino de la lista (la misma que en Solicitud de Salida).",
             "duplicateDestino": "Este destino ya fue registrado en este ítem.",
             "invalidHint": "Revise los destinos: seleccione el destino, sin repetir, e indique el nombre, la vigencia y el plazo de cada prueba (entre {{min}} y {{max}} días).",
             "tableMissingBanner": "Los plazos por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página."
@@ -1401,6 +1402,7 @@
         "saidaCarregamentoTitle": "Cargamento",
         "saidaCarregamentoResponsavel": "Responsable",
         "saidaCarregamentoHorario": "Horario",
+        "saidaJustificativaTitle": "Justificación del retraso",
         "produtoCountOne": "{{count}} producto",
         "produtoCountMany": "{{count}} productos",
         "loadErrorTitle": "Error al cargar cargamentos",

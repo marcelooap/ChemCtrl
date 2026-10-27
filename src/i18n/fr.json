@@ -914,6 +914,7 @@
             "empty": "Aucune destination enregistrée. Ajoutez une destination et les tests que l'expédition doit vérifier.",
             "requiredHint": "Enregistrez au moins une destination avec les tests à vérifier, ou désactivez la vérification.",
             "destinoRequired": "Sélectionnez une destination.",
+            "destinoInvalid": "Sélectionnez une destination dans la liste (identique à la demande de sortie).",
             "duplicateDestino": "Cette destination est déjà enregistrée dans cet élément.",
             "invalidHint": "Vérifiez les destinations : sélectionnez la destination, sans répétition, et indiquez le nom, la validité et le délai de chaque test (entre {{min}} et {{max}} jours).",
             "tableMissingBanner": "Les délais par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page."
@@ -1401,6 +1402,7 @@
         "saidaCarregamentoTitle": "Chargement",
         "saidaCarregamentoResponsavel": "Responsable",
         "saidaCarregamentoHorario": "Horaire",
+        "saidaJustificativaTitle": "Justification du retard",
         "produtoCountOne": "{{count}} produit",
         "produtoCountMany": "{{count}} produits",
         "loadErrorTitle": "Erreur lors du chargement",

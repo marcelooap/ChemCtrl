@@ -1036,6 +1036,33 @@ export function normalizeMotivoAtraso(value) {
   return toMotivoAtrasoInput(value).trim();
 }
 
+/** Pontualidade de um registro de agendamento concluído. */
+export function getAgendamentoPontualidade(agendamento) {
+  if (!agendamento || agendamento.status !== 'concluido') return null;
+  const dataAgendada = String(agendamento.data || '').slice(0, 10);
+  const dataCarregamento =
+    (agendamento.data_carregamento && String(agendamento.data_carregamento).slice(0, 10)) ||
+    dataAgendada;
+  return getStatusPontualidade(agendamento.horario, agendamento.hora_carregamento, {
+    dataAgendada,
+    dataCarregamento,
+  });
+}
+
+export function formatJustificativaAtrasoResponsavel(value, t) {
+  const key = String(value || '').trim();
+  if (!key) return '';
+  const opt = JUSTIFICATIVA_ATRASO_RESPONSAVEIS.find((o) => o.value === key);
+  return opt ? t(opt.labelKey) : key;
+}
+
+export function formatJustificativaAtrasoMotivo(value, t) {
+  const key = String(value || '').trim();
+  if (!key) return '';
+  const opt = JUSTIFICATIVA_ATRASO_MOTIVOS.find((o) => o.value === key);
+  return opt ? t(opt.labelKey) : key;
+}
+
 /** Contagem de produtos distintos: "01 produto", "02 produtos". */
 export function produtosCountLabel(saidas = [], t) {
   const distinct = new Map();

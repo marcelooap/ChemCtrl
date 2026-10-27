@@ -32,7 +32,7 @@ export default function Home() {
   const modules = useMemo(() => getAccessibleModules(user), [user]);
 
   return (
-    <div className="w-full space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('moduleSelection.title')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t('moduleSelection.subtitle')}</p>

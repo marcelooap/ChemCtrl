@@ -48,7 +48,7 @@ export default function AppShell({
         <div className="flex flex-col flex-1 min-h-0 p-4 sm:p-6 w-full overflow-hidden">
           <AppTopBar {...(topBarProps || {})} />
           {banner}
-          <div className={`flex-1 min-h-0 ${contentClassName}`}>
+          <div className={`flex flex-1 min-h-0 flex-col ${contentClassName}`}>
             <Outlet context={outletContext ?? { user }} />
           </div>
         </div>

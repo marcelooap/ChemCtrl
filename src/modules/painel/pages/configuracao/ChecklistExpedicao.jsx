@@ -444,28 +444,29 @@ export default function ChecklistExpedicao() {
     : handleItensCheioChange;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
-      <div className="shrink-0 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {t('painel.configuracao.checklistExpedicao.title')}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('painel.configuracao.checklistExpedicao.subtitle')}
-          </p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 space-y-4 bg-background pb-1">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t('painel.configuracao.checklistExpedicao.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t('painel.configuracao.checklistExpedicao.subtitle')}
+            </p>
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={!canSave}
+            className="bg-primary hover:bg-primary/90"
+          >
+            {saving || submitBusy
+              ? t('common.saving')
+              : t('painel.configuracao.checklistExpedicao.save')}
+          </Button>
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={!canSave}
-          className="bg-primary hover:bg-primary/90"
-        >
-          {saving || submitBusy
-            ? t('common.saving')
-            : t('painel.configuracao.checklistExpedicao.save')}
-        </Button>
-      </div>
 
-      {[
+        {[
         { missing: tableMissing, messageKey: 'tableMissingBanner', sql: checklistSql },
         {
           missing: configMissing,
@@ -515,93 +516,93 @@ export default function ChecklistExpedicao() {
           </div>
         ))}
 
-      <div className="shrink-0 bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
-        <div>
-          <Label htmlFor="checklist-expedicao-cliente" className="text-sm font-medium">
-            {t('painel.configuracao.checklistExpedicao.clientLabel')}
-          </Label>
-          <div className="mt-1.5 max-w-lg">
-            <SearchableSelect
-              selectOnly
-              options={clientes}
-              value={selected?.nome || ''}
-              onChange={(_label, option) => {
-                if (option) selectClient(option);
-              }}
-              getOptionLabel={(o) => o.nome}
-              getOptionValue={(o) => clienteOptionKey(o)}
-              placeholder={
-                loadingClientes
-                  ? t('painel.configuracao.checklistExpedicao.loading')
-                  : t('painel.configuracao.checklistExpedicao.searchClient')
-              }
-              disabled={loadingClientes || saving}
-              ariaLabel={t('painel.configuracao.checklistExpedicao.clientLabel')}
-            />
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 space-y-3">
+          <div>
+            <Label htmlFor="checklist-expedicao-cliente" className="text-sm font-medium">
+              {t('painel.configuracao.checklistExpedicao.clientLabel')}
+            </Label>
+            <div className="mt-1.5 max-w-lg">
+              <SearchableSelect
+                selectOnly
+                options={clientes}
+                value={selected?.nome || ''}
+                onChange={(_label, option) => {
+                  if (option) selectClient(option);
+                }}
+                getOptionLabel={(o) => o.nome}
+                getOptionValue={(o) => clienteOptionKey(o)}
+                placeholder={
+                  loadingClientes
+                    ? t('painel.configuracao.checklistExpedicao.loading')
+                    : t('painel.configuracao.checklistExpedicao.searchClient')
+                }
+                disabled={loadingClientes || saving}
+                ariaLabel={t('painel.configuracao.checklistExpedicao.clientLabel')}
+              />
+            </div>
           </div>
+          {selected ? (
+            <div className="border-t border-border pt-3 space-y-2">
+              <Tabs value={tipoCarga} onValueChange={setTipoCarga}>
+                <TabsList
+                  aria-label={t('painel.configuracao.checklistExpedicao.tipoCarga.label')}
+                  className="h-auto p-1 gap-1 bg-muted/80 border border-border shadow-sm w-full sm:w-fit"
+                >
+                  {[
+                    {
+                      value: 'cheio',
+                      label: t('painel.configuracao.checklistExpedicao.tipoCarga.cheio'),
+                      count: itensCheio.length,
+                      unsaved: itensCheioDirty || configDirty,
+                    },
+                    {
+                      value: 'vazio',
+                      label: t('painel.configuracao.checklistExpedicao.tipoCarga.vazio'),
+                      count: itensVazio.length,
+                      unsaved: itensVazioDirty,
+                    },
+                  ].map((tab) => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      disabled={editingLocked || loadingItens}
+                      className={`${TIPO_TAB_TRIGGER_CLASS} flex-1 sm:flex-none`}
+                    >
+                      {tab.label}
+                      {!loadingItens ? (
+                        <span
+                          className={`rounded-full px-1.5 text-[11px] font-semibold tabular-nums ${
+                            tipoCarga === tab.value
+                              ? 'bg-white/20 text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                          aria-label={t(
+                            'painel.configuracao.checklistExpedicao.tipoCarga.count',
+                            { count: tab.count }
+                          )}
+                        >
+                          {tab.count}
+                        </span>
+                      ) : null}
+                      {tab.unsaved ? (
+                        <span
+                          className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400"
+                          title={t('painel.configuracao.checklistExpedicao.tipoCarga.unsaved')}
+                        />
+                      ) : null}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <p className="text-xs text-muted-foreground">
+                {t('painel.configuracao.checklistExpedicao.tipoCarga.hint')}
+              </p>
+            </div>
+          ) : null}
         </div>
-        {selected ? (
-          <div className="border-t border-border pt-3 space-y-2">
-            <Tabs value={tipoCarga} onValueChange={setTipoCarga}>
-              <TabsList
-                aria-label={t('painel.configuracao.checklistExpedicao.tipoCarga.label')}
-                className="h-auto p-1 gap-1 bg-muted/80 border border-border shadow-sm w-full sm:w-fit"
-              >
-                {[
-                  {
-                    value: 'cheio',
-                    label: t('painel.configuracao.checklistExpedicao.tipoCarga.cheio'),
-                    count: itensCheio.length,
-                    unsaved: itensCheioDirty || configDirty,
-                  },
-                  {
-                    value: 'vazio',
-                    label: t('painel.configuracao.checklistExpedicao.tipoCarga.vazio'),
-                    count: itensVazio.length,
-                    unsaved: itensVazioDirty,
-                  },
-                ].map((tab) => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    disabled={editingLocked || loadingItens}
-                    className={`${TIPO_TAB_TRIGGER_CLASS} flex-1 sm:flex-none`}
-                  >
-                    {tab.label}
-                    {!loadingItens ? (
-                      <span
-                        className={`rounded-full px-1.5 text-[11px] font-semibold tabular-nums ${
-                          tipoCarga === tab.value
-                            ? 'bg-white/20 text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                        aria-label={t(
-                          'painel.configuracao.checklistExpedicao.tipoCarga.count',
-                          { count: tab.count }
-                        )}
-                      >
-                        {tab.count}
-                      </span>
-                    ) : null}
-                    {tab.unsaved ? (
-                      <span
-                        className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400"
-                        title={t('painel.configuracao.checklistExpedicao.tipoCarga.unsaved')}
-                      />
-                    ) : null}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <p className="text-xs text-muted-foreground">
-              {t('painel.configuracao.checklistExpedicao.tipoCarga.hint')}
-            </p>
-          </div>
-        ) : null}
       </div>
 
-      {/* Cliente fica fixo no topo; validade dos testes e itens rolam juntos. */}
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-1">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-4 pt-4 pr-1 pb-1">
         {selected && !loadingItens && !isVazioTab ? (
           <ChecklistExpedicaoValidadeTestesConfig
             value={config}

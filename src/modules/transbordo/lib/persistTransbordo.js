@@ -21,6 +21,7 @@ import {
   placaKey,
   sameTanqueIdentity,
   fracionadoEfetivo,
+  isOrigemEmbaladoMassa,
 } from '@transbordo/lib/vasilhameComposicao';
 import { syncTankaVasilhamesAfterOrigem } from '@transbordo/lib/tankaVolume';
 import { allocateTransbordoCodigo } from '@transbordo/lib/allocateBusinessCodes';
@@ -42,6 +43,43 @@ import {
 
 /** Vasilhame + embalagens unitárias (bombona/tambor/IBC) na tela de Vasilhames. */
 const TIPOS_VASILHAME = new Set(["Vasilhame", ...TIPOS_EMBALAGEM_ESTOQUE]);
+
+/** Converte quantidade da UI (kg/lb na origem embalada) para litros operacionais. */
+function quantidadeOrigemParaLitros(qty, origem, dens) {
+  const raw = roundVolume(qty || 0);
+  if (raw <= 0) return 0;
+  if (isOrigemEmbaladoMassa(origem) && dens > 0) {
+    return roundVolume(litrosFromMassaKg(raw, dens));
+  }
+  return raw;
+}
+
+/** Destino TB: volume_total informado em kg (origem embalada) → litros + peso coerente. */
+function destinoParaOperacaoLitros(d, origens, dens) {
+  const origemLinked = origens.find((o) => o._uid && o._uid === d.origem_uid);
+  if (!isOrigemEmbaladoMassa(origemLinked) || !(dens > 0)) return d;
+
+  const qtyKg = roundVolume(d.volume_total || d.volume || 0);
+  const volL = quantidadeOrigemParaLitros(qtyKg, origemLinked, dens);
+  const volPorEmbQty = roundVolume(d.volume_por_embalagem || 0);
+  const volPorEmbL =
+    volPorEmbQty > 0
+      ? quantidadeOrigemParaLitros(volPorEmbQty, origemLinked, dens)
+      : 0;
+  const peso = roundMass(qtyKg);
+
+  return {
+    ...d,
+    volume: volL,
+    volume_total: volL,
+    volume_por_embalagem: volPorEmbL,
+    peso_liquido: peso,
+    peso_bruto: roundMass((d.tara || 0) + peso),
+    quantidade_embalagens: isDestinoEstoqueEmbalado(d.tipo_embalagem)
+      ? qtdEmbalagensFromVolume(volL, volPorEmbL)
+      : roundVolume(d.quantidade_embalagens || 0),
+  };
+}
 
 function cleanObservacao(value) {
   const text = String(value ?? "").trim();
@@ -558,8 +596,19 @@ export async function persistTransbordo({
         delete payload.operador_usuario_id;
       }
 
-      // FIFO opera sobre uma origem por lote (ordem informada na UI)
-      const origensFifo = expandOrigensForFifo(origens, dens);
+      // FIFO opera em litros; origem embalada em kg converte antes da alocação
+      const origensFifo = expandOrigensForFifo(origens, dens).map((o) => {
+        if (!isOrigemEmbaladoMassa(o) || !(dens > 0)) return o;
+        const kg = roundMass(o.volume_retirado);
+        return {
+          ...o,
+          volume_retirado: roundVolume(litrosFromMassaKg(kg, dens)),
+          massa_retirada: kg,
+        };
+      });
+      const destinosOperacionais = destinos.map((d) =>
+        destinoParaOperacaoLitros(d, origens, dens)
+      );
 
       const produtoFiltrado = !!produtos.find(
         (p) => p.id === payload.produto_id
@@ -609,7 +658,7 @@ export async function persistTransbordo({
       // Com multi-lote na origem, o 1º lote informado vai ao 1º destino, e assim por diante.
       const { destinoCompositions } = calculateFIFOAllocation(
         origensFifo,
-        destinos,
+        destinosOperacionais,
         dens
       );
       // Lastreia cada fatia FIFO ao id do registro de estoque (origem.entrada_id).
@@ -621,12 +670,6 @@ export async function persistTransbordo({
             c.estoque_id = estoqueId;
             c.entrada_id = estoqueId;
           }
-          if (
-            (o?.tipo_origem === "embalado" || o?.embalado) &&
-            isUnidadeMassaEntrada(o?.unidade_medida || "kg")
-          ) {
-            c.quantidade_kg = roundMass(c.quantidade_l || 0);
-          }
         }
       }
 
@@ -636,8 +679,8 @@ export async function persistTransbordo({
       const vasilhameRecords = [];
       // Destinos do mesmo OP na mesma placa acumulam no mesmo tanque.
       const sessionByPlaca = new Map();
-      for (let destinoIndex = 0; destinoIndex < destinos.length; destinoIndex++) {
-        const d = destinos[destinoIndex];
+      for (let destinoIndex = 0; destinoIndex < destinosOperacionais.length; destinoIndex++) {
+        const d = destinosOperacionais[destinoIndex];
         const comp = destinoCompositions[destinoIndex] || [];
 
         // IBC / Tambor / Bombona → Vasilhames (placa sintética), sem Estoque
@@ -802,7 +845,7 @@ export async function persistTransbordo({
       // Unifica tanques duplicados no pátio (mesma placa)
       const afterSave = await entities.vasilhames.list();
       await unifyDuplicateVasilhames(afterSave, entities);
-      await syncFracionadoDosDestinos(destinos);
+      await syncFracionadoDosDestinos(destinosOperacionais);
 
       // Origem tankagem: baixa volume + composição no vasilhame (parcial ou total)
       await syncTankaVasilhamesAfterOrigem({

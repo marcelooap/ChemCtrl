@@ -35,6 +35,7 @@ import {
 import { loteToKg, loteToLitros, saldoKgToLitros, applyPesoLiquidoForaMargem } from "@transbordo/lib/conversao";
 import {
   computeDisponivelTransbordo,
+  computeEstoqueQuantidadesPorLocal,
   isEstoqueEmbalado,
   isUnidadeMassaEntrada,
 } from "@transbordo/lib/estoqueSaldo";
@@ -656,24 +657,33 @@ export default function TransbordoModal({
       };
     });
 
-  // Entradas embaladas com saldo > 0 (saídas fiscais já descontadas no saldo_atual)
+  // Origem embalada: só o que ainda está em embalagem no pátio.
+  // Saldo já transbordado para tanque/tanka aparece em Vasilhame/Tanka, não aqui.
   const entradasEmbaladas = entradas
     .filter(
       (e) =>
-        e.embalado === true &&
-        (e.produto_id === produtoId || e.produto_nome === produtoNome) &&
-        (e.saldo_atual || 0) > 0
+        isEstoqueEmbalado(e) &&
+        (e.produto_id === produtoId || e.produto_nome === produtoNome)
     )
     .map((e) => {
-      const um = e.unidade_medida || "kg";
-      const saldo = Math.round(Number(e.saldo_atual) || 0);
+      const locais = computeEstoqueQuantidadesPorLocal(e, {
+        transbordos,
+        vasilhames,
+        saldo: e.saldo_atual,
+      });
+      const saldoPatio = Number(locais?.patio) || 0;
+      if (saldoPatio <= 0) return null;
+      const um = e.unidade_medida || locais.unidade || "kg";
+      const saldo = Math.round(saldoPatio);
       return {
         ...e,
         embalado: true,
         unidade_medida: um,
+        saldo_atual: saldo,
         display_label: `${entradaIdMap[e.id] || "E000"} - ${e.produto_nome || ""} (${saldo} ${um})`,
       };
-    });
+    })
+    .filter(Boolean);
 
   // Saldo consumido por fonte (para excluir fontes esgotadas em origens subsequentes)
   const consumedBySource = {};
@@ -1098,11 +1108,17 @@ export default function TransbordoModal({
       const firstLote =
         lotesComVolume[0]?.lote || o.lote || "";
 
+      const origemEmbaladoMassa =
+        (o.tipo_origem === "embalado" || o.embalado) &&
+        isUnidadeMassaEntrada(o.unidade_medida || "kg");
+
       return {
         ...o,
         lote: firstLote,
         volume_retirado: volumeFromLotes,
-        massa_retirada: roundMass(volumeFromLotes * densidade),
+        massa_retirada: origemEmbaladoMassa
+          ? roundMass(volumeFromLotes)
+          : roundMass(volumeFromLotes * densidade),
         saldo_disponivel: roundVolume(o.saldo_disponivel),
         saldo_restante: roundVolume(
           Math.max(0, roundVolume(o.saldo_disponivel) - volumeFromLotes)

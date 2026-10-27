@@ -63,6 +63,7 @@ import {
   parseISODate,
   updateTransporte,
   formatDateBR,
+  findAgendamentoDisplayBySaida,
 } from '@painel/lib/agendamentosCarregamento';
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -501,7 +502,9 @@ export default function AgendamentosGrade({
   }
 
   return (
-    <div className={`w-full relative ${compact ? 'space-y-3' : 'space-y-5'}`}>
+    <div
+      className={`h-full min-h-0 overflow-y-auto w-full relative ${compact ? 'space-y-3' : 'space-y-5'}`}
+    >
       {bookingLocked ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-background/70">
           <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" />
@@ -901,6 +904,9 @@ export default function AgendamentosGrade({
           vasilhames={vasilhames}
           entradas={entradas}
           variant="agendamento"
+          agendamento={
+            viewSaida ? findAgendamentoDisplayBySaida(agendamentos, viewSaida.id) : null
+          }
           onClose={() => setViewSaida(null)}
         />
       ) : null}

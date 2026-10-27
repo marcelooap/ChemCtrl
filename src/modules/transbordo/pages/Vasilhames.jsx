@@ -37,6 +37,8 @@ import {
   getDominantLote,
   LOTE_APORTE_ANTERIOR,
   collapsedPlacaHealPatch,
+  repairEmbaladoKgStoredAsLitersPatch,
+  resolveVasilhameOperacionalPar,
   resolveFracionadoFromTransbordos,
   resolveVasilhameLoteDatas,
   applyLoteDatasToComposicao,
@@ -176,7 +178,17 @@ function resolveVasilhameData(vasilhame, transbordos = []) {
   return fromComp || vasilhame.created_at || vasilhame.created_date || null;
 }
 
-function renderVolumeQuantidadeCells(vasilhame, medida) {
+function renderVolumeQuantidadeCells(vasilhame, medida, transbordos = []) {
+  const operacional = resolveVasilhameOperacionalPar(vasilhame, {
+    transbordos,
+    densidade: vasilhame?.densidade,
+  });
+  const vDisplay = {
+    ...vasilhame,
+    volume: operacional.volume,
+    peso_liquido: operacional.massa,
+  };
+
   // Fracionado é o destino parcial do tanque (TB), mesmo com mais de um lote na composição.
   const fracionadoBadge = vasilhame.fracionado ? (
     <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-blue-800">
@@ -187,13 +199,13 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
   const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
-  const densidade = vasilhame?.densidade;
+  const densidade = operacional.densidade || vasilhame?.densidade;
 
   if (isEmbalado && !umIsVolume) {
     const massKg =
-      Number(vasilhame.peso_liquido) > 0
-        ? Number(vasilhame.peso_liquido)
-        : Number(vasilhame.volume) || 0;
+      Number(vDisplay.peso_liquido) > 0
+        ? Number(vDisplay.peso_liquido)
+        : Number(vDisplay.volume) || 0;
     const { volume: volL } = resolveVolumeMassaOperacional({
       massa: massKg,
       densidade,
@@ -216,7 +228,7 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
   }
 
   if (isEmbalado && umIsVolume) {
-    const qtdVol = Number(vasilhame.volume) || 0;
+    const qtdVol = Number(vDisplay.volume) || 0;
     const resolved = resolveVolumeMassaOperacional({
       volume: qtdVol,
       densidade,
@@ -242,8 +254,8 @@ function renderVolumeQuantidadeCells(vasilhame, medida) {
 
   // Granel: volume em L + quantidade em kg
   const resolved = resolveVolumeMassaOperacional({
-    volume: Number(vasilhame.volume) || 0,
-    massa: Number(vasilhame.peso_liquido) || 0,
+    volume: Number(vDisplay.volume) || 0,
+    massa: Number(vDisplay.peso_liquido) || 0,
     densidade,
   });
   return {
@@ -404,7 +416,15 @@ export default function Vasilhames() {
       const list = [];
       for (const raw of vas || []) {
         const source = vasById.get(raw.id) || raw;
-        const patch = collapsedPlacaHealPatch(source, volumes.transbordos);
+        const patchPlaca = collapsedPlacaHealPatch(source, volumes.transbordos);
+        const patchKgL = repairEmbaladoKgStoredAsLitersPatch(
+          source,
+          volumes.transbordos
+        );
+        const patch =
+          patchPlaca || patchKgL
+            ? { ...(patchPlaca || {}), ...(patchKgL || {}) }
+            : null;
         if (!patch) {
           list.push(normalizeVasilhameLote(source));
           continue;
@@ -1240,7 +1260,8 @@ export default function Vasilhames() {
                         linkedItems: saidaItemsByVasilhame.get(v.id) || [],
                         transbordos,
                       }),
-                      medida
+                      medida,
+                      transbordos
                     );
                   return (
                     <tr
@@ -1472,8 +1493,10 @@ export default function Vasilhames() {
 
       <PrintContainerLabelDialog
         key={labelVasilhame?.id || 'closed'}
-        open={!!labelVasilhame}
-        onOpenChange={(v) => { if (!v) setLabelVasilhame(null); }}
+        open={Boolean(labelVasilhame && labelContainer)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setLabelVasilhame(null);
+        }}
         container={labelContainer}
         density={labelDensity}
         contexto="convencional"

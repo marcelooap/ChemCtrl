@@ -967,6 +967,7 @@
             "empty": "Nenhum destino cadastrado. Adicione um destino e os testes que a expedição deve conferir.",
             "requiredHint": "Cadastre ao menos um destino com os testes que devem ser verificados, ou desative a verificação.",
             "destinoRequired": "Selecione um destino.",
+            "destinoInvalid": "Selecione um destino da lista (mesma lista da Solicitação de Saída).",
             "duplicateDestino": "Este destino já foi cadastrado neste item.",
             "invalidHint": "Revise os destinos: selecione o destino, sem repetir, e informe o nome, a validade e o prazo de cada teste (entre {{min}} e {{max}} dias).",
             "tableMissingBanner": "Os prazos por destino ainda não existem no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página."
@@ -1598,6 +1599,7 @@
         "saidaCarregamentoTitle": "Carregamento",
         "saidaCarregamentoResponsavel": "Responsável",
         "saidaCarregamentoHorario": "Horário",
+        "saidaJustificativaTitle": "Justificativa do atraso",
         "produtoCountOne": "{{count}} produto",
         "produtoCountMany": "{{count}} produtos",
         "loadErrorTitle": "Erro ao carregar carregamentos",

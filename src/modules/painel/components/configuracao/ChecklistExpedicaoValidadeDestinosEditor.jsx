@@ -13,6 +13,7 @@ import {
 } from '@shared/components/ui/select';
 import { cn } from '@shared/lib/utils';
 import SaidaDestinoSelect from '@transbordo/components/saida/SaidaDestinoSelect';
+import { destinoKey } from '@transbordo/lib/saidaDestinos';
 import { createTempItemId } from '@painel/lib/checklistExpedicaoConfig';
 import {
   COLOR_COD_TEXT_CLASS,
@@ -65,6 +66,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
       const typedValidade = String(teste?.validade ?? '').trim() !== '';
       const visible =
         err.code === PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO ||
+        err.code === PRAZO_DESTINO_ERROR.DESTINO_INVALID ||
         err.code === PRAZO_DESTINO_ERROR.DUPLICATE_TESTE ||
         showErrors ||
         (err.code === PRAZO_DESTINO_ERROR.TESTE_PRAZO_INVALID && typedPrazo) ||
@@ -121,10 +123,23 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
       )
     );
 
-  const destinoErrorText = (code) =>
-    code === PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO
-      ? t(`${prefix}.duplicateDestino`)
-      : t(`${prefix}.destinoRequired`);
+  const destinoErrorText = (code) => {
+    if (code === PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO) {
+      return t(`${prefix}.duplicateDestino`);
+    }
+    if (code === PRAZO_DESTINO_ERROR.DESTINO_INVALID) {
+      return t(`${prefix}.destinoInvalid`);
+    }
+    return t(`${prefix}.destinoRequired`);
+  };
+
+  const excludeDestinoKeysForRow = (rowKey, destinoAtual) => {
+    const currentKey = destinoKey(destinoAtual);
+    return rows
+      .filter((r) => r.key !== rowKey)
+      .map((r) => destinoKey(r.destino))
+      .filter((k) => k && k !== currentKey);
+  };
 
   const testeNomeErrorText = (code) => {
     if (code === PRAZO_DESTINO_ERROR.DUPLICATE_TESTE) return t(`${prefix}.duplicateTeste`);
@@ -165,6 +180,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                     <div className="mt-1.5">
                       <SaidaDestinoSelect
                         allowBlank={false}
+                        excludeDestinoKeys={excludeDestinoKeysForRow(row.key, row.destino)}
                         value={row.destino}
                         onChange={(destino) => updateRow(row.key, { destino })}
                         disabled={disabled}

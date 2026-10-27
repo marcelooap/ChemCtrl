@@ -169,6 +169,7 @@ export default function MainLayout() {
 
   return (
     <AppShell
+      contentClassName="overflow-hidden"
       sidebar={({ collapsed, setCollapsed }) => (
         <ModuleSidebar
           collapsed={collapsed}

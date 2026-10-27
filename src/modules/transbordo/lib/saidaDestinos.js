@@ -12,6 +12,13 @@ export const DESTINOS_SAIDA = Object.freeze([
   'Trident',
   'Total Energies',
   'Shell',
+  'Equinor',
+  'Derio',
+  'Deaçu',
+  'Modec',
+  'BW',
+  'KAROON',
+  'YINSON',
 ]);
 
 /** Id da opção "Em branco" no seletor (nunca persistido). */
@@ -42,17 +49,18 @@ export function normalizeDestino(value) {
   return DESTINOS_SAIDA.find((nome) => destinoKey(nome) === key) || '';
 }
 
-const DESTINO_OPTIONS = Object.freeze(DESTINOS_SAIDA.map((nome) => ({ id: nome, nome })));
-const DESTINO_OPTIONS_COM_BRANCO = Object.freeze([
-  { id: DESTINO_EM_BRANCO, nome: 'Em branco' },
-  ...DESTINO_OPTIONS,
-]);
-
 /**
- * Opções do seletor de destino.
- * @param {{ allowBlank?: boolean }} [opts]
- * @returns {ReadonlyArray<{ id: string, nome: string }>}
+ * Opções do seletor de destino (Solicitação de Saída, Checklist de Expedição, etc.).
+ * @param {{ allowBlank?: boolean, excludeDestinoKeys?: string[] }} [opts]
+ * @returns {Array<{ id: string, nome: string }>}
  */
-export function getDestinoOptions({ allowBlank = true } = {}) {
-  return allowBlank ? DESTINO_OPTIONS_COM_BRANCO : DESTINO_OPTIONS;
+export function getDestinoOptions({ allowBlank = true, excludeDestinoKeys = [] } = {}) {
+  const exclude = new Set(
+    (excludeDestinoKeys || []).map((k) => String(k ?? '').trim()).filter(Boolean)
+  );
+  const destinoOptions = DESTINOS_SAIDA.filter((nome) => !exclude.has(destinoKey(nome))).map(
+    (nome) => ({ id: nome, nome })
+  );
+  if (!allowBlank) return destinoOptions;
+  return [{ id: DESTINO_EM_BRANCO, nome: 'Em branco' }, ...destinoOptions];
 }

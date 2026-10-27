@@ -68,6 +68,7 @@ export default function LogisticaCarregamentos() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [viewSaida, setViewSaida] = useState(null);
+  const [viewAgendamento, setViewAgendamento] = useState(null);
   const [viewChecklistItems, setViewChecklistItems] = useState([]);
   const [viewPicker, setViewPicker] = useState(null);
   const [revertTarget, setRevertTarget] = useState(null);
@@ -209,6 +210,7 @@ export default function LogisticaCarregamentos() {
         return;
       }
       setViewChecklistItems(checklistItemsFromBooking(booking, saida.id));
+      setViewAgendamento(booking);
       setViewSaida(saida);
       return;
     }
@@ -482,6 +484,7 @@ export default function LogisticaCarregamentos() {
                     return;
                   }
                   setViewChecklistItems(checklistItemsFromBooking(row, saida.id));
+                  setViewAgendamento(row);
                   setViewSaida(saida);
                 }}
               >
@@ -538,8 +541,10 @@ export default function LogisticaCarregamentos() {
         checklistItems={viewChecklistItems}
         showPrintEtiqueta={false}
         showRelatorioSaida={false}
+        agendamento={viewAgendamento}
         onClose={() => {
           setViewSaida(null);
+          setViewAgendamento(null);
           setViewChecklistItems([]);
         }}
       />

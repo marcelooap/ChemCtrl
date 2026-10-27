@@ -5,7 +5,7 @@
  * aritmética é feita em UTC, evitando deslocamentos de fuso e de horário de verão.
  */
 
-import { destinoKey } from '@transbordo/lib/saidaDestinos';
+import { destinoKey, normalizeDestino } from '@transbordo/lib/saidaDestinos';
 
 export const VALIDADE_TESTES_PRAZO_PADRAO_DIAS = 180;
 export const VALIDADE_TESTES_PRAZO_MIN_DIAS = 1;
@@ -79,6 +79,7 @@ export const TESTE_NOME_MAX = 120;
 /** Códigos de erro da validação dos testes por destino. */
 export const PRAZO_DESTINO_ERROR = Object.freeze({
   DESTINO_REQUIRED: 'DESTINO_REQUIRED',
+  DESTINO_INVALID: 'DESTINO_INVALID',
   DUPLICATE_DESTINO: 'DUPLICATE_DESTINO',
   PRAZO_INVALID: 'PRAZO_INVALID',
   TESTES_REQUIRED: 'TESTES_REQUIRED',
@@ -151,12 +152,15 @@ export function validarPrazosPorDestino(rows = []) {
   const seen = new Set();
 
   (rows || []).forEach((row, index) => {
-    const destino = String(row?.destino ?? '').trim();
+    const destinoRaw = String(row?.destino ?? '').trim();
+    const destino = normalizeDestino(destinoRaw);
     const key = destinoKey(destino);
     const rowErrors = [];
 
-    if (!key) {
+    if (!destinoKey(destinoRaw)) {
       rowErrors.push({ index, field: 'destino', code: PRAZO_DESTINO_ERROR.DESTINO_REQUIRED });
+    } else if (!destino) {
+      rowErrors.push({ index, field: 'destino', code: PRAZO_DESTINO_ERROR.DESTINO_INVALID });
     } else if (seen.has(key)) {
       rowErrors.push({ index, field: 'destino', code: PRAZO_DESTINO_ERROR.DUPLICATE_DESTINO });
     } else {
