@@ -546,6 +546,38 @@ export default function NovaProducao() {
 
   const fmt3 = (n) => fmtNumber(n, { minimumFractionDigits: 3, maximumFractionDigits: 3 }, i18n.language);
 
+  const lotsExceedStock = (lotsSource) => {
+    const needed = new Map();
+    for (const mp of lotsSource || []) {
+      for (const lot of mp.lots || []) {
+        const qty = Number(lot.qty_fiscal) || 0;
+        if (!lot.stock_id || qty <= 0) continue;
+        const prev = needed.get(lot.stock_id) || { qty: 0, mp, lot };
+        prev.qty += qty;
+        needed.set(lot.stock_id, prev);
+      }
+    }
+    for (const [stockId, row] of needed) {
+      const stock = stocks.find((s) => s.id === stockId);
+      if (!stock) continue;
+      const available = Number(stock.current_stock) || 0;
+      if (row.qty > available + 0.0005) {
+        toast({
+          title: t('production.messages.mpStockInsufficient'),
+          description: t('production.messages.mpStockInsufficientDetail', {
+            mp: row.mp.mp_name || row.mp.mp_code,
+            lot: stock.lot || row.lot.lot || t('common.notAvailable'),
+            available: fmt3(available),
+            unit: stock.unit || 'kg',
+          }),
+          variant: 'destructive',
+        });
+        return true;
+      }
+    }
+    return false;
+  };
+
   const deductStock = async (lotsSource) => {
     const stockDeductions = {};
     for (const mp of lotsSource) {
@@ -573,13 +605,9 @@ export default function NovaProducao() {
     const operatorName = internalUser?.nome_completo || internalUser?.nome || internalUser?.full_name || '';
 
     try {
-      for (const mp of mpList) {
-        for (const lot of mp.lots) {
-          if (lot.stock_id) {
-            const stock = stocks.find(s => s.id === lot.stock_id);
-            if (stock && (stock.current_stock || 0) < (lot.qty_fiscal || 0)) { setSaving(false); return; }
-          }
-        }
+      if (lotsExceedStock(mpList)) {
+        setSaving(false);
+        return;
       }
 
       const allocatedLots = flattenAllocatedLots(mpList);
@@ -631,15 +659,22 @@ export default function NovaProducao() {
         return data;
       };
 
-      await createProductionWithUniqueOp(base44.entities.Production, buildProductionData, {
+      const created = await createProductionWithUniqueOp(base44.entities.Production, buildProductionData, {
         pageSize: 1000,
       });
+
+      try {
+        await deductStock(mpList);
+      } catch (stockErr) {
+        if (created?.record?.id) {
+          await base44.entities.Production.delete(created.record.id).catch(() => {});
+        }
+        throw stockErr;
+      }
 
       if (form.order_id) {
         await base44.entities.Order.update(form.order_id, { status: 'Em produção' });
       }
-
-      await deductStock(mpList);
 
       // Zera a tela como se tivesse saído e voltado — pronto para uma nova OP
       setForm({
@@ -678,17 +713,9 @@ export default function NovaProducao() {
     const operatorName = internalUser?.nome_completo || internalUser?.nome || internalUser?.full_name || '';
 
     try {
-      for (const mp of deficitMpList) {
-        for (const lot of mp.lots) {
-          if (lot.stock_id) {
-            const stock = stocks.find(s => s.id === lot.stock_id);
-            if (stock && (stock.current_stock || 0) < (lot.qty_fiscal || 0)) {
-              toast({ title: t('common.error'), variant: 'destructive' });
-              setSaving(false);
-              return;
-            }
-          }
-        }
+      if (lotsExceedStock(deficitMpList)) {
+        setSaving(false);
+        return;
       }
 
       const newLots = deficitMpList.flatMap(m =>
@@ -721,15 +748,29 @@ export default function NovaProducao() {
       const history = parseArr(complementProduction.supply_complements);
       history.push(buildSupplyHistoryEntry('complement', operatorName, newLots));
 
-      await base44.entities.Production.update(complementProduction.id, {
+      const complementPatch = {
         raw_materials_used: allUsed,
         volume_apontado: metrics.volume_apontado,
         volume_pendente: metrics.volume_pendente,
         complement_status: metrics.volume_pendente > 0.001 ? 'Pendente' : 'Completa',
         supply_complements: history,
-      });
+      };
+      const complementSnapshot = {
+        raw_materials_used: complementProduction.raw_materials_used,
+        volume_apontado: complementProduction.volume_apontado,
+        volume_pendente: complementProduction.volume_pendente,
+        complement_status: complementProduction.complement_status,
+        supply_complements: complementProduction.supply_complements,
+      };
 
-      await deductStock(deficitMpList);
+      await base44.entities.Production.update(complementProduction.id, complementPatch);
+
+      try {
+        await deductStock(deficitMpList);
+      } catch (stockErr) {
+        await base44.entities.Production.update(complementProduction.id, complementSnapshot).catch(() => {});
+        throw stockErr;
+      }
       toast({ title: t('production.fractional.complementSuccess') });
       navigate('/producoes');
     } catch (err) {
