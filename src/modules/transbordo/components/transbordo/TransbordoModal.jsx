@@ -821,13 +821,23 @@ export default function TransbordoModal({
       .filter(Boolean);
   };
 
+  const origemGuardaMassa = (o) =>
+    (o?.tipo_origem === "embalado" || o?.embalado) &&
+    isUnidadeMassaEntrada(o?.unidade_medida || "kg");
+
   const volumeOrigens = roundVolume(
     origens.reduce((sum, o) => sum + (o.volume_retirado || 0), 0)
   );
   const volumeDestinos = roundVolume(
     destinos.reduce((sum, d) => sum + (d.volume_total || d.volume || 0), 0)
   );
-  const massaTotal = roundMass(volumeOrigens * densidade);
+  const massaTotal = roundMass(
+    origens.reduce((sum, o) => {
+      const vol = Number(o.volume_retirado) || 0;
+      if (origemGuardaMassa(o)) return sum + vol;
+      return sum + (densidade > 0 ? vol * densidade : 0);
+    }, 0)
+  );
   const volumesMatch = Math.abs(volumeOrigens - volumeDestinos) === 0;
 
   const findOrigemDesbalanceada = () =>
@@ -1143,12 +1153,17 @@ export default function TransbordoModal({
       ),
     ];
 
+    const origemPorUid = new Map(origensNorm.map((o) => [o._uid, o]));
     const destinosNorm = destinosOrdered.map((d) => {
       const volume_total = roundVolume(d.volume_total || d.volume || 0);
       const volume_por_embalagem = roundVolume(d.volume_por_embalagem || 0);
       const quantidade_embalagens = isDestinoEstoqueEmbalado(d.tipo_embalagem)
         ? qtdEmbalagensFromVolume(volume_total, volume_por_embalagem)
         : roundVolume(d.quantidade_embalagens || 0);
+      const origem = origemPorUid.get(d.origem_uid);
+      const massaDestino = origemGuardaMassa(origem)
+        ? volume_total
+        : d.peso_liquido || (densidade > 0 ? volume_total * densidade : 0);
       return {
         ...d,
         volume: roundVolume(d.volume || volume_total),
@@ -1156,9 +1171,7 @@ export default function TransbordoModal({
         volume_por_embalagem,
         quantidade_embalagens,
         tara: roundMass(d.tara || 0),
-        peso_liquido: roundMass(
-          d.peso_liquido || (densidade > 0 ? volume_total * densidade : 0)
-        ),
+        peso_liquido: roundMass(massaDestino),
         peso_bruto: roundMass(d.peso_bruto || 0),
       };
     });
@@ -1205,6 +1218,11 @@ export default function TransbordoModal({
           if (existente?.fracionado) {
             vol = roundVolume((existente.volume || 0) + vol);
           }
+        }
+        const origem = origens.find((o) => o._uid === d.origem_uid);
+        if (origemGuardaMassa(origem)) {
+          const massa = roundMass(d.peso_liquido || vol);
+          return `Após confirmação o item ${item} ficará fracionado com ${formatMass(massa)} kg.`;
         }
         const massa = roundMass(densidade > 0 ? vol * densidade : destinoMassaKg(d, densidade));
         return `Após confirmação o item ${item} ficará fracionado com ${formatVolume(vol)} L e ${formatMass(massa)} kg.`;

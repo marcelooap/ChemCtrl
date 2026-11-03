@@ -195,7 +195,7 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
 );
 
 /**
- * Conferência teste a teste. O prazo mínimo da realização é hoje + prazo − validade.
+ * Conferência teste a teste. A data mínima de execução é hoje − (validade − 365) − prazo.
  * Sem validade cadastrada, permanece hoje − prazo.
  * Sem testes para o destino, a verificação fica bloqueada.
  * Itens antigos (um prazo único, sem lista) continuam no card legado.

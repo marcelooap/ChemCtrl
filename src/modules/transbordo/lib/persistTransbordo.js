@@ -688,6 +688,14 @@ export async function persistTransbordo({
             c.estoque_id = estoqueId;
             c.entrada_id = estoqueId;
           }
+          // Embalado em kg/lb: quantidade_l já é a massa envasada.
+          // Não multiplicar de novo pela densidade.
+          const origemEmbaladoMassa =
+            (o?.tipo_origem === "embalado" || o?.embalado) &&
+            isUnidadeMassaEntrada(o?.unidade_medida || "kg");
+          if (origemEmbaladoMassa) {
+            c.quantidade_kg = roundMass(c.quantidade_l);
+          }
         }
       }
 

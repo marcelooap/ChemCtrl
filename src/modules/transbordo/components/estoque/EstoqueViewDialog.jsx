@@ -13,6 +13,7 @@ import {
   listSaidasHistoricoForEstoque,
   listHistoricoTransbordosEncadeados,
   listDestinosFifoForEstoque,
+  quantidadesDestinoParaExibicao,
   getEstoqueQuantidade,
   getEstoqueNotaFiscal,
   getEstoqueNotaFiscalTroca,
@@ -134,10 +135,20 @@ export default function EstoqueViewDialog({
     return chosen.status || "No Pátio";
   };
 
-  // Destinos filtrados pelo FIFO: só embalagens que receberam este lote
+  const apresentarDestino = (row) => {
+    const ex = quantidadesDestinoParaExibicao(item, row);
+    return {
+      ...row,
+      volume: ex.volumeL > 0 ? ex.volumeL : null,
+      pesoLiq: ex.pesoKg,
+    };
+  };
+
+  // Destinos filtrados pelo FIFO: só embalagens que receberam este lote.
+  // Embalado em kg: volume do OP é a massa; a tabela mostra litro derivado e peso real.
   const destinosList = listDestinosFifoForEstoque(item, transbordos).map(
     (row) => ({
-      ...row,
+      ...apresentarDestino(row),
       status: resolveVasilhameStatus(row.rawDestino, row.codigo),
     })
   );
@@ -147,7 +158,7 @@ export default function EstoqueViewDialog({
     transbordos,
     vasilhames
   ).map((row) => ({
-    ...row,
+    ...apresentarDestino(row),
     status: resolveVasilhameStatus(row.rawDestino, row.codigo),
   }));
 

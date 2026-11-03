@@ -885,7 +885,7 @@
           "testesColumnMissingBanner": "Les tests par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
           "destinos": {
             "title": "Tests par destination",
-            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom, la validité et le délai de vérification, en jours. La date minimale d'exécution est aujourd'hui plus le délai de vérification, moins la validité.",
+            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom, la validité et le délai de vérification, en jours. La date minimale d'exécution est aujourd'hui moins (validité − 365 jours) moins le délai de vérification.",
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Sélectionnez la destination...",
             "prazoLabel": "Délai de validité (jours)",
@@ -905,6 +905,7 @@
             "testeNomePlaceholder": "Ex. : Test hydrostatique",
             "testeValidadeLabel": "Validité (jours)",
             "testePrazoLabel": "Délai de vérification (jours)",
+            "dataMinimaLabel": "Date minimale d'exécution",
             "addTeste": "Ajouter un test",
             "removeTeste": "Retirer le test",
             "testesRequired": "Ajoutez au moins un test pour cette destination.",

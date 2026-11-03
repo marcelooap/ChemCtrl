@@ -11,6 +11,9 @@ export const VALIDADE_TESTES_PRAZO_PADRAO_DIAS = 180;
 export const VALIDADE_TESTES_PRAZO_MIN_DIAS = 1;
 export const VALIDADE_TESTES_PRAZO_MAX_DIAS = 3650;
 
+/** Ano de referência da data mínima: hoje − (validade − 365) − prazo de verificação. */
+export const VALIDADE_TESTES_ANO_BASE_DIAS = 365;
+
 /** Valores persistidos de Color Cod da eslinga (por destino). */
 export const COLOR_COD_VALUES = Object.freeze([
   'laranja',
@@ -263,11 +266,11 @@ export function resolverTestesPorDestino(config, destino) {
 }
 
 /**
- * Prazo mínimo da data de realização de um teste.
- * Com validade: dia local de `base` + prazo de verificação − validade.
+ * Data mínima de execução de um teste.
+ * Com validade: dia local de `base` − (validade − 365) − prazo de verificação.
  * Sem validade (cadastro antigo): dia local de `base` − prazo.
  * A data de execução no físico deve ser igual ou posterior a este dia.
- * Ex.: 26/10/2026 + 170 − 365 → "2026-04-14".
+ * Ex.: 03/11/2026, validade 730 e prazo 30 → "2025-10-04".
  * @param {number} dias prazo de verificação, em dias
  * @param {Date} [base]
  * @param {number|string|null} [validade] validade do teste, em dias
@@ -276,7 +279,10 @@ export function resolverTestesPorDestino(config, destino) {
 export function calcularDataLimiteTestes(dias, base = new Date(), validade = null) {
   const prazo = normalizePrazoDias(dias);
   const validadeDias = parsePrazoDias(validade);
-  const deltaDias = validadeDias == null ? -prazo : prazo - validadeDias;
+  const deltaDias =
+    validadeDias == null
+      ? -prazo
+      : -(validadeDias - VALIDADE_TESTES_ANO_BASE_DIAS) - prazo;
   const utcMs =
     Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) + deltaDias * MS_PER_DAY;
   return new Date(utcMs).toISOString().slice(0, 10);

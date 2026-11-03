@@ -303,7 +303,7 @@ function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
 
 /**
  * Testes do tanque para o destino da solicitação.
- * O prazo mínimo da realização é hoje + prazo de verificação − validade.
+ * A data mínima de execução é hoje − (validade − 365) − prazo de verificação.
  * Sem validade cadastrada, permanece hoje − prazo. Destino fora do cadastro não traz testes.
  */
 function buildValidadeTestes(config, destino, hoje) {
@@ -894,27 +894,21 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ? saved.check_defs
           : null;
 
-    // A data mínima anda com o dia até o operador responder. Depois disso, fica a data
-    // da conferência — desde que validade e prazo daquele teste não tenham mudado.
+    // A data mínima é sempre a de hoje: hoje − (validade − 365) − prazo.
+    // A resposta já dada permanece. Se validade ou prazo mudaram, a resposta é refeita.
     const invalidatedTesteKeys = new Set();
-    let validade_testes = built.validade_testes;
+    const validade_testes = built.validade_testes;
     if (validade_testes?.testes?.length) {
       const savedByKey = new Map(
         (saved.validade_testes?.testes || []).map((teste) => [teste.key, teste])
       );
-      validade_testes = {
-        ...validade_testes,
-        testes: validade_testes.testes.map((teste) => {
-          const prev = savedByKey.get(teste.key);
-          const answered = Boolean(normalizeCheckValue(saved.checks?.[teste.key]));
-          if (!answered || !prev?.data_limite) return teste;
-          if (!testePrazoConferenciaIgual(prev, teste)) {
-            invalidatedTesteKeys.add(teste.key);
-            return teste;
-          }
-          return { ...teste, data_limite: prev.data_limite };
-        }),
-      };
+      for (const teste of validade_testes.testes) {
+        const prev = savedByKey.get(teste.key);
+        const answered = Boolean(normalizeCheckValue(saved.checks?.[teste.key]));
+        if (answered && prev && !testePrazoConferenciaIgual(prev, teste)) {
+          invalidatedTesteKeys.add(teste.key);
+        }
+      }
     }
     const validadeInvalidada =
       invalidatedTesteKeys.size > 0 ||

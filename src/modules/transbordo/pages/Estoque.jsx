@@ -634,15 +634,11 @@ export default function Estoque() {
                   const unidadeEntrada = getEstoqueUnidadeEntrada(e);
                   // Usa locais pré-computados para as colunas de breakdown
                   const locais = locaisMap.get(e.id) ?? null;
-                  const isEmbalado = isEstoqueEmbalagemUnitaria(e);
-                  // Para itens granel, locais.patio é a parcela não rastreável via
-                  // composicao (gap de litros sem kg/densidade). Soma ao tanque para
-                  // não dividir incorretamente um item que está inteiro em vasilhame.
-                  // Para embalado, locais.patio são embalagens soltas no pátio.
-                  const saldoEmbaladoEntrada = isEmbalado ? (locais?.patio ?? 0) : 0;
-                  const saldoTanqueEntrada = isEmbalado
-                    ? (locais?.vasilhames ?? 0)
-                    : ((locais?.vasilhames ?? 0) + (locais?.patio ?? 0));
+                  // Pátio = ainda em embalagem. Vasilhame = o que foi para tanque.
+                  // Não somar o pátio no tanque: isso jogava o saldo inteiro em tanque
+                  // quando não havia transbordo, ou quando só uma fração foi envasada.
+                  const saldoEmbaladoEntrada = locais?.patio ?? 0;
+                  const saldoTanqueEntrada = locais?.vasilhames ?? 0;
                   const saldoTankaEntrada = locais?.tankas ?? 0;
                   return (
                   <tr key={e.id}

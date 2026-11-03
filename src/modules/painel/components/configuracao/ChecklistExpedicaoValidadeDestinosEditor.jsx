@@ -22,6 +22,9 @@ import {
   TESTE_NOME_MAX,
   VALIDADE_TESTES_PRAZO_MAX_DIAS,
   VALIDADE_TESTES_PRAZO_MIN_DIAS,
+  calcularDataLimiteTestes,
+  formatDataLimiteTestes,
+  parsePrazoDias,
   validarPrazosPorDestino,
 } from '@painel/lib/validadeTestesTanque';
 
@@ -29,6 +32,12 @@ const COLOR_NONE = '__none__';
 
 function emptyTeste() {
   return { key: createTempItemId(), nome: '', validade: '', dias: '' };
+}
+
+/** Data mínima já formatada, ou null enquanto validade ou prazo ainda não são válidos. */
+function dataMinimaExecucao(validade, dias, language) {
+  if (parsePrazoDias(validade) == null || parsePrazoDias(dias) == null) return null;
+  return formatDataLimiteTestes(calcularDataLimiteTestes(dias, new Date(), validade), language);
 }
 
 /**
@@ -53,7 +62,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
   disabled = false,
   showErrors = false,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const baseId = useId();
   const prefix = 'painel.configuracao.checklistExpedicao.validadeTestes.destinos';
 
@@ -267,6 +276,7 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                         const nomeId = `${baseId}-nome-${teste.key}`;
                         const validadeId = `${baseId}-validade-${teste.key}`;
                         const prazoId = `${baseId}-prazo-${teste.key}`;
+                        const dataMinima = dataMinimaExecucao(teste.validade, teste.dias, i18n.language);
                         const labelClass =
                           testeIndex === 0
                             ? 'text-xs font-medium sm:flex sm:min-h-8 sm:items-end'
@@ -276,10 +286,8 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                           testeIndex === 0 ? 'mt-1.5' : 'mt-1.5 sm:mt-0'
                         );
                         return (
-                          <li
-                            key={teste.key}
-                            className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_9.5rem_auto] sm:items-start"
-                          >
+                          <li key={teste.key} className="space-y-1.5">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_9.5rem_auto] sm:items-start">
                             <div className="min-w-0">
                               <Label htmlFor={nomeId} className={labelClass}>
                                 {t(`${prefix}.testeNomeLabel`)}
@@ -382,6 +390,19 @@ export default function ChecklistExpedicaoValidadeDestinosEditor({
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {t(`${prefix}.dataMinimaLabel`)}
+                              {': '}
+                              <span
+                                className={cn(
+                                  'font-semibold tabular-nums',
+                                  dataMinima ? 'text-emerald-800' : 'text-foreground'
+                                )}
+                              >
+                                {dataMinima || '—'}
+                              </span>
+                            </p>
                           </li>
                         );
                       })}

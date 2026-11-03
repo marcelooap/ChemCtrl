@@ -885,7 +885,7 @@
           "testesColumnMissingBanner": "Las pruebas por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
           "destinos": {
             "title": "Pruebas por destino",
-            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre, la vigencia y el plazo de verificación, en días. La fecha mínima de ejecución es hoy más el plazo de verificación, menos la vigencia.",
+            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre, la vigencia y el plazo de verificación, en días. La fecha mínima de ejecución es hoy menos (vigencia − 365 días) menos el plazo de verificación.",
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Seleccione el destino...",
             "prazoLabel": "Plazo de vigencia (días)",
@@ -905,6 +905,7 @@
             "testeNomePlaceholder": "Ej.: Prueba hidrostática",
             "testeValidadeLabel": "Vigencia (días)",
             "testePrazoLabel": "Plazo de verificación (días)",
+            "dataMinimaLabel": "Fecha mínima de ejecución",
             "addTeste": "Agregar prueba",
             "removeTeste": "Quitar prueba",
             "testesRequired": "Agregue al menos una prueba para este destino.",
