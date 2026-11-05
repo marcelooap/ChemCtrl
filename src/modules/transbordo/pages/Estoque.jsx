@@ -632,11 +632,10 @@ export default function Estoque() {
                   const saldoInicialEntrada = valorNaUnidadeEntrada(e, qtdOp);
                   const saldoAtualEntrada = valorNaUnidadeEntrada(e, saldoAtualOp);
                   const unidadeEntrada = getEstoqueUnidadeEntrada(e);
-                  // Usa locais pré-computados para as colunas de breakdown
+                  // Usa locais pré-computados para as colunas de breakdown.
+                  // Embalado = só o que entrou como embalado e ainda está em embalagem.
+                  // Tanque/tanka = o que foi envasado; envase integral fica todo no tanque.
                   const locais = locaisMap.get(e.id) ?? null;
-                  // Pátio = ainda em embalagem. Vasilhame = o que foi para tanque.
-                  // Não somar o pátio no tanque: isso jogava o saldo inteiro em tanque
-                  // quando não havia transbordo, ou quando só uma fração foi envasada.
                   const saldoEmbaladoEntrada = locais?.patio ?? 0;
                   const saldoTanqueEntrada = locais?.vasilhames ?? 0;
                   const saldoTankaEntrada = locais?.tankas ?? 0;

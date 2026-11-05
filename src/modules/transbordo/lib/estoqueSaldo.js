@@ -18,6 +18,7 @@ import {
 import { entities } from "@transbordo/services/entities";
 import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
 import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
+import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
 import {
   EMPTY_PLACA_KEY,
   getTransbordoIndex,
@@ -1777,6 +1778,10 @@ function resolveQuantidadeEstoqueNoVasilhame(
  * Quantidades ainda no pátio, por tipo de armazenamento, na UOM da entrada.
  * Todo vínculo é lastreado pelo id do registro de estoque (FIFO + cadeia + composicao.estoque_id).
  *
+ * Embalado (`patio`) só recebe saldo de entrada registrada como embalado que
+ * ainda não foi para tanque ou tanka. Envase integral para tanque absorve a
+ * fração de arredondamento da massa: o saldo inteiro fica na coluna do tanque.
+ *
  * @param {object} estoqueItem
  * @param {object} deps
  * @param {Array} [deps.transbordos]
@@ -1927,21 +1932,42 @@ export function computeEstoqueQuantidadesPorLocal(
     }
   }
 
-  const gap = Math.max(
-    0,
-    roundOp(estoqueItem, saldoOp - (qtyVasilhamesOp + qtyTankasOp))
-  );
-  if (gap > 0) {
-    const tipoRecebimento =
-      estoqueItem?.tipo_recebimento ||
-      estoqueItem?.lotes?.[0]?.tipo_recebimento ||
-      "";
-    if (tipoRecebimento === "vasilhame" && !isEstoqueEmbalado(estoqueItem)) {
-      // Entrada já recebida no tanque: o que a composição não detalhou continua nele.
-      qtyVasilhamesOp += gap;
+  // Embalado só existe para entrada registrada como embalado.
+  // Envase integral para tanque/tanka: a massa do tanque foi gravada inteira
+  // (roundMass) e a fração do saldo não pode vazar para Embalado.
+  const tipoRecebimento = resolveTipoRecebimentoEstoque(estoqueItem);
+  const entradaEmbalado = tipoRecebimento === "embalado";
+  const alocado = qtyVasilhamesOp + qtyTankasOp;
+  const diff = roundOp(estoqueItem, saldoOp - alocado);
+  const diffAbs = Math.abs(diff);
+  const envaseIntegral =
+    alocado > 0 &&
+    saldoOp > 0 &&
+    (estoqueOperaEmLitros(estoqueItem) ? diffAbs <= 0.001 : diffAbs <= 1);
+
+  if (envaseIntegral) {
+    if (qtyTankasOp > 0 && qtyVasilhamesOp <= 0) {
+      qtyTankasOp = roundOp(estoqueItem, saldoOp);
+      qtyVasilhamesOp = 0;
+    } else if (qtyVasilhamesOp > 0 && qtyTankasOp <= 0) {
+      qtyVasilhamesOp = roundOp(estoqueItem, saldoOp);
+      qtyTankasOp = 0;
+    } else if (qtyVasilhamesOp >= qtyTankasOp) {
+      qtyVasilhamesOp = Math.max(
+        0,
+        roundOp(estoqueItem, qtyVasilhamesOp + diff)
+      );
     } else {
-      // Sem transbordo, ou só uma fração envasada: o restante segue em embalagem.
-      qtyPatioOp = gap;
+      qtyTankasOp = Math.max(0, roundOp(estoqueItem, qtyTankasOp + diff));
+    }
+    qtyPatioOp = 0;
+  } else if (diff > 0) {
+    if (tipoRecebimento === "vasilhame") {
+      // Entrada já recebida no tanque: o que a composição não detalhou continua nele.
+      qtyVasilhamesOp += diff;
+    } else if (entradaEmbalado) {
+      // Só o que entrou como embalado e ainda não foi para tanque/tanka.
+      qtyPatioOp = diff;
     }
   }
 

@@ -9,12 +9,15 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import TankSilo from "@transbordo/components/tankagem/TankSilo";
 import TankagemViewDialog from "@transbordo/components/tankagem/TankagemViewDialog";
 import {
+  computeEstoqueQuantidadesPorLocal,
   computeEstoqueSaldo,
+  createEstoqueSaldoContext,
   getEstoqueQuantidade,
   getEstoqueUnidade,
   hydrateEstoqueFiscal,
   isUnidadeVolumeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
+import { applyDeclaredVolumeDecimals } from "@transbordo/lib/declaredVolume";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
   computeTankaLotesDisponiveis,
@@ -38,8 +41,7 @@ import { containerClientMatches } from "@transbordo/lib/saidaOrigem";
 import { getDominantLote, repairVasilhameComposicao, unifyDuplicateVasilhames, normalizeVasilhameLote } from "@transbordo/lib/vasilhameComposicao";
 import { relinkSaidasVasilhameIds } from "@transbordo/lib/vasilhameSaidaLink";
 import {
-  formatMass,
-  formatNum,
+  formatQuantidade,
   formatVolume,
   roundVolume,
   parseNumero,
@@ -183,7 +185,8 @@ function formatSaldo(value, unidade) {
   ) {
     return formatVolume(value, { empty: "-" });
   }
-  return formatMass(value, { empty: "-" });
+  // Mesma formatação da tela de Estoque: preserva a fração (não arredonda kg).
+  return formatQuantidade(value, { empty: "-" });
 }
 
 function SaldoBadge({ children, tone = "green" }) {
@@ -239,6 +242,7 @@ export default function EstoqueEnvio() {
   const [vasilhames, setVasilhames] = useState([]);
   const [isotanques, setIsotanques] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
+  const [saidas, setSaidas] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [entradas, setEntradas] = useState([]);
@@ -332,6 +336,7 @@ export default function EstoqueEnvio() {
         setVasilhames(vasilhamesOk);
         setIsotanques(isot);
         setTransbordos(trans);
+        setSaidas(Array.isArray(saics) ? saics : []);
         setClientes(cliens);
         setReservas(reservasList || []);
         setEntradas(Array.isArray(ents) ? ents : []);
@@ -418,6 +423,7 @@ export default function EstoqueEnvio() {
         setVasilhames([]);
         setIsotanques([]);
         setTransbordos([]);
+        setSaidas([]);
         setClientes([]);
         setReservas([]);
         setEntradas([]);
@@ -439,10 +445,64 @@ export default function EstoqueEnvio() {
   const hasClientFilter =
     Boolean(clienteFilter) && clienteFilter !== "Todos os clientes";
 
+  /**
+   * Mesmo recorte da tela de Estoque: reaplica a fração declarada na entrada
+   * e reparte o saldo em embalado / tanque / tanka com a mesma função.
+   */
+  const estoqueComLocais = useMemo(() => {
+    const volumes = applyDeclaredVolumeDecimals({
+      estoque,
+      entradas,
+      transbordos,
+      vasilhames,
+    });
+    const saldoCtx = createEstoqueSaldoContext(
+      volumes.transbordos,
+      saidas,
+      volumes.vasilhames
+    );
+    const corrigidoPorId = new Map(
+      (volumes.estoque || []).map((row) => [String(row.id), row])
+    );
+
+    return (estoque || []).map((item) => {
+      const base = corrigidoPorId.get(String(item?.id)) || item;
+      const merged = {
+        ...item,
+        ...base,
+        quantidade: getEstoqueQuantidade(base),
+        unidade_medida: getEstoqueUnidade(base),
+      };
+      const saldo = computeEstoqueSaldo(
+        merged,
+        volumes.transbordos,
+        saidas,
+        volumes.vasilhames,
+        saldoCtx
+      );
+      const locais = computeEstoqueQuantidadesPorLocal(
+        { ...merged, saldo_atual: saldo, saldo_final: saldo },
+        {
+          transbordos: volumes.transbordos,
+          vasilhames: volumes.vasilhames,
+          saidas,
+          saldo,
+          saldoCtx,
+        }
+      );
+      return {
+        ...merged,
+        saldo_atual: saldo,
+        saldo_final: saldo,
+        locais,
+      };
+    });
+  }, [estoque, entradas, transbordos, vasilhames, saidas]);
+
   const produtosAgregados = useMemo(() => {
     const map = new Map();
     const fontes = collectEstoqueEnvioFontes({
-      estoque,
+      estoque: estoqueComLocais,
       entradas,
       indStock,
       clientes,
@@ -473,7 +533,10 @@ export default function EstoqueEnvio() {
       const prev = map.get(key);
       if (prev) {
         prev.saldo += saldo;
-        if (e.embalado) prev.saldoEmbalado = (prev.saldoEmbalado || 0) + saldo;
+        prev.saldoEmbalado = (prev.saldoEmbalado || 0) + (Number(e.saldoEmbalado) || 0);
+        prev.saldoTanque = (prev.saldoTanque || 0) + (Number(e.saldoTanque) || 0);
+        prev.saldoTanka = (prev.saldoTanka || 0) + (Number(e.saldoTanka) || 0);
+        if (e.colunasLivro) prev.colunasLivro = true;
         if (!prev.clienteId && e.cliente_id) prev.clienteId = e.cliente_id;
         // Mantém kg quando o grupo misturar UOM (após filtro de espelhos, raro)
         if (
@@ -494,7 +557,10 @@ export default function EstoqueEnvio() {
           produto,
           unidade,
           saldo,
-          saldoEmbalado: e.embalado ? saldo : 0,
+          saldoEmbalado: Number(e.saldoEmbalado) || 0,
+          saldoTanque: Number(e.saldoTanque) || 0,
+          saldoTanka: Number(e.saldoTanka) || 0,
+          colunasLivro: Boolean(e.colunasLivro),
           cliente_nome: e.cliente_nome || "",
           clienteId: e.cliente_id || null,
         });
@@ -533,6 +599,9 @@ export default function EstoqueEnvio() {
           saldoReservado,
           saldoFinal,
           saldoEmbalado: roundVolume(row.saldoEmbalado || 0),
+          saldoTanque: roundVolume(row.saldoTanque || 0),
+          saldoTanka: roundVolume(row.saldoTanka || 0),
+          colunasLivro: Boolean(row.colunasLivro),
         };
       })
       .sort((a, b) => {
@@ -548,7 +617,7 @@ export default function EstoqueEnvio() {
         return String(a.unidade).localeCompare(String(b.unidade), "pt-BR");
       });
   }, [
-    estoque,
+    estoqueComLocais,
     entradas,
     indStock,
     indStockReady,
@@ -734,8 +803,8 @@ export default function EstoqueEnvio() {
    * Densidade: tanka → estoque → indStock (MP). Sem densidade válida, não converte
    * litros como se fossem kg (evita Tanka 43.241 L aparecer como 43.241 kg).
    *
-   * Embalado: só o que entrou como embalado no pátio (saldoEmbalado das fontes).
-   * Diferença entre saldo atual e (tanque+tanka) NÃO vai para Embalado.
+   * Embalado / tanque / tanka do livro seguem a tela de Estoque (colunasLivro).
+   * Órfãos e matéria-prima sem lote no Transbordo continuam pelo físico.
    */
   const produtosComBreakdown = useMemo(() => {
     const densidadeByCode = new Map();
@@ -1024,9 +1093,23 @@ export default function EstoqueEnvio() {
     const allAgregados = [...produtosAgregados, ...orphanAgregados];
 
     const rows = allAgregados.map((p) => {
+      const isOrphan = p.orphanPhysical === true;
+
+      // Livro do Transbordo: as três colunas são a soma da tela de Estoque.
+      if (p.colunasLivro && !isOrphan) {
+        const saldoReservado = p.saldoReservado || 0;
+        return {
+          ...p,
+          saldoTanque: roundVolume(p.saldoTanque || 0),
+          saldoTanka: roundVolume(p.saldoTanka || 0),
+          saldoEmbalado: roundVolume(p.saldoEmbalado || 0),
+          saldoFinal: p.saldoFinal,
+          saldoReservado,
+        };
+      }
+
       const clienteKey = normProdutoKey(p.cliente_nome || "");
       const codigoKey = normProdutoKey(p.codigo === "—" ? "" : p.codigo);
-      const nomeKey = normProdutoKey(p.produto || "");
 
       const prodKey = normalizeProductMatchKey(p.produto || "");
       const vasilhameQtd =
@@ -1039,7 +1122,6 @@ export default function EstoqueEnvio() {
       let saldoTanque = roundVolume(vasilhameQtd);
       let saldoTanka = roundVolume(tankaQtd);
 
-      const isOrphan = p.orphanPhysical === true;
       let saldoAtual = isOrphan
         ? roundVolume(saldoTanque + saldoTanka)
         : p.saldo;
@@ -1056,8 +1138,7 @@ export default function EstoqueEnvio() {
         saldoTanka = roundVolume(saldoTanka * scale);
       }
 
-      // Embalado = porção do saldo de entrada embalada que NÃO foi transferida
-      // para tanque/tanka. Se o produto inteiro migrou para vasilhame, zera.
+      // Matéria-prima sem coluna de livro: embalado só o que sobrou depois do físico.
       const saldoEmbaladoBruto = roundVolume(p.saldoEmbalado || 0);
       const saldoEmbalado = roundVolume(
         Math.max(0, saldoEmbaladoBruto - saldoTanque - saldoTanka)
@@ -1399,7 +1480,7 @@ export default function EstoqueEnvio() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="blue">
-                            {formatNum(p.saldo, 3, { empty: "-" })}
+                            {formatQuantidade(p.saldo, { empty: "-" })}
                           </SaldoBadge>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -1411,7 +1492,7 @@ export default function EstoqueEnvio() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone="emerald">
-                            {formatNum(p.saldoFinal, 3, { empty: "-" })}
+                            {formatQuantidade(p.saldoFinal, { empty: "-" })}
                           </SaldoBadge>
                         </td>
                         <td className="px-4 py-3 text-center font-semibold text-primary">

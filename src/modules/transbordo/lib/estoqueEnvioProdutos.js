@@ -126,6 +126,8 @@ export function collectEstoqueEnvioFontes({
     const clienteNome = item?.cliente_nome || "";
 
     const tipoRecebimento = resolveTipoRecebimentoEstoque(item);
+    const locais = item?.locais;
+    const colunasLivro = Boolean(locais);
     fontes.push({
       codigo: String(item?.produto_codigo || "").trim() || "—",
       produto,
@@ -135,6 +137,15 @@ export function collectEstoqueEnvioFontes({
       cliente_id: item?.cliente_id || null,
       embalado: tipoRecebimento === "embalado",
       tipo_recebimento: tipoRecebimento,
+      // Mesmas colunas da tela de Estoque (pátio / tanque / tanka), já na UOM da entrada.
+      saldoEmbalado: colunasLivro
+        ? Number(locais.patio) || 0
+        : tipoRecebimento === "embalado"
+          ? saldo
+          : 0,
+      saldoTanque: colunasLivro ? Number(locais.vasilhames) || 0 : 0,
+      saldoTanka: colunasLivro ? Number(locais.tankas) || 0 : 0,
+      colunasLivro,
     });
 
     // Registra como "já coberto pelo Transbordo"
