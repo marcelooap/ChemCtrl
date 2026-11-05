@@ -17,6 +17,7 @@ import {
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
+import { parseDensidade } from '@transbordo/lib/format';
 import { printContainerLabel, calcValidityDate } from '@industrializacao/lib/labelprint';
 import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 import { ensureProductionPublicToken } from '@industrializacao/lib/ensurePublicToken';
@@ -44,6 +45,12 @@ function defaultVolumeForContainer(container, productions) {
   return '';
 }
 
+function defaultTareForContainer(container) {
+  const raw = container?.tare ?? container?.tara;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : '';
+}
+
 export default function PrintContainerLabelDialog({
   open,
   onOpenChange,
@@ -66,6 +73,7 @@ export default function PrintContainerLabelDialog({
     : '';
   const [formSession, setFormSession] = useState('');
   const [volume, setVolume] = useState('');
+  const [tare, setTare] = useState('');
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -78,6 +86,11 @@ export default function PrintContainerLabelDialog({
     if (sessionKey === formSession) return;
     setFormSession(sessionKey);
     setVolume(defaultVolumeForContainer(container, productions));
+    setTare(
+      labelRequiresManualVolume(container)
+        ? defaultTareForContainer(container)
+        : '',
+    );
     setQty(1);
   }, [dialogOpen, sessionKey, formSession, container, productions]);
 
@@ -85,6 +98,7 @@ export default function PrintContainerLabelDialog({
     if (dialogOpen) return;
     setFormSession('');
     setVolume('');
+    setTare('');
     setQty(1);
     setPrinting(false);
     setMeta(null);
@@ -104,11 +118,14 @@ export default function PrintContainerLabelDialog({
     () => productionOfContainer(container, productions || []),
     [container, productions],
   );
-  const density = Number(densityOverride) > 0
-    ? Number(densityOverride)
+  const densityFromOverride = parseDensidade(densityOverride);
+  const density = densityFromOverride > 0
+    ? densityFromOverride
     : containerDensity(container, productions, recipes);
-  const tare = Number(container?.tare ?? container?.tara) || 0;
-  const weights = calcLabelWeightsFromVolume({ volume, density, tare });
+  const tareKg = manualVolume
+    ? (Number(tare) || 0)
+    : (Number(container?.tare ?? container?.tara) || 0);
+  const weights = calcLabelWeightsFromVolume({ volume, density, tare: tareKg });
   const volumeOk = Number(volume) > 0;
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
   const embalagem = formatLabelEmbalagem(container);
@@ -251,7 +268,7 @@ export default function PrintContainerLabelDialog({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 gap-4 ${manualVolume ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   {t('containers.fields.volume')} (L) *
@@ -271,6 +288,25 @@ export default function PrintContainerLabelDialog({
                     : t('containers.vasilhames.printLabelVolumeHintTank')}
                 </p>
               </div>
+              {manualVolume && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    {t('containers.vasilhames.tare')}
+                  </label>
+                  <NumberInputBr
+                    key={`tare-${sessionKey}`}
+                    value={tare}
+                    onChange={setTare}
+                    decimals={0}
+                    min={0}
+                    placeholder="0"
+                    aria-label={t('containers.vasilhames.tare')}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('containers.vasilhames.printLabelTareHint')}
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   {t('containers.vasilhames.printLabelQty')} *

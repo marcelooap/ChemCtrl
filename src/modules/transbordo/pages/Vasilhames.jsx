@@ -631,8 +631,31 @@ export default function Vasilhames() {
 
   const labelDensity = (() => {
     if (!labelResolved) return undefined;
+
+    const produto =
+      (produtos || []).find(
+        (p) =>
+          labelResolved.produto_id &&
+          String(p.id) === String(labelResolved.produto_id)
+      ) ||
+      (produtos || []).find(
+        (p) =>
+          p.codigo &&
+          labelResolved.produto_codigo &&
+          String(p.codigo) === String(labelResolved.produto_codigo)
+      );
+    const densProduto = parseDensidade(produto?.densidade);
+
+    // Produto com densidade tabelada: usa o cadastro (ex.: 1,1 → 200 L = 220 kg).
+    if (produto?.densidade_tabelada && densProduto > 0) return densProduto;
+
     const dens = parseDensidade(labelResolved.densidade);
     if (dens > 0) return dens;
+
+    // Sem densidade no vasilhame: cai no cadastro do produto antes do
+    // fallback peso÷volume (que vira ~1 quando o peso foi gravado em L).
+    if (densProduto > 0) return densProduto;
+
     const vol = Number(labelResolved.volume) || 0;
     const net = Number(labelResolved.peso_liquido) || 0;
     if (vol > 0 && net > 0) return net / vol;

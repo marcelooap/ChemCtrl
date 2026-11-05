@@ -4356,6 +4356,7 @@
       "printLabelQty": "Quantidade de etiquetas",
       "printLabelVolumeHintUnit": "Informe o volume de uma unidade. O peso líquido é calculado a partir deste volume.",
       "printLabelVolumeHintTank": "Volume do tanque. Você pode ajustar se quiser imprimir com outro volume.",
+      "printLabelTareHint": "A tara é somada ao peso líquido para obter o peso bruto da etiqueta.",
       "printLabelVolumeRequired": "Informe o volume e a quantidade de etiquetas.",
       "printLabelConfirm": "Imprimir",
       "printingLabels": "Imprimindo...",

@@ -4433,6 +4433,7 @@
       "printLabelQty": "Number of labels",
       "printLabelVolumeHintUnit": "Enter the volume of a single unit. Net weight is calculated from this volume.",
       "printLabelVolumeHintTank": "Tank volume. You can adjust it if you want to print a different volume.",
+      "printLabelTareHint": "Tare is added to the net weight to get the label gross weight.",
       "printLabelVolumeRequired": "Enter the volume and the number of labels.",
       "printLabelConfirm": "Print",
       "printingLabels": "Printing...",
