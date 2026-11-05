@@ -530,7 +530,9 @@ export async function persistTransbordo({
           embalado: embaladoOrigem,
           massa_retirada: embaladoOrigem
             ? massaEmbaladoMassa
-            : roundMass(o.massa_retirada ?? volume_retirado * dens),
+            : dens > 0
+              ? roundMass(volume_retirado * dens)
+              : roundMass(o.massa_retirada || 0),
           ...(lotesRet.length > 0 ? { lotes_retirados: lotesRet } : {}),
         };
       });

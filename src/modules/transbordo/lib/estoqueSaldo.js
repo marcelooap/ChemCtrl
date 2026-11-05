@@ -301,11 +301,17 @@ export function getEstoqueExpedidoEntrada(estoqueItem) {
  * Em transbordos, `origem.entrada_id` aponta para `estoque.id`.
  * Usado só para disponibilidade de novo transbordo — não para saldo na tela.
  */
-export function calcTransbordado(estoqueItem, transbordos) {
+export function calcTransbordado(
+  estoqueItem,
+  transbordos,
+  { excludeTransbordoId } = {}
+) {
   const id = estoqueItem?.id;
   if (!id) return 0;
+  const skipId = String(excludeTransbordoId || "").trim();
 
   return (transbordos || []).reduce((sum, t) => {
+    if (skipId && String(t.id) === skipId) return sum;
     const dens =
       parseFloat(String(t.densidade || "0").replace(",", ".")) || 0;
     const matches = (t.origens || []).filter((o) =>
@@ -323,9 +329,12 @@ export function calcTransbordado(estoqueItem, transbordos) {
     return (
       sum +
       matches.reduce((s, o) => {
-        const massa =
-          o.massa_retirada || (o.volume_retirado || 0) * dens;
-        return s + (Number(massa) || 0);
+        const vol = Number(o.volume_retirado) || 0;
+        const stored = Number(o.massa_retirada) || 0;
+        // Volume operacional × dens é a fonte de verdade; evita herdar
+        // massa inteira legada (ex.: 16193 vs 16193,35 da entrada).
+        const fromVol = dens > 0 && vol > 0 ? roundMass(vol * dens) : 0;
+        return s + (fromVol > 0 ? fromVol : stored);
       }, 0)
     );
   }, 0);
@@ -1578,8 +1587,13 @@ export function computeEstoqueSaldo(
 /**
  * Quanto ainda pode ser retirado em um novo transbordo (kg/L conforme unidade).
  * Independente do saldo da tela de Estoque.
+ * Em edição, passe `excludeTransbordoId` para não subtrair a própria OP.
  */
-export function computeDisponivelTransbordo(estoqueItem, transbordos) {
+export function computeDisponivelTransbordo(
+  estoqueItem,
+  transbordos,
+  { excludeTransbordoId } = {}
+) {
   const tipoRecebimento =
     estoqueItem?.lotes?.[0]?.tipo_recebimento ||
     estoqueItem?.tipo_recebimento;
@@ -1588,7 +1602,9 @@ export function computeDisponivelTransbordo(estoqueItem, transbordos) {
   if (estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) return 0;
 
   const quantidade = getEstoqueQuantidade(estoqueItem);
-  const transbordado = calcTransbordado(estoqueItem, transbordos);
+  const transbordado = calcTransbordado(estoqueItem, transbordos, {
+    excludeTransbordoId,
+  });
   return Math.max(0, quantidade - transbordado);
 }
 

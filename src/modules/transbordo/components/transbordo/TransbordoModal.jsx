@@ -517,11 +517,21 @@ export default function TransbordoModal({
     (p) => !clienteNome || p.cliente_nome?.toLowerCase() === clienteNome.toLowerCase()
   );
 
+  // Em edição, o OP atual é excluído do histórico para não subtrair em dobro.
+  const editingIdForSaldo =
+    resolvedEditIdRef.current || editingTransbordo?.id || null;
+  const editingCodigoTransbordo =
+    editingTransbordo?.codigo_transbordo ||
+    (transbordos || []).find((t) => String(t.id) === String(editingIdForSaldo))
+      ?.codigo_transbordo ||
+    "";
+  const saldoOpts = { excludeTransbordoId: editingIdForSaldo };
+
   const produtosComSaldo = (() => {
     const withSaldo = filteredProdutos.filter((p) =>
       entradas.some((e) => {
         if (!(e.produto_id === p.id || e.produto_nome === p.produto)) return false;
-        const disponivel = computeDisponivelTransbordo(e, transbordos);
+        const disponivel = computeDisponivelTransbordo(e, transbordos, saldoOpts);
         return disponivel > 0 || (e.saldo_atual || 0) > 0;
       })
     );
@@ -560,11 +570,11 @@ export default function TransbordoModal({
       if (!(e.produto_id === produtoId || e.produto_nome === produtoNome)) {
         return false;
       }
-      return computeDisponivelTransbordo(e, transbordos) > 0;
+      return computeDisponivelTransbordo(e, transbordos, saldoOpts) > 0;
     })
     .map((e) => ({
       ...e,
-      saldo_atual: computeDisponivelTransbordo(e, transbordos),
+      saldo_atual: computeDisponivelTransbordo(e, transbordos, saldoOpts),
       display_codigo: entradaIdMap[e.id] || "E000",
       display_label: `${entradaIdMap[e.id] || "E000"} - ${e.produto_nome || ""}${
         e.lote ? ` (Lote ${e.lote})` : ""
@@ -572,14 +582,6 @@ export default function TransbordoModal({
     }));
 
   // Tankas com saldo > 0 (entrada Tankagem − saída como origem tanka)
-  // Em edição, o OP atual é excluído do histórico para não subtrair em dobro.
-  const editingIdForSaldo =
-    resolvedEditIdRef.current || editingTransbordo?.id || null;
-  const editingCodigoTransbordo =
-    editingTransbordo?.codigo_transbordo ||
-    (transbordos || []).find((t) => String(t.id) === String(editingIdForSaldo))
-      ?.codigo_transbordo ||
-    "";
 
   const produtoCtx = {
     produtoId,

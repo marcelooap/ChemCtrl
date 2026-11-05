@@ -3,7 +3,8 @@
  *
  * Volumes operacionais: até 3 casas. Inteiros continuam sem decimal (19.849);
  * frações da entrada são preservadas (19.848,5).
- * Massas operacionais: inteiros (sem casas decimais), milhar com ".".
+ * Massas operacionais: até 3 casas (alinha com a quantidade da entrada),
+ * milhar com "." e decimal ",".
  * Densidade / valores com decimal: milhar "." e decimal ",".
  * Fracionamentos inteiros: distributeInteger / distributeByWeights garantem
  * que a soma das partes = total de entrada (método do maior resto).
@@ -51,9 +52,12 @@ export function qtdEmbalagensFromVolume(total, volumePorEmbalagem) {
   return roundVolume(t / per);
 }
 
-/** Alias semântico para massas operacionais. */
+/**
+ * Massa operacional em kg: até 3 casas (ex.: 16.193,35).
+ * Inteiros permanecem inteiros; não trunca a fração da entrada.
+ */
 export function roundMass(v) {
-  return Math.round(parseNumero(v));
+  return roundQuantidade(v);
 }
 
 /**
@@ -124,11 +128,6 @@ export function formatVolume(v, opts = {}) {
   return formatQuantidade(v, opts);
 }
 
-/** Massa em kg — sempre inteiro PT-BR. */
-export function formatMass(v, opts = {}) {
-  return formatNum(v, 0, { empty: opts.empty ?? "0" });
-}
-
 /**
  * Quantidade informada na entrada: até 3 casas decimais.
  * Inteiros continuam sem casas (8.250). Frações preservam o que foi digitado (5.499,298).
@@ -148,6 +147,11 @@ export function formatQuantidade(v, opts = {}) {
   if (!hasFraction) return formatNum(n, 0, { empty });
   const text = formatNum(n, 3, { empty });
   return text.replace(/,(\d*?)0+$/, (_, digits) => (digits ? `,${digits}` : ""));
+}
+
+/** Massa em kg — até 3 casas PT-BR (16.193,35), inteiro sem casas (16.193). */
+export function formatMass(v, opts = {}) {
+  return formatQuantidade(v, opts);
 }
 
 /** Densidade — até 4 casas decimais PT-BR (ex.: 0,7900). */
