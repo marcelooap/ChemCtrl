@@ -4,6 +4,7 @@ import {
   getEstoqueUnidadeEntrada,
   isUnidadeVolumeEntrada,
   normalizeUnidadeEntrada,
+  somaLocaisEstoque,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   entradaByIdMap,
@@ -119,15 +120,18 @@ export function collectEstoqueEnvioFontes({
       continue;
     }
 
-    const saldo = getEstoqueSaldoEntrada(item);
-    if (saldo <= 0) continue;
-
     const produto = String(item?.produto_nome || "").trim() || "—";
     const clienteNome = item?.cliente_nome || "";
 
     const tipoRecebimento = resolveTipoRecebimentoEstoque(item);
     const locais = item?.locais;
     const colunasLivro = Boolean(locais);
+    // Mesma regra da tela de Estoque: Saldo Atual = embalado + tanque + tanka.
+    const saldo = colunasLivro
+      ? somaLocaisEstoque(locais)
+      : getEstoqueSaldoEntrada(item);
+    if (saldo <= 0) continue;
+
     fontes.push({
       codigo: String(item?.produto_codigo || "").trim() || "—",
       produto,

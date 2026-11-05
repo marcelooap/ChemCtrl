@@ -34,6 +34,7 @@ import {
   valorNaUnidadeEntrada,
   isUnidadeVolumeEntrada,
   hydrateEstoqueFiscal,
+  somaLocaisEstoque,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   invalidateTransbordoWorkspaceCache,
@@ -330,20 +331,6 @@ export default function Estoque() {
       });
   }, [estoque, search, statusFilter, clienteFilter, entradaIdMap]);
 
-  const { totalSaldo, totalCusto } = useMemo(
-    () =>
-      filtered.reduce(
-        (acc, e) => {
-          const saldo = e.saldo_atual || 0;
-          acc.totalSaldo += saldo;
-          acc.totalCusto += saldo * (e.preco_unitario || 0);
-          return acc;
-        },
-        { totalSaldo: 0, totalCusto: 0 }
-      ),
-    [filtered]
-  );
-
   const saldoCtx = useMemo(
     () => createEstoqueSaldoContext(transbordos, saidas, vasilhames),
     [transbordos, saidas, vasilhames]
@@ -380,6 +367,25 @@ export default function Estoque() {
     }
     return map;
   }, [estoque, transbordos, vasilhames, saidas, saldoCtx]);
+
+  const { totalSaldo, totalCusto } = useMemo(
+    () =>
+      filtered.reduce(
+        (acc, e) => {
+          // Totais seguem o Saldo Atual da grade (= embalado + tanque + tanka).
+          const locais = locaisMap.get(e.id);
+          const saldo =
+            locais != null
+              ? somaLocaisEstoque(locais)
+              : valorNaUnidadeEntrada(e, Number(e.saldo_atual) || 0);
+          acc.totalSaldo += saldo;
+          acc.totalCusto += saldo * (e.preco_unitario || 0);
+          return acc;
+        },
+        { totalSaldo: 0, totalCusto: 0 }
+      ),
+    [filtered, locaisMap]
+  );
 
   const handleEdit = (item) => {
     setEditingItem(item);
@@ -624,21 +630,22 @@ export default function Estoque() {
                 </tr>
               ) : (
                 filtered.map((e, i) => {
-                  const saldoZerado = Number(e.saldo_atual) === 0;
-                  // Saldo já calculado em buildEstoqueView (contexto compartilhado);
-                  // recalcular aqui custava O(transbordos × vasilhames) por linha a cada render.
-                  const qtdOp = getEstoqueQuantidade(e);
-                  const saldoAtualOp = Number(e.saldo_atual) || 0;
-                  const saldoInicialEntrada = valorNaUnidadeEntrada(e, qtdOp);
-                  const saldoAtualEntrada = valorNaUnidadeEntrada(e, saldoAtualOp);
-                  const unidadeEntrada = getEstoqueUnidadeEntrada(e);
                   // Usa locais pré-computados para as colunas de breakdown.
                   // Embalado = só o que entrou como embalado e ainda está em embalagem.
                   // Tanque/tanka = o que foi envasado; envase integral fica todo no tanque.
+                  // Saldo Atual = embalado + tanque + tanka (físico disponível).
                   const locais = locaisMap.get(e.id) ?? null;
                   const saldoEmbaladoEntrada = locais?.patio ?? 0;
                   const saldoTanqueEntrada = locais?.vasilhames ?? 0;
                   const saldoTankaEntrada = locais?.tankas ?? 0;
+                  const qtdOp = getEstoqueQuantidade(e);
+                  const saldoInicialEntrada = valorNaUnidadeEntrada(e, qtdOp);
+                  const saldoAtualEntrada =
+                    locais != null
+                      ? somaLocaisEstoque(locais)
+                      : valorNaUnidadeEntrada(e, Number(e.saldo_atual) || 0);
+                  const saldoZerado = saldoAtualEntrada <= 0;
+                  const unidadeEntrada = getEstoqueUnidadeEntrada(e);
                   return (
                   <tr key={e.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${

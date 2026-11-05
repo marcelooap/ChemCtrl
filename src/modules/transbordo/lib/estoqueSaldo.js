@@ -1799,6 +1799,7 @@ export function computeEstoqueQuantidadesPorLocal(
     vasilhames: 0,
     tankas: 0,
     patio: 0,
+    total: 0,
     unidade: getEstoqueUnidadeEntrada(estoqueItem),
   };
   if (!estoqueItem?.id) return empty;
@@ -1975,12 +1976,38 @@ export function computeEstoqueQuantidadesPorLocal(
   qtyTankasOp = roundOp(estoqueItem, qtyTankasOp);
   qtyPatioOp = roundOp(estoqueItem, qtyPatioOp);
 
+  const qtyVasilhamesEntrada = valorNaUnidadeEntrada(
+    estoqueItem,
+    qtyVasilhamesOp
+  );
+  const qtyTankasEntrada = valorNaUnidadeEntrada(estoqueItem, qtyTankasOp);
+  const qtyPatioEntrada = valorNaUnidadeEntrada(estoqueItem, qtyPatioOp);
+
   return {
-    vasilhames: valorNaUnidadeEntrada(estoqueItem, qtyVasilhamesOp),
-    tankas: valorNaUnidadeEntrada(estoqueItem, qtyTankasOp),
-    patio: valorNaUnidadeEntrada(estoqueItem, qtyPatioOp),
+    vasilhames: qtyVasilhamesEntrada,
+    tankas: qtyTankasEntrada,
+    patio: qtyPatioEntrada,
+    // Saldo Atual na tela = embalado + tanque + tanka (já na UOM da entrada).
+    total: somaLocaisEstoque({
+      patio: qtyPatioEntrada,
+      vasilhames: qtyVasilhamesEntrada,
+      tankas: qtyTankasEntrada,
+    }),
     unidade: getEstoqueUnidadeEntrada(estoqueItem),
   };
+}
+
+/**
+ * Soma das colunas físicas (embalado/pátio + tanque + tanka) na UOM da entrada.
+ * É a definição de Saldo Atual na grade de Estoque.
+ */
+export function somaLocaisEstoque(locais) {
+  if (!locais) return 0;
+  return roundQuantidade(
+    (Number(locais.patio) || 0) +
+      (Number(locais.vasilhames) || 0) +
+      (Number(locais.tankas) || 0)
+  );
 }
 
 /** Indica se o vasilhame contém produto deste registro de estoque. */
