@@ -3,6 +3,7 @@ import {
   getEstoqueUnidadeEntrada,
   hydrateEstoqueFiscal,
 } from '@transbordo/lib/estoqueSaldo';
+import { formatEstoqueCodigo } from '@transbordo/lib/estoqueCodigo';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
 import { isVasilhameReservaChave } from '@painel/lib/vasilhameReservas';
@@ -97,6 +98,10 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
     });
 
     const entradaCodigo = String(item.entrada_codigo ?? '').trim();
+    const codigoEstoque = Number(item.codigo_estoque);
+    const dataFabricacao = item.data_fabricacao || null;
+    const dataValidade = item.data_validade || null;
+
     const prev = map.get(chave);
     if (prev) {
       prev.saldoAtual += saldo;
@@ -104,9 +109,18 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       if (entradaCodigo && !prev.entradaCodigos.includes(entradaCodigo)) {
         prev.entradaCodigos.push(entradaCodigo);
       }
+      if (
+        Number.isFinite(codigoEstoque) &&
+        codigoEstoque > 0 &&
+        !prev.estoqueCodigos.includes(codigoEstoque)
+      ) {
+        prev.estoqueCodigos.push(codigoEstoque);
+      }
       if (!prev.produtoId && item.produto_id) prev.produtoId = item.produto_id;
       if (!prev.clienteId && item.cliente_id) prev.clienteId = item.cliente_id;
       if (prev.lote === '—' && lote !== '—') prev.lote = lote;
+      if (!prev.dataFabricacao && dataFabricacao) prev.dataFabricacao = dataFabricacao;
+      if (!prev.dataValidade && dataValidade) prev.dataValidade = dataValidade;
     } else {
       map.set(chave, {
         id: chave,
@@ -121,7 +135,11 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
         saldoAtual: saldo,
         estoqueIds: item.id ? [item.id] : [],
         entradaCodigos: entradaCodigo ? [entradaCodigo] : [],
+        estoqueCodigos:
+          Number.isFinite(codigoEstoque) && codigoEstoque > 0 ? [codigoEstoque] : [],
         densidade: item.densidade || item.lotes?.[0]?.densidade || null,
+        dataFabricacao,
+        dataValidade,
       });
     }
   }
@@ -155,7 +173,10 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       saldoAtual: 0,
       estoqueIds: [],
       entradaCodigos: [],
+      estoqueCodigos: [],
       densidade: null,
+      dataFabricacao: null,
+      dataValidade: null,
     });
   }
 
@@ -174,10 +195,17 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
           : entradaCodigos.length === 1
             ? entradaCodigos[0]
             : entradaCodigos.join(', ');
+      const estoqueCodigos = [...(row.estoqueCodigos || [])].sort((a, b) => a - b);
+      const estoqueDisplay =
+        estoqueCodigos.length === 0
+          ? '—'
+          : estoqueCodigos.map((codigo) => formatEstoqueCodigo(codigo)).join(', ');
       return {
         ...row,
         entradaCodigos,
         entradaDisplay,
+        estoqueCodigos,
+        estoqueDisplay,
         saldoAtual,
         saldoReservado,
         saldoFinal,

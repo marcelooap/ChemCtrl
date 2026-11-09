@@ -13,6 +13,7 @@ import ChecklistExpedicaoItensEditor, {
   validateChecklistItens,
 } from '@painel/components/configuracao/ChecklistExpedicaoItensEditor';
 import ChecklistExpedicaoValidadeTestesConfig from '@painel/components/configuracao/ChecklistExpedicaoValidadeTestesConfig';
+import ConfigBackLink from '@painel/components/configuracao/ConfigBackLink';
 import {
   DEFAULT_VALIDADE_TESTES_CONFIG,
   createTempItemId,
@@ -446,24 +447,27 @@ export default function ChecklistExpedicao() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 space-y-4 bg-background pb-1">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {t('painel.configuracao.checklistExpedicao.title')}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('painel.configuracao.checklistExpedicao.subtitle')}
-            </p>
+        <div className="space-y-2">
+          <ConfigBackLink />
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {t('painel.configuracao.checklistExpedicao.title')}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {t('painel.configuracao.checklistExpedicao.subtitle')}
+              </p>
+            </div>
+            <Button
+              onClick={handleSave}
+              disabled={!canSave}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {saving || submitBusy
+                ? t('common.saving')
+                : t('painel.configuracao.checklistExpedicao.save')}
+            </Button>
           </div>
-          <Button
-            onClick={handleSave}
-            disabled={!canSave}
-            className="bg-primary hover:bg-primary/90"
-          >
-            {saving || submitBusy
-              ? t('common.saving')
-              : t('painel.configuracao.checklistExpedicao.save')}
-          </Button>
         </div>
 
         {[

@@ -631,8 +631,8 @@ export default function Estoque() {
               ) : (
                 filtered.map((e, i) => {
                   // Usa locais pré-computados para as colunas de breakdown.
-                  // Embalado = só o que entrou como embalado e ainda está em embalagem.
-                  // Tanque/tanka = o que foi envasado; envase integral fica todo no tanque.
+                  // Embalado = entrada embalada residual + destinos bombona/tambor/IBC.
+                  // Tanque/tanka = tanque clássico e tankagem; unitários vão em Embalado.
                   // Saldo Atual = embalado + tanque + tanka (físico disponível).
                   const locais = locaisMap.get(e.id) ?? null;
                   const saldoEmbaladoEntrada = locais?.patio ?? 0;

@@ -60,6 +60,7 @@ import {
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import {
   collectTankIdentityNames,
+  isEstoqueEnvioEmbaladoUnitario,
   mapIndContainersForEstoqueEnvio,
   resolveQuantidadeFisicaVasilhame,
 } from "@transbordo/lib/estoqueEnvioVasilhames";
@@ -803,8 +804,9 @@ export default function EstoqueEnvio() {
    * Densidade: tanka → estoque → indStock (MP). Sem densidade válida, não converte
    * litros como se fossem kg (evita Tanka 43.241 L aparecer como 43.241 kg).
    *
-   * Embalado / tanque / tanka do livro seguem a tela de Estoque (colunasLivro).
-   * Órfãos e matéria-prima sem lote no Transbordo continuam pelo físico.
+   * Embalado / tanque / tanka do livro seguem a tela de Estoque (colunasLivro),
+   * inclusive bombona/tambor/IBC em Embalado. Órfãos e MP sem lote no Transbordo
+   * usam o físico com a mesma classificação unitário → Embalado.
    */
   const produtosComBreakdown = useMemo(() => {
     const densidadeByCode = new Map();
@@ -951,9 +953,12 @@ export default function EstoqueEnvio() {
     };
 
     // ── Acumuladores já na UOM de entrada por produto+cliente ──────────────
+    // Tanque = contentor/vasilhame clássico; Embalado = bombona/tambor/IBC.
     const orphanByKey = new Map();
     const vasilhameByCode = new Map();
     const vasilhameByNome = new Map();
+    const embaladoByCode = new Map();
+    const embaladoByNome = new Map();
     for (const v of filteredVasilhames) {
       const codigoKey = normProdutoKey(v.produto_codigo || "");
       const prodKey = normalizeProductMatchKey(v.produto_nome || "");
@@ -975,13 +980,19 @@ export default function EstoqueEnvio() {
         orphanByKey
       );
       rememberPhysicalUnidade(prodKey, clienteKey, unidadeFisica);
+      const targetByCode = isEstoqueEnvioEmbaladoUnitario(v)
+        ? embaladoByCode
+        : vasilhameByCode;
+      const targetByNome = isEstoqueEnvioEmbaladoUnitario(v)
+        ? embaladoByNome
+        : vasilhameByNome;
       if (codigoKey) {
         const k = `${codigoKey}||${clienteKey}`;
-        vasilhameByCode.set(k, (vasilhameByCode.get(k) || 0) + vol);
+        targetByCode.set(k, (targetByCode.get(k) || 0) + vol);
       }
       if (prodKey) {
         const k = `${prodKey}||${clienteKey}`;
-        vasilhameByNome.set(k, (vasilhameByNome.get(k) || 0) + vol);
+        targetByNome.set(k, (targetByNome.get(k) || 0) + vol);
       }
     }
 
@@ -1095,7 +1106,8 @@ export default function EstoqueEnvio() {
     const rows = allAgregados.map((p) => {
       const isOrphan = p.orphanPhysical === true;
 
-      // Livro do Transbordo: as três colunas são a soma da tela de Estoque.
+      // Livro do Transbordo: as três colunas são a soma da tela de Estoque
+      // (bombona/tambor/IBC já vêm em saldoEmbalado via locais.patio).
       if (p.colunasLivro && !isOrphan) {
         const saldoReservado = p.saldoReservado || 0;
         return {
@@ -1115,19 +1127,23 @@ export default function EstoqueEnvio() {
       const vasilhameQtd =
         lookupPhysicalMap(vasilhameByCode, codigoKey, p.produto, clienteKey) ||
         lookupPhysicalMap(vasilhameByNome, "", p.produto, clienteKey);
+      const embaladoQtd =
+        lookupPhysicalMap(embaladoByCode, codigoKey, p.produto, clienteKey) ||
+        lookupPhysicalMap(embaladoByNome, "", p.produto, clienteKey);
       const tankaQtd = lookupPhysicalMap(tankaByNome, "", p.produto, clienteKey);
       const unidadeFisica = physicalUnidadeByKey.get(`${prodKey}||${clienteKey}`);
       const unidadeRow = unidadeFisica || p.unidade;
 
       let saldoTanque = roundVolume(vasilhameQtd);
       let saldoTanka = roundVolume(tankaQtd);
+      let saldoEmbaladoFisico = roundVolume(embaladoQtd);
 
       let saldoAtual = isOrphan
-        ? roundVolume(saldoTanque + saldoTanka)
+        ? roundVolume(saldoTanque + saldoTanka + saldoEmbaladoFisico)
         : p.saldo;
 
-      // Tanque + tanka não podem exceder o saldo de livro (divergência de dados).
-      const totalFisico = saldoTanque + saldoTanka;
+      // Físico (tanque + tanka + unitário) não pode exceder o saldo de livro.
+      const totalFisico = saldoTanque + saldoTanka + saldoEmbaladoFisico;
       if (
         !isOrphan &&
         totalFisico > saldoAtual + 0.001 &&
@@ -1136,13 +1152,17 @@ export default function EstoqueEnvio() {
         const scale = saldoAtual / totalFisico;
         saldoTanque = roundVolume(saldoTanque * scale);
         saldoTanka = roundVolume(saldoTanka * scale);
+        saldoEmbaladoFisico = roundVolume(saldoEmbaladoFisico * scale);
       }
 
-      // Matéria-prima sem coluna de livro: embalado só o que sobrou depois do físico.
+      // MP sem coluna de livro: residual do livro + unitários físicos (bombona/tambor/IBC).
       const saldoEmbaladoBruto = roundVolume(p.saldoEmbalado || 0);
-      const saldoEmbalado = roundVolume(
+      const saldoEmbaladoResidual = roundVolume(
         Math.max(0, saldoEmbaladoBruto - saldoTanque - saldoTanka)
       );
+      const saldoEmbalado = isOrphan
+        ? saldoEmbaladoFisico
+        : roundVolume(saldoEmbaladoResidual + saldoEmbaladoFisico);
 
       const saldoReservado = p.saldoReservado || 0;
       const saldoFinal = isOrphan
@@ -1454,7 +1474,7 @@ export default function EstoqueEnvio() {
                             {p.cliente_nome || "—"}
                           </td>
                         )}
-                        {/* Embalado: saldo dos itens recebidos como embalado */}
+                        {/* Embalado: entrada embalada + destinos bombona/tambor/IBC */}
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone={p.saldoEmbalado > 0 ? "blue" : "muted"}>
                             {p.saldoEmbalado > 0
@@ -1462,7 +1482,7 @@ export default function EstoqueEnvio() {
                               : "—"}
                           </SaldoBadge>
                         </td>
-                        {/* Tanque: quantidade em vasilhames no pátio, na unidade de entrada do produto */}
+                        {/* Tanque: vasilhame clássico no pátio (sem bombona/tambor/IBC) */}
                         <td className="px-4 py-3 text-right">
                           <SaldoBadge tone={p.saldoTanque > 0 ? "blue" : "muted"}>
                             {p.saldoTanque > 0

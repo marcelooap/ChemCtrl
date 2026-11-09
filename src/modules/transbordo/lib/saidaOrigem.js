@@ -1,5 +1,19 @@
 /** Origens e tipos de item para solicitações de saída (Painel Comercial). */
 
+import { parseDensidade, roundMass, roundVolume } from "@transbordo/lib/format";
+import {
+  isDestinoEmbalagemUnitaria,
+  getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
+  buildPlacaEmbalagens,
+} from "@transbordo/lib/tiposEmbalagem";
+import {
+  isUnitPackagingType,
+  getContainerPackageQty,
+  getUnitPackagingCapacity,
+  formatAggregatedContainerLabel,
+} from "@industrializacao/lib/packagingTypes";
+
 export const ORIGEM_TRANSBORDO = "transbordo";
 export const ORIGEM_INDUSTRIALIZACAO = "industrializacao";
 
@@ -213,6 +227,13 @@ export function isTanqueVazioItem(item) {
   return Boolean(item?.tanque_vazio);
 }
 
+/** Saída só com contentores/tanques vazios (sem produto). */
+export function isSaidaCargaVazia(saida) {
+  const itens = saida?.itens || [];
+  if (itens.length === 0) return false;
+  return itens.every(isTanqueVazioItem);
+}
+
 /** Gera uid estável para chave de edição/checklist (tanque vazio sem cadastro). */
 export function newSaidaItemUid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -253,8 +274,8 @@ export function saidaItemChave(item) {
 }
 
 /**
- * O estoque deste item já foi baixado.
- * `validado: false` é um item incluído depois e ainda pendente.
+ * O estoque deste item já foi baixado (status atual).
+ * `validado: false` é pendente (novo item ou desvalidado).
  * Sem a flag, vale a validação do módulo (saídas antigas).
  */
 export function itemFoiBaixado(item, saida) {
@@ -265,9 +286,44 @@ export function itemFoiBaixado(item, saida) {
   return isSaidaValidadaNoModulo(saida, resolveItemOrigem(item));
 }
 
-/** Check verde na visualização: item já validado. */
+/**
+ * Histórico de validação do item — independente do status atual.
+ * `validado_historico: true` permanece após desvalidação.
+ * Legado: item atualmente baixado (ou herdando validação do módulo) conta
+ * como histórico até a próxima gravação gravar a flag explícita.
+ */
+export function itemTemHistoricoValidacao(item, saida) {
+  if (!item || isItemSaidaVazio(item)) return false;
+  if (item.validado_historico === true) return true;
+  // Status atual validado implica que já passou por validação.
+  if (item.validado === true) return true;
+  // Pendente explícito sem marcador de histórico: nunca validado
+  // (ou desvalidado antes desta flag existir).
+  if (item.validado === false) return false;
+  if (!saida) return false;
+  return isSaidaValidadaNoModulo(saida, resolveItemOrigem(item));
+}
+
+/** Check verde na visualização: já passou por validação (histórico). */
 export function isItemValidadoParaExibicao(item, saida) {
-  return itemFoiBaixado(item, saida);
+  return itemTemHistoricoValidacao(item, saida);
+}
+
+/**
+ * Aplica status atual de validação preservando/marcando o histórico.
+ * Desvalidar nunca apaga `validado_historico`.
+ */
+export function applyItemValidacaoFlags(item, checked, { hadBaixa = false } = {}) {
+  const next = { ...item, validado: Boolean(checked) };
+  if (
+    checked ||
+    hadBaixa ||
+    item?.validado_historico === true ||
+    item?.validado === true
+  ) {
+    next.validado_historico = true;
+  }
+  return next;
 }
 
 /** Há tanque/produto deste módulo incluído depois da validação. */
@@ -363,6 +419,177 @@ export function tanqueVazioTemIdentificacao(item) {
   const placa = String(item?.vasilhame_placa || "").trim();
   const barril = String(item?.vasilhame_barril || "").trim();
   return Boolean(placa || barril);
+}
+
+function isSaidaItemTanque(item) {
+  const tipo = String(item?.tipo || "");
+  return (
+    tipo === TIPO_CONVENCIONAL ||
+    tipo === TIPO_IND_VASILHAME ||
+    tipo === "Vasilhame"
+  );
+}
+
+function findVasilhameForSaidaItem(item, vasilhames = []) {
+  if (!item || !Array.isArray(vasilhames) || vasilhames.length === 0) return null;
+  if (item.vasilhame_id) {
+    const byId = vasilhames.find(
+      (v) => String(v?.id || "") === String(item.vasilhame_id)
+    );
+    if (byId) return byId;
+  }
+  const placa = String(item.vasilhame_placa || "")
+    .trim()
+    .toUpperCase();
+  if (!placa) return null;
+  const patio = vasilhames.find(
+    (v) =>
+      String(v?.placa || "")
+        .trim()
+        .toUpperCase() === placa &&
+      (v.status || "No Pátio") === "No Pátio" &&
+      !v.data_saida
+  );
+  if (patio) return patio;
+  return (
+    vasilhames.find(
+      (v) =>
+        String(v?.placa || "")
+          .trim()
+          .toUpperCase() === placa
+    ) || null
+  );
+}
+
+function densFromSameProduct(item, transbordos = []) {
+  const produtoId = String(item?.produto_id || "").trim();
+  const produtoNome = String(item?.produto_nome || "")
+    .trim()
+    .toUpperCase();
+  if (!produtoId && !produtoNome) return 0;
+
+  for (const t of transbordos || []) {
+    if (produtoId && String(t?.produto_id || "") === produtoId) {
+      const dens = parseDensidade(t?.densidade);
+      if (dens > 0) return dens;
+    }
+  }
+  if (!produtoNome) return 0;
+  for (const t of transbordos || []) {
+    if (
+      String(t?.produto_nome || "")
+        .trim()
+        .toUpperCase() === produtoNome
+    ) {
+      const dens = parseDensidade(t?.densidade);
+      if (dens > 0) return dens;
+    }
+  }
+  return 0;
+}
+
+function densFromRelatedTransbordos(vasilhame, item, transbordos = []) {
+  if (!Array.isArray(transbordos) || transbordos.length === 0) return 0;
+
+  const codigos = new Set(
+    [
+      vasilhame?.numero_op,
+      ...((vasilhame?.composicao || []).map((c) => c?.transbordo_codigo) || []),
+    ]
+      .map((c) => String(c || "").trim().toUpperCase())
+      .filter(Boolean)
+  );
+  const placa = String(vasilhame?.placa || item?.vasilhame_placa || "")
+    .trim()
+    .toUpperCase();
+
+  for (const t of transbordos) {
+    const codigo = String(t?.codigo_transbordo || "")
+      .trim()
+      .toUpperCase();
+    if (codigos.size > 0 && codigo && codigos.has(codigo)) {
+      const dens = parseDensidade(t?.densidade);
+      if (dens > 0) return dens;
+    }
+  }
+
+  if (placa) {
+    for (const t of transbordos) {
+      for (const d of t?.destinos || []) {
+        const destPlaca = String(d?.placa || d?.tanka_codigo || "")
+          .trim()
+          .toUpperCase();
+        if (destPlaca !== placa) continue;
+        const densDest =
+          parseDensidade(t?.densidade) ||
+          (Number(d?.peso_liquido) > 0 && Number(d?.volume_total || d?.volume) > 0
+            ? Number(d.peso_liquido) / Number(d.volume_total || d.volume)
+            : 0);
+        if (densDest > 0) return densDest;
+      }
+    }
+  }
+
+  return densFromSameProduct(item, transbordos);
+}
+
+/**
+ * Massa (kg) de um item para o total da saída.
+ * Prefere peso_liquido (tanques); cai em quantidade_solicitada (embalado/MP).
+ * Para tanque com volume e massa zerada (OP sem dens), deriva kg via densidade
+ * do vasilhame/OP relacionado ou do mesmo produto.
+ */
+export function saidaItemQuantidadeKg(item, ctx = {}) {
+  if (!item || isTanqueVazioItem(item) || isItemSaidaVazio(item)) return 0;
+  const direct =
+    Number(item.peso_liquido) || Number(item.quantidade_solicitada) || 0;
+  if (direct > 0) return direct;
+
+  if (!isSaidaItemTanque(item)) return 0;
+  const vol = roundVolume(item.volume_solicitado || 0);
+  if (!(vol > 0)) return 0;
+
+  const vasilhames = ctx.vasilhames || [];
+  const transbordos = ctx.transbordos || [];
+  const vasilhame = findVasilhameForSaidaItem(item, vasilhames);
+
+  let dens =
+    parseDensidade(item?.densidade) ||
+    parseDensidade(vasilhame?.densidade) ||
+    densFromRelatedTransbordos(vasilhame, item, transbordos);
+
+  if (dens > 0) return roundMass(vol * dens);
+
+  const tankVol = roundVolume(vasilhame?.volume || 0);
+  const tankKg = Number(vasilhame?.peso_liquido) || 0;
+  if (tankVol > 0 && tankKg > 0) {
+    return roundMass((tankKg * vol) / tankVol);
+  }
+
+  const fromCompKg = (vasilhame?.composicao || []).reduce(
+    (sum, c) => sum + (Number(c?.quantidade_kg) || 0),
+    0
+  );
+  if (fromCompKg > 0) {
+    const fromCompL = (vasilhame?.composicao || []).reduce(
+      (sum, c) => sum + (Number(c?.quantidade_l) || 0),
+      0
+    );
+    if (fromCompL > 0) return roundMass((fromCompKg * vol) / fromCompL);
+    return roundMass(fromCompKg);
+  }
+
+  return 0;
+}
+
+/** Quantidade total (kg) atual da saída, recalculada a partir dos itens. */
+export function calcSaidaQuantidadeTotal(itens = [], ctx = {}) {
+  return roundMass(
+    (itens || []).reduce(
+      (sum, item) => sum + saidaItemQuantidadeKg(item, ctx),
+      0
+    )
+  );
 }
 
 export function origemLabel(origem) {
@@ -541,4 +768,193 @@ export function retornoMpLabel(row) {
     : "0";
   const unit = row.unit || row.unidade || "kg";
   return `${reg} - ${code} - ${name} - ${lot} - ${qtd} ${unit}`;
+}
+
+function isItemEmbalagemUnitaria(item, vasilhame = null) {
+  if (isTanqueVazioItem(item)) return false;
+  if (item?.tipo === TIPO_CONVENCIONAL) {
+    if (isDestinoEmbalagemUnitaria(item.tipo_embalagem)) return true;
+    if (isDestinoEmbalagemUnitaria(vasilhame?.tipo)) return true;
+    return /^\d+\s*x\s+/i.test(String(item.vasilhame_placa || vasilhame?.placa || ""));
+  }
+  if (item?.tipo === TIPO_IND_VASILHAME) {
+    return (
+      isUnitPackagingType(item.container_type) ||
+      isUnitPackagingType(vasilhame?.type) ||
+      /^\d+\s*x\s+/i.test(
+        String(item.vasilhame_placa || vasilhame?.container_number || "")
+      )
+    );
+  }
+  return false;
+}
+
+function qtdEmbalagensDoItemSaida(item, vasilhame = null) {
+  const explicit = Math.round(Number(item?.quantidade_embalagens) || 0);
+  if (explicit > 0) return explicit;
+
+  const volPor =
+    Number(item?.volume_por_embalagem) ||
+    (item?.tipo === TIPO_IND_VASILHAME
+      ? getUnitPackagingCapacity(item.container_type || vasilhame?.type) ||
+        0
+      : getVolumePorEmbalagemFromVasilhame(vasilhame)) ||
+    0;
+  const vol = Number(item?.volume_solicitado) || 0;
+  if (volPor > 0 && vol > 0) return Math.max(1, Math.round(vol / volPor));
+
+  if (item?.tipo === TIPO_IND_VASILHAME && vasilhame) {
+    const fromC = getContainerPackageQty(vasilhame);
+    if (fromC > 0) return fromC;
+  }
+  if (vasilhame && isDestinoEmbalagemUnitaria(vasilhame.tipo)) {
+    const fromV = getQuantidadeEmbalagensFromVasilhame(vasilhame);
+    // Só usa o total do cadastro quando a linha pede o volume inteiro do tanque.
+    const volCadastro = Number(vasilhame.volume) || 0;
+    if (fromV > 0 && volCadastro > 0 && Math.abs(volCadastro - vol) < 0.5) {
+      return fromV;
+    }
+  }
+  return 1;
+}
+
+function unitarioSaidaGroupKey(item, vasilhame = null) {
+  if (!isItemEmbalagemUnitaria(item, vasilhame)) return null;
+  const produto = String(item.produto_nome || item.produto_id || "")
+    .trim()
+    .toLowerCase();
+  const lote = String(item.lote || "").trim().toLowerCase();
+  if (item.tipo === TIPO_CONVENCIONAL) {
+    const id = String(item.vasilhame_id || "").trim();
+    const placa = String(
+      vasilhame?.placa || item.vasilhame_placa || item.tipo_embalagem || ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(/^\d+\s*x\s+/i, "");
+    return `tb:${id || placa}|${produto}|${lote}`;
+  }
+  const id = String(item.container_id || "").trim();
+  const placa = String(
+    vasilhame?.container_number || item.vasilhame_placa || item.container_type || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/^\d+\s*x\s+/i, "");
+  return `ind:${id || placa}|${produto}|${lote}`;
+}
+
+/**
+ * Unifica linhas de bombona/IBC/tambor do mesmo envase na visualização
+ * de agendamento (N× "01" → 1 linha com quantidade total).
+ */
+export function aggregateUnitarioSaidaItens(
+  itens = [],
+  { vasilhames = [], containersById = null } = {}
+) {
+  const list = Array.isArray(itens) ? itens : [];
+  if (list.length <= 1) return list;
+
+  const vasilhameById = new Map(
+    (vasilhames || []).map((v) => [String(v.id), v])
+  );
+  const resolveSource = (item) => {
+    if (item?.tipo === TIPO_IND_VASILHAME && item.container_id) {
+      if (containersById instanceof Map) {
+        return containersById.get(String(item.container_id)) || null;
+      }
+      return null;
+    }
+    if (item?.vasilhame_id) {
+      return vasilhameById.get(String(item.vasilhame_id)) || null;
+    }
+    return null;
+  };
+
+  const out = [];
+  const groupIndex = new Map();
+
+  list.forEach((item, index) => {
+    const source = resolveSource(item);
+    const key = unitarioSaidaGroupKey(item, source);
+    if (!key) {
+      out.push({ ...item, _sourceIndexes: [index] });
+      return;
+    }
+
+    const qtdEmb = qtdEmbalagensDoItemSaida(item, source);
+    const existingIdx = groupIndex.get(key);
+    if (existingIdx == null) {
+      groupIndex.set(key, out.length);
+      const tipoEmb =
+        item.tipo_embalagem ||
+        item.container_type ||
+        source?.tipo ||
+        source?.type ||
+        "";
+      const volPor =
+        Number(item.volume_por_embalagem) ||
+        getVolumePorEmbalagemFromVasilhame(source) ||
+        getUnitPackagingCapacity(tipoEmb) ||
+        0;
+      const placa =
+        source?.placa ||
+        source?.container_number ||
+        (qtdEmb > 0 && tipoEmb
+          ? item.tipo === TIPO_IND_VASILHAME
+            ? formatAggregatedContainerLabel(qtdEmb, tipoEmb)
+            : buildPlacaEmbalagens(qtdEmb, tipoEmb)
+          : item.vasilhame_placa) ||
+        item.vasilhame_placa ||
+        "";
+      out.push({
+        ...item,
+        quantidade_embalagens: qtdEmb,
+        volume_por_embalagem: volPor || item.volume_por_embalagem || 0,
+        vasilhame_placa: placa,
+        _sourceIndexes: [index],
+        _aggregateKey: key,
+      });
+      return;
+    }
+
+    const acc = out[existingIdx];
+    const vol = roundVolume(
+      (Number(acc.volume_solicitado) || 0) + (Number(item.volume_solicitado) || 0)
+    );
+    const peso = roundMass(
+      (Number(acc.peso_liquido) || 0) + (Number(item.peso_liquido) || 0)
+    );
+    const qtdTotal = (Number(acc.quantidade_embalagens) || 0) + qtdEmb;
+    const tipoEmb =
+      acc.tipo_embalagem ||
+      acc.container_type ||
+      source?.tipo ||
+      source?.type ||
+      "";
+    const placa =
+      source?.placa ||
+      source?.container_number ||
+      (qtdTotal > 0 && tipoEmb
+        ? item.tipo === TIPO_IND_VASILHAME
+          ? formatAggregatedContainerLabel(qtdTotal, tipoEmb)
+          : buildPlacaEmbalagens(qtdTotal, tipoEmb)
+        : acc.vasilhame_placa);
+
+    out[existingIdx] = {
+      ...acc,
+      volume_solicitado: vol,
+      peso_liquido: peso,
+      peso_bruto: roundMass((Number(acc.tara) || 0) + peso),
+      quantidade_solicitada: roundMass(
+        (Number(acc.quantidade_solicitada) || 0) +
+          (Number(item.quantidade_solicitada) || 0)
+      ),
+      quantidade_embalagens: qtdTotal,
+      vasilhame_placa: placa || acc.vasilhame_placa,
+      _sourceIndexes: [...(acc._sourceIndexes || []), index],
+    };
+  });
+
+  return out;
 }

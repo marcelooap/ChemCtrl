@@ -32,6 +32,7 @@ import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   migrateEstoqueEmbaladoParaVasilhames,
   normalizeBarrilEmbalagensUnitarias,
+  consolidateUnitarioVasilhamesDuplicados,
 } from "@transbordo/lib/transbordoEmbalado";
 import { persistTransbordo } from "@transbordo/lib/persistTransbordo";
 import { excluirTransbordo } from "@transbordo/lib/excluirTransbordo";
@@ -238,6 +239,12 @@ export default function Transbordo() {
           );
         }
         await normalizeBarrilEmbalagensUnitarias();
+        const cons = await consolidateUnitarioVasilhamesDuplicados();
+        if (cons.deleted > 0) {
+          console.info(
+            `[ChemFlow] Consolidadas ${cons.mergedGroups} embalagem(ns) unitária(s); removidas ${cons.deleted} linha(s) duplicada(s).`
+          );
+        }
       } catch (migErr) {
         console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }

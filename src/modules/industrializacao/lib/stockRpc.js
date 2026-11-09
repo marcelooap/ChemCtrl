@@ -1,8 +1,61 @@
 /**
  * Helpers atômicos de estoque MP via RPC (Onda 1).
  * Preferir sempre estes em vez de read-modify-write no cliente.
+ *
+ * Após cada ajuste, invalida o cache e emite entityEvents para que
+ * useRealtimeEntity (Nova Produção, Estoque, etc.) reflita o saldo
+ * imediatamente — RPCs não passam pelo client CRUD que já emite esses eventos.
  */
 import { callRPC } from '@industrializacao/api/rpcClient';
+import { invalidate } from '@industrializacao/lib/queryCache';
+import { emitEntityChange } from '@industrializacao/lib/entityEvents';
+
+const STOCK_ENTITY = 'RawMaterialStock';
+
+/**
+ * Propaga o saldo pós-RPC para a UI local (mesmo dispositivo).
+ * @param {object|null} result retorno de adjust/deduct/restore
+ */
+function notifyStockAdjusted(result) {
+  if (!result?.id) return;
+  const balanceAfter = Number(result.balance_after);
+  if (!Number.isFinite(balanceAfter)) return;
+
+  invalidate(STOCK_ENTITY);
+  emitEntityChange(STOCK_ENTITY, {
+    eventType: 'UPDATE',
+    new: {
+      id: String(result.id),
+      current_stock: balanceAfter,
+      ...(result.entry_id != null ? { entry_id: result.entry_id } : {}),
+    },
+    old: null,
+  });
+}
+
+/**
+ * @param {Array<object>|object|null} results
+ */
+function notifyStockAdjustedMany(results) {
+  const list = Array.isArray(results) ? results : results ? [results] : [];
+  if (list.length === 0) return;
+  // Uma invalidação; vários UPDATEs locais (evita N× REFRESH/refetch).
+  invalidate(STOCK_ENTITY);
+  for (const result of list) {
+    if (!result?.id) continue;
+    const balanceAfter = Number(result.balance_after);
+    if (!Number.isFinite(balanceAfter)) continue;
+    emitEntityChange(STOCK_ENTITY, {
+      eventType: 'UPDATE',
+      new: {
+        id: String(result.id),
+        current_stock: balanceAfter,
+        ...(result.entry_id != null ? { entry_id: result.entry_id } : {}),
+      },
+      old: null,
+    });
+  }
+}
 
 /**
  * @param {string} stockId
@@ -14,10 +67,12 @@ export async function deductStock(stockId, qty) {
   if (!stockId || !(n > 0)) {
     throw new Error('deductStock: stockId e qty positivos são obrigatórios');
   }
-  return callRPC('deduct_raw_material_stock', {
+  const result = await callRPC('deduct_raw_material_stock', {
     p_stock_id: String(stockId),
     p_qty: n,
   });
+  notifyStockAdjusted(result);
+  return result;
 }
 
 /**
@@ -29,10 +84,12 @@ export async function restoreStock(stockId, qty) {
   if (!stockId || !(n > 0)) {
     throw new Error('restoreStock: stockId e qty positivos são obrigatórios');
   }
-  return callRPC('restore_raw_material_stock', {
+  const result = await callRPC('restore_raw_material_stock', {
     p_stock_id: String(stockId),
     p_qty: n,
   });
+  notifyStockAdjusted(result);
+  return result;
 }
 
 /**
@@ -43,5 +100,7 @@ export async function deductStockBatch(items = []) {
     .filter((i) => i?.stock_id && Number(i.qty) > 0)
     .map((i) => ({ stock_id: String(i.stock_id), qty: Number(i.qty) }));
   if (payload.length === 0) return [];
-  return callRPC('deduct_raw_material_stock_batch', { p_items: payload });
+  const results = await callRPC('deduct_raw_material_stock_batch', { p_items: payload });
+  notifyStockAdjustedMany(results);
+  return results;
 }

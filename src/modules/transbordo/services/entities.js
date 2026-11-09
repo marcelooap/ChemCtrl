@@ -271,6 +271,8 @@ export const entities = {
   saidaLeituras: createEntity('t_saida_leituras'),
   validacaoLeituras: createEntity('t_validacao_leituras'),
   operadores: createEntity('t_operadores'),
+  saidaDestinos: createEntity('t_saida_destinos'),
+  justificativasAtraso: createEntity('t_justificativas_atraso'),
   etiquetaConfigs: createEntity('t_etiqueta_configs'),
   checklistExpedicaoItens: createEntity('t_checklist_expedicao_itens'),
   checklistExpedicaoConfig: createEntity('t_checklist_expedicao_config'),

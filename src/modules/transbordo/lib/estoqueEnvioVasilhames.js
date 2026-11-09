@@ -5,12 +5,16 @@ import {
   productionOfContainer,
 } from "@industrializacao/lib/fractionalSupply";
 import { isUnidadeVolumeEntrada } from "@transbordo/lib/estoqueSaldo";
-import { getUnitPackagingCapacity } from "@industrializacao/lib/packagingTypes";
+import {
+  getUnitPackagingCapacity,
+  isUnitPackagingLike,
+} from "@industrializacao/lib/packagingTypes";
 import { resolveProductCode } from "@industrializacao/lib/recipeRevisions";
 import {
   isContainerNoPatio,
   ORIGEM_INDUSTRIALIZACAO,
 } from "@transbordo/lib/saidaOrigem";
+import { isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
 
 function normName(value) {
   return String(value || "")
@@ -58,6 +62,19 @@ export function isIndContainerShownAsTanka(container, tankNames) {
   if (!isTankType(container)) return false;
   const plate = normName(container?.container_number);
   return Boolean(plate && tankNames?.has(plate));
+}
+
+/**
+ * Bombona / tambor / IBC (Transbordo ou Industrialização).
+ * Continuam na listagem de vasilhames, mas no consolidado de Estoque Envio
+ * entram na coluna Embalado — mesma regra da tela de Estoque.
+ */
+export function isEstoqueEnvioEmbaladoUnitario(v) {
+  if (!v) return false;
+  const tipo = v.tipo || v.type || "";
+  const placa = v.placa || v.container_number || "";
+  if (isVasilhameLegadoEmbalado(tipo)) return true;
+  return isUnitPackagingLike(tipo, placa);
 }
 
 /**

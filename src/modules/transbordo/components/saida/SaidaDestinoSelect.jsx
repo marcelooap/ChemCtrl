@@ -1,13 +1,15 @@
+import { useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import {
   DESTINO_EM_BRANCO,
-  DESTINOS_SAIDA,
-  getDestinoOptions,
+  getDestinoOptionsFromList,
+  listDestinosAtivosNomes,
 } from "@transbordo/lib/saidaDestinos";
 
 /**
  * Seletor de Destino da carga (lista suspensa).
  * Mesmo componente na Solicitação de Saída e no Check List de Expedição.
+ * Opções vêm do cadastro (Painel → Configuração → Destino Carregamentos).
  *
  * @param {{
  *   value: string,
@@ -30,11 +32,44 @@ export default function SaidaDestinoSelect({
   inputClassName,
   excludeDestinoKeys,
 }) {
-  const options = getDestinoOptions({ allowBlank, excludeDestinoKeys });
+  const [destinos, setDestinos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const nomes = await listDestinosAtivosNomes();
+        if (!cancelled) setDestinos(nomes);
+      } catch (err) {
+        console.error("[SaidaDestinoSelect] load destinos:", err);
+        if (!cancelled) setDestinos([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const options = useMemo(() => {
+    const base = getDestinoOptionsFromList(destinos, {
+      allowBlank,
+      excludeDestinoKeys,
+    });
+    // Mantém valor histórico (destino removido do cadastro) visível na edição.
+    const current = String(value || "").trim();
+    if (current && !base.some((o) => o.nome === current || o.id === current)) {
+      return [...base, { id: current, nome: current }];
+    }
+    return base;
+  }, [destinos, allowBlank, excludeDestinoKeys, value]);
 
   return (
     <SearchableSelect
-      key={`destinos-${DESTINOS_SAIDA.length}-${allowBlank ? 1 : 0}`}
+      key={`destinos-${destinos.length}-${allowBlank ? 1 : 0}-${loading ? "loading" : "ready"}`}
       selectOnly
       value={value || ""}
       onChange={(_label, option) => {
@@ -44,8 +79,8 @@ export default function SaidaDestinoSelect({
       options={options}
       getOptionLabel={(o) => o.nome}
       getOptionValue={(o) => o.id}
-      placeholder={placeholder}
-      disabled={disabled}
+      placeholder={loading ? "Carregando destinos..." : placeholder}
+      disabled={disabled || loading}
       ariaLabel={ariaLabel}
       inputClassName={inputClassName}
     />

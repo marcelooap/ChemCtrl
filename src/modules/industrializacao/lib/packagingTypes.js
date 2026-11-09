@@ -146,14 +146,32 @@ export function formatLabelEmbalagem(container) {
   return barril ? `${plate} (${barril})` : (plate || '—');
 }
 
-/** Placeholder de volume (L) para IBC / tambor / bombona. */
+/** Interpreta litros em texto ("200", "1.000", "1,5"). */
+function parseLitersToken(token) {
+  const s = String(token || '').trim();
+  if (!s) return NaN;
+  // Milhar BR: 1.000 / 1.000.000
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ''));
+  if (/^\d{1,3}(\.\d{3})+,\d+$/.test(s)) {
+    return Number(s.replace(/\./g, '').replace(',', '.'));
+  }
+  return Number(s.replace(',', '.'));
+}
+
+/** Volume nominal (L) sugerido para IBC / tambor / bombona na etiqueta. */
 export function suggestLabelVolumePlaceholder(type) {
   const cap = getUnitPackagingCapacity(type);
   if (cap) return cap;
-  const match = String(type || '').match(/(\d+(?:[.,]\d+)?)\s*l\b/i);
-  if (!match) return '';
-  const n = Number(String(match[1]).replace(',', '.'));
-  return Number.isFinite(n) && n > 0 ? n : '';
+  const raw = String(type || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/(\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s*l\b/i);
+  if (match) {
+    const n = parseLitersToken(match[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  // One Way (IBC) / IBC sem litros explícitos → capacidade padrão 1000 L
+  if (/ibc|one\s*way/i.test(raw)) return 1000;
+  return '';
 }
 
 /** Líquido = volume × densidade; bruto = líquido + tara. Pesos em kg inteiros. */

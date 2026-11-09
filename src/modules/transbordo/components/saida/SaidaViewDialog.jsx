@@ -11,9 +11,28 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { SelectDot } from "@shared/components/ui/SelectDot";
 import { useToast } from "@shared/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@shared/components/ui/alert-dialog";
 import { entities } from "@transbordo/services/entities";
-import { Check, ClipboardList, Download, Files, FileText, Loader2, Printer } from "lucide-react";
-import { formatMass, formatVolume, roundMass } from "@transbordo/lib/format";
+import {
+  Check,
+  ClipboardList,
+  Download,
+  Files,
+  FileText,
+  Loader2,
+  Printer,
+  Undo2,
+} from "lucide-react";
+import { formatMass, formatVolume } from "@transbordo/lib/format";
 import { alignSaidaItemVolumeToVasilhame } from "@transbordo/lib/vasilhameComposicao";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -23,9 +42,10 @@ import {
 import { getSignedFileUrl } from "@industrializacao/api/storage";
 import {
   formatQtdEmbalagens,
-  printEtiquetaConvencional,
+  loadConvencionalLabelContext,
   printSaidaAgendamento,
 } from "@transbordo/lib/printSaidaAgendamento";
+import { applySaidaItemDevalidacao } from "@transbordo/lib/saidaFiscal";
 import {
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
@@ -37,8 +57,12 @@ import {
   resolveItemOrigem,
   isSaidaValidadaNoModulo,
   isItemValidadoParaExibicao,
+  itemFoiBaixado,
   saidaTemItemPendenteNoModulo,
   isTanqueVazioItem,
+  calcSaidaQuantidadeTotal,
+  aggregateUnitarioSaidaItens,
+  isSaidaModuloPainel,
 } from "@transbordo/lib/saidaOrigem";
 import {
   findChecklistItemForSaidaLinha,
@@ -104,10 +128,7 @@ function tipoBadgeClass(item) {
 }
 
 function quantidadeItens(items) {
-  return items.reduce(
-    (sum, item) => sum + (Number(item?.quantidade_solicitada) || 0),
-    0
-  );
+  return calcSaidaQuantidadeTotal(items);
 }
 
 function checklistItemsProntos(checklistItems, saida, itens) {
@@ -275,20 +296,24 @@ export default function SaidaViewDialog({
   const [selected, setSelected] = useState(() => new Set());
   const [, setMarkedLocal] = useState(() => new Set());
   const [printing, setPrinting] = useState(false);
-  const [indLabel, setIndLabel] = useState(null);
-  const [indLabelLoadingIndex, setIndLabelLoadingIndex] = useState(null);
+  const [labelDialog, setLabelDialog] = useState(null);
+  const [labelLoadingIndex, setLabelLoadingIndex] = useState(null);
   const [checklistDownloadingIndex, setChecklistDownloadingIndex] = useState(null);
   const [unifyingChecklists, setUnifyingChecklists] = useState(false);
   const [containersById, setContainersById] = useState(() => new Map());
+  const [devalidarItem, setDevalidarItem] = useState(null);
+  const [devalidando, setDevalidando] = useState(false);
 
   useEffect(() => {
     setSelected(new Set());
     setMarkedLocal(new Set());
     setPrinting(false);
-    setIndLabel(null);
-    setIndLabelLoadingIndex(null);
+    setLabelDialog(null);
+    setLabelLoadingIndex(null);
     setChecklistDownloadingIndex(null);
     setUnifyingChecklists(false);
+    setDevalidarItem(null);
+    setDevalidando(false);
   }, [open, saida?.id]);
 
   useEffect(() => {
@@ -327,7 +352,7 @@ export default function SaidaViewDialog({
 
   const displayItens = useMemo(() => {
     if (!saida) return [];
-    return (saida.itens || []).map((item) => {
+    const aligned = (saida.itens || []).map((item) => {
       const vasilhame = resolveEmbalagemSource(
         item,
         vasilhames,
@@ -335,18 +360,18 @@ export default function SaidaViewDialog({
       );
       return alignSaidaItemVolumeToVasilhame(item, vasilhame, transbordos);
     });
-  }, [saida, vasilhames, containersById, transbordos]);
+    // Agendamento (comercial/logística): unifica bombonas/IBC do mesmo envase.
+    if (variant === "agendamento") {
+      return aggregateUnitarioSaidaItens(aligned, {
+        vasilhames,
+        containersById,
+      });
+    }
+    return aligned;
+  }, [saida, vasilhames, containersById, transbordos, variant]);
 
   const displayQuantidadeTotal = useMemo(
-    () =>
-      roundMass(
-        displayItens.reduce(
-          (s, it) =>
-            s +
-            (Number(it.peso_liquido) || Number(it.quantidade_solicitada) || 0),
-          0
-        )
-      ),
+    () => calcSaidaQuantidadeTotal(displayItens),
     [displayItens]
   );
 
@@ -363,9 +388,11 @@ export default function SaidaViewDialog({
     .filter((index) => index >= 0);
   const selectableSet = new Set(selectableIndexes);
   const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
+  const canDevalidarItem = canSelectFiscal && Boolean(highlightModule || !isAgendamento);
   const colCount =
     (isAgendamento ? 8 : 7) +
     (canSelectFiscal ? 1 : 0) +
+    (canDevalidarItem ? 2 : 0) +
     (showChecklistColumn ? 1 : 0);
   const allSelected =
     selectableIndexes.length > 0 &&
@@ -404,10 +431,57 @@ export default function SaidaViewDialog({
   };
 
   const itemJaValidado = (item) => isItemValidadoParaExibicao(item, saida);
+  const itemStatusAtual = (item) =>
+    itemFoiBaixado(item, saida) ? "Validado" : "Pendente";
+
+  const handleConfirmDevalidarItem = async () => {
+    if (!devalidarItem || !saida?.id || devalidando) return;
+    setDevalidando(true);
+    try {
+      const updated = await applySaidaItemDevalidacao(saida, devalidarItem, {
+        userNome: user?.nome || user?.full_name || "",
+        estoque: entradas,
+        vasilhames,
+        moduleScope: isSaidaModuloPainel(saida)
+          ? highlightModule || resolveItemOrigem(devalidarItem)
+          : "all",
+      });
+      onSaidaChange?.(updated);
+      setDevalidarItem(null);
+      toast({
+        title: "Item desvalidado",
+        description:
+          "O status atual do item voltou para Pendente. O histórico de validação foi preservado.",
+      });
+    } catch (err) {
+      toast({
+        title: "Não foi possível desvalidar o item",
+        description: err?.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setDevalidando(false);
+    }
+  };
 
   const handlePrintRelatorio = async () => {
     if (isAgendamento) {
-      printSaidaAgendamento(saida, { t, vasilhames });
+      setPrinting(true);
+      try {
+        await printSaidaAgendamento(
+          { ...saida, itens, quantidade_total: displayQuantidadeTotal },
+          {
+            t,
+            vasilhames,
+            entradas,
+            transbordos,
+            agendamento,
+            containersById,
+          }
+        );
+      } finally {
+        setPrinting(false);
+      }
       return;
     }
 
@@ -516,28 +590,32 @@ export default function SaidaViewDialog({
   };
 
   const handlePrintEtiqueta = async (item, index) => {
-    // Vasilhame da Industrialização: usa o mesmo diálogo de etiqueta da tela
-    // de Vasilhames do módulo (volume, quantidade de cópias e pré-visualização).
-    if (item.tipo === TIPO_IND_VASILHAME) {
-      setIndLabelLoadingIndex(index);
-      try {
-        setIndLabel(await loadIndContainerLabelContext(item.container_id));
-      } catch (err) {
-        toast({
-          title: t("painel.comercial.agendamentos.printLabel"),
-          description: err?.message || t("painel.comercial.agendamentos.printBlocked"),
-          variant: "destructive",
-        });
-      } finally {
-        setIndLabelLoadingIndex(null);
-      }
-      return;
-    }
-
+    // Mesmo modal da tela de Vasilhames (prévia, volume editável, cópias).
+    setLabelLoadingIndex(index);
     try {
-      await printEtiquetaConvencional(item, saida, vasilhames);
+      if (item.tipo === TIPO_IND_VASILHAME) {
+        const ctx = await loadIndContainerLabelContext(item.container_id);
+        setLabelDialog({
+          contexto: "industrializacao",
+          container: ctx.container,
+          productions: ctx.productions,
+          recipes: ctx.recipes,
+        });
+        return;
+      }
+
+      setLabelDialog(
+        await loadConvencionalLabelContext(item, saida, vasilhames)
+      );
     } catch (err) {
-      window.alert(err?.message || t("painel.comercial.agendamentos.printBlocked"));
+      toast({
+        title: t("painel.comercial.agendamentos.printLabel"),
+        description:
+          err?.message || t("painel.comercial.agendamentos.printBlocked"),
+        variant: "destructive",
+      });
+    } finally {
+      setLabelLoadingIndex(null);
     }
   };
 
@@ -605,6 +683,16 @@ export default function SaidaViewDialog({
                     ? t("painel.comercial.agendamentos.qtdEmbalagens")
                     : "Qtd. Final Estoque"}
                 </th>
+                {canDevalidarItem ? (
+                  <>
+                    <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                      Status
+                    </th>
+                    <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                      Desvalidar
+                    </th>
+                  </>
+                ) : null}
                 {isAgendamento ? <th className="px-3 py-2.5 w-10" /> : null}
                 {showChecklistColumn ? (
                   <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
@@ -668,8 +756,8 @@ export default function SaidaViewDialog({
                         {canSelectFiscal && itemJaValidado(item) ? (
                           <Check
                             className="w-3.5 h-3.5 shrink-0 text-emerald-600"
-                            aria-label="Item já validado"
-                            title="Item já validado"
+                            aria-label="Histórico: item já foi validado anteriormente"
+                            title="Histórico: item já foi validado anteriormente"
                           />
                         ) : null}
                         <span>
@@ -704,6 +792,42 @@ export default function SaidaViewDialog({
                     }`}>
                       {isAgendamento ? formatQtdEmbalagens(item) : qtdFinalEstoque(item)}
                     </td>
+                    {canDevalidarItem ? (
+                      <>
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          {isForeignModule ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                                itemFoiBaixado(item, saida)
+                                  ? "bg-green-50 text-green-700 border-green-300"
+                                  : "bg-amber-50 text-amber-700 border-amber-300"
+                              }`}
+                            >
+                              {itemStatusAtual(item)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          {!isForeignModule && itemFoiBaixado(item, saida) ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                              title="Remover validação deste item"
+                              aria-label={`Desvalidar ${item.produto_nome || "item"}`}
+                              disabled={devalidando}
+                              onClick={() => setDevalidarItem(item)}
+                            >
+                              <Undo2 className="w-3.5 h-3.5" />
+                              Desvalidar
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </>
+                    ) : null}
                     {isAgendamento ? (
                       <td className="px-2 py-2.5 text-right">
                         <div className="inline-flex items-center justify-end gap-0.5">
@@ -726,10 +850,10 @@ export default function SaidaViewDialog({
                               className="p-1 rounded hover:bg-muted disabled:opacity-60"
                               title={t("painel.comercial.agendamentos.printLabel")}
                               aria-label={t("painel.comercial.agendamentos.printLabel")}
-                              disabled={indLabelLoadingIndex === i}
+                              disabled={labelLoadingIndex === i}
                               onClick={() => handlePrintEtiqueta(item, i)}
                             >
-                              {indLabelLoadingIndex === i ? (
+                              {labelLoadingIndex === i ? (
                                 <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" />
                               ) : (
                                 <Printer className="w-3.5 h-3.5 text-muted-foreground" />
@@ -848,15 +972,60 @@ export default function SaidaViewDialog({
     />
 
     <PrintContainerLabelDialog
-      key={indLabel?.container?.id || "closed"}
-      open={!!indLabel}
+      key={labelDialog?.container?.id || "closed"}
+      open={!!labelDialog}
       onOpenChange={(v) => {
-        if (!v) setIndLabel(null);
+        if (!v) setLabelDialog(null);
       }}
-      container={indLabel?.container || null}
-      productions={indLabel?.productions}
-      recipes={indLabel?.recipes}
+      container={labelDialog?.container || null}
+      productions={labelDialog?.productions}
+      recipes={labelDialog?.recipes}
+      initialVolume={labelDialog?.initialVolume}
+      density={labelDialog?.density}
+      contexto={labelDialog?.contexto || "convencional"}
+      clienteId={labelDialog?.clienteId}
+      clienteNome={labelDialog?.clienteNome}
+      manufactureDate={labelDialog?.manufactureDate || undefined}
+      expiryDate={labelDialog?.expiryDate || undefined}
+      resolvePublicToken={labelDialog?.resolvePublicToken}
     />
+
+    <AlertDialog
+      open={!!devalidarItem}
+      onOpenChange={(v) => {
+        if (!v && !devalidando) setDevalidarItem(null);
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Desvalidar item</AlertDialogTitle>
+          <AlertDialogDescription>
+            Confirma a remoção da validação de{" "}
+            <strong>
+              {devalidarItem?.produto_nome ||
+                (isTanqueVazioItem(devalidarItem)
+                  ? "Tanque Vazio"
+                  : "este item")}
+            </strong>
+            ? O saldo correspondente retorna ao estoque. Os demais itens
+            permanecem validados e o histórico deste produto é preservado.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={devalidando}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={devalidando}
+            onClick={(e) => {
+              e.preventDefault();
+              handleConfirmDevalidarItem();
+            }}
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            {devalidando ? "Desvalidando..." : "Confirmar"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

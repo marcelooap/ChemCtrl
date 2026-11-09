@@ -1,5 +1,9 @@
 -- Amplia a lista fechada de destinos em t_saidas.
 -- Idempotente: pode rodar mais de uma vez com segurança.
+--
+-- Nota: a abordagem de CHECK fechado foi descontinuada em
+-- 056_t_saidas_destino_drop_closed_check.sql (fonte única: saidaDestinos.js).
+-- Prefira aplicar a 056; esta 055 só permanece para histórico/ambientes antigos.
 
 comment on column t_saidas.destino is
   'Destino da carga (lista fechada). Null = em branco.';

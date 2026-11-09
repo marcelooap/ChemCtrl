@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import {
   formatNum,
   formatVolume,
+  parseDensidade,
   roundVolume,
   roundMass,
   roundQuantidade,
@@ -492,8 +493,44 @@ function distributeKgByVolume(totalKg, volumes) {
   return parts;
 }
 
-/** Massa da linha de saída (kg). A quantidade solicitada é a que fecha o total do relatório. */
-function resolveMassaFiscal(item, vasilhame, composicao, scale) {
+/** Densidade declarada do produto/tanque (nunca peso÷volume — isso recria o erro de arredondamento). */
+function resolveDensidadeFiscal(item, vasilhame) {
+  return (
+    parseDensidade(vasilhame?.densidade) ||
+    parseDensidade(item?.densidade) ||
+    0
+  );
+}
+
+/**
+ * Massa fiscal canônica: volume envasado × densidade declarada.
+ * Evita o +1 kg quando lotes misturados foram convertidos L→kg com Math.round
+ * individualmente (ex.: 1.165×1,3→1.515 + 335×1,3→436 = 1.951, em vez de 1.950).
+ */
+function massaPorVolumeDensidade(volumeL, densidade) {
+  const vol = roundVolume(volumeL);
+  const dens = parseDensidade(densidade);
+  if (!(vol > 0) || !(dens > 0)) return null;
+  return roundMass(vol * dens);
+}
+
+/**
+ * Massa da linha de saída (kg) para o relatório fiscal.
+ * Prioridade: volume × densidade declarada (fecha o total correto);
+ * depois quantidade solicitada / peso líquido já gravados.
+ */
+function resolveMassaFiscal(item, vasilhame, composicao, scale, volumeAlvo) {
+  const dens = resolveDensidadeFiscal(item, vasilhame);
+  const volFiscal =
+    roundVolume(volumeAlvo) > 0
+      ? roundVolume(volumeAlvo)
+      : roundVolume(
+          (composicao || []).reduce((s, c) => s + (Number(c.volume) || 0), 0) *
+            (scale || 1)
+        );
+  const porDensidade = massaPorVolumeDensidade(volFiscal, dens);
+  if (porDensidade != null) return porDensidade;
+
   const qtd = Number(item?.quantidade_solicitada) || 0;
   if (qtd > 0) return roundQuantidade(qtd);
 
@@ -549,14 +586,19 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
         lote: item.lote || "",
         composicao: [],
         densidade:
-          volumeAlvo > 0 && item.peso_liquido
+          parseDensidade(item.densidade) ||
+          (volumeAlvo > 0 && item.peso_liquido
             ? item.peso_liquido / volumeAlvo
-            : 0,
+            : 0),
       };
 
   const composicao = buildComposicaoRows(source).filter((c) => (c.volume || 0) > 0);
   if (composicao.length === 0) {
     const lote = item.lote || vasilhame?.lote || "-";
+    const dens = resolveDensidadeFiscal(item, source);
+    const massa =
+      massaPorVolumeDensidade(volumeAlvo, dens) ??
+      roundQuantidade(item.quantidade_solicitada || item.peso_liquido || 0);
     return [
       {
         codigo,
@@ -567,9 +609,7 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
         ),
         lote,
         volume: volumeAlvo,
-        massa: roundQuantidade(
-          item.quantidade_solicitada || item.peso_liquido || 0
-        ),
+        massa,
         tara,
       },
     ];
@@ -583,7 +623,7 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
 
   const volumes = composicao.map((c) => roundVolume((c.volume || 0) * scale));
   const massas = distributeKgByVolume(
-    resolveMassaFiscal(item, vasilhame, composicao, scale),
+    resolveMassaFiscal(item, vasilhame || source, composicao, scale, volumeAlvo),
     volumes
   );
 
@@ -630,24 +670,6 @@ export function generateRelatorioFiscalSaidaPDF(
   const codigo = saida.codigo || "-";
   const title = codigo !== "-" ? `Saída ${codigo}` : "Relatório Fiscal — Saída";
 
-  let y = addPageTitle(doc, title, "Relatório Fiscal da Saída");
-  y = addInfoGrid(
-    doc,
-    y,
-    [
-      ["Código", codigo],
-      ["Cliente", saida.cliente_nome || "-"],
-      ["Destino", saida.destino || "-"],
-      ["Solicitante", saida.usuario_criador || "-"],
-      ["Data Solicitação", fmtDate(saida.data_solicitacao)],
-      ["Data Programada", fmtDate(saida.data_programada)],
-      ["Qtd. Total", fmtNum(saida.quantidade_total, 0) + " kg"],
-      ["Responsável", responsavel || "-"],
-      ["Observações", saida.observacoes || "-", 2],
-    ],
-    3
-  );
-
   const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
   const entradaById = new Map((entradas || []).map((e) => [e.id, e]));
 
@@ -663,6 +685,28 @@ export function generateRelatorioFiscalSaidaPDF(
     const v = item.vasilhame_id ? vasilhameById.get(item.vasilhame_id) : null;
     convencionalRows.push(...buildSaidaConvencionalLoteRows(item, v));
   });
+
+  const totalMassaFiscal =
+    embaladoRows.reduce((s, r) => s + (Number(r.total) || 0), 0) +
+    convencionalRows.reduce((s, r) => s + (Number(r.massa) || 0), 0);
+
+  let y = addPageTitle(doc, title, "Relatório Fiscal da Saída");
+  y = addInfoGrid(
+    doc,
+    y,
+    [
+      ["Código", codigo],
+      ["Cliente", saida.cliente_nome || "-"],
+      ["Destino", saida.destino || "-"],
+      ["Solicitante", saida.usuario_criador || "-"],
+      ["Data Solicitação", fmtDate(saida.data_solicitacao)],
+      ["Data Programada", fmtDate(saida.data_programada)],
+      ["Qtd. Total", fmtNum(totalMassaFiscal, 3) + " kg"],
+      ["Responsável", responsavel || "-"],
+      ["Observações", saida.observacoes || "-", 2],
+    ],
+    3
+  );
 
   y = drawItensFiscaisTables(doc, y, { embaladoRows, convencionalRows });
 

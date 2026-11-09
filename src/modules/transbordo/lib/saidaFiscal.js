@@ -26,6 +26,11 @@ import {
   allModulosRelevantesValidados,
   getModulosRelevantesSaida,
   itemFoiBaixado,
+  isTanqueVazioItem,
+  calcSaidaQuantidadeTotal,
+  saidaItemChave,
+  applyItemValidacaoFlags,
+  resolveItemOrigem,
 } from "@transbordo/lib/saidaOrigem";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
 import { deductStock, restoreStock } from "@industrializacao/lib/stockRpc";
@@ -95,10 +100,20 @@ function resolveDensidade(vasilhame, item) {
   return 0;
 }
 
+function normalizeItemChavesFilter(itemChaves) {
+  if (!itemChaves) return null;
+  const list = itemChaves instanceof Set ? [...itemChaves] : [].concat(itemChaves);
+  const keys = list.map((k) => String(k || "").trim()).filter(Boolean);
+  return keys.length > 0 ? new Set(keys) : null;
+}
+
 /**
  * Alterna envio fiscal da saída:
  * - enviado: baixa estoque (embalado + convencional via origem), expede vasilhames
  * - aguardando: restaura estoque e retorna vasilhames ao pátio
+ *
+ * `itemChaves`: opcional — restringe o movimento a itens específicos
+ * (desvalidação individual). Demais itens preservam o status atual.
  */
 export async function applySaidaFiscalToggle(
   saida,
@@ -109,6 +124,7 @@ export async function applySaidaFiscalToggle(
     vasilhames = [],
     transbordos = null,
     moduleScope = "all",
+    itemChaves = null,
   } = {}
 ) {
   if (!saida?.id) throw new Error("Saída inválida");
@@ -119,6 +135,8 @@ export async function applySaidaFiscalToggle(
       "Não é possível validar uma saída sem produtos. Edite a saída e adicione os tanques/produtos."
     );
   }
+
+  const chavesFiltro = normalizeItemChavesFilter(itemChaves);
 
   // Regravação do transbordo cria outro id para o mesmo tanque. A saída
   // antiga ainda aponta para o id removido; a placa localiza o registro atual.
@@ -140,16 +158,31 @@ export async function applySaidaFiscalToggle(
       : "all";
   const itensEscopo = itemsForModuleScope(itensAll, scope);
   const scopedRefs = new Set(itensEscopo);
+  const matchChave = (item) => {
+    if (!chavesFiltro) return true;
+    const chave = saidaItemChave(item);
+    return Boolean(chave && chavesFiltro.has(chave));
+  };
   const itensJaBaixados = itensEscopo.filter((item) => itemFoiBaixado(item, saida));
   const itensPendentes = itensEscopo.filter((item) => item?.validado === false);
   // Validar de novo só baixa o tanque incluído depois. Reverter desfaz o que já saiu.
   const somentePendentes =
-    checked && itensPendentes.length > 0 && itensJaBaixados.length > 0;
-  const itensMovimento = !checked
+    checked && !chavesFiltro && itensPendentes.length > 0 && itensJaBaixados.length > 0;
+  let itensMovimento = !checked
     ? itensEscopo.filter((item) => itemFoiBaixado(item, saida))
     : somentePendentes
       ? itensPendentes
       : itensEscopo;
+  if (chavesFiltro) {
+    itensMovimento = itensMovimento.filter(matchChave);
+    if (itensMovimento.length === 0) {
+      throw new Error(
+        checked
+          ? "Nenhum item pendente encontrado para validar."
+          : "Nenhum item validado encontrado para desvalidar."
+      );
+    }
+  }
   const movimentoRefs = new Set(itensMovimento);
   const itens = itensMovimento;
   // Data de saída registrada nos vasilhames/containers = data programada da saída.
@@ -157,28 +190,6 @@ export async function applySaidaFiscalToggle(
   const dataSaidaRegistro = todayDateInputValue();
   const dataSaidaProgramada = saida.data_programada || "";
   const dataSaida = dataSaidaProgramada || dataSaidaRegistro;
-
-  const validacaoModulos = mergeValidacaoModulos(
-    saida,
-    scope,
-    checked,
-    userNome
-  );
-  const allDone =
-    scope === "all"
-      ? checked
-      : allModulosRelevantesValidados(
-          { ...saida, itens: itensAll },
-          validacaoModulos
-        );
-
-  const updates = {
-    enviado_ao_fiscal: allDone,
-    status: allDone ? "enviado_fiscal" : "aguardando",
-    enviado_fiscal_usuario: allDone ? userNome || null : null,
-    enviado_fiscal_data: allDone ? new Date().toISOString() : null,
-    validacao_modulos: validacaoModulos,
-  };
 
   const estoqueById = new Map((estoque || []).map((e) => [e.id, e]));
   const vasilhameById = new Map(vasilhameRows.map((v) => [v.id, v]));
@@ -203,12 +214,19 @@ export async function applySaidaFiscalToggle(
   const updatedItens = itensAll.map((item) => {
     if (scope !== "all" && !scopedRefs.has(item)) return item;
     if (!movimentoRefs.has(item)) {
-      if (!checked) return { ...item, validado: false };
+      // Desvalidação individual: não altera os demais itens do escopo.
+      if (!checked && chavesFiltro) return item;
+      if (!checked) {
+        return applyItemValidacaoFlags(item, false, {
+          hadBaixa: itemFoiBaixado(item, saida),
+        });
+      }
       if (itemFoiBaixado(item, saida) || item.validado === true) {
-        return { ...item, validado: true };
+        return applyItemValidacaoFlags(item, true, { hadBaixa: true });
       }
       return item;
     }
+    const hadBaixa = itemFoiBaixado(item, saida) || item.validado === true;
     if (item.tipo === "embalado" && item.entrada_id) {
       const e = estoqueById.get(item.entrada_id);
       const estoqueAtual = e?.saldo_final ?? e?.saldo_atual ?? 0;
@@ -216,59 +234,113 @@ export async function applySaidaFiscalToggle(
         item.quantidade_carregada != null && item.quantidade_carregada !== ""
           ? Number(item.quantidade_carregada) || 0
           : item.quantidade_solicitada || 0;
-      return {
-        ...item,
-        validado: checked,
-        estoque_atual: estoqueAtual,
-        estoque_final: Math.max(0, estoqueAtual - (checked ? qtdBaixa : 0)),
-      };
+      return applyItemValidacaoFlags(
+        {
+          ...item,
+          estoque_atual: estoqueAtual,
+          estoque_final: Math.max(0, estoqueAtual - (checked ? qtdBaixa : 0)),
+        },
+        checked,
+        { hadBaixa }
+      );
     }
-    if (item.tipo === "convencional" && item.vasilhame_id) {
+    if (
+      item.tipo === "convencional" &&
+      item.vasilhame_id &&
+      !isTanqueVazioItem(item)
+    ) {
       const v = vasilhameById.get(item.vasilhame_id);
       const volDisponivel = v?.volume || 0;
-      return {
-        ...item,
-        validado: checked,
-        volume_disponivel: volDisponivel,
-        saldo_final: Math.max(
-          0,
-          volDisponivel - (checked ? item.volume_solicitado || 0 : 0)
-        ),
-      };
+      return applyItemValidacaoFlags(
+        {
+          ...item,
+          volume_disponivel: volDisponivel,
+          saldo_final: Math.max(
+            0,
+            volDisponivel - (checked ? item.volume_solicitado || 0 : 0)
+          ),
+        },
+        checked,
+        { hadBaixa }
+      );
     }
     if (item.tipo === TIPO_IND_VASILHAME && item.container_id) {
       const c = containerById.get(item.container_id);
       const volDisponivel = c?.volume || 0;
-      return {
-        ...item,
-        validado: checked,
-        volume_disponivel: volDisponivel,
-        saldo_final: Math.max(
-          0,
-          volDisponivel - (checked ? item.volume_solicitado || 0 : 0)
-        ),
-      };
+      return applyItemValidacaoFlags(
+        {
+          ...item,
+          volume_disponivel: volDisponivel,
+          saldo_final: Math.max(
+            0,
+            volDisponivel - (checked ? item.volume_solicitado || 0 : 0)
+          ),
+        },
+        checked,
+        { hadBaixa }
+      );
     }
     if (item.tipo === TIPO_IND_RETORNO_MP && item.stock_id && !item.movement_id) {
       const s = stockById.get(item.stock_id);
       const estoqueAtual = s?.current_stock || 0;
-      return {
-        ...item,
-        validado: checked,
-        estoque_atual: estoqueAtual,
-        estoque_final: Math.max(
-          0,
-          estoqueAtual - (checked ? item.quantidade_solicitada || 0 : 0)
-        ),
-      };
+      return applyItemValidacaoFlags(
+        {
+          ...item,
+          estoque_atual: estoqueAtual,
+          estoque_final: Math.max(
+            0,
+            estoqueAtual - (checked ? item.quantidade_solicitada || 0 : 0)
+          ),
+        },
+        checked,
+        { hadBaixa }
+      );
     }
-    return { ...item, validado: checked };
+    return applyItemValidacaoFlags(item, checked, { hadBaixa });
   });
 
+  // Status do módulo após o movimento. Desvalidação individual mantém o
+  // módulo validado enquanto ainda houver item baixado naquele escopo.
+  const saidaAposItens = { ...saida, itens: updatedItens };
+  const itensEscopoApos = itemsForModuleScope(updatedItens, scope);
+  const aindaBaixadosNoEscopo = itensEscopoApos.some((item) =>
+    itemFoiBaixado(item, saidaAposItens)
+  );
+  const moduleChecked = chavesFiltro
+    ? aindaBaixadosNoEscopo
+      ? true
+      : false
+    : checked;
+
+  const validacaoModulos = mergeValidacaoModulos(
+    saida,
+    scope,
+    moduleChecked,
+    userNome
+  );
+  const allDone =
+    scope === "all"
+      ? moduleChecked
+      : allModulosRelevantesValidados(
+          { ...saida, itens: updatedItens },
+          validacaoModulos
+        );
+
+  const updates = {
+    enviado_ao_fiscal: allDone,
+    status: allDone ? "enviado_fiscal" : "aguardando",
+    enviado_fiscal_usuario: allDone ? userNome || null : null,
+    enviado_fiscal_data: allDone ? new Date().toISOString() : null,
+    validacao_modulos: validacaoModulos,
+  };
+
   if (checked) {
+    // Tanque vazio não está cadastrado em vasilhames — só identifica placa/barril
+    // na saída; não exige (nem registra) data_saida no cadastro de vasilhames.
     const lost = itens.find(
       (item) =>
         item?.tipo === "convencional" &&
+        !isTanqueVazioItem(item) &&
         (item.vasilhame_id || item.vasilhame_placa || item.vasilhame_barril) &&
         !vasilhameById.get(item.vasilhame_id)
     );
@@ -286,7 +358,8 @@ export async function applySaidaFiscalToggle(
   const volByVasilhame = {};
   const itemByVasilhame = {};
   itens.forEach((item) => {
-    if (item.tipo !== "convencional" || !item.vasilhame_id) return;
+    if (item.tipo !== "convencional" || !item.vasilhame_id || isTanqueVazioItem(item))
+      return;
     const vol = item.volume_solicitado || 0;
     volByVasilhame[item.vasilhame_id] =
       (volByVasilhame[item.vasilhame_id] || 0) + vol;
@@ -363,7 +436,12 @@ export async function applySaidaFiscalToggle(
 
   // Status da saída só depois dos tanques. Se a gravação do vasilhame falhar,
   // a validação não fica marcada sem data de saída.
-  await entities.saidas.update(saida.id, { ...updates, itens: updatedItens });
+  const quantidade_total = calcSaidaQuantidadeTotal(updatedItens);
+  await entities.saidas.update(saida.id, {
+    ...updates,
+    itens: updatedItens,
+    quantidade_total,
+  });
 
   // Estoque Transbordo: embalado + convencional (após ajustar vasilhames)
   const embaladoIds = itens
@@ -486,16 +564,125 @@ export async function applySaidaFiscalToggle(
       item?.tipo === "embalado" &&
       (item.reserva_id || item.sem_reserva === true || item.reserva_abatida)
   );
+  let itensFinais = updatedItens;
   if ((scope === "all" || scope === ORIGEM_TRANSBORDO) && controlaReserva) {
-    if (checked) await rpcAbaterReservasSaida(saida.id, null, "fiscal");
-    else await rpcEstornarReservasSaida(saida.id, "fiscal");
+    if (checked) {
+      await rpcAbaterReservasSaida(saida.id, null, "fiscal");
+      // RPC pode atualizar flags de reserva nos itens — recarrega se necessário.
+    } else if (!chavesFiltro) {
+      await rpcEstornarReservasSaida(saida.id, "fiscal");
+    } else {
+      // Desvalidação individual: estorna só os itens movidos, preservando os demais.
+      const chavesMovimento = new Set(
+        itensMovimento.map((item) => saidaItemChave(item)).filter(Boolean)
+      );
+      itensFinais = await estornarReservasItensSelecionados(
+        saida.id,
+        updatedItens,
+        chavesMovimento,
+        "fiscal"
+      );
+    }
   }
 
   return {
     ...saida,
     ...updates,
-    itens: updatedItens,
+    itens: itensFinais,
+    quantidade_total: calcSaidaQuantidadeTotal(itensFinais),
   };
+}
+
+/**
+ * Remove a validação de um único item, preservando os demais e o histórico.
+ */
+export async function applySaidaItemDevalidacao(saida, item, options = {}) {
+  const chave = saidaItemChave(item);
+  if (!chave) {
+    throw new Error("Não foi possível identificar o item para desvalidar.");
+  }
+  if (!itemFoiBaixado(item, saida)) {
+    throw new Error("Este item já está pendente de validação.");
+  }
+  const moduleScope =
+    options.moduleScope ||
+    (isSaidaModuloPainel(saida) ? resolveItemOrigem(item) : "all");
+  return applySaidaFiscalToggle(saida, false, {
+    ...options,
+    moduleScope,
+    itemChaves: [chave],
+  });
+}
+
+/** Estorno seletivo de reservas (desvalidação de itens específicos). */
+async function estornarReservasItensSelecionados(
+  saidaId,
+  itens,
+  chavesMovimento,
+  origem = "fiscal"
+) {
+  let changed = false;
+  const next = [];
+  for (const item of itens || []) {
+    const chave = saidaItemChave(item);
+    if (
+      !chave ||
+      !chavesMovimento.has(chave) ||
+      item?.tipo !== "embalado"
+    ) {
+      next.push(item);
+      continue;
+    }
+    if (
+      item.reserva_abatida &&
+      (item.abatimento_origem || "carregamento") === origem &&
+      item.reserva_id
+    ) {
+      const qtd = Math.round(Number(item.quantidade_abatida) || 0);
+      if (qtd > 0) {
+        try {
+          const reserva = await entities.materialReservas.get(item.reserva_id);
+          if (reserva?.id) {
+            await entities.materialReservas.update(reserva.id, {
+              quantidade: Math.round((Number(reserva.quantidade) || 0) + qtd),
+              status: "ativa",
+              removido_em: null,
+              removido_por_id: null,
+              removido_por_nome: null,
+              motivo_remocao: null,
+            });
+          }
+        } catch (err) {
+          console.error(
+            "[saidaFiscal] Falha ao estornar reserva do item desvalidado:",
+            err
+          );
+        }
+      }
+      const cleared = { ...item, reserva_abatida: false, quantidade_abatida: null };
+      delete cleared.abatimento_origem;
+      delete cleared.quantidade_carregada;
+      next.push(cleared);
+      changed = true;
+      continue;
+    }
+    if (
+      item.sem_reserva === true &&
+      item.quantidade_carregada_origem === origem
+    ) {
+      const cleared = { ...item };
+      delete cleared.quantidade_carregada;
+      delete cleared.quantidade_carregada_origem;
+      next.push(cleared);
+      changed = true;
+      continue;
+    }
+    next.push(item);
+  }
+  if (changed) {
+    await entities.saidas.update(saidaId, { itens: next });
+  }
+  return next;
 }
 
 function sumVolByVasilhame(itens = []) {
@@ -504,7 +691,7 @@ function sumVolByVasilhame(itens = []) {
   const qtdEmbById = {};
   (itens || []).forEach((item) => {
     if (item?.tipo !== TIPO_CONVENCIONAL && item?.tipo !== "convencional") return;
-    if (!item.vasilhame_id) return;
+    if (!item.vasilhame_id || isTanqueVazioItem(item)) return;
     const vid = item.vasilhame_id;
     map[vid] = (map[vid] || 0) + (Number(item.volume_solicitado) || 0);
     qtdEmbById[vid] =

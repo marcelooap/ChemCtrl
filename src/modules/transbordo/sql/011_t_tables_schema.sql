@@ -137,7 +137,8 @@ create table if not exists t_entradas (
   grupo_entrada text,
   -- lotes[]: { produto_id, produto_nome, produto_codigo, nota_fiscal, lote,
   --   densidade, quantidade, unidade_medida, data_fabricacao, data_validade,
-  --   preco_unitario, embalado, peso_liquido, quantidade_embalagens }
+  --   validade_indeterminada, preco_unitario, embalado, peso_liquido,
+  --   quantidade_embalagens }
   lotes jsonb not null default '[]'::jsonb,
   origem text not null default 'convencional' check (origem in ('convencional', 'industrializacao')),
   fornecedor text,

@@ -297,7 +297,11 @@ export default function EstoqueViewDialog({
             />
             <InfoItem
               label="Validade"
-              value={formatDate(item.data_validade)}
+              value={
+                item.validade_indeterminada
+                  ? "Indeterminado"
+                  : formatDate(item.data_validade)
+              }
             />
           </Section>
 

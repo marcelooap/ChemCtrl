@@ -427,7 +427,9 @@ export function formatReceivingLoteRow(
     unidade_medida: lote.unidade_medida,
     lote: lote.lote,
     fabricacaoFmt: formatDate(lote.data_fabricacao),
-    validadeFmt: formatDate(lote.data_validade),
+    validadeFmt: lote.validade_indeterminada
+      ? "Indeterminado"
+      : formatDate(lote.data_validade),
     densidadeFmt: formatDensidade(densidade),
     controlado: Boolean(controlado),
     orgao_regulamentador: orgao_regulamentador || null,

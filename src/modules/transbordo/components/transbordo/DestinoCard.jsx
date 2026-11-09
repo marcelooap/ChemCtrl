@@ -3,7 +3,7 @@ import { Input } from "@shared/components/ui/input";
 import { Textarea } from "@shared/components/ui/textarea";
 import { Label } from "@shared/components/ui/label";
 import { Switch } from "@shared/components/ui/switch";
-import { Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
@@ -45,7 +45,7 @@ function findVasilhameCadastro(placa, vasilhames = []) {
 /**
  * Critérios alinhados à validação por destino em TransbordoModal.handleSubmit:
  * - tipo obrigatório
- * - IBC/Bombona/Tambor: volume total e volume por embalagem > 0 (qtd auto)
+ * - IBC/Bombona/Tambor: volume total e volume por embalagem > 0 (qtd editável)
  * - demais: volume_total > 0 (necessário para a conferência fechar)
  */
 function isDestinoPreenchido(destino, volumeExcedido) {
@@ -123,6 +123,7 @@ export default function DestinoCard({
   densidade,
   preserveEntryMass = false,
   unidadeEntrada = "L",
+  exigeDensidade = false,
   onChange,
   onRemove,
   readOnly,
@@ -431,9 +432,21 @@ export default function DestinoCard({
     );
   }
 
+  const faltaDensidade = exigeDensidade && !(Number(densidade) > 0);
+
   return (
     <div className="rounded-lg border-2 border-border bg-card p-4 space-y-4 shadow-sm">
       {destinoHeader}
+
+      {faltaDensidade && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            Cadastre a densidade do produto embalado para informar o volume em
+            litros (L) neste destino e salvar o transbordo.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-1.5 max-w-md">
         <Label>Tipo de Destino *</Label>
@@ -578,7 +591,7 @@ export default function DestinoCard({
               }
               value={destino.volume}
               onChange={(v) => updateField("volume", v)}
-              readOnly={readOnly}
+              readOnly={readOnly || faltaDensidade}
               decimals={3}
             />
           </div>
@@ -703,7 +716,7 @@ export default function DestinoCard({
               value={destino.volume || ""}
               onChange={(v) => updateField("volume", v === "" ? "" : roundVolume(v))}
               placeholder="0"
-              disabled={readOnly}
+              disabled={readOnly || faltaDensidade}
               className={INPUT_EDITABLE}
             />
             {selectedTanka && tankaCapacidade > 0 && (
@@ -730,7 +743,7 @@ export default function DestinoCard({
             }
             value={destino.volume_total ?? destino.volume ?? ""}
             onChange={(v) => updateField("volume_total", v)}
-            readOnly={readOnly}
+            readOnly={readOnly || faltaDensidade}
             decimals={3}
           />
           <IntegerField
@@ -741,19 +754,29 @@ export default function DestinoCard({
             }
             value={destino.volume_por_embalagem}
             onChange={(v) => updateField("volume_por_embalagem", v)}
-            readOnly={readOnly}
+            readOnly={readOnly || faltaDensidade}
             decimals={3}
           />
-          <div className="space-y-1.5">
-            <Label>Qtd. Embalagens - auto</Label>
-            <Input
-              value={formatQuantidade(destino.quantidade_embalagens || 0, {
-                empty: "0",
-              })}
-              disabled
-              className="bg-card font-medium"
-            />
-          </div>
+          <IntegerField
+            label="Qtd. Embalagens *"
+            value={destino.quantidade_embalagens || ""}
+            onChange={(v) => {
+              const qtd = Math.max(0, Math.round(Number(v) || 0));
+              const volPor = roundVolume(destino.volume_por_embalagem || 0);
+              if (volPor > 0 && qtd > 0) {
+                updateField("volume_total", roundVolume(qtd * volPor));
+              } else {
+                const updated = {
+                  ...destino,
+                  quantidade_embalagens: qtd,
+                };
+                recalc(updated);
+                onChange(updated);
+              }
+            }}
+            readOnly={readOnly || faltaDensidade}
+            decimals={0}
+          />
         </div>
       )}
 

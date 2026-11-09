@@ -239,9 +239,9 @@ export default function AgendamentosGrade({
     const map = new Map();
     for (const [key, bookings] of bookingMap.entries()) {
       const [day, horario] = key.split('|');
-      // Encaixe: cada cliente é um carregamento independente (como na grade).
+      // Encaixe: cada saída é um carregamento independente (como na grade).
       if (horario === ENCAIXE_HORARIO) {
-        const groups = groupSlotCarregamentos(bookings, { splitByCliente: true });
+        const groups = groupSlotCarregamentos(bookings, { splitBySaida: true });
         const pending = groups.filter((g) => !isCarregado(g.bookings)).length;
         if (pending > 0) map.set(day, (map.get(day) || 0) + pending);
         continue;
@@ -315,7 +315,7 @@ export default function AgendamentosGrade({
   const encaixeGroups = useMemo(
     () =>
       groupSlotCarregamentos(bookingMap.get(`${selectedIso}|${ENCAIXE_HORARIO}`), {
-        splitByCliente: true,
+        splitBySaida: true,
       }),
     [bookingMap, selectedIso]
   );
@@ -347,7 +347,7 @@ export default function AgendamentosGrade({
       dateIso: selectedIso,
       horario,
       tipo: isEncaixe ? 'encaixe' : tipo,
-      // Encaixe: null = novo carregamento; array = editar só esse grupo (cliente).
+      // Encaixe: null = novo carregamento; array = editar só essa saída.
       // Regular: undefined → sincroniza o horário inteiro.
       groupBookings: isEncaixe ? scoped : undefined,
       scopeSaidaIds: isEncaixe

@@ -62,6 +62,7 @@ import {
   getEstoqueUnidadeEntrada,
   isUnidadeVolumeEntrada,
   normalizeUnidadeEntrada,
+  resolveVolumeVasilhameParaBaixa,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   healLinkedLotes,
@@ -74,8 +75,14 @@ import {
   getVolumePorEmbalagemFromVasilhame,
   buildPlacaEmbalagens,
 } from "@transbordo/lib/tiposEmbalagem";
+import { consolidateUnitarioVasilhamesDuplicados } from "@transbordo/lib/transbordoEmbalado";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
+import {
+  labelRequiresManualVolume,
+  stripAggregatedQtyPrefix,
+  suggestLabelVolumePlaceholder,
+} from "@industrializacao/lib/packagingTypes";
 import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicToken";
 import {
   collectConvencionalItemsForVasilhame,
@@ -372,9 +379,12 @@ export default function Vasilhames() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      // Migrações/reparos one-shot removidos do mount (Onda 1).
-      // unifyDuplicateVasilhames / repairVasilhameComposicao / heal de volume
-      // devem rodar via script administrativo, não a cada abertura da tela.
+      // Consolida bombonas/IBC/tambores No Pátio do mesmo OP em 1 linha.
+      try {
+        await consolidateUnitarioVasilhamesDuplicados();
+      } catch (consErr) {
+        console.warn("[Vasilhames] Consolidação unitária:", consErr);
+      }
 
       const [vas, prods, cliens, trans, ests, ents, saidasList] = await Promise.all([
         entities.vasilhames.list("-created_date"),
@@ -600,16 +610,94 @@ export default function Vasilhames() {
     setLabelVasilhame(v);
   };
 
-  // A baixa da expedição zera volume e peso no cadastro. A grade recupera o
-  // conteúdo (snapshot da saída, composição ou volume do tanque na OP); a
-  // etiqueta precisa desse mesmo volume, senão o campo abre em zero e os
-  // pesos líquido/bruto ficam em branco.
-  const labelResolved = labelVasilhame
-    ? resolveVasilhameExpedidoDisplay(labelVasilhame, {
-        linkedItems: saidaItemsByVasilhame.get(labelVasilhame.id) || [],
+  // Mesma fonte da grade (destinos/OP/composição). O campo persistido pode
+  // estar zerado enquanto o tanque ainda tem conteúdo exibível.
+  const labelResolved = useMemo(() => {
+    if (!labelVasilhame) return null;
+
+    const linkedItems = saidaItemsByVasilhame.get(labelVasilhame.id) || [];
+    const base = resolveVasilhameExpedidoDisplay(labelVasilhame, {
+      linkedItems,
+      transbordos,
+    });
+
+    const operacional = resolveVasilhameOperacionalPar(base, {
+      transbordos,
+      densidade: base?.densidade,
+    });
+
+    let volume = roundVolume(operacional.volume || 0);
+    let peso = roundMass(operacional.massa || 0);
+
+    if (volume <= 0) {
+      volume = roundVolume(resolveVolumeVasilhameParaBaixa(base, transbordos) || 0);
+    }
+
+    if (volume <= 0 || peso <= 0) {
+      const patch = buildVasilhameYardRestorePatch(base, {
+        linkedItems,
         transbordos,
-      })
-    : null;
+      });
+      if (patch) {
+        if (volume <= 0 && Number(patch.volume) > 0) {
+          volume = roundVolume(patch.volume);
+        }
+        if (peso <= 0 && Number(patch.peso_liquido) > 0) {
+          peso = roundMass(patch.peso_liquido);
+        }
+      }
+    }
+
+    if (volume <= 0) {
+      const fromComp = (base.composicao || []).reduce(
+        (s, c) => s + (Number(c.quantidade_l) || 0),
+        0
+      );
+      if (fromComp > 0) volume = roundVolume(fromComp);
+    }
+
+    if (peso <= 0 && volume > 0) {
+      const dens = parseDensidade(base.densidade) || parseDensidade(operacional.densidade);
+      if (dens > 0) peso = roundMass(volume * dens);
+    }
+
+    const tara = roundMass(base.tara || 0);
+    return {
+      ...base,
+      volume,
+      peso_liquido: peso,
+      peso_bruto: peso > 0 ? roundMass(tara + peso) : base.peso_bruto,
+    };
+  }, [labelVasilhame, saidaItemsByVasilhame, transbordos]);
+
+  const labelUnitVolume = useMemo(() => {
+    if (!labelResolved) return 0;
+    const unitContainer = {
+      type: labelResolved.tipo,
+      tipo: labelResolved.tipo,
+      container_number: labelResolved.placa,
+      placa: labelResolved.placa,
+    };
+    if (!labelRequiresManualVolume(unitContainer)) return 0;
+
+    const fromVasilhame = getVolumePorEmbalagemFromVasilhame(labelResolved);
+    if (fromVasilhame > 0) return Math.round(fromVasilhame);
+
+    const fromType = suggestLabelVolumePlaceholder(labelResolved.tipo);
+    if (fromType > 0) return Math.round(fromType);
+
+    const fromPlate = suggestLabelVolumePlaceholder(
+      stripAggregatedQtyPrefix(labelResolved.placa || "")
+    );
+    return fromPlate > 0 ? Math.round(fromPlate) : 0;
+  }, [labelResolved]);
+
+  const labelInitialVolume = useMemo(() => {
+    if (!labelResolved) return "";
+    if (labelUnitVolume > 0) return labelUnitVolume;
+    const tankVol = Number(labelResolved.volume) || 0;
+    return tankVol > 0 ? Math.round(tankVol) : "";
+  }, [labelResolved, labelUnitVolume]);
 
   const labelContainer = labelResolved
     ? {
@@ -622,6 +710,8 @@ export default function Vasilhames() {
         barril_number: labelResolved.barril || "",
         type: labelResolved.tipo || "",
         volume: labelResolved.volume,
+        volume_por_embalagem:
+          labelUnitVolume || getVolumePorEmbalagemFromVasilhame(labelResolved) || 0,
         tare: labelResolved.tara || 0,
         net_weight: labelResolved.peso_liquido,
         gross_weight: labelResolved.peso_bruto,
@@ -1534,12 +1624,13 @@ export default function Vasilhames() {
       </Dialog>
 
       <PrintContainerLabelDialog
-        key={labelVasilhame?.id || 'closed'}
+        key={labelVasilhame?.id || "closed"}
         open={Boolean(labelVasilhame && labelContainer)}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setLabelVasilhame(null);
         }}
         container={labelContainer}
+        initialVolume={labelInitialVolume}
         density={labelDensity}
         contexto="convencional"
         clienteId={labelVasilhame?.cliente_id}
@@ -1548,11 +1639,12 @@ export default function Vasilhames() {
         expiryDate={loteDatasEtiqueta?.data_validade || undefined}
         resolvePublicToken={
           labelVasilhame
-            ? () => resolveProdutoPublicToken({
-                produtoId: labelVasilhame.produto_id,
-                codigo: labelVasilhame.produto_codigo,
-                nome: labelVasilhame.produto_nome,
-              }).catch(() => null)
+            ? () =>
+                resolveProdutoPublicToken({
+                  produtoId: labelVasilhame.produto_id,
+                  codigo: labelVasilhame.produto_codigo,
+                  nome: labelVasilhame.produto_nome,
+                }).catch(() => null)
             : undefined
         }
       />

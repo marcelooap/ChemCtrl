@@ -1,6 +1,7 @@
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import { Button } from "@shared/components/ui/button";
+import { Checkbox } from "@shared/components/ui/checkbox";
 import { Switch } from "@shared/components/ui/switch";
 import {
   Select,
@@ -41,6 +42,7 @@ const emptyLote = () => ({
   unidade_medida: "",
   data_fabricacao: "",
   data_validade: "",
+  validade_indeterminada: false,
   preco_unitario: "",
   tipo_recebimento: "granel",
   embalado: false,
@@ -522,13 +524,45 @@ export default function LoteBlock({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Data de Validade</Label>
+          <div className="flex items-center justify-between gap-2 min-h-5">
+            <Label htmlFor={`data-validade-${index}`}>Data de Validade</Label>
+            <label
+              htmlFor={`validade-indeterminada-${index}`}
+              className="flex items-center gap-1.5 cursor-pointer select-none"
+            >
+              <Checkbox
+                id={`validade-indeterminada-${index}`}
+                checked={!!lote.validade_indeterminada}
+                onCheckedChange={(checked) => {
+                  const indeterminada = checked === true;
+                  onChange({
+                    ...lote,
+                    validade_indeterminada: indeterminada,
+                    data_validade: indeterminada ? "" : lote.data_validade,
+                  });
+                }}
+                disabled={readOnly}
+              />
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                Indeterminado
+              </span>
+            </label>
+          </div>
           <Input
+            id={`data-validade-${index}`}
             type="date"
-            value={lote.data_validade || ""}
-            onChange={(e) => update("data_validade", e.target.value)}
-            disabled={readOnly}
-            className={INPUT_EDITABLE}
+            value={lote.validade_indeterminada ? "" : lote.data_validade || ""}
+            onChange={(e) =>
+              onChange({
+                ...lote,
+                data_validade: e.target.value,
+                validade_indeterminada: false,
+              })
+            }
+            disabled={readOnly || !!lote.validade_indeterminada}
+            className={
+              lote.validade_indeterminada ? "bg-muted/40" : INPUT_EDITABLE
+            }
           />
         </div>
       </div>

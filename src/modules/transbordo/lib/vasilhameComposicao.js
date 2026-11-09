@@ -22,6 +22,10 @@ import {
   isDestinoEmbalagemUnitaria,
   isVasilhameLegadoEmbalado,
 } from "@transbordo/lib/tiposEmbalagem";
+import {
+  calcSaidaQuantidadeTotal,
+  saidaItemQuantidadeKg,
+} from "@transbordo/lib/saidaOrigem";
 
 /** Rótulo sintético — só quando há residual sem lote real atribuível. */
 export const LOTE_APORTE_ANTERIOR = "Aporte anterior";
@@ -2144,6 +2148,42 @@ export function alignSaidaItemVolumeToVasilhame(
 }
 
 /**
+ * Recupera massa de item de tanque com volume > 0 e peso zerado
+ * (OP gravado sem densidade/peso líquido).
+ */
+export function alignSaidaItemMassaFromVolume(
+  item,
+  vasilhame,
+  transbordos = [],
+  vasilhames = []
+) {
+  if (!saidaItemEhTanque(item)) return item;
+  const vol = roundVolume(item.volume_solicitado || 0);
+  if (!(vol > 0)) return item;
+  const mass =
+    Number(item.peso_liquido) || Number(item.quantidade_solicitada) || 0;
+  if (mass > 0) return item;
+
+  const ctxVasilhames =
+    vasilhames?.length > 0
+      ? vasilhames
+      : vasilhame
+        ? [vasilhame]
+        : [];
+  const kg = saidaItemQuantidadeKg(item, {
+    vasilhames: ctxVasilhames,
+    transbordos,
+  });
+  if (!(kg > 0)) return item;
+
+  return {
+    ...item,
+    peso_liquido: kg,
+    quantidade_solicitada: kg,
+  };
+}
+
+/**
  * Alinha volumes de saídas pendentes ao volume real dos tanques.
  */
 export async function healSaidaVolumesFromVasilhames({
@@ -2182,22 +2222,25 @@ export async function healSaidaVolumesFromVasilhames({
         byPlaca.get(
           String(item.vasilhame_placa || "").trim().toUpperCase()
         );
-      const aligned = alignSaidaItemVolumeToVasilhame(item, v, transbordos);
-      if (aligned !== item) changed = true;
-      return aligned;
+      let next = alignSaidaItemVolumeToVasilhame(item, v, transbordos);
+      if (next !== item) changed = true;
+      const withMass = alignSaidaItemMassaFromVolume(
+        next,
+        v,
+        transbordos,
+        vasilhames
+      );
+      if (withMass !== next) changed = true;
+      return withMass;
     });
     if (!changed) {
       nextSaidas.push(saida);
       continue;
     }
-    const quantidade_total = roundMass(
-      itens.reduce(
-        (s, it) =>
-          s +
-          (Number(it.peso_liquido) || Number(it.quantidade_solicitada) || 0),
-        0
-      )
-    );
+    const quantidade_total = calcSaidaQuantidadeTotal(itens, {
+      vasilhames,
+      transbordos,
+    });
     updates.push({ id: saida.id, itens, quantidade_total });
     nextSaidas.push({ ...saida, itens, quantidade_total });
   }

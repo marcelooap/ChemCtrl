@@ -31,13 +31,35 @@ import {
   calcLabelWeightsFromVolume,
   formatLabelEmbalagem,
   labelRequiresManualVolume,
+  stripAggregatedQtyPrefix,
   suggestLabelVolumePlaceholder,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtNumber } from '@/i18n/formatters';
 
-function defaultVolumeForContainer(container, productions) {
+/** Volume inicial do modal: unidade (tambor/bombona/IBC) ou volume do tanque. */
+export function defaultVolumeForContainer(container, productions, initialVolume) {
   if (!container) return '';
-  if (labelRequiresManualVolume(container)) return '';
+
+  const forced = Number(initialVolume);
+  if (Number.isFinite(forced) && forced > 0) return Math.round(forced);
+
+  // Tambor / bombona / IBC: volume de UMA unidade (editável), não o total do lote.
+  if (labelRequiresManualVolume(container)) {
+    const fromField = Number(container.volume_por_embalagem);
+    if (Number.isFinite(fromField) && fromField > 0) return Math.round(fromField);
+
+    const fromType = suggestLabelVolumePlaceholder(container.type || container.tipo);
+    if (fromType) return Math.round(fromType);
+
+    const plate = stripAggregatedQtyPrefix(
+      container.container_number || container.placa || '',
+    );
+    const fromPlate = suggestLabelVolumePlaceholder(plate);
+    if (fromPlate) return Math.round(fromPlate);
+
+    return '';
+  }
+
   const display = Number(containerDisplayVolume(container, productions));
   if (Number.isFinite(display) && display > 0) return Math.round(display);
   const stored = Number(container.volume);
@@ -65,40 +87,64 @@ export default function PrintContainerLabelDialog({
   expiryDate,
   publicToken: publicTokenOverride,
   resolvePublicToken,
+  /** Volume já resolvido pela tela (tanque ou unidade). Evita race do useEffect. */
+  initialVolume,
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const sessionKey = open && container
     ? String(container.id || `${container.container_number || ''}|${container.barril_number || ''}|${container.op_number || ''}`)
     : '';
-  const [formSession, setFormSession] = useState('');
-  const [volume, setVolume] = useState('');
-  const [tare, setTare] = useState('');
+
+  const seedVolume = useMemo(
+    () => defaultVolumeForContainer(container, productions, initialVolume),
+    // sessionKey força recálculo ao reabrir o mesmo container
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      sessionKey,
+      container,
+      productions,
+      initialVolume,
+      container?.volume,
+      container?.volume_por_embalagem,
+      container?.type,
+      container?.tipo,
+      container?.container_number,
+      container?.placa,
+    ],
+  );
+
+  const seedTare = useMemo(
+    () =>
+      labelRequiresManualVolume(container)
+        ? defaultTareForContainer(container)
+        : '',
+    [container, sessionKey],
+  );
+
+  // null = usar seed; número/'' = valor editado pelo usuário
+  const [volumeOverride, setVolumeOverride] = useState(null);
+  const [tareOverride, setTareOverride] = useState(null);
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [meta, setMeta] = useState(null);
 
   const dialogOpen = Boolean(open && container);
+  const volume = volumeOverride !== null ? volumeOverride : seedVolume;
+  const tare = tareOverride !== null ? tareOverride : seedTare;
 
   useEffect(() => {
-    if (!dialogOpen || !container) return;
-    if (sessionKey === formSession) return;
-    setFormSession(sessionKey);
-    setVolume(defaultVolumeForContainer(container, productions));
-    setTare(
-      labelRequiresManualVolume(container)
-        ? defaultTareForContainer(container)
-        : '',
-    );
+    // Nova sessão: descarta edições locais e volta ao seed
+    setVolumeOverride(null);
+    setTareOverride(null);
     setQty(1);
-  }, [dialogOpen, sessionKey, formSession, container, productions]);
+  }, [sessionKey]);
 
   useEffect(() => {
     if (dialogOpen) return;
-    setFormSession('');
-    setVolume('');
-    setTare('');
+    setVolumeOverride(null);
+    setTareOverride(null);
     setQty(1);
     setPrinting(false);
     setMeta(null);
@@ -138,7 +184,9 @@ export default function PrintContainerLabelDialog({
         production?.end_time ||
         container?.created_date;
   const labelExpiry = dateOverride?.expiryDate || expiryDate || calcValidityDate(fabDate, meta?.validityDays);
-  const volumePlaceholder = suggestLabelVolumePlaceholder(container?.type || container?.tipo);
+  const volumePlaceholder = suggestLabelVolumePlaceholder(
+    container?.type || container?.tipo || stripAggregatedQtyPrefix(container?.container_number || container?.placa || ''),
+  );
 
   useEffect(() => {
     if (!dialogOpen || !container) return undefined;
@@ -274,9 +322,9 @@ export default function PrintContainerLabelDialog({
                   {t('containers.fields.volume')} (L) *
                 </label>
                 <NumberInputBr
-                  key={`vol-${sessionKey}`}
+                  key={`vol-${sessionKey}-${seedVolume || 'empty'}`}
                   value={volume}
-                  onChange={setVolume}
+                  onChange={setVolumeOverride}
                   decimals={0}
                   min={0}
                   placeholder={volumePlaceholder ? String(volumePlaceholder) : '0'}
@@ -296,7 +344,7 @@ export default function PrintContainerLabelDialog({
                   <NumberInputBr
                     key={`tare-${sessionKey}`}
                     value={tare}
-                    onChange={setTare}
+                    onChange={setTareOverride}
                     decimals={0}
                     min={0}
                     placeholder="0"

@@ -112,6 +112,7 @@ export default function ReservarMaterial() {
           includeSaidos: true,
           saidas: saics || [],
           transbordos: trans || [],
+          estoque: ests || [],
         })
       );
       setReservas(reservasList || []);
@@ -166,7 +167,7 @@ export default function ReservarMaterial() {
       if (!matchesCliente(row.clienteNome)) return false;
       if (!matchesStatus((Number(row.saldoReservado) || 0) > 0)) return false;
       if (!q) return true;
-      const hay = `${row.entradaDisplay || ''} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
+      const hay = `${row.estoqueDisplay || ''} ${row.entradaDisplay || ''} ${row.clienteNome} ${row.codigo} ${row.produto} ${row.lote} ${row.unidade}`
         .toLowerCase();
       return hay.includes(q);
     });
@@ -308,25 +309,21 @@ export default function ReservarMaterial() {
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex w-full flex-wrap items-center gap-4 sm:flex-1 sm:min-w-0">
-              {tab === 'vasilhames' ? (
-                <div className="w-full min-w-[12rem] sm:w-48 sm:shrink-0">
-                  <SearchableSelect
-                    value={patioFilterLabel}
-                    onChange={(label) => {
-                      const opt = patioOptions.find((o) => o.nome === label);
-                      if (opt) setPatioScope(opt.id);
-                    }}
-                    options={patioOptions}
-                    getOptionLabel={(o) => o.nome}
-                    getOptionValue={(o) => o.id}
-                    placeholder={t(
-                      'painel.comercial.reservarMaterial.vasilhames.filterPatio.placeholder'
-                    )}
-                  />
-                </div>
-              ) : null}
+          <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start">
+            <div className="relative w-full shrink-0 sm:w-80 lg:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={
+                  tab === 'vasilhames'
+                    ? t('painel.comercial.reservarMaterial.vasilhames.searchPlaceholder')
+                    : t('painel.comercial.reservarMaterial.searchPlaceholder')
+                }
+                className="pl-10 bg-card w-full min-w-0"
+              />
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-4 sm:w-auto sm:flex-1 sm:min-w-0">
               <div className="w-full min-w-[12rem] sm:w-64 sm:shrink-0">
                 <SearchableSelect
                   value={clienteFilter}
@@ -347,19 +344,23 @@ export default function ReservarMaterial() {
                   placeholder={t('painel.comercial.reservarMaterial.filterStatus')}
                 />
               </div>
-            </div>
-            <div className="relative w-full shrink-0 sm:ml-4 sm:w-80 lg:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  tab === 'vasilhames'
-                    ? t('painel.comercial.reservarMaterial.vasilhames.searchPlaceholder')
-                    : t('painel.comercial.reservarMaterial.searchPlaceholder')
-                }
-                className="pl-10 bg-card w-full min-w-0"
-              />
+              {tab === 'vasilhames' ? (
+                <div className="w-full min-w-[12rem] sm:w-48 sm:shrink-0">
+                  <SearchableSelect
+                    value={patioFilterLabel}
+                    onChange={(label) => {
+                      const opt = patioOptions.find((o) => o.nome === label);
+                      if (opt) setPatioScope(opt.id);
+                    }}
+                    options={patioOptions}
+                    getOptionLabel={(o) => o.nome}
+                    getOptionValue={(o) => o.id}
+                    placeholder={t(
+                      'painel.comercial.reservarMaterial.vasilhames.filterPatio.placeholder'
+                    )}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -428,7 +429,7 @@ export default function ReservarMaterial() {
                         }`}
                       >
                         <td className="px-4 py-3 font-mono font-bold text-primary">
-                          {row.entradaDisplay}
+                          {row.estoqueDisplay}
                         </td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{row.codigo}</td>
                         <td className="px-4 py-3 font-medium text-foreground">{row.produto}</td>

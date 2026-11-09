@@ -7,6 +7,30 @@ export function todayISO() {
   return local.toISOString().slice(0, 10);
 }
 
+/**
+ * Normaliza fabricação/validade do lote.
+ * Quando a validade é indeterminada, a data específica é sempre limpa.
+ */
+export function normalizeLoteValidade(lote = {}) {
+  const validadeIndeterminada = !!lote.validade_indeterminada;
+  return {
+    ...lote,
+    validade_indeterminada: validadeIndeterminada,
+    data_validade: validadeIndeterminada
+      ? null
+      : lote.data_validade === "" || lote.data_validade === undefined
+        ? null
+        : lote.data_validade,
+  };
+}
+
+export function isValidadeIndeterminada(source) {
+  if (!source) return false;
+  if (source.validade_indeterminada === true) return true;
+  const lotes = Array.isArray(source.lotes) ? source.lotes : [];
+  return lotes.some((l) => l?.validade_indeterminada === true);
+}
+
 export function applyTipoRecebimento(lote, tipo) {
   const base = {
     ...lote,

@@ -630,9 +630,9 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     container.container_number || container.placa,
     container.barril_number || container.barril,
   );
-  const embalagem = contexto === 'convencional'
-    ? (embalagemPlaca || options?.embalagem || formatLabelEmbalagem(container))
-    : (options?.embalagem || formatLabelEmbalagem(container));
+  // formatLabelEmbalagem remove o prefixo "N x" em tambor/bombona/IBC.
+  const embalagem =
+    options?.embalagem || formatLabelEmbalagem(container) || embalagemPlaca;
 
   const opNum = container.op_number || '—';
   const dateOverride = containerLabelDateOverride(container);

@@ -4,9 +4,12 @@ import RealtimeProvider from '@industrializacao/components/RealtimeProvider';
 import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
 import Home from '@painel/pages/Home';
+import Configuracao from '@painel/pages/configuracao/Configuracao';
 import Operadores from '@painel/pages/configuracao/Operadores';
 import Etiquetas from '@painel/pages/configuracao/Etiquetas';
 import ChecklistExpedicao from '@painel/pages/configuracao/ChecklistExpedicao';
+import DestinoCarregamentos from '@painel/pages/configuracao/DestinoCarregamentos';
+import JustificativasAtraso from '@painel/pages/configuracao/JustificativasAtraso';
 import Dashboard from '@painel/pages/Dashboard';
 import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
@@ -36,8 +39,6 @@ export default function PainelRoutes() {
           <Route element={<MainLayout />}>
             <Route index element={<Navigate to="home" replace />} />
             <Route path="home" element={<Home />} />
-            <Route path="configuracao" element={<Navigate to="/painel/configuracao/operadores" replace />} />
-
             <Route
               path="comercial"
               element={<Navigate to="/painel/comercial/reservar-material" replace />}
@@ -61,9 +62,12 @@ export default function PainelRoutes() {
 
             <Route element={<ScreenAccessRoute />}>
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="configuracao" element={<Configuracao />} />
               <Route path="configuracao/operadores" element={<Operadores />} />
               <Route path="configuracao/etiquetas" element={<Etiquetas />} />
               <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
+              <Route path="configuracao/destino-carregamentos" element={<DestinoCarregamentos />} />
+              <Route path="configuracao/justificativas-atraso" element={<JustificativasAtraso />} />
               <Route path="comercial/reservar-material" element={<ReservarMaterial />} />
               <Route path="comercial/solicitacoes-saida" element={<SolicitacoesSaida />} />
               <Route

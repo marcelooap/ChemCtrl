@@ -5,8 +5,18 @@ import {
   isContainerFractional,
   productionOfContainer,
 } from '@industrializacao/lib/fractionalSupply';
-import { resolveProductCode } from '@industrializacao/lib/recipeRevisions';
-import { getDominantLote } from '@transbordo/lib/vasilhameComposicao';
+import { resolveContainerFabricacao } from '@industrializacao/lib/containerLoteDatas';
+import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
+import { calcValidityDate } from '@industrializacao/lib/labelprint';
+import {
+  resolveProductCode,
+  resolveValidityDays,
+} from '@industrializacao/lib/recipeRevisions';
+import { toDateInputValue } from '@/i18n/formatters';
+import {
+  getDominantLote,
+  resolveVasilhameLoteDatas,
+} from '@transbordo/lib/vasilhameComposicao';
 import { resolveVasilhameExpedidoDisplay } from '@transbordo/lib/vasilhamePatio';
 import { parseNumero } from '@transbordo/lib/format';
 import { entities } from '@transbordo/services/entities';
@@ -120,6 +130,25 @@ function saidaItemsByVasilhameId(saidas = []) {
   return map;
 }
 
+function resolveIndContainerLoteSummary(container, productions = [], recipes = []) {
+  const production = productionOfContainer(container, productions);
+  const override = containerLabelDateOverride(container);
+  if (override) {
+    return {
+      dataFabricacao: override.manufactureDate || null,
+      dataValidade: override.expiryDate || null,
+      lacres: String(container?.seals || '').trim() || null,
+    };
+  }
+  const fabricacao = resolveContainerFabricacao(container, production);
+  const validityDays = resolveValidityDays(recipes || [], container, production);
+  return {
+    dataFabricacao: toDateInputValue(fabricacao) || null,
+    dataValidade: toDateInputValue(calcValidityDate(fabricacao, validityDays)) || null,
+    lacres: String(container?.seals || '').trim() || null,
+  };
+}
+
 export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
   const display = resolveVasilhameExpedidoDisplay(vasilhame, {
     linkedItems: context.linkedItems || [],
@@ -127,6 +156,9 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
   });
   const origemId = vasilhame.id;
   const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, origemId);
+  const loteDatas = resolveVasilhameLoteDatas(vasilhame, context.estoqueById || null, {
+    transbordos: context.transbordos || [],
+  });
   return {
     id: chave,
     chave,
@@ -143,6 +175,9 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
     volume: Number(display.volume) || 0,
     massa: Number(display.peso_liquido) || 0,
     lote: dash(getDominantLote(vasilhame.composicao) || vasilhame.lote),
+    dataFabricacao: loteDatas.data_fabricacao || null,
+    dataValidade: loteDatas.data_validade || null,
+    lacres: String(vasilhame.lacres || '').trim() || null,
     createdAt: vasilhame.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     fracionado: isTransbordoFracionado(vasilhame),
@@ -164,6 +199,7 @@ export function mapIndContainer(
   const chave = buildVasilhameReservaChave(ORIGEM_INDUSTRIALIZACAO, origemId);
   const production = productionOfContainer(container, productions);
   const codigo = resolveProductCode(recipes, container, production);
+  const loteSummary = resolveIndContainerLoteSummary(container, productions, recipes);
   return {
     id: chave,
     chave,
@@ -180,6 +216,9 @@ export function mapIndContainer(
     volume: containerDisplayVolume(container, productions),
     massa: containerDisplayNetWeight(container, productions, recipes),
     lote: dash(container.lot),
+    dataFabricacao: loteSummary.dataFabricacao,
+    dataValidade: loteSummary.dataValidade,
+    lacres: loteSummary.lacres,
     createdAt: container.created_date || container.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
     fracionado: isContainerFractional(container, production, transfers),
@@ -220,14 +259,19 @@ export function buildVasilhameReservaRows({
   includeSaidos = false,
   saidas = [],
   transbordos = [],
+  estoque = [],
 } = {}) {
   const saidaItems = saidaItemsByVasilhameId(saidas);
+  const estoqueById = new Map(
+    (estoque || []).filter((row) => row?.id != null).map((row) => [String(row.id), row])
+  );
   const transbordo = (vasilhames || [])
     .filter((v) => isTransbordoVasilhameElegivel(v, includeSaidos))
     .map((v) =>
       mapTransbordoVasilhame(v, reservas, {
         linkedItems: saidaItems.get(v.id) || [],
         transbordos,
+        estoqueById,
       })
     );
 

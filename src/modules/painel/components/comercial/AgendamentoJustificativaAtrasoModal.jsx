@@ -23,13 +23,14 @@ import { cn } from '@shared/lib/utils';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
-  JUSTIFICATIVA_ATRASO_MOTIVOS,
+  JUSTIFICATIVA_ATRASO_MOTIVOS_FALLBACK,
   JUSTIFICATIVA_ATRASO_RESPONSAVEIS,
   normalizeBookings,
   normalizeMotivoAtraso,
   summarizeSlotBookings,
   toMotivoAtrasoInput,
 } from '@painel/lib/agendamentosCarregamento';
+import { listJustificativasAtrasoAtivas } from '@painel/lib/justificativasAtrasoCadastro';
 
 export default function AgendamentoJustificativaAtrasoModal({
   open,
@@ -44,6 +45,9 @@ export default function AgendamentoJustificativaAtrasoModal({
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [motivosCadastro, setMotivosCadastro] = useState([
+    ...JUSTIFICATIVA_ATRASO_MOTIVOS_FALLBACK,
+  ]);
   const savingRef = useRef(false);
 
   const list = normalizeBookings(bookings);
@@ -51,11 +55,11 @@ export default function AgendamentoJustificativaAtrasoModal({
   const booking = summary.first;
   const motivoOptions = useMemo(
     () =>
-      JUSTIFICATIVA_ATRASO_MOTIVOS.map((opt) => {
-        const label = normalizeMotivoAtraso(t(opt.labelKey));
-        return { value: label, label };
+      motivosCadastro.map((label) => {
+        const value = normalizeMotivoAtraso(label);
+        return { value, label: value };
       }),
-    [t]
+    [motivosCadastro]
   );
 
   useEffect(() => {
@@ -65,6 +69,18 @@ export default function AgendamentoJustificativaAtrasoModal({
     setError('');
     setSaving(false);
     savingRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ativos = await listJustificativasAtrasoAtivas();
+        if (!cancelled && ativos.length) setMotivosCadastro(ativos);
+      } catch (err) {
+        console.error('[JustificativaAtraso] load motivos:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, booking?.id, pendingPayload?.horaCarregamento, pendingPayload?.dataCarregamento]);
 
   if (!booking || !pendingPayload) return null;

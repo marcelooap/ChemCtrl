@@ -1,20 +1,41 @@
 import { printContainerLabel } from '@industrializacao/lib/labelprint';
+import { loadContainerLoteDatasMap } from '@industrializacao/lib/containerLoteDatas';
+import {
+  isUnitPackagingLike,
+  labelRequiresManualVolume,
+  stripAggregatedQtyPrefix,
+  suggestLabelVolumePlaceholder,
+} from '@industrializacao/lib/packagingTypes';
 import { entities } from '@transbordo/services/entities';
-import { formatMass, formatVolume } from '@transbordo/lib/format';
+import { formatMass, formatVolume, parseDensidade } from '@transbordo/lib/format';
 import { getDominantLote, resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 import { resolveProdutoPublicToken } from '@transbordo/lib/ensureProdutoPublicToken';
-import { getQuantidadeEmbalagensFromVasilhame } from '@transbordo/lib/tiposEmbalagem';
+import {
+  buildPlacaEmbalagens,
+  getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
+  isDestinoEmbalagemUnitaria,
+  isVasilhameLegadoEmbalado,
+  labelTipoEmbalagem,
+} from '@transbordo/lib/tiposEmbalagem';
 import {
   TIPO_CONVENCIONAL,
   TIPO_EMBALADO,
   TIPO_IND_RETORNO_MP,
   TIPO_IND_VASILHAME,
-  formatSaidaItemInformacoes,
+  formatSaidaItemEmbalagem,
+  formatSaidaItemLote,
+  isTanqueVazioItem,
   resolveSaidaItemLote,
   tipoItemLabel,
+  aggregateUnitarioSaidaItens,
 } from '@transbordo/lib/saidaOrigem';
+import { isValidadeIndeterminada } from '@transbordo/lib/entradaForm';
 
 const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const AGUARDANDO_TRANSPORTE = 'Aguardando informação';
+const REPORT_COL_COUNT = 10;
+const UNIT_PACKAGING_DESC = /bombona|tambor|ibc|one\s*way/i;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
@@ -28,6 +49,103 @@ function formatDate(d) {
   return date.toLocaleDateString('pt-BR');
 }
 
+function parseReportDate(d) {
+  if (!d) return null;
+  const raw = String(d);
+  const date = raw.includes('T') ? new Date(raw) : new Date(`${raw}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+/** Dias restantes até a validade (negativo se já vencido). */
+function formatDiasParaVencer(validade, { indeterminada = false } = {}) {
+  if (indeterminada) return '-';
+  const expiry = parseReportDate(validade);
+  if (!expiry) return '—';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return String(Math.round((expiry.getTime() - today.getTime()) / 86_400_000));
+}
+
+function formatValidadeRelatorio(validade, { indeterminada = false } = {}) {
+  if (indeterminada) return 'Indeterminado';
+  return formatDate(validade);
+}
+
+function resolveTipoEmbalagemRelatorio(item, vasilhame) {
+  return (
+    vasilhame?.tipo ||
+    vasilhame?.type ||
+    item?.tipo_embalagem ||
+    item?.container_type ||
+    ''
+  );
+}
+
+function resolvePlacaRelatorio(item, vasilhame) {
+  return String(
+    item?.vasilhame_placa ||
+      vasilhame?.placa ||
+      vasilhame?.container_number ||
+      ''
+  ).trim();
+}
+
+/** Bombona / tambor / IBC envasado (aparece em Vasilhames, mas conta como embalado). */
+function isEmbalagemUnitariaNoRelatorio(item, vasilhame) {
+  if (!item || isTanqueVazioItem(item)) return false;
+  if (item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP) {
+    return false;
+  }
+  const tipo = resolveTipoEmbalagemRelatorio(item, vasilhame);
+  const placa = resolvePlacaRelatorio(item, vasilhame);
+  return (
+    isDestinoEmbalagemUnitaria(tipo) ||
+    isVasilhameLegadoEmbalado(tipo) ||
+    isUnitPackagingLike(tipo, placa)
+  );
+}
+
+function tipoItemLabelRelatorio(item, vasilhame) {
+  if (isEmbalagemUnitariaNoRelatorio(item, vasilhame)) return 'Embalado';
+  return tipoItemLabel(item);
+}
+
+/** Descrição da embalagem unitária (ex.: "Bombonas de 200 L"), sem quantidade. */
+function formatDescricaoEmbalagemUnitaria(item, vasilhame) {
+  const placa = resolvePlacaRelatorio(item, vasilhame);
+  const fromPlaca = stripAggregatedQtyPrefix(placa);
+  if (fromPlaca && UNIT_PACKAGING_DESC.test(fromPlaca)) {
+    return fromPlaca;
+  }
+
+  const tipo = resolveTipoEmbalagemRelatorio(item, vasilhame);
+  if (tipo) {
+    const fromTipo = stripAggregatedQtyPrefix(buildPlacaEmbalagens(1, tipo));
+    if (fromTipo) return fromTipo;
+    return labelTipoEmbalagem(tipo) || tipo;
+  }
+
+  return fromPlaca || '—';
+}
+
+/**
+ * Coluna Informações do relatório de saída (agendamento):
+ * - Vasilhame (tanque): N placa (n barril)
+ * - Embalado original: "-"
+ * - Bombona/tambor/IBC envasado: descrição (ex.: Bombonas de 200 L)
+ */
+function formatRelatorioInformacoes(item, vasilhame) {
+  if (item?.tipo === TIPO_EMBALADO || item?.tipo === TIPO_IND_RETORNO_MP) {
+    return '-';
+  }
+  if (isEmbalagemUnitariaNoRelatorio(item, vasilhame)) {
+    return formatDescricaoEmbalagemUnitaria(item, vasilhame);
+  }
+  return formatSaidaItemEmbalagem(item, { vasilhame });
+}
+
 function formatQtdItem(n, unidade) {
   const u = String(unidade || 'kg').toLowerCase().trim();
   const isVol = u === 'l' || u === 'lt' || u === 'litro' || u === 'litros';
@@ -35,7 +153,20 @@ function formatQtdItem(n, unidade) {
 }
 
 export function formatQtdEmbalagens(item) {
-  if (item?.tipo === TIPO_CONVENCIONAL) return '01';
+  if (item?.tipo === TIPO_CONVENCIONAL || item?.tipo === TIPO_IND_VASILHAME) {
+    const stored = Number(item.quantidade_embalagens);
+    if (Number.isFinite(stored) && stored > 0) {
+      const rounded = Math.round(stored * 100) / 100;
+      if (Number.isInteger(rounded)) return String(rounded).padStart(2, '0');
+      return rounded.toLocaleString('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+    }
+    const fromPlaca = String(item.vasilhame_placa || '').match(/^(\d+)\s*x\s*/i);
+    if (fromPlaca) return String(parseInt(fromPlaca[1], 10) || 1).padStart(2, '0');
+    return '01';
+  }
   if (item?.tipo !== TIPO_EMBALADO) return '—';
 
   const stored = Number(item.quantidade_embalagens);
@@ -82,10 +213,124 @@ function openPrintWindow(html, title, blockedMessage) {
   return win;
 }
 
+function findById(mapOrList, id) {
+  if (!id) return null;
+  const key = String(id);
+  if (mapOrList instanceof Map) return mapOrList.get(key) || null;
+  return (mapOrList || []).find((row) => String(row?.id) === key) || null;
+}
+
+function resolveVasilhameForReport(item, vasilhameById) {
+  const byId = findById(vasilhameById, item?.vasilhame_id);
+  if (byId) return byId;
+  const placa = String(item?.vasilhame_placa || '').trim().toUpperCase();
+  if (!placa || !(vasilhameById instanceof Map)) return null;
+  for (const row of vasilhameById.values()) {
+    if (String(row?.placa || '').trim().toUpperCase() === placa) return row;
+  }
+  return null;
+}
+
+/**
+ * Fabricação/validade do produto/lote — mesmas fontes do checklist de carregamento.
+ */
+function resolveItemReportDates(
+  item,
+  { vasilhame, estoqueById, transbordos = [], container = null } = {}
+) {
+  if (isTanqueVazioItem(item)) {
+    return {
+      data_fabricacao: null,
+      data_validade: null,
+      validade_indeterminada: false,
+    };
+  }
+
+  const estoque =
+    findById(estoqueById, item?.entrada_id) ||
+    findById(estoqueById, item?.stock_id) ||
+    null;
+
+  const indeterminadaFromSources = (...sources) =>
+    sources.some((s) => isValidadeIndeterminada(s));
+
+  if (container) {
+    const indeterminada = indeterminadaFromSources(container, item, estoque);
+    return {
+      data_fabricacao:
+        container.data_fabricacao ||
+        item?.data_fabricacao ||
+        estoque?.data_fabricacao ||
+        null,
+      data_validade: indeterminada
+        ? null
+        : container.data_validade ||
+          item?.data_validade ||
+          estoque?.data_validade ||
+          null,
+      validade_indeterminada: indeterminada,
+    };
+  }
+
+  let fabricacao = item?.data_fabricacao || estoque?.data_fabricacao || null;
+  let validade = item?.data_validade || estoque?.data_validade || null;
+  let indeterminada = indeterminadaFromSources(item, estoque);
+
+  if (vasilhame) {
+    const datas = resolveVasilhameLoteDatas(vasilhame, estoqueById, {
+      transbordos,
+    });
+    if (datas.data_fabricacao || datas.data_validade) {
+      return {
+        data_fabricacao: datas.data_fabricacao || fabricacao || null,
+        data_validade: indeterminada
+          ? null
+          : datas.data_validade || validade || null,
+        validade_indeterminada: indeterminada,
+      };
+    }
+
+    const composicao = Array.isArray(vasilhame.composicao)
+      ? vasilhame.composicao
+      : [];
+    for (const c of composicao) {
+      const row =
+        findById(estoqueById, c?.estoque_id) ||
+        findById(estoqueById, c?.entrada_id);
+      if (!row) continue;
+      if (!indeterminada && isValidadeIndeterminada(row)) indeterminada = true;
+      if (!fabricacao && row.data_fabricacao) fabricacao = row.data_fabricacao;
+      if (!validade && row.data_validade) validade = row.data_validade;
+      if (fabricacao && (validade || indeterminada)) break;
+    }
+  }
+
+  return {
+    data_fabricacao: fabricacao || null,
+    data_validade: indeterminada ? null : validade || null,
+    validade_indeterminada: indeterminada,
+  };
+}
+
+function transporteField(value) {
+  const text = String(value || '').trim();
+  return text || AGUARDANDO_TRANSPORTE;
+}
+
 /**
  * Abre o diálogo de impressão do navegador com o conteúdo da saída (visão de agendamento).
  */
-export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
+export async function printSaidaAgendamento(
+  saida,
+  {
+    t,
+    vasilhames = [],
+    entradas = [],
+    transbordos = [],
+    agendamento = null,
+    containersById = null,
+  } = {}
+) {
   if (!saida) return;
 
   const codigo = saida.codigo || '';
@@ -96,35 +341,84 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
     saida.status === 'enviado_fiscal' || saida.enviado_ao_fiscal
       ? 'Validado'
       : 'Pendente';
-  const itens = saida.itens || [];
+  const itens = aggregateUnitarioSaidaItens(saida.itens || [], {
+    vasilhames,
+    containersById,
+  });
   const blocked = t?.('painel.comercial.agendamentos.printBlocked');
-  const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
+  const vasilhameById = new Map(
+    (vasilhames || []).map((v) => [String(v.id), v])
+  );
+  const estoqueById = new Map(
+    (entradas || []).map((row) => [String(row.id), row])
+  );
+
+  const containerIds = [
+    ...new Set(
+      itens.map((item) => item?.container_id).filter(Boolean).map(String)
+    ),
+  ];
+  let containerDatas = containersById instanceof Map ? containersById : new Map();
+  if (containerIds.length > 0) {
+    const missing = containerIds.filter((id) => {
+      const row = containerDatas.get(id);
+      return !(row?.data_fabricacao || row?.data_validade);
+    });
+    if (missing.length > 0) {
+      try {
+        const loaded = await loadContainerLoteDatasMap(missing);
+        containerDatas = new Map(containerDatas);
+        loaded.forEach((value, key) => containerDatas.set(key, value));
+      } catch (err) {
+        console.error(
+          '[Relatório Saída] Falha ao resolver datas dos containers:',
+          err
+        );
+      }
+    }
+  }
 
   const rows =
     itens.length === 0
-      ? `<tr><td colspan="6" class="empty">Nenhum produto nesta saída.</td></tr>`
+      ? `<tr><td colspan="${REPORT_COL_COUNT}" class="empty">Nenhum produto nesta saída.</td></tr>`
       : itens
           .map((item) => {
-            const vasilhame = item.vasilhame_id
-              ? vasilhameById.get(item.vasilhame_id)
-              : null;
+            const vasilhame = resolveVasilhameForReport(item, vasilhameById);
+            const container = findById(containerDatas, item?.container_id);
+            const embalagemSource = vasilhame || container;
+            const datas = resolveItemReportDates(item, {
+              vasilhame,
+              estoqueById,
+              transbordos,
+              container,
+            });
             return `
       <tr>
         <td class="code">${escapeHtml(saida.codigo || item.produto_codigo || '—')}</td>
-        <td>${escapeHtml(item.produto_nome || '—')}</td>
-        <td>${escapeHtml(tipoItemLabel(item))}</td>
-        <td>${escapeHtml(
-          formatSaidaItemInformacoes(item, {
-            vasilhame,
-            includeLote: true,
-            context: 'agendamento',
+        <td class="produto">${escapeHtml(item.produto_nome || '—')}</td>
+        <td class="tipo">${escapeHtml(tipoItemLabelRelatorio(item, embalagemSource))}</td>
+        <td class="info">${escapeHtml(formatRelatorioInformacoes(item, embalagemSource))}</td>
+        <td class="lote">${escapeHtml(formatSaidaItemLote(item, { vasilhame: embalagemSource }))}</td>
+        <td class="date">${escapeHtml(formatDate(datas.data_fabricacao))}</td>
+        <td class="date">${escapeHtml(
+          formatValidadeRelatorio(datas.data_validade, {
+            indeterminada: datas.validade_indeterminada,
           })
         )}</td>
-        <td class="num">${escapeHtml(qtdSolicitada(item))}</td>
-        <td class="num">${escapeHtml(formatQtdEmbalagens(item))}</td>
+        <td class="num dias">${escapeHtml(
+          formatDiasParaVencer(datas.data_validade, {
+            indeterminada: datas.validade_indeterminada,
+          })
+        )}</td>
+        <td class="num solicitado">${escapeHtml(qtdSolicitada(item))}</td>
+        <td class="num emb">${escapeHtml(formatQtdEmbalagens(item))}</td>
       </tr>`;
           })
           .join('');
+
+  const transportadora = transporteField(agendamento?.transportadora);
+  const motorista = transporteField(agendamento?.motorista);
+  const placa = transporteField(agendamento?.placa);
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -132,25 +426,71 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
 <meta charset="UTF-8" />
 <title>${escapeHtml(title)}</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm; }
+  @page { size: A4 landscape; margin: 10mm; }
   * { box-sizing: border-box; }
-  body { font-family: Inter, Arial, sans-serif; color: #111827; margin: 0; }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
-  .meta p { margin: 0; font-size: 11px; color: #6b7280; }
-  .meta strong { display: block; margin-top: 2px; font-size: 13px; color: #111827; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
-  th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
-  td.code { color: #1d4ed8; font-weight: 600; white-space: nowrap; }
-  td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  html, body { height: 100%; }
+  body {
+    font-family: Inter, Arial, sans-serif;
+    color: #111827;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet { flex: 1 0 auto; display: flex; flex-direction: column; min-height: calc(100vh - 0px); }
+  .sheet-body { flex: 1 0 auto; }
+  h1 { font-size: 17px; margin: 0 0 12px; }
+  .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 12px; }
+  .meta p { margin: 0; font-size: 10px; color: #6b7280; }
+  .meta strong { display: block; margin-top: 2px; font-size: 12px; color: #111827; }
+  .transporte { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; }
+  .transporte p { margin: 0; font-size: 10px; color: #6b7280; }
+  .transporte strong { display: block; margin-top: 2px; font-size: 12px; color: #111827; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+  th, td {
+    border: 1px solid #e5e7eb;
+    padding: 5px 6px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  th { background: #f3f4f6; font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; }
+  th.col-code, td.code { width: 6%; }
+  th.col-produto, td.produto { width: 18%; }
+  th.col-tipo, td.tipo { width: 7%; }
+  th.col-info, td.info { width: 13%; }
+  th.col-lote, td.lote { width: 10%; }
+  th.col-date, td.date { width: 8%; }
+  th.col-dias, td.dias { width: 7%; }
+  th.col-solicitado, td.solicitado { width: 9%; }
+  th.col-emb, td.emb { width: 8%; }
+  td.code { color: #1d4ed8; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  td.tipo, td.num, td.date, td.dias { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.dias, td.solicitado, td.emb { text-align: right; }
   td.empty { text-align: center; color: #6b7280; padding: 24px; }
-  .footer { display: flex; justify-content: space-between; margin-top: 12px; font-size: 12px; color: #6b7280; }
-  .notes { margin-bottom: 14px; font-size: 12px; }
-  .notes span { display: block; font-size: 11px; color: #6b7280; }
+  .footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: #6b7280; }
+  .notes { margin-bottom: 12px; font-size: 11px; }
+  .notes span { display: block; font-size: 10px; color: #6b7280; }
+  .signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    margin-top: auto;
+    padding-top: 56px;
+    page-break-inside: avoid;
+  }
+  .signatures .line { border-top: 1px solid #111827; padding-top: 8px; text-align: center; font-size: 12px; color: #374151; }
+  @media print {
+    html, body { height: auto; }
+    body, .sheet { min-height: 100vh; }
+    .signatures { margin-top: auto; padding-top: 48px; }
+  }
 </style>
 </head>
 <body>
+  <div class="sheet">
+  <div class="sheet-body">
   <h1>${escapeHtml(title)}</h1>
   <div class="meta">
     <div><p>Cliente</p><strong>${escapeHtml(saida.cliente_nome || '—')}</strong></div>
@@ -158,6 +498,11 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
     <div><p>Data da Solicitação</p><strong>${escapeHtml(formatDate(saida.data_solicitacao))}</strong></div>
     <div><p>Data Programada</p><strong>${escapeHtml(formatDate(saida.data_programada))}</strong></div>
     <div><p>Validação</p><strong>${escapeHtml(statusLabel)}</strong></div>
+  </div>
+  <div class="transporte">
+    <div><p>Transportadora</p><strong>${escapeHtml(transportadora)}</strong></div>
+    <div><p>Motorista</p><strong>${escapeHtml(motorista)}</strong></div>
+    <div><p>Placa</p><strong>${escapeHtml(placa)}</strong></div>
   </div>
   ${
     saida.observacoes
@@ -167,12 +512,16 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
   <table>
     <thead>
       <tr>
-        <th>Código</th>
-        <th>Produto</th>
-        <th>Tipo</th>
-        <th>Informações</th>
-        <th>Qtd. Solicitada</th>
-        <th>Qtd. de embalagens</th>
+        <th class="col-code">Código</th>
+        <th class="col-produto">Produto</th>
+        <th class="col-tipo">Tipo</th>
+        <th class="col-info">Informações</th>
+        <th class="col-lote">Lote</th>
+        <th class="col-date">Fabricação</th>
+        <th class="col-date">Validade</th>
+        <th class="col-dias">Dias p/ Vencer</th>
+        <th class="col-solicitado">Solicitado</th>
+        <th class="col-emb">Qtd. de embalagens</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -181,6 +530,12 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
     <span>${String(itens.length).padStart(2, '0')} ${itens.length === 1 ? 'produto' : 'produtos'}</span>
     <span>Qtd. total: <strong>${escapeHtml(formatMass(saida.quantidade_total))} kg</strong></span>
   </div>
+  </div>
+  <div class="signatures">
+    <div class="line">Operador</div>
+    <div class="line">Conferente</div>
+  </div>
+  </div>
 </body>
 </html>`;
 
@@ -188,10 +543,18 @@ export function printSaidaAgendamento(saida, { t, vasilhames = [] } = {}) {
 }
 
 export function resolveVasilhameForItem(item, vasilhames = []) {
-  if (!item?.vasilhame_id) return null;
+  if (item?.vasilhame_id) {
+    const byId = (vasilhames || []).find(
+      (v) => String(v.id) === String(item.vasilhame_id),
+    );
+    if (byId) return byId;
+  }
+  const placa = String(item?.vasilhame_placa || '').trim().toUpperCase();
+  if (!placa) return null;
   return (
-    (vasilhames || []).find((v) => String(v.id) === String(item.vasilhame_id)) ||
-    null
+    (vasilhames || []).find(
+      (v) => String(v.placa || '').trim().toUpperCase() === placa,
+    ) || null
   );
 }
 
@@ -217,39 +580,115 @@ async function loadVasilhameLoteDatas(vasilhame) {
   }
 }
 
-export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
+function resolveUnitVolumeForLabel(vasilhame, item) {
+  const fromVasilhame = getVolumePorEmbalagemFromVasilhame(vasilhame);
+  if (fromVasilhame > 0) return Math.round(fromVasilhame);
+
+  const type = vasilhame?.tipo || item?.tipo_embalagem || '';
+  const fromType = suggestLabelVolumePlaceholder(type);
+  if (fromType > 0) return Math.round(fromType);
+
+  const plate = stripAggregatedQtyPrefix(
+    item?.vasilhame_placa || vasilhame?.placa || '',
+  );
+  const fromPlate = suggestLabelVolumePlaceholder(plate);
+  return fromPlate > 0 ? Math.round(fromPlate) : 0;
+}
+
+/**
+ * Monta o contexto do PrintContainerLabelDialog para item convencional
+ * (mesmo modal da tela de Vasilhames / Transbordo).
+ */
+export async function loadConvencionalLabelContext(item, saida, vasilhames = []) {
   const vasilhame = resolveVasilhameForItem(item, vasilhames);
   const loteDatas = await loadVasilhameLoteDatas(vasilhame);
+  const plate = item?.vasilhame_placa || vasilhame?.placa || '';
+  const type = vasilhame?.tipo || item?.tipo_embalagem || '';
+  const unitVol = resolveUnitVolumeForLabel(vasilhame, item);
+  const isUnit = labelRequiresManualVolume({
+    type,
+    tipo: type,
+    container_number: plate,
+    placa: plate,
+  });
+
+  const tankVol =
+    Number(vasilhame?.volume) ||
+    Number(item?.volume_disponivel) ||
+    Number(item?.volume_solicitado) ||
+    0;
+
   const container = {
-    op_number: saida?.codigo || vasilhame?.codigo || '—',
+    id: vasilhame?.id || item?.vasilhame_id || `saida-${saida?.id || 'x'}-${plate || item?.produto_id || 'item'}`,
     product: item?.produto_nome || vasilhame?.produto_nome || '—',
     lot: resolveSaidaItemLote(item, { vasilhame, preferVasilhame: true }) || '—',
-    container_number: item?.vasilhame_placa || vasilhame?.placa || '',
+    client: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
+    op_number: saida?.codigo || vasilhame?.codigo || '—',
+    container_number: plate,
     barril_number: item?.vasilhame_barril || vasilhame?.barril || '',
-    type: vasilhame?.tipo || '',
+    type,
+    volume: tankVol,
+    volume_por_embalagem: unitVol || 0,
     tare: vasilhame?.tara || 0,
-    volume: vasilhame?.volume,
     net_weight: vasilhame?.peso_liquido || item?.peso_liquido || 0,
     gross_weight: vasilhame?.peso_bruto || 0,
     composicao: vasilhame?.composicao,
-    quantidade_embalagens: vasilhame?.quantidade_embalagens,
+    quantidade_embalagens:
+      vasilhame?.quantidade_embalagens || item?.quantidade_embalagens,
     created_date: vasilhame?.created_at || saida?.data_programada,
   };
 
-  const publicToken = await resolveProdutoPublicToken({
-    produtoId: item?.produto_id || vasilhame?.produto_id,
-    codigo: item?.produto_codigo || vasilhame?.produto_codigo,
-    nome: item?.produto_nome || vasilhame?.produto_nome,
-  }).catch(() => null);
+  const dens =
+    parseDensidade(vasilhame?.densidade) ||
+    parseDensidade(item?.densidade) ||
+    0;
 
-  await printContainerLabel(container, null, publicToken, {
+  const initialVolume = isUnit
+    ? (unitVol > 0 ? unitVol : '')
+    : (tankVol > 0 ? Math.round(tankVol) : '');
+
+  const produtoId = item?.produto_id || vasilhame?.produto_id;
+  const produtoCodigo = item?.produto_codigo || vasilhame?.produto_codigo;
+  const produtoNome = item?.produto_nome || vasilhame?.produto_nome;
+
+  return {
+    contexto: 'convencional',
+    container,
+    initialVolume,
+    density: dens > 0 ? dens : undefined,
+    clienteId: saida?.cliente_id || vasilhame?.cliente_id,
+    clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
     manufactureDate: loteDatas.data_fabricacao || null,
     expiryDate: loteDatas.data_validade || undefined,
-    volume: vasilhame?.volume,
-    clienteNome: saida?.cliente_nome || vasilhame?.cliente_nome || item?.cliente_nome,
-    clienteId: saida?.cliente_id || vasilhame?.cliente_id,
+    resolvePublicToken: () =>
+      resolveProdutoPublicToken({
+        produtoId,
+        codigo: produtoCodigo,
+        nome: produtoNome,
+      }).catch(() => null),
+  };
+}
+
+export async function printEtiquetaConvencional(item, saida, vasilhames = []) {
+  const ctx = await loadConvencionalLabelContext(item, saida, vasilhames);
+  const publicToken = await ctx.resolvePublicToken();
+  const volume =
+    Number(ctx.initialVolume) > 0
+      ? Number(ctx.initialVolume)
+      : Number(ctx.container.volume) || 0;
+
+  await printContainerLabel(ctx.container, null, publicToken, {
+    manufactureDate: ctx.manufactureDate,
+    expiryDate: ctx.expiryDate,
+    volume,
+    clienteNome: ctx.clienteNome,
+    clienteId: ctx.clienteId,
     contexto: 'convencional',
-    packageQty: getQuantidadeEmbalagensFromVasilhame(vasilhame) || undefined,
+    packageQty: getQuantidadeEmbalagensFromVasilhame({
+      ...ctx.container,
+      tipo: ctx.container.type,
+      placa: ctx.container.container_number,
+    }) || undefined,
   });
 }
 

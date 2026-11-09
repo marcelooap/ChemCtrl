@@ -11,7 +11,12 @@ import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import SaidaItemRow from "@transbordo/components/saida/SaidaItemRow";
 import SaidaDestinoSelect from "@transbordo/components/saida/SaidaDestinoSelect";
 import { normalizeDestino } from "@transbordo/lib/saidaDestinos";
-import { formatMass, formatVolume } from "@transbordo/lib/format";
+import {
+  formatMass,
+  formatVolume,
+  parseDensidade,
+  roundMass,
+} from "@transbordo/lib/format";
 import { todayDateInputValue } from "@/i18n/formatters";
 import { resyncTransbordoStockAfterSaidaEdit } from "@transbordo/lib/saidaFiscal";
 import { clearSaidaLeituras } from "@transbordo/lib/saidaNovas";
@@ -43,7 +48,10 @@ import {
   saidaItemChave,
   isSaidaValidadaNoModulo,
   isSaidaModuloPainel,
+  calcSaidaQuantidadeTotal,
 } from "@transbordo/lib/saidaOrigem";
+import { isDestinoEmbalagemUnitaria } from "@transbordo/lib/tiposEmbalagem";
+import { isUnitPackagingType } from "@industrializacao/lib/packagingTypes";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import {
   buildSaidaClienteOptions,
@@ -86,6 +94,11 @@ export default function SaidaForm({
   const navigate = useNavigate();
   const { user } = useAuth();
   const isEdit = !!id;
+  // Comercial (nova): data programada vem do modal de agendamento pós-salvar.
+  const scheduleAfterCreate =
+    !isEdit && typeof onCreateSuccess === "function";
+  // Comercial: data programada só via modal de agendamento (criar ou editar).
+  const usesAgendamentoModal = scheduleAfterCreate || enableAgendamentoEdit;
   const defaultOrigem = lockedOrigem || ORIGEM_TRANSBORDO;
   const loadIndData =
     enableMultiOrigem || lockedOrigem === ORIGEM_INDUSTRIALIZACAO;
@@ -340,13 +353,12 @@ export default function SaidaForm({
 
   const addItem = () => {
     const prevLen = formData.itens.length;
-    const map = {};
-    for (let i = 0; i < prevLen; i++) map[i] = true;
-    map[prevLen] = false;
+    const map = { 0: false };
+    for (let i = 0; i < prevLen; i++) map[i + 1] = true;
     setCollapsedByIndex(map);
     setFormData((prev) => ({
       ...prev,
-      itens: [...prev.itens, emptySaidaItem(defaultOrigem)],
+      itens: [emptySaidaItem(defaultOrigem), ...prev.itens],
     }));
   };
 
@@ -378,7 +390,7 @@ export default function SaidaForm({
       setError("Informe a data da solicitação.");
       return;
     }
-    if (!formData.data_programada?.trim()) {
+    if (!usesAgendamentoModal && !formData.data_programada?.trim()) {
       setError("Informe a data programada.");
       return;
     }
@@ -396,7 +408,7 @@ export default function SaidaForm({
       });
       if (removeuValidado) {
         setError(
-          "Não é possível remover um item já validado. Reverta a validação para Pendente na tela de Saída do módulo que validou o item."
+          "Não é possível remover um item já validado. Desvalide o item no modal Visualizar da tela de Saída, ou altere a carga para Pendente."
         );
         return;
       }
@@ -467,6 +479,13 @@ export default function SaidaForm({
           );
           return;
         }
+        if (
+          isDestinoEmbalagemUnitaria(item.tipo_embalagem) &&
+          !(Number(item.quantidade_embalagens) > 0)
+        ) {
+          setError(`Produto ${i + 1}: informe a quantidade de embalagens.`);
+          return;
+        }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
           setError(`Produto ${i + 1}: informe o volume solicitado.`);
           return;
@@ -485,6 +504,13 @@ export default function SaidaForm({
               ? `Produto ${i + 1}: selecione a embalagem.`
               : `Produto ${i + 1}: selecione um vasilhame da Industrialização.`
           );
+          return;
+        }
+        if (
+          isUnitPackagingType(item.container_type) &&
+          !(Number(item.quantidade_embalagens) > 0)
+        ) {
+          setError(`Produto ${i + 1}: informe a quantidade de embalagens.`);
           return;
         }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
@@ -668,8 +694,24 @@ export default function SaidaForm({
           const v = vasilhameOriginal[item.vasilhame_id];
           const originalVol = v?.volume || 0;
           const originalPesoLiq = v?.peso_liquido || 0;
-          const densidade = originalVol > 0 ? originalPesoLiq / originalVol : 0;
-          const pesoSolicitado = vol * densidade;
+          // Densidade declarada do tanque (não peso÷volume: isso propaga o +1 kg
+          // de arredondamento por lote misturado para a quantidade solicitada).
+          const densDeclarada = parseDensidade(v?.densidade);
+          const densEfetiva =
+            originalVol > 0 ? originalPesoLiq / originalVol : 0;
+          const densidade = densDeclarada > 0 ? densDeclarada : densEfetiva;
+          const pesoCalc =
+            densDeclarada > 0
+              ? roundMass(vol * densDeclarada)
+              : densidade > 0
+                ? roundMass(vol * densidade)
+                : 0;
+          // Fallback: massa já capturada na seleção do tanque (sem densidade no cadastro).
+          const pesoSolicitado =
+            pesoCalc ||
+            Number(item.peso_liquido) ||
+            Number(item.quantidade_solicitada) ||
+            0;
 
           return {
             ...item,
@@ -677,6 +719,7 @@ export default function SaidaForm({
             volume_disponivel: volAntes,
             saldo_final: volAntes - vol,
             quantidade_solicitada: pesoSolicitado,
+            peso_liquido: pesoSolicitado,
           };
         }
 
@@ -729,25 +772,39 @@ export default function SaidaForm({
       });
 
       const itensPersistidos = itensWithStock.map((item) => {
-        if (jaBaixadoOriginal(item)) return { ...item, validado: true };
         const original = origemPorChave.get(saidaItemChave(item));
-        if (original?.validado === false) return { ...item, validado: false };
+        const historico =
+          original?.validado_historico === true ||
+          original?.validado === true ||
+          item?.validado_historico === true;
+        if (jaBaixadoOriginal(item)) {
+          return {
+            ...item,
+            validado: true,
+            validado_historico: true,
+          };
+        }
+        if (original?.validado === false) {
+          return {
+            ...item,
+            validado: false,
+            ...(historico ? { validado_historico: true } : {}),
+          };
+        }
         if (!original && editingSaida) {
           const modulo = resolveItemOrigem(item);
           if (
             isSaidaValidadaNoModulo(editingSaida, modulo) ||
             editingSaida.enviado_ao_fiscal
           ) {
+            // Novo item em saída já validada: pendente, sem histórico.
             return { ...item, validado: false };
           }
         }
-        return item;
+        return historico ? { ...item, validado_historico: true } : item;
       });
 
-      const quantidadeTotal = itensPersistidos.reduce(
-        (sum, item) => sum + (item.quantidade_solicitada || 0),
-        0
-      );
+      const quantidadeTotal = calcSaidaQuantidadeTotal(itensPersistidos);
 
       const codigo = editingSaida?.codigo || (await generateCodigo());
 
@@ -756,7 +813,10 @@ export default function SaidaForm({
         cliente_nome: clienteNomeSalvo,
         destino: normalizeDestino(formData.destino) || null,
         data_solicitacao: formData.data_solicitacao,
-        data_programada: agendamentoPendente?.dateIso || formData.data_programada,
+        data_programada:
+          agendamentoPendente?.dateIso ||
+          formData.data_programada ||
+          null,
         observacoes: formData.observacoes,
         itens: itensPersistidos,
         quantidade_total: quantidadeTotal,
@@ -926,22 +986,40 @@ export default function SaidaForm({
             Cancelar
           </Button>
           {isEdit && enableAgendamentoEdit ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              onClick={() => setAgendamentoOpen(true)}
-            >
-              <Calendar className="w-4 h-4" />
-              Agendamento
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => setAgendamentoOpen(true)}
+              >
+                <Calendar className="w-4 h-4" />
+                Agendamento
+              </Button>
+              {agendamentoPendente ? (
+                <p className="text-xs text-emerald-700">
+                  {new Date(
+                    `${agendamentoPendente.dateIso}T00:00:00`
+                  ).toLocaleDateString("pt-BR")}
+                  {" · "}
+                  {agendamentoPendente.horario === ENCAIXE_HORARIO
+                    ? "Encaixe"
+                    : agendamentoPendente.horario}
+                  {" (salvar para confirmar)"}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           <Button
             onClick={handleSave}
-            disabled={saving || submitBusy || !formData.data_programada}
+            disabled={
+              saving ||
+              submitBusy ||
+              (!usesAgendamentoModal && !formData.data_programada)
+            }
             className="bg-primary hover:bg-primary/90 gap-2"
             title={
-              !formData.data_programada
+              !usesAgendamentoModal && !formData.data_programada
                 ? "Preencha a data programada para salvar"
                 : undefined
             }
@@ -962,7 +1040,11 @@ export default function SaidaForm({
         <h2 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2 mb-4">
           Dados da Solicitação
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+            usesAgendamentoModal ? "xl:grid-cols-3" : "xl:grid-cols-4"
+          }`}
+        >
           <div className="space-y-1.5">
             <Label>Cliente *</Label>
             <SearchableSelect
@@ -1013,29 +1095,31 @@ export default function SaidaForm({
               }
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Data Programada *</Label>
-            <DateInputBr
-              value={formData.data_programada}
-              onChange={(iso) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  data_programada: iso,
-                }));
-                setAgendamentoPendente((prev) =>
-                  prev && prev.dateIso === iso ? prev : null
-                );
-              }}
-            />
-            {agendamentoPendente ? (
-              <p className="text-xs text-emerald-700">
-                Horário:{" "}
-                {agendamentoPendente.horario === ENCAIXE_HORARIO
-                  ? "Encaixe"
-                  : agendamentoPendente.horario}
-              </p>
-            ) : null}
-          </div>
+          {!usesAgendamentoModal ? (
+            <div className="space-y-1.5">
+              <Label>Data Programada *</Label>
+              <DateInputBr
+                value={formData.data_programada}
+                onChange={(iso) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    data_programada: iso,
+                  }));
+                  setAgendamentoPendente((prev) =>
+                    prev && prev.dateIso === iso ? prev : null
+                  );
+                }}
+              />
+              {agendamentoPendente ? (
+                <p className="text-xs text-emerald-700">
+                  Horário:{" "}
+                  {agendamentoPendente.horario === ENCAIXE_HORARIO
+                    ? "Encaixe"
+                    : agendamentoPendente.horario}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

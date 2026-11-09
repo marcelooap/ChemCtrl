@@ -296,7 +296,8 @@ function loteFromRow(row, tank) {
     quantidade: receivedQty(row),
     unidade_medida: row.unidade_medida,
     data_fabricacao: row.data_fabricacao,
-    data_validade: row.data_validade,
+    data_validade: row.validade_indeterminada ? null : row.data_validade,
+    validade_indeterminada: Boolean(row.validade_indeterminada),
     preco_unitario: row.preco_unitario,
     tipo_recebimento: row.tipo_recebimento,
     tipo_embalagem: row.tipo_embalagem,
@@ -331,7 +332,8 @@ function toEstoque(row, tanks) {
     lote: row.lote,
     densidade: row.densidade,
     data_fabricacao: row.data_fabricacao,
-    data_validade: row.data_validade,
+    data_validade: row.validade_indeterminada ? null : row.data_validade,
+    validade_indeterminada: Boolean(row.validade_indeterminada),
     saldo_inicial: row.saldo_inicial,
     unidade_medida: row.unidade_medida,
     saldo_final: row.saldo_final,
@@ -396,7 +398,8 @@ function toEntrada(lines, tanks) {
     lote: first.lote,
     densidade: first.densidade,
     data_fabricacao: first.data_fabricacao,
-    data_validade: first.data_validade,
+    data_validade: first.validade_indeterminada ? null : first.data_validade,
+    validade_indeterminada: Boolean(first.validade_indeterminada),
     saldo_inicial: sumQuantidade,
     quantidade: sumQuantidade,
     unidade_medida: first.unidade_medida,
@@ -474,7 +477,13 @@ function rowFromEstoquePayload(payload, ids) {
     lote: nullIfEmpty(lote.lote ?? payload.lote),
     densidade: densidadeForDb(lote.densidade ?? payload.densidade),
     data_fabricacao: nullIfEmpty(lote.data_fabricacao ?? payload.data_fabricacao),
-    data_validade: nullIfEmpty(lote.data_validade ?? payload.data_validade),
+    data_validade:
+      lote.validade_indeterminada || payload.validade_indeterminada
+        ? null
+        : nullIfEmpty(lote.data_validade ?? payload.data_validade),
+    validade_indeterminada: Boolean(
+      lote.validade_indeterminada || payload.validade_indeterminada
+    ),
     fornecedor: nullIfEmpty(payload.fornecedor),
     saldo_inicial: resolveSaldoInicial(payload, lote),
     unidade_medida: lote.unidade_medida || payload.unidade_medida || 'kg',
@@ -805,9 +814,9 @@ export function createEstoqueEntity() {
       const copy = [
         'produto_id', 'produto_nome', 'produto_codigo', 'cliente_id', 'cliente_nome',
         'nota_fiscal', 'nota_fiscal_troca', 'lote', 'densidade', 'data_fabricacao',
-        'data_validade', 'saldo_inicial', 'unidade_medida', 'preco_unitario', 'custo_total',
-        'saldo_final', 'embalado', 'peso_liquido', 'quantidade_embalagens', 'status_wms',
-        'grupo_entrada', 'codigo_estoque',
+        'data_validade', 'validade_indeterminada', 'saldo_inicial', 'unidade_medida',
+        'preco_unitario', 'custo_total', 'saldo_final', 'embalado', 'peso_liquido',
+        'quantidade_embalagens', 'status_wms', 'grupo_entrada', 'codigo_estoque',
       ];
       for (const key of copy) {
         if (!Object.prototype.hasOwnProperty.call(payload, key)) continue;
@@ -843,6 +852,19 @@ export function createEstoqueEntity() {
         }
         if (lote.ind_mp_id && !patch.grupo_entrada) {
           patch.grupo_entrada = `INDMP:${lote.ind_mp_id}`;
+        }
+        if (Object.prototype.hasOwnProperty.call(lote, 'validade_indeterminada')) {
+          patch.validade_indeterminada = !!lote.validade_indeterminada;
+          if (lote.validade_indeterminada) patch.data_validade = null;
+        }
+        if (
+          !patch.validade_indeterminada &&
+          Object.prototype.hasOwnProperty.call(lote, 'data_validade')
+        ) {
+          patch.data_validade = nullIfEmpty(lote.data_validade);
+        }
+        if (Object.prototype.hasOwnProperty.call(lote, 'data_fabricacao')) {
+          patch.data_fabricacao = nullIfEmpty(lote.data_fabricacao);
         }
       }
       for (const key of ['produto_id', 'cliente_id', 'vasilhame_id']) {

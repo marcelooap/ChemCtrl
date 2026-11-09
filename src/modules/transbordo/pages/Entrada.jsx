@@ -371,14 +371,24 @@ export default function Entrada() {
       cliente_id: nullIfEmpty(data.cliente_id),
       produto_id: nullIfEmpty(data.produto_id),
       data_fabricacao: nullIfEmpty(data.data_fabricacao),
-      data_validade: nullIfEmpty(data.data_validade),
-      lotes: (data.lotes || []).map((l) => ({
-        ...l,
-        produto_id: nullIfEmpty(l.produto_id),
-        data_fabricacao: nullIfEmpty(l.data_fabricacao),
-        data_validade: nullIfEmpty(l.data_validade),
-      })),
+      data_validade: data.validade_indeterminada
+        ? null
+        : nullIfEmpty(data.data_validade),
+      lotes: (data.lotes || []).map((l) => {
+        const validadeIndeterminada = !!l.validade_indeterminada;
+        return {
+          ...l,
+          produto_id: nullIfEmpty(l.produto_id),
+          data_fabricacao: nullIfEmpty(l.data_fabricacao),
+          data_validade: validadeIndeterminada
+            ? null
+            : nullIfEmpty(l.data_validade),
+          validade_indeterminada: validadeIndeterminada,
+        };
+      }),
     };
+    // Flag só em lotes[] (jsonb) — evita coluna inexistente no update.
+    delete entradaPayload.validade_indeterminada;
 
     const savedEntrada = await entities.entradas.update(
       editingEntrada.id,
@@ -423,7 +433,10 @@ export default function Entrada() {
         lote: lote.lote,
         densidade: lote.densidade,
         data_fabricacao: nullIfEmpty(lote.data_fabricacao),
-        data_validade: nullIfEmpty(lote.data_validade),
+        data_validade: lote.validade_indeterminada
+          ? null
+          : nullIfEmpty(lote.data_validade),
+        validade_indeterminada: !!lote.validade_indeterminada,
         saldo_inicial: loteQtd,
         quantidade: loteQtd,
         unidade_medida: loteUnidadeEstoque(lote),

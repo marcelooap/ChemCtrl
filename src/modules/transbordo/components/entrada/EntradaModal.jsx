@@ -57,7 +57,8 @@ function mapLoteFromEntrada(l, entrada = {}) {
     quantidade_nf: quantidadeNf,
     unidade_medida: l.unidade_medida || "",
     data_fabricacao: l.data_fabricacao || "",
-    data_validade: l.data_validade || "",
+    data_validade: l.validade_indeterminada ? "" : l.data_validade || "",
+    validade_indeterminada: !!l.validade_indeterminada,
     preco_unitario:
       l.preco_unitario != null
         ? String(l.preco_unitario)
@@ -238,6 +239,8 @@ export default function EntradaModal({
                   unidade_medida: editingEntrada.unidade_medida || "",
                   data_fabricacao: editingEntrada.data_fabricacao || "",
                   data_validade: editingEntrada.data_validade || "",
+                  validade_indeterminada:
+                    !!editingEntrada.validade_indeterminada,
                   preco_unitario: editingEntrada.preco_unitario,
                   embalado: editingEntrada.embalado || false,
                   tipo_recebimento: editingEntrada.tipo_recebimento,
@@ -561,7 +564,8 @@ export default function EntradaModal({
         quantidade_declarada: tipo === "granel" ? qtdDeclarada : null,
         unidade_medida: isVasilhame ? "L" : l.unidade_medida,
         data_fabricacao: l.data_fabricacao,
-        data_validade: l.data_validade,
+        data_validade: l.validade_indeterminada ? null : l.data_validade,
+        validade_indeterminada: !!l.validade_indeterminada,
         preco_unitario: parseFloat(l.preco_unitario) || 0,
         tipo_recebimento: tipo,
         embalado: isEmbalado,
@@ -607,7 +611,10 @@ export default function EntradaModal({
       lote: firstLote.lote,
       densidade: firstLote.densidade,
       data_fabricacao: firstLote.data_fabricacao,
-      data_validade: firstLote.data_validade,
+      data_validade: firstLote.validade_indeterminada
+        ? null
+        : firstLote.data_validade,
+      validade_indeterminada: !!firstLote.validade_indeterminada,
       saldo_inicial: qtdKgEfetiva,
       quantidade: qtdKgEfetiva,
       unidade_medida: "kg",

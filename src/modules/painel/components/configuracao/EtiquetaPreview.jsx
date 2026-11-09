@@ -170,9 +170,11 @@ export default function EtiquetaPreview({
     ));
 
   const placaBarril = formatEtiquetaEmbalagemPlaca(v.container_number, v.barril_number);
+  // Preferir `embalagem` já formatada (sem "10 x" em tambor/bombona/IBC).
+  const embalagemFmt = String(v.embalagem || '').trim();
   const embalagem = convencionalVertical
-    ? (placaBarril || String(v.embalagem || '').trim() || '—')
-    : (v.embalagem
+    ? (embalagemFmt || placaBarril || '—')
+    : (embalagemFmt
       || (v.barril_number
         ? `${v.container_number || ''} (${v.barril_number})`
         : v.container_number || v.packaging_type || '—'));

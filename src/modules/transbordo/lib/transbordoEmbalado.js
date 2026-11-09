@@ -11,13 +11,18 @@ import {
   qtdEmbalagensFromVolume,
 } from "@transbordo/lib/format";
 import { calculateFIFOAllocation } from "@transbordo/lib/fifo";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import {
+  getDominantLote,
+  mergeComposicao,
+} from "@transbordo/lib/vasilhameComposicao";
 import { entities } from "@transbordo/services/entities";
+import { relinkSaidasVasilhameIds } from "@transbordo/lib/vasilhameSaidaLink";
 import {
   isDestinoEstoqueEmbalado,
   isVasilhameLegadoEmbalado,
   buildPlacaEmbalagens,
   getQuantidadeEmbalagensFromVasilhame,
+  getVolumePorEmbalagemFromVasilhame,
   VOLUME_PADRAO_EMBALAGEM,
 } from "@transbordo/lib/tiposEmbalagem";
 
@@ -150,7 +155,14 @@ export function buildEstoqueEmbaladoFromDestino({
     data_fabricacao:
       origemEstoque?.data_fabricacao || origemLote?.data_fabricacao || null,
     data_validade:
-      origemEstoque?.data_validade || origemLote?.data_validade || null,
+      origemLote?.validade_indeterminada ||
+      origemEstoque?.lotes?.[0]?.validade_indeterminada
+        ? null
+        : origemEstoque?.data_validade || origemLote?.data_validade || null,
+    validade_indeterminada: !!(
+      origemLote?.validade_indeterminada ||
+      origemEstoque?.lotes?.[0]?.validade_indeterminada
+    ),
     preco_unitario: preco,
     produto_id: nullIfEmpty(payload.produto_id) || origemEstoque?.produto_id,
     produto_nome: payload.produto_nome || origemEstoque?.produto_nome || "",
@@ -190,8 +202,18 @@ export function buildEstoqueEmbaladoFromDestino({
     data_fabricacao: nullIfEmpty(
       origemEstoque?.data_fabricacao || origemLote?.data_fabricacao
     ),
-    data_validade: nullIfEmpty(
-      origemEstoque?.data_validade || origemLote?.data_validade
+    data_validade:
+      origemLote?.validade_indeterminada ||
+      origemEstoque?.validade_indeterminada ||
+      origemEstoque?.lotes?.[0]?.validade_indeterminada
+        ? null
+        : nullIfEmpty(
+            origemEstoque?.data_validade || origemLote?.data_validade
+          ),
+    validade_indeterminada: !!(
+      origemLote?.validade_indeterminada ||
+      origemEstoque?.validade_indeterminada ||
+      origemEstoque?.lotes?.[0]?.validade_indeterminada
     ),
     saldo_inicial: pesoTotal,
     quantidade: pesoTotal,
@@ -437,6 +459,271 @@ export async function migrateEstoqueEmbaladoParaVasilhames() {
     migrated: toCreate.length,
     deletedEstoque: toDeleteIds.length,
   };
+}
+
+/**
+ * Mescla N registros unitários do mesmo tipo em 1 linha agregada
+ * (ex.: 3× "01 x Bombonas" → "03 x Bombonas de 200 L").
+ */
+export function consolidateUnitarioVasilhameRecords(records = []) {
+  const others = [];
+  const byTipo = new Map();
+
+  for (const row of records || []) {
+    if (!isDestinoEstoqueEmbalado(row?.tipo || "")) {
+      others.push(row);
+      continue;
+    }
+    const key = String(row.tipo || "").trim();
+    if (!key) {
+      others.push(row);
+      continue;
+    }
+
+    const existing = byTipo.get(key);
+    if (!existing) {
+      byTipo.set(key, {
+        ...row,
+        composicao: Array.isArray(row.composicao) ? [...row.composicao] : [],
+      });
+      continue;
+    }
+
+    const qtdAcc = getQuantidadeEmbalagensFromVasilhame(existing);
+    const qtdAdd = getQuantidadeEmbalagensFromVasilhame(row);
+    const qtdNova = Math.max(0, qtdAcc) + Math.max(0, qtdAdd);
+    const volNova = roundVolume((existing.volume || 0) + (row.volume || 0));
+    const pesoNova = roundMass(
+      (existing.peso_liquido || 0) + (row.peso_liquido || 0)
+    );
+    const volPorEmb =
+      getVolumePorEmbalagemFromVasilhame(existing) ||
+      getVolumePorEmbalagemFromVasilhame(row) ||
+      VOLUME_PADRAO_EMBALAGEM[existing.tipo] ||
+      0;
+    const composicaoMerged = mergeComposicao(
+      existing.composicao,
+      row.composicao || []
+    );
+    const composicao =
+      composicaoMerged.length > 0
+        ? composicaoMerged.map((c, i) =>
+            i === 0
+              ? {
+                  ...c,
+                  quantidade_embalagens: qtdNova,
+                  volume_por_embalagem: volPorEmb || c.volume_por_embalagem,
+                  quantidade_l: volNova,
+                  quantidade_kg: pesoNova,
+                }
+              : c
+          )
+        : [
+            {
+              lote: existing.lote || row.lote || "",
+              quantidade_l: volNova,
+              quantidade_kg: pesoNova,
+              quantidade_embalagens: qtdNova,
+              volume_por_embalagem: volPorEmb,
+              transbordo_codigo:
+                existing.numero_op || existing.codigo || row.numero_op || "",
+              data: null,
+            },
+          ];
+
+    byTipo.set(key, {
+      ...existing,
+      volume: volNova,
+      peso_liquido: pesoNova,
+      peso_bruto: roundMass((existing.tara || 0) + pesoNova),
+      placa: buildPlacaEmbalagens(qtdNova || 1, existing.tipo),
+      composicao,
+      lote: getDominantLote(composicao) || existing.lote || row.lote || "",
+      barril: "",
+    });
+  }
+
+  return [...others, ...byTipo.values()];
+}
+
+function opKeyOfUnitario(v) {
+  return (
+    v?.transbordo_id ||
+    String(v?.numero_op || "").trim() ||
+    String(v?.codigo || "").trim() ||
+    ""
+  );
+}
+
+function statusKeyOfUnitario(v) {
+  const status = (v?.status || "No Pátio").trim() || "No Pátio";
+  const dataSaida = v?.data_saida ? String(v.data_saida).slice(0, 10) : "";
+  // Expedidos no mesmo dia do mesmo OP unificam juntos; No Pátio sem data_saida.
+  return `${status}|${dataSaida}`;
+}
+
+/**
+ * Volume/peso efetivos para consolidação (Expedido com volume zerado
+ * usa composição ou qtd × volume por embalagem).
+ */
+function unitarioTotalsForMerge(v) {
+  let volume = roundVolume(v?.volume || 0);
+  let peso = roundMass(v?.peso_liquido || 0);
+  const qtd = Math.max(1, getQuantidadeEmbalagensFromVasilhame(v) || 1);
+  const volPorEmb =
+    getVolumePorEmbalagemFromVasilhame(v) ||
+    VOLUME_PADRAO_EMBALAGEM[v?.tipo] ||
+    0;
+
+  if (volume <= 0) {
+    const fromComp = (v?.composicao || []).reduce(
+      (s, c) => s + (Number(c.quantidade_l) || 0),
+      0
+    );
+    if (fromComp > 0) volume = roundVolume(fromComp);
+    else if (volPorEmb > 0) volume = roundVolume(qtd * volPorEmb);
+  }
+  if (peso <= 0) {
+    const fromComp = (v?.composicao || []).reduce(
+      (s, c) => s + (Number(c.quantidade_kg) || 0),
+      0
+    );
+    if (fromComp > 0) peso = roundMass(fromComp);
+    else {
+      const dens = parseDensidade(v?.densidade);
+      if (dens > 0 && volume > 0) peso = roundMass(volume * dens);
+    }
+  }
+
+  return {
+    ...v,
+    volume,
+    peso_liquido: peso,
+    peso_bruto: roundMass((Number(v?.tara) || 0) + peso),
+    composicao:
+      Array.isArray(v?.composicao) && v.composicao.length > 0
+        ? v.composicao.map((c, i) =>
+            i === 0
+              ? {
+                  ...c,
+                  quantidade_embalagens:
+                    Number(c.quantidade_embalagens) > 0
+                      ? c.quantidade_embalagens
+                      : qtd,
+                  volume_por_embalagem:
+                    Number(c.volume_por_embalagem) > 0
+                      ? c.volume_por_embalagem
+                      : volPorEmb,
+                  quantidade_l: Number(c.quantidade_l) > 0 ? c.quantidade_l : volume,
+                  quantidade_kg:
+                    Number(c.quantidade_kg) > 0 ? c.quantidade_kg : peso,
+                }
+              : c
+          )
+        : [
+            {
+              lote: v?.lote || "",
+              quantidade_l: volume,
+              quantidade_kg: peso,
+              quantidade_embalagens: qtd,
+              volume_por_embalagem: volPorEmb,
+              transbordo_codigo: v?.numero_op || v?.codigo || "",
+              data: null,
+            },
+          ],
+  };
+}
+
+/**
+ * Consolida no banco bombonas/IBC/tambores duplicados do mesmo OP + tipo
+ * (No Pátio e Expedido). Legado: N linhas "01 x …" → 1 linha "0N x …".
+ */
+export async function consolidateUnitarioVasilhamesDuplicados() {
+  const list = await entities.vasilhames.list();
+  const candidatos = (list || []).filter((v) =>
+    isDestinoEstoqueEmbalado(v.tipo || "")
+  );
+
+  const groups = new Map();
+  for (const v of candidatos) {
+    const op = opKeyOfUnitario(v);
+    if (!op) continue;
+    const key = `${op}|${String(v.tipo || "").trim()}|${statusKeyOfUnitario(v)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(v);
+  }
+
+  let mergedGroups = 0;
+  let deleted = 0;
+  const replacements = [];
+  const details = [];
+
+  for (const [, group] of groups) {
+    if (group.length <= 1) continue;
+
+    const sorted = [...group].sort((a, b) => {
+      const da = new Date(a.created_at || a.created_date || 0).getTime();
+      const db = new Date(b.created_at || b.created_date || 0).getTime();
+      if (da !== db) return da - db;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const [primary, ...others] = sorted;
+    const prepared = sorted.map(unitarioTotalsForMerge);
+    const consolidated = consolidateUnitarioVasilhameRecords(prepared)[0];
+    if (!consolidated) continue;
+
+    const qtd = getQuantidadeEmbalagensFromVasilhame(consolidated);
+    const volPorEmb = getVolumePorEmbalagemFromVasilhame(consolidated);
+    const status = primary.status || "No Pátio";
+    const dataSaida =
+      primary.data_saida ||
+      others.find((o) => o.data_saida)?.data_saida ||
+      null;
+
+    await entities.vasilhames.update(primary.id, {
+      volume: consolidated.volume,
+      peso_liquido: consolidated.peso_liquido,
+      peso_bruto: consolidated.peso_bruto,
+      placa: buildPlacaEmbalagens(qtd || 1, primary.tipo),
+      barril: "",
+      lote: consolidated.lote || primary.lote || "",
+      status,
+      data_saida: dataSaida,
+      composicao: (consolidated.composicao || []).map((c, i) =>
+        i === 0
+          ? {
+              ...c,
+              quantidade_embalagens: qtd,
+              volume_por_embalagem: volPorEmb || c.volume_por_embalagem,
+              quantidade_l: consolidated.volume,
+              quantidade_kg: consolidated.peso_liquido,
+            }
+          : c
+      ),
+    });
+
+    for (const o of others) {
+      replacements.push({ from: o.id, to: primary.id });
+      await entities.vasilhames.delete(o.id);
+      deleted += 1;
+    }
+    mergedGroups += 1;
+    details.push({
+      keepId: primary.id,
+      op: opKeyOfUnitario(primary),
+      tipo: primary.tipo,
+      status,
+      qtd,
+      volume: consolidated.volume,
+      removed: others.length,
+    });
+  }
+
+  if (replacements.length > 0) {
+    await relinkSaidasVasilhameIds(replacements);
+  }
+
+  return { mergedGroups, deleted, details };
 }
 
 /**

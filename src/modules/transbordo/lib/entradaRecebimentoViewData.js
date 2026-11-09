@@ -362,7 +362,9 @@ export function buildEntradaRecebimentoViewModel({
     qualidadeRows: lotes.map((l) => ({
       lote: l.lote || "-",
       fabricacao: formatDateEntrada(l.data_fabricacao),
-      validade: formatDateEntrada(l.data_validade),
+      validade: l.validade_indeterminada
+        ? "Indeterminado"
+        : formatDateEntrada(l.data_validade),
       densidade: formatDensidade(resolveDensidade(l, produtosById)),
     })),
     pesagem: hasPesagem

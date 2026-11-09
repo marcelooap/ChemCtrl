@@ -5,7 +5,23 @@ import { Switch } from "@shared/components/ui/switch";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { formatVolume, formatMass, formatNum, roundVolume, roundMass, roundQuantidade } from "@transbordo/lib/format";
+import {
+  formatVolume,
+  formatMass,
+  formatNum,
+  parseDensidade,
+  roundVolume,
+  roundMass,
+  roundQuantidade,
+} from "@transbordo/lib/format";
+
+/** Massa líquida fiscal: volume × densidade declarada (evita +1 kg de arredondamento por lote). */
+function massaLiquidaFiscal(vasilhame, volumeL) {
+  const vol = roundVolume(volumeL);
+  const dens = parseDensidade(vasilhame?.densidade);
+  if (dens > 0 && vol > 0) return roundMass(vol * dens);
+  return roundMass(vasilhame?.peso_liquido || 0);
+}
 import { getEstoqueUnidade } from "@transbordo/lib/estoqueSaldo";
 import {
   isDestinoEmbalagemUnitaria,
@@ -765,6 +781,8 @@ export default function SaidaItemRow({
   const handleVasilhameChange = (_label, option) => {
     if (!option) return;
     const volumeAtual = option.volume || 0;
+    const pesoLiq = massaLiquidaFiscal(option, volumeAtual);
+    const tara = roundMass(option.tara || 0);
     const unitario = isDestinoEmbalagemUnitaria(option.tipo);
     const qtdEmb = getQuantidadeEmbalagensFromVasilhame(option);
     onChange({
@@ -776,8 +794,9 @@ export default function SaidaItemRow({
       produto_nome: option.produto_nome || "",
       produto_codigo: option.produto_codigo || "",
       lote: option.lote || "",
-      peso_liquido: option.peso_liquido || 0,
-      peso_bruto: option.peso_bruto || 0,
+      peso_liquido: pesoLiq,
+      quantidade_solicitada: pesoLiq,
+      peso_bruto: roundMass(tara + pesoLiq),
       volume_solicitado: volumeAtual,
       tipo_embalagem: option.tipo || "",
       quantidade_embalagens: unitario ? qtdEmb : 0,
@@ -789,7 +808,8 @@ export default function SaidaItemRow({
 
   const handleQtdEmbalagensSaida = (qtd) => {
     if (!selectedVasilhame) return;
-    const qtdN = Math.max(0, Math.round(Number(qtd) || 0));
+    const maxQtd = qtdEmbDisponivel > 0 ? qtdEmbDisponivel : Infinity;
+    const qtdN = Math.max(0, Math.min(maxQtd, Math.round(Number(qtd) || 0)));
     const volPorEmb =
       getVolumePorEmbalagemFromVasilhame(selectedVasilhame) ||
       (qtdEmbDisponivel > 0
@@ -815,6 +835,7 @@ export default function SaidaItemRow({
       volume_solicitado: volSolicitado,
       peso_liquido: pesoLiq,
       peso_bruto: roundMass(tara + pesoLiq),
+      quantidade_solicitada: pesoLiq,
     });
   };
 
@@ -859,7 +880,8 @@ export default function SaidaItemRow({
 
   const handleQtdIndEmbalagens = (qtd) => {
     if (!selectedContainer) return;
-    const qtdN = Math.max(0, Math.round(Number(qtd) || 0));
+    const maxQtd = qtdIndEmb > 0 ? qtdIndEmb : Infinity;
+    const qtdN = Math.max(0, Math.min(maxQtd, Math.round(Number(qtd) || 0)));
     const volPorEmb =
       getUnitPackagingCapacity(selectedContainer.type) ||
       (qtdIndEmb > 0
@@ -889,6 +911,20 @@ export default function SaidaItemRow({
     });
   };
 
+  const handleQtdEmbalagensUnificado = (qtd) => {
+    if (item.tipo === TIPO_IND_VASILHAME) {
+      handleQtdIndEmbalagens(qtd);
+      return;
+    }
+    handleQtdEmbalagensSaida(qtd);
+  };
+
+  const isUnificadoUnitario =
+    (item.tipo === TIPO_CONVENCIONAL && isUnitarioSelecionado) ||
+    (item.tipo === TIPO_IND_VASILHAME && isIndUnitario);
+  const qtdEmbUnificadoMax =
+    item.tipo === TIPO_IND_VASILHAME ? qtdIndEmb : qtdEmbDisponivel;
+
   const handleProdutoVasilhameUnificadoChange = (_label, option) => {
     if (!option) return;
     if (produtoNomeKey(item.produto_nome) === produtoNomeKey(option.nome)) return;
@@ -907,6 +943,8 @@ export default function SaidaItemRow({
     if (option.source === ORIGEM_TRANSBORDO) {
       const v = option.raw;
       const volumeAtual = v.volume || 0;
+      const pesoLiq = massaLiquidaFiscal(v, volumeAtual);
+      const tara = roundMass(v.tara || 0);
       const unitario = isDestinoEmbalagemUnitaria(v.tipo);
       const qtdEmb = getQuantidadeEmbalagensFromVasilhame(v);
       onChange({
@@ -920,9 +958,10 @@ export default function SaidaItemRow({
         produto_nome: v.produto_nome || "",
         produto_codigo: v.produto_codigo || "",
         lote: v.lote || "",
-        peso_liquido: v.peso_liquido || 0,
-        peso_bruto: v.peso_bruto || 0,
+        peso_liquido: pesoLiq,
+        peso_bruto: roundMass(tara + pesoLiq),
         volume_solicitado: volumeAtual,
+        quantidade_solicitada: pesoLiq,
         tipo_embalagem: v.tipo || "",
         quantidade_embalagens: unitario ? qtdEmb : 0,
         volume_por_embalagem: unitario ? getVolumePorEmbalagemFromVasilhame(v) : 0,
@@ -1407,6 +1446,34 @@ export default function SaidaItemRow({
                       className="bg-card font-medium"
                     />
                   </div>
+                  {isUnificadoUnitario && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label>
+                          Qtd. Embalagens *
+                          {qtdEmbUnificadoMax > 0
+                            ? ` (máx. ${qtdEmbUnificadoMax})`
+                            : ""}
+                        </Label>
+                        <NumberInputBr
+                          decimals={0}
+                          value={item.quantidade_embalagens || ""}
+                          onChange={(v) =>
+                            handleQtdEmbalagensUnificado(v === "" ? 0 : v)
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Volume Solicitado (L)</Label>
+                        <Input
+                          value={formatVolume(item.volume_solicitado || 0)}
+                          disabled
+                          className="bg-card font-medium"
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               {hasCliente && produtosVasilhameUnificados.length === 0 && (
@@ -1483,6 +1550,34 @@ export default function SaidaItemRow({
                   className="bg-card font-medium"
                 />
               </div>
+              {isUnitarioSelecionado && item.vasilhame_id && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>
+                      Qtd. Embalagens *
+                      {qtdEmbDisponivel > 0
+                        ? ` (máx. ${qtdEmbDisponivel})`
+                        : ""}
+                    </Label>
+                    <NumberInputBr
+                      decimals={0}
+                      value={item.quantidade_embalagens || ""}
+                      onChange={(v) =>
+                        handleQtdEmbalagensSaida(v === "" ? 0 : v)
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Volume Solicitado (L)</Label>
+                    <Input
+                      value={formatVolume(item.volume_solicitado || 0)}
+                      disabled
+                      className="bg-card font-medium"
+                    />
+                  </div>
+                </>
+              )}
               {hasCliente && produtosVasilhame.length === 0 && (
                 <p className="col-span-3 text-xs text-muted-foreground">
                   Nenhum produto com tanque disponível no pátio para este cliente.
@@ -1526,6 +1621,32 @@ export default function SaidaItemRow({
                   className="bg-card font-medium"
                 />
               </div>
+              {isIndUnitario && item.container_id && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>
+                      Qtd. Embalagens *
+                      {qtdIndEmb > 0 ? ` (máx. ${qtdIndEmb})` : ""}
+                    </Label>
+                    <NumberInputBr
+                      decimals={0}
+                      value={item.quantidade_embalagens || ""}
+                      onChange={(v) =>
+                        handleQtdIndEmbalagens(v === "" ? 0 : v)
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Volume Solicitado (L)</Label>
+                    <Input
+                      value={formatVolume(item.volume_solicitado || 0)}
+                      disabled
+                      className="bg-card font-medium"
+                    />
+                  </div>
+                </>
+              )}
               {hasCliente && containersDisponiveis.length === 0 && (
                 <p className="col-span-3 text-xs text-muted-foreground">
                   {containersInd.length === 0

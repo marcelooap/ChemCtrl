@@ -21,7 +21,6 @@ import {
 import { saldoKgToLitros } from "@transbordo/lib/conversao";
 import {
   isEstoqueEmbalado,
-  isUnidadeMassaEntrada,
   normalizeUnidadeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
 
@@ -143,46 +142,39 @@ export default function OrigemCard({
 
   const saldoDisponivel =
     selectedSource?.saldo_atual ?? origem.saldo_disponivel ?? 0;
-  const unidadeMedida =
-    (isEmbaladoOrigem
-      ? selectedSource?.unidade_medida ||
-        origem.unidade_medida ||
-        "kg"
-      : selectedSource?.unidade_medida || "L") || "L";
+  // Unidade do estoque (persistência). UI operacional de embalado é sempre L.
+  const unidadeEntrada =
+    selectedSource?.unidade_medida ||
+    origem.unidade_medida ||
+    (isEmbaladoOrigem ? "kg" : "L");
+  const densOk = Number(densidade) > 0;
+  const faltaDensidadeEmbalado = isEmbaladoOrigem && !densOk;
+  // Embalado: quantidade sempre em L (igual aos demais tipos).
+  const unidadeMedida = isEmbaladoOrigem
+    ? "L"
+    : selectedSource?.unidade_medida || "L";
   const unidadeLabel = labelUnidade(unidadeMedida);
-  const keepEntryUom = isEmbaladoOrigem;
   const volumeRetirado = roundVolume(
     isMultiLote
       ? lotesRetirados.reduce((s, l) => s + (l.volume_retirado || 0), 0)
       : origem.volume_retirado || 0
   );
 
-  const massaRetirada = (() => {
-    if (keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)) {
-      const um = normalizeUnidadeEntrada(unidadeMedida);
-      return um === "lb"
-        ? roundMass(volumeRetirado * 0.453592)
-        : roundMass(volumeRetirado);
-    }
-    return roundMass(volumeRetirado * densidade);
-  })();
+  const massaRetirada = densOk
+    ? roundMass(volumeRetirado * densidade)
+    : roundMass(origem.massa_retirada || 0);
 
-  // Embalado: saldo e retirada na UOM da entrada (sem kg→L)
-  const saldoOperacional =
-    keepEntryUom
-      ? Math.round(Number(saldoDisponivel) || 0)
-      : unidadeMedida === "kg" && densidade > 0
-        ? saldoKgToLitros(saldoDisponivel, densidade, selectedSource)
-        : roundVolume(saldoDisponivel);
+  // Opções já chegam em L (adjustOptionsForOrigem). Sem densidade no embalado, saldo 0.
+  const saldoOperacional = faltaDensidadeEmbalado
+    ? 0
+    : unidadeMedida === "kg" && densOk
+      ? saldoKgToLitros(saldoDisponivel, densidade, selectedSource)
+      : roundVolume(saldoDisponivel);
 
   const saldoRestanteOp = Math.max(0, saldoOperacional - volumeRetirado);
-  const saldoRestanteKg = keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
-    ? roundMass(
-        normalizeUnidadeEntrada(unidadeMedida) === "lb"
-          ? saldoRestanteOp * 0.453592
-          : saldoRestanteOp
-      )
-    : roundMass(saldoRestanteOp * densidade);
+  const saldoRestanteKg = densOk
+    ? roundMass(saldoRestanteOp * densidade)
+    : 0;
 
   const handleTipoChange = (label, item) => {
     onChange({
@@ -205,11 +197,13 @@ export default function OrigemCard({
   const handleSourceChange = (label, item) => {
     if (item) {
       const emb = isEstoqueEmbalado(item) || tipoOrigem === "embalado";
+      // Preserva UOM do estoque (kg/lb) para persistência; saldo da opção já vem em L.
       const unid = item.unidade_medida || (emb ? "kg" : "L");
       const saldo = item.saldo_atual || 0;
-      const saldoOp = emb
-        ? Math.round(Number(saldo) || 0)
-        : unid === "kg" && densidade > 0
+      const semDens = emb && !(Number(densidade) > 0);
+      const saldoOp = semDens
+        ? 0
+        : unid === "kg" && !emb && densidade > 0
           ? saldoKgToLitros(saldo, densidade, item)
           : roundVolume(saldo);
       const lotes = item.lotes_disponiveis || [];
@@ -234,19 +228,14 @@ export default function OrigemCard({
 
   const handleVolumeChange = (val) => {
     const v = roundVolume(val);
-    const massa =
-      keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
-        ? normalizeUnidadeEntrada(unidadeMedida) === "lb"
-          ? roundMass(v * 0.453592)
-          : roundMass(v)
-        : roundMass(v * densidade);
+    const massa = densOk ? roundMass(v * densidade) : 0;
     onChange({
       ...origem,
       volume_retirado: v,
       massa_retirada: massa,
       saldo_restante: Math.max(0, saldoOperacional - v),
-      unidade_medida: unidadeMedida,
-      embalado: keepEntryUom,
+      unidade_medida: unidadeEntrada,
+      embalado: isEmbaladoOrigem,
       lotes_retirados: undefined,
     });
   };
@@ -260,10 +249,7 @@ export default function OrigemCard({
       next.reduce((s, l) => s + (l.volume_retirado || 0), 0)
     );
     const firstWithVol = next.find((l) => (l.volume_retirado || 0) > 0);
-    const massa =
-      keepEntryUom && isUnidadeMassaEntrada(unidadeMedida)
-        ? roundMass(total)
-        : roundMass(total * densidade);
+    const massa = densOk ? roundMass(total * densidade) : 0;
     onChange({
       ...origem,
       lotes_disponiveis: lotesDisponiveis,
@@ -272,8 +258,8 @@ export default function OrigemCard({
       massa_retirada: massa,
       lote: firstWithVol?.lote || next[0]?.lote || origem.lote || "",
       saldo_restante: Math.max(0, saldoOperacional - total),
-      unidade_medida: unidadeMedida,
-      embalado: keepEntryUom,
+      unidade_medida: unidadeEntrada,
+      embalado: isEmbaladoOrigem,
     });
   };
 
@@ -431,7 +417,7 @@ export default function OrigemCard({
                   value={l.volume_retirado || ""}
                   onChange={(v) => handleLoteVolumeChange(i, v)}
                   placeholder="0"
-                  disabled={origemLocked}
+                  disabled={origemLocked || faltaDensidadeEmbalado}
                   className="bg-white"
                 />
                 {excedeu && (
@@ -623,7 +609,7 @@ export default function OrigemCard({
           min={0}
           value={origem.volume_retirado ?? ""}
           onChange={(v) => handleVolumeChange(v)}
-          disabled={origemLocked}
+          disabled={origemLocked || faltaDensidadeEmbalado}
           className="bg-white font-medium text-primary"
         />
       </div>
@@ -635,16 +621,14 @@ export default function OrigemCard({
           className="bg-card font-medium text-green-600"
         />
       </div>
-      {!keepEntryUom || !isUnidadeMassaEntrada(unidadeMedida) ? (
-        <div className="space-y-1.5">
-          <Label>Massa Correspondente (kg)</Label>
-          <Input
-            value={formatMass(massaRetirada)}
-            disabled
-            className="bg-card font-medium"
-          />
-        </div>
-      ) : null}
+      <div className="space-y-1.5">
+        <Label>Massa Correspondente (kg)</Label>
+        <Input
+          value={formatMass(massaRetirada)}
+          disabled
+          className="bg-card font-medium"
+        />
+      </div>
     </div>
   );
 
@@ -715,7 +699,7 @@ export default function OrigemCard({
                 value={origem.volume_retirado || ""}
                 onChange={(v) => handleVolumeChange(v)}
                 placeholder="0"
-                disabled={origemLocked}
+                disabled={origemLocked || faltaDensidadeEmbalado}
                 className="bg-white"
               />
               {(excedeuSaldo || excedeuLote) && (
@@ -728,16 +712,14 @@ export default function OrigemCard({
           </>
         )}
 
-        {(!keepEntryUom || !isUnidadeMassaEntrada(unidadeMedida)) && (
-          <div className="space-y-1.5">
-            <Label>Massa Correspondente (kg)</Label>
-            <Input
-              value={formatMass(massaRetirada)}
-              disabled
-              className="bg-card font-medium"
-            />
-          </div>
-        )}
+        <div className="space-y-1.5">
+          <Label>Massa Correspondente (kg)</Label>
+          <Input
+            value={formatMass(massaRetirada)}
+            disabled
+            className="bg-card font-medium"
+          />
+        </div>
       </div>
       {!isMultiLote && (
         <div className="flex items-center gap-4 text-xs">
@@ -747,11 +729,12 @@ export default function OrigemCard({
               {formatQtd(saldoRestanteOp, unidadeMedida)} {unidadeLabel}
             </span>
           </span>
-          {!keepEntryUom && unidadeMedida !== "L" && (
+          {isEmbaladoOrigem && densOk && (
             <span className="text-muted-foreground">
               /{" "}
               <span className="font-medium text-green-700">
-                {formatMass(saldoRestanteKg)} {unidadeMedida}
+                {formatMass(saldoRestanteKg)}{" "}
+                {labelUnidade(unidadeEntrada)}
               </span>
             </span>
           )}
@@ -763,6 +746,16 @@ export default function OrigemCard({
   return (
     <div className="rounded-xl border-2 border-primary/25 bg-card p-5 space-y-4 shadow-sm ring-1 ring-primary/5">
       {origemHeaderExpanded}
+      {faltaDensidadeEmbalado && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            Produto embalado sem densidade cadastrada. Cadastre a densidade do
+            produto para informar a quantidade em litros (L) e registrar o
+            transbordo.
+          </p>
+        </div>
+      )}
       {fieldsLocked}
       {fieldsNormal}
       {destinosSection}

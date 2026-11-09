@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { entities } from '@transbordo/services/entities';
 import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
-import { Plus, Search, Eye, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, RefreshCw, Truck } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
@@ -16,8 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@shared/components/ui/alert-dialog";
+import { useToast } from "@shared/components/ui/use-toast";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import SaidaViewDialog from "@transbordo/components/saida/SaidaViewDialog";
+import AgendamentoTransporteModal from "@painel/components/comercial/AgendamentoTransporteModal";
 import { formatMass } from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
@@ -36,6 +39,8 @@ import {
   canExcluirSaidaNoModuloOperacional,
   isSaidaValidadaNoModulo,
   saidaTemItemPendenteNoModulo,
+  calcSaidaQuantidadeTotal,
+  isSaidaCargaVazia,
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
   TIPO_EMBALADO,
@@ -48,6 +53,8 @@ import {
 import {
   findAgendamentoDisplayBySaida,
   formatSlotRef,
+  hasTransporte,
+  updateTransporte,
 } from "@painel/lib/agendamentosCarregamento";
 import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConfig";
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
@@ -71,7 +78,32 @@ const STATUS_OPTIONS_EXPEDICAO = [
   { value: "expedido", label: "Expedido" },
 ];
 
+const STATUS_OPTIONS_AGENDAMENTO = [
+  { value: "all", label: "Todos" },
+  { value: "pendente", label: "Pendente" },
+  { value: "agendado", label: "Agendado" },
+];
+
+const STATUS_OPTIONS_TRANSPORTE = [
+  { value: "all", label: "Todos" },
+  { value: "pendente", label: "Pendente" },
+  { value: "registrado", label: "Registrado" },
+];
+
 const DEFAULT_BASE_PATH = "/chemflow/saida";
+
+/** Ordena pelo código da saída (S001, S012…) — maior ID primeiro. */
+function compareSaidaCodigoDesc(a, b) {
+  const parse = (value) => {
+    const text = String(value || "").trim();
+    const digits = text.replace(/\D+/g, "");
+    if (digits) return Number(digits);
+    return Number.NEGATIVE_INFINITY;
+  };
+  const diff = parse(b?.codigo) - parse(a?.codigo);
+  if (diff !== 0) return diff;
+  return String(b?.codigo || "").localeCompare(String(a?.codigo || ""), "pt-BR");
+}
 
 /**
  * Tela de listagem de saídas.
@@ -89,6 +121,8 @@ export default function Saida({
   statusMode = "validacao",
 } = {}) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const { user } = useAuth();
   const { isNew, markAsRead, saidasRevision } = useSaidaNovas();
   const isExpedicao = statusMode === "expedicao";
@@ -111,15 +145,19 @@ export default function Saida({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
+  const [agendamentoFilter, setAgendamentoFilter] = useState("");
+  const [transporteFilter, setTransporteFilter] = useState("");
   const [deleteId, setDeleteId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const listScrollRef = useRef(null);
   const [viewSaida, setViewSaida] = useState(null);
+  const [transporteBooking, setTransporteBooking] = useState(null);
   const [fiscalConfirm, setFiscalConfirm] = useState(null); // { saida, enviar: boolean }
   const [fiscalBusyId, setFiscalBusyId] = useState(null);
   const [fiscalError, setFiscalError] = useState("");
   const [loading, setLoading] = useState(true);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
+  // Expedição: remove Data Solicitação (-1) e adiciona Transporte (+1) → mantém 11.
   const tableColSpan = isExpedicao ? 11 : 10;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -237,38 +275,133 @@ export default function Saida({
   const getExpedicaoStatus = (saida) =>
     isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
 
-  const filtered = saidas.filter((s) => {
-    const q = search.toLowerCase();
-    const matchSearch =
-      !q ||
-      s.codigo?.toLowerCase().includes(q) ||
-      s.cliente_nome?.toLowerCase().includes(q);
+  /** Mesma regra da coluna Validação — não usar só `saida.status`. */
+  const isSaidaValidadaNaLista = (saida) =>
+    isSaidaValidadaNoModulo(saida, operationalModule) &&
+    !saidaTemItemPendenteNoModulo(saida, operationalModule);
 
-    let matchStatus = true;
-    if (statusFilter && statusFilter !== "Todos") {
-      if (isExpedicao) {
-        const status = getExpedicaoStatus(s);
-        matchStatus =
-          (statusFilter === "Aguardando" && status === "aguardando") ||
-          (statusFilter === "Expedido" && status === "expedido");
-      } else {
-        matchStatus =
-          ((statusFilter === "Pendente" || statusFilter === "Aguardando") &&
-            s.status === "aguardando") ||
-          ((statusFilter === "Validado" ||
+  const filtered = useMemo(() => {
+    const rows = saidas.filter((s) => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        s.codigo?.toLowerCase().includes(q) ||
+        s.cliente_nome?.toLowerCase().includes(q);
+
+      let matchStatus = true;
+      if (
+        statusFilter &&
+        statusFilter !== "Todos" &&
+        statusFilter !== "all"
+      ) {
+        if (isExpedicao) {
+          const status = getExpedicaoStatus(s);
+          const wantAguardando =
+            statusFilter === "Aguardando" || statusFilter === "aguardando";
+          const wantExpedido =
+            statusFilter === "Expedido" || statusFilter === "expedido";
+          matchStatus =
+            (wantAguardando && status === "aguardando") ||
+            (wantExpedido && status === "expedido");
+        } else {
+          const isValidated = isSaidaValidadaNaLista(s);
+          const wantPendente =
+            statusFilter === "Pendente" ||
+            statusFilter === "Aguardando" ||
+            statusFilter === "aguardando";
+          const wantValidado =
+            statusFilter === "Validado" ||
             statusFilter === "Enviado" ||
-            statusFilter === "Enviado ao Fiscal") &&
-            s.status === "enviado_fiscal");
+            statusFilter === "Enviado ao Fiscal" ||
+            statusFilter === "enviado_fiscal";
+          matchStatus =
+            (wantPendente && !isValidated) || (wantValidado && isValidated);
+        }
       }
+
+      const matchCliente =
+        !clienteFilter ||
+        clienteFilter === "Todos os clientes" ||
+        clienteFilter === "all" ||
+        s.cliente_nome === clienteFilter;
+
+      let matchAgendamento = true;
+      let matchTransporte = true;
+      if (isExpedicao) {
+        const agendamento = findAgendamentoDisplayBySaida(agendamentos, s.id);
+
+        if (
+          agendamentoFilter &&
+          agendamentoFilter !== "Todos" &&
+          agendamentoFilter !== "all"
+        ) {
+          const wantPendente =
+            agendamentoFilter === "Pendente" ||
+            agendamentoFilter === "pendente";
+          const wantAgendado =
+            agendamentoFilter === "Agendado" ||
+            agendamentoFilter === "agendado";
+          matchAgendamento =
+            (wantPendente && !agendamento) ||
+            (wantAgendado && Boolean(agendamento));
+        }
+
+        if (
+          transporteFilter &&
+          transporteFilter !== "Todos" &&
+          transporteFilter !== "all"
+        ) {
+          const registrado = hasTransporte(agendamento);
+          const wantPendente =
+            transporteFilter === "Pendente" ||
+            transporteFilter === "pendente";
+          const wantRegistrado =
+            transporteFilter === "Registrado" ||
+            transporteFilter === "registrado";
+          matchTransporte =
+            (wantPendente && !registrado) ||
+            (wantRegistrado && registrado);
+        }
+      }
+
+      return (
+        matchSearch &&
+        matchStatus &&
+        matchCliente &&
+        matchAgendamento &&
+        matchTransporte
+      );
+    });
+
+    // Operacional: saídas com tag "Novo" ficam no topo, separadas do restante.
+    // Depois de visualizar/validar, voltam à ordem normal por código (ID).
+    if (!trackNewFromPainel) {
+      return [...rows].sort(compareSaidaCodigoDesc);
     }
 
-    const matchCliente =
-      !clienteFilter ||
-      clienteFilter === "Todos os clientes" ||
-      s.cliente_nome === clienteFilter;
-
-    return matchSearch && matchStatus && matchCliente;
-  });
+    const novas = [];
+    const demais = [];
+    for (const s of rows) {
+      if (isNew(s.id)) novas.push(s);
+      else demais.push(s);
+    }
+    novas.sort(compareSaidaCodigoDesc);
+    demais.sort(compareSaidaCodigoDesc);
+    return [...novas, ...demais];
+  }, [
+    saidas,
+    search,
+    statusFilter,
+    clienteFilter,
+    agendamentoFilter,
+    transporteFilter,
+    agendamentos,
+    isExpedicao,
+    trackNewFromPainel,
+    isNew,
+    expedidasIds,
+    operationalModule,
+  ]);
 
   const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -310,6 +443,7 @@ export default function Saida({
   };
 
   const renderProdutosLabel = (s) => {
+    if (isSaidaCargaVazia(s)) return "Carga vazia";
     const itens = s.itens || [];
     const distinct = new Map();
     for (const item of itens) {
@@ -324,6 +458,30 @@ export default function Saida({
     if (count === 1) return [...distinct.values()][0];
     const text = String(count).padStart(2, "0");
     return `${text} Produtos`;
+  };
+
+  /** Sempre a partir dos itens atuais — não depende de `quantidade_total` desatualizado. */
+  const quantidadeTotalSaida = (s) =>
+    calcSaidaQuantidadeTotal(s?.itens, { vasilhames, transbordos });
+
+  const renderQuantidadeTotal = (s) => {
+    if (isSaidaCargaVazia(s)) return "-";
+    return formatMass(quantidadeTotalSaida(s), { empty: "-" });
+  };
+
+  const handleSaveTransporte = async ({ transportadora, motorista, placa }) => {
+    if (!transporteBooking?.id) return;
+    await updateTransporte({
+      bookings: [transporteBooking],
+      transportadora,
+      motorista,
+      placa,
+      t,
+    });
+    toast({
+      title: t("painel.comercial.agendamentos.transporte.saveSuccess"),
+    });
+    await loadData({ silent: true });
   };
 
   const rememberScroll = () => {
@@ -484,24 +642,14 @@ export default function Saida({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="relative flex-1 min-w-[260px] max-w-md">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por código ou cliente..."
               className="pl-10 bg-card"
-            />
-          </div>
-          <div className="w-48">
-            <SearchableSelect
-              value={statusFilter}
-              onChange={(label) => setStatusFilter(label)}
-              options={statusOptions}
-              getOptionLabel={(o) => o.label}
-              getOptionValue={(o) => o.value}
-              placeholder="Status"
             />
           </div>
           <div className="w-56">
@@ -511,7 +659,45 @@ export default function Saida({
               options={clienteFilterOptions}
               getOptionLabel={(c) => c.nome}
               getOptionValue={(c) => c.id}
-              placeholder="Todos os clientes"
+              placeholder="Cliente"
+              selectOnly
+            />
+          </div>
+          {isExpedicao && (
+            <>
+              <div className="w-44">
+                <SearchableSelect
+                  value={transporteFilter}
+                  onChange={(label) => setTransporteFilter(label)}
+                  options={STATUS_OPTIONS_TRANSPORTE}
+                  getOptionLabel={(o) => o.label}
+                  getOptionValue={(o) => o.value}
+                  placeholder="Transporte"
+                  selectOnly
+                />
+              </div>
+              <div className="w-44">
+                <SearchableSelect
+                  value={agendamentoFilter}
+                  onChange={(label) => setAgendamentoFilter(label)}
+                  options={STATUS_OPTIONS_AGENDAMENTO}
+                  getOptionLabel={(o) => o.label}
+                  getOptionValue={(o) => o.value}
+                  placeholder="Agendamento"
+                  selectOnly
+                />
+              </div>
+            </>
+          )}
+          <div className="w-44">
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(label) => setStatusFilter(label)}
+              options={statusOptions}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder={isExpedicao ? "Carregamento" : "Status"}
+              selectOnly
             />
           </div>
         </div>
@@ -531,14 +717,19 @@ export default function Saida({
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
                 <th className="px-5 py-3 font-medium">ID</th>
                 <th className="px-5 py-3 font-medium">Solicitante</th>
-                <th className="px-5 py-3 font-medium">Data Solicitação</th>
+                {!isExpedicao && (
+                  <th className="px-5 py-3 font-medium">Data Solicitação</th>
+                )}
                 <th className="px-5 py-3 font-medium">Data Programada</th>
                 <th className="px-5 py-3 font-medium">Dias</th>
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Produtos</th>
                 <th className="px-5 py-3 font-medium">Qtd. Total (kg)</th>
                 {isExpedicao && (
-                  <th className="px-5 py-3 font-medium">Agendamento</th>
+                  <>
+                    <th className="px-5 py-3 font-medium">Agendamento</th>
+                    <th className="px-5 py-3 font-medium">Transporte</th>
+                  </>
                 )}
                 <th className="px-5 py-3 font-medium">
                   {isExpedicao ? "Carregamento" : "Validação"}
@@ -567,20 +758,36 @@ export default function Saida({
                   const agendamento = isExpedicao
                     ? findAgendamentoDisplayBySaida(agendamentos, s.id)
                     : null;
+                  const transporteRegistrado =
+                    isExpedicao && hasTransporte(agendamento);
                   const isValidated = isExpedicao
                     ? false
-                    : isSaidaValidadaNoModulo(s, operationalModule) &&
-                      !saidaTemItemPendenteNoModulo(s, operationalModule);
+                    : isSaidaValidadaNaLista(s);
                   const hideDias = isExpedicao
                     ? expedicaoStatus === "expedido"
                     : isValidated;
+                  const isNova = trackNewFromPainel && isNew(s.id);
+                  const next = filtered[i + 1];
+                  const isLastNova =
+                    isNova &&
+                    (!next || !(trackNewFromPainel && isNew(next.id)));
 
                   return (
                   <tr
                     key={s.id}
-                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-opacity duration-150 ${
+                    className={`transition-opacity duration-150 ${
                       removingId === s.id ? "opacity-0" : ""
-                    } ${i % 2 === 1 ? "bg-muted/40/30" : ""}`}
+                    } ${
+                      isNova
+                        ? `bg-primary/[0.06] hover:bg-primary/[0.1] ${
+                            isLastNova
+                              ? "border-b-2 border-primary/25"
+                              : "border-b border-primary/10"
+                          }`
+                        : `border-b border-border last:border-0 hover:bg-muted/40 ${
+                            i % 2 === 1 ? "bg-muted/40/30" : ""
+                          }`
+                    }`}
                   >
                     <td className="px-5 py-3 font-medium text-primary">
                       <span className="inline-flex items-center gap-1.5">
@@ -595,40 +802,83 @@ export default function Saida({
                     <td className="px-5 py-3 text-foreground">
                       {s.usuario_criador || "-"}
                     </td>
+                    {!isExpedicao && (
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {formatDateWithWeekday(s.data_solicitacao)}
+                      </td>
+                    )}
                     <td className="px-5 py-3 text-muted-foreground">
-                      {formatDateWithWeekday(s.data_solicitacao)}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {formatDateWithWeekday(s.data_programada)}
+                      {s.data_programada
+                        ? formatDateWithWeekday(s.data_programada)
+                        : "Aguardando"}
                     </td>
                     <td className="px-5 py-3">
-                      {hideDias ? "-" : renderDias(s.data_programada)}
+                      {hideDias || !s.data_programada
+                        ? "-"
+                        : renderDias(s.data_programada)}
                     </td>
                     <td className="px-5 py-3 text-foreground">{s.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {renderProdutosLabel(s)}
                     </td>
                     <td className="px-5 py-3 font-medium text-foreground">
-                      {formatMass(s.quantidade_total, { empty: "-" })}
+                      {renderQuantidadeTotal(s)}
                     </td>
                     {isExpedicao && (
-                      <td className="px-5 py-3">
-                        {agendamento ? (
-                          <span
-                            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${
-                              agendamento.tipo === 'encaixe' || agendamento.horario === 'encaixe'
-                                ? 'bg-gray-100 text-gray-500 border-gray-300'
-                                : 'bg-green-50 text-green-700 border-green-300'
-                            }`}
-                          >
-                            {formatSlotRef(agendamento)}
+                      <>
+                        <td className="px-5 py-3">
+                          {agendamento ? (
+                            <span
+                              className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${
+                                agendamento.tipo === 'encaixe' || agendamento.horario === 'encaixe'
+                                  ? 'bg-gray-100 text-gray-500 border-gray-300'
+                                  : 'bg-green-50 text-green-700 border-green-300'
+                              }`}
+                            >
+                              {formatSlotRef(agendamento)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-300">
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            {transporteRegistrado ? (
+                              <button
+                                type="button"
+                                onClick={() => setTransporteBooking(agendamento)}
+                                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-green-50 text-green-700 border-green-300 hover:bg-green-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400"
+                                title={t(
+                                  "painel.comercial.agendamentos.transporte.button"
+                                )}
+                              >
+                                Registrado
+                              </button>
+                            ) : (
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-300">
+                                Pendente
+                              </span>
+                            )}
+                            {agendamento && !transporteRegistrado ? (
+                              <button
+                                type="button"
+                                onClick={() => setTransporteBooking(agendamento)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-amber-700 hover:bg-amber-100 hover:text-amber-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                title={t(
+                                  "painel.comercial.agendamentos.transporte.button"
+                                )}
+                                aria-label={t(
+                                  "painel.comercial.agendamentos.transporte.button"
+                                )}
+                              >
+                                <Truck className="w-3.5 h-3.5" />
+                              </button>
+                            ) : null}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-300">
-                            Pendente
-                          </span>
-                        )}
-                      </td>
+                        </td>
+                      </>
                     )}
                     <td className="px-5 py-3">
                       {isExpedicao ? (
@@ -724,7 +974,7 @@ export default function Saida({
             Quantidade total:{" "}
             <span className="font-medium text-foreground">
               {formatMass(
-                filtered.reduce((sum, s) => sum + (s.quantidade_total || 0), 0)
+                filtered.reduce((sum, s) => sum + quantidadeTotalSaida(s), 0)
               )}{" "}
               kg
             </span>
@@ -764,8 +1014,20 @@ export default function Saida({
               row.id === updated.id ? { ...row, ...updated } : row
             )
           );
+          // Atualiza estoque/vasilhames após desvalidação individual.
+          loadData({ silent: true });
         }}
       />
+
+      {isExpedicao ? (
+        <AgendamentoTransporteModal
+          open={!!transporteBooking}
+          onClose={() => setTransporteBooking(null)}
+          booking={transporteBooking}
+          permissionPrefix="painel_comercial_saida"
+          onSave={handleSaveTransporte}
+        />
+      ) : null}
 
       {/* Validação Confirmation (ChemFlow / Industrialização) */}
       {!isExpedicao && (
@@ -783,11 +1045,11 @@ export default function Saida({
               <AlertDialogDescription>
                 {fiscalConfirm?.enviar
                   ? fiscalConfirm?.somentePendentes
-                    ? "Há itens novos nesta saída. A baixa de estoque será feita só neles. Os itens que já foram validados permanecem com o check."
+                    ? "Há itens novos nesta saída. A baixa de estoque será feita só neles. Os itens que já foram validados permanecem com o check de histórico."
                     : "Confirma a validação desta saída?"
                   : isSaidaModuloPainel(fiscalConfirm?.saida)
-                    ? "Os saldos dos produtos deste módulo retornarão para o estoque. Itens de outros módulos não são alterados."
-                    : "Tem certeza que deseja mudar o status dessa saída para Pendente? Lembrando que todos os saldos dos produtos presentes nessa saída retornarão para o estoque."}
+                    ? "Os saldos dos produtos deste módulo retornarão para o estoque. O histórico de validação é preservado. Itens de outros módulos não são alterados."
+                    : "Tem certeza que deseja mudar o status dessa saída para Pendente? Todos os saldos dos produtos retornarão ao estoque. O histórico de validação é preservado."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

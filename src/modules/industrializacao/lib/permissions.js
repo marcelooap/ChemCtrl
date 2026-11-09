@@ -23,8 +23,10 @@ function resolvePermissions(user) {
   const base = Array.isArray(user.permissions) && user.permissions.length > 0
     ? user.permissions
     : getLegacyPermissionsForUser(user);
-  return augmentProgrammingPermissions(
-    augmentLogisticaPermissions(augmentQualityAnalysesPermissions(base))
+  return augmentConfiguracaoPermissions(
+    augmentProgrammingPermissions(
+      augmentLogisticaPermissions(augmentQualityAnalysesPermissions(base))
+    )
   );
 }
 
@@ -59,6 +61,41 @@ export function augmentLogisticaPermissions(permissions) {
     set.add('painel_logistica_recebimento.view');
     set.add('painel_logistica_recebimento.create');
     set.add(SECTION_ACCESS_KEYS.logistica);
+  }
+  return Array.from(set);
+}
+
+/**
+ * Bridge: hub Configuração + novos cadastros herdam acesso de qualquer tela
+ * já liberada no grupo (perfis antigos sem as chaves novas).
+ */
+export function augmentConfiguracaoPermissions(permissions) {
+  const set = new Set(permissions || []);
+  const configViews = [
+    'painel_config_operadores.view',
+    'painel_config_etiquetas.view',
+    'painel_config_checklist_expedicao.view',
+    'painel_config_destino_carregamentos.view',
+    'painel_config_justificativas_atraso.view',
+  ];
+  const hasAnyConfig = configViews.some((k) => set.has(k));
+  if (hasAnyConfig || set.has(SECTION_ACCESS_KEYS.configuracao)) {
+    set.add('painel_configuracao.view');
+  }
+  // Novos cadastros: quem já editava checklist/operadores no grupo recebe acesso.
+  if (
+    set.has('painel_config_operadores.view') ||
+    set.has('painel_config_checklist_expedicao.view') ||
+    set.has(SECTION_ACCESS_KEYS.configuracao)
+  ) {
+    set.add('painel_config_destino_carregamentos.view');
+    set.add('painel_config_destino_carregamentos.create');
+    set.add('painel_config_destino_carregamentos.edit');
+    set.add('painel_config_destino_carregamentos.delete');
+    set.add('painel_config_justificativas_atraso.view');
+    set.add('painel_config_justificativas_atraso.create');
+    set.add('painel_config_justificativas_atraso.edit');
+    set.add('painel_config_justificativas_atraso.delete');
   }
   return Array.from(set);
 }

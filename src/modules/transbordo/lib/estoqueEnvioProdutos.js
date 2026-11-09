@@ -141,7 +141,8 @@ export function collectEstoqueEnvioFontes({
       cliente_id: item?.cliente_id || null,
       embalado: tipoRecebimento === "embalado",
       tipo_recebimento: tipoRecebimento,
-      // Mesmas colunas da tela de Estoque (pátio / tanque / tanka), já na UOM da entrada.
+      // Mesmas colunas da tela de Estoque (pátio/embalado / tanque / tanka).
+      // patio já inclui destinos unitários (bombona/tambor/IBC) do transbordo.
       saldoEmbalado: colunasLivro
         ? Number(locais.patio) || 0
         : tipoRecebimento === "embalado"

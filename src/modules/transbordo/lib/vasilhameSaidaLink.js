@@ -1,5 +1,6 @@
 import { entities } from "@transbordo/services/entities";
 import { sameTanqueIdentity } from "@transbordo/lib/vasilhameComposicao";
+import { isTanqueVazioItem } from "@transbordo/lib/saidaOrigem";
 
 const TIPO_CONVENCIONAL = "convencional";
 
@@ -11,13 +12,14 @@ function isItemConvencional(item) {
  * Vasilhame que a linha da saída deve movimentar.
  * O id gravado na saída deixa de existir quando o transbordo é regravado
  * (os tanques são recriados). Nesse caso a placa/barril localiza o registro atual.
+ * Tanque vazio não está cadastrado em vasilhames — não resolve vínculo.
  */
 export function resolveVasilhameDaSaida(
   item,
   vasilhames = [],
   { preferPatio = true } = {}
 ) {
-  if (!isItemConvencional(item)) return null;
+  if (!isItemConvencional(item) || isTanqueVazioItem(item)) return null;
   const list = vasilhames || [];
   const id = String(item?.vasilhame_id || "").trim();
   if (id) {
@@ -56,6 +58,7 @@ export function alignSaidaItensVasilhames(
   { preferPatio = true } = {}
 ) {
   return (itens || []).map((item) => {
+    if (isTanqueVazioItem(item)) return item;
     const resolved = resolveVasilhameDaSaida(item, vasilhames, { preferPatio });
     if (!resolved) return item;
     if (String(resolved.id) === String(item.vasilhame_id || "")) return item;
@@ -69,7 +72,7 @@ export function alignSaidaItensVasilhames(
 }
 
 export function saidaItemSemVasilhame(item, vasilhames = [], options = {}) {
-  if (!isItemConvencional(item)) return false;
+  if (!isItemConvencional(item) || isTanqueVazioItem(item)) return false;
   if (!item?.vasilhame_id && !item?.vasilhame_placa && !item?.vasilhame_barril) {
     return false;
   }

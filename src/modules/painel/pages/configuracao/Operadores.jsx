@@ -20,6 +20,7 @@ import {
   renameOperadorComHistorico,
   setOperadorAtivo,
 } from '@transbordo/lib/operadoresCadastro';
+import ConfigBackLink from '@painel/components/configuracao/ConfigBackLink';
 import operadoresSql from '@transbordo/sql/025_t_operadores.sql?raw';
 
 export default function Operadores() {
@@ -150,19 +151,22 @@ export default function Operadores() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
-      <div className="shrink-0 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {t('painel.configuracao.operadores.title')}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('painel.configuracao.operadores.subtitle')}
-          </p>
+      <div className="shrink-0 space-y-2">
+        <ConfigBackLink />
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t('painel.configuracao.operadores.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t('painel.configuracao.operadores.subtitle')}
+            </p>
+          </div>
+          <Button onClick={openNew} className="bg-primary hover:bg-primary/90 gap-2">
+            <Plus className="w-4 h-4" />
+            {t('painel.configuracao.operadores.add')}
+          </Button>
         </div>
-        <Button onClick={openNew} className="bg-primary hover:bg-primary/90 gap-2">
-          <Plus className="w-4 h-4" />
-          {t('painel.configuracao.operadores.add')}
-        </Button>
       </div>
 
       {virtualMode && (

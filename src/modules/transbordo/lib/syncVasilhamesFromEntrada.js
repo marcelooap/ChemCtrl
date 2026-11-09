@@ -414,7 +414,10 @@ function buildEstoqueFromLote(lote, entrada, entradaCodigo) {
     lote: lote.lote || "",
     densidade: lote.densidade || "",
     data_fabricacao: nullIfEmpty(lote.data_fabricacao),
-    data_validade: nullIfEmpty(lote.data_validade),
+    data_validade: lote.validade_indeterminada
+      ? null
+      : nullIfEmpty(lote.data_validade),
+    validade_indeterminada: !!lote.validade_indeterminada,
     saldo_inicial: loteQtd,
     quantidade: loteQtd,
     unidade_medida: loteUnidadeEstoque(lote),

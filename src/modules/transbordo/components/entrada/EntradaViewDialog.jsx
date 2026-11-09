@@ -42,6 +42,7 @@ import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
           unidade_medida: entrada.unidade_medida,
           data_fabricacao: entrada.data_fabricacao,
           data_validade: entrada.data_validade,
+          validade_indeterminada: !!entrada.validade_indeterminada,
           densidade: entrada.densidade,
         }];
     const lotesCount = lotes.length;
@@ -191,7 +192,11 @@ import { getQuantidadeNotaFiscal } from "@transbordo/lib/conversao";
                     <tr key={i}>
                       <td className={tdClass}>{l.lote || "-"}</td>
                       <td className={tdClass}>{formatDate(l.data_fabricacao)}</td>
-                      <td className={tdClass}>{formatDate(l.data_validade)}</td>
+                      <td className={tdClass}>
+                        {l.validade_indeterminada
+                          ? "Indeterminado"
+                          : formatDate(l.data_validade)}
+                      </td>
                       <td className={tdClass}>{formatDensidade(l.densidade)}</td>
                     </tr>
                   ))}

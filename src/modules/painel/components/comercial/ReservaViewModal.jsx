@@ -9,6 +9,7 @@ import {
 } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { brasiliaDateTime } from '@industrializacao/lib/brasilTime';
+import { fmtDate } from '@/i18n/formatters';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import {
   formatQty,
@@ -23,7 +24,7 @@ import { useSubmitGuard } from '@shared/hooks/useSubmitGuard';
 import { useToast } from '@shared/components/ui/use-toast';
 
 export default function ReservaViewModal({ open, onClose, row, reservas = [] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const boletaGuard = useSubmitGuard();
 
@@ -61,103 +62,125 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
             <h3 className="text-sm font-semibold text-foreground mb-3">
               {t('painel.comercial.reservarMaterial.productSummary')}
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {isVasilhame ? (
+              <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  {t('painel.comercial.reservarMaterial.vasilhames.columns.id')}:{' '}
+                  <span className="font-mono font-medium text-foreground">{row.displayId || '—'}</span>
+                </span>
+                <span>
+                  {t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}:{' '}
+                  <span className="font-medium text-foreground">
+                    {row.origem === ORIGEM_INDUSTRIALIZACAO
+                      ? t('painel.comercial.reservarMaterial.vasilhames.origem.industrializacao')
+                      : t('painel.comercial.reservarMaterial.vasilhames.origem.transbordo')}
+                  </span>
+                </span>
+                <span>
+                  {t('painel.comercial.reservarMaterial.vasilhames.columns.placa')}:{' '}
+                  <span className="font-mono font-medium text-foreground">{row.placa || '—'}</span>
+                </span>
+                <span>
+                  {t('painel.comercial.reservarMaterial.vasilhames.columns.barril')}:{' '}
+                  <span className="font-mono font-medium text-foreground">{row.barril || '—'}</span>
+                </span>
+                <span>
+                  {t('painel.comercial.reservarMaterial.vasilhames.columns.status')}:{' '}
+                  <span className="font-medium text-foreground">
+                    {row.reservado
+                      ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
+                      : t('painel.comercial.reservarMaterial.vasilhames.status.livre')}
+                  </span>
+                </span>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
               {isVasilhame ? (
                 <>
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.id')}
-                    value={row.displayId}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.origem')}
-                    value={
-                      row.origem === ORIGEM_INDUSTRIALIZACAO
-                        ? t('painel.comercial.reservarMaterial.vasilhames.origem.industrializacao')
-                        : t('painel.comercial.reservarMaterial.vasilhames.origem.transbordo')
-                    }
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.placa')}
-                    value={row.placa}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.barril')}
-                    value={row.barril}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.cliente')}
-                    value={row.clienteNome}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.cod')}
-                    value={row.codigo}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.produto')}
-                    value={row.produto}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.lote')}
-                    value={row.lote}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.volume')}
-                    value={`${formatVolume(row.volume, { empty: '—' })} L`}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
-                    value={`${formatMass(row.massa, { empty: '—' })} kg`}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.vasilhames.columns.status')}
-                    value={
-                      row.reservado
-                        ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
-                        : t('painel.comercial.reservarMaterial.vasilhames.status.livre')
-                    }
-                  />
+                  <div className="space-y-2">
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.produto')}
+                      value={row.produto}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.cliente')}
+                      value={row.clienteNome}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.vasilhames.columns.volume')}
+                      value={`${formatVolume(row.volume, { empty: '—' })} L`}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
+                      value={`${formatMass(row.massa, { empty: '—' })} kg`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.fabricacao')}
+                      value={fmtDate(row.dataFabricacao, undefined, i18n.language)}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.validade')}
+                      value={fmtDate(row.dataValidade, undefined, i18n.language)}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.lote')}
+                      value={row.lote}
+                      mono
+                    />
+                    {row.lacres ? (
+                      <SummaryItem
+                        label={t('painel.comercial.reservarMaterial.columns.lacres')}
+                        value={row.lacres}
+                        mono
+                      />
+                    ) : null}
+                  </div>
                 </>
               ) : (
                 <>
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.cliente')}
-                    value={row.clienteNome}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.cod')}
-                    value={row.codigo}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.produto')}
-                    value={row.produto}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.lote')}
-                    value={row.lote}
-                    mono
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.unidade')}
-                    value={row.unidade}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.saldoAtual')}
-                    value={`${formatQty(row.saldoAtual, row.unidade)} ${row.unidade}`}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.saldoReservado')}
-                    value={`${formatQty(row.saldoReservado, row.unidade)} ${row.unidade}`}
-                  />
-                  <SummaryItem
-                    label={t('painel.comercial.reservarMaterial.columns.saldoFinal')}
-                    value={`${formatQty(row.saldoFinal, row.unidade)} ${row.unidade}`}
-                  />
+                  <div className="space-y-2">
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.produto')}
+                      value={row.produto}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.cliente')}
+                      value={row.clienteNome}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.saldoReservado')}
+                      value={`${formatQty(row.saldoReservado, row.unidade)} ${row.unidade}`}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.saldoAtual')}
+                      value={`${formatQty(row.saldoAtual, row.unidade)} ${row.unidade}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.fabricacao')}
+                      value={fmtDate(row.dataFabricacao, undefined, i18n.language)}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.validade')}
+                      value={fmtDate(row.dataValidade, undefined, i18n.language)}
+                    />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.columns.lote')}
+                      value={row.lote}
+                      mono
+                    />
+                    {row.lacres ? (
+                      <SummaryItem
+                        label={t('painel.comercial.reservarMaterial.columns.lacres')}
+                        value={row.lacres}
+                        mono
+                      />
+                    ) : null}
+                  </div>
                 </>
               )}
             </div>

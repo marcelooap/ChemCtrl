@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS estoque_produtos (
   densidade text,
   data_fabricacao date,
   data_validade date,
+  validade_indeterminada boolean NOT NULL DEFAULT false,
   fornecedor text,
   quantidade numeric NOT NULL DEFAULT 0,
   initial_stock numeric,

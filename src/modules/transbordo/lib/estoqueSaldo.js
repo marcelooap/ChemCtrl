@@ -19,6 +19,7 @@ import { entities } from "@transbordo/services/entities";
 import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
 import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
 import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
+import { isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import {
   EMPTY_PLACA_KEY,
   getTransbordoIndex,
@@ -1794,9 +1795,11 @@ function resolveQuantidadeEstoqueNoVasilhame(
  * Quantidades ainda no pátio, por tipo de armazenamento, na UOM da entrada.
  * Todo vínculo é lastreado pelo id do registro de estoque (FIFO + cadeia + composicao.estoque_id).
  *
- * Embalado (`patio`) só recebe saldo de entrada registrada como embalado que
- * ainda não foi para tanque ou tanka. Envase integral para tanque absorve a
- * fração de arredondamento da massa: o saldo inteiro fica na coluna do tanque.
+ * Embalado (`patio`) recebe:
+ * - entrada registrada como embalado que ainda não foi para tanque/tanka; e
+ * - destinos unitários de transbordo (bombona / tambor / IBC), que continuam
+ *   na tela de Vasilhames mas contabilizam na coluna Embalado do Estoque.
+ * Envase integral para um único local absorve a fração de arredondamento.
  *
  * @param {object} estoqueItem
  * @param {object} deps
@@ -1867,8 +1870,12 @@ export function computeEstoqueQuantidadesPorLocal(
       qtyTankasOp += qtd;
       const key = `${v.tanka_id || v.id || ""}|${normCodigo(v.placa || v.tanka || "")}`;
       tankasContadasViaVasilhame.add(key);
+    } else if (isVasilhameLegadoEmbalado(tipo)) {
+      // Bombona / tambor / IBC: permanecem em Vasilhames, mas no Estoque
+      // entram na coluna Embalado (não em Saldo Tanque).
+      qtyPatioOp += qtd;
     } else {
-      // Tudo que aparece na tela de Vasilhames (Vasilhame, IBC, bombona, tambor…)
+      // Tanque clássico (tipo Vasilhame) → coluna Saldo Tanque
       qtyVasilhamesOp += qtd;
     }
   }
@@ -1890,7 +1897,11 @@ export function computeEstoqueQuantidadesPorLocal(
     if (qtdFifo <= 0) continue;
 
     vasilhamesContados.add(v.id);
-    qtyVasilhamesOp += qtdFifo;
+    if (isVasilhameLegadoEmbalado(d.tipo_embalagem || v.tipo || "")) {
+      qtyPatioOp += qtdFifo;
+    } else {
+      qtyVasilhamesOp += qtdFifo;
+    }
   }
 
   const tankaKeys = new Map();
@@ -1934,27 +1945,27 @@ export function computeEstoqueQuantidadesPorLocal(
   // Volume do tanque em litros não pode aparecer como kg. Quando a quantidade
   // rastreada passa do saldo (ex.: 4.000 L de uma entrada de 3.320 kg), converte
   // pela densidade ou limita ao saldo — o tanque não contém mais do que a entrada.
-  if (!estoqueOperaEmLitros(estoqueItem) && qtyVasilhamesOp > saldoOp + 0.5) {
-    const dens =
-      parseDensidade(
-        estoqueItem?.densidade || estoqueItem?.lotes?.[0]?.densidade
-      ) ||
-      parseDensidade(fifoRows[0]?.densidade) ||
-      parseDensidade(chainRows[0]?.densidade);
-    const kg = dens > 0 && dens < 20 ? roundMass(qtyVasilhamesOp * dens) : 0;
-    if (kg > 0 && kg < qtyVasilhamesOp - 0.5 && kg <= saldoOp + 0.5) {
-      qtyVasilhamesOp = kg;
-    } else {
-      qtyVasilhamesOp = saldoOp;
-    }
-  }
+  const densLocal =
+    parseDensidade(
+      estoqueItem?.densidade || estoqueItem?.lotes?.[0]?.densidade
+    ) ||
+    parseDensidade(fifoRows[0]?.densidade) ||
+    parseDensidade(chainRows[0]?.densidade);
 
-  // Embalado só existe para entrada registrada como embalado.
-  // Envase integral para tanque/tanka: a massa do tanque foi gravada inteira
-  // (roundMass) e a fração do saldo não pode vazar para Embalado.
+  const capQtyMassToSaldo = (qty) => {
+    if (estoqueOperaEmLitros(estoqueItem) || !(qty > saldoOp + 0.5)) return qty;
+    const kg = densLocal > 0 && densLocal < 20 ? roundMass(qty * densLocal) : 0;
+    if (kg > 0 && kg < qty - 0.5 && kg <= saldoOp + 0.5) return kg;
+    return saldoOp;
+  };
+  qtyVasilhamesOp = capQtyMassToSaldo(qtyVasilhamesOp);
+  qtyPatioOp = capQtyMassToSaldo(qtyPatioOp);
+
+  // Embalado = entrada embalada residual + destinos unitários (bombona/tambor/IBC).
+  // Envase integral em um único local absorve a fração de arredondamento.
   const tipoRecebimento = resolveTipoRecebimentoEstoque(estoqueItem);
   const entradaEmbalado = tipoRecebimento === "embalado";
-  const alocado = qtyVasilhamesOp + qtyTankasOp;
+  const alocado = qtyVasilhamesOp + qtyTankasOp + qtyPatioOp;
   const diff = roundOp(estoqueItem, saldoOp - alocado);
   const diffAbs = Math.abs(diff);
   const envaseIntegral =
@@ -1963,28 +1974,44 @@ export function computeEstoqueQuantidadesPorLocal(
     (estoqueOperaEmLitros(estoqueItem) ? diffAbs <= 0.001 : diffAbs <= 1);
 
   if (envaseIntegral) {
-    if (qtyTankasOp > 0 && qtyVasilhamesOp <= 0) {
-      qtyTankasOp = roundOp(estoqueItem, saldoOp);
-      qtyVasilhamesOp = 0;
-    } else if (qtyVasilhamesOp > 0 && qtyTankasOp <= 0) {
-      qtyVasilhamesOp = roundOp(estoqueItem, saldoOp);
-      qtyTankasOp = 0;
-    } else if (qtyVasilhamesOp >= qtyTankasOp) {
-      qtyVasilhamesOp = Math.max(
-        0,
-        roundOp(estoqueItem, qtyVasilhamesOp + diff)
-      );
-    } else {
-      qtyTankasOp = Math.max(0, roundOp(estoqueItem, qtyTankasOp + diff));
+    const buckets = [
+      {
+        qty: qtyPatioOp,
+        set: (v) => {
+          qtyPatioOp = v;
+        },
+      },
+      {
+        qty: qtyVasilhamesOp,
+        set: (v) => {
+          qtyVasilhamesOp = v;
+        },
+      },
+      {
+        qty: qtyTankasOp,
+        set: (v) => {
+          qtyTankasOp = v;
+        },
+      },
+    ];
+    const active = buckets.filter((b) => b.qty > 0);
+    if (active.length === 1) {
+      active[0].set(roundOp(estoqueItem, saldoOp));
+      for (const b of buckets) {
+        if (b !== active[0]) b.set(0);
+      }
+    } else if (active.length > 1) {
+      active.sort((a, b) => b.qty - a.qty);
+      const top = active[0];
+      top.set(Math.max(0, roundOp(estoqueItem, top.qty + diff)));
     }
-    qtyPatioOp = 0;
   } else if (diff > 0) {
     if (tipoRecebimento === "vasilhame") {
       // Entrada já recebida no tanque: o que a composição não detalhou continua nele.
       qtyVasilhamesOp += diff;
     } else if (entradaEmbalado) {
-      // Só o que entrou como embalado e ainda não foi para tanque/tanka.
-      qtyPatioOp = diff;
+      // Entrada embalada ainda sem tanque/tanka/unitário vinculado.
+      qtyPatioOp += diff;
     }
   }
 

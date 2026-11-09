@@ -14,9 +14,6 @@ import {
   CalendarClock,
   PackageCheck,
   Inbox,
-  HardHat,
-  Tag,
-  ClipboardCheck,
   Settings,
   Container,
   ArrowLeftRight,
@@ -127,27 +124,10 @@ export default function MainLayout() {
 
     const configItem = hasSectionAccess(user, SECTION_ACCESS_KEYS.configuracao)
       ? {
-        groupId: 'configuracao',
+        path: '/painel/configuracao',
         sectionKey: SECTION_ACCESS_KEYS.configuracao,
         label: t('painel.nav.configuracao'),
         icon: Settings,
-        children: [
-          {
-            path: '/painel/configuracao/operadores',
-            label: t('painel.nav.operadores'),
-            icon: HardHat,
-          },
-          {
-            path: '/painel/configuracao/etiquetas',
-            label: t('painel.nav.etiquetas'),
-            icon: Tag,
-          },
-          {
-            path: '/painel/configuracao/checklist-expedicao',
-            label: t('painel.nav.checklistExpedicao'),
-            icon: ClipboardCheck,
-          },
-        ],
       }
       : null;
 

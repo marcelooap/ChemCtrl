@@ -119,6 +119,7 @@ export default function Estoque() {
           transfers: indPack.transfers,
           saidas: saics || [],
           transbordos: trans || [],
+          estoque: ests || [],
         })
       );
       setReservas(reservasList || []);

@@ -37,6 +37,7 @@ import {
 import {
   TIPOS_EMBALAGEM_ESTOQUE,
   deleteEstoqueDoTransbordo,
+  consolidateUnitarioVasilhameRecords,
 } from '@transbordo/lib/transbordoEmbalado';
 import {
   isDestinoEstoqueEmbalado,
@@ -847,10 +848,16 @@ export async function persistTransbordo({
         }
       }
 
-      if (vasilhameRecords.length > 0) {
+      // Bombona/IBC/Tambor do mesmo OP → 1 linha com quantidade total
+      const vasilhamesParaCriar =
+        consolidateUnitarioVasilhameRecords(vasilhameRecords);
+
+      if (vasilhamesParaCriar.length > 0) {
         let createdVasilhames;
         try {
-          createdVasilhames = await entities.vasilhames.bulkCreate(vasilhameRecords);
+          createdVasilhames = await entities.vasilhames.bulkCreate(
+            vasilhamesParaCriar
+          );
         } catch (err) {
           rethrowIfMissingObservacao(err);
         }

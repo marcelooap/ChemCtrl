@@ -3,6 +3,7 @@ import { loteQuantidadeEstoque, loteUnidadeEstoque } from "@transbordo/lib/conve
 import { resolveTipoRecebimento } from "@transbordo/lib/tipoRecebimento";
 import { syncVasilhamesFromEntradaLotes } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { allocateEntradaCodigo } from "@transbordo/lib/allocateBusinessCodes";
+import { normalizeLoteValidade } from "@transbordo/lib/entradaForm";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -17,19 +18,30 @@ function todayISO() {
  * Usado na efetivação de validações de recebimento (embalado/vasilhame).
  */
 export async function createEntradaCompleta({ data, produtos = [] }) {
-  const entradaPayload = {
-    ...data,
-    data: data.data || todayISO(),
-    cliente_id: nullIfEmpty(data.cliente_id),
-    produto_id: nullIfEmpty(data.produto_id),
-    data_fabricacao: nullIfEmpty(data.data_fabricacao),
-    data_validade: nullIfEmpty(data.data_validade),
-    lotes: (data.lotes || []).map((l) => ({
+  const lotesNormalizados = (data.lotes || []).map((l) =>
+    normalizeLoteValidade({
       ...l,
       produto_id: nullIfEmpty(l.produto_id),
       data_fabricacao: nullIfEmpty(l.data_fabricacao),
       data_validade: nullIfEmpty(l.data_validade),
-    })),
+    })
+  );
+  const firstLote = lotesNormalizados[0] || {};
+  const validadeIndeterminada =
+    !!data.validade_indeterminada || !!firstLote.validade_indeterminada;
+  // Flag vive em lotes[] (jsonb). Não enviar coluna inexistente no insert.
+  const { validade_indeterminada: _omitFlag, ...dataRest } = data;
+
+  const entradaPayload = {
+    ...dataRest,
+    data: data.data || todayISO(),
+    cliente_id: nullIfEmpty(data.cliente_id),
+    produto_id: nullIfEmpty(data.produto_id),
+    data_fabricacao: nullIfEmpty(data.data_fabricacao),
+    data_validade: validadeIndeterminada
+      ? null
+      : nullIfEmpty(data.data_validade),
+    lotes: lotesNormalizados,
   };
 
   const savedEntrada = await entities.entradas.create(entradaPayload);
@@ -59,7 +71,10 @@ export async function createEntradaCompleta({ data, produtos = [] }) {
       lote: lote.lote,
       densidade: lote.densidade,
       data_fabricacao: nullIfEmpty(lote.data_fabricacao),
-      data_validade: nullIfEmpty(lote.data_validade),
+      data_validade: lote.validade_indeterminada
+        ? null
+        : nullIfEmpty(lote.data_validade),
+      validade_indeterminada: !!lote.validade_indeterminada,
       saldo_inicial: loteQtd,
       quantidade: loteQtd,
       unidade_medida: loteUnidadeEstoque(lote),

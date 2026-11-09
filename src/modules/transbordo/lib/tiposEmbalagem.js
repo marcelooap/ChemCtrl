@@ -14,8 +14,13 @@ export const TIPOS_EMBALAGEM_DESTINO = [
   { value: "Bombona de 20 L", label: "Bombona de 20 L" },
 ];
 
-/** Volume padrão (L) por tipo unitário — IBC permanece livre. */
+/** Volume padrão (L) por tipo unitário. */
 export const VOLUME_PADRAO_EMBALAGEM = {
+  "One Way (IBC)": 1000,
+  "One Way": 1000,
+  IBC: 1000,
+  "IBC – 1.000 L": 1000,
+  "IBC - 1.000 L": 1000,
   "Bombona de 200 L": 200,
   "Bombona 200 L": 200,
   "bombona de 200 L": 200,
@@ -31,7 +36,8 @@ export const VOLUME_PADRAO_EMBALAGEM = {
 
 /**
  * Destinos unitários (IBC / Bombona / Tambor).
- * Geram registro na tela de Vasilhames (não no Estoque).
+ * Geram registro na tela de Vasilhames e, no Estoque, somam na coluna Embalado
+ * (não na coluna de tanque/vasilhame).
  */
 export const TIPOS_EMBALAGEM_ESTOQUE = new Set([
   "One Way (IBC)",

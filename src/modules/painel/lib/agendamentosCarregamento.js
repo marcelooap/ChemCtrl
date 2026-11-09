@@ -14,6 +14,7 @@ import {
   isItemSaidaVazio,
   isTanqueVazioItem,
 } from '@transbordo/lib/saidaOrigem';
+import { notifyAgendamentoSePendenteValidacao } from '@transbordo/lib/saidaNovas';
 
 export const ENCAIXE_HORARIO = 'encaixe';
 export const SLOT_STEP_MINUTES = 30;
@@ -368,23 +369,27 @@ export function summarizeSlotBookings(bookings) {
   };
 }
 
-function clienteGroupKey(row) {
-  if (row?.cliente_id) return `id:${row.cliente_id}`;
-  const nome = String(row?.cliente_nome || '')
-    .trim()
-    .toLowerCase();
-  if (nome) return `nome:${nome}`;
-  return `saida:${row?.saida_id || row?.id || '—'}`;
+/** Chave de carregamento independente no Encaixe: sempre uma saída por card. */
+function saidaGroupKey(row) {
+  if (row?.saida_id) return `saida:${row.saida_id}`;
+  if (row?.id) return `row:${row.id}`;
+  return `saida:${row?.saida_codigo || '—'}`;
 }
 
 /**
- * No Encaixe, cada cliente vira um carregamento independente.
- * Horários regulares permanecem um único grupo por slot.
+ * No Encaixe, cada saída é um carregamento independente (card próprio),
+ * mesmo quando o cliente é o mesmo. Horários regulares permanecem um
+ * único grupo por slot.
+ *
+ * `splitBySaida` (ou o alias legado `splitByCliente`) ativa a divisão.
  */
-export function groupSlotCarregamentos(bookings = [], { splitByCliente = false } = {}) {
+export function groupSlotCarregamentos(
+  bookings = [],
+  { splitBySaida = false, splitByCliente = false } = {}
+) {
   const list = normalizeBookings(bookings);
   if (list.length === 0) return [];
-  if (!splitByCliente) {
+  if (!splitBySaida && !splitByCliente) {
     return [
       {
         key: 'all',
@@ -396,7 +401,7 @@ export function groupSlotCarregamentos(bookings = [], { splitByCliente = false }
 
   const map = new Map();
   for (const row of list) {
-    const key = clienteGroupKey(row);
+    const key = saidaGroupKey(row);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(row);
   }
@@ -491,7 +496,7 @@ export async function bookSlotSaidas({
   ).filter((row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario);
 
   // Horário regular já carregado permanece ocupado (não reagenda).
-  // No Encaixe, outros clientes podem continuar sendo adicionados.
+  // No Encaixe, outros carregamentos (outras saídas) podem continuar sendo adicionados.
   if (!(scopeSaidaIds instanceof Set) && concluidosNoSlot.length > 0) {
     throw new Error(
       t?.('painel.comercial.agendamentos.errors.slotCarregado') ||
@@ -555,6 +560,18 @@ export async function bookSlotSaidas({
         ...transporte,
       });
     }
+
+    // Mantém a data programada da saída alinhada ao slot agendado.
+    await Promise.all(
+      selected.map((saida) =>
+        entities.saidas.update(saida.id, { data_programada: dateIso })
+      )
+    );
+
+    // Alerta "Novo" só para módulos ainda pendentes de validação operacional.
+    await Promise.all(
+      selected.map((saida) => notifyAgendamentoSePendenteValidacao(saida))
+    );
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new Error(
@@ -605,6 +622,8 @@ export async function rescheduleSaidaAgendamento({
       horario,
       tipo: tipo === 'encaixe' ? 'encaixe' : 'regular',
     });
+    await entities.saidas.update(saida.id, { data_programada: dateIso });
+    await notifyAgendamentoSePendenteValidacao(saida);
     return;
   }
 
@@ -1007,6 +1026,7 @@ export const JUSTIFICATIVA_ATRASO_RESPONSAVEIS = [
   { value: 'intertank', labelKey: 'painel.comercial.agendamentos.justificativa.responsaveis.intertank' },
 ];
 
+/** Motivos legados (chave i18n) — usados só para exibir histórico antigo. */
 export const JUSTIFICATIVA_ATRASO_MOTIVOS = [
   { value: 'nota_fiscal', labelKey: 'painel.comercial.agendamentos.justificativa.motivos.notaFiscal' },
   {
@@ -1019,6 +1039,17 @@ export const JUSTIFICATIVA_ATRASO_MOTIVOS = [
     labelKey: 'painel.comercial.agendamentos.justificativa.motivos.aguardandoCarreta',
   },
 ];
+
+/**
+ * Textos padrão (maiúsculas) enquanto t_justificativas_atraso não existir.
+ * Cadastro editável: Painel → Configuração → Justificativas Atraso - logística.
+ */
+export const JUSTIFICATIVA_ATRASO_MOTIVOS_FALLBACK = Object.freeze([
+  'NOTA FISCAL',
+  'DIVERGÊNCIAS DE CONFERÊNCIA',
+  'EMPILHADEIRA',
+  'AGUARDANDO CARRETA',
+]);
 
 const MOTIVO_ATRASO_MAX_LENGTH = 200;
 

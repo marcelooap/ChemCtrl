@@ -6,6 +6,7 @@ import { Input } from '@shared/components/ui/input';
 import { useToast } from '@shared/components/ui/use-toast';
 import EtiquetaCamposEditor from '@painel/components/configuracao/EtiquetaCamposEditor';
 import EtiquetaPreview from '@painel/components/configuracao/EtiquetaPreview';
+import ConfigBackLink from '@painel/components/configuracao/ConfigBackLink';
 import {
   ETIQUETA_PREVIEW_MOCK,
   extractDateFormat,
@@ -223,22 +224,25 @@ export default function Etiquetas() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
-      <div className="shrink-0 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {t('painel.configuracao.etiquetas.title')}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('painel.configuracao.etiquetas.subtitle')}
-          </p>
+      <div className="shrink-0 space-y-2">
+        <ConfigBackLink />
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t('painel.configuracao.etiquetas.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {t('painel.configuracao.etiquetas.subtitle')}
+            </p>
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={!selected || !dirty || saving || submitBusy}
+            className="bg-primary hover:bg-primary/90"
+          >
+            {saving || submitBusy ? t('common.saving') : t('buttons.save')}
+          </Button>
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={!selected || !dirty || saving || submitBusy}
-          className="bg-primary hover:bg-primary/90"
-        >
-          {saving || submitBusy ? t('common.saving') : t('buttons.save')}
-        </Button>
       </div>
 
       {tableMissing && (

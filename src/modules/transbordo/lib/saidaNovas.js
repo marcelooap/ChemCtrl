@@ -14,6 +14,7 @@ import { chemflowSupabase, isChemFlowConfigured } from '@/services/supabase/chem
 import {
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
+  getModulosRelevantesSaida,
   isSaidaModuloPainel,
   isSaidaValidadaNoModulo,
   saidaHasIndustrializacaoItems,
@@ -63,6 +64,47 @@ export async function clearSaidaLeituras(saidaId, modulo) {
   if (modulo) query = query.eq('modulo', normalizeSaidaModulo(modulo));
   const { error } = await query;
   if (error) throw error;
+}
+
+/**
+ * Alerta de novo agendamento na tela de Saída.
+ * Só reabre o badge "Novo" nos módulos ainda pendentes de validação.
+ * Saída já validada (sem itens pendentes) não dispara alerta.
+ */
+export async function notifyAgendamentoSePendenteValidacao(saida) {
+  if (!saida?.id) return;
+  let row = saida;
+  if (
+    !isSaidaModuloPainel(row) ||
+    !Array.isArray(row.itens) ||
+    row.validacao_modulos == null
+  ) {
+    if (emptyClient()) return;
+    const { data, error } = await chemflowSupabase
+      .from('t_saidas')
+      .select('id, modulo_origem, status, enviado_ao_fiscal, itens, validacao_modulos')
+      .eq('id', saida.id)
+      .maybeSingle();
+    if (error || !data) return;
+    row = data;
+  }
+  if (!isSaidaModuloPainel(row)) return;
+  const mods = getModulosRelevantesSaida(row);
+  if (mods.length === 0) return;
+  for (const modulo of mods) {
+    const validada =
+      isSaidaValidadaNoModulo(row, modulo) &&
+      !saidaTemItemPendenteNoModulo(row, modulo);
+    if (validada) continue;
+    try {
+      await clearSaidaLeituras(row.id, modulo);
+    } catch (err) {
+      console.error(
+        '[saidaNovas] Falha ao reabrir alerta após agendamento:',
+        err
+      );
+    }
+  }
 }
 
 function emptyClient() {
