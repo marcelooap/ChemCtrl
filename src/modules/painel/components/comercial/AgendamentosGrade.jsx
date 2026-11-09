@@ -971,6 +971,18 @@ function TimeSlotButton({
   const placa = String(summary.placa || '').trim();
   const cliente =
     summary.clientesLabel && summary.clientesLabel !== '—' ? summary.clientesLabel : '';
+  // Destino vem da saída (não é denormalizado no agendamento).
+  const destinos = [
+    ...new Set(
+      list
+        .map((b) => {
+          const saida = saidasById?.get?.(String(b?.saida_id));
+          return String(saida?.destino || '').trim();
+        })
+        .filter(Boolean)
+    ),
+  ];
+  const destino = destinos.join(', ');
   // O cliente fica fixo na linha do horário; ao lado da saída vai só a transportadora.
   const besideId = filled ? transportadora : '';
   const hasSideActions = showTruck || showEye || showCheck || showChecklistBtn;
@@ -1023,19 +1035,31 @@ function TimeSlotButton({
           interactive ? '' : 'cursor-default'
         }`}
       >
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-start gap-1.5">
           {carregado ? (
-            <CheckCircle2 className={`w-3.5 h-3.5 ${tone.icon}`} />
+            <CheckCircle2 className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
           ) : (
-            <Clock className={`w-3.5 h-3.5 ${tone.icon}`} />
+            <Clock className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
           )}
           <span className={`shrink-0 text-sm font-semibold tabular-nums ${tone.title}`}>{hora}</span>
-          {occupied && cliente ? (
-            <span
-              className={`ml-auto min-w-0 truncate text-right text-xs font-semibold ${tone.meta}`}
-              title={cliente}
-            >
-              {cliente}
+          {occupied && (cliente || destino) ? (
+            <span className="ml-auto min-w-0 text-right">
+              {cliente ? (
+                <span
+                  className={`block truncate text-xs font-semibold ${tone.meta}`}
+                  title={cliente}
+                >
+                  {cliente}
+                </span>
+              ) : null}
+              {destino ? (
+                <span
+                  className={`mt-0.5 block truncate text-[11px] font-medium leading-snug ${tone.metaMuted}`}
+                  title={destino}
+                >
+                  {destino}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </span>

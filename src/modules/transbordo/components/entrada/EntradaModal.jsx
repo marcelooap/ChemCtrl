@@ -78,6 +78,14 @@ function mapLoteFromEntrada(l, entrada = {}) {
         : entrada.quantidade_embalagens != null
           ? String(entrada.quantidade_embalagens)
           : "",
+    local_armazenagem:
+      l.local_armazenagem || entrada.local_armazenagem || "",
+    qtd_paletes:
+      l.qtd_paletes != null
+        ? String(l.qtd_paletes)
+        : entrada.qtd_paletes != null
+          ? String(entrada.qtd_paletes)
+          : "",
     placa: l.placa || "",
     barril: l.barril || "",
     volume: l.volume != null && l.volume !== "" ? String(l.volume) : "",
@@ -189,6 +197,8 @@ export default function EntradaModal({
                   tipo_recebimento: editingEntrada.tipo_recebimento,
                   peso_liquido: editingEntrada.peso_liquido,
                   quantidade_embalagens: editingEntrada.quantidade_embalagens,
+                  local_armazenagem: editingEntrada.local_armazenagem,
+                  qtd_paletes: editingEntrada.qtd_paletes,
                   placa: editingEntrada.placa,
                   barril: editingEntrada.barril,
                   volume: editingEntrada.volume,
@@ -475,6 +485,19 @@ export default function EntradaModal({
           );
           return null;
         }
+        if (!l.local_armazenagem) {
+          setError(`Local de Armazenagem é obrigatório no bloco ${i + 1}.`);
+          return null;
+        }
+        if (l.qtd_paletes === "" || l.qtd_paletes == null) {
+          setError(`Qtd Paletes é obrigatória no bloco ${i + 1}.`);
+          return null;
+        }
+        const lQtdPaletes = Number(l.qtd_paletes);
+        if (!Number.isFinite(lQtdPaletes) || lQtdPaletes < 0) {
+          setError(`Qtd Paletes deve ser um número válido no bloco ${i + 1}.`);
+          return null;
+        }
       }
     }
 
@@ -515,6 +538,12 @@ export default function EntradaModal({
         peso_liquido: pesoLiquido,
         quantidade_embalagens: isEmbalado
           ? parseFloat(l.quantidade_embalagens) || 0
+          : null,
+        local_armazenagem: isEmbalado ? l.local_armazenagem || null : null,
+        qtd_paletes: isEmbalado
+          ? l.qtd_paletes === "" || l.qtd_paletes == null
+            ? null
+            : Number(l.qtd_paletes)
           : null,
         ...(isVasilhame
           ? {
@@ -579,6 +608,10 @@ export default function EntradaModal({
       quantidade_embalagens: firstLote.embalado
         ? firstLote.quantidade_embalagens
         : null,
+      local_armazenagem: firstLote.embalado
+        ? firstLote.local_armazenagem || null
+        : null,
+      qtd_paletes: firstLote.embalado ? firstLote.qtd_paletes : null,
       status_wms: statusWms,
       granel_pesagem: granelPesagemAtiva,
       granel_ticket: granelPesagemAtiva ? granelTicket : null,

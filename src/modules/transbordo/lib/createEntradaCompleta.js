@@ -89,6 +89,9 @@ export async function createEntradaCompleta({ data, produtos = [] }) {
           : null,
       quantidade_embalagens:
         tipo === "embalado" ? lote.quantidade_embalagens || null : null,
+      local_armazenagem:
+        tipo === "embalado" ? lote.local_armazenagem || null : null,
+      qtd_paletes: tipo === "embalado" ? lote.qtd_paletes ?? null : null,
       status_wms: data.status_wms || false,
       origem: data.origem || "convencional",
       granel_pesagem: data.granel_pesagem || false,

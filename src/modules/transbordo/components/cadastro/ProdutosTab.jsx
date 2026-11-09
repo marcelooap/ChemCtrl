@@ -324,6 +324,7 @@ export default function ProdutosTab() {
               filtrado: Boolean(payload.filtrado),
               controlado: Boolean(payload.controlado),
               orgao_regulamentador: payload.orgao_regulamentador || "",
+              qtd_embalagem_por_palete: payload.qtd_embalagem_por_palete,
             },
           });
         } catch (err) {

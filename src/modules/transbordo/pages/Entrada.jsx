@@ -489,6 +489,10 @@ export default function Entrada() {
         quantidade_embalagens: lote.embalado
           ? lote.quantidade_embalagens || null
           : null,
+        local_armazenagem: lote.embalado
+          ? lote.local_armazenagem || null
+          : null,
+        qtd_paletes: lote.embalado ? lote.qtd_paletes ?? null : null,
         status_wms: data.status_wms || false,
         origem: data.origem || null,
         granel_pesagem: data.granel_pesagem || false,

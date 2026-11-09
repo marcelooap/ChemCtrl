@@ -48,6 +48,8 @@ const emptyLote = () => ({
   embalado: false,
   peso_liquido: "",
   quantidade_embalagens: "",
+  local_armazenagem: "",
+  qtd_paletes: "",
   placa: "",
   barril: "",
   volume: "",
@@ -614,6 +616,34 @@ export default function LoteBlock({
               trimTrailingZeros
               value={lote.quantidade_embalagens || ""}
               onChange={handleQtdEmbalagensChange}
+              placeholder="0"
+              disabled={readOnly}
+              className={INPUT_EDITABLE}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Local Armazenagem *</Label>
+            <Select
+              value={lote.local_armazenagem || undefined}
+              onValueChange={(value) => update("local_armazenagem", value)}
+              disabled={readOnly}
+            >
+              <SelectTrigger className={`h-10 ${INPUT_EDITABLE}`}>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Tenda">Tenda</SelectItem>
+                <SelectItem value="Pátio">Pátio</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Qtd Paletes *</Label>
+            <NumberInputBr
+              decimals={0}
+              min={0}
+              value={lote.qtd_paletes || ""}
+              onChange={(v) => update("qtd_paletes", v === "" ? "" : v)}
               placeholder="0"
               disabled={readOnly}
               className={INPUT_EDITABLE}

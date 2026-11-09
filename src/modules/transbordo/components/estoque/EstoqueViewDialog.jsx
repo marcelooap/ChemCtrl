@@ -339,6 +339,18 @@ export default function EstoqueViewDialog({
                       : "—"
                   }
                 />
+                <InfoItem
+                  label="Local Armazenagem"
+                  value={item.local_armazenagem || "—"}
+                />
+                <InfoItem
+                  label="Qtd Paletes"
+                  value={
+                    item.qtd_paletes != null && item.qtd_paletes !== ""
+                      ? String(item.qtd_paletes)
+                      : "—"
+                  }
+                />
               </>
             )}
           </Section>

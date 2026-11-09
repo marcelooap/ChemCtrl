@@ -304,6 +304,8 @@ function loteFromRow(row, tank) {
     embalado: row.embalado,
     peso_liquido: row.peso_liquido,
     quantidade_embalagens: row.quantidade_embalagens,
+    local_armazenagem: row.local_armazenagem || null,
+    qtd_paletes: row.qtd_paletes,
     ind_mp_id: String(row.grupo_entrada || '').startsWith('INDMP:')
       ? String(row.grupo_entrada).slice('INDMP:'.length) || null
       : row.origem === 'MATERIA_PRIMA'
@@ -346,6 +348,8 @@ function toEstoque(row, tanks) {
     embalado: row.embalado,
     peso_liquido: row.peso_liquido,
     quantidade_embalagens: row.quantidade_embalagens,
+    local_armazenagem: row.local_armazenagem || null,
+    qtd_paletes: row.qtd_paletes,
     tipo_recebimento: row.tipo_recebimento,
     tipo_embalagem: row.tipo_embalagem,
     vasilhame_id: row.vasilhame_id,
@@ -411,6 +415,8 @@ function toEntrada(lines, tanks) {
     embalado: first.embalado,
     peso_liquido: first.peso_liquido,
     quantidade_embalagens: first.quantidade_embalagens,
+    local_armazenagem: first.local_armazenagem || null,
+    qtd_paletes: first.qtd_paletes,
     status_wms: first.status_wms,
     granel_pesagem: first.granel_pesagem,
     granel_ticket: first.granel_ticket,
@@ -493,6 +499,10 @@ function rowFromEstoquePayload(payload, ids) {
     embalado: Boolean(lote.embalado ?? payload.embalado),
     peso_liquido: lote.peso_liquido ?? payload.peso_liquido ?? null,
     quantidade_embalagens: lote.quantidade_embalagens ?? payload.quantidade_embalagens ?? null,
+    local_armazenagem: nullIfEmpty(
+      lote.local_armazenagem ?? payload.local_armazenagem
+    ),
+    qtd_paletes: lote.qtd_paletes ?? payload.qtd_paletes ?? null,
     tipo_recebimento: nullIfEmpty(lote.tipo_recebimento),
     tipo_embalagem: nullIfEmpty(lote.tipo_embalagem),
     vasilhame_id: nullIfEmpty(lote.vasilhame_id || lote.vasilhame_existente_id),
@@ -816,11 +826,21 @@ export function createEstoqueEntity() {
         'nota_fiscal', 'nota_fiscal_troca', 'lote', 'densidade', 'data_fabricacao',
         'data_validade', 'validade_indeterminada', 'saldo_inicial', 'unidade_medida',
         'preco_unitario', 'custo_total', 'saldo_final', 'embalado', 'peso_liquido',
-        'quantidade_embalagens', 'status_wms', 'grupo_entrada', 'codigo_estoque',
+        'quantidade_embalagens', 'local_armazenagem', 'qtd_paletes', 'status_wms',
+        'grupo_entrada', 'codigo_estoque',
       ];
       for (const key of copy) {
         if (!Object.prototype.hasOwnProperty.call(payload, key)) continue;
         patch[key] = key === 'densidade' ? densidadeForDb(payload[key]) : payload[key];
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'local_armazenagem')) {
+        patch.local_armazenagem = nullIfEmpty(patch.local_armazenagem);
+      }
+      if (
+        Object.prototype.hasOwnProperty.call(patch, 'qtd_paletes') &&
+        (patch.qtd_paletes === '' || patch.qtd_paletes === undefined)
+      ) {
+        patch.qtd_paletes = null;
       }
       // Aliases legados → colunas canônicas
       if (

@@ -51,6 +51,7 @@ export default function ProdutoModal({
   const [clienteNome, setClienteNome] = useState("");
   const [densidadeTabelada, setDensidadeTabelada] = useState(false);
   const [densidade, setDensidade] = useState("");
+  const [qtdEmbalagemPorPalete, setQtdEmbalagemPorPalete] = useState("");
   const [filtrado, setFiltrado] = useState(false);
   const [controlado, setControlado] = useState(false);
   const [orgaoRegulamentador, setOrgaoRegulamentador] = useState("");
@@ -75,6 +76,12 @@ export default function ProdutoModal({
           ? editingProduto.densidade
           : ""
       );
+      setQtdEmbalagemPorPalete(
+        editingProduto.qtd_embalagem_por_palete != null &&
+          editingProduto.qtd_embalagem_por_palete !== ""
+          ? String(editingProduto.qtd_embalagem_por_palete)
+          : ""
+      );
       setFiltrado(editingProduto.filtrado || false);
       setControlado(Boolean(editingProduto.controlado));
       setOrgaoRegulamentador(editingProduto.orgao_regulamentador || "");
@@ -91,6 +98,7 @@ export default function ProdutoModal({
       setClienteNome("");
       setDensidadeTabelada(false);
       setDensidade("");
+      setQtdEmbalagemPorPalete("");
       setFiltrado(false);
       setControlado(false);
       setOrgaoRegulamentador("");
@@ -229,6 +237,10 @@ export default function ProdutoModal({
       cliente_nome: clienteNome,
       densidade: densidadeTabelada ? densidade || "-" : "-",
       densidade_tabelada: densidadeTabelada,
+      qtd_embalagem_por_palete:
+        qtdEmbalagemPorPalete === "" || qtdEmbalagemPorPalete == null
+          ? null
+          : Number(qtdEmbalagemPorPalete),
       filtrado,
       controlado,
       orgao_regulamentador: controlado ? orgaoRegulamentador : null,
@@ -354,6 +366,18 @@ export default function ProdutoModal({
               />
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label>Qtd de embalagem por palete</Label>
+            <NumberInputBr
+              decimals={0}
+              min={0}
+              value={qtdEmbalagemPorPalete}
+              onChange={(v) => setQtdEmbalagemPorPalete(v === "" ? "" : v)}
+              placeholder="0"
+              disabled={readOnly}
+            />
+          </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
             <div>
