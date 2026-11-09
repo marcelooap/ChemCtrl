@@ -29,7 +29,6 @@ import { entities } from "@transbordo/services/entities";
 import {
   findLinkedTransbordo,
   findAllLinkedTransbordos,
-  multipleTransbordosMessage,
 } from "@transbordo/lib/findLinkedTransbordo";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 
@@ -140,8 +139,6 @@ export default function EntradaModal({
   const [granelPesoLiquido, setGranelPesoLiquido] = useState("");
   const [error, setError] = useState("");
   const [collapsedLotes, setCollapsedLotes] = useState({});
-  const [transbordoBlockMessage, setTransbordoBlockMessage] = useState("");
-  const [checkingTransbordos, setCheckingTransbordos] = useState(false);
   const [vasilhames, setVasilhames] = useState([]);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   const navigate = useNavigate();
@@ -161,60 +158,6 @@ export default function EntradaModal({
       cancelled = true;
     };
   }, [open]);
-
-  // Bloqueia "Ir para Transbordo" quando há cadeia com 2+ OPs
-  useEffect(() => {
-    if (!open || !editingEntrada?.id || readOnly) {
-      setTransbordoBlockMessage("");
-      return;
-    }
-
-    let cancelled = false;
-    const check = async () => {
-      setCheckingTransbordos(true);
-      try {
-        const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
-          await Promise.all([
-            transbordosProp?.length
-              ? Promise.resolve(transbordosProp)
-              : entities.transbordos.list("-created_date"),
-            entities.estoque.filter({ entrada_id: editingEntrada.id }),
-            entities.vasilhames.list(),
-          ]);
-
-        const prefill = {
-          id: editingEntrada.id,
-          produto_id: editingEntrada.produto_id,
-          produto_nome: editingEntrada.produto_nome,
-          lote: editingEntrada.lote,
-          lotes: editingEntrada.lotes,
-          savedEstoques: estoqueDaEntrada,
-        };
-
-        const linked = findAllLinkedTransbordos(
-          allTransbordos,
-          prefill,
-          estoqueDaEntrada.length ? estoqueDaEntrada : estoqueProp,
-          vasilhamesList
-        );
-
-        if (!cancelled) {
-          setTransbordoBlockMessage(
-            linked.length > 1 ? multipleTransbordosMessage(linked) : ""
-          );
-        }
-      } catch {
-        if (!cancelled) setTransbordoBlockMessage("");
-      } finally {
-        if (!cancelled) setCheckingTransbordos(false);
-      }
-    };
-
-    check();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, editingEntrada, readOnly, transbordosProp, estoqueProp]);
 
   useEffect(() => {
     if (!open) return;
@@ -669,11 +612,6 @@ export default function EntradaModal({
     const data = validateAndBuildData();
     if (!data) return;
 
-    if (transbordoBlockMessage) {
-      setError(transbordoBlockMessage);
-      return;
-    }
-
     let saved;
     try {
       saved = await onSave(data);
@@ -693,7 +631,7 @@ export default function EntradaModal({
         savedEstoques,
       };
 
-      // Revalida cadeia após salvar (pode ter OPs posteriores)
+      // Preferência: OP único; se houver cadeia, abre o mais antigo (OP de entrada).
       let linkedTransbordo = null;
       try {
         const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
@@ -712,19 +650,15 @@ export default function EntradaModal({
           vasilhamesList
         );
 
-        if (linked.length > 1) {
-          const msg = multipleTransbordosMessage(linked);
-          setTransbordoBlockMessage(msg);
-          setError(msg);
-          return;
-        }
-
-        linkedTransbordo = findLinkedTransbordo(
-          allTransbordos,
-          prefillEntrada,
-          estoqueDaEntrada,
-          vasilhamesList
-        );
+        linkedTransbordo =
+          findLinkedTransbordo(
+            allTransbordos,
+            prefillEntrada,
+            estoqueDaEntrada,
+            vasilhamesList
+          ) ||
+          linked[0] ||
+          null;
       } catch {
         linkedTransbordo = null;
       }
@@ -984,35 +918,20 @@ export default function EntradaModal({
           {!readOnly && (
             <DialogFooter className="sm:justify-between flex-col sm:flex-row gap-3">
               {!blockIrParaTransbordo && !hideIrParaTransbordo ? (
-                <div className="flex flex-col gap-2 max-w-md">
-                  <Button
-                    type="button"
-                    onClick={handleSaveAndTransbordo}
-                    disabled={
-                      !allSameProduct ||
-                      !!transbordoBlockMessage ||
-                      checkingTransbordos ||
-                      submitBusy
-                    }
-                    className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={
-                      transbordoBlockMessage
-                        ? transbordoBlockMessage
-                        : !allSameProduct
-                        ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
-                        : ""
-                    }
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                    Ir para Transbordo
-                  </Button>
-                  {transbordoBlockMessage && (
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs leading-relaxed">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{transbordoBlockMessage}</span>
-                    </div>
-                  )}
-                </div>
+                <Button
+                  type="button"
+                  onClick={handleSaveAndTransbordo}
+                  disabled={!allSameProduct || submitBusy}
+                  className="bg-orange-500 hover:bg-orange-600 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    !allSameProduct
+                      ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
+                      : ""
+                  }
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  Ir para Transbordo
+                </Button>
               ) : (
                 <div />
               )}

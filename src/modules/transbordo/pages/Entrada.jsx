@@ -31,6 +31,11 @@ import {
   persistDeclaredVolumeDecimals,
 } from "@transbordo/lib/declaredVolume";
 import { syncEntradaEstoqueCascade } from "@transbordo/lib/cascadeEntradaUpdate";
+import {
+  computeEntradaSaldoResumo,
+  persistAjustePatioAlocacoes,
+  validateAjusteQuantidade,
+} from "@transbordo/lib/entradaAjusteSaldo";
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { ensureClienteByNome } from "@transbordo/lib/ensureCliente";
 import {
@@ -360,6 +365,38 @@ export default function Entrada() {
     }
 
     const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
+    const ajusteAlocacoes = Array.isArray(data.ajuste_alocacoes)
+      ? data.ajuste_alocacoes
+      : [];
+
+    const [existingEstoque, vasilhamesList, saidasList] = await Promise.all([
+      entities.estoque.filter({ entrada_id: editingEntrada.id }),
+      entities.vasilhames.list().catch(() => []),
+      entities.saidas.list().catch(() => []),
+    ]);
+    const estoqueDaEntrada = (existingEstoque || []).filter(
+      (e) => !String(e?.grupo_entrada || "").startsWith("TB")
+    );
+    // Trava de persistência: piso = volume já saído do pátio (não o transbordado interno).
+    const resumoAtual = computeEntradaSaldoResumo({
+      entradaId: editingEntrada.id,
+      estoqueItems: estoqueDaEntrada,
+      transbordos,
+      saidas: saidasList || [],
+      vasilhames: vasilhamesList || [],
+    });
+    const novaQtd = (data.lotes || []).reduce(
+      (sum, lote) => sum + (loteQuantidadeEstoque(lote) || 0),
+      0
+    );
+    const pisoCheck = validateAjusteQuantidade({
+      novaQuantidade: novaQtd,
+      movimentado: resumoAtual.movimentado,
+      unidade: resumoAtual.unidade,
+    });
+    if (!pisoCheck.ok) {
+      throw new Error(pisoCheck.message);
+    }
 
     const entradaPayload = {
       ...data,
@@ -389,14 +426,13 @@ export default function Entrada() {
     };
     // Flag só em lotes[] (jsonb) — evita coluna inexistente no update.
     delete entradaPayload.validade_indeterminada;
+    delete entradaPayload.ajuste_alocacoes;
+    delete entradaPayload.ajuste_manter_na_origem;
 
     const savedEntrada = await entities.entradas.update(
       editingEntrada.id,
       entradaPayload
     );
-    const existingEstoque = await entities.estoque.filter({
-      entrada_id: editingEntrada.id,
-    });
 
     const grupoId = data.grupo_entrada || `GRP-${Date.now()}`;
     const entradaCodigo =
@@ -503,6 +539,26 @@ export default function Entrada() {
       throw new Error(
         err?.message ||
           "Entrada salva, mas não foi possível registrar o vasilhame no pátio."
+      );
+    }
+
+    try {
+      const densFallback =
+        parseFloat(String(entradaPayload.densidade || "0").replace(",", ".")) ||
+        0;
+      await persistAjustePatioAlocacoes({
+        alocacoes: ajusteAlocacoes,
+        estoqueItems: savedEstoques,
+        entrada: savedEntrada,
+        entradaCodigo,
+        densFallback,
+        transbordos,
+      });
+    } catch (err) {
+      console.error("[Transbordo] Erro ao ajustar saldos do pátio:", err);
+      throw new Error(
+        err?.message ||
+          "Entrada salva, mas não foi possível ajustar os saldos remanescentes no pátio."
       );
     }
 

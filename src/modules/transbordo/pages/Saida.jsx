@@ -54,6 +54,7 @@ import {
   findAgendamentoDisplayBySaida,
   formatSlotRef,
   hasTransporte,
+  saidaTemProdutoInformado,
   updateTransporte,
 } from "@painel/lib/agendamentosCarregamento";
 import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConfig";
@@ -103,6 +104,36 @@ function compareSaidaCodigoDesc(a, b) {
   const diff = parse(b?.codigo) - parse(a?.codigo);
   if (diff !== 0) return diff;
   return String(b?.codigo || "").localeCompare(String(a?.codigo || ""), "pt-BR");
+}
+
+/** Busca textual: código, cliente ou tanque (placa / barril) nos itens. */
+function saidaMatchesSearch(saida, query, vasilhamesById) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+
+  if (String(saida?.codigo || "").toLowerCase().includes(q)) return true;
+  if (String(saida?.cliente_nome || "").toLowerCase().includes(q)) return true;
+
+  for (const item of saida?.itens || []) {
+    const placaItem = String(item?.vasilhame_placa || "").toLowerCase();
+    const barrilItem = String(item?.vasilhame_barril || "").toLowerCase();
+    if (placaItem.includes(q) || barrilItem.includes(q)) return true;
+
+    const vasilhameId = String(item?.vasilhame_id || "").trim();
+    if (!vasilhameId || !vasilhamesById) continue;
+    const vasilhame = vasilhamesById.get(vasilhameId);
+    if (!vasilhame) continue;
+
+    const placaCadastro = String(
+      vasilhame.placa || vasilhame.container_number || ""
+    ).toLowerCase();
+    const barrilCadastro = String(
+      vasilhame.barril || vasilhame.barril_number || ""
+    ).toLowerCase();
+    if (placaCadastro.includes(q) || barrilCadastro.includes(q)) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -280,13 +311,18 @@ export default function Saida({
     isSaidaValidadaNoModulo(saida, operationalModule) &&
     !saidaTemItemPendenteNoModulo(saida, operationalModule);
 
+  const vasilhamesById = useMemo(() => {
+    const map = new Map();
+    for (const row of vasilhames || []) {
+      const id = String(row?.id || "").trim();
+      if (id) map.set(id, row);
+    }
+    return map;
+  }, [vasilhames]);
+
   const filtered = useMemo(() => {
     const rows = saidas.filter((s) => {
-      const q = search.toLowerCase();
-      const matchSearch =
-        !q ||
-        s.codigo?.toLowerCase().includes(q) ||
-        s.cliente_nome?.toLowerCase().includes(q);
+      const matchSearch = saidaMatchesSearch(s, search, vasilhamesById);
 
       let matchStatus = true;
       if (
@@ -401,6 +437,7 @@ export default function Saida({
     isNew,
     expedidasIds,
     operationalModule,
+    vasilhamesById,
   ]);
 
   const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -444,6 +481,10 @@ export default function Saida({
 
   const renderProdutosLabel = (s) => {
     if (isSaidaCargaVazia(s)) return "Carga vazia";
+    // Comercial: saída agendada antes do cliente informar produto/tanque.
+    if (isExpedicao && !saidaTemProdutoInformado(s)) {
+      return "Aguardando informações";
+    }
     const itens = s.itens || [];
     const distinct = new Map();
     for (const item of itens) {
@@ -466,6 +507,7 @@ export default function Saida({
 
   const renderQuantidadeTotal = (s) => {
     if (isSaidaCargaVazia(s)) return "-";
+    if (isExpedicao && !saidaTemProdutoInformado(s)) return "-";
     return formatMass(quantidadeTotalSaida(s), { empty: "-" });
   };
 
@@ -648,7 +690,7 @@ export default function Saida({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por código ou cliente..."
+              placeholder="Buscar por código, cliente ou tanque..."
               className="pl-10 bg-card"
             />
           </div>

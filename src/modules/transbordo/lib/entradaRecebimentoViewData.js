@@ -4,6 +4,7 @@ import {
   formatDensidade,
   formatNum,
   formatQuantidade,
+  roundMass,
 } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
@@ -13,6 +14,9 @@ import {
   kgToLoteUnidade,
 } from "@transbordo/lib/conversao";
 import { formatEtiquetaEmbalagemPlaca } from "@transbordo/lib/etiquetaConfig";
+
+/** Residual típico de volume×densidade; acima disso trata-se de OP parcial. */
+const TOLERANCIA_ALINHAMENTO_MASSA_KG = 1;
 
 export function formatDateEntrada(dateStr) {
   if (!dateStr) return "-";
@@ -88,7 +92,65 @@ function destinoMassa(d, densidade) {
   if (d.peso_liquido != null && d.peso_liquido !== "") {
     return Number(d.peso_liquido) || 0;
   }
-  return destinoVolume(d) * (Number(densidade) || 0);
+  const dens = Number(densidade) || 0;
+  if (!(dens > 0)) return 0;
+  return roundMass(destinoVolume(d) * dens);
+}
+
+/**
+ * Quantidade informada da entrada em kg (mesma base da tabela de produtos).
+ */
+function resolveQuantidadeInformadaKg(entrada, lotes, lotesCount) {
+  return roundMass(
+    (lotes || []).reduce((sum, l) => {
+      const qNf = getQuantidadeNotaFiscal(l, entrada, { lotesCount });
+      const q =
+        qNf != null && qNf !== ""
+          ? qNf
+          : l?.quantidade_declarada ?? l?.quantidade;
+      return sum + loteToKg({ ...l, quantidade: q });
+    }, 0)
+  );
+}
+
+/**
+ * Redistribui massas dos destinos para somar exatamente a quantidade informada.
+ * Só age quando a diferença é residual de arredondamento (vol × dens).
+ */
+export function alignDestinosMassaToQuantidade(destinos = [], quantidadeKg) {
+  const target = roundMass(quantidadeKg);
+  if (!(target > 0) || !Array.isArray(destinos) || destinos.length === 0) {
+    return destinos;
+  }
+
+  const sum = roundMass(
+    destinos.reduce((s, d) => s + (Number(d.massa) || 0), 0)
+  );
+  if (!(sum > 0)) return destinos;
+
+  const diff = Math.abs(sum - target);
+  if (diff > TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9) {
+    return destinos;
+  }
+  if (diff <= 1e-9) return destinos;
+
+  const weights = destinos.map((d) => {
+    const m = Number(d.massa) || 0;
+    if (m > 0) return m;
+    return Number(d.volume) || 0;
+  });
+  const sumW = weights.reduce((a, b) => a + b, 0);
+  if (!(sumW > 0)) return destinos;
+
+  let allocated = 0;
+  return destinos.map((d, i) => {
+    if (i === destinos.length - 1) {
+      return { ...d, massa: roundMass(target - allocated) };
+    }
+    const m = roundMass((weights[i] / sumW) * target);
+    allocated = roundMass(allocated + m);
+    return { ...d, massa: m };
+  });
 }
 
 function buildProdutosById(produtos) {
@@ -280,13 +342,21 @@ export function buildEntradaRecebimentoViewModel({
   const mostrarPorProduto = algumControlado && !todosControlados;
 
   const origemIds = buildOrigemIds(entrada, estoque);
-  const destinosList = buildDestinosList({
+  const quantidadeInformadaKg = resolveQuantidadeInformadaKg(
     entrada,
-    entradaId,
-    transbordos,
-    origemIds,
-    destinosInformados,
-  });
+    lotes,
+    lotesCount
+  );
+  const destinosList = alignDestinosMassaToQuantidade(
+    buildDestinosList({
+      entrada,
+      entradaId,
+      transbordos,
+      origemIds,
+      destinosInformados,
+    }),
+    quantidadeInformadaKg
+  );
 
   const transbordoTotais = destinosList.reduce(
     (acc, d) => ({
@@ -295,6 +365,15 @@ export function buildEntradaRecebimentoViewModel({
     }),
     { volume: 0, massa: 0 }
   );
+  // Garante total de massa idêntico à quantidade informada quando houve alinhamento.
+  if (
+    quantidadeInformadaKg > 0 &&
+    destinosList.length > 0 &&
+    Math.abs(transbordoTotais.massa - quantidadeInformadaKg) <=
+      TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
+  ) {
+    transbordoTotais.massa = quantidadeInformadaKg;
+  }
 
   const hasPesagem =
     Boolean(entrada.granel_pesagem) ||

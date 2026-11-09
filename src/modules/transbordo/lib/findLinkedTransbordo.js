@@ -205,7 +205,8 @@ export function multipleTransbordosMessage(linked = []) {
       : "";
   return (
     `Existem ${linked.length} transbordos vinculados a esta entrada${lista}. ` +
-    `Exclua os transbordos posteriores na tela de Transbordo para poder editar o transbordo de entrada.`
+    `A quantidade e os saldos remanescentes no pátio podem ser ajustados aqui; ` +
+    `para editar o transbordo de entrada pela tela de OP, exclua antes os transbordos posteriores.`
   );
 }
 

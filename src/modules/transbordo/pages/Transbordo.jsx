@@ -4,7 +4,7 @@ import { entities } from '@transbordo/services/entities';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
 import { isUnidadeMassaEntrada, isUnidadeVolumeEntrada, normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
-import { findLinkedTransbordo, findAllLinkedTransbordos, multipleTransbordosMessage } from "@transbordo/lib/findLinkedTransbordo";
+import { findLinkedTransbordo, findAllLinkedTransbordos } from "@transbordo/lib/findLinkedTransbordo";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
@@ -214,7 +214,6 @@ export default function Transbordo() {
   const [saveError, setSaveError] = useState("");
   const [prefillConsumed, setPrefillConsumed] = useState(false);
   const [activePrefill, setActivePrefill] = useState(null);
-  const [chainBlockMessage, setChainBlockMessage] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
   const prefillEntrada = location.state?.prefillEntrada;
@@ -304,22 +303,14 @@ export default function Transbordo() {
         vasilhames
       );
 
-      if (allLinked.length > 1) {
-        setEditingTransbordo(null);
-        setActivePrefill(null);
-        setModalOpen(false);
-        setPrefillConsumed(true);
-        setChainBlockMessage(multipleTransbordosMessage(allLinked));
-        clearPrefillNavigation();
-        return;
-      }
-
-      // Preferência: OP passado na navegação (já resolvido na Entrada)
+      // Preferência: OP da navegação; senão OP único; senão o mais antigo da cadeia.
       let linked =
         (linkedTransbordoIdFromNav &&
           transbordos.find((t) => t.id === linkedTransbordoIdFromNav)) ||
         linkedTransbordoFromNav ||
-        findLinkedTransbordo(transbordos, prefillEntrada, entradas, vasilhames);
+        findLinkedTransbordo(transbordos, prefillEntrada, entradas, vasilhames) ||
+        allLinked[0] ||
+        null;
 
       // Garante versão fresca da lista carregada (com destinos completos)
       if (linked?.id) {
@@ -725,23 +716,6 @@ export default function Transbordo() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cadeia com múltiplos OPs — não permite editar via entrada */}
-      <AlertDialog
-        open={!!chainBlockMessage}
-        onOpenChange={(v) => !v && setChainBlockMessage("")}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edição de transbordo bloqueada</AlertDialogTitle>
-            <AlertDialogDescription>{chainBlockMessage}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setChainBlockMessage("")}>
-              Entendi
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
