@@ -1076,17 +1076,23 @@ export default function SaidaItemRow({
     });
   })();
 
-  const resumoProduto = tanqueVazio
-    ? formatSaidaItemEmbalagem(item)
-    : item.produto_nome ||
-      ((item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME) &&
-      item.vasilhame_placa
-        ? containerLabel({
-            container_number: item.vasilhame_placa,
-            barril_number: item.vasilhame_barril,
-            type: item.container_type || item.tipo_embalagem,
-          })
-        : "—");
+  const embalagemResumo = formatSaidaItemEmbalagem(item);
+  const temEmbalagemResumo =
+    Boolean(embalagemResumo) &&
+    embalagemResumo !== "—" &&
+    embalagemResumo !== "-";
+
+  const resumoProduto = (() => {
+    if (tanqueVazio) return embalagemResumo;
+
+    const nomeProduto = String(item.produto_nome || "").trim();
+    if (temEmbalagemResumo && nomeProduto) {
+      return `${embalagemResumo} ${nomeProduto}`;
+    }
+    if (nomeProduto) return nomeProduto;
+    if (temEmbalagemResumo) return embalagemResumo;
+    return "—";
+  })();
 
   const resumoQuantidade = tanqueVazio
     ? "—"

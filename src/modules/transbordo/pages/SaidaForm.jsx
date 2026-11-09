@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { entities } from "@transbordo/services/entities";
 import { base44 } from "@industrializacao/api/base44Client";
@@ -50,6 +50,14 @@ import {
   isSaidaModuloPainel,
   calcSaidaQuantidadeTotal,
 } from "@transbordo/lib/saidaOrigem";
+import {
+  aplicarHistoricoHerdado,
+  buildHistoricoTanqueKeySet,
+  consumirHistoricoTanquesHerdados,
+  itemTemHistoricoHerdavel,
+  listHistoricoTanquePendentes,
+  publicarHistoricoTanquesRemovidos,
+} from "@transbordo/lib/saidaValidacaoHistoricoTanque";
 import { isDestinoEmbalagemUnitaria } from "@transbordo/lib/tiposEmbalagem";
 import { isUnitPackagingType } from "@industrializacao/lib/packagingTypes";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
@@ -116,6 +124,7 @@ export default function SaidaForm({
   const [clientes, setClientes] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [reservas, setReservas] = useState([]);
+  const [historicoPendentes, setHistoricoPendentes] = useState([]);
   const [editingSaida, setEditingSaida] = useState(null);
   const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [agendamentoPendente, setAgendamentoPendente] = useState(null);
@@ -130,21 +139,53 @@ export default function SaidaForm({
     itens: [emptySaidaItem(defaultOrigem)],
   });
 
+  const historicoTanqueKeys = useMemo(
+    () => buildHistoricoTanqueKeySet({ pendentes: historicoPendentes }),
+    [historicoPendentes]
+  );
+
+  // Se a Saída A for salva em outra aba, atualiza órfãos ao focar o formulário.
+  useEffect(() => {
+    const refreshHistorico = () => {
+      listHistoricoTanquePendentes()
+        .then((rows) => setHistoricoPendentes(rows || []))
+        .catch(() => {});
+    };
+    window.addEventListener("focus", refreshHistorico);
+    return () => window.removeEventListener("focus", refreshHistorico);
+  }, []);
+
+  useEffect(() => {
+    if (historicoTanqueKeys.size === 0) return;
+    setFormData((prev) => {
+      let changed = false;
+      const itens = prev.itens.map((item) => {
+        const next = aplicarHistoricoHerdado(item, historicoTanqueKeys);
+        if (next !== item) changed = true;
+        return next;
+      });
+      return changed ? { ...prev, itens } : prev;
+    });
+  }, [historicoTanqueKeys]);
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [ents, vascs, cliens, saics, reservasList] = await Promise.all([
-          entities.estoque.list(),
-          entities.vasilhames.list(),
-          entities.clientes.list(),
-          entities.saidas.list("-created_date"),
-          entities.materialReservas.list("-created_at").catch(() => []),
-        ]);
+        const [ents, vascs, cliens, saics, reservasList, historicoList] =
+          await Promise.all([
+            entities.estoque.list(),
+            entities.vasilhames.list(),
+            entities.clientes.list(),
+            entities.saidas.list("-created_date"),
+            entities.materialReservas.list("-created_at").catch(() => []),
+            listHistoricoTanquePendentes().catch(() => []),
+          ]);
 
         setEntradas(ents);
         setVasilhames(vascs);
         setSaidas(saics);
         setReservas(reservasList || []);
+        setHistoricoPendentes(historicoList || []);
         setClientes(uniqueClientesByNome(cliens));
 
         if (loadIndData) {
@@ -345,9 +386,10 @@ export default function SaidaForm({
   };
 
   const updateItem = (index, updated) => {
+    const withHistorico = aplicarHistoricoHerdado(updated, historicoTanqueKeys);
     setFormData((prev) => ({
       ...prev,
-      itens: prev.itens.map((it, i) => (i === index ? updated : it)),
+      itens: prev.itens.map((it, i) => (i === index ? withHistorico : it)),
     }));
   };
 
@@ -553,6 +595,15 @@ export default function SaidaForm({
     setSaving(true);
 
     try {
+      // Recarrega órfãos no save (formulário pode ter aberto antes da remoção na outra saída).
+      const historicoPendentesFresh = await listHistoricoTanquePendentes().catch(
+        () => historicoPendentes
+      );
+      const historicoKeysFresh = buildHistoricoTanqueKeySet({
+        pendentes: historicoPendentesFresh,
+      });
+      setHistoricoPendentes(historicoPendentesFresh);
+
       const clientePersistido = await persistClienteSelecionado(
         formData.cliente_id,
         formData.cliente_nome
@@ -773,10 +824,15 @@ export default function SaidaForm({
 
       const itensPersistidos = itensWithStock.map((item) => {
         const original = origemPorChave.get(saidaItemChave(item));
-        const historico =
+        const historicoLocal =
           original?.validado_historico === true ||
           original?.validado === true ||
           item?.validado_historico === true;
+        const historicoHerdado = itemTemHistoricoHerdavel(
+          item,
+          historicoKeysFresh
+        );
+        const historico = historicoLocal || historicoHerdado;
         if (jaBaixadoOriginal(item)) {
           return {
             ...item,
@@ -797,8 +853,13 @@ export default function SaidaForm({
             isSaidaValidadaNoModulo(editingSaida, modulo) ||
             editingSaida.enviado_ao_fiscal
           ) {
-            // Novo item em saída já validada: pendente, sem histórico.
-            return { ...item, validado: false };
+            // Novo item em saída já validada: pendente.
+            // Mantém check apenas se o tanque já tinha histórico em outra saída.
+            return {
+              ...item,
+              validado: false,
+              ...(historicoHerdado ? { validado_historico: true } : {}),
+            };
           }
         }
         return historico ? { ...item, validado_historico: true } : item;
@@ -862,6 +923,20 @@ export default function SaidaForm({
       await promoverProdutosPorIds(
         itensPersistidos.map((item) => item.produto_id).filter(Boolean)
       ).catch(() => 0);
+
+      // Histórico de validação por tanque: publica órfãos removidos e consome os herdados.
+      if (editingSaida?.id) {
+        await publicarHistoricoTanquesRemovidos({
+          oldItens: editingSaida.itens || [],
+          newItens: itensPersistidos,
+          saida: editingSaida,
+        }).catch((err) => {
+          console.error("[SaidaForm] Falha ao publicar histórico de tanque:", err);
+        });
+      }
+      await consumirHistoricoTanquesHerdados(itensPersistidos).catch((err) => {
+        console.error("[SaidaForm] Falha ao consumir histórico de tanque:", err);
+      });
 
       if (isFiscal) {
         // Transbordo: devolve/reaplica saldo de itens removidos/alterados e recalcula estoque.
