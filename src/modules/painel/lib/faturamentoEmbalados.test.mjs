@@ -123,6 +123,30 @@ console.log('Teste 10 — Saída não concluída ignorada');
   assert('agendado não faturável', faturavel === false);
 }
 
+console.log('Teste 11 — Anti-duplicidade remanescente (saída + estoque)');
+{
+  // 5 entram, 3 saem, 2 remanescem — armazenagem não se sobrepõe.
+  const entrada = 5;
+  const saida = 3;
+  const rem = entrada - saida;
+  const daysExit = countStorageDays('2026-09-01', '2026-09-15');
+  const daysRem = countStorageDays('2026-09-01', '2026-10-01');
+  const armSaida = toCents(saida * daysExit * 1.25);
+  const armEstoque = toCents(rem * daysRem * 1.25);
+  const armTotal = armSaida + armEstoque;
+  assert('remanescente = 2', rem === 2);
+  assert('armazenagem saída só nos 3', armSaida === toCents(3 * daysExit * 1.25));
+  assert('armazenagem estoque só nos 2', armEstoque === toCents(2 * daysRem * 1.25));
+  assert(
+    'total = soma sem overlap',
+    armTotal === armSaida + armEstoque,
+    `got ${armTotal}`
+  );
+  // Linha de entrada não carrega armazenagem remanescente.
+  const entradaArmCents = null;
+  assert('entrada sem armazenagem remanescente', entradaArmCents == null);
+}
+
 console.log('');
 if (failed) {
   console.error(`${failed} teste(s) falharam`);

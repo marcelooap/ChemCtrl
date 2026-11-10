@@ -8,8 +8,10 @@ import {
   apurarFaturamentoEmbalados,
 } from '@painel/lib/faturamentoEmbalados';
 import {
+  canManageFaturamentoTarifaHistory,
   createFaturamentoTarifa,
   currentMonthRange,
+  deleteFaturamentoTarifa,
   getTarifaVigente,
   listFaturamentoTarifas,
 } from '@painel/lib/faturamentoTarifas';
@@ -116,6 +118,10 @@ export default function Faturamento() {
   );
 
   const vigente = useMemo(() => getTarifaVigente(tarifas), [tarifas]);
+  const canManageHistory = useMemo(
+    () => canManageFaturamentoTarifaHistory(user),
+    [user]
+  );
 
   const handleSaveTarifa = async (payload) => {
     setSavingTarifa(true);
@@ -127,6 +133,7 @@ export default function Faturamento() {
       const next = await listFaturamentoTarifas();
       setTarifas(next || []);
       toast({ title: t('painel.faturamento.tarifas.saved') });
+      return true;
     } catch (err) {
       console.error('[Faturamento] saveTarifa:', err);
       toast({
@@ -134,6 +141,29 @@ export default function Faturamento() {
         description: err?.message,
         variant: 'destructive',
       });
+      return false;
+    } finally {
+      setSavingTarifa(false);
+    }
+  };
+
+  const handleDeleteTarifa = async (row) => {
+    if (!canManageHistory || !row?.id) return false;
+    setSavingTarifa(true);
+    try {
+      await deleteFaturamentoTarifa(row.id);
+      const next = await listFaturamentoTarifas();
+      setTarifas(next || []);
+      toast({ title: t('painel.faturamento.tarifas.deleted') });
+      return true;
+    } catch (err) {
+      console.error('[Faturamento] deleteTarifa:', err);
+      toast({
+        title: t('painel.faturamento.tarifas.deleteError'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+      return false;
     } finally {
       setSavingTarifa(false);
     }
@@ -163,7 +193,9 @@ export default function Faturamento() {
           tarifas={tarifas}
           vigente={vigente}
           saving={savingTarifa}
+          canManageHistory={canManageHistory}
           onSave={handleSaveTarifa}
+          onDelete={handleDeleteTarifa}
         />
 
         <FaturamentoKpis totals={apuracao.totals} />

@@ -4,7 +4,7 @@ import { Eye, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { formatCurrency } from '@transbordo/lib/format';
-import { ORIGEM_ENTRADA } from '@painel/lib/faturamentoEmbalados';
+import { ORIGEM_ENTRADA, ORIGEM_ESTOQUE } from '@painel/lib/faturamentoEmbalados';
 
 const PAGE_SIZE = 25;
 
@@ -26,6 +26,22 @@ function MoneyBadge({ value, dash, tone }) {
       {formatCurrency(value)}
     </span>
   );
+}
+
+function origemBadgeClass(origem) {
+  if (origem === ORIGEM_ENTRADA) {
+    return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200';
+  }
+  if (origem === ORIGEM_ESTOQUE) {
+    return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200';
+  }
+  return 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200';
+}
+
+function origemLabelKey(origem) {
+  if (origem === ORIGEM_ENTRADA) return 'entrada';
+  if (origem === ORIGEM_ESTOQUE) return 'estoque';
+  return 'saida';
 }
 
 function formatDateBR(iso) {
@@ -156,8 +172,17 @@ export default function FaturamentoTabela({ rows = [], onView }) {
             </thead>
             <tbody>
               {pageRows.map((row) => {
-                const isEntrada = row.origem === ORIGEM_ENTRADA;
-                const pending = (row.pendencias || []).length > 0;
+                const pendingList = row.pendencias || [];
+                const pending = pendingList.length > 0;
+                const pendingTitle = pending
+                  ? pendingList
+                      .map((p) =>
+                        t(`painel.faturamento.modal.pendencia.${p}`, {
+                          defaultValue: t('painel.faturamento.table.pending'),
+                        })
+                      )
+                      .join(' · ')
+                  : '';
                 return (
                   <tr
                     key={row.key}
@@ -170,8 +195,9 @@ export default function FaturamentoTabela({ rows = [], onView }) {
                         {row.id}
                         {pending ? (
                           <AlertTriangle
-                            className="h-3.5 w-3.5 text-amber-600"
-                            title={t('painel.faturamento.table.pending')}
+                            className="h-3.5 w-3.5 text-amber-600 shrink-0"
+                            title={pendingTitle}
+                            aria-label={pendingTitle}
                           />
                         ) : null}
                       </span>
@@ -181,15 +207,11 @@ export default function FaturamentoTabela({ rows = [], onView }) {
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                          isEntrada
-                            ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200'
-                            : 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
-                        }`}
+                        className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${origemBadgeClass(
+                          row.origem
+                        )}`}
                       >
-                        {isEntrada
-                          ? t('painel.faturamento.table.entrada')
-                          : t('painel.faturamento.table.saida')}
+                        {t(`painel.faturamento.table.${origemLabelKey(row.origem)}`)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{row.codigo || dash}</td>

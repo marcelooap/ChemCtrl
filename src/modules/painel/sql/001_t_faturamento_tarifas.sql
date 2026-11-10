@@ -11,9 +11,9 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS t_faturamento_tarifas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   vigencia_inicio date NOT NULL,
-  movimentacao_palete numeric(12, 2) NOT NULL,
-  armazenagem_tenda numeric(12, 2) NOT NULL,
-  armazenagem_patio numeric(12, 2) NOT NULL,
+  movimentacao_palete numeric(30, 15) NOT NULL,
+  armazenagem_tenda numeric(30, 15) NOT NULL,
+  armazenagem_patio numeric(30, 15) NOT NULL,
   observacao text,
   created_by text,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -30,11 +30,11 @@ COMMENT ON TABLE t_faturamento_tarifas IS
 COMMENT ON COLUMN t_faturamento_tarifas.vigencia_inicio IS
   'Data a partir da qual a tarifa vale (inclusive). Para um dia D usa-se a maior vigencia_inicio <= D.';
 COMMENT ON COLUMN t_faturamento_tarifas.movimentacao_palete IS
-  'Valor R$ por palete movimentado (entrada ou saída).';
+  'Valor R$ por palete movimentado (entrada ou saída). Até 15 casas decimais.';
 COMMENT ON COLUMN t_faturamento_tarifas.armazenagem_tenda IS
-  'Valor R$ por palete/dia na Tenda.';
+  'Valor R$ por palete/dia na Tenda. Até 15 casas decimais.';
 COMMENT ON COLUMN t_faturamento_tarifas.armazenagem_patio IS
-  'Valor R$ por palete/dia no Pátio.';
+  'Valor R$ por palete/dia no Pátio. Até 15 casas decimais.';
 
 INSERT INTO t_faturamento_tarifas (
   vigencia_inicio,

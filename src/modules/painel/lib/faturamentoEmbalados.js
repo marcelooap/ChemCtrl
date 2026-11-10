@@ -3,14 +3,20 @@
  *
  * - Movimentação entrada: qtd_paletes × tarifa (se data ∈ período)
  * - Movimentação saída: ceil(embalagens / capacidade) × tarifa (só carregamento concluído)
- * - Armazenagem: ledger por lote, início inclusivo / fim exclusivo
+ * - Armazenagem saída: paletes expedidos × dias até o carregamento (clipados ao período)
+ * - Armazenagem estoque: saldo remanescente × dias no período (origem "estoque")
  * - Granel/vasilhame excluídos
+ *
+ * Anti-duplicidade: paletes que saíram cobram armazenagem na linha de saída;
+ * paletes remanescentes cobram apenas na linha de estoque (nunca na entrada).
  */
 import { resolveTipoRecebimentoEstoque } from '@transbordo/lib/tipoRecebimento';
-import { resolveTarifaForDate } from '@painel/lib/faturamentoTarifas';
+import { formatEstoqueCodigo } from '@transbordo/lib/estoqueCodigo';
+import { rateToNumber, resolveTarifaForDate } from '@painel/lib/faturamentoTarifas';
 
 export const ORIGEM_ENTRADA = 'entrada';
 export const ORIGEM_SAIDA = 'saida';
+export const ORIGEM_ESTOQUE = 'estoque';
 
 export const PENDENCIA = Object.freeze({
   QTD_PALETES: 'qtd_paletes',
@@ -87,10 +93,72 @@ function minDate(a, b) {
 }
 
 function localRateKey(local) {
-  const v = String(local || '').trim();
-  if (v === 'Tenda') return 'armazenagem_tenda';
-  if (v === 'Pátio' || v === 'Patio') return 'armazenagem_patio';
+  const v = String(local || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (v === 'tenda') return 'armazenagem_tenda';
+  if (v === 'patio') return 'armazenagem_patio';
   return null;
+}
+
+/** Local cadastrado no estoque (sem default — ausente fica em branco + pendência). */
+function resolveLocalArmazenagem(lote) {
+  const raw =
+    lote?.local_armazenagem ||
+    lote?.lotes?.[0]?.local_armazenagem ||
+    null;
+  return localRateKey(raw) ? raw : null;
+}
+
+/** Embalagens da entrada (direto ou inferido por saldo/peso). */
+function resolveQuantidadeEmbalagens(lote) {
+  const direct = Number(
+    lote?.quantidade_embalagens ?? lote?.lotes?.[0]?.quantidade_embalagens
+  );
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const peso = Number(lote?.peso_liquido ?? lote?.lotes?.[0]?.peso_liquido);
+  const saldoInicial = Number(lote?.saldo_inicial ?? lote?.quantidade) || 0;
+  if (Number.isFinite(peso) && peso > 0 && saldoInicial > 0) {
+    const n = saldoInicial / peso;
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/** Quantidade de paletes da entrada (com fallbacks). */
+function resolveQtdPaletesEntrada(lote, capMap) {
+  const direct = Number(lote?.qtd_paletes ?? lote?.lotes?.[0]?.qtd_paletes);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const emb = resolveQuantidadeEmbalagens(lote);
+  const cap =
+    capacidadeForItem(lote, capMap) ||
+    capacidadeForItem(lote?.lotes?.[0], capMap);
+  if (Number.isFinite(emb) && emb > 0 && cap != null) {
+    return calcPaletesSaida(emb, cap);
+  }
+  // Sem capacidade no cadastro: assume 1 embalagem por palete (legado).
+  if (Number.isFinite(emb) && emb > 0) {
+    return Math.ceil(emb);
+  }
+  return null;
+}
+
+/**
+ * Limita o remanescente ao saldo operacional atual (pátio/estoque).
+ * Cobre baixas que não passaram por saída embalada (ex.: transbordo).
+ */
+function capPaletesBySaldoAtual(lote, qtdPaletesEntrada, remaining) {
+  const saldoInicial = Number(lote?.saldo_inicial ?? lote?.quantidade) || 0;
+  const saldoAtual = Number(lote?.saldo_atual ?? lote?.saldo_final) || 0;
+  if (saldoAtual <= 0) return 0;
+  if (!(qtdPaletesEntrada > 0)) return Math.max(0, remaining);
+  if (!(saldoInicial > 0)) return Math.max(0, remaining);
+  const bySaldo = qtdPaletesEntrada * (saldoAtual / saldoInicial);
+  return Math.max(0, Math.min(Number(remaining) || 0, bySaldo));
 }
 
 function isEmbaladoEstoque(item) {
@@ -101,9 +169,13 @@ function unique(arr) {
   return [...new Set((arr || []).filter(Boolean))];
 }
 
-function moneyCentsForDays(paletes, days, dailyRate) {
+/**
+ * Produto exato (sem arredondar). Arredonda só no valor final via toCents.
+ */
+function moneyExact(paletes, days, dailyRate) {
   if (!paletes || !days) return 0;
-  return toCents(Number(paletes) * Number(days) * Number(dailyRate || 0));
+  const rate = rateToNumber(dailyRate) ?? 0;
+  return Number(paletes) * Number(days) * rate;
 }
 
 export function calcArmazenagemCents({
@@ -141,7 +213,7 @@ export function calcArmazenagemCents({
   }
   const points = [...cuts].sort();
 
-  let cents = 0;
+  let exactTotal = 0;
   let days = 0;
   const segments = [];
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -150,9 +222,9 @@ export function calcArmazenagemCents({
     const d = countStorageDays(a, b);
     if (d <= 0) continue;
     const tarifa = resolveTarifaForDate(tarifas, a);
-    const daily = Number(tarifa?.[rateKey]) || 0;
-    const part = moneyCentsForDays(paletes, d, daily);
-    cents += part;
+    const daily = tarifa?.[rateKey];
+    const partExact = moneyExact(paletes, d, daily);
+    exactTotal += partExact;
     days += d;
     segments.push({
       from: a,
@@ -162,12 +234,13 @@ export function calcArmazenagemCents({
       days: d,
       paletes,
       dailyRate: daily,
-      cents: part,
+      // Exibição do segmento; o total da linha arredonda o somatório exato.
+      cents: toCents(partExact),
       local,
     });
   }
 
-  return { cents, days, pending: null, segments };
+  return { cents: toCents(exactTotal), days, pending: null, segments };
 }
 
 function produtoCapacidadeMap(produtos) {
@@ -176,17 +249,24 @@ function produtoCapacidadeMap(produtos) {
     if (!p) continue;
     const cap = Number(p.qtd_embalagem_por_palete);
     const value = Number.isFinite(cap) && cap > 0 ? cap : null;
+    if (value == null) continue;
     if (p.id) map.set(String(p.id), value);
-    if (p.codigo) map.set(`cod:${String(p.codigo).trim().toUpperCase()}`, value);
+    const cod = String(p.codigo || p.produto_codigo || '')
+      .trim()
+      .toUpperCase();
+    if (cod) map.set(`cod:${cod}`, value);
   }
   return map;
 }
 
 function capacidadeForItem(item, capMap) {
-  if (item?.produto_id && capMap.has(String(item.produto_id))) {
+  if (!item || !capMap) return null;
+  if (item.produto_id && capMap.has(String(item.produto_id))) {
     return capMap.get(String(item.produto_id));
   }
-  const cod = String(item?.produto_codigo || '').trim().toUpperCase();
+  const cod = String(item.produto_codigo || item.codigo || '')
+    .trim()
+    .toUpperCase();
   if (cod && capMap.has(`cod:${cod}`)) return capMap.get(`cod:${cod}`);
   return null;
 }
@@ -344,6 +424,8 @@ function loteMatchesSearch(lote, search) {
     lote?.cliente_nome,
     lote?.entrada_codigo,
     lote?.id_entrada,
+    lote?.id,
+    formatEstoqueCodigo(lote?.codigo_estoque),
   ]
     .filter(Boolean)
     .join(' ')
@@ -378,7 +460,7 @@ function applySaidaMovimentacao(row, ev, tarifas, from, to) {
   }
 
   const unit = resolveTarifaForDate(tarifas, exitDate).movimentacao_palete;
-  row.movimentacaoCents = toCents(ev.paletes * unit);
+  row.movimentacaoCents = toCents(ev.paletes * (rateToNumber(unit) ?? 0));
   row.paletesMovimentacao = ev.paletes;
   row.valorUnitarioMov = unit;
 }
@@ -431,83 +513,111 @@ export function apurarFaturamentoEmbalados({
   }
 
   const entradaRows = [];
+  const estoqueRows = [];
   const saidaRows = [];
   const saidaRowByKey = new Map();
   const processedSaidaKeys = new Set();
 
   const embalados = (estoqueItems || []).filter(isEmbaladoEstoque);
-  /** Armazenagem de lotes recebidos antes do período (sem linha de entrada na tabela). */
-  let armazenagemRemanescenteForaPeriodoCents = 0;
 
   for (const lote of embalados) {
     const estoqueId = String(lote.id || '');
     if (!estoqueId) continue;
 
     const dataEntrada = toIsoDate(lote.data) || toIsoDate(lote.created_at);
-    const qtdPaletesRaw = Number(lote.qtd_paletes);
-    const qtdPaletes =
-      Number.isFinite(qtdPaletesRaw) && qtdPaletesRaw > 0 ? qtdPaletesRaw : null;
-    const local = lote.local_armazenagem || lote.lotes?.[0]?.local_armazenagem || null;
+    const qtdPaletes = resolveQtdPaletesEntrada(lote, capMap);
+    const local = resolveLocalArmazenagem(lote);
+    const estoqueCodigo = formatEstoqueCodigo(lote.codigo_estoque);
 
+    const missingLocal = !localRateKey(local);
     const pendenciasEntrada = [];
     if (qtdPaletes == null) pendenciasEntrada.push(PENDENCIA.QTD_PALETES);
-    if (!localRateKey(local)) pendenciasEntrada.push(PENDENCIA.LOCAL);
+    if (missingLocal) pendenciasEntrada.push(PENDENCIA.LOCAL);
 
     const loteEvents = eventsByEstoque.get(estoqueId) || [];
     let remaining = qtdPaletes || 0;
+    const saidasComposicao = [];
+    let paletesSaidaTotal = 0;
+    /** Saídas até o fim do período (reduzem saldo “no momento” da apuração). */
+    let paletesSaidaAteFimPeriodo = 0;
 
-    let entradaArmazenagemCents = 0;
-    let entradaArmazenagemDays = 0;
-    let entradaArmazenagemDetail = [];
+    let estoqueArmazenagemCents = 0;
+    let estoqueArmazenagemDays = 0;
+    let estoqueArmazenagemDetail = [];
 
-    const canLedger = qtdPaletes != null && Boolean(dataEntrada) && Boolean(localRateKey(local));
+    // Ledger de saldo: exige paletes + data. Local só é necessário para cobrar armazenagem.
+    const canTrackSaldo = qtdPaletes != null && Boolean(dataEntrada);
+    const canBillStorage = canTrackSaldo && !missingLocal;
 
-    if (canLedger) {
+    if (canTrackSaldo) {
       for (const ev of loteEvents) {
-        const exitDate = ev.data_carregamento;
+        const exitDate = toIsoDate(ev.data_carregamento);
         const requested = Number(ev.paletes) || 0;
-        const consumed = Math.min(remaining, requested);
+        // Saídas após o período ainda estavam em estoque durante a apuração.
+        const exitInOrBeforePeriod = Boolean(exitDate && exitDate <= to);
+        const exitInPeriod = Boolean(exitDate && exitDate >= from && exitDate <= to);
+        const consumed = exitInOrBeforePeriod ? Math.min(remaining, requested) : 0;
 
-        if (requested > remaining) {
+        if (exitInOrBeforePeriod && requested > remaining) {
           ev.pendencias = unique([...(ev.pendencias || []), PENDENCIA.OVERSHIP]);
         }
 
-        const row = ensureSaidaRow(saidaRowByKey, saidaRows, ev, lote, local);
-        processedSaidaKeys.add(`${String(ev.saida.id)}::${ev.itemIndex}`);
-        applySaidaMovimentacao(row, ev, tarifas, from, to);
-        if (ev.pendencias?.length) {
-          row.pendencias = unique([...(row.pendencias || []), ...ev.pendencias]);
+        if (exitInOrBeforePeriod && consumed > 0) {
+          paletesSaidaAteFimPeriodo += consumed;
+          saidasComposicao.push({
+            data: exitDate,
+            paletes: consumed,
+            saidaId: ev.saida?.codigo || ev.saida?.id || null,
+            embalagens: ev.embalagens,
+            noPeriodo: exitInPeriod,
+          });
+          remaining = Math.max(0, remaining - consumed);
         }
 
-        // Armazenagem dos paletes expedidos: da entrada até a data de carregamento (fim exclusivo).
-        if (consumed > 0 && dataEntrada && exitDate) {
-          const store = calcArmazenagemCents({
-            paletes: consumed,
-            startInclusive: dataEntrada,
-            endExclusive: exitDate,
-            local,
-            tarifas,
-            periodFrom: from,
-            periodTo: to,
-          });
-          if (store.cents) {
-            row.armazenagemCents = (row.armazenagemCents || 0) + store.cents;
-            row.armazenagemDays = (row.armazenagemDays || 0) + store.days;
-            row.armazenagemSegments = [
-              ...(row.armazenagemSegments || []),
-              ...store.segments,
-            ];
-            if (!row.valorDiario && store.segments[0]) {
-              row.valorDiario = store.segments[0].dailyRate;
+        if (exitInPeriod) {
+          const row = ensureSaidaRow(saidaRowByKey, saidaRows, ev, lote, local);
+          processedSaidaKeys.add(`${String(ev.saida.id)}::${ev.itemIndex}`);
+          applySaidaMovimentacao(row, ev, tarifas, from, to);
+          row.pendencias = unique([
+            ...(row.pendencias || []),
+            ...(ev.pendencias || []),
+            ...(missingLocal ? [PENDENCIA.LOCAL] : []),
+          ]);
+
+          if (consumed > 0 && canBillStorage) {
+            paletesSaidaTotal += consumed;
+
+            // Armazenagem dos paletes expedidos no período (linha de saída).
+            const store = calcArmazenagemCents({
+              paletes: consumed,
+              startInclusive: dataEntrada,
+              endExclusive: exitDate,
+              local,
+              tarifas,
+              periodFrom: from,
+              periodTo: to,
+            });
+            if (store.cents) {
+              row.armazenagemCents = (row.armazenagemCents || 0) + store.cents;
+              row.armazenagemDays = (row.armazenagemDays || 0) + store.days;
+              row.armazenagemSegments = [
+                ...(row.armazenagemSegments || []),
+                ...store.segments,
+              ];
+              if (!row.valorDiario && store.segments[0]) {
+                row.valorDiario = store.segments[0].dailyRate;
+              }
             }
+          } else if (consumed > 0) {
+            paletesSaidaTotal += consumed;
           }
         }
-
-        remaining = Math.max(0, remaining - requested);
       }
 
-      // Remanescentes: permanecem desde a entrada até o fim do período filtrado.
-      if (remaining > 0 && dataEntrada) {
+      // Remanescentes no período — INCLUI entrada anterior ao filtro.
+      remaining = capPaletesBySaldoAtual(lote, qtdPaletes, remaining);
+      const presenteNoPeriodo = Boolean(dataEntrada && dataEntrada <= to);
+      if (remaining > 0 && presenteNoPeriodo && canBillStorage) {
         const store = calcArmazenagemCents({
           paletes: remaining,
           startInclusive: dataEntrada,
@@ -517,13 +627,15 @@ export function apurarFaturamentoEmbalados({
           periodFrom: from,
           periodTo: to,
         });
-        entradaArmazenagemCents += store.cents;
-        entradaArmazenagemDays += store.days;
-        entradaArmazenagemDetail = store.segments;
+        estoqueArmazenagemCents = store.cents;
+        estoqueArmazenagemDays = store.days;
+        estoqueArmazenagemDetail = store.segments;
       }
     } else {
-      // Sem ledger completo: ainda gera linhas de saída (movimentação) no período.
+      // Sem saldo rastreável: ainda gera linhas de saída (movimentação) no período.
       for (const ev of loteEvents) {
+        const exitDate = toIsoDate(ev.data_carregamento);
+        if (!(exitDate && exitDate >= from && exitDate <= to)) continue;
         const row = ensureSaidaRow(saidaRowByKey, saidaRows, ev, lote, local);
         processedSaidaKeys.add(`${String(ev.saida.id)}::${ev.itemIndex}`);
         applySaidaMovimentacao(row, ev, tarifas, from, to);
@@ -539,24 +651,29 @@ export function apurarFaturamentoEmbalados({
     const movEntradaCents =
       entryInPeriod && qtdPaletes != null
         ? toCents(
-            qtdPaletes * resolveTarifaForDate(tarifas, dataEntrada).movimentacao_palete
+            qtdPaletes *
+              (rateToNumber(
+                resolveTarifaForDate(tarifas, dataEntrada).movimentacao_palete
+              ) ?? 0)
           )
         : null;
 
-    const hasArmazenagem = entradaArmazenagemCents > 0;
     const hasMov = movEntradaCents != null && movEntradaCents > 0;
+    const hasEstoqueArm = estoqueArmazenagemCents > 0;
+    const presenteNoPeriodo = Boolean(dataEntrada && dataEntrada <= to);
+    // Sem local: ainda lista o remanescente com advertência (sem cobrar armazenagem).
+    const hasEstoquePendenteLocal =
+      canTrackSaldo &&
+      missingLocal &&
+      presenteNoPeriodo &&
+      remaining > 0;
+    const matchesLoteFilters =
+      loteMatchesClienteFilter(lote, clienteId, clienteNome) &&
+      loteMatchesSearch(lote, search);
 
-    // Entrada só entra na tabela se a data do recebimento estiver no período.
-    // Armazenagem de estoque remanescente (entrada anterior) segue no total, sem poluir a lista.
-    if (!entryInPeriod) {
-      if (
-        hasArmazenagem &&
-        loteMatchesClienteFilter(lote, clienteId, clienteNome) &&
-        loteMatchesSearch(lote, search)
-      ) {
-        armazenagemRemanescenteForaPeriodoCents += entradaArmazenagemCents;
-      }
-    } else if (hasMov || hasArmazenagem || pendenciasEntrada.length > 0) {
+    // Entrada: somente movimentação (e pendências). Sem armazenagem remanescente.
+    // Continua filtrada pela data de entrada ∈ período.
+    if (entryInPeriod && (hasMov || pendenciasEntrada.length > 0)) {
       entradaRows.push({
         key: `entrada:${estoqueId}`,
         origem: ORIGEM_ENTRADA,
@@ -568,20 +685,16 @@ export function apurarFaturamentoEmbalados({
         lote: lote.lote || '',
         clienteId: lote.cliente_id || null,
         cliente: lote.cliente_nome || '',
-        local,
+        local: local || null,
         paletes: qtdPaletes,
         movimentacaoCents: hasMov ? movEntradaCents : null,
-        armazenagemCents: hasArmazenagem ? entradaArmazenagemCents : null,
-        armazenagemDays: hasArmazenagem ? entradaArmazenagemDays : null,
-        armazenagemSegments: entradaArmazenagemDetail,
+        armazenagemCents: null,
+        armazenagemDays: null,
+        armazenagemSegments: [],
         valorUnitarioMov: hasMov
           ? resolveTarifaForDate(tarifas, dataEntrada).movimentacao_palete
           : null,
-        valorDiario: localRateKey(local)
-          ? resolveTarifaForDate(tarifas, maxDate(dataEntrada, from) || from)[
-              localRateKey(local)
-            ]
-          : null,
+        valorDiario: null,
         quantidadeRecebida: lote.quantidade ?? lote.saldo_inicial ?? null,
         pendencias: pendenciasEntrada,
         detail: {
@@ -589,7 +702,50 @@ export function apurarFaturamentoEmbalados({
           estoque: lote,
           qtdPaletes,
           dataEntrada,
-          armazenagemSegments: entradaArmazenagemDetail,
+        },
+      });
+    }
+
+    // Estoque: NÃO filtra pela data de entrada.
+    // Com local: cobra armazenagem. Sem local: lista com local em branco + advertência.
+    if ((hasEstoqueArm || hasEstoquePendenteLocal) && matchesLoteFilters) {
+      const rateKey = localRateKey(local);
+      const refDate = maxDate(dataEntrada, from) || from;
+      const pendenciasEstoque = missingLocal ? [PENDENCIA.LOCAL] : [];
+      estoqueRows.push({
+        key: `estoque:${estoqueId}`,
+        origem: ORIGEM_ESTOQUE,
+        id: estoqueCodigo !== '—' ? estoqueCodigo : estoqueId,
+        idInterno: estoqueId,
+        // Data de referência da apuração (não a data de entrada).
+        data: to,
+        codigo: lote.produto_codigo || '',
+        produto: lote.produto_nome || '',
+        lote: lote.lote || '',
+        clienteId: lote.cliente_id || null,
+        cliente: lote.cliente_nome || '',
+        local: local || null,
+        paletes: remaining,
+        movimentacaoCents: null,
+        armazenagemCents: hasEstoqueArm ? estoqueArmazenagemCents : null,
+        armazenagemDays: hasEstoqueArm ? estoqueArmazenagemDays : null,
+        armazenagemSegments: hasEstoqueArm ? estoqueArmazenagemDetail : [],
+        valorUnitarioMov: null,
+        valorDiario: rateKey
+          ? resolveTarifaForDate(tarifas, refDate)?.[rateKey]
+          : null,
+        pendencias: pendenciasEstoque,
+        detail: {
+          tipo: ORIGEM_ESTOQUE,
+          estoque: lote,
+          dataEntrada,
+          periodFrom: from,
+          periodTo: to,
+          qtdPaletesEntrada: qtdPaletes,
+          paletesSaida: paletesSaidaAteFimPeriodo,
+          paletesRemanescentes: remaining,
+          saidas: saidasComposicao,
+          armazenagemSegments: hasEstoqueArm ? estoqueArmazenagemDetail : [],
         },
       });
     }
@@ -620,10 +776,12 @@ export function apurarFaturamentoEmbalados({
     return hasMov || hasArm || hasPendencia;
   });
 
-  let rows = [...entradaRows, ...saidaRowsNoPeriodo].map(finalizeRow);
+  let rows = [...entradaRows, ...saidaRowsNoPeriodo, ...estoqueRows].map(finalizeRow);
 
-  // Guarda: somente eventos cuja data está dentro do período filtrado.
+  // Entrada/Saída: data do evento ∈ período.
+  // Estoque: já foi gerado pelo saldo presente no período (entrada pode ser anterior).
   rows = rows.filter((r) => {
+    if (r.origem === ORIGEM_ESTOQUE) return true;
     const d = String(r.data || '').slice(0, 10);
     return d >= from && d <= to;
   });
@@ -645,7 +803,7 @@ export function apurarFaturamentoEmbalados({
   }
   if (q) {
     rows = rows.filter((r) => {
-      const hay = [r.codigo, r.produto, r.lote, r.cliente, r.id]
+      const hay = [r.codigo, r.produto, r.lote, r.cliente, r.id, r.idInterno]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -656,6 +814,10 @@ export function apurarFaturamentoEmbalados({
   rows.sort((a, b) => {
     const d = String(b.data || '').localeCompare(String(a.data || ''));
     if (d !== 0) return d;
+    const origemOrder = { entrada: 0, saida: 1, estoque: 2 };
+    const oa = origemOrder[a.origem] ?? 9;
+    const ob = origemOrder[b.origem] ?? 9;
+    if (oa !== ob) return oa - ob;
     return String(a.id).localeCompare(String(b.id));
   });
 
@@ -675,10 +837,9 @@ export function apurarFaturamentoEmbalados({
     if (r.origem === ORIGEM_SAIDA && r.movimentacaoCents) {
       totals.movSaidaCents += r.movimentacaoCents;
     }
+    // Armazenagem de saída + estoque remanescente (sem duplicidade).
     if (r.armazenagemCents) totals.armazenagemCents += r.armazenagemCents;
   }
-  // Inclui armazenagem de lotes recebidos antes do período (estoque remanescente).
-  totals.armazenagemCents += armazenagemRemanescenteForaPeriodoCents;
   totals.totalCents =
     totals.movEntradaCents + totals.movSaidaCents + totals.armazenagemCents;
 
