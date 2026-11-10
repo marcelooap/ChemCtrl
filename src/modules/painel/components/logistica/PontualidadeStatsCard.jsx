@@ -26,14 +26,16 @@ export default function PontualidadeStatsCard({ stats, title, action = null, cla
   const { t } = useTranslation();
 
   return (
-    <div className={`rounded-xl border border-border bg-card px-4 py-3 shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-4 mb-2">
+    <div
+      className={`rounded-xl border border-border bg-card px-4 py-3 shadow-sm flex flex-col ${className}`}
+    >
+      <div className="flex items-center justify-between gap-4 mb-2 min-h-7">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </span>
         {action}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 mt-auto">
         <div className="min-w-[104px]">
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />

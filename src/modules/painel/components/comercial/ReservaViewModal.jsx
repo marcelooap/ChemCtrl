@@ -115,6 +115,10 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
                       label={t('painel.comercial.reservarMaterial.vasilhames.columns.massa')}
                       value={`${formatMass(row.massa, { empty: '—' })} kg`}
                     />
+                    <SummaryItem
+                      label={t('painel.comercial.reservarMaterial.vasilhames.columns.tara')}
+                      value={`${formatMass(row.tara, { empty: '—' })} kg`}
+                    />
                   </div>
                   <div className="space-y-2">
                     <SummaryItem

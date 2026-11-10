@@ -35,16 +35,53 @@ import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import PontualidadeStatsCard, {
   computePontualidadeStats,
 } from '@painel/components/logistica/PontualidadeStatsCard';
+import AtrasoResponsavelStatsCard, {
+  computeAtrasoResponsavelStats,
+} from '@painel/components/logistica/AtrasoResponsavelStatsCard';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
   groupCarregamentosConcluidos,
   listAgendamentosConcluidos,
   normalizeBookings,
-  produtosCountLabel,
   reverterCarregamento,
 } from '@painel/lib/agendamentosCarregamento';
 import { checklistItemsFromBooking } from '@painel/lib/carregamentoChecklistConfig';
+import { resolveVasilhameDaSaida } from '@transbordo/lib/vasilhameSaidaLink';
+
+/** Destinos distintos das saídas do carregamento. */
+function destinosLabelFromSaidas(saidas = []) {
+  const names = [
+    ...new Set(
+      (saidas || [])
+        .map((saida) => String(saida?.destino || '').trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (names.length === 0) return '—';
+  return names.join(' · ');
+}
+
+/** Tokens de busca do tanque (nº placa / nº barril) a partir dos itens das saídas. */
+function tankSearchTokens(saidasResolvidas = [], vasilhames = []) {
+  const tokens = [];
+  for (const saida of saidasResolvidas || []) {
+    for (const item of saida?.itens || []) {
+      const vasilhame = resolveVasilhameDaSaida(item, vasilhames, {
+        preferPatio: false,
+      });
+      const placa = String(
+        item?.vasilhame_placa || vasilhame?.placa || vasilhame?.container_number || ''
+      ).trim();
+      const barril = String(
+        item?.vasilhame_barril ?? vasilhame?.barril ?? vasilhame?.barril_number ?? ''
+      ).trim();
+      if (placa && placa !== '—' && placa !== '-') tokens.push(placa);
+      if (barril && barril !== '—' && barril !== '-') tokens.push(barril);
+    }
+  }
+  return tokens;
+}
 
 /** Mês (YYYY-MM) da data efetiva do carregamento. */
 const rowMonthKey = (row) =>
@@ -67,6 +104,8 @@ export default function LogisticaCarregamentos() {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [appliedDateFrom, setAppliedDateFrom] = useState('');
+  const [appliedDateTo, setAppliedDateTo] = useState('');
   const [viewSaida, setViewSaida] = useState(null);
   const [viewAgendamento, setViewAgendamento] = useState(null);
   const [viewChecklistItems, setViewChecklistItems] = useState([]);
@@ -124,16 +163,16 @@ export default function LogisticaCarregamentos() {
         .filter(Boolean);
       return {
         ...row,
-        produtosLabel: produtosCountLabel(saidasGrupo, t),
+        destinosLabel: destinosLabelFromSaidas(saidasGrupo),
         saidasResolvidas: saidasGrupo,
       };
     });
-  }, [rows, saidasById, t]);
+  }, [rows, saidasById]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const from = String(dateFrom || '').slice(0, 10);
-    const to = String(dateTo || '').slice(0, 10);
+    const from = String(appliedDateFrom || '').slice(0, 10);
+    const to = String(appliedDateTo || '').slice(0, 10);
 
     return displayRows.filter((row) => {
       const carregamentoDate = String(row.data_carregamento || row.data || '').slice(0, 10);
@@ -145,7 +184,7 @@ export default function LogisticaCarregamentos() {
       const hay = [
         row.codesLabel,
         row.clientesLabel,
-        row.produtosLabel,
+        row.destinosLabel,
         row.transportadora,
         row.motorista,
         row.placa,
@@ -154,15 +193,29 @@ export default function LogisticaCarregamentos() {
         row.hora_carregamento,
         formatDateBR(row.data),
         formatDateBR(row.data_carregamento),
+        ...tankSearchTokens(row.saidasResolvidas, vasilhames),
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [displayRows, search, dateFrom, dateTo]);
+  }, [displayRows, search, appliedDateFrom, appliedDateTo, vasilhames]);
 
-  const hasDateFilter = Boolean(dateFrom || dateTo);
+  const hasDateDraft = Boolean(dateFrom || dateTo);
+  const hasDateFilter = Boolean(appliedDateFrom || appliedDateTo);
+
+  const applyDateFilter = () => {
+    setAppliedDateFrom(String(dateFrom || '').slice(0, 10));
+    setAppliedDateTo(String(dateTo || '').slice(0, 10));
+  };
+
+  const clearDateFilter = () => {
+    setDateFrom('');
+    setDateTo('');
+    setAppliedDateFrom('');
+    setAppliedDateTo('');
+  };
 
   // Meses disponíveis para o filtro do contador (sempre inclui o mês atual).
   const statsMonthOptions = useMemo(() => {
@@ -187,10 +240,18 @@ export default function LogisticaCarregamentos() {
     [i18n.language]
   );
 
-  // Pontualidade dos carregamentos concluídos no mês selecionado.
-  const pontualidadeStats = useMemo(
-    () => computePontualidadeStats(rows.filter((row) => rowMonthKey(row) === statsMonth)),
+  // Pontualidade e responsáveis dos atrasos no mês selecionado.
+  const monthRows = useMemo(
+    () => rows.filter((row) => rowMonthKey(row) === statsMonth),
     [rows, statsMonth]
+  );
+  const pontualidadeStats = useMemo(
+    () => computePontualidadeStats(monthRows),
+    [monthRows]
+  );
+  const atrasoResponsavelStats = useMemo(
+    () => computeAtrasoResponsavelStats(monthRows),
+    [monthRows]
   );
 
   const resolveSaida = (booking) => saidasById.get(String(booking?.saida_id));
@@ -263,42 +324,61 @@ export default function LogisticaCarregamentos() {
             {t('painel.logistica.sections.carregamentos.subtitle')}
           </p>
         </div>
-        <PontualidadeStatsCard
-          stats={pontualidadeStats}
-          title={t('painel.logistica.carregamentos.stats.title')}
-          action={
-            <Select value={statsMonth} onValueChange={setStatsMonth}>
-              <SelectTrigger
-                className="h-7 w-[160px] text-xs"
-                aria-label={t('painel.logistica.carregamentos.stats.monthFilter')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {statsMonthOptions.map((key) => (
-                  <SelectItem key={key} value={key} className="text-xs">
-                    {statsMonthLabel(key)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
-        />
+        <div className="flex flex-wrap items-stretch justify-end gap-3">
+          <PontualidadeStatsCard
+            className="h-full"
+            stats={pontualidadeStats}
+            title={t('painel.logistica.carregamentos.stats.title')}
+            action={
+              <Select value={statsMonth} onValueChange={setStatsMonth}>
+                <SelectTrigger
+                  className="h-7 w-[160px] text-xs"
+                  aria-label={t('painel.logistica.carregamentos.stats.monthFilter')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {statsMonthOptions.map((key) => (
+                    <SelectItem key={key} value={key} className="text-xs">
+                      {statsMonthLabel(key)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+          <AtrasoResponsavelStatsCard
+            className="h-full"
+            stats={atrasoResponsavelStats}
+            title={t('painel.logistica.carregamentos.stats.atrasoTitle')}
+          />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
-        <div className="shrink-0 px-5 py-4 border-b border-border flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
+        <div className="shrink-0 px-5 py-3 border-b border-border flex flex-col items-start gap-2">
+          <div className="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h2 className="text-sm font-semibold text-foreground">
               {t('painel.logistica.carregamentos.tableTitle')}
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <span className="text-xs text-muted-foreground">
               {t('painel.logistica.carregamentos.tableCount', {
                 count: filteredRows.length,
               })}
-            </p>
+            </span>
           </div>
-          <div className="flex flex-wrap items-end gap-2 w-full lg:w-auto">
+          <div className="flex flex-wrap items-end justify-start gap-2 w-full">
+            <div className="relative w-full sm:w-[28rem] min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('painel.logistica.carregamentos.searchPlaceholder')}
+                className="pl-9 h-9"
+                title={t('painel.logistica.carregamentos.searchPlaceholder')}
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-2 ml-2">
             <div className="space-y-1">
               <Label htmlFor="carreg-date-from" className="text-[11px] text-muted-foreground">
                 {t('painel.logistica.carregamentos.dateFrom')}
@@ -306,7 +386,7 @@ export default function LogisticaCarregamentos() {
               <DateInputBr
                 value={dateFrom}
                 onChange={setDateFrom}
-                className="w-[148px]"
+                className="w-[160px]"
               />
             </div>
             <div className="space-y-1">
@@ -316,71 +396,69 @@ export default function LogisticaCarregamentos() {
               <DateInputBr
                 value={dateTo}
                 onChange={setDateTo}
-                className="w-[148px]"
+                className="w-[160px]"
               />
             </div>
-            {hasDateFilter ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-9"
+              onClick={applyDateFilter}
+              disabled={!hasDateDraft}
+            >
+              {t('painel.logistica.carregamentos.filterButton')}
+            </Button>
+            {hasDateFilter || hasDateDraft ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="h-9 px-2 text-muted-foreground"
-                onClick={() => {
-                  setDateFrom('');
-                  setDateTo('');
-                }}
+                onClick={clearDateFilter}
                 title={t('painel.logistica.carregamentos.clearDates')}
               >
                 <X className="h-4 w-4" />
               </Button>
             ) : null}
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t('painel.logistica.carregamentos.searchPlaceholder')}
-                className="pl-9 h-9"
-              />
             </div>
           </div>
         </div>
 
         <div className="overflow-auto flex-1 min-h-0">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-auto">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground sticky top-0 z-10">
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.saida')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.cliente')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
-                  {t('painel.logistica.carregamentos.columns.produto')}
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap">
+                  {t('painel.logistica.carregamentos.columns.destino')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.transportadora')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.motorista')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap">
                   {t('painel.logistica.carregamentos.columns.placa')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.horarioAgendado')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.horarioCarregamento')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.status')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-center">
                   {t('painel.logistica.carregamentos.columns.operador')}
                 </th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap text-right">
+                <th className="px-2.5 py-2.5 font-semibold whitespace-nowrap text-right">
                   {t('painel.logistica.carregamentos.columns.acoes')}
                 </th>
               </tr>
@@ -390,7 +468,7 @@ export default function LogisticaCarregamentos() {
                 <tr>
                   <td
                     colSpan={11}
-                    className="px-4 py-12 text-center text-sm text-muted-foreground"
+                    className="px-2.5 py-12 text-center text-sm text-muted-foreground"
                   >
                     {t('painel.logistica.carregamentos.empty')}
                   </td>
@@ -401,29 +479,29 @@ export default function LogisticaCarregamentos() {
                     key={row.id}
                     className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                   >
-                    <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
+                    <td className="px-2.5 py-2.5 font-medium text-primary whitespace-nowrap">
                       {row.codesLabel}
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[180px] truncate">
+                    <td className="px-2.5 py-2.5 text-foreground whitespace-nowrap">
                       {row.clientesLabel}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {row.produtosLabel}
+                    <td className="px-2.5 py-2.5 text-muted-foreground whitespace-nowrap">
+                      {row.destinosLabel}
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[160px] truncate text-center">
+                    <td className="px-2.5 py-2.5 text-foreground whitespace-nowrap text-center">
                       {row.transportadora || '—'}
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate text-center">
+                    <td className="px-2.5 py-2.5 text-foreground whitespace-nowrap text-center">
                       {row.motorista || '—'}
                     </td>
-                    <td className="px-4 py-3 font-mono text-foreground whitespace-nowrap">
+                    <td className="px-2.5 py-2.5 font-mono text-foreground whitespace-nowrap">
                       {row.placa || '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-center">
+                    <td className="px-2.5 py-2.5 text-muted-foreground whitespace-nowrap text-center">
                       <span className="block tabular-nums">{horarioLabel(row.horario)}</span>
                       <span className="block text-[11px]">{formatDateBR(row.data)}</span>
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-foreground whitespace-nowrap text-center">
+                    <td className="px-2.5 py-2.5 tabular-nums text-foreground whitespace-nowrap text-center">
                       <span className="block">{row.hora_carregamento || '—'}</span>
                       {row.data_carregamento ? (
                         <span className="block text-[11px] text-muted-foreground">
@@ -431,13 +509,13 @@ export default function LogisticaCarregamentos() {
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                    <td className="px-2.5 py-2.5 whitespace-nowrap text-center">
                       <PontualidadeBadge status={row.pontualidade} t={t} />
                     </td>
-                    <td className="px-4 py-3 text-foreground max-w-[140px] truncate text-center">
+                    <td className="px-2.5 py-2.5 text-foreground whitespace-nowrap text-center">
                       {row.operador_nome || '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-2.5 py-2.5 text-right">
                       <div className="inline-flex items-center justify-end gap-1">
                         <RowActionButton
                           title={t('painel.logistica.carregamentos.view')}

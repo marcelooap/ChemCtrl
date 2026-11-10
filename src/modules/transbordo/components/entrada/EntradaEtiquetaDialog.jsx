@@ -147,6 +147,7 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
         op_number: model.id,
         lot: model.lote,
         manufactureDate: model.fabricacao,
+        fillingDate: model.envase,
         expiryDate: model.validade,
         net_weight: model.netWeight || 0,
         gross_weight: model.grossWeight || 0,

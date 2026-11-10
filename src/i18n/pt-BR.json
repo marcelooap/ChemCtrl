@@ -600,6 +600,7 @@
       "profiles": "Permissões",
       "painelHome": "Home",
       "painelDashboard": "Dashboard",
+      "painelFaturamento": "Faturamento",
       "painelReservarMaterial": "Reservar Material",
       "painelSolicitacoesSaida": "Solicitações de Saída",
       "painelComposicaoCarga": "Composição de Carga",
@@ -750,6 +751,7 @@
     "nav": {
       "home": "Home",
       "dashboard": "Dashboard",
+      "faturamento": "Faturamento",
       "comercial": "Comercial",
       "reservarMaterial": "Reservar Material",
       "solicitacoesSaida": "Solicitações de Saída",
@@ -966,6 +968,7 @@
           "pesoBruto": "Peso bruto",
           "volume": "Volume",
           "cliente": "Cliente",
+          "dataEnvase": "Data envase",
           "embalagem": "Embalagem",
           "responsavelTecnico": "Responsável técnico"
         }
@@ -1108,6 +1111,108 @@
         "sales": "Vendas",
         "logistics": "Logística",
         "stock": "Estoque"
+      }
+    },
+    "faturamento": {
+      "title": "Faturamento",
+      "subtitle": "Movimentação e armazenagem de materiais embalados",
+      "loadErrorTitle": "Não foi possível carregar o faturamento",
+      "loadErrorDescription": "Verifique a conexão e se a tabela de tarifas foi criada no Supabase.",
+      "tarifas": {
+        "title": "Tarifas de cobrança",
+        "subtitle": "Valores vigentes. Ao salvar, cria uma nova vigência sem alterar o histórico.",
+        "movimentacao": "Movimentação (R$/palete)",
+        "tenda": "Armazenagem Tenda (R$/palete/dia)",
+        "patio": "Armazenagem Pátio (R$/palete/dia)",
+        "vigencia": "Vigência a partir de",
+        "save": "Salvar tarifas",
+        "saving": "Salvando…",
+        "saved": "Nova vigência registrada",
+        "history": "Histórico de vigências",
+        "current": "Vigente desde {{date}}",
+        "emptyHistory": "Nenhuma vigência cadastrada.",
+        "saveError": "Não foi possível salvar as tarifas"
+      },
+      "filters": {
+        "cliente": "Cliente",
+        "clienteAll": "Todos os clientes",
+        "search": "Busca",
+        "searchPlaceholder": "Código, produto ou lote",
+        "dateFrom": "Período inicial",
+        "dateTo": "Período final",
+        "apply": "Filtrar",
+        "clear": "Limpar"
+      },
+      "kpis": {
+        "movEntrada": "Movimentação de entrada",
+        "movSaida": "Movimentação de saída",
+        "armazenagem": "Armazenagem",
+        "total": "Total do faturamento",
+        "pendencias": "{{count}} pendência(s) de configuração"
+      },
+      "table": {
+        "title": "Registros de faturamento",
+        "count": "{{count}} registro(s)",
+        "empty": "Nenhum registro encontrado para os filtros selecionados.",
+        "id": "ID",
+        "data": "Data",
+        "origem": "Origem",
+        "cod": "Cód.",
+        "produto": "Produto",
+        "lote": "Lote",
+        "cliente": "Cliente",
+        "local": "Local de armazenagem",
+        "movimentacao": "Movimentação",
+        "armazenagem": "Armazenagem",
+        "total": "Valor total",
+        "acoes": "Ações",
+        "entrada": "Entrada",
+        "saida": "Saída",
+        "dash": "—",
+        "view": "Visualizar detalhes",
+        "pending": "Pendência"
+      },
+      "modal": {
+        "titleEntrada": "Detalhes da entrada",
+        "titleSaida": "Detalhes da saída",
+        "close": "Fechar",
+        "id": "ID",
+        "dataEntrada": "Data de entrada",
+        "dataCarregamento": "Data de carregamento",
+        "cliente": "Cliente",
+        "codigo": "Código",
+        "produto": "Produto",
+        "lote": "Lote",
+        "quantidadeRecebida": "Quantidade recebida",
+        "qtdPaletes": "Quantidade de paletes",
+        "local": "Local de armazenagem",
+        "valorUnitarioMov": "Valor unitário da movimentação",
+        "valorTotalMov": "Valor total da movimentação",
+        "embalagens": "Embalagens carregadas",
+        "capacidade": "Embalagens por palete",
+        "paletesCalc": "Paletes calculados",
+        "diasArmazenagem": "Dias de armazenagem",
+        "valorDiario": "Valor diário por palete",
+        "valorArmazenagem": "Valor total da armazenagem",
+        "valorTotal": "Valor total faturado",
+        "breakdown": "Detalhamento do cálculo",
+        "segment": "Armazenagem: {{paletes}} palete(s) × {{days}} dia(s) × {{rate}} = {{total}}",
+        "formulaMovEntrada": "Movimentação: {{paletes}} palete(s) × {{rate}} = {{total}}",
+        "formulaMovSaida": "Movimentação: ceil({{embalagens}} ÷ {{capacidade}}) = {{paletes}} × {{rate}} = {{total}}",
+        "pendencias": "Pendências de configuração",
+        "pendencia": {
+          "qtd_paletes": "Quantidade de paletes não informada na entrada",
+          "local_armazenagem": "Local de armazenagem ausente ou inválido",
+          "qtd_embalagem_por_palete": "Capacidade de embalagens por palete não cadastrada no produto",
+          "quantidade_embalagens": "Quantidade de embalagens da saída ausente ou inválida",
+          "paletes_excedem_entrada": "Paletes da saída excedem o saldo da entrada",
+          "estoque_nao_encontrado": "Estoque de origem não encontrado"
+        }
+      },
+      "pagination": {
+        "prev": "Anterior",
+        "next": "Próxima",
+        "page": "Página {{page}} de {{total}}"
       }
     },
     "comercial": {
@@ -1538,6 +1643,7 @@
             "barril": "Nº Barril",
             "volume": "Volume",
             "massa": "Massa",
+            "tara": "Tara",
             "observacao": "Observação",
             "status": "Status",
             "dataSaida": "Data de saída"
@@ -1659,9 +1765,10 @@
       "carregamentos": {
         "tableTitle": "Carregamentos concluídos",
         "tableCount": "{{count}} registro(s)",
-        "searchPlaceholder": "Buscar saída, cliente, motorista, placa...",
+        "searchPlaceholder": "Buscar saída, cliente, motorista ou tanque...",
         "dateFrom": "Finalizado de",
         "dateTo": "até",
+        "filterButton": "Filtrar",
         "clearDates": "Limpar período",
         "empty": "Nenhum carregamento concluído encontrado.",
         "view": "Visualizar saída",
@@ -1701,6 +1808,7 @@
         "columns": {
           "saida": "ID da saída",
           "cliente": "Cliente",
+          "destino": "Destino",
           "produto": "Produto",
           "transportadora": "Transportadora",
           "motorista": "Motorista",
@@ -1719,7 +1827,11 @@
           "title": "Pontualidade no mês",
           "dayTitle": "Pontualidade do dia",
           "monthFilter": "Filtrar por mês",
-          "total": "Total"
+          "total": "Total",
+          "atrasoTitle": "Responsável pelo atraso",
+          "atrasoCliente": "Cliente",
+          "atrasoIntertank": "Intertank",
+          "atrasoTotal": "Fora do horário"
         }
       },
       "recebimento": {
@@ -4327,6 +4439,7 @@
       "client": "CLIENTE",
       "lot": "LOTE",
       "manufacture": "FABRICAÇÃO",
+      "fillingDate": "DATA ENVASE",
       "expiry": "VALIDADE",
       "mass": "MASSA",
       "netWeight": "P. LÍQUIDO",

@@ -340,6 +340,18 @@ export default function ProdutoModal({
             ) : null}
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Qtd de embalagem por palete</Label>
+            <NumberInputBr
+              decimals={0}
+              min={0}
+              value={qtdEmbalagemPorPalete}
+              onChange={(v) => setQtdEmbalagemPorPalete(v === "" ? "" : v)}
+              placeholder="0"
+              disabled={readOnly}
+            />
+          </div>
+
           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
             <div>
               <Label>Densidade Tabelada?</Label>
@@ -366,18 +378,6 @@ export default function ProdutoModal({
               />
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <Label>Qtd de embalagem por palete</Label>
-            <NumberInputBr
-              decimals={0}
-              min={0}
-              value={qtdEmbalagemPorPalete}
-              onChange={(v) => setQtdEmbalagemPorPalete(v === "" ? "" : v)}
-              placeholder="0"
-              disabled={readOnly}
-            />
-          </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/40/50">
             <div>

@@ -548,6 +548,7 @@
       "profiles": "Permisos",
       "painelHome": "Inicio",
       "painelDashboard": "Dashboard",
+      "painelFaturamento": "Facturación",
       "painelReservarMaterial": "Reservar Material",
       "painelSolicitacoesSaida": "Solicitudes de Salida",
       "painelComposicaoCarga": "Composición de Carga",
@@ -697,6 +698,7 @@
     "nav": {
       "home": "Home",
       "dashboard": "Dashboard",
+      "faturamento": "Facturación",
       "comercial": "Comercial",
       "reservarMaterial": "Reservar Material",
       "solicitacoesSaida": "Solicitudes de Salida",
@@ -826,6 +828,7 @@
           "pesoBruto": "Peso bruto",
           "volume": "Volumen",
           "cliente": "Cliente",
+          "dataEnvase": "Fecha de envasado",
           "embalagem": "Embalaje",
           "responsavelTecnico": "Responsable técnico"
         }
@@ -1263,6 +1266,7 @@
             "barril": "Nº Barril",
             "volume": "Volumen",
             "massa": "Masa",
+            "tara": "Tara",
             "observacao": "Observación",
             "status": "Estado",
             "dataSaida": "Fecha de salida"
@@ -1378,7 +1382,11 @@
       "carregamentos": {
         "tableTitle": "Cargamentos concluidos",
         "tableCount": "{{count}} registro(s)",
-        "searchPlaceholder": "Buscar salida, cliente, conductor, placa...",
+        "searchPlaceholder": "Buscar salida, cliente, conductor o tanque...",
+        "dateFrom": "Finalizado desde",
+        "dateTo": "hasta",
+        "filterButton": "Filtrar",
+        "clearDates": "Limpiar período",
         "empty": "No se encontraron cargamentos concluidos.",
         "view": "Ver salida",
         "revert": "Revertir expedición",
@@ -1417,6 +1425,7 @@
         "columns": {
           "saida": "ID de salida",
           "cliente": "Cliente",
+          "destino": "Destino",
           "produto": "Producto",
           "transportadora": "Transportista",
           "motorista": "Conductor",
@@ -1435,7 +1444,11 @@
           "title": "Puntualidad del mes",
           "dayTitle": "Puntualidad del día",
           "monthFilter": "Filtrar por mes",
-          "total": "Total"
+          "total": "Total",
+          "atrasoTitle": "Responsable del atraso",
+          "atrasoCliente": "Cliente",
+          "atrasoIntertank": "Intertank",
+          "atrasoTotal": "Fuera de horario"
         }
       },
       "topics": {
@@ -3993,6 +4006,7 @@
       "client": "CLIENTE",
       "lot": "LOTE",
       "manufacture": "FABRICACIÓN",
+      "fillingDate": "FECHA ENVASE",
       "expiry": "VENCIMIENTO",
       "mass": "MASA",
       "netWeight": "P. NETO",

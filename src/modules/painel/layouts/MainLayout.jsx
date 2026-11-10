@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Home,
   LayoutDashboard,
+  Receipt,
   Briefcase,
   Truck,
   Users,
@@ -46,6 +47,7 @@ export default function MainLayout() {
 
     const business = [
       { path: '/painel/dashboard', label: t('painel.nav.dashboard'), icon: LayoutDashboard },
+      { path: '/painel/faturamento', label: t('painel.nav.faturamento'), icon: Receipt },
       {
         groupId: 'comercial',
         label: t('painel.nav.comercial'),

@@ -108,6 +108,7 @@ function dataRowLabel(key, t) {
     case 'id': return t('pdf.label.ref');
     case 'lote': return t('pdf.label.lot');
     case 'fabricacao': return t('pdf.label.manufacture');
+    case 'data_envase': return t('pdf.label.fillingDate');
     case 'validade': return t('pdf.label.expiry');
     case 'cliente': return t('pdf.label.client');
     case 'volume': return t('pdf.label.volume');
@@ -392,6 +393,7 @@ async function buildConfiguredLabelBody({
   lot,
   client,
   fabDate,
+  envaseDate,
   valDate,
   netWeight,
   grossWeight,
@@ -417,6 +419,7 @@ async function buildConfiguredLabelBody({
     id: refId,
     lote: lot,
     fabricacao: fabDate,
+    data_envase: envaseDate,
     validade: valDate,
     cliente: client,
     volume,
@@ -663,6 +666,12 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     contexto === 'convencional' && !fabDateStr
       ? ''
       : formatEtiquetaDate(fabDateStr, dateFormat, lang);
+  const envaseDateStr =
+    options?.fillingDate || options?.envaseDate || container.created_date || null;
+  const envaseDate =
+    contexto === 'convencional' && !envaseDateStr
+      ? ''
+      : formatEtiquetaDate(envaseDateStr, dateFormat, lang);
   const valDate = formatEtiquetaDate(
     dateOverride?.expiryDate || options?.expiryDate || calcValidityDate(fabDateStr, validityDays),
     dateFormat,
@@ -682,6 +691,7 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     lot: container.lot || '—',
     client: clienteNome || '—',
     fabDate,
+    envaseDate,
     valDate,
     netWeight: weightFmt(netWeight || 0),
     grossWeight: weightFmt(grossWeight || 0),
@@ -755,6 +765,11 @@ export const printRawMaterialLabel = async (stockItem, publicToken, options) => 
   const campos = printConfig.campos;
   const dateFormat = printConfig.dateFormat;
   const fabDate = formatEtiquetaDate(stockItem.manufacture_date, dateFormat, lang);
+  const envaseDate = formatEtiquetaDate(
+    options?.fillingDate || options?.envaseDate || stockItem.created_date || null,
+    dateFormat,
+    lang
+  );
   const valDate = formatEtiquetaDate(stockItem.expiry_date, dateFormat, lang);
   const responsavelTecnico =
     options?.responsavelTecnico ??
@@ -770,6 +785,7 @@ export const printRawMaterialLabel = async (stockItem, publicToken, options) => 
     lot: stockItem.lot || '—',
     client: clienteNome || '—',
     fabDate,
+    envaseDate,
     valDate,
     netWeight: numFmt(stockItem.packaging_capacity || stockItem.net_weight || 0),
     grossWeight: numFmt(stockItem.gross_weight || 0),

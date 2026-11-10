@@ -246,6 +246,7 @@ export default function PrintContainerLabelDialog({
     try {
       await printContainerLabel(container, meta?.validityDays, meta?.publicToken, {
         manufactureDate: fabDate,
+        fillingDate: container?.created_date || undefined,
         expiryDate: labelExpiry || undefined,
         locale: i18n.language,
         clienteNome: meta?.clienteNome,
@@ -275,6 +276,7 @@ export default function PrintContainerLabelDialog({
     op_number: container?.op_number || '—',
     lot: container?.lot || '—',
     manufactureDate: fabDate,
+    fillingDate: container?.created_date || null,
     expiryDate: labelExpiry,
     net_weight: volumeOk ? weights.netWeight : 0,
     gross_weight: volumeOk ? weights.grossWeight : 0,

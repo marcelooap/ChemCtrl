@@ -521,6 +521,17 @@ export const permissionModules = [
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
       {
+        id: 'painel_faturamento',
+        labelKey: 'rbac.resources.painelFaturamento',
+        icon: 'Receipt',
+        route: '/painel/faturamento',
+        nav: { showInSidebar: true, order: 3 },
+        actions: [
+          { key: 'view', labelKey: 'rbac.actions.view' },
+          { key: 'edit', labelKey: 'rbac.actions.edit' },
+        ],
+      },
+      {
         id: 'painel_comercial_reserva',
         labelKey: 'rbac.resources.painelReservarMaterial',
         icon: 'PackagePlus',
@@ -531,7 +542,7 @@ export const permissionModules = [
           groupId: 'comercial',
           groupLabelKey: 'painel.nav.comercial',
           groupIcon: 'Briefcase',
-          groupOrder: 3,
+          groupOrder: 4,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -551,7 +562,7 @@ export const permissionModules = [
           groupId: 'comercial',
           groupLabelKey: 'painel.nav.comercial',
           groupIcon: 'Briefcase',
-          groupOrder: 3,
+          groupOrder: 4,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -571,7 +582,7 @@ export const permissionModules = [
           groupId: 'comercial',
           groupLabelKey: 'painel.nav.comercial',
           groupIcon: 'Briefcase',
-          groupOrder: 3,
+          groupOrder: 4,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -591,7 +602,7 @@ export const permissionModules = [
           groupId: 'logistica',
           groupLabelKey: 'painel.nav.logistica',
           groupIcon: 'Truck',
-          groupOrder: 4,
+          groupOrder: 5,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -611,7 +622,7 @@ export const permissionModules = [
           groupId: 'logistica',
           groupLabelKey: 'painel.nav.logistica',
           groupIcon: 'Truck',
-          groupOrder: 4,
+          groupOrder: 5,
         },
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
@@ -626,7 +637,7 @@ export const permissionModules = [
           groupId: 'logistica',
           groupLabelKey: 'painel.nav.logistica',
           groupIcon: 'Truck',
-          groupOrder: 4,
+          groupOrder: 5,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -646,7 +657,7 @@ export const permissionModules = [
           groupId: 'operacional',
           groupLabelKey: 'painel.nav.operacional',
           groupIcon: 'Container',
-          groupOrder: 5,
+          groupOrder: 6,
         },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },
@@ -666,7 +677,7 @@ export const permissionModules = [
           groupId: 'operacional',
           groupLabelKey: 'painel.nav.operacional',
           groupIcon: 'Container',
-          groupOrder: 5,
+          groupOrder: 6,
         },
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
@@ -1257,6 +1268,7 @@ function mapResourceToSidebarLabel(resourceId) {
     client_stock: 'sidebar.clientStock',
     painel_home: 'painel.nav.home',
     painel_dashboard: 'painel.nav.dashboard',
+    painel_faturamento: 'painel.nav.faturamento',
     painel_comercial_reserva: 'painel.nav.reservarMaterial',
     painel_comercial_saida: 'painel.nav.solicitacoesSaida',
     painel_comercial_agendamentos: 'painel.nav.agendamentos',

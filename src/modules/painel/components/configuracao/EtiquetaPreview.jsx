@@ -126,6 +126,9 @@ export default function EtiquetaPreview({
       case 'fabricacao':
         if (convencional && !v.manufactureDate) return '';
         return formatEtiquetaDate(v.manufactureDate, dateFormat, i18n.language);
+      case 'data_envase':
+        if (convencional && !v.fillingDate) return '';
+        return formatEtiquetaDate(v.fillingDate, dateFormat, i18n.language);
       case 'validade':
         return formatEtiquetaDate(v.expiryDate, dateFormat, i18n.language);
       case 'cliente':
@@ -144,6 +147,7 @@ export default function EtiquetaPreview({
       id: t('pdf.label.ref'),
       lote: t('pdf.label.lot'),
       fabricacao: t('pdf.label.manufacture'),
+      data_envase: t('pdf.label.fillingDate', { defaultValue: 'DATA ENVASE' }),
       validade: t('pdf.label.expiry'),
       cliente: t('pdf.label.client'),
       volume: t('pdf.label.volume', { defaultValue: 'VOLUME' }),

@@ -121,6 +121,7 @@ export function buildEntradaEtiquetaModel(entrada, lote, { entradaCodigo = "" } 
     lote: String(lote?.lote || "").trim() || "—",
     id: codigo || "—",
     fabricacao: lote?.data_fabricacao || entrada?.data_fabricacao || null,
+    envase: entrada?.created_date || entrada?.data || entrada?.data_entrada || null,
     validade: lote?.data_validade || entrada?.data_validade || null,
     netWeight: weights.net,
     grossWeight: weights.gross,
@@ -167,6 +168,9 @@ export async function printEntradaEtiqueta(
     lot: model?.lote || "—",
     client: model?.cliente || "—",
     fabDate: formatEtiquetaDate(model?.fabricacao, dateFormat, locale),
+    envaseDate: model?.envase
+      ? formatEtiquetaDate(model.envase, dateFormat, locale)
+      : "",
     valDate: formatEtiquetaDate(model?.validade, dateFormat, locale),
     netWeight: formatWeight(model?.netWeight, locale),
     grossWeight: formatWeight(model?.grossWeight, locale),

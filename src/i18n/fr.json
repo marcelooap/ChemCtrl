@@ -548,6 +548,7 @@
       "profiles": "Permissions",
       "painelHome": "Accueil",
       "painelDashboard": "Tableau de bord",
+      "painelFaturamento": "Facturation",
       "painelReservarMaterial": "Réserver du matériel",
       "painelSolicitacoesSaida": "Demandes de sortie",
       "painelComposicaoCarga": "Composition de charge",
@@ -697,6 +698,7 @@
     "nav": {
       "home": "Accueil",
       "dashboard": "Tableau de bord",
+      "faturamento": "Facturation",
       "comercial": "Commercial",
       "reservarMaterial": "Réserver du Matériel",
       "solicitacoesSaida": "Demandes de Sortie",
@@ -826,6 +828,7 @@
           "pesoBruto": "Poids brut",
           "volume": "Volume",
           "cliente": "Client",
+          "dataEnvase": "Date d'emballage",
           "embalagem": "Emballage",
           "responsavelTecnico": "Responsable technique"
         }
@@ -1263,6 +1266,7 @@
             "barril": "Nº Fût",
             "volume": "Volume",
             "massa": "Masse",
+            "tara": "Tare",
             "observacao": "Observation",
             "status": "Statut",
             "dataSaida": "Date de sortie"
@@ -1378,7 +1382,11 @@
       "carregamentos": {
         "tableTitle": "Chargements terminés",
         "tableCount": "{{count}} enregistrement(s)",
-        "searchPlaceholder": "Rechercher sortie, client, chauffeur, plaque...",
+        "searchPlaceholder": "Rechercher sortie, client, chauffeur ou cuve...",
+        "dateFrom": "Finalisé du",
+        "dateTo": "au",
+        "filterButton": "Filtrer",
+        "clearDates": "Effacer la période",
         "empty": "Aucun chargement terminé trouvé.",
         "view": "Voir la sortie",
         "revert": "Annuler l'expédition",
@@ -1417,6 +1425,7 @@
         "columns": {
           "saida": "ID de sortie",
           "cliente": "Client",
+          "destino": "Destination",
           "produto": "Produit",
           "transportadora": "Transporteur",
           "motorista": "Chauffeur",
@@ -1435,7 +1444,11 @@
           "title": "Ponctualité du mois",
           "dayTitle": "Ponctualité du jour",
           "monthFilter": "Filtrer par mois",
-          "total": "Total"
+          "total": "Total",
+          "atrasoTitle": "Responsable du retard",
+          "atrasoCliente": "Client",
+          "atrasoIntertank": "Intertank",
+          "atrasoTotal": "Hors horaire"
         }
       },
       "topics": {
@@ -3987,6 +4000,7 @@
       "client": "CLIENT",
       "lot": "LOT",
       "manufacture": "FABRICATION",
+      "fillingDate": "DATE EMBALLAGE",
       "expiry": "PÉREMPTION",
       "mass": "MASSE",
       "netWeight": "P. NET",

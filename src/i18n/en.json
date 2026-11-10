@@ -600,6 +600,7 @@
       "profiles": "Permissions",
       "painelHome": "Home",
       "painelDashboard": "Dashboard",
+      "painelFaturamento": "Billing",
       "painelReservarMaterial": "Reserve Material",
       "painelSolicitacoesSaida": "Outbound Requests",
       "painelComposicaoCarga": "Load Composition",
@@ -750,6 +751,7 @@
     "nav": {
       "home": "Home",
       "dashboard": "Dashboard",
+      "faturamento": "Billing",
       "comercial": "Commercial",
       "reservarMaterial": "Reserve Material",
       "solicitacoesSaida": "Outbound Requests",
@@ -966,6 +968,7 @@
           "pesoBruto": "Gross weight",
           "volume": "Volume",
           "cliente": "Customer",
+          "dataEnvase": "Filling date",
           "embalagem": "Packaging",
           "responsavelTecnico": "Technical manager"
         }
@@ -1108,6 +1111,108 @@
         "sales": "Sales",
         "logistics": "Logistics",
         "stock": "Inventory"
+      }
+    },
+    "faturamento": {
+      "title": "Billing",
+      "subtitle": "Handling and storage charges for packaged materials",
+      "loadErrorTitle": "Could not load billing",
+      "loadErrorDescription": "Check the connection and whether the rates table was created in Supabase.",
+      "tarifas": {
+        "title": "Billing rates",
+        "subtitle": "Current rates. Saving creates a new effective date without changing history.",
+        "movimentacao": "Handling (R$/pallet)",
+        "tenda": "Tent storage (R$/pallet/day)",
+        "patio": "Yard storage (R$/pallet/day)",
+        "vigencia": "Effective from",
+        "save": "Save rates",
+        "saving": "Saving…",
+        "saved": "New rate period saved",
+        "history": "Rate history",
+        "current": "Effective since {{date}}",
+        "emptyHistory": "No rates registered.",
+        "saveError": "Could not save rates"
+      },
+      "filters": {
+        "cliente": "Customer",
+        "clienteAll": "All customers",
+        "search": "Search",
+        "searchPlaceholder": "Code, product or lot",
+        "dateFrom": "Start date",
+        "dateTo": "End date",
+        "apply": "Filter",
+        "clear": "Clear"
+      },
+      "kpis": {
+        "movEntrada": "Inbound handling",
+        "movSaida": "Outbound handling",
+        "armazenagem": "Storage",
+        "total": "Billing total",
+        "pendencias": "{{count}} configuration issue(s)"
+      },
+      "table": {
+        "title": "Billing records",
+        "count": "{{count}} record(s)",
+        "empty": "No records found for the selected filters.",
+        "id": "ID",
+        "data": "Date",
+        "origem": "Origin",
+        "cod": "Code",
+        "produto": "Product",
+        "lote": "Lot",
+        "cliente": "Customer",
+        "local": "Storage location",
+        "movimentacao": "Handling",
+        "armazenagem": "Storage",
+        "total": "Total",
+        "acoes": "Actions",
+        "entrada": "Inbound",
+        "saida": "Outbound",
+        "dash": "—",
+        "view": "View details",
+        "pending": "Pending"
+      },
+      "modal": {
+        "titleEntrada": "Inbound details",
+        "titleSaida": "Outbound details",
+        "close": "Close",
+        "id": "ID",
+        "dataEntrada": "Inbound date",
+        "dataCarregamento": "Loading date",
+        "cliente": "Customer",
+        "codigo": "Code",
+        "produto": "Product",
+        "lote": "Lot",
+        "quantidadeRecebida": "Quantity received",
+        "qtdPaletes": "Pallet quantity",
+        "local": "Storage location",
+        "valorUnitarioMov": "Unit handling rate",
+        "valorTotalMov": "Total handling",
+        "embalagens": "Packages loaded",
+        "capacidade": "Packages per pallet",
+        "paletesCalc": "Calculated pallets",
+        "diasArmazenagem": "Storage days",
+        "valorDiario": "Daily rate per pallet",
+        "valorArmazenagem": "Total storage",
+        "valorTotal": "Total billed",
+        "breakdown": "Calculation breakdown",
+        "segment": "Storage: {{paletes}} pallet(s) × {{days}} day(s) × {{rate}} = {{total}}",
+        "formulaMovEntrada": "Handling: {{paletes}} pallet(s) × {{rate}} = {{total}}",
+        "formulaMovSaida": "Handling: ceil({{embalagens}} ÷ {{capacidade}}) = {{paletes}} × {{rate}} = {{total}}",
+        "pendencias": "Configuration issues",
+        "pendencia": {
+          "qtd_paletes": "Pallet quantity missing on inbound",
+          "local_armazenagem": "Storage location missing or invalid",
+          "qtd_embalagem_por_palete": "Packages per pallet not set on the product",
+          "quantidade_embalagens": "Outbound package quantity missing or invalid",
+          "paletes_excedem_entrada": "Outbound pallets exceed inbound balance",
+          "estoque_nao_encontrado": "Source stock not found"
+        }
+      },
+      "pagination": {
+        "prev": "Previous",
+        "next": "Next",
+        "page": "Page {{page}} of {{total}}"
       }
     },
     "comercial": {
@@ -1538,6 +1643,7 @@
             "barril": "Barrel No.",
             "volume": "Volume",
             "massa": "Mass",
+            "tara": "Tare",
             "observacao": "Notes",
             "status": "Status",
             "dataSaida": "Departure date"
@@ -1659,9 +1765,10 @@
       "carregamentos": {
         "tableTitle": "Completed loadings",
         "tableCount": "{{count}} record(s)",
-        "searchPlaceholder": "Search outbound, client, driver, plate...",
+        "searchPlaceholder": "Search outbound, client, driver or tank...",
         "dateFrom": "Finalized from",
         "dateTo": "to",
+        "filterButton": "Filter",
         "clearDates": "Clear period",
         "empty": "No completed loadings found.",
         "view": "View outbound",
@@ -1701,6 +1808,7 @@
         "columns": {
           "saida": "Outbound ID",
           "cliente": "Client",
+          "destino": "Destination",
           "produto": "Product",
           "transportadora": "Carrier",
           "motorista": "Driver",
@@ -1719,7 +1827,11 @@
           "title": "Monthly punctuality",
           "dayTitle": "Daily punctuality",
           "monthFilter": "Filter by month",
-          "total": "Total"
+          "total": "Total",
+          "atrasoTitle": "Delay responsibility",
+          "atrasoCliente": "Customer",
+          "atrasoIntertank": "Intertank",
+          "atrasoTotal": "Late"
         }
       },
       "recebimento": {
@@ -4404,6 +4516,7 @@
       "client": "CLIENT",
       "lot": "LOT",
       "manufacture": "MFG. DATE",
+      "fillingDate": "FILLING DATE",
       "expiry": "EXPIRY",
       "mass": "MASS",
       "netWeight": "NET WT.",

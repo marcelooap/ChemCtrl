@@ -22,6 +22,7 @@ export const ETIQUETA_FIELD_CATALOG = [
   { key: 'peso_bruto', labelKey: 'painel.configuracao.etiquetas.fields.pesoBruto' },
   { key: 'volume', labelKey: 'painel.configuracao.etiquetas.fields.volume' },
   { key: 'cliente', labelKey: 'painel.configuracao.etiquetas.fields.cliente' },
+  { key: 'data_envase', labelKey: 'painel.configuracao.etiquetas.fields.dataEnvase' },
   { key: 'embalagem', labelKey: 'painel.configuracao.etiquetas.fields.embalagem' },
   { key: 'responsavel_tecnico', labelKey: 'painel.configuracao.etiquetas.fields.responsavelTecnico' },
 ];
@@ -33,11 +34,42 @@ const DATA_ROW_KEYS = new Set([
   'fabricacao',
   'validade',
   'cliente',
+  'data_envase',
   'volume',
   'id',
   'responsavel_tecnico',
 ]);
 const WEIGHT_KEYS = new Set(['peso_liquido', 'peso_bruto']);
+
+/** Insere chaves novas do catálogo junto ao vizinho anterior (ex.: data_envase após cliente). */
+function mergeKeysWithCatalogOrder(orderedKeys, catalogKeys) {
+  const result = [...orderedKeys];
+  const present = new Set(result);
+  for (const key of catalogKeys) {
+    if (present.has(key)) continue;
+    const catIdx = catalogKeys.indexOf(key);
+    let insertAt = result.length;
+    for (let i = catIdx - 1; i >= 0; i -= 1) {
+      const idx = result.indexOf(catalogKeys[i]);
+      if (idx !== -1) {
+        insertAt = idx + 1;
+        break;
+      }
+    }
+    if (insertAt === result.length) {
+      for (let i = catIdx + 1; i < catalogKeys.length; i += 1) {
+        const idx = result.indexOf(catalogKeys[i]);
+        if (idx !== -1) {
+          insertAt = idx;
+          break;
+        }
+      }
+    }
+    result.splice(insertAt, 0, key);
+    present.add(key);
+  }
+  return result;
+}
 
 function defaultEnabledKeys(contexto) {
   if (contexto === 'industrializacao') {
@@ -95,10 +127,10 @@ export function normalizeCampos(campos, contexto) {
   const ordered = incoming
     .filter((c) => c && FIELD_KEYS.includes(c.key))
     .sort((a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0))
-    .map((c) => c.key);
+    .map((c) => c.key)
+    .filter((k, i, arr) => arr.indexOf(k) === i);
 
-  const missing = defaults.map((d) => d.key).filter((k) => !byKey.has(k));
-  const keys = [...ordered.filter((k, i) => ordered.indexOf(k) === i), ...missing];
+  const keys = mergeKeysWithCatalogOrder(ordered, FIELD_KEYS);
   const withoutRt = keys.filter((k) => k !== 'responsavel_tecnico');
   const pinned = keys.includes('responsavel_tecnico')
     ? [...withoutRt, 'responsavel_tecnico']
@@ -115,18 +147,21 @@ export function isCampoEnabled(campos, key) {
   return Boolean((campos || []).find((c) => c.key === key && c.enabled));
 }
 
-const LEFT_COLUMN_KEYS = ['cliente', 'lote', 'volume', 'responsavel_tecnico'];
+/** Ordem visual da coluna esquerda (data_envase logo abaixo de cliente). */
+const LEFT_COLUMN_KEYS = ['cliente', 'data_envase', 'lote', 'volume', 'responsavel_tecnico'];
+/** Campos exigidos para liberar o layout em duas colunas (data_envase é opcional). */
+const SPLIT_LEFT_REQUIRED_KEYS = ['cliente', 'lote', 'volume', 'responsavel_tecnico'];
 const RIGHT_COLUMN_KEYS = ['fabricacao', 'validade'];
 
 /**
- * Coluna esquerda: Cliente, Lote, Volume, Resp. Téc.
+ * Coluna esquerda: Cliente, Data envase, Lote, Volume, Resp. Téc.
  * Coluna direita: Fabricação e Validade — só quando os quatro campos
- * da esquerda estiverem ativos, para não sobrepor com poucos dados.
+ * obrigatórios da esquerda estiverem ativos, para não sobrepor com poucos dados.
  */
 export function buildEtiquetaDataLayout(dataRows = []) {
   const rows = (dataRows || []).filter(Boolean);
   const byKey = new Map(rows.map((row) => [row.key, row]));
-  const leftAllActive = LEFT_COLUMN_KEYS.every((key) => byKey.has(key));
+  const leftAllActive = SPLIT_LEFT_REQUIRED_KEYS.every((key) => byKey.has(key));
   const hasDates = RIGHT_COLUMN_KEYS.some((key) => byKey.has(key));
   const splitDates = leftAllActive && hasDates;
 
@@ -185,6 +220,7 @@ export function partitionEtiquetaCampos(campos = []) {
 /** Ordem fixa da etiqueta vertical: produto no topo, dados, QR, pesos, embalagem. */
 export const VERTICAL_DATA_FIELD_ORDER = [
   'cliente',
+  'data_envase',
   'lote',
   'fabricacao',
   'validade',
@@ -316,6 +352,7 @@ export const ETIQUETA_PREVIEW_MOCK = {
   op_number: 'OP-00421',
   lot: '250817-01',
   manufactureDate: '2026-08-01',
+  fillingDate: '2026-08-05',
   expiryDate: '2027-08-01',
   net_weight: 1000.5,
   gross_weight: 1085.2,
