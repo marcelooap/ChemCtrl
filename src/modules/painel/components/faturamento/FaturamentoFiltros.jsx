@@ -14,10 +14,13 @@ import {
 export default function FaturamentoFiltros({
   clientes = [],
   clienteId,
+  status,
+  showStatusFilter = false,
   search,
   dateFrom,
   dateTo,
   onClienteChange,
+  onStatusChange,
   onSearchChange,
   onDateFromChange,
   onDateToChange,
@@ -50,6 +53,35 @@ export default function FaturamentoFiltros({
             </SelectContent>
           </Select>
         </div>
+
+        {showStatusFilter ? (
+          <div className="space-y-1 min-w-[150px] flex-1 sm:flex-none sm:w-[180px]">
+            <Label className="text-[11px] text-muted-foreground">
+              {t('painel.faturamentoVasilhames.filters.status')}
+            </Label>
+            <Select
+              value={status || '__all__'}
+              onValueChange={(v) => onStatusChange?.(v === '__all__' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={t('painel.faturamentoVasilhames.filters.statusAll')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">
+                  {t('painel.faturamentoVasilhames.filters.statusAll')}
+                </SelectItem>
+                <SelectItem value="No Pátio">
+                  {t('painel.faturamentoVasilhames.table.noPatio')}
+                </SelectItem>
+                <SelectItem value="Expedido">
+                  {t('painel.faturamentoVasilhames.table.expedido')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         <div className="space-y-1 min-w-[200px] flex-1">
           <Label className="text-[11px] text-muted-foreground">

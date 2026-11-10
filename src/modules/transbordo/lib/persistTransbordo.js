@@ -17,6 +17,7 @@ import {
   unifyDuplicateVasilhames,
   seedComposicaoFromVasilhame,
   aggregateComposicaoByLote,
+  alignComposicaoKgToDensidade,
   applyAdditionalDestino,
   placaKey,
   sameTanqueIdentity,
@@ -388,7 +389,7 @@ function buildVasilhameBase(
     transbordo_codigo: codigo,
     data: data.data || null,
   });
-  const composicao =
+  const composicaoRaw =
     isUnitario && composicaoBase.length > 0
       ? composicaoBase.map((c, i) =>
           i === 0
@@ -412,6 +413,13 @@ function buildVasilhameBase(
             },
           ]
         : composicaoBase;
+  const composicao =
+    !isUnitario && dens > 0 && composicaoRaw.length > 0
+      ? alignComposicaoKgToDensidade(composicaoRaw, dens, volume)
+      : composicaoRaw;
+  if (!isUnitario && dens > 0 && volume > 0) {
+    pesoLiquido = roundMass(volume * dens);
+  }
   const lote = getDominantLote(composicao);
 
   const placa = isTankagem
@@ -559,7 +567,12 @@ export async function persistTransbordo({
             ? qtdEmbalagensFromVolume(volume_total, roundVolume(d.volume_por_embalagem || 0))
             : roundVolume(d.quantidade_embalagens || 0),
           tara: roundMass(d.tara || 0),
-          peso_liquido: roundMass(d.peso_liquido || pesoAuto),
+          // Granel: sempre L × densidade (evita kg inteiro residual no destino).
+          peso_liquido: embaladoMass
+            ? roundMass(d.peso_liquido || pesoAuto)
+            : dens > 0
+              ? pesoAuto
+              : roundMass(d.peso_liquido || 0),
           peso_bruto: roundMass(d.peso_bruto || 0),
         };
       });

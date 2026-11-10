@@ -524,7 +524,8 @@ export const permissionModules = [
         id: 'painel_faturamento',
         labelKey: 'rbac.resources.painelFaturamento',
         icon: 'Receipt',
-        route: '/painel/faturamento',
+        route: '/painel/faturamento/embalados',
+        routePrefixes: ['/painel/faturamento'],
         nav: { showInSidebar: true, order: 3 },
         actions: [
           { key: 'view', labelKey: 'rbac.actions.view' },

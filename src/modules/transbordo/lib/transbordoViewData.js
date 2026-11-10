@@ -13,7 +13,6 @@ import {
   normalizeUnidadeEntrada,
   isUnidadeMassaEntrada,
   isUnidadeVolumeEntrada,
-  getEstoqueUnidadeEntrada,
   isEstoqueEmbalado,
 } from "@transbordo/lib/estoqueSaldo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
@@ -100,42 +99,71 @@ function labelUnidade(unidade) {
   return "L";
 }
 
-function resolveUnidadeTransbordo(transbordo, produtos = [], entradas = []) {
-  const origens = transbordo?.origens || [];
-
-  for (const o of origens) {
-    if (o?.unidade_medida) return normalizeUnidadeEntrada(o.unidade_medida);
-  }
-
-  for (const o of origens) {
-    const entrada = entradas.find((e) => e.id === o.entrada_id);
-    if (!entrada) continue;
-    const um = getEstoqueUnidadeEntrada(entrada);
-    if (um) return normalizeUnidadeEntrada(um);
-  }
-
-  const produto =
-    produtos.find((p) => p.id === transbordo?.produto_id) ||
-    produtos.find(
-      (p) =>
-        p.codigo &&
-        transbordo?.produto_codigo &&
-        String(p.codigo) === String(transbordo.produto_codigo)
-    );
-  if (produto?.unidade_medida) {
-    return normalizeUnidadeEntrada(produto.unidade_medida);
-  }
-
-  const origemEmbalada = origens.some(
-    (o) =>
-      o.tipo_origem === "embalado" ||
-      o.embalado ||
-      (o.entrada_id &&
-        isEstoqueEmbalado(entradas.find((e) => e.id === o.entrada_id)))
+/**
+ * volume_* da origem está em massa (kg/lb) e precisa ÷ densidade → L?
+ *
+ * Regra:
+ * - Embalado em kg/lb → converte
+ * - Embalado em L/gal → mantém
+ * - Granel em kg/lb → converte (legado); se o valor já estiver em L
+ *   (volume × dens ≈ massa), mantém — evita L÷densidade (5.000 → 3.816)
+ * - Granel em L/gal → mantém
+ */
+function origemVolumeEmMassa(origem, densidade) {
+  const embalado =
+    origem?.tipo_origem === "embalado" || Boolean(origem?.embalado);
+  const um = normalizeUnidadeEntrada(
+    origem?.unidade_medida || (embalado ? "kg" : "l")
   );
-  if (origemEmbalada) return "kg";
+
+  if (embalado) return isUnidadeMassaEntrada(um);
+  if (!isUnidadeMassaEntrada(um)) return false;
+
+  const vol = Number(origem?.volume_retirado) || 0;
+  const massa = Number(origem?.massa_retirada) || 0;
+  const dens = parseDensidade(densidade);
+  if (vol <= 0 || massa <= 0 || dens <= 0) return true;
+
+  const tol = Math.max(1, Math.abs(massa) * 0.02);
+  const asLitros = Math.abs(vol * dens - massa) <= tol;
+  const asMassa = Math.abs(vol - massa) <= tol;
+  if (asLitros && !asMassa) return false;
+  if (asMassa && !asLitros) return true;
+  return true;
+}
+
+/** UOM do OP para legendas/totais — massa só quando volume_* ainda está em kg/lb. */
+function resolveUnidadeTransbordo(transbordo, _produtos = [], entradas = []) {
+  const origens = transbordo?.origens || [];
+  const dens = transbordo?.densidade;
+
+  for (const o of origens) {
+    if (origemVolumeEmMassa(o, dens)) {
+      return normalizeUnidadeEntrada(o.unidade_medida || "kg");
+    }
+  }
+
+  for (const o of origens) {
+    if (isOrigemEmbalado(o, entradas) && o?.unidade_medida) {
+      return normalizeUnidadeEntrada(o.unidade_medida);
+    }
+  }
+
+  for (const o of origens) {
+    if (o?.unidade_medida && isUnidadeVolumeEntrada(o.unidade_medida)) {
+      return normalizeUnidadeEntrada(o.unidade_medida);
+    }
+  }
 
   return "l";
+}
+
+function destinoVolumeEmMassa(destino, origens = [], densidade) {
+  const linked = origens.find(
+    (o) => o?._uid && o._uid === destino?.origem_uid
+  );
+  if (linked) return origemVolumeEmMassa(linked, densidade);
+  return origens.some((o) => origemVolumeEmMassa(o, densidade));
 }
 
 function resolveDensidadeDisplay(transbordo, produtos = [], entradas = []) {
@@ -312,14 +340,13 @@ function buildDestinoLinhas(destino, composicao, densidade, isMassa) {
   }));
 }
 
-function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome, unidade }) {
+function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome }) {
   const rows = [];
   for (const o of transbordo?.origens || []) {
     const origem = labelOrigemLinha(o, isotanques, entradas);
     const lotes = (o.lotes_retirados || []).filter((l) => (l.volume_retirado || 0) > 0);
     const produto = origemProdutoNome(o, produtoNome);
-    const umOrigem = normalizeUnidadeEntrada(o.unidade_medida || unidade);
-    const origemEmMassa = isUnidadeMassaEntrada(umOrigem);
+    const origemEmMassa = origemVolumeEmMassa(o, transbordo?.densidade);
     const dens = parseDensidade(transbordo?.densidade);
 
     if (lotes.length > 1) {
@@ -330,9 +357,7 @@ function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome, unidad
           origem,
           produto,
           lote: l.lote || "-",
-          volume: origemEmMassa
-            ? volumeLitrosDisplay(vol, transbordo?.densidade, true)
-            : formatVolume(vol, { empty: "-" }),
+          volume: volumeLitrosDisplay(vol, transbordo?.densidade, origemEmMassa),
           massa: formatMass(massa, { empty: "-" }),
         });
       }
@@ -345,16 +370,14 @@ function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome, unidad
       origem,
       produto,
       lote: o.lote || "-",
-      volume: origemEmMassa
-        ? volumeLitrosDisplay(vol, transbordo?.densidade, true)
-        : formatVolume(vol, { empty: "-" }),
+      volume: volumeLitrosDisplay(vol, transbordo?.densidade, origemEmMassa),
       massa: formatMass(massa, { empty: "-" }),
     });
   }
   return rows;
 }
 
-function buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }) {
+function buildDestinoRows(transbordo, { vasilhames }) {
   const origens = transbordo?.origens || [];
   const destinos = transbordo?.destinos || [];
   const densOperacao = parseDensidade(transbordo?.densidade);
@@ -369,20 +392,24 @@ function buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }) {
     const tipo = d.tipo_embalagem || "";
     const tanque = isDestinoTanquePatio(tipo);
     const embalado = isDestinoEstoqueEmbalado(tipo);
+    const volumeEmMassa = destinoVolumeEmMassa(d, origens, densOperacao);
     const qtdEmb =
       d.quantidade_embalagens != null && d.quantidade_embalagens !== ""
         ? formatQuantidade(Number(d.quantidade_embalagens) || 0, { empty: "" })
         : null;
-    const linhas = buildDestinoLinhas(d, destinoCompositions[i], densOperacao, isMassa);
+    const linhas = buildDestinoLinhas(
+      d,
+      destinoCompositions[i],
+      densOperacao,
+      volumeEmMassa
+    );
     const lacre = lacreDoDestino(d, transbordo, vasilhames);
     linhas.forEach((linha, groupIndex) => {
       rows.push({
         embalagem: tanque ? embalagemDestinoLabel(d) : "-",
         lote: linha.lote || "-",
         qtd: embalado ? (qtdEmb != null ? String(qtdEmb) : "-") : "-",
-        volume: isVolume
-          ? formatVolume(linha.volume, { empty: "-" })
-          : volumeLitrosDisplay(linha.volume, densOperacao, isMassa),
+        volume: volumeLitrosDisplay(linha.volume, densOperacao, volumeEmMassa),
         massa: formatMass(linha.massa, { empty: "-" }),
         lacre,
         groupId: i,
@@ -450,9 +477,9 @@ export function buildTransbordoViewModel({
       isotanques,
       entradas,
       produtoNome,
-      unidade,
     }),
-    destinoRows: buildDestinoRows(transbordo, { vasilhames, isMassa, isVolume }),
+    destinoRows: buildDestinoRows(transbordo, { vasilhames }),
+    // Granel: volume_total já é L. Embalado em massa: converter a partir da massa.
     volumeTotal: isVolume
       ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
       : isMassa

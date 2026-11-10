@@ -5,6 +5,7 @@
 
 import {
   roundVolume,
+  roundMass,
   distributeByWeights,
   parseDensidade,
 } from "@transbordo/lib/format";
@@ -59,7 +60,7 @@ export function calculateFIFOAllocation(origens = [], destinos = [], densidade =
       lote: t.lote,
       origem_index: t.origem_index,
       quantidade_l: t.take,
-      quantidade_kg: dens > 0 ? roundVolume(t.take * dens) : 0,
+      quantidade_kg: dens > 0 ? roundMass(t.take * dens) : 0,
     }));
   });
 

@@ -11,12 +11,15 @@ import { FileDown, FileText } from "lucide-react";
 import {
   formatVolume,
   formatMass,
+  parseDensidade,
+  roundMass,
   resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
 import { generateBoletaPDF } from "@transbordo/lib/pdfBoleta";
 import { generateRelatorioFiscalPDF } from "@transbordo/lib/pdfFiscal";
 import {
   aggregateComposicaoByLote,
+  alignComposicaoKgToDensidade,
   loteExibidoDoVasilhame,
   getLoteEnvaseDate,
   LOTE_APORTE_ANTERIOR,
@@ -121,10 +124,29 @@ const formatDate = (d) => {
         massa: Number(base.peso_liquido) || 0,
         densidade: base.densidade,
       });
+      const dens = parseDensidade(base.densidade);
+      const isLiquidoGranel =
+        !isDestinoEmbalagemUnitaria(base.tipo || vasilhame.tipo) &&
+        !isVasilhameLegadoEmbalado(base.tipo || vasilhame.tipo);
+      const pesoLiquido =
+        isLiquidoGranel && dens > 0 && resolved.volume > 0
+          ? roundMass(resolved.volume * dens)
+          : resolved.massa;
+      const composicao =
+        isLiquidoGranel && dens > 0 && Array.isArray(base.composicao)
+          ? alignComposicaoKgToDensidade(
+              base.composicao,
+              dens,
+              resolved.volume
+            )
+          : base.composicao;
+      const tara = Number(base.tara ?? vasilhame.tara) || 0;
       return {
         ...base,
         volume: resolved.volume,
-        peso_liquido: resolved.massa,
+        composicao,
+        peso_liquido: pesoLiquido,
+        peso_bruto: roundMass(tara + pesoLiquido),
       };
     }, [vasilhame, saidas, transbordos]);
 

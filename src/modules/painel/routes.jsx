@@ -12,6 +12,7 @@ import DestinoCarregamentos from '@painel/pages/configuracao/DestinoCarregamento
 import JustificativasAtraso from '@painel/pages/configuracao/JustificativasAtraso';
 import Dashboard from '@painel/pages/Dashboard';
 import Faturamento from '@painel/pages/Faturamento';
+import FaturamentoVasilhames from '@painel/pages/FaturamentoVasilhames';
 import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
 import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
 import LogisticaRecebimento from '@painel/pages/logistica/Recebimento';
@@ -63,7 +64,12 @@ export default function PainelRoutes() {
 
             <Route element={<ScreenAccessRoute />}>
               <Route path="dashboard" element={<Dashboard />} />
-              <Route path="faturamento" element={<Faturamento />} />
+              <Route
+                path="faturamento"
+                element={<Navigate to="/painel/faturamento/embalados" replace />}
+              />
+              <Route path="faturamento/embalados" element={<Faturamento />} />
+              <Route path="faturamento/vasilhames" element={<FaturamentoVasilhames />} />
               <Route path="configuracao" element={<Configuracao />} />
               <Route path="configuracao/operadores" element={<Operadores />} />
               <Route path="configuracao/etiquetas" element={<Etiquetas />} />

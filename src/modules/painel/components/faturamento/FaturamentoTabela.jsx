@@ -190,9 +190,9 @@ export default function FaturamentoTabela({ rows = [], onView }) {
                       pending ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''
                     }`}
                   >
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
-                        {row.id}
+                        <span className="font-semibold text-primary">{row.id}</span>
                         {pending ? (
                           <AlertTriangle
                             className="h-3.5 w-3.5 text-amber-600 shrink-0"

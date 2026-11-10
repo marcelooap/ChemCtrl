@@ -47,7 +47,23 @@ export default function MainLayout() {
 
     const business = [
       { path: '/painel/dashboard', label: t('painel.nav.dashboard'), icon: LayoutDashboard },
-      { path: '/painel/faturamento', label: t('painel.nav.faturamento'), icon: Receipt },
+      {
+        groupId: 'faturamento',
+        label: t('painel.nav.faturamento'),
+        icon: Receipt,
+        children: [
+          {
+            path: '/painel/faturamento/embalados',
+            label: t('painel.nav.faturamentoEmbalados'),
+            icon: PackageCheck,
+          },
+          {
+            path: '/painel/faturamento/vasilhames',
+            label: t('painel.nav.faturamentoVasilhames'),
+            icon: Container,
+          },
+        ],
+      },
       {
         groupId: 'comercial',
         label: t('painel.nav.comercial'),

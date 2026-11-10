@@ -215,9 +215,106 @@ function composicaoSignature(list = []) {
   return (list || [])
     .map(
       (c) =>
-        `${String(c.transbordo_codigo || "").trim()}|${(c.lote || "").trim()}|${roundVolume(c.quantidade_l || 0)}`
+        `${String(c.transbordo_codigo || "").trim()}|${(c.lote || "").trim()}|${roundVolume(c.quantidade_l || 0)}|${roundMass(c.quantidade_kg || 0)}`
     )
     .join(";");
+}
+
+/**
+ * Recalcula quantidade_kg por entrada com L × densidade e alinha o residual
+ * para a soma fechar exatamente roundMass(volume × densidade).
+ * Evita drift tipo 3.959,793 kg quando o total operacional é 3.960 kg.
+ */
+export function alignComposicaoKgToDensidade(
+  composicao = [],
+  densidade,
+  volumeTotal
+) {
+  const dens = parseDensidade(densidade);
+  const base = Array.isArray(composicao) ? composicao : [];
+  if (!(dens > 0) || base.length === 0) return base;
+
+  const next = base.map((c) => {
+    const qL = roundVolume(c.quantidade_l || 0);
+    return {
+      ...c,
+      quantidade_l: qL,
+      quantidade_kg: qL > 0 ? roundMass(qL * dens) : 0,
+    };
+  });
+
+  const volSum = roundVolume(
+    next.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  const targetVol =
+    volumeTotal != null && roundVolume(volumeTotal) > 0
+      ? roundVolume(volumeTotal)
+      : volSum;
+  if (!(targetVol > 0)) return next;
+
+  const kgAlvo = roundMass(targetVol * dens);
+  const kgAtual = roundMass(
+    next.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
+  );
+  const diffKg = roundMass(kgAlvo - kgAtual);
+  if (diffKg === 0 || next.length === 0) return next;
+
+  let idx = 0;
+  next.forEach((c, i) => {
+    if ((c.quantidade_kg || 0) > (next[idx].quantidade_kg || 0)) idx = i;
+  });
+  next[idx] = {
+    ...next[idx],
+    quantidade_kg: Math.max(
+      0,
+      roundMass((next[idx].quantidade_kg || 0) + diffKg)
+    ),
+  };
+  return next;
+}
+
+/**
+ * Corrige composição/peso líquido divergentes da densidade cadastrada,
+ * sem alterar volumes. Idempotente.
+ */
+export function repairComposicaoKgFromDensidadePatch(vasilhame) {
+  if (!vasilhame?.id) return null;
+  const tipo = vasilhame.tipo || "Vasilhame";
+  if (tipo !== "Vasilhame" && tipo !== "Tankagem") return null;
+  if (isDestinoEmbalagemUnitaria(tipo) || isVasilhameLegadoEmbalado(tipo)) {
+    return null;
+  }
+
+  const dens = parseDensidade(vasilhame.densidade);
+  if (!(dens > 0)) return null;
+
+  const composicao = Array.isArray(vasilhame.composicao)
+    ? vasilhame.composicao
+    : [];
+  const volume = roundVolume(
+    vasilhame.volume ||
+      composicao.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  if (!(volume > 0)) return null;
+
+  const aligned =
+    composicao.length > 0
+      ? alignComposicaoKgToDensidade(composicao, dens, volume)
+      : composicao;
+  const pesoAlvo = roundMass(volume * dens);
+  const pesoAtual = roundMass(vasilhame.peso_liquido || 0);
+  const tara = roundMass(vasilhame.tara || 0);
+  const sameComp =
+    composicao.length === 0 ||
+    composicaoSignature(composicao) === composicaoSignature(aligned);
+  const sameKg = Math.abs(pesoAtual - pesoAlvo) < 1e-9;
+  if (sameComp && sameKg) return null;
+
+  return {
+    ...(composicao.length > 0 ? { composicao: aligned } : {}),
+    peso_liquido: pesoAlvo,
+    peso_bruto: roundMass(tara + pesoAlvo),
+  };
 }
 
 /**
@@ -259,7 +356,11 @@ export function rebuildComposicaoFromTransbordos(
         lote: d.lote || t.lote || "",
         quantidade_l: volDest,
         quantidade_kg:
-          kgDest > 0 ? kgDest : dens > 0 ? roundMass(volDest * dens) : 0,
+          dens > 0
+            ? roundMass(volDest * dens)
+            : kgDest > 0
+              ? kgDest
+              : 0,
         transbordo_codigo: t.codigo_transbordo || null,
         data: t.data || null,
         destino_index: destinoIndex,
@@ -293,7 +394,12 @@ export function rebuildComposicaoFromTransbordos(
     }
   }
 
-  return clipped.filter((e) => e.quantidade_l > 0);
+  const filtered = clipped.filter((e) => e.quantidade_l > 0);
+  if (!(dens > 0) || filtered.length === 0) return filtered;
+  const targetVol = roundVolume(
+    filtered.reduce((s, e) => s + (e.quantidade_l || 0), 0)
+  );
+  return alignComposicaoKgToDensidade(filtered, dens, targetVol);
 }
 
 /** Agrega composição por lote (soma L e kg). */
@@ -609,6 +715,10 @@ export function applyAdditionalDestino(
   });
   const densV = parseDensidade(base.densidade) || parseDensidade(dens) || 0;
   const addedKg = (comp || []).reduce((s, c) => s + (c.quantidade_kg || 0), 0);
+  const composicao =
+    densV > 0
+      ? alignComposicaoKgToDensidade(merged, densV, newVol)
+      : merged;
   const peso =
     densV > 0
       ? roundMass(newVol * densV)
@@ -619,8 +729,8 @@ export function applyAdditionalDestino(
       : roundMass(base.tara || 0);
   return {
     volume: newVol,
-    composicao: merged,
-    lote: getDominantLote(merged) || base.lote || "",
+    composicao,
+    lote: getDominantLote(composicao) || base.lote || "",
     peso_liquido: peso,
     peso_bruto: roundMass(taraFinal + peso),
     tara: taraFinal,
@@ -810,11 +920,13 @@ export function composicaoFifoNaPlaca(transbordo, placa, barril) {
         lote: c.lote || "",
         origem_index: c.origem_index,
         quantidade_l: qL,
+        // Densidade cadastrada prevalece: evita kg inteiro residual no destino
+        // que faz a soma da composição divergir de volume × densidade.
         quantidade_kg:
-          kgFromDestino > 0
-            ? kgFromDestino
-            : dens > 0
-              ? roundMass(qL * dens)
+          dens > 0
+            ? roundMass(qL * dens)
+            : kgFromDestino > 0
+              ? kgFromDestino
               : roundMass(c.quantidade_kg || 0),
         estoque_id: estoqueId,
         entrada_id: estoqueId,
@@ -824,7 +936,13 @@ export function composicaoFifoNaPlaca(transbordo, placa, barril) {
       });
     }
   });
-  return entries;
+  return dens > 0
+    ? alignComposicaoKgToDensidade(
+        entries,
+        dens,
+        roundVolume(entries.reduce((s, e) => s + (e.quantidade_l || 0), 0))
+      )
+    : entries;
 }
 
 /**
@@ -889,11 +1007,15 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
 
   const dens =
     parseDensidade(vasilhame.densidade) || parseDensidade(op.densidade);
-  const composicao = entries.map((e) => ({
+  const composicaoRaw = entries.map((e) => ({
     ...e,
     quantidade_kg:
       dens > 0 ? roundMass(e.quantidade_l * dens) : e.quantidade_kg,
   }));
+  const composicao =
+    dens > 0
+      ? alignComposicaoKgToDensidade(composicaoRaw, dens, fifoVol)
+      : composicaoRaw;
   const peso =
     dens > 0
       ? roundMass(fifoVol * dens)
@@ -1050,11 +1172,12 @@ export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
       const massaFromComp = roundMass(
         history.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
       );
+      // Volume × densidade é a fonte da verdade operacional (fecha 5.000 L = 3.960 kg).
       const massa =
-        massaFromComp > 0
-          ? massaFromComp
-          : dens > 0
-            ? roundMass(volume * dens)
+        dens > 0
+          ? roundMass(volume * dens)
+          : massaFromComp > 0
+            ? massaFromComp
             : 0;
       return { volume, massa, densidade: dens };
     }
@@ -1191,30 +1314,34 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   const dens =
     parseDensidade(vasilhame.densidade) ||
     parseDensidade(expected?.densidade);
+  const composicaoAligned =
+    dens > 0
+      ? alignComposicaoKgToDensidade(composicao, dens, volume)
+      : composicao;
   const pesoFromComp = roundMass(
-    composicao.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
+    composicaoAligned.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
   );
   const peso =
-    pesoFromComp > 0
-      ? pesoFromComp
+    dens > 0
+      ? roundMass(volume * dens)
       : expected?.massa > 0
         ? expected.massa
-        : dens > 0
-          ? roundMass(volume * dens)
+        : pesoFromComp > 0
+          ? pesoFromComp
           : 0;
-  const lote = getDominantLote(composicao) || vasilhame.lote || "";
+  const lote = getDominantLote(composicaoAligned) || vasilhame.lote || "";
   const next = {
     ...vasilhame,
     volume,
-    composicao,
+    composicao: composicaoAligned,
     lote,
     peso_liquido: peso,
   };
   const fracionado = resolveFracionadoFromTransbordos(next, transbordos);
   const sameVolume = Math.abs(storedVol - volume) < 0.01;
   const sameComp =
-    composicaoSignature(storedComp) === composicaoSignature(composicao);
-  const sameKg = storedKg <= 0 || Math.abs(storedKg - peso) < 1;
+    composicaoSignature(storedComp) === composicaoSignature(composicaoAligned);
+  const sameKg = Math.abs(storedKg - peso) < 1e-9;
   const sameFracionado = Boolean(fracionado) === Boolean(vasilhame.fracionado);
   const sameLote = lote === (vasilhame.lote || "");
   const tara = roundMass(vasilhame.tara || 0);
@@ -1236,7 +1363,7 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
 
   return {
     volume,
-    composicao,
+    composicao: composicaoAligned,
     lote,
     peso_liquido: peso,
     peso_bruto: roundMass(tara + peso),
@@ -1732,7 +1859,7 @@ export function rescaleComposicaoToVolume(composicao = [], volume, densidade = 0
     };
   }
 
-  return scaled
+  const withKg = scaled
     .map((c, i) => {
       const prev = base[i];
       const kg =
@@ -1744,6 +1871,9 @@ export function rescaleComposicaoToVolume(composicao = [], volume, densidade = 0
       return { ...c, quantidade_kg: kg };
     })
     .filter((c) => c.quantidade_l > 0);
+  return dens > 0
+    ? alignComposicaoKgToDensidade(withKg, dens, target)
+    : withKg;
 }
 
 /**
@@ -1819,7 +1949,12 @@ export function applyEditedLotesToComposicao(composicao = [], edits = [], densid
     });
   }
 
-  return base.filter((c) => roundVolume(c.quantidade_l || 0) > 0);
+  const filtered = base.filter((c) => roundVolume(c.quantidade_l || 0) > 0);
+  if (!(dens > 0) || filtered.length === 0) return filtered;
+  const totalVol = roundVolume(
+    filtered.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  );
+  return alignComposicaoKgToDensidade(filtered, dens, totalVol);
 }
 
 export function normalizeVasilhameLote(v) {

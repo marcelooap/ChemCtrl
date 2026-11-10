@@ -348,7 +348,7 @@ function buildSaidaRowBase(ev, lote, local) {
   return {
     key: `saida:${saida.id}:${ev.itemIndex}`,
     origem: ORIGEM_SAIDA,
-    id: saida.codigo || saida.id,
+    id: resolveDisplayId(saida.codigo, saida.numero, saida.codigo_saida),
     idInterno: saida.id,
     data: ev.data_carregamento,
     codigo: item.produto_codigo || lote?.produto_codigo || '',
@@ -397,6 +397,38 @@ function finalizeRow(row) {
     total: hasAny ? fromCents(total) : null,
     totalCents: total,
   };
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim()
+  );
+}
+
+/**
+ * ID curto para exibição na tabela (nunca UUID técnico).
+ * Preferência: codigo_estoque → entrada_codigo → outros códigos curtos.
+ */
+export function resolveDisplayId(...candidates) {
+  for (const raw of candidates) {
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (!s || s === '—' || isUuidLike(s)) continue;
+    return s;
+  }
+  return '—';
+}
+
+/** ID de linha de estoque/entrada embalado. */
+export function resolveEstoqueDisplayId(lote) {
+  const estoqueCodigo = formatEstoqueCodigo(lote?.codigo_estoque);
+  return resolveDisplayId(
+    estoqueCodigo !== '—' ? estoqueCodigo : null,
+    lote?.entrada_codigo,
+    lote?.id_entrada,
+    lote?.codigo,
+    lote?.lotes?.[0]?.entrada_codigo
+  );
 }
 
 function loteMatchesClienteFilter(lote, clienteId, clienteNome) {
@@ -527,7 +559,7 @@ export function apurarFaturamentoEmbalados({
     const dataEntrada = toIsoDate(lote.data) || toIsoDate(lote.created_at);
     const qtdPaletes = resolveQtdPaletesEntrada(lote, capMap);
     const local = resolveLocalArmazenagem(lote);
-    const estoqueCodigo = formatEstoqueCodigo(lote.codigo_estoque);
+    const displayId = resolveEstoqueDisplayId(lote);
 
     const missingLocal = !localRateKey(local);
     const pendenciasEntrada = [];
@@ -677,7 +709,7 @@ export function apurarFaturamentoEmbalados({
       entradaRows.push({
         key: `entrada:${estoqueId}`,
         origem: ORIGEM_ENTRADA,
-        id: lote.entrada_codigo || lote.id_entrada || estoqueId,
+        id: displayId,
         idInterno: estoqueId,
         data: dataEntrada,
         codigo: lote.produto_codigo || '',
@@ -715,7 +747,7 @@ export function apurarFaturamentoEmbalados({
       estoqueRows.push({
         key: `estoque:${estoqueId}`,
         origem: ORIGEM_ESTOQUE,
-        id: estoqueCodigo !== '—' ? estoqueCodigo : estoqueId,
+        id: displayId,
         idInterno: estoqueId,
         // Data de referência da apuração (não a data de entrada).
         data: to,

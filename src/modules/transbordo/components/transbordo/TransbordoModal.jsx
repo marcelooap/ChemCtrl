@@ -484,6 +484,8 @@ export default function TransbordoModal({
             entrada_id: item.estoqueRow?.id || prefillEntrada.id,
             entrada_codigo: `${entradaCodigo} — Lote ${item.lote || i + 1}`,
             lote: item.lote,
+            // Entrada kg ou L: formulário já normaliza para litros.
+            unidade_medida: "L",
             volume_retirado: volumeL,
             massa_retirada: roundMass(volumeL * lDens),
             saldo_restante: 0,
@@ -1201,10 +1203,16 @@ export default function TransbordoModal({
   };
 
   const buildPayload = () => {
-    // Formulário em L; estoque embalado em massa persiste volume_retirado na UOM da entrada.
+    // Formulário em L; só embalado em kg/lb persiste volume_retirado na UOM de massa.
+    // Granel (kg ou L na entrada) e embalado em L já estão em litros no form.
     const origensNorm = origens.map((o) => {
-      const um = o.unidade_medida || "kg";
-      const origemEmbaladoMassa = isOrigemEmbaladoMassa(o);
+      const embalado = o.tipo_origem === "embalado" || Boolean(o.embalado);
+      const um = o.unidade_medida || (embalado ? "kg" : "L");
+      const origemEmbaladoMassa = isOrigemEmbaladoMassa({
+        ...o,
+        embalado,
+        unidade_medida: um,
+      });
       const toPersist = (qtyL) =>
         origemEmbaladoMassa && densidade > 0
           ? embaladoLitrosToMassa(qtyL, um, densidade)
@@ -1272,8 +1280,14 @@ export default function TransbordoModal({
     const origemPorUid = new Map(origensNorm.map((o) => [o._uid, o]));
     const destinosNorm = destinosOrdered.map((d) => {
       const origem = origemPorUid.get(d.origem_uid);
-      const um = origem?.unidade_medida || "kg";
-      const origemEmbaladoMassa = isOrigemEmbaladoMassa(origem);
+      const origemEmbalado =
+        origem?.tipo_origem === "embalado" || Boolean(origem?.embalado);
+      const um = origem?.unidade_medida || (origemEmbalado ? "kg" : "L");
+      const origemEmbaladoMassa = isOrigemEmbaladoMassa({
+        ...origem,
+        embalado: origemEmbalado,
+        unidade_medida: um,
+      });
       const toPersist = (qtyL) =>
         origemEmbaladoMassa && densidade > 0
           ? embaladoLitrosToMassa(qtyL, um, densidade)

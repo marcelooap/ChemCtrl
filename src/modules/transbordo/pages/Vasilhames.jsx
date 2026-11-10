@@ -40,6 +40,7 @@ import {
   collapsedPlacaHealPatch,
   repairEmbaladoKgStoredAsLitersPatch,
   repairVolumeFromDestinosPatch,
+  repairComposicaoKgFromDensidadePatch,
   healSaidaVolumesFromVasilhames,
   resolveVasilhameOperacionalPar,
   resolveFracionadoFromTransbordos,
@@ -441,11 +442,23 @@ export default function Vasilhames() {
           source,
           volumes.transbordos
         );
+        const afterStructural = {
+          ...source,
+          ...(patchDestinos || {}),
+          ...(patchPlaca || {}),
+          ...(patchKgL || {}),
+        };
+        const patchKgDens =
+          repairComposicaoKgFromDensidadePatch(afterStructural);
         const patch =
-          patchDestinos ||
-          (patchPlaca || patchKgL
-            ? { ...(patchPlaca || {}), ...(patchKgL || {}) }
-            : null);
+          patchDestinos || patchPlaca || patchKgL || patchKgDens
+            ? {
+                ...(patchDestinos || {}),
+                ...(patchPlaca || {}),
+                ...(patchKgL || {}),
+                ...(patchKgDens || {}),
+              }
+            : null;
         if (!patch) {
           list.push(normalizeVasilhameLote(source));
           continue;
@@ -826,21 +839,6 @@ export default function Vasilhames() {
         for (const c of editingVasilhame.composicao || []) {
           const key = String(c.lote || "").trim();
           prevByLote.set(key, (prevByLote.get(key) || 0) + (Number(c.quantidade_l) || 0));
-        }
-        if (dens > 0 && nextComp.length > 0) {
-          const kgAlvo = pesoLiq;
-          const kgAtual = nextComp.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0);
-          const diffKg = kgAlvo - kgAtual;
-          if (diffKg !== 0) {
-            let idx = 0;
-            nextComp.forEach((c, i) => {
-              if ((c.quantidade_kg || 0) > (nextComp[idx].quantidade_kg || 0)) idx = i;
-            });
-            nextComp[idx] = {
-              ...nextComp[idx],
-              quantidade_kg: Math.max(0, roundMass((nextComp[idx].quantidade_kg || 0) + diffKg)),
-            };
-          }
         }
         volumeChanged = lotesEditados.some(
           (l) =>
