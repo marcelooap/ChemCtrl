@@ -11,6 +11,8 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import {
   parseArr,
   stockUnitOf,
+  stockDensityOf,
+  fiscalQtyOf,
   liveLotOf,
   isTransferDestinationContainer,
   containerLiveNetWeight,
@@ -63,11 +65,8 @@ export default function ProductionViewDialog({
 
   const unitOf = (mp) => stockUnitOf(mp, stocks);
   const lotOf = (mp) => liveLotOf(mp, stocks);
-  const densityOf = (mp) => {
-    if (!mp?.stock_id) return 1;
-    const s = stocks.find((x) => x.id === mp.stock_id);
-    return s?.density || 1;
-  };
+  const densityOf = (mp) => stockDensityOf(mp, stocks);
+  const fiscalOf = (mp) => (editingMp ? (mp.qty_fiscal || 0) : fiscalQtyOf(mp, stocks));
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [editingMp, setEditingMp] = useState(false);
@@ -94,7 +93,11 @@ export default function ProductionViewDialog({
   }, [open, production?.id]);
 
   const startEditMp = () => {
-    setDraftMps(parseArr(production.raw_materials_used).map((m) => ({ ...m })));
+    // Recalcula qty_fiscal pela unidade atual da nota (kg operacional é a fonte da verdade).
+    setDraftMps(parseArr(production.raw_materials_used).map((m) => ({
+      ...m,
+      qty_fiscal: fiscalQtyOf(m, stocks),
+    })));
     setEditingMp(true);
   };
 
@@ -368,7 +371,7 @@ export default function ProductionViewDialog({
                             <span className="text-xs text-muted-foreground min-w-[1.5rem]">{unit}</span>
                           </div>
                         ) : (
-                          <>{fmt(m.qty_fiscal)} {unit}</>
+                          <>{fmt(fiscalOf(m))} {unit}</>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right font-medium">
@@ -396,7 +399,7 @@ export default function ProductionViewDialog({
                   const mps = rawMaterials;
                   const units = mps.map(unitOf);
                   const sameUnit = units.length > 0 && units.every(u => u === units[0]);
-                  const tFiscal = mps.reduce((s, m) => s + (m.qty_fiscal || 0), 0);
+                  const tFiscal = mps.reduce((s, m) => s + (fiscalOf(m) || 0), 0);
                   const tOp = mps.reduce((s, m) => s + (m.qty_operational || 0), 0);
                   return (
                     <tr className="border-t bg-muted/50 font-bold" style={{ color: '#2575D1' }}>

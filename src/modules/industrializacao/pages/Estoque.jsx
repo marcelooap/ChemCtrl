@@ -28,6 +28,7 @@ import {
   buildMpStockPayload,
   validateMpStockForm,
 } from '@industrializacao/lib/mpStockForm';
+import { fiscalQtyOf, round3 } from '@industrializacao/lib/productionViewUtils';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { useDebouncedValue } from '@industrializacao/hooks/useDebouncedValue';
 import { allocateMpEntryIds, compareMpEntryIdDesc } from '@industrializacao/lib/allocateMpEntryId';
@@ -280,16 +281,38 @@ export default function Estoque() {
         await upsertEntradaFromMp({ ...editing, ...data, id: editing.id });
         const newLot = (form.lot || '').trim();
         const oldLot = (editing.lot || '').trim();
-        if (newLot !== oldLot) {
+        const newUnit = (form.unit || '').trim();
+        const oldUnit = (editing.unit || '').trim();
+        const newDensity = parseFloat(form.density) || 0;
+        const oldDensity = parseFloat(editing.density) || 0;
+        const lotChanged = newLot !== oldLot;
+        const unitChanged = newUnit !== oldUnit || newDensity !== oldDensity;
+        if (lotChanged || unitChanged) {
           try {
             const allProductions = await base44.entities.Production.list('-created_date', 500);
+            const liveStock = { ...editing, ...data, id: editing.id };
             for (const prod of allProductions) {
               const mps = parseJsonArray(prod.raw_materials_used);
               let changed = false;
               for (const mp of mps) {
-                if (mp.stock_id === editing.id && (mp.lot || '') !== newLot) {
+                if (mp.stock_id !== editing.id) continue;
+                if (lotChanged && (mp.lot || '') !== newLot) {
                   mp.lot = newLot;
                   changed = true;
+                }
+                if (unitChanged) {
+                  // Recalcula qty_fiscal na nova unidade a partir do kg operacional.
+                  const nextFiscal = fiscalQtyOf(mp, [liveStock]);
+                  if (
+                    round3(parseFloat(mp.qty_fiscal) || 0) !== nextFiscal
+                    || (mp.unit || '') !== newUnit
+                    || round3(parseFloat(mp.density) || 0) !== round3(newDensity)
+                  ) {
+                    mp.qty_fiscal = nextFiscal;
+                    mp.unit = newUnit;
+                    mp.density = newDensity || null;
+                    changed = true;
+                  }
                 }
               }
               if (changed) {

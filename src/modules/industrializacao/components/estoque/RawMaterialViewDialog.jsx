@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/compon
 import { Button } from '@shared/components/ui/button';
 import { Box, FileText } from 'lucide-react';
 import { generateStockPDF } from '@industrializacao/lib/pdfReports.js';
+import { fiscalQtyOf } from '@industrializacao/lib/productionViewUtils';
 import { fmtDate, fmtDateTime, fmtNumber } from '@/i18n/formatters';
 import { translateStockDestination } from '@/i18n/domainMaps';
 
@@ -39,7 +40,14 @@ export default function RawMaterialViewDialog({ item, open, onOpenChange, readOn
           if (!Array.isArray(rmu)) rmu = [];
           rmu.forEach(mp => {
             if (mp.stock_id === itemId) {
-              used.push({ op_number: prod.op_number, product: prod.product, date: prod.date, qty_fiscal: mp.qty_fiscal, qty_operational: mp.qty_operational });
+              used.push({
+                op_number: prod.op_number,
+                product: prod.product,
+                date: prod.date,
+                // Converte pela unidade atual da nota (qty_operational em kg é a fonte da verdade).
+                qty_fiscal: fiscalQtyOf(mp, [item]),
+                qty_operational: mp.qty_operational,
+              });
             }
           });
         });

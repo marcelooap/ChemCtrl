@@ -632,10 +632,20 @@ export default function NovaProducao() {
           unit_price: recipes.find(r => r.id === form.recipe_id)?.price || 0,
           total_value: (volNum * densityNum) * (recipes.find(r => r.id === form.recipe_id)?.price || 0),
           raw_materials_used: mpList.flatMap(m =>
-            m.lots.filter(l => l.stock_id).map(l => ({
-              mp_code: m.mp_code, mp_name: m.mp_name, stock_id: l.stock_id,
-              lot: l.lot, qty_fiscal: l.qty_fiscal, qty_operational: l.qty_operational, checked: false
-            }))
+            m.lots.filter(l => l.stock_id).map(l => {
+              const stock = stocks.find(s => s.id === l.stock_id);
+              return {
+                mp_code: m.mp_code,
+                mp_name: m.mp_name,
+                stock_id: l.stock_id,
+                lot: l.lot,
+                unit: stock?.unit || 'kg',
+                density: stock?.density || null,
+                qty_fiscal: l.qty_fiscal,
+                qty_operational: l.qty_operational,
+                checked: false,
+              };
+            })
           ),
         };
 
@@ -719,14 +729,19 @@ export default function NovaProducao() {
       }
 
       const newLots = deficitMpList.flatMap(m =>
-        m.lots.filter(l => l.stock_id).map(l => ({
-          mp_code: m.mp_code,
-          mp_name: m.mp_name,
-          stock_id: l.stock_id,
-          lot: l.lot,
-          qty_fiscal: l.qty_fiscal,
-          qty_operational: l.qty_operational,
-        }))
+        m.lots.filter(l => l.stock_id).map(l => {
+          const stock = stocks.find(s => s.id === l.stock_id);
+          return {
+            mp_code: m.mp_code,
+            mp_name: m.mp_name,
+            stock_id: l.stock_id,
+            lot: l.lot,
+            unit: stock?.unit || 'kg',
+            density: stock?.density || null,
+            qty_fiscal: l.qty_fiscal,
+            qty_operational: l.qty_operational,
+          };
+        })
       );
 
       const pastProduction = !['Aguardando Início', 'Em Produção'].includes(complementProduction.status);

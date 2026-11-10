@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ShieldCheck, Package, Box } from 'lucide-react';
 import publicI18n from '@/i18n/publicI18n';
 import { fmtDate, fmtDateTime, fmtNumber } from '@/i18n/formatters';
+import { fiscalQtyOf } from '@industrializacao/lib/productionViewUtils';
 
 function asArray(value) {
   if (Array.isArray(value)) return value;
@@ -59,8 +60,14 @@ export default function PublicRawMaterialView({ data }) {
   const productions = asArray(data?.productions);
   const movements = asArray(data?.movements);
   const unit = data?.unit || '';
+  const stockProxy = data ? [{ id: data.id, unit: data.unit, density: data.density }] : [];
+  const fiscalOf = (c) => fiscalQtyOf({
+    stock_id: data?.id,
+    qty_fiscal: c.qty_fiscal,
+    qty_operational: c.qty_operational,
+  }, stockProxy);
 
-  const totalFiscal = productions.reduce((s, c) => s + (Number(c.qty_fiscal) || 0), 0);
+  const totalFiscal = productions.reduce((s, c) => s + (fiscalOf(c) || 0), 0);
   const totalOp = productions.reduce((s, c) => s + (Number(c.qty_operational) || 0), 0);
   const totalMoved = movements.reduce((s, m) => s + (Number(m.quantity) || 0), 0);
 
@@ -150,7 +157,7 @@ export default function PublicRawMaterialView({ data }) {
                       <td className="px-3 py-2 font-medium" style={{ color: '#2563eb' }}>{c.op_number || '—'}</td>
                       <td className="px-3 py-2">{c.product || '—'}</td>
                       <td className="px-3 py-2">{fmtDate(c.date, undefined, lang)}</td>
-                      <td className="px-3 py-2 text-right">{fmt(c.qty_fiscal)} {unit}</td>
+                      <td className="px-3 py-2 text-right">{fmt(fiscalOf(c))} {unit}</td>
                       <td className="px-3 py-2 text-right">{fmt(c.qty_operational)} kg</td>
                     </tr>
                   ))}

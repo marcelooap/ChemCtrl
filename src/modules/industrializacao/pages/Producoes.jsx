@@ -58,7 +58,7 @@ export default function Producoes() {
   const [searchParams] = useSearchParams();
   const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
   const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
-  const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 500));
+  const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
   const { data: recipes } = useRecipes('-created_date', 500);
   const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
   const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () => base44.entities.ContainerOrigin.list('-created_date', 2000));
@@ -313,6 +313,8 @@ export default function Producoes() {
           ...m,
           stock_id: m.stock_id || null,
           lot: stock?.lot || m.lot || '',
+          unit: stock?.unit || m.unit || 'kg',
+          density: stock?.density ?? m.density ?? null,
           qty_fiscal: parseFloat(m.qty_fiscal) || 0,
           qty_operational: parseFloat(m.qty_operational) || 0,
         };

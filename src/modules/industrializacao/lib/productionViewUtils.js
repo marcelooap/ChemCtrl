@@ -13,9 +13,18 @@ export const parseArr = (val) => {
 
 export const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
+export const normalizeUnit = (unit) => {
+  const u = String(unit || 'kg').trim().toLowerCase();
+  if (u === 'l' || u === 'lt' || u === 'litro' || u === 'litros') return 'L';
+  if (u === 'kg' || u === 'kgs' || u === 'quilo' || u === 'quilos') return 'kg';
+  if (u === 'gal' || u === 'gallon' || u === 'gallons') return 'gal';
+  if (u === 'lb' || u === 'lbs') return 'lb';
+  return unit || 'kg';
+};
+
 export const convertToKg = (value, unit, density) => {
   const d = density || 1;
-  switch (unit) {
+  switch (normalizeUnit(unit)) {
     case 'kg': return value;
     case 'L': return value * d;
     case 'gal': return value * 3.78541 * d;
@@ -26,7 +35,7 @@ export const convertToKg = (value, unit, density) => {
 
 export const convertFromKg = (kg, unit, density) => {
   const d = density || 1;
-  switch (unit) {
+  switch (normalizeUnit(unit)) {
     case 'kg': return kg;
     case 'L': return kg / d;
     case 'gal': return kg / (3.78541 * d);
@@ -35,27 +44,76 @@ export const convertFromKg = (kg, unit, density) => {
   }
 };
 
-export const stockUnitOf = (mp, stocks) => {
+/** Resolve the live stock row for a production MP line (id first, then lot+code). */
+export const resolveStockOf = (mp, stocks) => {
+  const list = stocks || [];
+  if (!mp) return null;
   if (mp.stock_id) {
-    const s = (stocks || []).find(x => x.id === mp.stock_id);
-    if (s && s.unit) return s.unit;
+    const byId = list.find((x) => x.id === mp.stock_id);
+    if (byId) return byId;
   }
+  const lot = (mp.lot || '').trim();
+  const code = (mp.mp_code || '').trim();
+  if (lot && code) {
+    return list.find((x) => (x.lot || '').trim() === lot && (x.mp_code || '').trim() === code) || null;
+  }
+  return null;
+};
+
+export const stockUnitOf = (mp, stocks) => {
+  const s = resolveStockOf(mp, stocks);
+  if (s && s.unit) return normalizeUnit(s.unit);
+  if (mp?.unit) return normalizeUnit(mp.unit);
   return 'kg';
 };
 
-export const liveLotOf = (mp, stocks) => {
-  if (mp.stock_id) {
-    const s = (stocks || []).find(x => x.id === mp.stock_id);
-    if (s && s.lot) return s.lot;
+export const stockDensityOf = (mp, stocks) => {
+  const s = resolveStockOf(mp, stocks);
+  const fromStock = parseFloat(s?.density);
+  if (Number.isFinite(fromStock) && fromStock > 0) return fromStock;
+  const fromMp = parseFloat(mp?.density);
+  if (Number.isFinite(fromMp) && fromMp > 0) return fromMp;
+  return 1;
+};
+
+/**
+ * Fiscal qty in the CURRENT stock/note unit.
+ *
+ * Prefers the stored qty_fiscal (valor lançado na OP).
+ * Only converts from qty_operational (kg) when the stored fiscal looks like a kg
+ * snapshot left behind after a unit change (qty_fiscal ≈ qty_operational while unit ≠ kg).
+ */
+export const fiscalQtyOf = (mp, stocks) => {
+  const unit = stockUnitOf(mp, stocks);
+  const dens = stockDensityOf(mp, stocks);
+  const opKg = parseFloat(mp?.qty_operational);
+  const stored = parseFloat(mp?.qty_fiscal);
+  const hasOp = Number.isFinite(opKg);
+  const hasStored = Number.isFinite(stored);
+
+  if (normalizeUnit(unit) === 'kg') {
+    return round3(hasStored ? stored : (hasOp ? opKg : 0));
   }
-  return mp.lot;
+
+  // Gravado em kg e a nota hoje está em L/gal/lb → converte.
+  if (hasOp && hasStored && Math.abs(stored - opKg) <= 0.0005) {
+    return round3(convertFromKg(opKg, unit, dens));
+  }
+
+  if (hasStored) return round3(stored);
+  if (hasOp) return round3(convertFromKg(opKg, unit, dens));
+  return 0;
+};
+
+export const liveLotOf = (mp, stocks) => {
+  const s = resolveStockOf(mp, stocks);
+  if (s && s.lot) return s.lot;
+  return mp?.lot;
 };
 
 export const stockUnitPriceOf = (mp, stocks) => {
-  if (mp.stock_id) {
-    const s = (stocks || []).find(x => x.id === mp.stock_id);
-    if (s) return s.unit_price || 0;
-  }
+  const s = resolveStockOf(mp, stocks);
+  if (s) return s.unit_price || 0;
   return 0;
 };
 

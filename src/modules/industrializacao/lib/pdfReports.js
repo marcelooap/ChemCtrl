@@ -11,6 +11,8 @@ import {
   containerLiveGrossWeight,
   resolveProductDensity,
   stockUnitPriceOf,
+  stockUnitOf as resolveStockUnitOf,
+  fiscalQtyOf,
   formatContainerPackagingForProduction,
 } from '@industrializacao/lib/productionViewUtils';
 import { getLatestRecipeForProduct, resolveProductCode, resolveRecipeForContainer } from '@industrializacao/lib/recipeRevisions';
@@ -699,10 +701,8 @@ function drawProductionCostSection(doc, y, production, stocks, recipes, t, fmtNu
   const mps = parseArr(production.raw_materials_used);
   const mpCostRows = mps.map(function(m) {
     const price = stockUnitPriceOf(m, stocks);
-    const qty = m.qty_fiscal || 0;
-    const unit = (stocks && m.stock_id)
-      ? ((stocks.find(function(x) { return x.id === m.stock_id; }) || {}).unit || 'kg')
-      : 'kg';
+    const qty = fiscalQtyOf(m, stocks);
+    const unit = resolveStockUnitOf(m, stocks);
     return { name: m.mp_name, unit: unit, price: price, qty: qty, cost: price * qty };
   });
   const totalMpCost = mpCostRows.reduce(function(s, r) { return s + r.cost; }, 0);
@@ -789,15 +789,17 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
   const recipes = options.recipes || [];
   const complete = !!options.complete;
   const stockUnitOf = function(mp) {
-    if (stocks && mp.stock_id) {
-      const s = stocks.find(function(x) { return x.id === mp.stock_id; });
-      if (s && s.unit) return s.unit;
-    }
-    return 'kg';
+    return resolveStockUnitOf(mp, stocks);
   };
   const liveLotOf = function(mp) {
     if (stocks && mp.stock_id) {
       const s = stocks.find(function(x) { return x.id === mp.stock_id; });
+      if (s && s.lot) return s.lot;
+    }
+    if (stocks && mp.lot && mp.mp_code) {
+      const s = stocks.find(function(x) {
+        return (x.lot || '') === (mp.lot || '') && (x.mp_code || '') === (mp.mp_code || '');
+      });
       if (s && s.lot) return s.lot;
     }
     return mp.lot;
@@ -861,6 +863,7 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
     doc.setFontSize(9); setColor(doc, GRAY_LABEL); doc.text(t('pdf.production.noRawMaterials'), M, y); y += 10;
   } else {
     const units = mps.map(stockUnitOf);
+    const fiscalQtys = mps.map(function(m) { return fiscalQtyOf(m, stocks); });
     const allSameUnit = units.length > 0 && units.every(function(u) { return u === units[0]; });
     const fiscalUnit = allSameUnit ? units[0] : '';
     const mpHeaders = [
@@ -870,8 +873,16 @@ function drawProductionReport(doc, production, containers, stocks, options = {})
       t('pdf.production.columns.qtyFiscal'),
       t('pdf.production.columns.qtyOperational'),
     ];
-    const mpRows = mps.map(function(m, i) { return [m.mp_code || '-', m.mp_name || '-', liveLotOf(m) || '-', fmtNum(m.qty_fiscal, 3) + ' ' + units[i], fmtNum(m.qty_operational, 3) + ' kg']; });
-    const tFiscal = mps.reduce(function(s, m) { return s + (m.qty_fiscal || 0); }, 0);
+    const mpRows = mps.map(function(m, i) {
+      return [
+        m.mp_code || '-',
+        m.mp_name || '-',
+        liveLotOf(m) || '-',
+        fmtNum(fiscalQtys[i], 3) + ' ' + units[i],
+        fmtNum(m.qty_operational, 3) + ' kg',
+      ];
+    });
+    const tFiscal = fiscalQtys.reduce(function(s, q) { return s + (q || 0); }, 0);
     const tOp = mps.reduce(function(s, m) { return s + (m.qty_operational || 0); }, 0);
     y = addTable(doc, y, mpHeaders, mpRows, [30, 62, 28, 34, 28], [t('pdf.common.total'), '', '', (fiscalUnit ? fmtNum(tFiscal, 3) + ' ' + fiscalUnit : fmtNum(tFiscal, 3)), fmtNum(tOp, 3) + ' kg']);
   }
