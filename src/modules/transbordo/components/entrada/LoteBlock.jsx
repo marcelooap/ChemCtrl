@@ -622,7 +622,7 @@ export default function LoteBlock({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Local Armazenagem *</Label>
+            <Label>Local Armazenagem</Label>
             <Select
               value={lote.local_armazenagem || undefined}
               onValueChange={(value) => update("local_armazenagem", value)}
@@ -638,7 +638,7 @@ export default function LoteBlock({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Qtd Paletes *</Label>
+            <Label>Qtd Paletes</Label>
             <NumberInputBr
               decimals={0}
               min={0}

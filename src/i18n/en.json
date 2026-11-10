@@ -4665,6 +4665,7 @@
       "printLabelVolumeHintTank": "Tank volume. You can adjust it if you want to print a different volume.",
       "printLabelTareHint": "Tare is added to the net weight to get the label gross weight.",
       "printLabelVolumeRequired": "Enter the volume and the number of labels.",
+      "printLabelRepBrasilOfLotWarning": "CHECK THE BATCH: IT MUST START WITH \"OS - XXXXXX - XX\"",
       "printLabelConfirm": "Print",
       "printingLabels": "Printing...",
       "delete": "Delete",

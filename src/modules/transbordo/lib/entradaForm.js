@@ -150,15 +150,11 @@ export function validateEntradaLotes(lotes, produtos = []) {
       if (Math.abs(lTotalCalc - lQtd) > 0.001) {
         return `A soma do peso líquido das embalagens deve ser igual à quantidade no bloco ${i + 1}.`;
       }
-      if (!l.local_armazenagem) {
-        return `Local de Armazenagem é obrigatório no bloco ${i + 1}.`;
-      }
-      if (l.qtd_paletes === "" || l.qtd_paletes == null) {
-        return `Qtd Paletes é obrigatória no bloco ${i + 1}.`;
-      }
-      const lQtdPaletes = Number(l.qtd_paletes);
-      if (!Number.isFinite(lQtdPaletes) || lQtdPaletes < 0) {
-        return `Qtd Paletes deve ser um número válido no bloco ${i + 1}.`;
+      if (l.qtd_paletes !== "" && l.qtd_paletes != null) {
+        const lQtdPaletes = Number(l.qtd_paletes);
+        if (!Number.isFinite(lQtdPaletes) || lQtdPaletes < 0) {
+          return `Qtd Paletes deve ser um número válido no bloco ${i + 1}.`;
+        }
       }
     }
   }

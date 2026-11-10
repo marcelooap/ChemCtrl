@@ -129,43 +129,43 @@ export default function FaturamentoTabela({ rows = [], onView }) {
             </p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-max min-w-full text-sm">
             <thead className="bg-muted/80 text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.id')}
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   <SortHeader id="data" label={t('painel.faturamento.table.data')} />
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.origem')}
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.cod')}
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   <SortHeader id="produto" label={t('painel.faturamento.table.produto')} />
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.lote')}
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   <SortHeader id="cliente" label={t('painel.faturamento.table.cliente')} />
                 </th>
-                <th className="px-3 py-2.5 text-left font-medium">
+                <th className="px-3 py-2.5 text-left font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.local')}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">
+                <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.movimentacao')}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">
+                <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.armazenagem')}
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">
+                <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
                   <SortHeader id="total" label={t('painel.faturamento.table.total')} />
                 </th>
-                <th className="px-3 py-2.5 text-center font-medium">
+                <th className="px-3 py-2.5 text-center font-medium whitespace-nowrap">
                   {t('painel.faturamento.table.acoes')}
                 </th>
               </tr>
@@ -215,13 +215,9 @@ export default function FaturamentoTabela({ rows = [], onView }) {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{row.codigo || dash}</td>
-                    <td className="px-3 py-2.5 max-w-[200px] truncate" title={row.produto}>
-                      {row.produto || dash}
-                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">{row.produto || dash}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{row.lote || dash}</td>
-                    <td className="px-3 py-2.5 max-w-[160px] truncate" title={row.cliente}>
-                      {row.cliente || dash}
-                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">{row.cliente || dash}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">{row.local || dash}</td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
                       <MoneyBadge value={row.movimentacao} dash={dash} tone="orange" />

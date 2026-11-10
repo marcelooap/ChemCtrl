@@ -485,18 +485,12 @@ export default function EntradaModal({
           );
           return null;
         }
-        if (!l.local_armazenagem) {
-          setError(`Local de Armazenagem é obrigatório no bloco ${i + 1}.`);
-          return null;
-        }
-        if (l.qtd_paletes === "" || l.qtd_paletes == null) {
-          setError(`Qtd Paletes é obrigatória no bloco ${i + 1}.`);
-          return null;
-        }
-        const lQtdPaletes = Number(l.qtd_paletes);
-        if (!Number.isFinite(lQtdPaletes) || lQtdPaletes < 0) {
-          setError(`Qtd Paletes deve ser um número válido no bloco ${i + 1}.`);
-          return null;
+        if (l.qtd_paletes !== "" && l.qtd_paletes != null) {
+          const lQtdPaletes = Number(l.qtd_paletes);
+          if (!Number.isFinite(lQtdPaletes) || lQtdPaletes < 0) {
+            setError(`Qtd Paletes deve ser um número válido no bloco ${i + 1}.`);
+            return null;
+          }
         }
       }
     }

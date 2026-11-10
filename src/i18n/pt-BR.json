@@ -4588,6 +4588,7 @@
       "printLabelVolumeHintTank": "Volume do tanque. Você pode ajustar se quiser imprimir com outro volume.",
       "printLabelTareHint": "A tara é somada ao peso líquido para obter o peso bruto da etiqueta.",
       "printLabelVolumeRequired": "Informe o volume e a quantidade de etiquetas.",
+      "printLabelRepBrasilOfLotWarning": "VERIFICAR LOTE, O MESMO DEVE COMEÇAR COM \"OS - XXXXXX - XX\"",
       "printLabelConfirm": "Imprimir",
       "printingLabels": "Imprimindo...",
       "delete": "Excluir",

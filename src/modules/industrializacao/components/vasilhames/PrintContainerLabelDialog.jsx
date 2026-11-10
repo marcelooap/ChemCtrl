@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Printer } from 'lucide-react';
+import { AlertTriangle, Loader2, Printer } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import {
   Dialog,
@@ -35,6 +35,17 @@ import {
   suggestLabelVolumePlaceholder,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtNumber } from '@/i18n/formatters';
+
+const REP_BRASIL_CLIENT = 'REP BRASIL';
+
+/** Alerta REP BRASIL: lote de etiqueta não pode iniciar com OF (deve ser OS-…). */
+export function shouldWarnRepBrasilOfLot(clienteNome, lot) {
+  const client = String(clienteNome || '').trim().toUpperCase();
+  if (client !== REP_BRASIL_CLIENT) return false;
+  const lote = String(lot || '').trim();
+  if (!lote || lote === '—') return false;
+  return lote.toUpperCase().startsWith('OF');
+}
 
 /** Volume inicial do modal: unidade (tambor/bombona/IBC) ou volume do tanque. */
 export function defaultVolumeForContainer(container, productions, initialVolume) {
@@ -270,11 +281,16 @@ export default function PrintContainerLabelDialog({
     }
   };
 
+  const resolvedClienteNome =
+    meta?.clienteNome || clienteNome || container?.client || container?.cliente_nome || production?.client || '';
+  const resolvedLot = container?.lot || container?.lote || '';
+  const showRepBrasilOfLotWarning = shouldWarnRepBrasilOfLot(resolvedClienteNome, resolvedLot);
+
   const previewValues = {
     product: container?.product || '—',
-    client: meta?.clienteNome || container?.client || '—',
+    client: resolvedClienteNome || '—',
     op_number: container?.op_number || '—',
-    lot: container?.lot || '—',
+    lot: resolvedLot || '—',
     manufactureDate: fabDate,
     fillingDate: container?.created_date || null,
     expiryDate: labelExpiry,
@@ -297,6 +313,16 @@ export default function PrintContainerLabelDialog({
 
         {container && (
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
+            {showRepBrasilOfLotWarning && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-950"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+                <p>{t('containers.vasilhames.printLabelRepBrasilOfLotWarning')}</p>
+              </div>
+            )}
+
             <div className="overflow-x-auto rounded-lg bg-muted/40 px-3 py-4">
               {loading && !meta ? (
                 <div className="flex items-center justify-center h-[220px] text-muted-foreground">

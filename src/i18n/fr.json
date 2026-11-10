@@ -4125,6 +4125,7 @@
       "printLabelVolumeHintTank": "Volume du réservoir. Vous pouvez l'ajuster pour imprimer un autre volume.",
       "printLabelTareHint": "La tare est ajoutée au poids net pour obtenir le poids brut de l'étiquette.",
       "printLabelVolumeRequired": "Saisissez le volume et le nombre d'étiquettes.",
+      "printLabelRepBrasilOfLotWarning": "VÉRIFIER LE LOT : IL DOIT COMMENCER PAR \"OS - XXXXXX - XX\"",
       "printLabelConfirm": "Imprimer",
       "printingLabels": "Impression...",
       "delete": "Supprimer",
