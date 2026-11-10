@@ -67,6 +67,8 @@ INSERT INTO permissoes (id, modulo, tela, acao, codigo, descricao) VALUES
   -- Painel
   ('painel_home.view', 'painel', 'home', 'view', 'painel_home.view', 'Visualizar Home do Painel'),
   ('painel_dashboard.view', 'painel', 'dashboard', 'view', 'painel_dashboard.view', 'Visualizar Dashboard do Painel'),
+  ('painel_faturamento.view', 'painel', 'faturamento', 'view', 'painel_faturamento.view', 'Visualizar Faturamento do Painel'),
+  ('painel_faturamento.edit', 'painel', 'faturamento', 'edit', 'painel_faturamento.edit', 'Editar tarifas de Faturamento'),
   ('painel_comercial_reserva.view', 'painel', 'comercial_reserva', 'view', 'painel_comercial_reserva.view', 'Visualizar Reservar Material'),
   ('painel_comercial_reserva.create', 'painel', 'comercial_reserva', 'create', 'painel_comercial_reserva.create', 'Criar reserva de material'),
   ('painel_comercial_reserva.edit', 'painel', 'comercial_reserva', 'edit', 'painel_comercial_reserva.edit', 'Editar reserva de material'),
