@@ -560,8 +560,13 @@ export function resolveVasilhameLoteDatas(
       : [];
 
   const pick = (field) => {
-    const own = entries.find((c) => Object.prototype.hasOwnProperty.call(c, field));
-    if (own) return toDateOnly(own[field]);
+    // Só aceita data própria quando preenchida; null/vazio na composição
+    // não bloqueia o fallback para a entrada/estoque de origem.
+    for (const c of entries) {
+      if (!Object.prototype.hasOwnProperty.call(c, field)) continue;
+      const value = toDateOnly(c[field]);
+      if (value) return value;
+    }
     for (const est of origens) {
       const value = toDateOnly(est[field]);
       if (value) return value;

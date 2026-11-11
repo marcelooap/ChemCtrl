@@ -27,7 +27,10 @@ import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
 } from "@transbordo/lib/declaredVolume";
-import { applySaidaFiscalToggle } from "@transbordo/lib/saidaFiscal";
+import {
+  applySaidaFiscalToggle,
+  reconcileValidatedSaidaEmbalagens,
+} from "@transbordo/lib/saidaFiscal";
 import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromSaidaConvencional,
@@ -277,6 +280,17 @@ export default function Saida({
         list = volHealed.saidas || list;
       } catch (err) {
         console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
+      }
+      try {
+        // Repara Validado + No Pátio (containers/vasilhames sem Expedido/data).
+        await reconcileValidatedSaidaEmbalagens(list, {
+          vasilhames: vasilhamesAlinhados,
+        });
+      } catch (err) {
+        console.error(
+          "[Transbordo] Falha ao reconciliar expedição das saídas validadas:",
+          err
+        );
       }
       if (onlyIndustrializacao) {
         list = list.filter(saidaHasIndustrializacaoItems);

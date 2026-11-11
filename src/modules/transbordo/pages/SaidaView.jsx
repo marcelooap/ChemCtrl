@@ -25,6 +25,10 @@ import {
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import { healSaidaVolumesFromVasilhames } from "@transbordo/lib/vasilhameComposicao";
 import {
+  applySaidaFiscalToggle,
+  reconcileValidatedSaidaEmbalagens,
+} from "@transbordo/lib/saidaFiscal";
+import {
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
   TIPO_IND_VASILHAME,
@@ -226,6 +230,16 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             err
           );
         }
+        try {
+          await reconcileValidatedSaidaEmbalagens(saidaRow ? [saidaRow] : [], {
+            vasilhames: vasRows,
+          });
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao reconciliar expedição da saída:",
+            err
+          );
+        }
         setSaida(saidaRow);
         setEntradas(ents);
         setVasilhames(vasRows);
@@ -238,147 +252,23 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
   }, [id]);
 
   const handleFiscalToggle = async (checked) => {
+    if (!saida?.id) return;
     setUpdatingFiscal(true);
-    const updates = {
-      enviado_ao_fiscal: checked,
-      status: checked ? "enviado_fiscal" : "aguardando",
-      enviado_fiscal_usuario: checked ? user?.nome || null : null,
-      enviado_fiscal_data: checked ? new Date().toISOString() : null,
-    };
-    setSaida((prev) => ({ ...prev, ...updates }));
-
     try {
-      const itens = saida.itens || [];
-      const dataSaida = saida.data_programada || "";
-
-      // ── Atualizar snapshots dos itens com o estoque real do momento ──
-      const updatedItens = itens.map((item) => {
-        if (item.tipo === "embalado" && item.entrada_id) {
-          const e = entradas.find((e) => e.id === item.entrada_id);
-          const estoqueAtual = e?.saldo_final ?? e?.saldo_atual ?? 0;
-          return {
-            ...item,
-            estoque_atual: estoqueAtual,
-            estoque_final: estoqueAtual - (item.quantidade_solicitada || 0),
-          };
-        } else if (item.tipo === "convencional" && item.vasilhame_id) {
-          const v = vasilhames.find((v) => v.id === item.vasilhame_id);
-          const volDisponivel = v?.volume || 0;
-          return {
-            ...item,
-            volume_disponivel: volDisponivel,
-            saldo_final: volDisponivel - (item.volume_solicitado || 0),
-          };
-        }
-        return item;
+      const updated = await applySaidaFiscalToggle(saida, checked, {
+        userNome: user?.nome || "",
+        estoque: entradas,
+        vasilhames,
       });
-
-      await entities.saidas.update(id, { ...updates, itens: updatedItens });
-
-      // ── Embalado: dar baixa no estoque (FIFO por estoque_alocacoes ou entrada_id) ──
-      const estoqueAdjustments = {};
-      itens.forEach((item) => {
-        if (item.tipo !== "embalado") return;
-        if (
-          Array.isArray(item.estoque_alocacoes) &&
-          item.estoque_alocacoes.length > 0
-        ) {
-          item.estoque_alocacoes.forEach((aloc) => {
-            if (!aloc?.entrada_id) return;
-            const qty = Number(aloc.quantidade) || 0;
-            estoqueAdjustments[aloc.entrada_id] =
-              (estoqueAdjustments[aloc.entrada_id] || 0) +
-              (checked ? -qty : qty);
-          });
-          return;
-        }
-        if (!item.entrada_id) return;
-        const qty = item.quantidade_solicitada || 0;
-        estoqueAdjustments[item.entrada_id] =
-          (estoqueAdjustments[item.entrada_id] || 0) + (checked ? -qty : qty);
-      });
-
-      const estoqueUpdates = Object.entries(estoqueAdjustments).map(([eid, adj]) => {
-        const e = entradas.find((e) => e.id === eid);
-        const base = Number(e?.saldo_final ?? e?.saldo_atual) || 0;
-        return { id: eid, saldo_final: Math.max(0, base + adj) };
-      });
-      if (estoqueUpdates.length > 0) {
-        await entities.estoque.bulkUpdate(estoqueUpdates);
-        setEntradas((prev) =>
-          prev.map((e) =>
-            estoqueAdjustments[e.id]
-              ? {
-                  ...e,
-                  saldo_final: Math.max(
-                    0,
-                    (Number(e.saldo_final ?? e.saldo_atual) || 0) +
-                      estoqueAdjustments[e.id]
-                  ),
-                  saldo_atual: Math.max(
-                    0,
-                    (Number(e.saldo_final ?? e.saldo_atual) || 0) +
-                      estoqueAdjustments[e.id]
-                  ),
-                }
-              : e
-          )
-        );
+      setSaida(updated);
+      try {
+        const vascs = await entities.vasilhames.list();
+        setVasilhames(vascs || []);
+      } catch {
+        // mantém cache local se a recarga falhar
       }
-
-      // ── Convencional: registrar saída dos vasilhames ──
-      const vasilhameVolAdjustments = {};
-      const vasilhameIds = [];
-      itens.forEach((item) => {
-        if (item.tipo === "convencional" && item.vasilhame_id) {
-          const vol = item.volume_solicitado || 0;
-          vasilhameVolAdjustments[item.vasilhame_id] =
-            (vasilhameVolAdjustments[item.vasilhame_id] || 0) + (checked ? -vol : vol);
-          vasilhameIds.push(item.vasilhame_id);
-        }
-      });
-
-      const vasilhameUpdates = vasilhameIds.map((vid) => {
-        const v = vasilhames.find((v) => v.id === vid);
-        const volAdj = vasilhameVolAdjustments[vid] || 0;
-        const originalVol = v?.volume || 0;
-        const originalPesoLiq = v?.peso_liquido || 0;
-        const densidade = originalVol > 0 ? originalPesoLiq / originalVol : 0;
-        const newVol = originalVol + volAdj;
-        return {
-          id: vid,
-          volume: newVol,
-          peso_liquido: newVol * densidade,
-          peso_bruto: (v?.tara || 0) + newVol * densidade,
-          status: checked ? "Expedido" : "No Pátio",
-          data_saida: checked ? dataSaida || null : null,
-        };
-      });
-
-      if (vasilhameUpdates.length > 0) {
-        await entities.vasilhames.bulkUpdate(vasilhameUpdates);
-        setVasilhames((prev) =>
-          prev.map((v) => {
-            const upd = vasilhameUpdates.find((u) => u.id === v.id);
-            return upd
-              ? {
-                  ...v,
-                  status: upd.status,
-                  data_saida: upd.data_saida,
-                  volume: upd.volume,
-                  peso_liquido: upd.peso_liquido,
-                  peso_bruto: upd.peso_bruto,
-                }
-              : v;
-          })
-        );
-      }
-    } catch {
-      setSaida((prev) => ({
-        ...prev,
-        enviado_ao_fiscal: !checked,
-        status: !checked ? "enviado_fiscal" : "aguardando",
-      }));
+    } catch (err) {
+      console.error("[SaidaView] Falha ao alternar validação fiscal:", err);
     }
     setUpdatingFiscal(false);
   };

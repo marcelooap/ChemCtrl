@@ -1054,7 +1054,9 @@ export default function SaidaForm({
             gross_weight: (c?.tare || 0) + newNet,
             status: stillInSaida && newVol <= 0 ? "Expedido" : "No Pátio",
             departure_date:
-              stillInSaida && newVol <= 0 ? todayDateInputValue() : null,
+              stillInSaida && newVol <= 0
+                ? editingSaida?.data_programada || todayDateInputValue() || null
+                : null,
           });
         }
 

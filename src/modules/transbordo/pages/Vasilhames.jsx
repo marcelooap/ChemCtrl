@@ -922,33 +922,59 @@ export default function Vasilhames() {
         };
       }
 
-      // Só persiste as datas que o usuário realmente alterou (evita copiar o estoque).
+      // Fabricação/validade: só grava alteração explícita de data.
+      // Se o lote foi renomeado, congela na composição as datas já resolvidas
+      // (herdadas da entrada) — senão deixam de aparecer quando o nome do lote
+      // deixa de coincidir com o da entrada.
       const datasAtuais = resolveVasilhameLoteDatas(editingVasilhame, estoqueById, {
         transbordos,
       });
+      const formFab = String(nextFabricacao || "").trim().slice(0, 10);
+      const formVal = String(nextValidade || "").trim().slice(0, 10);
+      const loteRenomeado =
+        (!multiLote && newLote !== oldLote) || lotesRenamed;
       const datasPatch = {};
-      if (String(nextFabricacao || "") !== datasAtuais.data_fabricacao) {
-        datasPatch.data_fabricacao = nextFabricacao || "";
-      }
-      if (String(nextValidade || "") !== datasAtuais.data_validade) {
-        datasPatch.data_validade = nextValidade || "";
+      if (loteRenomeado) {
+        const fab = formFab || datasAtuais.data_fabricacao;
+        const val = formVal || datasAtuais.data_validade;
+        if (fab) datasPatch.data_fabricacao = fab;
+        if (val) datasPatch.data_validade = val;
+      } else {
+        if (formFab !== datasAtuais.data_fabricacao) {
+          datasPatch.data_fabricacao = formFab;
+        }
+        if (formVal !== datasAtuais.data_validade) {
+          datasPatch.data_validade = formVal;
+        }
       }
       if (Object.keys(datasPatch).length > 0) {
-        payload = {
-          ...payload,
-          composicao: applyLoteDatasToComposicao(
-            payload.composicao ?? editingVasilhame.composicao,
-            newLote || oldLote,
-            datasPatch,
-            {
-              quantidade_l: Number(data.volume ?? editingVasilhame.volume) || 0,
-              quantidade_kg:
-                Number(data.peso_liquido ?? editingVasilhame.peso_liquido) || 0,
-              transbordo_codigo:
-                editingVasilhame.numero_op || editingVasilhame.codigo || null,
-            }
-          ),
+        const datasFallback = {
+          quantidade_l: Number(data.volume ?? editingVasilhame.volume) || 0,
+          quantidade_kg:
+            Number(data.peso_liquido ?? editingVasilhame.peso_liquido) || 0,
+          transbordo_codigo:
+            editingVasilhame.numero_op || editingVasilhame.codigo || null,
         };
+        let nextComposicao = payload.composicao ?? editingVasilhame.composicao;
+        const lotesAlvo = new Set();
+        if (multiLote) {
+          for (const l of lotesEditados) {
+            const key = String(l.lote || "").trim();
+            if (key) lotesAlvo.add(key);
+          }
+        }
+        const headerLote = newLote || oldLote;
+        if (headerLote) lotesAlvo.add(headerLote);
+        if (lotesAlvo.size === 0) lotesAlvo.add(headerLote || "");
+        for (const loteKey of lotesAlvo) {
+          nextComposicao = applyLoteDatasToComposicao(
+            nextComposicao,
+            loteKey,
+            datasPatch,
+            datasFallback
+          );
+        }
+        payload = { ...payload, composicao: nextComposicao };
       }
 
       if (prevExpedido && !nextExpedido) {

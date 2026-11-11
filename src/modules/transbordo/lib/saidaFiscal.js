@@ -108,6 +108,97 @@ function normalizeItemChavesFilter(itemChaves) {
   return keys.length > 0 ? new Set(keys) : null;
 }
 
+/** Indexa entidades por id string — evita falha silenciosa number vs string no Map. */
+function indexById(rows = []) {
+  const map = new Map();
+  for (const row of rows || []) {
+    if (row?.id == null) continue;
+    map.set(String(row.id), row);
+  }
+  return map;
+}
+
+function entityLabel(item, fallback = "selecionado") {
+  return (
+    item?.vasilhame_placa ||
+    item?.vasilhame_barril ||
+    item?.container_number ||
+    item?.placa ||
+    item?.lote ||
+    fallback
+  );
+}
+
+/**
+ * Resolve containers da Industrialização por id (get), sem depender da janela
+ * list(..., 1000) — causa clássica de Validado sem Expedido.
+ */
+async function resolveContainersByIds(ids = [], seedRows = []) {
+  const byId = indexById(seedRows);
+  const missing = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))]
+    .filter((id) => !byId.has(id));
+  if (missing.length === 0) return byId;
+
+  const fetched = await Promise.all(
+    missing.map((id) => base44.entities.Container.get(id).catch(() => null))
+  );
+  for (const row of fetched) {
+    if (row?.id == null) continue;
+    byId.set(String(row.id), row);
+  }
+  return byId;
+}
+
+async function resolveStocksByIds(ids = [], seedRows = []) {
+  const byId = indexById(seedRows);
+  const missing = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))]
+    .filter((id) => !byId.has(id));
+  if (missing.length === 0) return byId;
+
+  const fetched = await Promise.all(
+    missing.map((id) =>
+      base44.entities.RawMaterialStock.get(id).catch(() => null)
+    )
+  );
+  for (const row of fetched) {
+    if (row?.id == null) continue;
+    byId.set(String(row.id), row);
+  }
+  return byId;
+}
+
+/** Tanque esvaziado na validação (tolerância de arredondamento de volume). */
+function isVolumeEsgotado(newVol, volTaken, currentVol) {
+  if (roundVolume(newVol) <= 0) return true;
+  if (volTaken > 0 && volTaken + 1e-9 >= currentVol) return true;
+  return false;
+}
+
+/**
+ * Patch de expedição / retorno ao pátio para container Industrialização.
+ */
+function buildIndContainerFiscalPatch(container, item, checked, dataSaida) {
+  if (!checked) {
+    const currentVolNow = Number(container?.volume) || 0;
+    if (currentVolNow <= 0) {
+      return (
+        buildContainerYardRestorePatch(container, [{ item }]) || {
+          status: "No Pátio",
+          departure_date: null,
+        }
+      );
+    }
+    return {
+      status: "No Pátio",
+      departure_date: null,
+    };
+  }
+  return {
+    status: "Expedido",
+    departure_date: dataSaida || null,
+  };
+}
+
 /**
  * Alterna envio fiscal da saída:
  * - enviado: baixa estoque (embalado + convencional via origem), expede vasilhames
@@ -192,25 +283,43 @@ export async function applySaidaFiscalToggle(
   const dataSaidaProgramada = saida.data_programada || "";
   const dataSaida = dataSaidaProgramada || dataSaidaRegistro;
 
-  const estoqueById = new Map((estoque || []).map((e) => [e.id, e]));
-  const vasilhameById = new Map(vasilhameRows.map((v) => [v.id, v]));
+  const estoqueById = indexById(estoque);
+  const vasilhameById = indexById(vasilhameRows);
   const allTransbordos =
     transbordos || (await entities.transbordos.list());
 
-  const hasIndItems = itens.some(
-    (i) => i.tipo === TIPO_IND_VASILHAME || i.tipo === TIPO_IND_RETORNO_MP
-  );
+  const containerIdsNeeded = [
+    ...new Set(
+      itens
+        .filter((i) => i.tipo === TIPO_IND_VASILHAME && i.container_id)
+        .map((i) => String(i.container_id))
+    ),
+  ];
+  const stockIdsNeeded = [
+    ...new Set(
+      itens
+        .filter(
+          (i) =>
+            i.tipo === TIPO_IND_RETORNO_MP && i.stock_id && !i.movement_id
+        )
+        .map((i) => String(i.stock_id))
+    ),
+  ];
 
-  let containersInd = [];
-  let stocksInd = [];
-  if (hasIndItems) {
-    [containersInd, stocksInd] = await Promise.all([
-      base44.entities.Container.list("-created_date", 1000),
-      base44.entities.RawMaterialStock.list("-created_date", 1000),
+  let containerById = new Map();
+  let stockById = new Map();
+  if (containerIdsNeeded.length > 0 || stockIdsNeeded.length > 0) {
+    const [containersResolved, stocksResolved] = await Promise.all([
+      containerIdsNeeded.length > 0
+        ? resolveContainersByIds(containerIdsNeeded)
+        : Promise.resolve(new Map()),
+      stockIdsNeeded.length > 0
+        ? resolveStocksByIds(stockIdsNeeded)
+        : Promise.resolve(new Map()),
     ]);
+    containerById = containersResolved;
+    stockById = stocksResolved;
   }
-  const containerById = new Map(containersInd.map((c) => [c.id, c]));
-  const stockById = new Map(stocksInd.map((s) => [s.id, s]));
 
   const updatedItens = itensAll.map((item) => {
     if (scope !== "all" && !scopedRefs.has(item)) return item;
@@ -229,7 +338,7 @@ export async function applySaidaFiscalToggle(
     }
     const hadBaixa = itemFoiBaixado(item, saida) || item.validado === true;
     if (item.tipo === "embalado" && item.entrada_id) {
-      const e = estoqueById.get(item.entrada_id);
+      const e = estoqueById.get(String(item.entrada_id));
       const estoqueAtual = e?.saldo_final ?? e?.saldo_atual ?? 0;
       const qtdBaixa =
         item.quantidade_carregada != null && item.quantidade_carregada !== ""
@@ -250,7 +359,7 @@ export async function applySaidaFiscalToggle(
       item.vasilhame_id &&
       !isTanqueVazioItem(item)
     ) {
-      const v = vasilhameById.get(item.vasilhame_id);
+      const v = vasilhameById.get(String(item.vasilhame_id));
       const volDisponivel = v?.volume || 0;
       return applyItemValidacaoFlags(
         {
@@ -266,7 +375,7 @@ export async function applySaidaFiscalToggle(
       );
     }
     if (item.tipo === TIPO_IND_VASILHAME && item.container_id) {
-      const c = containerById.get(item.container_id);
+      const c = containerById.get(String(item.container_id));
       const volDisponivel = c?.volume || 0;
       return applyItemValidacaoFlags(
         {
@@ -282,7 +391,7 @@ export async function applySaidaFiscalToggle(
       );
     }
     if (item.tipo === TIPO_IND_RETORNO_MP && item.stock_id && !item.movement_id) {
-      const s = stockById.get(item.stock_id);
+      const s = stockById.get(String(item.stock_id));
       const estoqueAtual = s?.current_stock || 0;
       return applyItemValidacaoFlags(
         {
@@ -343,12 +452,22 @@ export async function applySaidaFiscalToggle(
         item?.tipo === "convencional" &&
         !isTanqueVazioItem(item) &&
         (item.vasilhame_id || item.vasilhame_placa || item.vasilhame_barril) &&
-        !vasilhameById.get(item.vasilhame_id)
+        !vasilhameById.get(String(item.vasilhame_id || ""))
     );
     if (lost) {
-      const label = lost.vasilhame_placa || lost.vasilhame_barril || "selecionado";
       throw new Error(
-        `Não foi possível registrar a data de saída do vasilhame ${label}. Atualize a página e tente novamente.`
+        `Não foi possível registrar a data de saída do vasilhame ${entityLabel(lost)}. Atualize a página e tente novamente.`
+      );
+    }
+    const lostContainer = itens.find(
+      (item) =>
+        item?.tipo === TIPO_IND_VASILHAME &&
+        item.container_id &&
+        !containerById.get(String(item.container_id))
+    );
+    if (lostContainer) {
+      throw new Error(
+        `Não foi possível expedir o vasilhame ${entityLabel(lostContainer)}. Atualize a página e tente novamente.`
       );
     }
   }
@@ -361,20 +480,30 @@ export async function applySaidaFiscalToggle(
   itens.forEach((item) => {
     if (item.tipo !== "convencional" || !item.vasilhame_id || isTanqueVazioItem(item))
       return;
+    const vid = String(item.vasilhame_id);
     const vol = item.volume_solicitado || 0;
-    volByVasilhame[item.vasilhame_id] =
-      (volByVasilhame[item.vasilhame_id] || 0) + vol;
-    if (!itemByVasilhame[item.vasilhame_id]) {
-      itemByVasilhame[item.vasilhame_id] = item;
+    volByVasilhame[vid] = (volByVasilhame[vid] || 0) + vol;
+    if (!itemByVasilhame[vid]) {
+      itemByVasilhame[vid] = item;
     }
   });
 
   const vasilhameIds = Object.keys(volByVasilhame);
   if (vasilhameIds.length > 0) {
+    // Volume fresco do banco — evita residual fantasma que impede Expedido.
+    const freshVasilhames = await Promise.all(
+      vasilhameIds.map((vid) => entities.vasilhames.get(vid).catch(() => null))
+    );
+    for (const row of freshVasilhames) {
+      if (row?.id == null) continue;
+      vasilhameById.set(String(row.id), row);
+    }
+
     const vasilhameUpdates = vasilhameIds.map((vid) => {
       const v = vasilhameById.get(vid);
       const item = itemByVasilhame[vid];
-      const volAdj = (volByVasilhame[vid] || 0) * (checked ? -1 : 1);
+      const volTaken = volByVasilhame[vid] || 0;
+      const volAdj = volTaken * (checked ? -1 : 1);
       const currentVol = Number(v?.volume) || 0;
       const newVol = Math.max(0, roundVolume(currentVol + volAdj));
       const dens = resolveDensidade(v, item);
@@ -391,13 +520,16 @@ export async function applySaidaFiscalToggle(
               )
             );
 
+      const expedir =
+        checked && isVolumeEsgotado(newVol, volTaken, currentVol);
+
       const patch = {
         id: vid,
         volume: newVol,
         peso_liquido: newPesoLiq,
         peso_bruto: roundMass((Number(v?.tara) || 0) + newPesoLiq),
-        status: checked && newVol <= 0 ? "Expedido" : "No Pátio",
-        data_saida: checked && newVol <= 0 ? dataSaida || null : null,
+        status: expedir ? "Expedido" : "No Pátio",
+        data_saida: expedir ? dataSaida || null : null,
       };
 
       if (isDestinoEmbalagemUnitaria(v?.tipo)) {
@@ -435,8 +567,39 @@ export async function applySaidaFiscalToggle(
     await entities.vasilhames.bulkUpdate(vasilhameUpdates);
   }
 
-  // Status da saída só depois dos tanques. Se a gravação do vasilhame falhar,
-  // a validação não fica marcada sem data de saída.
+  // Industrialização: expedir / retornar containers ANTES de marcar a saída.
+  // Antes o status Validado era gravado primeiro e um container ausente era
+  // ignorado com `continue` — gerava Validado + No Pátio sem data de saída.
+  const volByContainer = {};
+  const itemByContainer = {};
+  itens.forEach((item) => {
+    if (item.tipo !== TIPO_IND_VASILHAME || !item.container_id) return;
+    const cid = String(item.container_id);
+    const vol = item.volume_solicitado || 0;
+    volByContainer[cid] = (volByContainer[cid] || 0) + vol;
+    if (!itemByContainer[cid]) {
+      itemByContainer[cid] = item;
+    }
+  });
+
+  for (const cid of Object.keys(volByContainer)) {
+    const c = containerById.get(cid);
+    const item = itemByContainer[cid];
+    if (!c) {
+      if (checked) {
+        throw new Error(
+          `Não foi possível expedir o vasilhame ${entityLabel(item)}. Atualize a página e tente novamente.`
+        );
+      }
+      continue;
+    }
+    const patch = buildIndContainerFiscalPatch(c, item, checked, dataSaida);
+    await base44.entities.Container.update(cid, patch);
+    containerById.set(cid, { ...c, ...patch });
+  }
+
+  // Status da saída só depois dos tanques/containers. Se a gravação falhar,
+  // a validação não fica marcada sem data de saída / Expedido.
   const quantidade_total = calcSaidaQuantidadeTotal(updatedItens);
   await entities.saidas.update(saida.id, {
     ...updates,
@@ -457,50 +620,6 @@ export async function applySaidaFiscalToggle(
     await syncEstoqueSaldos(estoqueIds);
   }
 
-  // Industrialização: expedir / retornar containers
-  const volByContainer = {};
-  const itemByContainer = {};
-  itens.forEach((item) => {
-    if (item.tipo !== TIPO_IND_VASILHAME || !item.container_id) return;
-    const vol = item.volume_solicitado || 0;
-    volByContainer[item.container_id] =
-      (volByContainer[item.container_id] || 0) + vol;
-    if (!itemByContainer[item.container_id]) {
-      itemByContainer[item.container_id] = item;
-    }
-  });
-
-  for (const cid of Object.keys(volByContainer)) {
-    const c = containerById.get(cid);
-    if (!c) continue;
-    const item = itemByContainer[cid];
-    let patch;
-
-    if (!checked) {
-      const currentVolNow = Number(c.volume) || 0;
-      if (currentVolNow <= 0) {
-        // Volume zerado em validação antiga: restaura snapshot para o pátio.
-        const restore = buildContainerYardRestorePatch(c, [{ item }]);
-        patch = restore || {
-          status: "No Pátio",
-          departure_date: null,
-        };
-      } else {
-        patch = {
-          status: "No Pátio",
-          departure_date: null,
-        };
-      }
-    } else {
-      patch = {
-        status: "Expedido",
-        departure_date: dataSaida || null,
-      };
-    }
-
-    await base44.entities.Container.update(cid, patch);
-  }
-
   // Industrialização: retorno de MP — baixa estoque e registra movimentação fiscal
   for (const item of itens) {
     if (item.tipo !== TIPO_IND_RETORNO_MP) continue;
@@ -508,7 +627,7 @@ export async function applySaidaFiscalToggle(
     if (item.movement_id) continue;
     if (!item.stock_id) continue;
 
-    const stock = stockById.get(item.stock_id);
+    const stock = stockById.get(String(item.stock_id));
     if (!stock) continue;
 
     const qtd = item.quantidade_solicitada || 0;
@@ -535,7 +654,7 @@ export async function applySaidaFiscalToggle(
         balance_before: balanceBefore,
         balance_after: newBalance,
       });
-      stockById.set(stock.id, { ...stock, current_stock: newBalance });
+      stockById.set(String(stock.id), { ...stock, current_stock: newBalance });
     } else {
       // Reverte: remove movimentações geradas por esta saída e devolve o saldo
       try {
@@ -554,7 +673,7 @@ export async function applySaidaFiscalToggle(
       }
       const adjusted = qtd > 0 ? await restoreStock(stock.id, qtd) : null;
       const newBalance = Number(adjusted?.balance_after ?? available + qtd);
-      stockById.set(stock.id, { ...stock, current_stock: newBalance });
+      stockById.set(String(stock.id), { ...stock, current_stock: newBalance });
     }
   }
 
@@ -731,7 +850,7 @@ export async function resyncTransbordoStockAfterSaidaEdit(
     ...Object.keys(newConv.map),
   ]);
 
-  const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
+  const vasilhameById = indexById(vasilhames);
   const dataSaidaRegistro = dataSaida || todayDateInputValue();
 
   if (vasilhameIds.size > 0) {
@@ -740,7 +859,7 @@ export async function resyncTransbordoStockAfterSaidaEdit(
     for (const vid of vasilhameIds) {
       const item = newConv.itemById[vid] || oldConv.itemById[vid];
       const v =
-        vasilhameById.get(vid) ||
+        vasilhameById.get(String(vid)) ||
         resolveVasilhameDaSaida(
           {
             tipo: "convencional",
@@ -751,8 +870,8 @@ export async function resyncTransbordoStockAfterSaidaEdit(
           vasilhames,
           { preferPatio: true }
         );
-      if (!v || seenTargets.has(v.id)) continue;
-      seenTargets.add(v.id);
+      if (!v || seenTargets.has(String(v.id))) continue;
+      seenTargets.add(String(v.id));
       const oldVol = oldConv.map[vid] || 0;
       const newVolTaken = newConv.map[vid] || 0;
       // Estado atual já reflete a baixa do item antigo → devolve o delta
@@ -774,14 +893,14 @@ export async function resyncTransbordoStockAfterSaidaEdit(
           ? roundMass(nextVol * dens)
           : Math.max(0, roundMass((Number(v.peso_liquido) || 0) + pesoAdj));
 
+      const expedir = newVolTaken > 0 && roundVolume(nextVol) <= 0;
       const patch = {
         id: v.id,
         volume: nextVol,
         peso_liquido: newPesoLiq,
         peso_bruto: roundMass((Number(v.tara) || 0) + newPesoLiq),
-        status: nextVol <= 0 && newVolTaken > 0 ? "Expedido" : "No Pátio",
-        data_saida:
-          nextVol <= 0 && newVolTaken > 0 ? dataSaidaRegistro || null : null,
+        status: expedir ? "Expedido" : "No Pátio",
+        data_saida: expedir ? dataSaidaRegistro || null : null,
       };
 
       if (isDestinoEmbalagemUnitaria(v?.tipo)) {
@@ -808,7 +927,7 @@ export async function resyncTransbordoStockAfterSaidaEdit(
       }
 
       patches.push(patch);
-      vasilhameById.set(vid, { ...v, ...patch });
+      vasilhameById.set(String(v.id), { ...v, ...patch });
     }
     if (patches.length > 0) {
       await entities.vasilhames.bulkUpdate(patches);
@@ -831,4 +950,123 @@ export async function resyncTransbordoStockAfterSaidaEdit(
   if (estoqueIds.length > 0) {
     await syncEstoqueSaldos(estoqueIds);
   }
+}
+
+function needsExpedicaoHeal(row) {
+  if (!row) return true;
+  if (String(row.status || "") !== "Expedido") return true;
+  const data = row.departure_date ?? row.data_saida;
+  return data == null || String(data).trim() === "";
+}
+
+/**
+ * Corrige embalagens já validadas na saída que ficaram "No Pátio" sem data
+ * (falha intermitente antiga). Seguro para rodar no carregamento da lista.
+ *
+ * - Industrialização (`ind_vasilhame`): status Expedido + departure_date
+ * - Transbordo convencional: Expedido + data_saida quando volume já está zerado
+ */
+export async function reconcileValidatedSaidaEmbalagens(
+  saidas = [],
+  { vasilhames = [] } = {}
+) {
+  const list = saidas || [];
+  if (list.length === 0) return { containersFixed: 0, vasilhamesFixed: 0 };
+
+  const containerTargets = new Map();
+  const vasilhameTargets = new Map();
+
+  for (const saida of list) {
+    const dataSaida =
+      saida?.data_programada || todayDateInputValue() || null;
+    for (const item of saida?.itens || []) {
+      if (!itemFoiBaixado(item, saida)) continue;
+
+      if (item.tipo === TIPO_IND_VASILHAME && item.container_id) {
+        const cid = String(item.container_id);
+        if (!containerTargets.has(cid)) {
+          containerTargets.set(cid, { dataSaida, item });
+        }
+        continue;
+      }
+
+      if (
+        (item.tipo === TIPO_CONVENCIONAL || item.tipo === "convencional") &&
+        item.vasilhame_id &&
+        !isTanqueVazioItem(item)
+      ) {
+        const vid = String(item.vasilhame_id);
+        if (!vasilhameTargets.has(vid)) {
+          vasilhameTargets.set(vid, { dataSaida, item });
+        }
+      }
+    }
+  }
+
+  let containersFixed = 0;
+  let vasilhamesFixed = 0;
+
+  if (containerTargets.size > 0) {
+    const byId = await resolveContainersByIds([...containerTargets.keys()]);
+    for (const [cid, meta] of containerTargets) {
+      const container = byId.get(cid);
+      if (!container || !needsExpedicaoHeal(container)) continue;
+      const patch = {
+        status: "Expedido",
+        departure_date: meta.dataSaida || null,
+      };
+      try {
+        await base44.entities.Container.update(cid, patch);
+        containersFixed += 1;
+      } catch (err) {
+        console.error(
+          "[saidaFiscal] Falha ao reconciliar container expedido:",
+          cid,
+          err
+        );
+      }
+    }
+  }
+
+  if (vasilhameTargets.size > 0) {
+    const byId = indexById(vasilhames);
+    const missing = [...vasilhameTargets.keys()].filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      const fetched = await Promise.all(
+        missing.map((id) => entities.vasilhames.get(id).catch(() => null))
+      );
+      for (const row of fetched) {
+        if (row?.id == null) continue;
+        byId.set(String(row.id), row);
+      }
+    }
+
+    const patches = [];
+    for (const [vid, meta] of vasilhameTargets) {
+      const v = byId.get(vid);
+      if (!v) continue;
+      const vol = Number(v.volume) || 0;
+      // Só força Expedido quando o tanque já está fisicamente vazio.
+      if (roundVolume(vol) > 0) continue;
+      if (!needsExpedicaoHeal(v)) continue;
+      patches.push({
+        id: vid,
+        status: "Expedido",
+        data_saida: meta.dataSaida || null,
+      });
+    }
+    if (patches.length > 0) {
+      try {
+        await entities.vasilhames.bulkUpdate(patches);
+        vasilhamesFixed = patches.length;
+      } catch (err) {
+        console.error(
+          "[saidaFiscal] Falha ao reconciliar vasilhames expedidos:",
+          err
+        );
+      }
+    }
+  }
+
+  return { containersFixed, vasilhamesFixed };
 }

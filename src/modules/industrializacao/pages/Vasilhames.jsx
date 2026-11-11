@@ -29,6 +29,7 @@ import {
   buildContainerYardRestorePatch,
   collectIndVasilhameItemsForContainer,
 } from '@transbordo/lib/saidaIndContainer';
+import { reconcileValidatedSaidaEmbalagens } from '@transbordo/lib/saidaFiscal';
 import AddTankDialog from '@industrializacao/components/vasilhames/AddTankDialog';
 import HistoryDialog from '@industrializacao/components/vasilhames/HistoryDialog';
 import PrintContainerLabelDialog from '@industrializacao/components/vasilhames/PrintContainerLabelDialog';
@@ -97,6 +98,7 @@ export default function Vasilhames() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
   const highlightRef = useRef(null);
+  const expedicaoReconciledRef = useRef(false);
   const { toast } = useToast();
   const [viewSaidas, setViewSaidas] = useState([]);
   const [loadingViewSaidas, setLoadingViewSaidas] = useState(false);
@@ -481,6 +483,35 @@ export default function Vasilhames() {
     next.delete('id');
     setSearchParams(next, { replace: true });
   }, [searchParams, loading, containers, setSearchParams]);
+
+  // Corrige containers validados na saída que ficaram "No Pátio" sem data.
+  useEffect(() => {
+    if (loading || !containers?.length || expedicaoReconciledRef.current) {
+      return undefined;
+    }
+    expedicaoReconciledRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const saidas = await loadChemflowSaidasCached();
+        if (cancelled) return;
+        const { containersFixed } = await reconcileValidatedSaidaEmbalagens(
+          saidas || []
+        );
+        if (!cancelled && containersFixed > 0) {
+          load();
+        }
+      } catch (err) {
+        console.error(
+          '[Vasilhames] Falha ao reconciliar expedição das saídas:',
+          err
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, containers?.length, load]);
 
   useEffect(() => {
     if (!highlightId || !highlightRef.current) return;

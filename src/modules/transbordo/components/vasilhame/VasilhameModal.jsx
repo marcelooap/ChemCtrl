@@ -190,6 +190,23 @@ export default function VasilhameModal({
     // loteDatas deriva de editingVasilhame; não reinicia o form por conta própria.
   }, [editingVasilhame, open, produtos]);
 
+  // Se o estoque carregar depois da abertura, preenche datas ainda vazias
+  // sem sobrescrever edição manual do usuário.
+  useEffect(() => {
+    if (!open || !editingVasilhame) return;
+    if (loteDatas?.data_fabricacao) {
+      setDataFabricacao((prev) => prev || loteDatas.data_fabricacao);
+    }
+    if (loteDatas?.data_validade) {
+      setDataValidade((prev) => prev || loteDatas.data_validade);
+    }
+  }, [
+    open,
+    editingVasilhame,
+    loteDatas?.data_fabricacao,
+    loteDatas?.data_validade,
+  ]);
+
   const clientesComProdutos = produtos
     .filter((p) => p.cliente_nome)
     .reduce((acc, p) => {
