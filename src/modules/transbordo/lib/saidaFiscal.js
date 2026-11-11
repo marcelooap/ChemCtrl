@@ -491,17 +491,81 @@ export async function applySaidaFiscalToggle(
   const vasilhameIds = Object.keys(volByVasilhame);
   if (vasilhameIds.length > 0) {
     // Volume fresco do banco — evita residual fantasma que impede Expedido.
+    // Também descarta ids só presentes na lista em memória (já removidos no DB).
     const freshVasilhames = await Promise.all(
       vasilhameIds.map((vid) => entities.vasilhames.get(vid).catch(() => null))
     );
-    for (const row of freshVasilhames) {
-      if (row?.id == null) continue;
-      vasilhameById.set(String(row.id), row);
+    for (let i = 0; i < vasilhameIds.length; i += 1) {
+      const vid = vasilhameIds[i];
+      const row = freshVasilhames[i];
+      if (row?.id != null) {
+        vasilhameById.set(String(row.id), row);
+      } else {
+        vasilhameById.delete(vid);
+      }
     }
 
-    const vasilhameUpdates = vasilhameIds.map((vid) => {
+    // Id gravado na saída pode ter sido removido na regravação do transbordo.
+    // Remapeia por placa/barril antes do bulkUpdate (evita "Registro não encontrado").
+    const missingIds = vasilhameIds.filter((vid) => !vasilhameById.get(vid));
+    if (missingIds.length > 0) {
+      const freshList = await entities.vasilhames.list();
+      for (const row of freshList || []) {
+        if (row?.id == null) continue;
+        vasilhameById.set(String(row.id), row);
+      }
+      vasilhameRows = [...vasilhameById.values()];
+
+      for (const staleId of missingIds) {
+        const item = itemByVasilhame[staleId];
+        const resolved = resolveVasilhameDaSaida(item, vasilhameRows, {
+          preferPatio: checked,
+        });
+        if (!resolved?.id) continue;
+        const resolvedId = String(resolved.id);
+        if (resolvedId === staleId) continue;
+
+        volByVasilhame[resolvedId] =
+          (volByVasilhame[resolvedId] || 0) + (volByVasilhame[staleId] || 0);
+        if (!itemByVasilhame[resolvedId]) {
+          itemByVasilhame[resolvedId] = {
+            ...item,
+            vasilhame_id: resolved.id,
+            vasilhame_placa: resolved.placa || item?.vasilhame_placa || "",
+            vasilhame_barril:
+              resolved.barril ?? item?.vasilhame_barril ?? "",
+          };
+        }
+        delete volByVasilhame[staleId];
+        delete itemByVasilhame[staleId];
+
+        for (let i = 0; i < updatedItens.length; i += 1) {
+          const it = updatedItens[i];
+          if (String(it?.vasilhame_id || "") !== staleId) continue;
+          updatedItens[i] = {
+            ...it,
+            vasilhame_id: resolved.id,
+            vasilhame_placa: resolved.placa || it.vasilhame_placa || "",
+            vasilhame_barril: resolved.barril ?? it.vasilhame_barril ?? "",
+          };
+        }
+      }
+    }
+
+    const vasilhameUpdates = [];
+    for (const vid of Object.keys(volByVasilhame)) {
       const v = vasilhameById.get(vid);
       const item = itemByVasilhame[vid];
+      if (!v?.id) {
+        if (checked) {
+          throw new Error(
+            `Não foi possível registrar a data de saída do vasilhame ${entityLabel(item)}. Atualize a página e tente novamente.`
+          );
+        }
+        // Desvalidação: tanque já ausente — não bloqueia reverter o status.
+        continue;
+      }
+
       const volTaken = volByVasilhame[vid] || 0;
       const volAdj = volTaken * (checked ? -1 : 1);
       const currentVol = Number(v?.volume) || 0;
@@ -524,7 +588,7 @@ export async function applySaidaFiscalToggle(
         checked && isVolumeEsgotado(newVol, volTaken, currentVol);
 
       const patch = {
-        id: vid,
+        id: String(v.id),
         volume: newVol,
         peso_liquido: newPesoLiq,
         peso_bruto: roundMass((Number(v?.tara) || 0) + newPesoLiq),
@@ -562,9 +626,11 @@ export async function applySaidaFiscalToggle(
         );
       }
 
-      return patch;
-    });
-    await entities.vasilhames.bulkUpdate(vasilhameUpdates);
+      vasilhameUpdates.push(patch);
+    }
+    if (vasilhameUpdates.length > 0) {
+      await entities.vasilhames.bulkUpdate(vasilhameUpdates);
+    }
   }
 
   // Industrialização: expedir / retornar containers ANTES de marcar a saída.
