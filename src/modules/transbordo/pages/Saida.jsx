@@ -6,6 +6,7 @@ import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
 import { Plus, Search, Eye, Pencil, Trash2, RefreshCw, Truck } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
+import { Checkbox } from "@shared/components/ui/checkbox";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -93,6 +94,15 @@ const STATUS_OPTIONS_TRANSPORTE = [
 
 const DEFAULT_BASE_PATH = "/chemflow/saida";
 
+/** Diferença em dias entre a data programada (YYYY-MM-DD) e hoje. */
+function calcDias(dataProgramada) {
+  if (!dataProgramada) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const programada = new Date(dataProgramada + "T00:00:00");
+  return Math.ceil((programada - today) / (1000 * 60 * 60 * 24));
+}
+
 /** Ordena pelo código da saída (S001, S012…) — maior ID primeiro. */
 function compareSaidaCodigoDesc(a, b) {
   const parse = (value) => {
@@ -178,6 +188,8 @@ export default function Saida({
   const [clienteFilter, setClienteFilter] = useState("");
   const [agendamentoFilter, setAgendamentoFilter] = useState("");
   const [transporteFilter, setTransporteFilter] = useState("");
+  /** Comercial: filtro opcional; inicia desmarcado ao abrir a tela. */
+  const [carregamentosHoje, setCarregamentosHoje] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const listScrollRef = useRef(null);
@@ -363,6 +375,7 @@ export default function Saida({
 
       let matchAgendamento = true;
       let matchTransporte = true;
+      let matchCarregamentosHoje = true;
       if (isExpedicao) {
         const agendamento = findAgendamentoDisplayBySaida(agendamentos, s.id);
 
@@ -398,6 +411,14 @@ export default function Saida({
             (wantPendente && !registrado) ||
             (wantRegistrado && registrado);
         }
+
+        // Mesma regra visual da coluna Dias: "Hoje" quando calcDias === 0
+        // e a saída ainda não está expedida (expedido exibe "-").
+        if (carregamentosHoje) {
+          const dias = calcDias(s.data_programada);
+          const isExpedido = isSaidaExpedida(s.id, expedidasIds);
+          matchCarregamentosHoje = !isExpedido && dias === 0;
+        }
       }
 
       return (
@@ -405,7 +426,8 @@ export default function Saida({
         matchStatus &&
         matchCliente &&
         matchAgendamento &&
-        matchTransporte
+        matchTransporte &&
+        matchCarregamentosHoje
       );
     });
 
@@ -431,6 +453,7 @@ export default function Saida({
     clienteFilter,
     agendamentoFilter,
     transporteFilter,
+    carregamentosHoje,
     agendamentos,
     isExpedicao,
     trackNewFromPainel,
@@ -459,14 +482,6 @@ export default function Saida({
         <span className="text-xs font-medium text-primary">{weekday}</span>
       </span>
     );
-  };
-
-  const calcDias = (dataProgramada) => {
-    if (!dataProgramada) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const programada = new Date(dataProgramada + "T00:00:00");
-    return Math.ceil((programada - today) / (1000 * 60 * 60 * 24));
   };
 
   const renderDias = (dataProgramada) => {
@@ -742,6 +757,24 @@ export default function Saida({
               selectOnly
             />
           </div>
+          {isExpedicao && (
+            <label
+              htmlFor="filtro-carregamentos-hoje"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-3 text-sm text-foreground shadow-sm transition-colors hover:bg-muted/50"
+            >
+              <Checkbox
+                id="filtro-carregamentos-hoje"
+                checked={carregamentosHoje}
+                onCheckedChange={(checked) =>
+                  setCarregamentosHoje(checked === true)
+                }
+                aria-label="Carregamentos Hoje"
+              />
+              <span className="whitespace-nowrap font-medium">
+                Carregamentos Hoje
+              </span>
+            </label>
+          )}
         </div>
 
         {!isExpedicao && fiscalError && (

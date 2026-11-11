@@ -426,65 +426,167 @@ export async function printSaidaAgendamento(
 <meta charset="UTF-8" />
 <title>${escapeHtml(title)}</title>
 <style>
-  @page { size: A4 landscape; margin: 10mm; }
+  /*
+   * Margem em duas camadas (igual a4-document.css):
+   * @page cobre a área não imprimível da impressora; padding do .sheet
+   * protege se o diálogo de impressão sobrescrever @page.
+   */
+  @page { size: A4 landscape; margin: 8mm; }
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
   body {
     font-family: Inter, Arial, sans-serif;
     color: #111827;
-    margin: 0;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
   }
-  .sheet { flex: 1 0 auto; display: flex; flex-direction: column; min-height: calc(100vh - 0px); }
-  .sheet-body { flex: 1 0 auto; }
-  h1 { font-size: 17px; margin: 0 0 12px; }
-  .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 12px; }
-  .meta p { margin: 0; font-size: 10px; color: #6b7280; }
-  .meta strong { display: block; margin-top: 2px; font-size: 12px; color: #111827; }
-  .transporte { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; }
-  .transporte p { margin: 0; font-size: 10px; color: #6b7280; }
-  .transporte strong { display: block; margin-top: 2px; font-size: 12px; color: #111827; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+  .sheet {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 0px);
+    width: 100%;
+    max-width: 100%;
+    padding: 4mm;
+    overflow: visible;
+  }
+  .sheet-body { flex: 1 0 auto; min-width: 0; overflow: visible; }
+  h1 {
+    font-size: 15px;
+    margin: 0 0 10px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .meta { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+  .meta p { margin: 0; font-size: 9px; color: #6b7280; }
+  .meta strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #111827;
+    overflow-wrap: anywhere;
+  }
+  .transporte {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 6px 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+  }
+  .transporte p { margin: 0; font-size: 9px; color: #6b7280; }
+  .transporte strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #111827;
+    overflow-wrap: anywhere;
+  }
+  table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 10px;
+  }
   th, td {
     border: 1px solid #e5e7eb;
-    padding: 5px 6px;
+    padding: 7px 6px;
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
     overflow-wrap: anywhere;
     word-break: break-word;
+    line-height: 1.35;
   }
-  th { background: #f3f4f6; font-size: 9px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; }
+  th {
+    background: #f3f4f6;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    color: #6b7280;
+    line-height: 1.3;
+    hyphens: auto;
+    padding: 8px 6px;
+  }
+  /* Larguras somam 100% — prioriza Código e Qtd. emb. nas bordas. */
   th.col-code, td.code { width: 6%; }
   th.col-produto, td.produto { width: 18%; }
   th.col-tipo, td.tipo { width: 7%; }
-  th.col-info, td.info { width: 13%; }
-  th.col-lote, td.lote { width: 10%; }
+  th.col-info, td.info { width: 12%; }
+  th.col-lote, td.lote { width: 9%; }
   th.col-date, td.date { width: 8%; }
   th.col-dias, td.dias { width: 7%; }
-  th.col-solicitado, td.solicitado { width: 9%; }
-  th.col-emb, td.emb { width: 8%; }
-  td.code { color: #1d4ed8; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  th.col-solicitado, td.solicitado { width: 10%; }
+  th.col-emb, td.emb { width: 15%; }
+  td.code {
+    color: #1d4ed8;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: visible;
+  }
   td.tipo, td.num, td.date, td.dias { white-space: nowrap; font-variant-numeric: tabular-nums; }
   td.dias, td.solicitado, td.emb { text-align: right; }
-  td.empty { text-align: center; color: #6b7280; padding: 24px; }
-  .footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: #6b7280; }
-  .notes { margin-bottom: 12px; font-size: 11px; }
-  .notes span { display: block; font-size: 10px; color: #6b7280; }
+  th.col-dias, th.col-solicitado, th.col-emb { text-align: right; }
+  td.empty { text-align: center; color: #6b7280; padding: 20px; }
+  .footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 10px; color: #6b7280; }
+  .notes { margin-bottom: 10px; font-size: 10px; overflow-wrap: anywhere; }
+  .notes span { display: block; font-size: 9px; color: #6b7280; }
   .signatures {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 48px;
     margin-top: auto;
-    padding-top: 56px;
+    padding-top: 24px;
+    padding-bottom: 2mm;
     page-break-inside: avoid;
+    flex-shrink: 0;
   }
-  .signatures .line { border-top: 1px solid #111827; padding-top: 8px; text-align: center; font-size: 12px; color: #374151; }
+  .signatures .line {
+    border-top: 1px solid #111827;
+    padding-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: #374151;
+  }
   @media print {
-    html, body { height: auto; }
-    body, .sheet { min-height: 100vh; }
-    .signatures { margin-top: auto; padding-top: 48px; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: visible;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet {
+      /* A4 landscape (210mm) − margens @page (8mm×2): preenche a folha
+         para empurrar assinaturas ao rodapé sem cortar conteúdo longo. */
+      min-height: calc(210mm - 16mm);
+      padding: 3mm;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet-body { flex: 1 1 auto; }
+    .signatures {
+      margin-top: auto;
+      padding-top: 20px;
+      padding-bottom: 0;
+    }
   }
 </style>
 </head>
@@ -519,9 +621,9 @@ export async function printSaidaAgendamento(
         <th class="col-lote">Lote</th>
         <th class="col-date">Fabricação</th>
         <th class="col-date">Validade</th>
-        <th class="col-dias">Dias p/ Vencer</th>
+        <th class="col-dias">Dias p/&nbsp;venc.</th>
         <th class="col-solicitado">Solicitado</th>
-        <th class="col-emb">Qtd. de embalagens</th>
+        <th class="col-emb">Qtd.&nbsp;embalagens</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>

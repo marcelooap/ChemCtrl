@@ -23,6 +23,7 @@ import {
   ensurePdfSpace,
 } from "@transbordo/lib/pdfReportLayout";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
+import { healSaidaVolumesFromVasilhames } from "@transbordo/lib/vasilhameComposicao";
 import {
   TIPO_EMBALADO,
   TIPO_CONVENCIONAL,
@@ -209,6 +210,21 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           vasRows = healed.vasilhames || vascs;
         } catch (err) {
           console.error("[Transbordo] Falha ao alinhar lote da saída:", err);
+        }
+        try {
+          const volHealed = await healSaidaVolumesFromVasilhames({
+            saidas: saidaRow ? [saidaRow] : [],
+            vasilhames: vasRows,
+            entitiesApi: entities,
+          });
+          saidaRow =
+            (volHealed.saidas || []).find((row) => row.id === s?.id) ||
+            saidaRow;
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao alinhar volume da saída:",
+            err
+          );
         }
         setSaida(saidaRow);
         setEntradas(ents);

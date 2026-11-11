@@ -1,12 +1,18 @@
 import { entities } from "@transbordo/services/entities";
 import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import {
+  alignSaidaItemVolumeToVasilhame,
+  getDominantLote,
+} from "@transbordo/lib/vasilhameComposicao";
 import { parseDensidade } from "@transbordo/lib/format";
 import {
   computeTankaLotesDisponiveis,
   sortTransbordosChrono,
 } from "@transbordo/lib/tankaVolume";
-import { isLoteNaoInformado } from "@transbordo/lib/saidaOrigem";
+import {
+  calcSaidaQuantidadeTotal,
+  isLoteNaoInformado,
+} from "@transbordo/lib/saidaOrigem";
 import {
   calculateFIFOAllocation,
   expandOrigensForFifo,
@@ -700,6 +706,44 @@ export async function syncSaidaLoteDoVasilhame(vasilhameId, oldLote, newLote) {
       return { ...item, lote: normCode(newLote) };
     });
     if (changed) updates.push({ id: saida.id, itens });
+  }
+  if (updates.length > 0) await entities.saidas.bulkUpdate(updates);
+}
+
+/**
+ * Propaga volume editado no vasilhame para saídas abertas desse tanque
+ * (solicitação de saída / validação). Não altera saídas já enviadas ao fiscal.
+ */
+export async function syncSaidaVolumeDoVasilhame(
+  vasilhameId,
+  vasilhame,
+  { transbordos = [], previousVolume } = {}
+) {
+  if (!vasilhameId || !vasilhame) return;
+  const saidas = await entities.saidas.list();
+  const updates = [];
+  const alignOpts = { previousVolume };
+  for (const saida of saidas || []) {
+    if (saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal") continue;
+    let changed = false;
+    const itens = (saida.itens || []).map((item) => {
+      if (String(item?.vasilhame_id || "") !== String(vasilhameId)) return item;
+      if (!isSaidaVasilhameItem(item)) return item;
+      const next = alignSaidaItemVolumeToVasilhame(
+        item,
+        vasilhame,
+        transbordos,
+        alignOpts
+      );
+      if (next !== item) changed = true;
+      return next;
+    });
+    if (!changed) continue;
+    const quantidade_total = calcSaidaQuantidadeTotal(itens, {
+      vasilhames: [vasilhame],
+      transbordos,
+    });
+    updates.push({ id: saida.id, itens, quantidade_total });
   }
   if (updates.length > 0) await entities.saidas.bulkUpdate(updates);
 }

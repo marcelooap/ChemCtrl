@@ -625,6 +625,15 @@ export default function LogisticaCarregamentos() {
           setViewAgendamento(null);
           setViewChecklistItems([]);
         }}
+        onSaidaChange={(updated) => {
+          if (!updated?.id) return;
+          setViewSaida(updated);
+          setSaidas((prev) =>
+            prev.map((row) =>
+              row.id === updated.id ? { ...row, ...updated } : row
+            )
+          );
+        }}
       />
     </div>
   );

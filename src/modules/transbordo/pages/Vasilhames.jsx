@@ -10,6 +10,7 @@ import { generateRelatorioFiscalVasilhamesPDF } from "@transbordo/lib/pdfFiscal"
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
+import { matchesSearchText, normalizeSearchKey } from "@shared/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +69,7 @@ import {
 import {
   healLinkedLotes,
   syncSaidaLoteDoVasilhame,
+  syncSaidaVolumeDoVasilhame,
 } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   isDestinoEmbalagemUnitaria,
@@ -574,15 +576,15 @@ export default function Vasilhames() {
       }
     }
 
-    const q = search.toLowerCase();
+    const q = normalizeSearchKey(search);
     const matchSearch =
       !q ||
-      v.codigo?.toLowerCase().includes(q) ||
-      v.placa?.toLowerCase().includes(q) ||
-      v.barril?.toLowerCase().includes(q) ||
-      v.produto_nome?.toLowerCase().includes(q) ||
-      v.cliente_nome?.toLowerCase().includes(q) ||
-      v.lote?.toLowerCase().includes(q);
+      matchesSearchText(v.codigo, q) ||
+      matchesSearchText(v.placa, q) ||
+      matchesSearchText(v.barril, q) ||
+      matchesSearchText(v.produto_nome, q) ||
+      matchesSearchText(v.cliente_nome, q) ||
+      matchesSearchText(v.lote, q);
 
     const matchCliente =
       !clienteFilter ||
@@ -1032,6 +1034,19 @@ export default function Vasilhames() {
           await syncSaidaLoteDoVasilhame(editingVasilhame.id, oldLote, newLote);
         } catch (err) {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
+        }
+      }
+      if (volumeChanged) {
+        try {
+          await syncSaidaVolumeDoVasilhame(editingVasilhame.id, saved, {
+            transbordos,
+            previousVolume: editingVasilhame.volume,
+          });
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao atualizar volume nas saídas:",
+            err
+          );
         }
       }
       const deixouDeSerFracionado =

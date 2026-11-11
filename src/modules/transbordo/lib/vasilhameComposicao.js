@@ -2238,13 +2238,18 @@ function volumeTanqueParaSaida(vasilhame, transbordos = []) {
 }
 
 /**
- * Corrige item de saída cujo volume foi gravado com o tanque duplicado
- * (10.000 L em tanque de 5.000 L).
+ * Corrige item de saída cujo volume ficou desalinhado do tanque:
+ * - volume duplicado / acima da capacidade (ex.: 10.000 L em tanque de 5.000 L)
+ * - solicitação de tanque cheio após ajuste de volume no vasilhame (ex.: 4.999 → 5.000 L)
+ *
+ * @param {object} [options]
+ * @param {number} [options.previousVolume] volume anterior do tanque (edição no vasilhame)
  */
 export function alignSaidaItemVolumeToVasilhame(
   item,
   vasilhame,
-  transbordos = []
+  transbordos = [],
+  options = {}
 ) {
   if (!saidaItemEhTanque(item) || !vasilhame) return item;
   const tankVol = volumeTanqueParaSaida(vasilhame, transbordos);
@@ -2255,7 +2260,22 @@ export function alignSaidaItemVolumeToVasilhame(
     Math.abs(asked - 2 * tankVol) < 1 ||
     (Math.abs(asked - 10000) < 1 && Math.abs(tankVol - 5000) < 1);
   const exceeds = asked > tankVol + 1;
-  if (!doubled && !exceeds) return item;
+  const disp = roundVolume(item.volume_disponivel || 0);
+  const saldoRaw = item.saldo_final;
+  const saldo =
+    saldoRaw == null || saldoRaw === ""
+      ? NaN
+      : roundVolume(saldoRaw);
+  const isFullTankRequest =
+    (Number.isFinite(saldo) && Math.abs(saldo) <= TOLERANCIA_TANQUE_CHEIO_L) ||
+    (disp > 0 && Math.abs(asked - disp) <= TOLERANCIA_TANQUE_CHEIO_L);
+  const previousVolume = roundVolume(options.previousVolume || 0);
+  const matchesPreviousTank =
+    previousVolume > 0 && Math.abs(asked - previousVolume) <= 1;
+  const staleFullTank =
+    Math.abs(asked - tankVol) > 0.001 &&
+    (isFullTankRequest || matchesPreviousTank);
+  if (!doubled && !exceeds && !staleFullTank) return item;
 
   const dens = parseDensidade(vasilhame.densidade);
   const massa =
@@ -2264,21 +2284,26 @@ export function alignSaidaItemVolumeToVasilhame(
       : roundMass(
           ((Number(item.peso_liquido) || 0) * tankVol) / (asked || tankVol)
         );
-  const disp = roundVolume(item.volume_disponivel || 0);
+  const resetDisponivel =
+    doubled ||
+    exceeds ||
+    staleFullTank ||
+    Math.abs(disp - 2 * tankVol) < 1 ||
+    Math.abs(disp - 10000) < 1 ||
+    disp > tankVol + 1 ||
+    (disp > 0 && Math.abs(disp - asked) <= TOLERANCIA_TANQUE_CHEIO_L);
+  const nextDisponivel = resetDisponivel
+    ? tankVol
+    : disp > 0
+      ? Math.min(disp, tankVol)
+      : tankVol;
   return {
     ...item,
     volume_solicitado: tankVol,
-    volume_disponivel:
-      Math.abs(disp - 2 * tankVol) < 1 ||
-      Math.abs(disp - 10000) < 1 ||
-      disp > tankVol + 1
-        ? tankVol
-        : disp > 0
-          ? Math.min(disp, tankVol)
-          : tankVol,
+    volume_disponivel: nextDisponivel,
     peso_liquido: massa,
     quantidade_solicitada: massa,
-    saldo_final: 0,
+    saldo_final: roundVolume(Math.max(0, nextDisponivel - tankVol)),
   };
 }
 

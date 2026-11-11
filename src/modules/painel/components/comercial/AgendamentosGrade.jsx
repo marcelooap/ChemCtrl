@@ -916,6 +916,15 @@ export default function AgendamentosGrade({
             viewSaida ? findAgendamentoDisplayBySaida(agendamentos, viewSaida.id) : null
           }
           onClose={() => setViewSaida(null)}
+          onSaidaChange={(updated) => {
+            if (!updated?.id) return;
+            setViewSaida(updated);
+            setSaidas((prev) =>
+              prev.map((row) =>
+                row.id === updated.id ? { ...row, ...updated } : row
+              )
+            );
+          }}
         />
       ) : null}
     </div>

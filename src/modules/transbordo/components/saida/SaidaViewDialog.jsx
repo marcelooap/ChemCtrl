@@ -33,7 +33,10 @@ import {
   Undo2,
 } from "lucide-react";
 import { formatMass, formatVolume } from "@transbordo/lib/format";
-import { alignSaidaItemVolumeToVasilhame } from "@transbordo/lib/vasilhameComposicao";
+import {
+  alignSaidaItemVolumeToVasilhame,
+  healSaidaVolumesFromVasilhames,
+} from "@transbordo/lib/vasilhameComposicao";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
   generateChecklistCargaPDF,
@@ -314,6 +317,36 @@ export default function SaidaViewDialog({
     setUnifyingChecklists(false);
     setDevalidarItem(null);
     setDevalidando(false);
+  }, [open, saida?.id]);
+
+  // Persiste volume do tanque nas saídas abertas (ex.: 4.999 → 5.000 L).
+  useEffect(() => {
+    if (!open || !saida?.id) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const healed = await healSaidaVolumesFromVasilhames({
+          saidas: [saida],
+          vasilhames,
+          transbordos,
+          entitiesApi: entities,
+        });
+        if (cancelled) return;
+        if (!(healed.updates || []).length) return;
+        const next = (healed.saidas || [])[0];
+        if (next) onSaidaChange?.(next);
+      } catch (err) {
+        console.error(
+          "[Transbordo] Falha ao alinhar volume da saída no diálogo:",
+          err
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Heal uma vez por abertura da saída; snapshot atual vem do closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open/id only
   }, [open, saida?.id]);
 
   useEffect(() => {

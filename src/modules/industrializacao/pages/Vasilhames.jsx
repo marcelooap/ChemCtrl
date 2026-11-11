@@ -24,6 +24,7 @@ import {
   getOriginalPackageQty,
 } from '@industrializacao/lib/packagingTypes';
 import { fmtDate, fmtNumber, todayDateInputValue, toDateInputValue } from '@/i18n/formatters';
+import { matchesSearchText, normalizeSearchKey } from '@shared/lib/utils';
 import {
   buildContainerYardRestorePatch,
   collectIndVasilhameItemsForContainer,
@@ -144,7 +145,8 @@ export default function Vasilhames() {
   );
 
   const filtered = useMemo(() => {
-    const q = deferredSearch.toLowerCase().trim();
+    const qRaw = deferredSearch.toLowerCase().trim();
+    const q = normalizeSearchKey(qRaw);
     const fractionalKeywords = new Set([
       'fracionado',
       'frac',
@@ -152,7 +154,7 @@ export default function Vasilhames() {
       (t('production.fractional.badgeContainer') || '').toLowerCase().trim(),
       (t('production.fractional.badge') || '').toLowerCase().trim(),
     ].filter(Boolean));
-    const isFractionalKeyword = Boolean(q && fractionalKeywords.has(q));
+    const isFractionalKeyword = Boolean(qRaw && fractionalKeywords.has(qRaw));
 
     return containers.filter((c) => {
       let matchSearch;
@@ -168,7 +170,7 @@ export default function Vasilhames() {
         );
       } else {
         matchSearch = [c.product, c.client, c.container_number, c.barril_number, c.lot]
-          .some((v) => (v || '').toLowerCase().includes(q));
+          .some((v) => matchesSearchText(v, q));
       }
       const matchStatus = statusFilter === 'all' || c.status === statusFilter;
       const matchClient =
