@@ -23,6 +23,12 @@ import { clearSaidaLeituras } from "@transbordo/lib/saidaNovas";
 import { allocateSaidaCodigo } from "@transbordo/lib/allocateBusinessCodes";
 import { buildReservaChave } from "@painel/lib/materialReservas";
 import {
+  allocateFifoEstoqueLote,
+  chaveFromEntradaEmbalado,
+  getAvailableSaldoLote as calcAvailableSaldoLote,
+  quantidadeItemParaEstoque,
+} from "@painel/lib/saidaEmbaladoLotes";
+import {
   rpcSalvarSaidaComReserva,
   validarItensEmbalado,
 } from "@painel/lib/saidaReservas";
@@ -285,26 +291,61 @@ export default function SaidaForm({
   const aplicarCredito = (saldo, credito) =>
     credito > 0 && saldo + 1e-6 < credito ? saldo + credito : saldo;
 
-  const getAvailableSaldo = (entradaId, currentIndex) => {
+  const creditoBaixadoEstoque = (entradaId) => {
+    if (!editingSaida) return 0;
+    let total = 0;
+    for (const item of editingSaida.itens || []) {
+      if (item.tipo !== TIPO_EMBALADO && item.tipo !== "embalado") continue;
+      if (!itemFoiBaixado(item, editingSaida)) continue;
+      total += quantidadeItemParaEstoque(item, entradaId);
+    }
+    return total;
+  };
+
+  const getEntradaSaldoBruto = (entradaId) => {
     const entrada = entradas.find((e) => sameId(e.id, entradaId));
     let saldo = Number(entrada?.saldo_atual) || 0;
-    saldo = aplicarCredito(saldo, creditoBaixado(
-      (item) =>
-        (item.tipo === TIPO_EMBALADO || item.tipo === "embalado") &&
-        sameId(item.entrada_id, entradaId),
-      "quantidade_solicitada"
-    ));
+    saldo = aplicarCredito(saldo, creditoBaixadoEstoque(entradaId));
+    return saldo;
+  };
+
+  const getAvailableSaldo = (entradaId, currentIndex) => {
+    let saldo = getEntradaSaldoBruto(entradaId);
     formData.itens.forEach((item, i) => {
-      if (
-        i !== currentIndex &&
-        item.tipo === TIPO_EMBALADO &&
-        sameId(item.entrada_id, entradaId)
-      ) {
-        saldo -= item.quantidade_solicitada || 0;
+      if (i === currentIndex) return;
+      if (item.tipo !== TIPO_EMBALADO) return;
+      const usado = quantidadeItemParaEstoque(
+        {
+          ...item,
+          // Sem alocação persistida ainda: debita a linha inteira no entrada_id.
+          estoque_alocacoes:
+            Array.isArray(item.estoque_alocacoes) && item.estoque_alocacoes.length > 0
+              ? item.estoque_alocacoes
+              : null,
+        },
+        entradaId
+      );
+      // quantidadeItemParaEstoque com alocacoes=null só conta se entrada_id bate;
+      // para itens só com entrada_id, usa quantidade_solicitada.
+      if (Array.isArray(item.estoque_alocacoes) && item.estoque_alocacoes.length > 0) {
+        saldo -= usado;
+      } else if (sameId(item.entrada_id, entradaId)) {
+        saldo -= Number(item.quantidade_solicitada) || 0;
       }
     });
     return saldo;
   };
+
+  const getAvailableSaldoLote = (chave, currentIndex) =>
+    calcAvailableSaldoLote({
+      entradas,
+      itens: formData.itens,
+      currentIndex,
+      chave,
+      clienteId: formData.cliente_id,
+      clienteNome: formData.cliente_nome,
+      getEntradaSaldo: getEntradaSaldoBruto,
+    });
 
   const getAvailableVolume = (vasilhameId, currentIndex) => {
     const v = vasilhames.find((x) => sameId(x.id, vasilhameId));
@@ -490,12 +531,17 @@ export default function SaidaForm({
           setError(`Produto ${i + 1}: informe a quantidade solicitada.`);
           return;
         }
-        const available = getAvailableSaldo(item.entrada_id, i);
+        const entradaRef = entradas.find((e) => e.id === item.entrada_id);
+        const um = entradaRef?.unidade_medida || item.unidade || "kg";
+        const chave =
+          item.reserva_chave ||
+          chaveFromEntradaEmbalado(entradaRef, {
+            clienteId: formData.cliente_id,
+            clienteNome: formData.cliente_nome,
+            unidadeFallback: um,
+          });
+        const available = getAvailableSaldoLote(chave, i);
         if (item.quantidade_solicitada > available) {
-          const um =
-            entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
-            item.unidade ||
-            "kg";
           const fmt =
             String(um).toLowerCase() === "l" ||
             String(um).toLowerCase() === "lt" ||
@@ -651,9 +697,21 @@ export default function SaidaForm({
         (editingSaida.itens || []).forEach((item) => {
           if (!itemFoiBaixado(item, editingSaida)) return;
           if (item.tipo === TIPO_EMBALADO && item.entrada_id) {
-            entradaSaldos[item.entrada_id] =
-              (entradaSaldos[item.entrada_id] || 0) +
-              (item.quantidade_solicitada || 0);
+            if (
+              Array.isArray(item.estoque_alocacoes) &&
+              item.estoque_alocacoes.length > 0
+            ) {
+              item.estoque_alocacoes.forEach((aloc) => {
+                if (!aloc?.entrada_id) return;
+                entradaSaldos[aloc.entrada_id] =
+                  (entradaSaldos[aloc.entrada_id] || 0) +
+                  (Number(aloc.quantidade) || 0);
+              });
+            } else {
+              entradaSaldos[item.entrada_id] =
+                (entradaSaldos[item.entrada_id] || 0) +
+                (item.quantidade_solicitada || 0);
+            }
           } else if (item.tipo === TIPO_CONVENCIONAL && item.vasilhame_id) {
             vasilhameVolumes[item.vasilhame_id] =
               (vasilhameVolumes[item.vasilhame_id] || 0) +
@@ -707,31 +765,60 @@ export default function SaidaForm({
         }
 
         if (item.tipo === TIPO_EMBALADO) {
-          const estoqueAntes = entradaSaldos[item.entrada_id] || 0;
           const qtd = item.quantidade_solicitada || 0;
-          if (isFiscal && jaBaixadoOriginal(item)) {
-            entradaSaldos[item.entrada_id] = estoqueAntes - qtd;
-          }
           const unidade =
             entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
             item.unidade ||
             "kg";
+          const reservaChave = buildReservaChave({
+            clienteId: clienteIdSalvo,
+            clienteNome: clienteNomeSalvo,
+            produtoCodigo: item.produto_codigo,
+            lote: item.lote,
+            unidade,
+          });
+          // Saldo agregado do lote ANTES desta linha (para snapshot comercial).
+          const saldoLoteAntes = entradas.reduce((sum, e) => {
+            if (
+              chaveFromEntradaEmbalado(e, {
+                clienteId: clienteIdSalvo,
+                clienteNome: clienteNomeSalvo,
+                unidadeFallback: unidade,
+              }) !== reservaChave
+            ) {
+              return sum;
+            }
+            return sum + (Number(entradaSaldos[e.id]) || 0);
+          }, 0);
+          const { alocacoes, restante } = allocateFifoEstoqueLote({
+            entradas,
+            quantidade: qtd,
+            chave: reservaChave,
+            clienteId: clienteIdSalvo,
+            clienteNome: clienteNomeSalvo,
+            getEntradaSaldo: (entradaId) => Number(entradaSaldos[entradaId]) || 0,
+          });
+          if (restante > 0 || alocacoes.length === 0) {
+            throw new Error(
+              `Produto: saldo insuficiente no lote ${item.lote || "—"} (${qtd} ${unidade}).`
+            );
+          }
+          for (const aloc of alocacoes) {
+            entradaSaldos[aloc.entrada_id] =
+              (Number(entradaSaldos[aloc.entrada_id]) || 0) - (aloc.quantidade || 0);
+          }
           return {
             ...item,
             origem: ORIGEM_TRANSBORDO,
             unidade,
+            entrada_id: alocacoes[0]?.entrada_id || item.entrada_id,
+            estoque_alocacoes: alocacoes,
             sem_reserva: !item.reserva_id,
             reserva_id: item.reserva_id || null,
             reserva_solicitante: item.reserva_id ? item.reserva_solicitante || null : null,
-            reserva_chave: buildReservaChave({
-              clienteId: clienteIdSalvo,
-              clienteNome: clienteNomeSalvo,
-              produtoCodigo: item.produto_codigo,
-              lote: item.lote,
-              unidade,
-            }),
-            estoque_atual: estoqueAntes,
-            estoque_final: estoqueAntes - qtd,
+            reserva_chave: reservaChave,
+            estoque_atual: saldoLoteAntes,
+            estoque_final: saldoLoteAntes - qtd,
           };
         }
 
@@ -1247,6 +1334,7 @@ export default function SaidaForm({
               onRemove={() => removeItem(index)}
               locked={itemTravado(item)}
               getAvailableSaldo={getAvailableSaldo}
+              getAvailableSaldoLote={getAvailableSaldoLote}
               getAvailableVolume={getAvailableVolume}
               getAvailableContainerVolume={getAvailableContainerVolume}
               getAvailableStockSaldo={getAvailableStockSaldo}

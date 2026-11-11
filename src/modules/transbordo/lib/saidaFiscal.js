@@ -38,6 +38,7 @@ import {
   rpcAbaterReservasSaida,
   rpcEstornarReservasSaida,
 } from "@painel/lib/saidaReservas";
+import { estoqueIdsFromSaidaItem } from "@painel/lib/saidaEmbaladoLotes";
 import {
   alignSaidaItensVasilhames,
   resolveVasilhameDaSaida,
@@ -444,9 +445,7 @@ export async function applySaidaFiscalToggle(
   });
 
   // Estoque Transbordo: embalado + convencional (após ajustar vasilhames)
-  const embaladoIds = itens
-    .filter((i) => i.tipo === "embalado" && i.entrada_id)
-    .map((i) => i.entrada_id);
+  const embaladoIds = itens.flatMap((i) => estoqueIdsFromSaidaItem(i));
   const convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
     itens,
     vasilhames,
@@ -716,11 +715,13 @@ export async function resyncTransbordoStockAfterSaidaEdit(
   const prevItens = previousSaida?.itens || [];
   const oldEmb = prevItens.filter(
     (i) =>
-      (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") && i.entrada_id
+      (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") &&
+      estoqueIdsFromSaidaItem(i).length > 0
   );
   const newEmb = (nextItens || []).filter(
     (i) =>
-      (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") && i.entrada_id
+      (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") &&
+      estoqueIdsFromSaidaItem(i).length > 0
   );
 
   const oldConv = sumVolByVasilhame(prevItens);
@@ -815,7 +816,9 @@ export async function resyncTransbordoStockAfterSaidaEdit(
   }
 
   const allTransbordos = await entities.transbordos.list();
-  const embaladoIds = [...oldEmb, ...newEmb].map((i) => i.entrada_id);
+  const embaladoIds = [...oldEmb, ...newEmb].flatMap((i) =>
+    estoqueIdsFromSaidaItem(i)
+  );
   const convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
     [...prevItens, ...(nextItens || [])].filter(
       (i) => i.tipo === TIPO_CONVENCIONAL || i.tipo === "convencional"

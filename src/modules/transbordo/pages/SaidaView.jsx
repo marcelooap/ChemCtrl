@@ -275,14 +275,27 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
 
       await entities.saidas.update(id, { ...updates, itens: updatedItens });
 
-      // ── Embalado: dar baixa no estoque (item.entrada_id = estoque.id) ──
+      // ── Embalado: dar baixa no estoque (FIFO por estoque_alocacoes ou entrada_id) ──
       const estoqueAdjustments = {};
       itens.forEach((item) => {
-        if (item.tipo === "embalado" && item.entrada_id) {
-          const qty = item.quantidade_solicitada || 0;
-          estoqueAdjustments[item.entrada_id] =
-            (estoqueAdjustments[item.entrada_id] || 0) + (checked ? -qty : qty);
+        if (item.tipo !== "embalado") return;
+        if (
+          Array.isArray(item.estoque_alocacoes) &&
+          item.estoque_alocacoes.length > 0
+        ) {
+          item.estoque_alocacoes.forEach((aloc) => {
+            if (!aloc?.entrada_id) return;
+            const qty = Number(aloc.quantidade) || 0;
+            estoqueAdjustments[aloc.entrada_id] =
+              (estoqueAdjustments[aloc.entrada_id] || 0) +
+              (checked ? -qty : qty);
+          });
+          return;
         }
+        if (!item.entrada_id) return;
+        const qty = item.quantidade_solicitada || 0;
+        estoqueAdjustments[item.entrada_id] =
+          (estoqueAdjustments[item.entrada_id] || 0) + (checked ? -qty : qty);
       });
 
       const estoqueUpdates = Object.entries(estoqueAdjustments).map(([eid, adj]) => {

@@ -18,6 +18,10 @@ import {
 import { entities } from "@transbordo/services/entities";
 import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
 import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
+import {
+  estoqueIdsFromSaidaItem,
+  quantidadeItemParaEstoque,
+} from "@painel/lib/saidaEmbaladoLotes";
 import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
 import { isVasilhameLegadoEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import {
@@ -821,6 +825,15 @@ export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = [], estoq
           const loteKey = String(c.lote).trim();
           o = origens.find((x) => String(x.lote || "").trim() === loteKey);
         }
+        // Troca de lote (REP OF→OS / lote_manual): o lote exibido no tanque
+        // deixa de bater com origem.lote — vincula pelo id do estoque.
+        if (!o && (c.estoque_id || c.entrada_id)) {
+          o = origens.find(
+            (x) =>
+              idsEqual(x.entrada_id, c.estoque_id) ||
+              idsEqual(x.entrada_id, c.entrada_id)
+          );
+        }
         if (!o?.entrada_id) continue;
         const qtd =
           Number(c.quantidade_l) ||
@@ -925,7 +938,6 @@ export function isVasilhameFromEntradaDireta(vasilhame, estoqueItem) {
 export function calcSaidasEmbalado(estoqueItem, saidas) {
   const id = estoqueItem?.id;
   if (!id) return 0;
-  const emLitros = estoqueOperaEmLitros(estoqueItem);
 
   return (saidas || []).reduce((sum, saida) => {
     if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return sum;
@@ -933,29 +945,14 @@ export function calcSaidasEmbalado(estoqueItem, saidas) {
       sum +
       (saida.itens || []).reduce((s, item) => {
         if (item.validado === false) return s;
-        if (item.tipo !== "embalado" || item.entrada_id !== id) return s;
-        const qtd = emLitros
-          ? Number(item.quantidade_carregada) ||
-            Number(item.volume_solicitado) ||
-            Number(item.quantidade_solicitada) ||
-            0
-          : item.quantidade_carregada != null && item.quantidade_carregada !== ""
-            ? Number(item.quantidade_carregada) || 0
-            : Number(item.quantidade_solicitada) || 0;
-        return s + qtd;
+        if (item.tipo !== "embalado") return s;
+        return s + quantidadeItemParaEstoque(item, id);
       }, 0)
     );
   }, 0);
 }
 
-/**
- * Massa/volume já baixado por saídas convencionais fiscais
- * cujos vasilhames se originaram deste estoque (via transbordo ou entrada direta).
- *
- * Se o tanque ainda está No Pátio com conteúdo, a baixa fiscal não consumiu o
- * físico — não debita (evita saldo errado quando a saída fiscal existe mas o
- * vasilhame foi mantido/restaurado no pátio).
- */
+/** Ids de vasilhame com saída convencional validada no fiscal. */
 function buildFiscalVasilhameIds(saidas) {
   const fiscalVasilhameIds = new Set();
   (saidas || []).forEach((saida) => {
@@ -970,27 +967,48 @@ function buildFiscalVasilhameIds(saidas) {
   return fiscalVasilhameIds;
 }
 
+/**
+ * Peso deste estoque no vasilhame (0..1). Usado para saber se a saída fiscal
+ * já cobre a baixa — após troca de lote o Map pode guardar id em outro tipo.
+ */
+function weightForEstoqueInVasilhame(vasilhame, transbordos, estoqueItem) {
+  if (!vasilhame || !estoqueItem?.id) return 0;
+  const weights = getEstoqueWeightsForVasilhame(
+    vasilhame,
+    transbordos,
+    estoqueItem
+  );
+  let w = Number(weights.get(estoqueItem.id)) || 0;
+  if (w > 0) return w;
+  for (const [k, weight] of weights) {
+    if (!idsEqual(k, estoqueItem.id)) continue;
+    w = Number(weight) || 0;
+    break;
+  }
+  return w;
+}
+
+/** Saída fiscal já debita este estoque neste tanque — não baixar de novo no pátio. */
+function fiscalJaDebitaEstoque(vasilhame, transbordos, estoqueItem) {
+  return weightForEstoqueInVasilhame(vasilhame, transbordos, estoqueItem) > 0;
+}
+
 function buildEmbaladoByEstoqueId(saidas) {
   const index = new Map();
   (saidas || []).forEach((saida) => {
     if (!isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)) return;
     (saida.itens || []).forEach((item) => {
       if (item.validado === false) return;
-      if (item.tipo !== "embalado" || item.entrada_id == null) return;
-      const id = String(item.entrada_id);
-      const entry = index.get(id) || { litros: 0, massa: 0 };
-      const litros =
-        Number(item.quantidade_carregada) ||
-        Number(item.volume_solicitado) ||
-        Number(item.quantidade_solicitada) ||
-        0;
-      const massa =
-        item.quantidade_carregada != null && item.quantidade_carregada !== ""
-          ? Number(item.quantidade_carregada) || 0
-          : Number(item.quantidade_solicitada) || 0;
-      entry.litros += litros;
-      entry.massa += massa;
-      index.set(id, entry);
+      if (item.tipo !== "embalado") return;
+      const ids = estoqueIdsFromSaidaItem(item);
+      ids.forEach((estoqueId) => {
+        const id = String(estoqueId);
+        const entry = index.get(id) || { litros: 0, massa: 0 };
+        const qtd = quantidadeItemParaEstoque(item, estoqueId);
+        entry.litros += qtd;
+        entry.massa += qtd;
+        index.set(id, entry);
+      });
     });
   });
   return index;
@@ -1043,6 +1061,14 @@ export function mapEstoqueListWithSaldo(
   });
 }
 
+/**
+ * Massa/volume já baixado por saídas convencionais fiscais
+ * cujos vasilhames se originaram deste estoque (via transbordo ou entrada direta).
+ *
+ * Se o tanque ainda está No Pátio com conteúdo, a baixa fiscal não consumiu o
+ * físico — não debita (evita saldo errado quando a saída fiscal existe mas o
+ * vasilhame foi mantido/restaurado no pátio).
+ */
 export function calcSaidasConvencional(
   estoqueItem,
   saidas,
@@ -1072,8 +1098,7 @@ export function calcSaidasConvencional(
           ((Number(v.volume) || 0) > 0 || (Number(v.peso_liquido) || 0) > 0);
         if (aindaNoPatio) return s;
 
-        const weights = getEstoqueWeightsForVasilhame(v, transbordos, estoqueItem);
-        const w = weights.get(id) || 0;
+        const w = weightForEstoqueInVasilhame(v, transbordos, estoqueItem);
         if (w <= 0) return s;
         // Baixa na unidade do estoque: L → volume_solicitado; kg → massa
         const qtd =
@@ -1306,39 +1331,66 @@ export function calcVasilhamesExpedidosPatio(
   if (usaQtdOrigemOp) {
     let total = 0;
     const countedDirect = new Set();
+    const vasilhameById = getVasilhameIndex(vasilhames).byId;
 
-    for (const t of transbordos || []) {
-      const origemVol = (t.origens || [])
-        .filter((o) => origemMatchesEstoque(o, estoqueItem))
-        .reduce((s, o) => s + (Number(o.volume_retirado) || 0), 0);
-      if (origemVol <= 0) continue;
-
-      const destinos = t.destinos || [];
-      let volDestTotal = 0;
-      let volDestExpedido = 0;
-
-      for (const d of destinos) {
-        const volD = Number(d.volume_total || d.volume) || 0;
-        volDestTotal += volD;
-        const v = resolveVasilhameFromDestino(d, t, vasilhames);
-        if (!v) continue;
-        if (fiscalVasilhameIds.has(v.id)) continue;
-        if (!isVasilhameExpedido(v)) continue;
-        volDestExpedido += volD > 0 ? volD : 0;
-        countedDirect.add(v.id);
+    const debitaExpedidoSeCaber = (vasId, volBruto) => {
+      if (!(volBruto > 0) || countedDirect.has(vasId)) return;
+      const v = vasilhameById.get(vasId);
+      if (!v || !isVasilhameExpedido(v)) return;
+      if (
+        fiscalVasilhameIds.has(v.id) &&
+        fiscalJaDebitaEstoque(v, transbordos, estoqueItem)
+      ) {
+        return;
       }
 
-      if (volDestExpedido <= 0) continue;
-
-      if (volDestTotal > 0) {
-        total += origemVol * (volDestExpedido / volDestTotal);
-      } else {
-        // Destinos sem volume informado: se há expedido, conta a origem integral
-        total += origemVol;
+      // Composição lastreada por id manda: após troca de lote REP (OF→OS),
+      // a fatia FIFO do OP pode apontar um tanque que já não carrega este estoque.
+      const composicao = Array.isArray(v.composicao) ? v.composicao : [];
+      const hasStamps = composicao.some(
+        (c) => c?.estoque_id != null || c?.entrada_id != null
+      );
+      let qtd = volBruto;
+      if (hasStamps) {
+        const fromComp = composicao.reduce((s, c) => {
+          if (
+            !idsEqual(c.estoque_id, id) &&
+            !idsEqual(c.entrada_id, id)
+          ) {
+            return s;
+          }
+          return s + quantidadeComposicaoOperacional(c, estoqueItem);
+        }, 0);
+        if (!(fromComp > 0)) return;
+        qtd = fromComp;
       }
+
+      const tankCap = resolveQuantidadeVasilhameParaBaixa(
+        estoqueItem,
+        v,
+        transbordos
+      );
+      if (tankCap > 0 && qtd > tankCap) qtd = tankCap;
+
+      total += qtd;
+      countedDirect.add(vasId);
+    };
+
+    // 1) Destinos FIFO deste estoque (mesma base da tela DESTINOS).
+    // Nunca ratear origemVol por todos os destinos do OP — isso debitava
+    // tanque expedido de outro lote no mesmo OP (ex.: 9.000 → 8.333,333).
+    const fifoRows = listDestinosFifoForEstoque(estoqueItem, transbordos);
+    const fatiasFifo = indexFatiasEstoquePorVasilhame(
+      fifoRows,
+      transbordos,
+      vasilhames,
+      estoqueItem
+    );
+    for (const [vasId, vol] of fatiasFifo) {
+      debitaExpedidoSeCaber(vasId, vol);
     }
 
-    // Produto que passou por tanka (ou outro vasilhame) antes do envase.
+    // 2) Produto que passou por tanka (ou outro vasilhame) antes do envase.
     // A baixa usa o lote do transbordo, não o lote atual do tanque: um
     // lote_manual (ex.: OF-1417-26 renomeado para OS-1831-26) não pode
     // esconder o volume já expedido.
@@ -1353,41 +1405,40 @@ export function calcVasilhamesExpedidosPatio(
       vasilhames,
       estoqueItem
     );
-    const vasilhameById = getVasilhameIndex(vasilhames).byId;
     for (const [vasId, vol] of fatias) {
-      if (!(vol > 0) || countedDirect.has(vasId)) continue;
-      const v = vasilhameById.get(vasId);
-      if (!v || !isVasilhameExpedido(v)) continue;
-      if (fiscalVasilhameIds.has(v.id)) {
-        const weights = getEstoqueWeightsForVasilhame(
-          v,
-          transbordos,
-          estoqueItem
-        );
-        let w = Number(weights.get(id)) || 0;
-        if (w <= 0) {
-          for (const [k, weight] of weights) {
-            if (!idsEqual(k, id)) continue;
-            w = Number(weight) || 0;
-            break;
-          }
-        }
-        // Saída fiscal já debita quando o peso aponta para este estoque.
-        if (w > 0) continue;
-      }
-      total += vol;
+      debitaExpedidoSeCaber(vasId, vol);
     }
 
-    // Entrada direta como vasilhame (sem OP)
+    // 3) Entrada direta / composição em tanque expedido ainda não coberto
     for (const v of vasilhames || []) {
       if (countedDirect.has(v.id)) continue;
       if (!isVasilhameExpedido(v)) continue;
-      if (fiscalVasilhameIds.has(v.id)) continue;
+      if (
+        fiscalVasilhameIds.has(v.id) &&
+        fiscalJaDebitaEstoque(v, transbordos, estoqueItem)
+      ) {
+        continue;
+      }
+
+      const composicao = Array.isArray(v.composicao) ? v.composicao : [];
+      const fromComp = composicao.reduce((s, c) => {
+        if (
+          !idsEqual(c.estoque_id, id) &&
+          !idsEqual(c.entrada_id, id)
+        ) {
+          return s;
+        }
+        return s + quantidadeComposicaoOperacional(c, estoqueItem);
+      }, 0);
+      if (fromComp > 0) {
+        debitaExpedidoSeCaber(v.id, fromComp);
+        continue;
+      }
+
       if (!isVasilhameFromEntradaDireta(v, estoqueItem)) continue;
-      total += resolveQuantidadeVasilhameParaBaixa(
-        estoqueItem,
-        v,
-        transbordos
+      debitaExpedidoSeCaber(
+        v.id,
+        resolveQuantidadeVasilhameParaBaixa(estoqueItem, v, transbordos)
       );
     }
 
@@ -1399,10 +1450,10 @@ export function calcVasilhamesExpedidosPatio(
 
   return (vasilhames || []).reduce((sum, v) => {
     if (!isVasilhameExpedido(v)) return sum;
-    if (fiscalVasilhameIds.has(v.id)) return sum;
-
-    const weights = getEstoqueWeightsForVasilhame(v, transbordos, estoqueItem);
-    const w = weights.get(id) || 0;
+    // Massa: se a fiscal já aponta peso para este estoque, deixa o convencional.
+    // Sem peso (troca de lote / vínculo perdido), ainda baixa pelo fallback OP.
+    const w = weightForEstoqueInVasilhame(v, transbordos, estoqueItem);
+    if (fiscalVasilhameIds.has(v.id) && w > 0) return sum;
     if (w <= 0) return sum;
 
     const qtd = resolveMassaVasilhameParaBaixa(v, transbordos);
@@ -1450,10 +1501,13 @@ export function listSaidasHistoricoForEstoque(
       let unidade = "kg";
       let linked = false;
 
-      if (item.tipo === "embalado" && item.entrada_id === id) {
-        linked = true;
-        quantidade = Number(item.quantidade_solicitada) || 0;
-        unidade = estoqueItem.unidade_medida || "kg";
+      if (item.tipo === "embalado") {
+        const qtdEstoque = quantidadeItemParaEstoque(item, id);
+        if (qtdEstoque > 0) {
+          linked = true;
+          quantidade = qtdEstoque;
+          unidade = estoqueItem.unidade_medida || "kg";
+        }
       } else if (item.tipo === "convencional" && item.vasilhame_id) {
         const v = vasilhameById.get(item.vasilhame_id);
         if (v) {
@@ -1733,6 +1787,26 @@ function resolveQuantidadeEstoqueNoVasilhame(
       return s + quantidadeComposicaoOperacional(c, estoqueItem);
     }, 0);
 
+  const capToTankPhysical = (qty, fromEstoqueId = 0) => {
+    if (!(qty > 0)) return 0;
+    const tankCap = resolveQuantidadeVasilhameParaBaixa(
+      estoqueItem,
+      vasilhame,
+      transbordos
+    );
+    if (!(tankCap > 0) || qty <= tankCap) return roundOp(estoqueItem, qty);
+    // Composição/lote_manual pode ficar acima do volume do tanque após troca
+    // de lote REP (OF→OS). Rateia a fatia deste estoque pelo físico real.
+    const totalComp = roundOp(estoqueItem, sumComp(() => true));
+    if (totalComp > tankCap && fromEstoqueId > 0) {
+      return roundOp(estoqueItem, (fromEstoqueId * tankCap) / totalComp);
+    }
+    return roundOp(estoqueItem, tankCap);
+  };
+
+  const hasEstoqueStamps = composicao.some(
+    (c) => c?.estoque_id != null || c?.entrada_id != null
+  );
   const byEstoqueId = roundOp(
     estoqueItem,
     sumComp(
@@ -1740,10 +1814,13 @@ function resolveQuantidadeEstoqueNoVasilhame(
         idsEqual(c.estoque_id, estoqueId) || idsEqual(c.entrada_id, estoqueId)
     )
   );
-  if (byEstoqueId > 0) return byEstoqueId;
+  if (byEstoqueId > 0) return capToTankPhysical(byEstoqueId, byEstoqueId);
+  // Composição lastreada por id: se nenhum apontar para este estoque, o tanque
+  // não carrega este saldo. Evita fatia FIFO do OF antigo após troca REP→OS.
+  if (hasEstoqueStamps) return 0;
 
   const fatia = Number(fatiaPorVasilhame?.get(vasilhame.id)) || 0;
-  if (fatia > 0) return roundOp(estoqueItem, fatia);
+  if (fatia > 0) return capToTankPhysical(fatia);
 
   const vKeys = collectVasilhameKeys(vasilhame);
   const linkedByTrack = [...vKeys].some((k) => trackedKeys.has(k));
@@ -1893,6 +1970,23 @@ export function computeEstoqueQuantidadesPorLocal(
     if (isVasilhameExpedido(v)) continue;
     if ((v.status || "No Pátio") !== "No Pátio") continue;
 
+    // Mesma regra da composição: se o tanque já declara outros estoque_id,
+    // a fatia FIFO do lote antigo (pré-troca) não entra neste saldo.
+    const compV = Array.isArray(v.composicao) ? v.composicao : [];
+    const stamped = compV.some(
+      (c) => c?.estoque_id != null || c?.entrada_id != null
+    );
+    if (
+      stamped &&
+      !compV.some(
+        (c) =>
+          idsEqual(c.estoque_id, estoqueItem.id) ||
+          idsEqual(c.entrada_id, estoqueItem.id)
+      )
+    ) {
+      continue;
+    }
+
     const qtdFifo = quantidadeFifoOperacional(row, estoqueItem);
     if (qtdFifo <= 0) continue;
 
@@ -2006,13 +2100,14 @@ export function computeEstoqueQuantidadesPorLocal(
       top.set(Math.max(0, roundOp(estoqueItem, top.qty + diff)));
     }
   } else if (diff > 0) {
-    if (tipoRecebimento === "vasilhame") {
-      // Entrada já recebida no tanque: o que a composição não detalhou continua nele.
-      qtyVasilhamesOp += diff;
-    } else if (entradaEmbalado) {
+    if (entradaEmbalado) {
       // Entrada embalada ainda sem tanque/tanka/unitário vinculado.
       qtyPatioOp += diff;
     }
+    // Não reinjetar residual em Saldo Tanque. Tanques No Pátio já foram
+    // somados acima (composição / entrada direta / OP). Diff positivo após
+    // expedição (ex.: troca de lote REP OF→OS) era estoque fantasma — o
+    // tanque expedido não pode voltar a aparecer na coluna Saldo Tanque.
   }
 
   qtyVasilhamesOp = roundOp(estoqueItem, qtyVasilhamesOp);

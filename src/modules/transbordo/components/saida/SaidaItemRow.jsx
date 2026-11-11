@@ -51,6 +51,10 @@ import {
 } from "@transbordo/lib/saidaOrigem";
 import { buildReservaChave } from "@painel/lib/materialReservas";
 import {
+  aggregateLotesEmbaladoOptions,
+  chaveFromEntradaEmbalado,
+} from "@painel/lib/saidaEmbaladoLotes";
+import {
   SEM_RESERVA_ID,
   formatQtyReserva,
   opcoesReservaEmbalado,
@@ -187,6 +191,7 @@ export default function SaidaItemRow({
   onChange,
   onRemove,
   getAvailableSaldo,
+  getAvailableSaldoLote,
   getAvailableVolume,
   getAvailableContainerVolume,
   getAvailableStockSaldo,
@@ -331,12 +336,17 @@ export default function SaidaItemRow({
     });
   });
 
-  const lotesForProduct = embaladoEntradas.filter((e) => {
-    const sameProduct =
-      (e.produto_id || e.produto_nome) === (item.produto_id || item.produto_nome);
-    if (!sameProduct) return false;
-    const saldoDisponivel = getAvailableSaldo(e.id, index);
-    return saldoDisponivel > 0 || e.id === item.entrada_id;
+  // Uma opção por lote comercial (cliente+produto+lote+unidade), somando
+  // saldos físicos fragmentados — igual à tela Reservar Material.
+  const lotesForProduct = aggregateLotesEmbaladoOptions({
+    entradas: embaladoEntradas,
+    getAvailableSaldoLote,
+    index,
+    produtoId: item.produto_id,
+    produtoNome: item.produto_nome,
+    currentEntradaId: item.entrada_id,
+    clienteId,
+    clienteNome,
   });
 
   // ── Convencional (Transbordo) ──
@@ -580,16 +590,19 @@ export default function SaidaItemRow({
     : 0;
   const fisicoChave = chaveEmbalado
     ? embaladoEntradas.reduce((sum, entrada) => {
-        const chave = buildReservaChave({
-          clienteId: entrada.cliente_id,
-          clienteNome: entrada.cliente_nome,
-          produtoCodigo: entrada.produto_codigo,
-          lote: entrada.lote,
-          unidade: entrada.unidade_medida || unidadeEmbalado,
+        const chave = chaveFromEntradaEmbalado(entrada, {
+          clienteId,
+          clienteNome,
+          unidadeFallback: unidadeEmbalado,
         });
         if (chave !== chaveEmbalado) return sum;
         return sum + (Number(entrada.saldo_atual) || 0);
       }, 0)
+    : 0;
+  const saldoLoteDisponivel = chaveEmbalado
+    ? typeof getAvailableSaldoLote === "function"
+      ? getAvailableSaldoLote(chaveEmbalado, index)
+      : roundQuantidade(fisicoChave)
     : 0;
   const tetoExcepcional = chaveEmbalado
     ? saldoExcepcionalDisponivel({
@@ -605,13 +618,17 @@ export default function SaidaItemRow({
     item.tipo === TIPO_EMBALADO &&
     item.reserva_id &&
     (item.quantidade_solicitada || 0) > dispReserva;
-  const saldoAtualLote = roundQuantidade(Number(selectedEntrada?.saldo_atual) || 0);
-  const saldoDisponivelSemReserva = Math.max(0, Math.min(saldoAtualLote, tetoExcepcional));
+  const saldoDisponivelSemReserva = Math.max(
+    0,
+    Math.min(saldoLoteDisponivel, tetoExcepcional)
+  );
   const displayEstoqueFinal =
     saldoDisponivelSemReserva - (item.reserva_id ? 0 : item.quantidade_solicitada || 0);
   const estoqueInsuficiente =
     semReservaAtivo && (item.quantidade_solicitada || 0) > saldoDisponivelSemReserva;
-  const maxQuantidadeSolicitada = item.reserva_id ? dispReserva : saldoDisponivelSemReserva;
+  const maxQuantidadeSolicitada = item.reserva_id
+    ? Math.min(dispReserva, saldoLoteDisponivel)
+    : saldoDisponivelSemReserva;
   const reservaSelectValue = !item.entrada_id
     ? ""
     : item.reserva_id
@@ -679,25 +696,36 @@ export default function SaidaItemRow({
 
   const handleLoteChange = (_label, option) => {
     if (!option) return;
+    const primary = option.primary || option;
     const unidade =
-      option.unidade_medida || getEstoqueUnidade(option) || "kg";
+      option.unidade_medida ||
+      primary.unidade_medida ||
+      getEstoqueUnidade(primary) ||
+      "kg";
+    const lote = option.lote || primary.lote || "";
     onChange({
       ...item,
-      entrada_id: option.id,
-      lote: option.lote || "",
+      entrada_id: primary.id,
+      lote,
       unidade,
       peso_liquido_embalagem:
-        option.peso_liquido || item.peso_liquido_embalagem || 0,
+        option.peso_liquido ||
+        primary.peso_liquido ||
+        item.peso_liquido_embalagem ||
+        0,
       reserva_id: "",
       sem_reserva: true,
       reserva_solicitante: "",
-      reserva_chave: buildReservaChave({
-        clienteId,
-        clienteNome,
-        produtoCodigo: item.produto_codigo,
-        lote: option.lote,
-        unidade,
-      }),
+      reserva_chave:
+        option.chave ||
+        buildReservaChave({
+          clienteId,
+          clienteNome,
+          produtoCodigo: item.produto_codigo || option.produto_codigo,
+          lote,
+          unidade,
+        }),
+      estoque_alocacoes: null,
       quantidade_solicitada: 0,
       quantidade_embalagens: 0,
     });
@@ -1034,10 +1062,22 @@ export default function SaidaItemRow({
   };
 
   const loteSelectValue = (() => {
-    if (!item.entrada_id) return "";
-    const entrada =
-      lotesForProduct.find((e) => e.id === item.entrada_id) ||
-      entradas.find((e) => e.id === item.entrada_id);
+    if (!item.entrada_id && !item.reserva_chave && !item.lote) return "";
+    const agregado =
+      lotesForProduct.find(
+        (o) =>
+          (item.reserva_chave && o.chave === item.reserva_chave) ||
+          (item.entrada_id &&
+            (o.estoqueIds || []).some((id) => String(id) === String(item.entrada_id)))
+      ) || null;
+    if (agregado) {
+      return loteLabel(
+        agregado.lote,
+        agregado.saldoDisponivel,
+        agregado.unidade_medida
+      );
+    }
+    const entrada = entradas.find((e) => e.id === item.entrada_id);
     if (!entrada) return item.lote || "";
     return loteLabel(
       entrada.lote,
@@ -1306,7 +1346,7 @@ export default function SaidaItemRow({
                   getOptionLabel={(o) =>
                     loteLabel(
                       o.lote,
-                      getAvailableSaldo(o.id, index),
+                      o.saldoDisponivel,
                       o.unidade_medida
                     )
                   }

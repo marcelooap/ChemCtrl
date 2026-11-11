@@ -43,8 +43,27 @@ export default function Login() {
         style={{ background: 'radial-gradient(circle at 50% 50%, #081125 0%, #0f1c37 100%)' }}
       >
         <div className="max-w-md mx-auto">
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-6" style={{ background: '#2563eb' }}>
-            <Factory className="w-7 h-7 text-white" strokeWidth={1.5} />
+          <div className="relative w-14 h-14 mb-6">
+            <div
+              className="w-14 h-14 rounded-xl flex items-center justify-center"
+              style={{ background: '#2563eb' }}
+            >
+              <Factory className="w-7 h-7 text-white" strokeWidth={1.5} />
+            </div>
+            <img
+              src="/icons/seasonal/santa-hat.png"
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute select-none drop-shadow-md"
+              style={{
+                width: '58px',
+                height: '58px',
+                top: '-30px',
+                left: '-18px',
+                transform: 'rotate(-12deg)',
+                zIndex: 2,
+              }}
+            />
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight mb-2">{t('login.branding.title')}</h1>
           <p className="text-base text-blue-200/70 font-light mb-6">{t('login.branding.subtitle')}</p>
@@ -55,8 +74,21 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 bg-background">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 bg-background relative overflow-hidden">
+        <img
+          src="/icons/seasonal/santa-sleigh.png"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute select-none hidden sm:block"
+          style={{
+            width: 'min(280px, 42%)',
+            top: '12px',
+            right: '8px',
+            zIndex: 1,
+            opacity: 0.95,
+          }}
+        />
+        <div className="w-full max-w-sm relative z-10">
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-1 text-foreground">{t('login.title')}</h2>
             <p className="text-sm text-muted-foreground">{t('login.subtitle')}</p>
