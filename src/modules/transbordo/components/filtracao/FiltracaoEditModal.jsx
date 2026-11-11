@@ -10,7 +10,7 @@ import { Button } from "@shared/components/ui/button";
 import { Label } from "@shared/components/ui/label";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { PARTICULA_TAMANHOS } from "@transbordo/lib/filtracao";
+import { PARTICULA_TAMANHOS, formatParticulaCount } from "@transbordo/lib/filtracao";
 
 function toInputValue(v) {
   return v === null || v === undefined || v === "" ? "" : String(v);
@@ -165,10 +165,15 @@ export default function FiltracaoEditModal({
           <div className="space-y-2">
             <Label>Contagem de partículas</Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {PARTICULA_TAMANHOS.map(({ key, label }) => (
+              {PARTICULA_TAMANHOS.map(({ key, label, max }) => (
                 <div key={key} className="space-y-1.5">
                   <Label htmlFor={`filtracao-${key}`} className="text-xs text-muted-foreground">
                     {label}
+                    {max != null && (
+                      <span className="ml-1 font-normal text-muted-foreground/80">
+                        (máx. {formatParticulaCount(max)})
+                      </span>
+                    )}
                   </Label>
                   <NumberInputBr
                     id={`filtracao-${key}`}

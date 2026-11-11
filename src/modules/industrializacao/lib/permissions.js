@@ -1,6 +1,7 @@
 import i18n from '@/i18n';
 import { ROLE_KEYS } from '@/i18n/domainMaps';
 import {
+  APP_MODULE_IDS,
   getDefaultRouteFromPermissions,
   getLegacyPermissionsForUser,
   getSectionKeyForPath,
@@ -205,9 +206,9 @@ export function sameClientName(a, b) {
   return Boolean(left && right && left === right);
 }
 
-export function getDefaultRoute(user) {
+export function getDefaultRoute(user, appModuleId = APP_MODULE_IDS.INDUSTRIALIZACAO) {
   if (!user) return '/login';
-  return getDefaultRouteFromPermissions(resolvePermissions(user), user);
+  return getDefaultRouteFromPermissions(resolvePermissions(user), user, appModuleId);
 }
 
 export function getRoleLabel(user) {

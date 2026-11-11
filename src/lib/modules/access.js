@@ -1,5 +1,6 @@
 import { APP_MODULES, MODULE_IDS, getModuleById } from '@/lib/modules/catalog';
 import { getDefaultRoute, isAdminUser } from '@industrializacao/lib/permissions';
+import { APP_MODULE_IDS } from '@industrializacao/lib/rbac/permissionCatalog';
 
 function normalizeModules(raw) {
   if (Array.isArray(raw)) {
@@ -70,12 +71,15 @@ export function resolveModuleDeniedRedirect(user, _deniedModuleId) {
 
 /**
  * Rota de entrada no módulo, respeitando RBAC interno.
- * Industrialização → primeira tela permitida (getDefaultRoute), não sempre `/`.
+ * Usa somente telas do módulo clicado (não cruza com Painel/Comercial).
  */
 export function resolveModuleEntryRoute(user, moduleId) {
   if (!user || !moduleId) return PAINEL_HOME_ROUTE;
   if (moduleId === MODULE_IDS.INDUSTRIALIZACAO) {
-    return getDefaultRoute(user);
+    return getDefaultRoute(user, APP_MODULE_IDS.INDUSTRIALIZACAO);
+  }
+  if (moduleId === MODULE_IDS.TRANSBORDO) {
+    return getDefaultRoute(user, APP_MODULE_IDS.TRANSBORDO);
   }
   const mod = getModuleById(moduleId);
   return mod?.route || PAINEL_HOME_ROUTE;

@@ -577,7 +577,7 @@ export default function TransbordoModal({
   useEffect(() => {
     if (!open || fixedOperador?.nome) return undefined;
     let cancelled = false;
-    listOperadoresAtivosNomes()
+    listOperadoresAtivosNomes({ setor: "Transbordo" })
       .then((ativos) => {
         if (!cancelled) setOperadoresAtivos(ativos);
       })

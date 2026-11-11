@@ -18,6 +18,20 @@ function normalizeNome(nome) {
   return String(nome || '').trim();
 }
 
+function normalizeSetor(setor) {
+  const value = String(setor || '').trim();
+  return value || null;
+}
+
+function normalizeSetorKey(setor) {
+  const value = normalizeSetor(setor);
+  if (!value) return null;
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 function isTableMissingError(err) {
   const msg = String(err?.message || err || '').toLowerCase();
   return (
@@ -41,6 +55,7 @@ function virtualRow(nome, ativo = true) {
   return {
     id: `virtual:${nome}`,
     nome,
+    setor: null,
     ativo,
     _virtual: true,
   };
@@ -99,23 +114,46 @@ export async function listOperadoresCadastro() {
   }
 }
 
+function matchesSetor(row, setor) {
+  if (!setor) return true;
+  return normalizeSetorKey(row?.setor) === normalizeSetorKey(setor);
+}
+
+/**
+ * Operadores ativos do cadastro.
+ * @param {{ setor?: string }} [opts] — quando informado, restringe ao setor (ex.: "Transbordo").
+ */
+export async function listOperadoresAtivos({ setor } = {}) {
+  const rows = await listOperadoresCadastro();
+  if (!rows.length) {
+    if (setor) return [];
+    return OPERADORES_FALLBACK.map((nome) => virtualRow(nome, true));
+  }
+  return rows.filter((r) => r.ativo !== false && matchesSetor(r, setor));
+}
+
 /**
  * Nomes ativos para o dropdown de novos registros.
  * Se a tabela ainda não existir (SQL não aplicado), usa a lista histórica.
+ * @param {{ setor?: string }} [opts] — quando informado, restringe ao setor (ex.: "Transbordo").
  */
-export async function listOperadoresAtivosNomes() {
-  const rows = await listOperadoresCadastro();
-  if (!rows.length) return [...OPERADORES_FALLBACK];
-  return rows.filter((r) => r.ativo !== false).map((r) => r.nome).filter(Boolean);
+export async function listOperadoresAtivosNomes({ setor } = {}) {
+  const rows = await listOperadoresAtivos({ setor });
+  if (!rows.length) return setor ? [] : [...OPERADORES_FALLBACK];
+  return rows.map((r) => r.nome).filter(Boolean);
 }
 
-export async function createOperador(nome) {
+export async function createOperador(nome, { setor } = {}) {
   const trimmed = normalizeNome(nome);
   if (!trimmed) {
     throw new Error('Informe o nome do operador.');
   }
   try {
-    return await entities.operadores.create({ nome: trimmed, ativo: true });
+    return await entities.operadores.create({
+      nome: trimmed,
+      setor: normalizeSetor(setor),
+      ativo: true,
+    });
   } catch (err) {
     if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
     throw err;
@@ -132,20 +170,31 @@ export async function updateOperador(id, payload) {
  * guardam o nome (transbordos.operadores e vasilhames.responsavel).
  * Não altera registros se o operador apenas for inativado.
  */
-export async function renameOperadorComHistorico(operador, novoNome) {
+export async function renameOperadorComHistorico(operador, novoNome, { setor } = {}) {
   if (isVirtualOperador(operador)) throw new Error(TABLE_MISSING_MESSAGE);
 
   const oldName = normalizeNome(operador?.nome);
   const nextName = normalizeNome(novoNome);
+  const nextSetor = normalizeSetor(setor);
+  const setorChanged =
+    setor !== undefined &&
+    normalizeSetor(operador?.setor) !== nextSetor;
   if (!operador?.id) throw new Error('Operador inválido.');
   if (!nextName) throw new Error('Informe o nome do operador.');
-  if (oldName.toLowerCase() === nextName.toLowerCase() && oldName === nextName) {
+  if (
+    oldName.toLowerCase() === nextName.toLowerCase() &&
+    oldName === nextName &&
+    !setorChanged
+  ) {
     return operador;
   }
 
+  const patch = { nome: nextName };
+  if (setor !== undefined) patch.setor = nextSetor;
+
   let updated;
   try {
-    updated = await entities.operadores.update(operador.id, { nome: nextName });
+    updated = await entities.operadores.update(operador.id, patch);
   } catch (err) {
     if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
     throw err;
@@ -210,6 +259,17 @@ export async function setOperadorAtivo(id, ativo) {
   if (isVirtualOperador(id)) throw new Error(TABLE_MISSING_MESSAGE);
   try {
     return await entities.operadores.update(id, { ativo: Boolean(ativo) });
+  } catch (err) {
+    if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
+    throw err;
+  }
+}
+
+/** Remove o operador do cadastro. O histórico operacional (nomes) permanece. */
+export async function deleteOperador(id) {
+  if (isVirtualOperador(id)) throw new Error(TABLE_MISSING_MESSAGE);
+  try {
+    return await entities.operadores.delete(id);
   } catch (err) {
     if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
     throw err;

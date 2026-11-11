@@ -808,6 +808,7 @@ export async function concluirCarregamento({
   dataCarregamento,
   justificativa,
   quantidadesCarregadas,
+  operador,
   user,
   t,
 }) {
@@ -835,6 +836,15 @@ export async function concluirCarregamento({
     throw new Error(
       t?.('painel.comercial.agendamentos.errors.dataCarregamento') ||
         'Informe uma data de carregamento válida.'
+    );
+  }
+
+  const operadorNome = String(operador?.nome || '').trim();
+  const operadorId = String(operador?.id || '').trim();
+  if (!operadorNome) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.concluir.operadorRequired') ||
+        'Selecione o operador responsável pelo carregamento.'
     );
   }
 
@@ -875,9 +885,8 @@ export async function concluirCarregamento({
     status: 'concluido',
     hora_carregamento: hora,
     data_carregamento: dataIso,
-    operador_conclusao_id: toUserIdText(user?.id),
-    operador_conclusao_nome:
-      user?.nome || user?.full_name || user?.username || user?.email || '—',
+    operador_conclusao_id: operadorId || toUserIdText(user?.id),
+    operador_conclusao_nome: operadorNome,
     justificativa_atraso_responsavel: atrasado
       ? String(justificativa.responsavel).trim()
       : null,

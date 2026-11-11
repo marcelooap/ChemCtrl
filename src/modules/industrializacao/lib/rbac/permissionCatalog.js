@@ -1345,19 +1345,52 @@ export function getLegacyPermissionsForUser(user) {
   return [];
 }
 
-export function getDefaultRouteFromPermissions(permissions, user) {
+/**
+ * Primeira rota permitida dentro de um app module.
+ * Não cruza módulos (ex.: permissão de Painel/Comercial não pode
+ * ser a entrada de Industrialização).
+ */
+export function getDefaultRouteFromPermissions(
+  permissions,
+  user,
+  appModuleId = APP_MODULE_IDS.INDUSTRIALIZACAO,
+) {
   if (user?.tipo === 'externo') return '/tela-clientes';
   const set = new Set(permissions || []);
-  if (set.has('home.view')) return '/';
-  if (set.has('production_orders.view')) return '/ordens';
-  if (set.has('containers.view')) return '/vasilhames';
-  if (set.has('client_portal.view')) return '/tela-clientes';
-  if (set.has('dashboard.view')) return '/dashboard';
-  const firstView = (permissions || []).find((k) => k.endsWith('.view'));
-  if (firstView) {
-    const resourceId = firstView.replace(/\.view$/, '');
-    const res = getResourceById(resourceId);
-    if (res?.route) return res.route;
+  const moduleId = appModuleId || APP_MODULE_IDS.INDUSTRIALIZACAO;
+
+  if (moduleId === APP_MODULE_IDS.INDUSTRIALIZACAO) {
+    if (set.has('home.view')) return '/';
+    if (set.has('production_orders.view')) return '/ordens';
+    if (set.has('containers.view')) return '/vasilhames';
+    if (set.has('client_portal.view')) return '/tela-clientes';
+    if (set.has('dashboard.view')) return '/dashboard';
   }
+
+  // Ordem da sidebar do módulo (grupos → filhos) — previsível e alinhada à UX.
+  for (const item of getSidebarNavSpec(moduleId)) {
+    if (Array.isArray(item.children) && item.children.length > 0) {
+      if (item.sectionKey && !set.has(item.sectionKey)) continue;
+      for (const child of item.children) {
+        if (child.path && set.has(child.viewPermission)) return child.path;
+      }
+      continue;
+    }
+    if (item.path && set.has(item.viewPermission)) return item.path;
+  }
+
+  // Telas do módulo fora da sidebar (fallback por ordem do catálogo).
+  for (const mod of permissionModules) {
+    if ((mod.appModuleId || APP_MODULE_IDS.INDUSTRIALIZACAO) !== moduleId) continue;
+    for (const res of mod.resources) {
+      if (!res.route || !set.has(permissionKey(res.id, 'view'))) continue;
+      const sectionKey = getSectionAccessKey(res.nav?.groupId);
+      if (sectionKey && !set.has(sectionKey)) continue;
+      return res.route;
+    }
+  }
+
+  if (moduleId === APP_MODULE_IDS.TRANSBORDO) return '/chemflow';
+  if (moduleId === APP_MODULE_IDS.PAINEL) return '/painel/home';
   return '/';
 }

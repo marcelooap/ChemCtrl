@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Plus, Power, Search, HardHat, Copy } from 'lucide-react';
+import { Pencil, Plus, Power, Search, HardHat, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Input } from '@shared/components/ui/input';
@@ -16,12 +16,14 @@ import {
 import ConfirmDialog from '@shared/components/ConfirmDialog';
 import {
   createOperador,
+  deleteOperador,
   listOperadoresCadastro,
   renameOperadorComHistorico,
   setOperadorAtivo,
 } from '@transbordo/lib/operadoresCadastro';
 import ConfigBackLink from '@painel/components/configuracao/ConfigBackLink';
 import operadoresSql from '@transbordo/sql/025_t_operadores.sql?raw';
+import operadoresSetorSql from '@transbordo/sql/061_t_operadores_setor.sql?raw';
 
 export default function Operadores() {
   const { t } = useTranslation();
@@ -32,8 +34,10 @@ export default function Operadores() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [nome, setNome] = useState('');
+  const [setor, setSetor] = useState('');
   const [saving, setSaving] = useState(false);
   const [toggleTarget, setToggleTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -58,7 +62,8 @@ export default function Operadores() {
 
   const handleCopySql = async () => {
     try {
-      await navigator.clipboard.writeText(operadoresSql);
+      const script = `${operadoresSql.trim()}\n\n${operadoresSetorSql.trim()}\n`;
+      await navigator.clipboard.writeText(script);
       toast({ title: t('painel.configuracao.operadores.sqlCopied') });
     } catch {
       toast({
@@ -70,21 +75,48 @@ export default function Operadores() {
 
   const virtualMode = rows.some((r) => r._virtual);
 
+  const idMap = useMemo(() => {
+    const sortedAll = [...rows].sort((a, b) => {
+      const da = new Date(a.created_at || a.created_date || 0).getTime();
+      const db = new Date(b.created_at || b.created_date || 0).getTime();
+      if (da !== db) return da - db;
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', {
+        sensitivity: 'base',
+      });
+    });
+    const map = {};
+    sortedAll.forEach((row, i) => {
+      map[row.id] = String(i + 1).padStart(2, '0');
+    });
+    return map;
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => String(r.nome || '').toLowerCase().includes(q));
-  }, [rows, search]);
+    const list = !q
+      ? [...rows]
+      : rows.filter((r) => {
+          const nomeMatch = String(r.nome || '').toLowerCase().includes(q);
+          const setorMatch = String(r.setor || '').toLowerCase().includes(q);
+          const idMatch = String(idMap[r.id] || '').includes(q);
+          return nomeMatch || setorMatch || idMatch;
+        });
+    return list.sort(
+      (a, b) => Number(idMap[b.id] || 0) - Number(idMap[a.id] || 0)
+    );
+  }, [rows, search, idMap]);
 
   const openNew = () => {
     setEditing(null);
     setNome('');
+    setSetor('');
     setModalOpen(true);
   };
 
   const openEdit = (row) => {
     setEditing(row);
     setNome(row.nome || '');
+    setSetor(row.setor || '');
     setModalOpen(true);
   };
 
@@ -114,10 +146,10 @@ export default function Operadores() {
     setSaving(true);
     try {
       if (editing) {
-        await renameOperadorComHistorico(editing, trimmed);
+        await renameOperadorComHistorico(editing, trimmed, { setor });
         toast({ title: t('painel.configuracao.operadores.updated') });
       } else {
-        await createOperador(trimmed);
+        await createOperador(trimmed, { setor });
         toast({ title: t('painel.configuracao.operadores.created') });
       }
       setModalOpen(false);
@@ -147,6 +179,22 @@ export default function Operadores() {
     });
     setToggleTarget(null);
     await loadData();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteOperador(deleteTarget.id);
+      toast({ title: t('painel.configuracao.operadores.deleted') });
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      toast({
+        title: t('painel.configuracao.operadores.deleteError'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -199,8 +247,14 @@ export default function Operadores() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                <th className="px-4 py-3 font-medium w-16">
+                  {t('painel.configuracao.operadores.columns.id')}
+                </th>
                 <th className="px-4 py-3 font-medium">
                   {t('painel.configuracao.operadores.columns.name')}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {t('painel.configuracao.operadores.columns.setor')}
                 </th>
                 <th className="px-4 py-3 font-medium">
                   {t('painel.configuracao.operadores.columns.status')}
@@ -213,13 +267,13 @@ export default function Operadores() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
                     {t('painel.configuracao.operadores.loading')}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-12 text-center">
+                  <td colSpan={5} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <HardHat className="w-8 h-8 opacity-50" />
                       <p>{t('painel.configuracao.operadores.empty')}</p>
@@ -236,7 +290,17 @@ export default function Operadores() {
                         i % 2 === 1 ? 'bg-muted/20' : ''
                       } ${ativo ? '' : 'opacity-60'}`}
                     >
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-primary tabular-nums">
+                          {idMap[row.id] || '—'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-medium text-foreground">{row.nome}</td>
+                      <td className="px-4 py-3 text-foreground">
+                        {row.setor || (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -268,6 +332,14 @@ export default function Operadores() {
                             }
                           >
                             <Power />
+                          </RowActionButton>
+                          <RowActionButton
+                            tone="danger"
+                            onClick={() => setDeleteTarget(row)}
+                            title={t('painel.configuracao.operadores.remove')}
+                            disabled={row._virtual}
+                          >
+                            <Trash2 />
                           </RowActionButton>
                         </div>
                       </td>
@@ -317,6 +389,14 @@ export default function Operadores() {
                 </p>
               )}
             </div>
+            <div className="space-y-1.5">
+              <Label>{t('painel.configuracao.operadores.setorLabel')}</Label>
+              <Input
+                value={setor}
+                onChange={(e) => setSetor(e.target.value)}
+                placeholder={t('painel.configuracao.operadores.setorPlaceholder')}
+              />
+            </div>
             <DialogFooter>
               <Button
                 type="button"
@@ -363,6 +443,19 @@ export default function Operadores() {
             : t('painel.configuracao.operadores.inactivate')
         }
         onConfirm={handleToggle}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        title={t('painel.configuracao.operadores.removeTitle')}
+        message={t('painel.configuracao.operadores.removeMessage', {
+          name: deleteTarget?.nome,
+        })}
+        confirmLabel={t('painel.configuracao.operadores.remove')}
+        onConfirm={handleDelete}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import DateInputBr from '@shared/components/ui/DateInputBr';
 import { Can } from '@industrializacao/lib/rbac/Can';
+import { cn } from '@shared/lib/utils';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
@@ -22,6 +23,7 @@ import {
   summarizeSlotBookings,
   todayISO,
 } from '@painel/lib/agendamentosCarregamento';
+import { listOperadoresAtivos } from '@transbordo/lib/operadoresCadastro';
 
 export default function AgendamentoConcluirCarregamentoModal({
   open,
@@ -34,6 +36,9 @@ export default function AgendamentoConcluirCarregamentoModal({
   const { t } = useTranslation();
   const [horaCarregamento, setHoraCarregamento] = useState('');
   const [dataCarregamento, setDataCarregamento] = useState('');
+  const [operadores, setOperadores] = useState([]);
+  const [operadorId, setOperadorId] = useState('');
+  const [loadingOperadores, setLoadingOperadores] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -42,14 +47,33 @@ export default function AgendamentoConcluirCarregamentoModal({
   const summary = summarizeSlotBookings(list);
   const booking = summary.first;
   const cargaKey = list.map((row) => row.saida_id).filter(Boolean).join('|');
+  const selectedOperador = operadores.find((op) => op.id === operadorId) || null;
 
   useEffect(() => {
     if (!open) return;
     setHoraCarregamento(nowBrasiliaHHMM());
     setDataCarregamento(todayISO());
+    setOperadorId('');
     setError('');
     setSaving(false);
     savingRef.current = false;
+
+    let cancelled = false;
+    setLoadingOperadores(true);
+    listOperadoresAtivos({ setor: 'Logística' })
+      .then((rows) => {
+        if (!cancelled) setOperadores(rows || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOperadores([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOperadores(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, cargaKey]);
 
   if (!booking) return null;
@@ -62,6 +86,10 @@ export default function AgendamentoConcluirCarregamentoModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (savingRef.current) return;
+    if (!selectedOperador?.nome) {
+      setError(t('painel.comercial.agendamentos.concluir.operadorRequired'));
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setError('');
@@ -82,6 +110,7 @@ export default function AgendamentoConcluirCarregamentoModal({
         onNeedsJustificativa?.({
           horaCarregamento,
           dataCarregamento: dataIso,
+          operador: selectedOperador,
         });
         onClose();
         return;
@@ -91,6 +120,7 @@ export default function AgendamentoConcluirCarregamentoModal({
         horaCarregamento,
         dataCarregamento: dataIso,
         justificativa: null,
+        operador: selectedOperador,
       });
       onClose();
     } catch (err) {
@@ -102,6 +132,8 @@ export default function AgendamentoConcluirCarregamentoModal({
       setSaving(false);
     }
   };
+
+  const canLiberar = Boolean(selectedOperador?.nome) && !saving;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !saving && onClose()}>
@@ -153,6 +185,44 @@ export default function AgendamentoConcluirCarregamentoModal({
             {t('painel.comercial.agendamentos.concluir.dataHoraHint')}
           </p>
 
+          <div className="space-y-2">
+            <Label>
+              {t('painel.comercial.agendamentos.concluir.operadorLabel')}
+              <span className="text-destructive"> *</span>
+            </Label>
+            {loadingOperadores ? (
+              <p className="text-sm text-muted-foreground">
+                {t('painel.comercial.agendamentos.concluir.operadorLoading')}
+              </p>
+            ) : operadores.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('painel.comercial.agendamentos.concluir.operadorEmpty')}
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {operadores.map((op) => {
+                  const selected = op.id === operadorId;
+                  return (
+                    <button
+                      key={op.id}
+                      type="button"
+                      onClick={() => setOperadorId(op.id)}
+                      disabled={saving}
+                      className={cn(
+                        'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                          : 'border-border bg-card text-foreground hover:bg-muted/60'
+                      )}
+                    >
+                      {op.nome}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {error ? (
             <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -165,7 +235,7 @@ export default function AgendamentoConcluirCarregamentoModal({
               {t('buttons.cancel')}
             </Button>
             <Can anyOf={[`${permissionPrefix}.edit`, `${permissionPrefix}.view`]}>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={!canLiberar}>
                 {saving
                   ? t('painel.comercial.agendamentos.saving')
                   : t('painel.comercial.agendamentos.concluir.confirm')}

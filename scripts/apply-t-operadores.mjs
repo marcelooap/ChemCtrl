@@ -64,6 +64,10 @@ async function main() {
     resolve(root, 'src/modules/transbordo/sql/025_t_operadores.sql'),
     'utf8'
   );
+  const sqlSetor = readFileSync(
+    resolve(root, 'src/modules/transbordo/sql/061_t_operadores_setor.sql'),
+    'utf8'
+  );
   const sqlEtiquetas = readFileSync(
     resolve(root, 'src/modules/transbordo/sql/026_t_etiqueta_configs.sql'),
     'utf8'
@@ -77,6 +81,8 @@ async function main() {
   try {
     await client.query(sql);
     console.log('t_operadores: ok');
+    await client.query(sqlSetor);
+    console.log('t_operadores.setor: ok');
     await client.query(sqlEtiquetas);
     console.log('t_etiqueta_configs: ok');
   } finally {

@@ -9,11 +9,11 @@ import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
 import { resolveVasilhameExpedidoDisplay } from "@transbordo/lib/vasilhamePatio";
 
 export const PARTICULA_TAMANHOS = [
-  { key: "particulas_6", label: "6 mm", short: "6" },
-  { key: "particulas_14", label: "14 mm", short: "14" },
-  { key: "particulas_21", label: "21 mm", short: "21" },
-  { key: "particulas_38", label: "38 mm", short: "38" },
-  { key: "particulas_70", label: "70 mm", short: "70" },
+  { key: "particulas_6", label: "6 mm", short: "6", max: 1950 },
+  { key: "particulas_14", label: "14 mm", short: "14", max: 346 },
+  { key: "particulas_21", label: "21 mm", short: "21", max: 61.2 },
+  { key: "particulas_38", label: "38 mm", short: "38", max: 10.6 },
+  { key: "particulas_70", label: "70 mm", short: "70", max: 1.6 },
 ];
 
 /** Contagens em formato PT-BR (ex.: 10.000 ou 13,547). */

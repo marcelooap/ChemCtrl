@@ -419,6 +419,7 @@ export default function AgendamentosGrade({
     dataCarregamento,
     justificativa,
     quantidadesCarregadas,
+    operador,
   }) => {
     const list = normalizeBookings(
       justificativaState?.bookings || concluirBookings
@@ -430,6 +431,7 @@ export default function AgendamentosGrade({
       dataCarregamento,
       justificativa,
       quantidadesCarregadas,
+      operador: operador || justificativaState?.operador || null,
       user,
       t,
     });
@@ -438,7 +440,12 @@ export default function AgendamentosGrade({
     await loadData({ silent: true });
   };
 
-  const handleNeedsJustificativa = ({ horaCarregamento, dataCarregamento, quantidadesCarregadas }) => {
+  const handleNeedsJustificativa = ({
+    horaCarregamento,
+    dataCarregamento,
+    quantidadesCarregadas,
+    operador,
+  }) => {
     const list = normalizeBookings(concluirBookings);
     if (list.length === 0) return;
     setJustificativaState({
@@ -446,6 +453,7 @@ export default function AgendamentosGrade({
       horaCarregamento,
       dataCarregamento,
       quantidadesCarregadas,
+      operador,
     });
   };
 

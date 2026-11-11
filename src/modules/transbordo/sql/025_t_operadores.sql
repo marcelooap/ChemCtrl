@@ -15,10 +15,17 @@ $$ language plpgsql;
 create table if not exists t_operadores (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
+  setor text,
   ativo boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table t_operadores
+  add column if not exists setor text;
+
+comment on column t_operadores.setor is
+  'Setor / área do operador no chão de fábrica.';
 
 create unique index if not exists uq_t_operadores_nome_ci
   on t_operadores (lower(btrim(nome)));
