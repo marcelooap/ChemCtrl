@@ -6,7 +6,6 @@ import {
   Factory,
   Filter,
   Layers,
-  Truck,
 } from 'lucide-react';
 import {
   Area,
@@ -33,7 +32,6 @@ import {
 } from '@shared/components/ui/select';
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -44,6 +42,11 @@ import {
   buildPainelTransbordoDashboardView,
   loadPainelTransbordoDashboard,
 } from '@painel/lib/dashboardTransbordoData';
+import {
+  buildPainelLogisticaDashboardView,
+  loadPainelLogisticaDashboard,
+} from '@painel/lib/dashboardLogisticaData';
+import DashboardLogisticaView from '@painel/components/dashboard/DashboardLogisticaView';
 
 const VIEW = Object.freeze({
   TRANSBORDO: 'transbordo',
@@ -307,6 +310,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [yearPayload, setYearPayload] = useState(null);
+  const [logisticaPayload, setLogisticaPayload] = useState(null);
 
   const yearOptions = useMemo(() => {
     const years = new Set([currentYear, selectedYear]);
@@ -315,19 +319,21 @@ export default function Dashboard() {
   }, [currentYear, selectedYear]);
 
   const load = useCallback(async () => {
-    if (view !== VIEW.TRANSBORDO) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const data = await loadPainelTransbordoDashboard(selectedYear);
-      setYearPayload(data);
+      if (view === VIEW.LOGISTICA) {
+        const data = await loadPainelLogisticaDashboard(selectedYear);
+        setLogisticaPayload(data);
+      } else {
+        const data = await loadPainelTransbordoDashboard(selectedYear);
+        setYearPayload(data);
+      }
     } catch (err) {
       console.error('[Painel Dashboard]', err);
       setError(err?.message || t('painel.dashboard.loadErrorDescription'));
-      setYearPayload(null);
+      if (view === VIEW.LOGISTICA) setLogisticaPayload(null);
+      else setYearPayload(null);
     } finally {
       setLoading(false);
     }
@@ -359,6 +365,15 @@ export default function Dashboard() {
       operators: Array.isArray(computed?.operators) ? computed.operators : [],
     };
   }, [yearPayload, selectedYear, selectedMonth]);
+
+  const logisticaDashboard = useMemo(() => {
+    if (!logisticaPayload) return null;
+    return buildPainelLogisticaDashboardView(logisticaPayload, {
+      year: selectedYear,
+      month: selectedMonth,
+      t,
+    });
+  }, [logisticaPayload, selectedYear, selectedMonth, t]);
 
   const pieData = useMemo(
     () =>
@@ -436,77 +451,56 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {view === VIEW.TRANSBORDO ? (
-          <div className="flex flex-col items-stretch gap-2.5 w-[140px]">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('painel.dashboard.yearLabel')}
-              </label>
-              <Select
-                value={String(selectedYear)}
-                onValueChange={(v) => setSelectedYear(Number(v))}
-              >
-                <SelectTrigger className="h-8 text-xs mt-0.5 w-full bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map((year) => (
-                    <SelectItem key={year} value={String(year)} className="text-xs">
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">
-                {t('painel.dashboard.monthLabel')}
-              </label>
-              <Select
-                value={String(selectedMonth)}
-                onValueChange={(v) => setSelectedMonth(Number(v))}
-              >
-                <SelectTrigger className="h-8 text-xs mt-0.5 w-full bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONTH_KEYS.map((key, index) => (
-                    <SelectItem key={key} value={String(index)} className="text-xs">
-                      {t(`painel.dashboard.months.${key}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex flex-col items-stretch gap-2.5 w-[140px]">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('painel.dashboard.yearLabel')}
+            </label>
+            <Select
+              value={String(selectedYear)}
+              onValueChange={(v) => setSelectedYear(Number(v))}
+            >
+              <SelectTrigger className="h-8 text-xs mt-0.5 w-full bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => (
+                  <SelectItem key={year} value={String(year)} className="text-xs">
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : null}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('painel.dashboard.monthLabel')}
+            </label>
+            <Select
+              value={String(selectedMonth)}
+              onValueChange={(v) => setSelectedMonth(Number(v))}
+            >
+              <SelectTrigger className="h-8 text-xs mt-0.5 w-full bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MONTH_KEYS.map((key, index) => (
+                  <SelectItem key={key} value={String(index)} className="text-xs">
+                    {t(`painel.dashboard.months.${key}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       {view === VIEW.LOGISTICA ? (
-        <Card className="min-h-[280px]">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                <Truck className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <div>
-                <CardTitle className="text-base">
-                  {t('painel.dashboard.logistics.title')}
-                </CardTitle>
-                <CardDescription>
-                  {t('painel.dashboard.logistics.description')}
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-40 rounded-lg border border-dashed border-border bg-muted/40 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground px-4 text-center">
-                {t('painel.dashboard.logistics.comingSoon')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <DashboardLogisticaView
+          data={logisticaDashboard}
+          loading={loading}
+          error={error}
+        />
       ) : loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-border border-t-[#2575D1] rounded-full animate-spin" />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { Eye, Search, Undo2, X } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
@@ -95,13 +96,21 @@ const currentMonthKey = () => {
 export default function LogisticaCarregamentos() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
   const [entradas, setEntradas] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    const fromQuery =
+      searchParams.get('q') ||
+      searchParams.get('saida') ||
+      searchParams.get('codigo') ||
+      '';
+    return String(fromQuery).trim();
+  });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [appliedDateFrom, setAppliedDateFrom] = useState('');
@@ -113,6 +122,17 @@ export default function LogisticaCarregamentos() {
   const [revertTarget, setRevertTarget] = useState(null);
   const [reverting, setReverting] = useState(false);
   const [statsMonth, setStatsMonth] = useState(currentMonthKey);
+
+  useEffect(() => {
+    const fromQuery =
+      searchParams.get('q') ||
+      searchParams.get('saida') ||
+      searchParams.get('codigo') ||
+      '';
+    const next = String(fromQuery).trim();
+    if (!next) return;
+    setSearch(next);
+  }, [searchParams]);
 
   const saidasById = useMemo(() => {
     const map = new Map();
