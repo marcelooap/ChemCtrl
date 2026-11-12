@@ -299,15 +299,31 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
     return yy + h;
   };
 
-  const drawBadgeAt = (label, cx, cy, maxW) => {
+  const BADGE_STYLES = {
+    green: { fill: [220, 252, 231], text: [21, 128, 61] },
+    red: { fill: [254, 226, 226], text: [185, 28, 28] },
+    gray: { fill: [226, 232, 240], text: [71, 85, 105] },
+  };
+
+  const resolveSignedBadgeTone = (label) => {
+    const raw = String(label ?? "").trim();
+    if (!raw || raw === "-" || raw === "—" || raw === "–") return "gray";
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n === 0) return "gray";
+    if (n < 0) return "red";
+    return "green";
+  };
+
+  const drawBadgeAt = (label, cx, cy, maxW, tone = "green") => {
+    const style = BADGE_STYLES[tone] || BADGE_STYLES.green;
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
     const tw = doc.getTextWidth(label) + 4;
     const bw = Math.min(Math.max(tw, 14), Math.max(14, maxW - 2));
     const bh = 4.6;
-    setFill(doc, [220, 252, 231]);
+    setFill(doc, style.fill);
     doc.roundedRect(cx - bw / 2, cy - bh / 2, bw, bh, 1.2, 1.2, "F");
-    setColor(doc, [21, 128, 61]);
+    setColor(doc, style.text);
     const safe = doc.splitTextToSize(label, bw - 3)[0] || label;
     doc.text(safe, cx, cy, { align: "center", baseline: "middle" });
   };
@@ -396,8 +412,16 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, badgeCols = [], o
         const cy = startY + li * lineH;
         const label = raw || "-";
 
-        if (badgeSet.has(i) && label && label !== "-") {
-          drawBadgeAt(label, cellCenterX(x, widths[i]), cy, widths[i]);
+        if (badgeTones[i] === "signed") {
+          drawBadgeAt(
+            label,
+            cellCenterX(x, widths[i]),
+            cy,
+            widths[i],
+            resolveSignedBadgeTone(label)
+          );
+        } else if (badgeSet.has(i) && label && label !== "-") {
+          drawBadgeAt(label, cellCenterX(x, widths[i]), cy, widths[i], "green");
         } else {
           doc.setFontSize(dataFs);
           setColor(doc, BLACK);
@@ -773,9 +797,88 @@ function drawSiloObsBadge(doc, text, centerX, y, maxWidth) {
   doc.text(label, centerX, y, { align: "center", baseline: "middle" });
 }
 
+function parsePdfDateOnly(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const date = raw.includes("T")
+    ? new Date(raw)
+    : new Date(`${raw.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatValidadeControle(validade, { indeterminada = false } = {}) {
+  if (indeterminada) return "Indeterminado";
+  return fmtDate(validade);
+}
+
+/** Dias restantes até a validade (negativo se já vencido). */
+function formatDiasParaVencer(validade, { indeterminada = false } = {}) {
+  if (indeterminada) return "-";
+  const expiry = parsePdfDateOnly(validade);
+  if (!expiry) return "—";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return String(Math.round((expiry.getTime() - today.getTime()) / 86_400_000));
+}
+
+function formatProdutoControle(codigo, produto) {
+  const cod = String(codigo || "").trim();
+  const nome = String(produto || "").trim() || "-";
+  if (!cod || cod === "-" || cod === "—") return nome;
+  return `${cod} - ${nome}`;
+}
+
 /**
- * Última(s) folha(s) em paisagem, com os silos do filtro.
+ * Folha(s) em retrato após as tankas: validade e dias para vencer por lote.
+ */
+function addControleQualidadePages(doc, lots = []) {
+  doc.addPage("a4", "p");
+  let y = addPageTitle(
+    doc,
+    "Controle de Qualidade",
+    "Validade por lote do estoque filtrado"
+  );
+
+  if (!lots.length) {
+    doc.setFontSize(9);
+    setColor(doc, GRAY_LABEL);
+    doc.text("Nenhum lote com saldo no filtro.", M, y);
+    return;
+  }
+
+  const headers = ["PRODUTO", "LOTE", "VALIDADE", "DIAS P/ VENCER"];
+  const rows = lots.map((row) => [
+    formatProdutoControle(row.codigo, row.produto),
+    row.lote || "-",
+    formatValidadeControle(row.data_validade, {
+      indeterminada: row.validade_indeterminada,
+    }),
+    formatDiasParaVencer(row.data_validade, {
+      indeterminada: row.validade_indeterminada,
+    }),
+  ]);
+  const widths = fitColWidths(doc, headers, rows, null, {
+    flexCols: [0],
+    flexMin: 48,
+    dataFs: 8,
+    hdrFs: 7.5,
+  });
+
+  addTable(doc, y, headers, rows, widths, null, [], {
+    align: ["left", "center", "center", "center"],
+    dataFs: 8,
+    hdrFs: 7.5,
+    badgeTones: { 3: "signed" },
+  });
+}
+
+/**
+ * Folha(s) em paisagem, com os silos do filtro.
  * Uma página cabe 24 tankas (8 × 3). O excedente segue em outra folha paisagem.
+ * Em seguida vem a folha retrato de Controle de Qualidade.
  */
 function addTankaSiloPages(doc, tanks = []) {
   const cols = 8;
@@ -889,7 +992,7 @@ function addTankaSiloPages(doc, tanks = []) {
 /**
  * Relatório consolidado de Estoque Envio (produtos + vasilhames + tankas).
  * Layout no padrão visual do PDF de checklist.
- * A última folha é paisagem, com os silos coloridos do filtro.
+ * Após as tankas (silos em paisagem), inclui folha retrato de Controle de Qualidade.
  */
 export function generateEstoqueEnvioPDF({
   client,
@@ -897,6 +1000,7 @@ export function generateEstoqueEnvioPDF({
   containers = [],
   containersSummary = [],
   tanks = [],
+  qualityLots = [],
 }) {
   const clientLabel = client || "Todos os clientes";
   const doc = new jsPDF({ format: "a4" });
@@ -1243,6 +1347,7 @@ export function generateEstoqueEnvioPDF({
   }
 
   addTankaSiloPages(doc, tanks);
+  addControleQualidadePages(doc, qualityLots);
   addFooter(doc);
   const clienteArquivo = safePdfFilenamePart(clientLabel) || "Cliente";
   doc.save(`Estoque ${clienteArquivo} ${formatPdfFileDate()}.pdf`);

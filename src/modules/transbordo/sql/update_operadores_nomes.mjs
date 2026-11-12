@@ -1,5 +1,7 @@
 /**
- * Renomeia operadores nos transbordos (e responsável em vasilhames) já salvos.
+ * Alinha nomes abreviados do histórico ao cadastro atual (t_operadores).
+ * Corrige duplicatas no dashboard (ex.: "Joelson A." + "Joelson Alves").
+ *
  * Uso: node src/modules/transbordo/sql/update_operadores_nomes.mjs
  */
 import { createClient } from '@supabase/supabase-js';
@@ -45,25 +47,31 @@ if (!url || !key) {
 
 const supabase = createClient(url, key);
 
-/** Nomes antigos → novos (ordem: mais longos primeiro para replace em string). */
+/**
+ * Nomes antigos (histórico) → nomes atuais do cadastro.
+ * Mais específicos primeiro quando houver risco de overlap.
+ */
 const RENAME = [
-  ['Francisco Mariano', 'Mariano'],
-  ['Adriano Queiroz', 'Adriano Q.'],
-  ['Leonardo Souza', 'Leonardo S.'],
-  ['Rafael Novais', 'Rafael N.'],
-  ['Wandre Costa', 'Wandre C.'],
-  ['Ezequiel', 'Ezequiel F.'],
+  ['Adriano Q.', 'Adriano Queiroz'],
+  ['Joelson A.', 'Joelson Alves'],
+  ['Everton N.', 'Everton Nascimento'],
+  ['Ezequiel F.', 'Ezekiel da Silva'],
+  ['Leonardo S.', 'Leonardo Sousa'],
+  ['Rafael N.', 'Rafael Novais'],
+  ['Rafael S.', 'Rafael Santos'],
+  ['F. Mariano', 'Francisco Mariano'],
+  ['Wandre C.', 'Wandre Costa'],
+  ['Mariano', 'Francisco Mariano'],
 ];
 
-const MAP = Object.fromEntries(RENAME);
+const MAP = Object.fromEntries(
+  RENAME.map(([from, to]) => [from.toLowerCase(), to])
+);
 
 function renameOperador(nome) {
   const n = String(nome || '').trim();
   if (!n) return n;
-  if (MAP[n]) return MAP[n];
-  // Já abreviado ou variante
-  if (n === 'Ezequiel F.') return n;
-  return n;
+  return MAP[n.toLowerCase()] || n;
 }
 
 function renameOperadores(list) {
@@ -75,26 +83,37 @@ function renameOperadores(list) {
 
 function renameResponsavel(text) {
   if (!text || typeof text !== 'string') return { changed: false, next: text };
-  let next = text;
-  for (const [from, to] of RENAME) {
-    if (from === 'Ezequiel') {
-      // Evita "Ezequiel F." → "Ezequiel F. F."
-      next = next.replace(/\bEzequiel\b(?!\s*F\.)/g, to);
-    } else {
-      next = next.split(from).join(to);
-    }
+  const parts = text
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return { changed: false, next: text };
+  const nextParts = parts.map(renameOperador);
+  const changed = nextParts.some((v, i) => v !== parts[i]);
+  return { changed, next: nextParts.join(', ') };
+}
+
+async function fetchAll(table, columns) {
+  const pageSize = 1000;
+  let from = 0;
+  const rows = [];
+  while (true) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
   }
-  return { changed: next !== text, next };
+  return rows;
 }
 
 async function main() {
-  const { data: transbordos, error: tErr } = await supabase
-    .from('t_transbordos')
-    .select('id, codigo_transbordo, operadores');
-  if (tErr) throw new Error(`t_transbordos: ${tErr.message}`);
-
+  const transbordos = await fetchAll('t_transbordos', 'id, codigo_transbordo, operadores');
   let tUpdated = 0;
-  for (const row of transbordos || []) {
+  for (const row of transbordos) {
     const { changed, next } = renameOperadores(row.operadores);
     if (!changed) continue;
     const { error } = await supabase
@@ -112,13 +131,9 @@ async function main() {
     );
   }
 
-  const { data: vasilhames, error: vErr } = await supabase
-    .from('t_vasilhames')
-    .select('id, codigo, placa, responsavel');
-  if (vErr) throw new Error(`t_vasilhames: ${vErr.message}`);
-
+  const vasilhames = await fetchAll('t_vasilhames', 'id, codigo, placa, responsavel');
   let vUpdated = 0;
-  for (const row of vasilhames || []) {
+  for (const row of vasilhames) {
     const { changed, next } = renameResponsavel(row.responsavel);
     if (!changed) continue;
     const { error } = await supabase
@@ -136,8 +151,8 @@ async function main() {
     );
   }
 
-  console.log(`\nTransbordos atualizados: ${tUpdated}/${(transbordos || []).length}`);
-  console.log(`Vasilhames (responsável) atualizados: ${vUpdated}/${(vasilhames || []).length}`);
+  console.log(`\nTransbordos atualizados: ${tUpdated}/${transbordos.length}`);
+  console.log(`Vasilhames (responsável) atualizados: ${vUpdated}/${vasilhames.length}`);
 }
 
 main().catch((err) => {

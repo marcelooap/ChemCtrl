@@ -165,10 +165,87 @@ export async function updateOperador(id, payload) {
   return entities.operadores.update(id, payload);
 }
 
+function namesMatch(a, b) {
+  return normalizeNome(a).toLowerCase() === normalizeNome(b).toLowerCase();
+}
+
+async function fetchAllRows(table, columns) {
+  const pageSize = 1000;
+  let from = 0;
+  const rows = [];
+  while (true) {
+    const { data, error } = await chemflowSupabase
+      .from(table)
+      .select(columns)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}
+
+/**
+ * Substitui o nome do operador em transbordos.operadores e
+ * vasilhames.responsavel (histórico denormalizado).
+ */
+export async function syncOperadorNomeNoHistorico(oldName, nextName) {
+  const from = normalizeNome(oldName);
+  const to = normalizeNome(nextName);
+  if (!from || !to || from === to) {
+    return { transbordos: 0, vasilhames: 0 };
+  }
+  if (!isChemFlowConfigured || !chemflowSupabase) {
+    throw new Error('Supabase ChemFlow não configurado.');
+  }
+
+  const transbordos = await fetchAllRows('t_transbordos', 'id, operadores');
+  const transbordoPatches = [];
+  for (const row of transbordos) {
+    const ops = Array.isArray(row.operadores) ? row.operadores : [];
+    let changed = false;
+    const next = ops.map((n) => {
+      if (!namesMatch(n, from)) return n;
+      changed = true;
+      return to;
+    });
+    if (changed) transbordoPatches.push({ id: row.id, operadores: next });
+  }
+  if (transbordoPatches.length > 0) {
+    await entities.transbordos.bulkUpdate(transbordoPatches);
+  }
+
+  const vasilhames = await fetchAllRows('t_vasilhames', 'id, responsavel');
+  const vasilhamePatches = [];
+  for (const row of vasilhames) {
+    const parts = String(row.responsavel || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!parts.some((n) => namesMatch(n, from))) continue;
+    vasilhamePatches.push({
+      id: row.id,
+      responsavel: parts.map((n) => (namesMatch(n, from) ? to : n)).join(', '),
+    });
+  }
+  if (vasilhamePatches.length > 0) {
+    await entities.vasilhames.bulkUpdate(vasilhamePatches);
+  }
+
+  return {
+    transbordos: transbordoPatches.length,
+    vasilhames: vasilhamePatches.length,
+  };
+}
+
 /**
  * Renomeia o operador no cadastro e nos registros operacionais que
  * guardam o nome (transbordos.operadores e vasilhames.responsavel).
  * Não altera registros se o operador apenas for inativado.
+ *
+ * Ordem: histórico primeiro, cadastro depois — se o sync falhar,
+ * o nome no cadastro permanece e a edição pode ser refeita.
  */
 export async function renameOperadorComHistorico(operador, novoNome, { setor } = {}) {
   if (isVirtualOperador(operador)) throw new Error(TABLE_MISSING_MESSAGE);
@@ -181,78 +258,31 @@ export async function renameOperadorComHistorico(operador, novoNome, { setor } =
     normalizeSetor(operador?.setor) !== nextSetor;
   if (!operador?.id) throw new Error('Operador inválido.');
   if (!nextName) throw new Error('Informe o nome do operador.');
-  if (
-    oldName.toLowerCase() === nextName.toLowerCase() &&
-    oldName === nextName &&
-    !setorChanged
-  ) {
+  if (oldName === nextName && !setorChanged) {
     return operador;
+  }
+
+  const nomeChanged = oldName !== nextName;
+  if (nomeChanged) {
+    try {
+      await syncOperadorNomeNoHistorico(oldName, nextName);
+    } catch (err) {
+      if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
+      throw new Error(
+        `Não foi possível atualizar o histórico com o novo nome: ${err?.message || err}`
+      );
+    }
   }
 
   const patch = { nome: nextName };
   if (setor !== undefined) patch.setor = nextSetor;
 
-  let updated;
   try {
-    updated = await entities.operadores.update(operador.id, patch);
+    return await entities.operadores.update(operador.id, patch);
   } catch (err) {
     if (isTableMissingError(err)) throw new Error(TABLE_MISSING_MESSAGE);
     throw err;
   }
-  if (oldName.toLowerCase() === nextName.toLowerCase()) {
-    return updated;
-  }
-
-  if (!isChemFlowConfigured || !chemflowSupabase) return updated;
-
-  try {
-    const { data: transbordos, error: tErr } = await chemflowSupabase
-      .from('t_transbordos')
-      .select('id, operadores')
-      .contains('operadores', [oldName]);
-    if (tErr) throw tErr;
-
-    const transbordoPatches = (transbordos || [])
-      .map((row) => {
-        const next = (Array.isArray(row.operadores) ? row.operadores : []).map((n) =>
-          n === oldName ? nextName : n
-        );
-        return { id: row.id, operadores: next };
-      })
-      .filter(Boolean);
-
-    if (transbordoPatches.length > 0) {
-      await entities.transbordos.bulkUpdate(transbordoPatches);
-    }
-
-    const { data: vasilhames, error: vErr } = await chemflowSupabase
-      .from('t_vasilhames')
-      .select('id, responsavel')
-      .ilike('responsavel', `%${oldName}%`);
-    if (vErr) throw vErr;
-
-    const vasilhamePatches = (vasilhames || [])
-      .map((row) => {
-        const parts = String(row.responsavel || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
-        if (!parts.includes(oldName)) return null;
-        return {
-          id: row.id,
-          responsavel: parts.map((n) => (n === oldName ? nextName : n)).join(', '),
-        };
-      })
-      .filter(Boolean);
-
-    if (vasilhamePatches.length > 0) {
-      await entities.vasilhames.bulkUpdate(vasilhamePatches);
-    }
-  } catch (err) {
-    console.warn('[ChemFlow] Falha ao sincronizar nome do operador no histórico:', err);
-  }
-
-  return updated;
 }
 
 export async function setOperadorAtivo(id, ativo) {

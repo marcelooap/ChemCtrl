@@ -1106,9 +1106,43 @@
       "title": "Dashboard",
       "subtitle": "Indicadores e gráficos operacionais",
       "awaitingData": "Aguardando conexão com dados reais",
-      "chartsTitle": "Gráficos",
-      "chartPlaceholder": "Estrutura preparada para visualização",
+      "viewLabel": "Visualização",
+      "monthLabel": "Mês",
+      "yearLabel": "Ano",
+      "totalCenter": "Total",
+      "emptyYear": "Nenhuma movimentação registrada neste ano.",
+      "emptyPeriod": "Nenhuma movimentação registrada neste mês.",
+      "emptyOperators": "Nenhum operador com volume no período.",
+      "months": {
+        "january": "Janeiro",
+        "february": "Fevereiro",
+        "march": "Março",
+        "april": "Abril",
+        "may": "Maio",
+        "june": "Junho",
+        "july": "Julho",
+        "august": "Agosto",
+        "september": "Setembro",
+        "october": "Outubro",
+        "november": "Novembro",
+        "december": "Dezembro"
+      },
+      "loadErrorTitle": "Não foi possível carregar o dashboard",
+      "loadErrorDescription": "Verifique a conexão com o Supabase e tente novamente.",
+      "views": {
+        "transbordo": "Transbordo",
+        "logistica": "Logística"
+      },
+      "logistics": {
+        "title": "Logística",
+        "description": "Indicadores logísticos serão disponibilizados em breve.",
+        "comingSoon": "Visualização em desenvolvimento"
+      },
       "kpis": {
+        "volumeTotal": "Volume total",
+        "volumeConvencional": "Volume convencional",
+        "volumeIndustrializado": "Volume industrializado",
+        "volumeFiltrado": "Volume filtrado",
         "volumeProduced": "Volume produzido",
         "volumeTransferred": "Volume transbordado",
         "orders": "Pedidos",
@@ -1116,7 +1150,22 @@
         "loadings": "Carregamentos",
         "stock": "Estoque"
       },
+      "series": {
+        "total": "Volume total",
+        "convencional": "Convencional",
+        "industrializado": "Industrializado",
+        "filtrado": "Filtrado"
+      },
+      "chartsTitle": "Gráficos",
+      "chartPlaceholder": "Estrutura preparada para visualização",
       "charts": {
+        "monthly": "Evolução mensal de volumes",
+        "monthlyHint": "Ano {{year}} · independente do mês selecionado",
+        "daily": "Volume diário do mês",
+        "dailyHint": "{{month}} de {{year}} · total do dia (convencional + industrializado + filtrado)",
+        "dailyDayLabel": "Dia {{day}}",
+        "distribution": "Distribuição por categoria",
+        "operators": "Volumes por operador",
         "production": "Produção",
         "transbordo": "Transbordo",
         "sales": "Vendas",

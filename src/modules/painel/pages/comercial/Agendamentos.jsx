@@ -10,6 +10,7 @@ export default function Agendamentos() {
       subtitle={t('painel.comercial.agendamentos.subtitle')}
       permissionPrefix="painel_comercial_agendamentos"
       showTransporte
+      showViewSaida
     />
   );
 }

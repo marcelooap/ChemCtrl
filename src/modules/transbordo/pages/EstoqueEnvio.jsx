@@ -50,6 +50,7 @@ import {
 import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 import {
   agregadoCoversPhysicalSlot,
+  collectControleQualidadeLotes,
   collectEstoqueEnvioFontes,
   estoqueEnvioGrupoKey,
 } from "@transbordo/lib/estoqueEnvioProdutos";
@@ -1292,12 +1293,26 @@ export default function EstoqueEnvio() {
         };
       });
 
+      const qualityLots = collectControleQualidadeLotes({
+        estoque: estoqueComLocais,
+        entradas,
+        indStock,
+        clientes,
+        indStockReady,
+      }).filter((row) => {
+        if (!matchesCliente(row, clienteFilter, clientes)) return false;
+        if (!q) return true;
+        const hay = `${row.codigo} ${row.produto} ${row.lote} ${row.cliente_nome || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+
       generateEstoqueEnvioPDF({
         client: hasClientFilter ? clienteFilter : "Todos os clientes",
         products: produtosComBreakdown,
         containers,
         containersSummary: vasilhamesResumoPorProduto,
         tanks,
+        qualityLots,
       });
       toast({ title: "PDF gerado com sucesso" });
     } catch {

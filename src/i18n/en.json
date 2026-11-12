@@ -1106,9 +1106,43 @@
       "title": "Dashboard",
       "subtitle": "Operational KPIs and charts",
       "awaitingData": "Waiting for real data connection",
-      "chartsTitle": "Charts",
-      "chartPlaceholder": "Structure prepared for visualization",
+      "viewLabel": "View",
+      "monthLabel": "Month",
+      "yearLabel": "Year",
+      "totalCenter": "Total",
+      "emptyYear": "No movements recorded this year.",
+      "emptyPeriod": "No movements recorded this month.",
+      "emptyOperators": "No operators with volume in the period.",
+      "months": {
+        "january": "January",
+        "february": "February",
+        "march": "March",
+        "april": "April",
+        "may": "May",
+        "june": "June",
+        "july": "July",
+        "august": "August",
+        "september": "September",
+        "october": "October",
+        "november": "November",
+        "december": "December"
+      },
+      "loadErrorTitle": "Could not load the dashboard",
+      "loadErrorDescription": "Check the Supabase connection and try again.",
+      "views": {
+        "transbordo": "Transshipment",
+        "logistica": "Logistics"
+      },
+      "logistics": {
+        "title": "Logistics",
+        "description": "Logistics indicators will be available soon.",
+        "comingSoon": "View under development"
+      },
       "kpis": {
+        "volumeTotal": "Total volume",
+        "volumeConvencional": "Conventional volume",
+        "volumeIndustrializado": "Industrialized volume",
+        "volumeFiltrado": "Filtered volume",
         "volumeProduced": "Volume produced",
         "volumeTransferred": "Volume transferred",
         "orders": "Orders",
@@ -1116,7 +1150,22 @@
         "loadings": "Loadings",
         "stock": "Inventory"
       },
+      "series": {
+        "total": "Total volume",
+        "convencional": "Conventional",
+        "industrializado": "Industrialized",
+        "filtrado": "Filtered"
+      },
+      "chartsTitle": "Charts",
+      "chartPlaceholder": "Structure prepared for visualization",
       "charts": {
+        "monthly": "Monthly volume trend",
+        "monthlyHint": "Year {{year}} · not affected by month filter",
+        "daily": "Daily volume this month",
+        "dailyHint": "{{month}} {{year}} · daily total (conventional + industrialized + filtered)",
+        "dailyDayLabel": "Day {{day}}",
+        "distribution": "Distribution by category",
+        "operators": "Volume by operator",
         "production": "Production",
         "transbordo": "Transshipment",
         "sales": "Sales",

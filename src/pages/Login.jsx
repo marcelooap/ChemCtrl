@@ -81,9 +81,9 @@ export default function Login() {
           aria-hidden="true"
           className="pointer-events-none absolute select-none hidden sm:block"
           style={{
-            width: 'min(280px, 42%)',
-            top: '12px',
-            right: '8px',
+            width: 'min(420px, 58%)',
+            top: '4px',
+            right: '0px',
             zIndex: 1,
             opacity: 0.95,
           }}
