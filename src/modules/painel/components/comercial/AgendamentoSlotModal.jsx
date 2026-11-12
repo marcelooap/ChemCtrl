@@ -93,13 +93,14 @@ export default function AgendamentoSlotModal({
       ? t('painel.comercial.agendamentos.encaixe')
       : slot.horario;
 
-  const toggleSaida = (saidaId) => {
+  const isEncaixe = slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO;
+
+  // Uma saída por horário regular; no encaixe, uma saída por card.
+  const selectSaida = (saidaId) => {
     const key = String(saidaId);
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+      if (prev.has(key) && prev.size === 1) return new Set();
+      return new Set([key]);
     });
   };
 
@@ -108,6 +109,10 @@ export default function AgendamentoSlotModal({
     const selected = availableSaidas.filter((s) => selectedIds.has(String(s.id)));
     if (selected.length === 0) {
       setError(t('painel.comercial.agendamentos.errors.selectSaida'));
+      return;
+    }
+    if (selected.length > 1) {
+      setError(t('painel.comercial.agendamentos.errors.singleSaida'));
       return;
     }
     savingRef.current = true;
@@ -155,13 +160,9 @@ export default function AgendamentoSlotModal({
 
         {occupied ? null : (
         <p className="text-xs text-muted-foreground">
-          {slot.tipo === 'encaixe' || slot.horario === ENCAIXE_HORARIO
-            ? t('painel.comercial.agendamentos.modal.encaixeMultiHint', {
-                count: selectedIds.size,
-              })
-            : t('painel.comercial.agendamentos.modal.multiHint', {
-                count: selectedIds.size,
-              })}
+          {isEncaixe
+            ? t('painel.comercial.agendamentos.modal.encaixeSingleHint')
+            : t('painel.comercial.agendamentos.modal.singleHint')}
         </p>
         )}
 
@@ -218,15 +219,16 @@ export default function AgendamentoSlotModal({
                     return lines.map((linha, index) => (
                       <tr
                         key={`${s.id}-${linha.vasilhame}-${index}`}
-                        onClick={occupied ? undefined : () => toggleSaida(s.id)}
+                        onClick={occupied ? undefined : () => selectSaida(s.id)}
                         className={`border-b border-border last:border-0 transition-colors ${rowTone}`}
                       >
                         {occupied ? null : (
                           <td className="px-3 py-2.5">
                             <input
-                              type="checkbox"
+                              type="radio"
+                              name="agendamento-saida"
                               checked={checked}
-                              onChange={() => toggleSaida(s.id)}
+                              onChange={() => selectSaida(s.id)}
                               onClick={(e) => e.stopPropagation()}
                               className="accent-primary"
                               aria-label={s.codigo || s.id}

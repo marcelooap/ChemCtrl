@@ -70,6 +70,20 @@ export function clientsMatch(a, b) {
   return na.includes(nb) || nb.includes(na);
 }
 
+/**
+ * Mesmo cliente com grafias curtas vs completas (ex.: "vibra" e "VIBRA ENERGIA").
+ * Exige fronteira de palavra para não unir "inter" com "intertank".
+ */
+export function isClienteNomeAlias(a, b) {
+  const na = normalizeClientName(a);
+  const nb = normalizeClientName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length <= nb.length ? nb : na;
+  return longer.startsWith(`${shorter} `);
+}
+
 /** Chave de deduplicação da lista de clientes (nome exato, sem diferenciar maiúsculas). */
 export function clienteNomeKey(nome) {
   return String(nome || "").trim().toLowerCase();

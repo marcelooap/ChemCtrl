@@ -1042,7 +1042,7 @@
           "testesColumnMissingBanner": "Tests by destination do not exist in the database yet. Paste the SQL script into the Supabase SQL Editor, run it and reload this page.",
           "destinos": {
             "title": "Tests by destination",
-            "hint": "For each destination, register only the tests that must be checked. Enter the name, the validity and the verification period, in days. The earliest execution date is today minus (validity − 365 days) minus the verification period.",
+            "hint": "For each destination, register only the tests that must be checked. Enter the name, the validity and the verification period, in days. The earliest execution date is today minus (validity − verification period).",
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Select the destination...",
             "prazoLabel": "Validity period (days)",
@@ -1647,7 +1647,7 @@
             "limiteCurto": "cut-off",
             "hint": "{{dias}}-day period from today. Check that the tank tests expire on or after this date.",
             "execucaoHint": "The cut-off date is today minus {{dias}} days. The execution date on the physical record must be later than {{data}}.",
-            "execucaoHintValidade": "The earliest execution date is today − ({{validade}} − 365) − {{prazo}} days of verification. The execution date on the physical record must be on or after {{data}}.",
+            "execucaoHintValidade": "The earliest execution date is today − ({{validade}} − {{prazo}}) days. The execution date on the physical record must be on or after {{data}}.",
             "validade": "Validity",
             "resultado": "Check result",
             "destino": "Destination",
@@ -1717,7 +1717,9 @@
           "searchPlaceholder": "Search outbound by code or client...",
           "emptySaidas": "No outbound requests available to schedule.",
           "multiHint": "{{count}} outbound request(s) selected for this slot",
+          "singleHint": "Select only one outbound request for this time slot.",
           "encaixeMultiHint": "{{count}} outbound request(s) in this fit-in — each becomes its own card; other fit-in loadings are not changed",
+          "encaixeSingleHint": "Select one outbound request for this fit-in card. For multiple requests, use one card each.",
           "confirm": "Schedule",
           "release": "Release slot",
           "releaseCarregamento": "Release loading"
@@ -1737,7 +1739,9 @@
         },
         "errors": {
           "selectSaida": "Select at least one outbound request to schedule.",
+          "singleSaida": "Select only one outbound request per time slot. Use Fit-in for multiple requests (one per card).",
           "saidaAssigned": "Outbound {{codigo}} is already scheduled at {{slot}}.",
+          "slotOccupied": "This time slot already has outbound {{codigo}} scheduled. Choose another slot or use Fit-in.",
           "slotCarregado": "This slot has already been loaded and cannot be rescheduled.",
           "conflict": "This slot or outbound request was just taken. Refresh and try again.",
           "saveFailed": "Could not save the booking.",

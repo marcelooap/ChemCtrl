@@ -378,8 +378,8 @@ function saidaGroupKey(row) {
 
 /**
  * No Encaixe, cada saída é um carregamento independente (card próprio),
- * mesmo quando o cliente é o mesmo. Horários regulares permanecem um
- * único grupo por slot.
+ * mesmo quando o cliente é o mesmo. Horários regulares têm no máximo
+ * uma saída ativa por slot (um único grupo).
  *
  * `splitBySaida` (ou o alias legado `splitByCliente`) ativa a divisão.
  */
@@ -459,13 +459,15 @@ function isUniqueViolation(err) {
 }
 
 /**
- * Sincroniza as saídas de um horário (permite várias no mesmo slot).
+ * Agenda saídas em um horário.
+ * - Horário regular: no máximo 1 saída ativa (mesmo cliente).
+ * - Encaixe: várias saídas no dia, com 1 saída por card.
  * Cada saída permanece exclusiva de um único horário ativo.
  *
  * `scopeSaidaIds`:
  * - `null` (padrão): sincroniza o horário inteiro (horários regulares).
- * - `Set`: no Encaixe, edita só esse carregamento e preserva os demais clientes.
- * - `Set` vazio: adiciona um novo carregamento sem alterar os já agendados.
+ * - `Set`: no Encaixe, edita só esse carregamento e preserva os demais.
+ * - `Set` vazio: adiciona um novo card de encaixe sem alterar os já agendados.
  */
 export async function bookSlotSaidas({
   dateIso,
@@ -486,6 +488,16 @@ export async function bookSlotSaidas({
     );
   }
 
+  const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
+
+  // Regular e cada card de encaixe: exatamente uma saída por agendamento.
+  if (selected.length > 1) {
+    throw new Error(
+      t?.('painel.comercial.agendamentos.errors.singleSaida') ||
+        'Selecione apenas uma saída por horário. Use o Encaixe para várias saídas (uma por card).'
+    );
+  }
+
   const ativos = await entities.agendamentosCarregamento.filter({ status: 'agendado' });
   const concluidosNoSlot = (
     (await entities.agendamentosCarregamento.filter({
@@ -497,7 +509,7 @@ export async function bookSlotSaidas({
 
   // Horário regular já carregado permanece ocupado (não reagenda).
   // No Encaixe, outros carregamentos (outras saídas) podem continuar sendo adicionados.
-  if (!(scopeSaidaIds instanceof Set) && concluidosNoSlot.length > 0) {
+  if (!isEncaixe && concluidosNoSlot.length > 0) {
     throw new Error(
       t?.('painel.comercial.agendamentos.errors.slotCarregado') ||
         'Este horário já foi carregado e não pode ser reagendado.'
@@ -508,6 +520,22 @@ export async function bookSlotSaidas({
     (row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario
   );
   const selectedIds = new Set(selected.map((s) => String(s.id)));
+
+  // Horário regular: bloqueia se já houver outra saída agendada no mesmo slot.
+  if (!isEncaixe) {
+    const occupiedByOther = noSlot.find(
+      (row) => !selectedIds.has(String(row.saida_id))
+    );
+    if (occupiedByOther) {
+      throw new Error(
+        t?.('painel.comercial.agendamentos.errors.slotOccupied', {
+          codigo: occupiedByOther.saida_codigo || '',
+        }) ||
+          `Este horário já possui a saída ${occupiedByOther.saida_codigo || ''} agendada.`
+      );
+    }
+  }
+
   const scoped =
     scopeSaidaIds instanceof Set
       ? noSlot.filter((row) => scopeSaidaIds.has(String(row.saida_id)))
@@ -609,18 +637,38 @@ export async function rescheduleSaidaAgendamento({
     })) || []
   ).filter((row) => String(row.data).slice(0, 10) === dateIso && row.horario === horario);
 
-  if (concluidos.length > 0 && horario !== ENCAIXE_HORARIO) {
+  const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
+
+  if (concluidos.length > 0 && !isEncaixe) {
     throw new Error(
       t?.('painel.comercial.agendamentos.errors.slotCarregado') ||
         'Este horário já foi carregado e não pode ser reagendado.'
     );
   }
 
+  // Horário regular: não move para slot que já tem outra saída.
+  if (!isEncaixe) {
+    const occupiedByOther = ativos.find(
+      (row) =>
+        String(row.data).slice(0, 10) === dateIso &&
+        row.horario === horario &&
+        String(row.saida_id) !== String(saida.id)
+    );
+    if (occupiedByOther) {
+      throw new Error(
+        t?.('painel.comercial.agendamentos.errors.slotOccupied', {
+          codigo: occupiedByOther.saida_codigo || '',
+        }) ||
+          `Este horário já possui a saída ${occupiedByOther.saida_codigo || ''} agendada.`
+      );
+    }
+  }
+
   if (current) {
     await entities.agendamentosCarregamento.update(current.id, {
       data: dateIso,
       horario,
-      tipo: tipo === 'encaixe' ? 'encaixe' : 'regular',
+      tipo: isEncaixe ? 'encaixe' : 'regular',
     });
     await entities.saidas.update(saida.id, { data_programada: dateIso });
     await notifyAgendamentoSePendenteValidacao(saida);
@@ -630,10 +678,12 @@ export async function rescheduleSaidaAgendamento({
   await bookSlotSaidas({
     dateIso,
     horario,
-    tipo,
+    tipo: isEncaixe ? 'encaixe' : 'regular',
     saidas: [saida],
     user,
     t,
+    // Encaixe novo: card isolado, sem sincronizar os demais.
+    scopeSaidaIds: isEncaixe ? new Set() : null,
   });
 }
 

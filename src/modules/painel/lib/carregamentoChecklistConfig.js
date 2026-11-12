@@ -303,7 +303,7 @@ function resolveCustomCheckDefs(defsMap, clienteId, clienteNome) {
 
 /**
  * Testes do tanque para o destino da solicitação.
- * A data mínima de execução é hoje − (validade − 365) − prazo de verificação.
+ * A data mínima de execução é hoje − (validade − prazo de verificação).
  * Sem validade cadastrada, permanece hoje − prazo. Destino fora do cadastro não traz testes.
  */
 function buildValidadeTestes(config, destino, hoje) {
@@ -894,7 +894,7 @@ export function mergeChecklistItems(builtItems, storedItems) {
           ? saved.check_defs
           : null;
 
-    // A data mínima é sempre a de hoje: hoje − (validade − 365) − prazo.
+    // A data mínima é sempre a de hoje: hoje − (validade − prazo).
     // A resposta já dada permanece. Se validade ou prazo mudaram, a resposta é refeita.
     const invalidatedTesteKeys = new Set();
     const validade_testes = built.validade_testes;

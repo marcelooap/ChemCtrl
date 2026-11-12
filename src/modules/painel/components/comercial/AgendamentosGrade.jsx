@@ -276,28 +276,42 @@ export default function AgendamentosGrade({
     if (!lockedSaida?.id || bookingLocked) return;
     setBookingLocked(true);
     try {
+      const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
       const key = `${selectedIso}|${horario}`;
       const existing = normalizeBookings(bookingMap.get(key));
-      const existingAsSaidas = existing.map((row) => ({
-        id: row.saida_id,
-        codigo: row.saida_codigo,
-        cliente_id: row.cliente_id,
-        cliente_nome: row.cliente_nome,
-      }));
-      const alreadyOnSlot = existingAsSaidas.some(
-        (s) => String(s.id) === String(lockedSaida.id)
-      );
+
+      // Horário regular: não inclui em slot já ocupado por outra saída.
+      if (!isEncaixe) {
+        const occupiedByOther = existing.find(
+          (row) => String(row.saida_id) !== String(lockedSaida.id)
+        );
+        if (occupiedByOther) {
+          throw new Error(
+            t('painel.comercial.agendamentos.errors.slotOccupied', {
+              codigo: occupiedByOther.saida_codigo || '',
+            })
+          );
+        }
+      }
+
       await bookSlotSaidas({
         dateIso: selectedIso,
         horario,
-        tipo,
-        saidas: alreadyOnSlot ? existingAsSaidas : [...existingAsSaidas, lockedSaida],
+        tipo: isEncaixe ? 'encaixe' : 'regular',
+        saidas: [lockedSaida],
         user,
         t,
+        // Encaixe: sempre um card novo com uma saída, sem alterar os demais.
+        scopeSaidaIds: isEncaixe ? new Set() : null,
       });
       toast({ title: t('painel.comercial.agendamentos.saveSuccess') });
       if (typeof onBooked === 'function') {
-        await onBooked({ dateIso: selectedIso, horario, tipo, saida: lockedSaida });
+        await onBooked({
+          dateIso: selectedIso,
+          horario,
+          tipo: isEncaixe ? 'encaixe' : 'regular',
+          saida: lockedSaida,
+        });
         return;
       }
       await loadData({ silent: true });
@@ -323,15 +337,37 @@ export default function AgendamentosGrade({
   const openSlot = (horario, tipo = 'regular', groupBookings = null) => {
     if (!canBook) return;
     if (lockedSaida) {
+      const isEncaixeLocked = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;
       const existing = normalizeBookings(
         bookingMap.get(`${selectedIso}|${horario}`)
       );
-      if (isCarregado(existing)) return;
-      if (deferBooking) {
-        queuePendingMove({ dateIso: selectedIso, horario, tipo });
+      if (isCarregado(existing) && !isEncaixeLocked) return;
+      // Horário regular ocupado: bloqueia no clique (mesmo do mesmo cliente).
+      if (
+        !isEncaixeLocked &&
+        existing.some((row) => String(row.saida_id) !== String(lockedSaida.id))
+      ) {
+        const other = existing.find(
+          (row) => String(row.saida_id) !== String(lockedSaida.id)
+        );
+        toast({
+          title: t('painel.comercial.agendamentos.errors.saveFailed'),
+          description: t('painel.comercial.agendamentos.errors.slotOccupied', {
+            codigo: other?.saida_codigo || '',
+          }),
+          variant: 'destructive',
+        });
         return;
       }
-      bookLockedSaida(horario, tipo);
+      if (deferBooking) {
+        setPendingMove({
+          dateIso: selectedIso,
+          horario,
+          tipo: isEncaixeLocked ? 'encaixe' : tipo,
+        });
+        return;
+      }
+      bookLockedSaida(horario, isEncaixeLocked ? 'encaixe' : tipo);
       return;
     }
     const isEncaixe = tipo === 'encaixe' || horario === ENCAIXE_HORARIO;

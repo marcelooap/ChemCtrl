@@ -1,7 +1,7 @@
 -- Validade de cada teste (Check List de Expedição)
 -- Painel → Configuração → Check List Expedição → Testes a verificar
 -- Cada teste passa a gravar validade_dias além de prazo_dias:
---   data mínima de execução = hoje − (validade_dias − 365) − prazo_dias.
+--   data mínima de execução = hoje − (validade_dias − prazo_dias).
 -- Idempotente. Pré-requisito: 044_t_checklist_expedicao_validade_testes.sql
 -- Executar no SQL Editor do Supabase (ChemFlow).
 

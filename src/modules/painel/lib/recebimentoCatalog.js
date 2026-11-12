@@ -19,6 +19,38 @@ import {
   ORIGEM_AMBOS,
   ORIGEM_ARMAZENAGEM,
 } from "@transbordo/lib/cadastroProdutosCentral";
+import { isClienteNomeAlias } from "@transbordo/lib/saidaOrigem";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isPersistedClienteId(id) {
+  return UUID_RE.test(String(id || ""));
+}
+
+/** Prefer UUID do cadastro e o nome mais completo ("VIBRA ENERGIA" > "vibra"). */
+function preferClienteOption(a, b) {
+  const aUuid = isPersistedClienteId(a?.id);
+  const bUuid = isPersistedClienteId(b?.id);
+  if (aUuid !== bUuid) return aUuid ? a : b;
+  const aLen = String(a?.nome || "").trim().length;
+  const bLen = String(b?.nome || "").trim().length;
+  if (aLen !== bLen) return aLen >= bLen ? a : b;
+  return a;
+}
+
+/** Insere ou funde aliases ("vibra" + "VIBRA ENERGIA") na lista acumulada. */
+function upsertClienteOption(list, candidate) {
+  const nome = String(candidate?.nome || "").trim();
+  if (!nome) return;
+  const next = { ...candidate, nome };
+  const idx = list.findIndex((existing) => isClienteNomeAlias(existing.nome, next.nome));
+  if (idx === -1) {
+    list.push(next);
+    return;
+  }
+  list[idx] = preferClienteOption(list[idx], next);
+}
 
 export function parseRecipeRawMaterials(recipe) {
   const raw = recipe?.raw_materials;
@@ -35,18 +67,13 @@ export function parseRecipeRawMaterials(recipe) {
 }
 
 function uniqueClientsFromNames(names) {
-  const map = new Map();
+  const list = [];
   (names || []).forEach((raw) => {
     const nome = String(raw || "").trim();
     if (!nome) return;
-    const key = nome.toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, { id: `ind-cli:${key}`, nome });
-    }
+    upsertClienteOption(list, { id: `ind-cli:${nome.toLowerCase()}`, nome });
   });
-  return Array.from(map.values()).sort((a, b) =>
-    a.nome.localeCompare(b.nome, "pt-BR")
-  );
+  return list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 function toProdutoOption({
@@ -240,18 +267,13 @@ export function buildPaProdutos(recipes, produtosCatalog = []) {
 }
 
 export function uniqueClientesByNome(clientes) {
-  const map = new Map();
+  const list = [];
   (clientes || []).forEach((c) => {
     const nome = String(c?.nome || "").trim();
     if (!nome) return;
-    const key = nome.toLowerCase();
-    if (!map.has(key)) {
-      map.set(key, { ...c, nome });
-    }
+    upsertClienteOption(list, { ...c, nome });
   });
-  return Array.from(map.values()).sort((a, b) =>
-    a.nome.localeCompare(b.nome, "pt-BR")
-  );
+  return list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 export function clientsFromProdutos(produtos) {
@@ -260,28 +282,24 @@ export function clientsFromProdutos(produtos) {
 
 /**
  * Une clientes do Transbordo com clientes extras (ex.: Industrialização),
- * preservando o cadastro do Transbordo quando o nome coincide.
+ * preservando o cadastro do Transbordo quando o nome coincide ou é alias
+ * ("vibra" absorvido por "VIBRA ENERGIA").
  */
 export function mergeClientesByNome(clientesTb, extraClientes) {
-  const map = new Map();
-  uniqueClientesByNome(clientesTb).forEach((c) => {
-    map.set(String(c.nome).toLowerCase(), c);
-  });
+  const list = uniqueClientesByNome(clientesTb);
   (extraClientes || []).forEach((c) => {
     const nome = String(c?.nome || "").trim();
     if (!nome) return;
-    const key = nome.toLowerCase();
-    if (!map.has(key)) map.set(key, { ...c, nome });
+    upsertClienteOption(list, { ...c, nome });
   });
-  return Array.from(map.values()).sort((a, b) =>
-    a.nome.localeCompare(b.nome, "pt-BR")
-  );
+  return list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 /**
  * Lista da solicitação de saída: cadastro do Transbordo + nomes da
  * Industrialização (e de estoque/produto). Um nome, um item.
  * O id do Transbordo prevalece; nome só da Industrialização fica com id temporário.
+ * Aliases curtos/completos do mesmo cliente são fundidos.
  */
 export function buildSaidaClienteOptions(clientesTransbordo, nomesExtras) {
   const extras = [];

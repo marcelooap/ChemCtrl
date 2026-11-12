@@ -900,7 +900,7 @@
           "testesColumnMissingBanner": "Las pruebas por destino aún no existen en la base de datos. Pegue el script SQL en el Editor SQL de Supabase, ejecútelo y recargue esta página.",
           "destinos": {
             "title": "Pruebas por destino",
-            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre, la vigencia y el plazo de verificación, en días. La fecha mínima de ejecución es hoy menos (vigencia − 365 días) menos el plazo de verificación.",
+            "hint": "Para cada destino, registre solo las pruebas que deben verificarse. Indique el nombre, la vigencia y el plazo de verificación, en días. La fecha mínima de ejecución es hoy menos (vigencia − plazo de verificación).",
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Seleccione el destino...",
             "prazoLabel": "Plazo de vigencia (días)",
@@ -1201,7 +1201,9 @@
           "searchPlaceholder": "Buscar salida por código o cliente...",
           "emptySaidas": "No hay salidas disponibles para agendar.",
           "multiHint": "{{count}} salida(s) seleccionada(s) para este horario",
+          "singleHint": "Seleccione solo una salida para este horario.",
           "encaixeMultiHint": "{{count}} salida(s) en este encaje — cada salida vira su propio card; los demás cargamentos del encaje no se modifican",
+          "encaixeSingleHint": "Seleccione una salida para este card de encaje. Para varias salidas, use un card por salida.",
           "confirm": "Agendar",
           "release": "Liberar horario",
           "releaseCarregamento": "Liberar cargamento"
@@ -1221,7 +1223,9 @@
         },
         "errors": {
           "selectSaida": "Seleccione al menos una salida para agendar.",
+          "singleSaida": "Seleccione solo una salida por horario. Use Encaje para varias salidas (una por card).",
           "saidaAssigned": "La salida {{codigo}} ya está agendada en {{slot}}.",
+          "slotOccupied": "Este horario ya tiene la salida {{codigo}} agendada. Elija otro horario o use Encaje.",
           "conflict": "Este horario o salida acaba de ser ocupado. Actualice la grilla e intente de nuevo.",
           "saveFailed": "No fue posible guardar el agendamiento.",
           "releaseFailed": "No fue posible liberar el horario.",

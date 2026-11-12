@@ -900,7 +900,7 @@
           "testesColumnMissingBanner": "Les tests par destination n'existent pas encore dans la base. Collez le script SQL dans l'éditeur SQL de Supabase, exécutez-le et rechargez cette page.",
           "destinos": {
             "title": "Tests par destination",
-            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom, la validité et le délai de vérification, en jours. La date minimale d'exécution est aujourd'hui moins (validité − 365 jours) moins le délai de vérification.",
+            "hint": "Pour chaque destination, enregistrez seulement les tests à contrôler. Indiquez le nom, la validité et le délai de vérification, en jours. La date minimale d'exécution est aujourd'hui moins (validité − délai de vérification).",
             "destinoLabel": "Destination",
             "destinoPlaceholder": "Sélectionnez la destination...",
             "prazoLabel": "Délai de validité (jours)",
@@ -1201,7 +1201,9 @@
           "searchPlaceholder": "Rechercher une sortie par code ou client...",
           "emptySaidas": "Aucune sortie disponible à planifier.",
           "multiHint": "{{count}} sortie(s) sélectionnée(s) pour ce créneau",
+          "singleHint": "Sélectionnez une seule sortie pour ce créneau.",
           "encaixeMultiHint": "{{count}} sortie(s) dans cet encastrement — chaque sortie a sa propre carte ; les autres chargements ne sont pas modifiés",
+          "encaixeSingleHint": "Sélectionnez une sortie pour cette carte d'encastrement. Pour plusieurs sorties, utilisez une carte par sortie.",
           "confirm": "Planifier",
           "release": "Libérer le créneau",
           "releaseCarregamento": "Libérer le chargement"
@@ -1221,7 +1223,9 @@
         },
         "errors": {
           "selectSaida": "Sélectionnez au moins une sortie à planifier.",
+          "singleSaida": "Sélectionnez une seule sortie par créneau. Utilisez l'encastrement pour plusieurs sorties (une par carte).",
           "saidaAssigned": "La sortie {{codigo}} est déjà planifiée à {{slot}}.",
+          "slotOccupied": "Ce créneau a déjà la sortie {{codigo}} planifiée. Choisissez un autre créneau ou utilisez l'encastrement.",
           "conflict": "Ce créneau ou cette sortie vient d'être pris. Actualisez et réessayez.",
           "saveFailed": "Impossible d'enregistrer la planification.",
           "releaseFailed": "Impossible de libérer le créneau.",

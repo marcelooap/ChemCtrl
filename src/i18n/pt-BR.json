@@ -1042,7 +1042,7 @@
           "testesColumnMissingBanner": "Os testes por destino ainda não existem no banco. Cole o script SQL no Editor SQL do Supabase, execute e recarregue esta página.",
           "destinos": {
             "title": "Testes por destino",
-            "hint": "Para cada destino, cadastre só os testes que devem ser conferidos. Informe o nome, a validade e o prazo de verificação, em dias. A data mínima de execução é a data de hoje menos (validade − 365 dias) menos o prazo de verificação.",
+            "hint": "Para cada destino, cadastre só os testes que devem ser conferidos. Informe o nome, a validade e o prazo de verificação, em dias. A data mínima de execução é a data de hoje menos (validade − prazo de verificação).",
             "destinoLabel": "Destino",
             "destinoPlaceholder": "Selecione o destino...",
             "prazoLabel": "Prazo de validade (dias)",
@@ -1647,7 +1647,7 @@
             "limiteCurto": "limite",
             "hint": "Prazo de {{dias}} dias a partir de hoje. Confira se o vencimento dos testes do tanque é igual ou posterior a esta data.",
             "execucaoHint": "A data limite é hoje menos {{dias}} dias. A data de execução no físico deve ser maior que {{data}}.",
-            "execucaoHintValidade": "A data mínima de execução é hoje − ({{validade}} − 365) − {{prazo}} dias de verificação. A data de execução no físico deve ser igual ou posterior a {{data}}.",
+            "execucaoHintValidade": "A data mínima de execução é hoje − ({{validade}} − {{prazo}}) dias. A data de execução no físico deve ser igual ou posterior a {{data}}.",
             "validade": "Validade",
             "resultado": "Resultado da verificação",
             "destino": "Destino",
@@ -1717,7 +1717,9 @@
           "searchPlaceholder": "Buscar saída por código ou cliente...",
           "emptySaidas": "Nenhuma saída disponível para agendar.",
           "multiHint": "{{count}} saída(s) selecionada(s) para este horário",
+          "singleHint": "Selecione apenas uma saída para este horário.",
           "encaixeMultiHint": "{{count}} saída(s) neste encaixe — cada saída vira um card próprio; demais carregamentos do encaixe não são alterados",
+          "encaixeSingleHint": "Selecione uma saída para este card de encaixe. Para várias saídas, use um card por saída.",
           "confirm": "Agendar",
           "release": "Liberar horário",
           "releaseCarregamento": "Liberar carregamento"
@@ -1737,7 +1739,9 @@
         },
         "errors": {
           "selectSaida": "Selecione ao menos uma saída para agendar.",
+          "singleSaida": "Selecione apenas uma saída por horário. Use o Encaixe para várias saídas (uma por card).",
           "saidaAssigned": "A saída {{codigo}} já está agendada em {{slot}}.",
+          "slotOccupied": "Este horário já possui a saída {{codigo}} agendada. Escolha outro horário ou use o Encaixe.",
           "slotCarregado": "Este horário já foi carregado e não pode ser reagendado.",
           "conflict": "Este horário ou saída acabou de ser ocupado. Atualize a grade e tente novamente.",
           "saveFailed": "Não foi possível salvar o agendamento.",

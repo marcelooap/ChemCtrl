@@ -13,7 +13,7 @@ import {
   EMBALADO_CHECKS,
   checkDefsNomeKey,
 } from '@painel/lib/carregamentoChecklistConfig';
-import { clienteNomeKey } from '@transbordo/lib/saidaOrigem';
+import { clienteNomeKey, isClienteNomeAlias } from '@transbordo/lib/saidaOrigem';
 import { isMissingRpcError } from '@painel/lib/saidaReservas';
 import { listNomesClientesIndustrializacao } from '@painel/lib/saidaClientes';
 import { buildSaidaClienteOptions } from '@painel/lib/recebimentoCatalog';
@@ -486,7 +486,7 @@ function latestUpdatedAt(rows) {
 
 /**
  * Agrupa os clientes informados com todos os ids de `t_clientes` que compartilham o
- * mesmo nome (o cadastro pode ter ids duplicados).
+ * mesmo nome ou alias ("vibra" / "VIBRA ENERGIA"). O cadastro pode ter ids duplicados.
  */
 async function resolveClienteGroups(clientes = []) {
   const requested = (clientes || [])
@@ -498,6 +498,14 @@ async function resolveClienteGroups(clientes = []) {
   const groups = requested.map((c) => {
     const nomeKey = clienteNomeKey(c.nome) || (c.id && nomeById.get(c.id)) || '';
     const ids = new Set(nomeKey ? idsByNome.get(nomeKey) || [] : []);
+    // Inclui ids de grafias curtas/completas do mesmo cliente.
+    if (nomeKey) {
+      for (const [otherKey, otherIds] of idsByNome.entries()) {
+        if (otherKey === nomeKey) continue;
+        if (!isClienteNomeAlias(nomeKey, otherKey)) continue;
+        for (const id of otherIds) ids.add(id);
+      }
+    }
     if (c.id) ids.add(c.id);
     return { id: c.id, nome: c.nome, ids };
   });
@@ -655,6 +663,84 @@ export async function loadChecklistExpedicaoOperacional(clientes = []) {
  */
 export async function listChecklistExpedicaoByClientes(clientes = []) {
   return (await loadChecklistExpedicaoOperacional(clientes)).checkDefs;
+}
+
+/**
+ * Carrega itens + validade para a tela de configuração.
+ * Usa a mesma resolução de ids duplicados do operacional (`resolveClienteGroups` +
+ * `pickLatestRows`): o dropdown deduplica por nome e pode apontar para um UUID
+ * irmão sem os dados; aqui buscamos em todos os ids do nome e devolvemos o
+ * registro mais recente, com o `clienteId` canônico para as próximas gravações.
+ *
+ * @param {{ id?: string|null, nome?: string|null }} cliente
+ * @returns {Promise<{
+ *   clienteId: string|null,
+ *   itensCheio: Array<object>,
+ *   itensVazio: Array<object>,
+ *   config: { ativo: boolean, dias: number, prazosPorDestino: Array<object> },
+ * }>}
+ */
+export async function loadChecklistExpedicaoConfigPage(cliente = {}) {
+  const selectedId = normalizeClienteId(cliente?.id);
+  const nome = String(cliente?.nome || '').trim();
+  const empty = {
+    clienteId: selectedId,
+    itensCheio: [],
+    itensVazio: [],
+    config: { ...DEFAULT_VALIDADE_TESTES_CONFIG },
+  };
+  if (!selectedId && !clienteNomeKey(nome)) return empty;
+
+  // Sem ChemFlow (select .in), cai no carregamento por um único id.
+  if (!isChemFlowConfigured || !chemflowSupabase) {
+    if (!selectedId) return empty;
+    const [itensCheio, itensVazio, config] = await Promise.all([
+      listChecklistExpedicaoItens(selectedId, { tanqueVazio: false }),
+      listChecklistExpedicaoItens(selectedId, { tanqueVazio: true }),
+      getChecklistExpedicaoConfig(selectedId),
+    ]);
+    return { clienteId: selectedId, itensCheio, itensVazio, config };
+  }
+
+  const { groups, allIds } = await resolveClienteGroups([{ id: selectedId, nome }]);
+  if (allIds.length === 0) return empty;
+
+  const [itensRows, configRows, destinoRows] = await Promise.all([
+    fetchItensRows(allIds),
+    fetchConfigRows(allIds),
+    fetchDestinoRows(allIds),
+  ]);
+  if (
+    itensRows.length > 0 &&
+    !Object.prototype.hasOwnProperty.call(itensRows[0], 'tanque_vazio')
+  ) {
+    tanqueVazioColumnAvailable = false;
+  }
+
+  const group = groups[0];
+  const itensByCliente = groupByClienteId(itensRows);
+  const configByCliente = groupByClienteId(configRows);
+  const destinosByCliente = groupByClienteId(destinoRows);
+
+  const itens = pickLatestRows(group, itensByCliente) || [];
+  const configRow = pickLatestRows(group, configByCliente)?.[0] || null;
+  const prazos = configRow
+    ? destinosByCliente.get(String(configRow.cliente_id)) || []
+    : [];
+
+  const canonicalId =
+    normalizeClienteId(configRow?.cliente_id) ||
+    normalizeClienteId(itens[0]?.cliente_id) ||
+    selectedId;
+
+  return {
+    clienteId: canonicalId,
+    itensCheio: sortByOrdem(filterItensByTanqueVazio(itens, false)),
+    itensVazio: sortByOrdem(filterItensByTanqueVazio(itens, true)),
+    config: configRow
+      ? toValidadeTestesConfig(configRow, prazos)
+      : { ...DEFAULT_VALIDADE_TESTES_CONFIG },
+  };
 }
 
 /**

@@ -11,9 +11,6 @@ export const VALIDADE_TESTES_PRAZO_PADRAO_DIAS = 180;
 export const VALIDADE_TESTES_PRAZO_MIN_DIAS = 1;
 export const VALIDADE_TESTES_PRAZO_MAX_DIAS = 3650;
 
-/** Ano de referência da data mínima: hoje − (validade − 365) − prazo de verificação. */
-export const VALIDADE_TESTES_ANO_BASE_DIAS = 365;
-
 /** Valores persistidos de Color Cod da eslinga (por destino). */
 export const COLOR_COD_VALUES = Object.freeze([
   'laranja',
@@ -266,25 +263,28 @@ export function resolverTestesPorDestino(config, destino) {
 }
 
 /**
- * Data mínima de execução de um teste.
- * Com validade: dia local de `base` − (validade − 365) − prazo de verificação.
- * Sem validade (cadastro antigo): dia local de `base` − prazo.
+ * Data mínima de execução de um teste — mesma conta para qualquer cliente/destino.
+ *
+ * Com validade: data atual − (validade − prazo de verificação).
+ * Sem validade (cadastro antigo): data atual − prazo de verificação.
  * A data de execução no físico deve ser igual ou posterior a este dia.
- * Ex.: 03/11/2026, validade 730 e prazo 30 → "2025-10-04".
+ *
+ * Ex.: 12/11/2026, validade 365 e prazo 50 → "2026-01-01".
+ *
  * @param {number} dias prazo de verificação, em dias
  * @param {Date} [base]
  * @param {number|string|null} [validade] validade do teste, em dias
  * @returns {string} "YYYY-MM-DD"
  */
 export function calcularDataLimiteTestes(dias, base = new Date(), validade = null) {
-  const prazo = normalizePrazoDias(dias);
+  const prazoVerificacao = normalizePrazoDias(dias);
   const validadeDias = parsePrazoDias(validade);
-  const deltaDias =
-    validadeDias == null
-      ? -prazo
-      : -(validadeDias - VALIDADE_TESTES_ANO_BASE_DIAS) - prazo;
+  // dataAtual − (validade − prazo)  |  legado: dataAtual − prazo
+  const diasASubtrair =
+    validadeDias == null ? prazoVerificacao : validadeDias - prazoVerificacao;
   const utcMs =
-    Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) + deltaDias * MS_PER_DAY;
+    Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()) -
+    diasASubtrair * MS_PER_DAY;
   return new Date(utcMs).toISOString().slice(0, 10);
 }
 

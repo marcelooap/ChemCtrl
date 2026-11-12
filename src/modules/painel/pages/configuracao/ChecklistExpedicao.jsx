@@ -17,7 +17,6 @@ import ConfigBackLink from '@painel/components/configuracao/ConfigBackLink';
 import {
   DEFAULT_VALIDADE_TESTES_CONFIG,
   createTempItemId,
-  getChecklistExpedicaoConfig,
   getDefaultChecklistDescricoes,
   isChecklistExpedicaoConfigAvailable,
   isChecklistExpedicaoDestinosAvailable,
@@ -25,7 +24,7 @@ import {
   isChecklistExpedicaoTanqueVazioAvailable,
   isChecklistExpedicaoTestesAvailable,
   listChecklistExpedicaoClientes,
-  listChecklistExpedicaoItens,
+  loadChecklistExpedicaoConfigPage,
   saveChecklistExpedicao,
   saveChecklistExpedicaoConfig,
 } from '@painel/lib/checklistExpedicaoConfig';
@@ -167,8 +166,11 @@ export default function ChecklistExpedicao() {
   }, [loadClientes]);
 
   const loadItens = useCallback(
-    async (clienteId) => {
-      if (!isPersistedClienteId(clienteId)) {
+    async (cliente) => {
+      const clienteId = cliente?.id;
+      const clienteNome = String(cliente?.nome || '').trim();
+      // Sem UUID e sem nome não há como resolver ids duplicados em t_clientes.
+      if (!isPersistedClienteId(clienteId) && !clienteNome) {
         setItensCheio([]);
         setItensVazio([]);
         setConfig(DEFAULT_CONFIG_FORM);
@@ -180,22 +182,48 @@ export default function ChecklistExpedicao() {
       }
       setLoadingItens(true);
       try {
-        const [rowsCheio, rowsVazio, savedConfig] = await Promise.all([
-          listChecklistExpedicaoItens(clienteId, { tanqueVazio: false }),
-          listChecklistExpedicaoItens(clienteId, { tanqueVazio: true }),
-          getChecklistExpedicaoConfig(clienteId),
-        ]);
+        // Busca em todos os UUIDs do mesmo nome e usa o registro mais recente
+        // (o dropdown pode apontar para um id irmão sem os dados salvos).
+        const loaded = await loadChecklistExpedicaoConfigPage({
+          id: clienteId,
+          nome: clienteNome,
+        });
         setTableMissing(!isChecklistExpedicaoTableAvailable());
         setConfigMissing(!isChecklistExpedicaoConfigAvailable());
         setDestinosMissing(!isChecklistExpedicaoDestinosAvailable());
         setTestesMissing(!isChecklistExpedicaoTestesAvailable());
         setTanqueVazioMissing(!isChecklistExpedicaoTanqueVazioAvailable());
-        setConfig(toConfigForm(savedConfig));
-        setItensCheio(toItemForm(rowsCheio));
-        setItensVazio(toItemForm(rowsVazio));
-        setHadItensCheio(rowsCheio.length > 0);
-        setHadItensVazio(rowsVazio.length > 0);
+        setConfig(toConfigForm(loaded.config));
+        setItensCheio(toItemForm(loaded.itensCheio));
+        setItensVazio(toItemForm(loaded.itensVazio));
+        setHadItensCheio(loaded.itensCheio.length > 0);
+        setHadItensVazio(loaded.itensVazio.length > 0);
         resetDirty();
+
+        // Alinha a seleção ao id canônico para as próximas gravações.
+        const canonicalId = loaded.clienteId;
+        if (canonicalId && String(canonicalId) !== String(clienteId || '')) {
+          const canonicalNome = clienteNome || cliente?.nome || '';
+          const previousKey = clienteOptionKey(cliente);
+          setClientes((prev) => {
+            const without = prev.filter(
+              (c) =>
+                clienteOptionKey(c) !== previousKey &&
+                String(c.id) !== String(canonicalId) &&
+                String(c.nome || '').trim().toLowerCase() !==
+                  String(canonicalNome).trim().toLowerCase()
+            );
+            return [
+              ...without,
+              { id: canonicalId, nome: canonicalNome },
+            ].sort((a, b) =>
+              String(a.nome).localeCompare(String(b.nome), 'pt-BR', {
+                sensitivity: 'base',
+              })
+            );
+          });
+          setSelectedKey(String(canonicalId));
+        }
       } catch (err) {
         console.error('[ChecklistExpedicao] itens:', err);
         toast({
@@ -217,8 +245,8 @@ export default function ChecklistExpedicao() {
   );
 
   useEffect(() => {
-    loadItens(selected?.id);
-  }, [selected?.id, loadItens]);
+    loadItens(selected);
+  }, [selected?.id, selected?.nome, loadItens]);
 
   const selectClient = (option) => {
     const key = clienteOptionKey(option);
@@ -445,7 +473,8 @@ export default function ChecklistExpedicao() {
     : handleItensCheioChange;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Título, alertas SQL e card Cliente ficam fixos; o scroll começa na validade. */}
       <div className="shrink-0 space-y-4 bg-background pb-1">
         <div className="space-y-2">
           <ConfigBackLink />
@@ -606,7 +635,7 @@ export default function ChecklistExpedicao() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-4 pt-4 pr-1 pb-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain space-y-4 pt-4 pr-1 pb-4">
         {selected && !loadingItens && !isVazioTab ? (
           <ChecklistExpedicaoValidadeTestesConfig
             value={config}
@@ -616,7 +645,7 @@ export default function ChecklistExpedicao() {
           />
         ) : null}
 
-        <div>
+        <div className="min-h-0">
           {!selected ? (
             <div className="min-h-[16rem] bg-card rounded-xl border border-border shadow-sm flex flex-col items-center justify-center text-muted-foreground gap-2 p-8">
               <ClipboardCheck className="w-10 h-10 opacity-40" />

@@ -46,9 +46,16 @@ create trigger t_agendamentos_carregamento_set_updated_at
   before update on t_agendamentos_carregamento
   for each row execute function t_set_updated_at();
 
--- Um horário pode ter várias saídas; cada saída só pode estar em um horário ativo.
+-- Horário regular: 1 saída ativa por slot. Encaixe: várias saídas (uma por card).
+-- Cada saída só pode estar em um horário ativo.
 create index if not exists idx_t_agendamentos_slot
   on t_agendamentos_carregamento (data, horario);
+
+create unique index if not exists uq_t_agendamentos_slot_regular_ativo
+  on t_agendamentos_carregamento (data, horario)
+  where status = 'agendado'
+    and tipo = 'regular'
+    and horario is distinct from 'encaixe';
 
 create unique index if not exists uq_t_agendamentos_saida_ativa
   on t_agendamentos_carregamento (saida_id)
