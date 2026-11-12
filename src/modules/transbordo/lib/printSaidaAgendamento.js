@@ -382,7 +382,7 @@ export async function printSaidaAgendamento(
     itens.length === 0
       ? `<tr><td colspan="${REPORT_COL_COUNT}" class="empty">Nenhum produto nesta saída.</td></tr>`
       : itens
-          .map((item) => {
+          .map((item, i) => {
             const vasilhame = resolveVasilhameForReport(item, vasilhameById);
             const container = findById(containerDatas, item?.container_id);
             const embalagemSource = vasilhame || container;
@@ -394,7 +394,7 @@ export async function printSaidaAgendamento(
             });
             return `
       <tr>
-        <td class="code">${escapeHtml(saida.codigo || item.produto_codigo || '—')}</td>
+        <td class="code">${escapeHtml(String(i + 1).padStart(2, '0'))}</td>
         <td class="produto">${escapeHtml(item.produto_nome || '—')}</td>
         <td class="tipo">${escapeHtml(tipoItemLabelRelatorio(item, embalagemSource))}</td>
         <td class="info">${escapeHtml(formatRelatorioInformacoes(item, embalagemSource))}</td>
@@ -517,7 +517,7 @@ export async function printSaidaAgendamento(
     hyphens: auto;
     padding: 8px 6px;
   }
-  /* Larguras somam 100% — prioriza Código e Qtd. emb. nas bordas. */
+  /* Larguras somam 100% — prioriza Item e Qtd. emb. nas bordas. */
   th.col-code, td.code { width: 6%; }
   th.col-produto, td.produto { width: 18%; }
   th.col-tipo, td.tipo { width: 7%; }
@@ -614,7 +614,7 @@ export async function printSaidaAgendamento(
   <table>
     <thead>
       <tr>
-        <th class="col-code">Código</th>
+        <th class="col-code">Item</th>
         <th class="col-produto">Produto</th>
         <th class="col-tipo">Tipo</th>
         <th class="col-info">Informações</th>

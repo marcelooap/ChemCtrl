@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
-import { ArrowLeft, FileDown } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileDown } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Switch } from "@shared/components/ui/switch";
 import { Label } from "@shared/components/ui/label";
@@ -37,6 +37,13 @@ import {
   resolveItemOrigem,
   origemLabel,
 } from "@transbordo/lib/saidaOrigem";
+import {
+  applyEstoqueStatusWmsPatch,
+  ESTOQUE_STATUS_WMS_EVENT,
+  isSaidaItemWmsNok,
+  saidaTemItemWmsNok,
+  WMS_ALERT_TITLE,
+} from "@transbordo/lib/saidaStatusWms";
 
 const EMPTY = "—";
 
@@ -90,6 +97,7 @@ function gerarSaidaPDF(saida) {
 
     y = drawSectionTitle(doc, y, "Produtos");
     const headers = [
+      "Item",
       "Tipo",
       "Produto",
       "Lote",
@@ -101,7 +109,8 @@ function gerarSaidaPDF(saida) {
       "Est. Antes",
       "Est. Depois",
     ];
-    const rows = (saida.itens || []).map((item) => [
+    const rows = (saida.itens || []).map((item, i) => [
+      String(i + 1).padStart(2, "0"),
       tipoItemLabel(item),
       item.produto_nome || "—",
       item.lote || "—",
@@ -129,7 +138,7 @@ function gerarSaidaPDF(saida) {
     y = drawSoftTable(doc, y, {
       headers,
       rows,
-      widths: [20, 30, 18, 16, 16, 14, 18, 16, 18, 18],
+      widths: [12, 18, 28, 16, 14, 14, 12, 16, 14, 16, 16],
       fontSize: 6.5,
       headerSize: 5.8,
       lineH: 3.1,
@@ -192,14 +201,16 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
   const [updatingFiscal, setUpdatingFiscal] = useState(false);
   const [entradas, setEntradas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [transbordos, setTransbordos] = useState([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [s, ents, vascs] = await Promise.all([
+        const [s, ents, vascs, trans] = await Promise.all([
           entities.saidas.get(id),
           entities.estoque.list(),
           entities.vasilhames.list(),
+          entities.transbordos.list(),
         ]);
         let saidaRow = s;
         let vasRows = vascs;
@@ -219,6 +230,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           const volHealed = await healSaidaVolumesFromVasilhames({
             saidas: saidaRow ? [saidaRow] : [],
             vasilhames: vasRows,
+            transbordos: trans || [],
             entitiesApi: entities,
           });
           saidaRow =
@@ -243,6 +255,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
         setSaida(saidaRow);
         setEntradas(ents);
         setVasilhames(vasRows);
+        setTransbordos(trans || []);
       } catch {
         setSaida(null);
       }
@@ -250,6 +263,30 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
     };
     load();
   }, [id]);
+
+  useEffect(() => {
+    const onEstoqueStatusWms = (event) => {
+      const estoqueId = event?.detail?.id;
+      if (estoqueId == null) return;
+      const statusWms = !!event.detail.status_wms;
+      setEntradas((prev) =>
+        applyEstoqueStatusWmsPatch(prev, estoqueId, statusWms)
+      );
+    };
+    window.addEventListener(ESTOQUE_STATUS_WMS_EVENT, onEstoqueStatusWms);
+    return () =>
+      window.removeEventListener(ESTOQUE_STATUS_WMS_EVENT, onEstoqueStatusWms);
+  }, []);
+
+  const wmsCtx = useMemo(
+    () => ({
+      vasilhames,
+      transbordos,
+      estoque: entradas,
+    }),
+    [vasilhames, transbordos, entradas]
+  );
+  const hasWmsNok = saidaTemItemWmsNok(saida, wmsCtx);
 
   const handleFiscalToggle = async (checked) => {
     if (!saida?.id) return;
@@ -396,6 +433,18 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
         )}
       </div>
 
+      {hasWmsNok ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/30 dark:border-amber-900 px-4 py-3 flex items-start gap-2">
+          <AlertTriangle
+            className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5"
+            aria-hidden
+          />
+          <p className="text-xs text-amber-800 dark:text-amber-200">
+            {WMS_ALERT_TITLE}
+          </p>
+        </div>
+      ) : null}
+
       {/* Tabela de Produtos */}
       <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
@@ -407,6 +456,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
+                <th className="px-4 py-3 font-medium">Item</th>
                 <th className="px-4 py-3 font-medium">Tipo</th>
                 <th className="px-4 py-3 font-medium">Produto</th>
                 <th className="px-4 py-3 font-medium">Quantidade</th>
@@ -423,18 +473,25 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             <tbody>
               {(saida.itens || []).length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
                     Nenhum produto nesta saída.
                   </td>
                 </tr>
               ) : (
-                saida.itens.map((item, i) => (
+                saida.itens.map((item, i) => {
+                  const wmsNok = isSaidaItemWmsNok(item, wmsCtx);
+                  return (
                   <tr
                     key={i}
-                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
-                      i % 2 === 1 ? "bg-muted/40/30" : ""
+                    className={`border-b border-border last:border-0 transition-colors ${
+                      wmsNok
+                        ? "bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/60 dark:hover:bg-amber-950/30"
+                        : `hover:bg-muted/40 ${i % 2 === 1 ? "bg-muted/40/30" : ""}`
                     }`}
                   >
+                    <td className="px-4 py-3 font-medium text-primary whitespace-nowrap">
+                      {String(i + 1).padStart(2, "0")}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
                         <span
@@ -455,7 +512,18 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-foreground">{item.produto_nome || "—"}</td>
+                    <td className="px-4 py-3 text-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{item.produto_nome || "—"}</span>
+                        {wmsNok ? (
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-amber-600 shrink-0"
+                            title={WMS_ALERT_TITLE}
+                            aria-label={WMS_ALERT_TITLE}
+                          />
+                        ) : null}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 font-medium text-foreground">
                       {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
                         ? `${formatVolume(item.volume_solicitado, { empty: EMPTY })} L`
@@ -504,7 +572,8 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                         : `${formatVolume(item.saldo_final, { empty: EMPTY })} L`}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -97,4 +97,30 @@ export function invalidateTransbordoWorkspaceCache() {
   });
 }
 
+/**
+ * Atualiza um registro de estoque no snapshot em memória (ex.: Status WMS).
+ * Evita que a tela de Saída continue alertando NOK após marcar OK no Estoque,
+ * enquanto o TTL do cache ainda estiver válido.
+ */
+export function patchTransbordoWorkspaceEstoque(id, patch) {
+  if (id == null || !patch || typeof patch !== "object") {
+    queryClientInstance.invalidateQueries({
+      queryKey: TRANSBORDO_WORKSPACE_QUERY_KEY,
+    });
+    return;
+  }
+  if (cache.data?.estoque) {
+    const idStr = String(id);
+    cache.data = {
+      ...cache.data,
+      estoque: cache.data.estoque.map((row) =>
+        String(row?.id) === idStr ? { ...row, ...patch } : row
+      ),
+    };
+  }
+  queryClientInstance.invalidateQueries({
+    queryKey: TRANSBORDO_WORKSPACE_QUERY_KEY,
+  });
+}
+
 export const TRANSBORDO_WORKSPACE_QUERY_KEY = ['transbordo', 'workspace'];

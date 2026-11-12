@@ -1161,9 +1161,7 @@ export default function SaidaItemRow({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="text-sm font-semibold text-primary shrink-0">
-            {tanqueVazio
-              ? `Tanque Vazio ${String(index + 1).padStart(2, "0")}`
-              : `Produto ${String(index + 1).padStart(2, "0")}`}
+            {`Item ${String(index + 1).padStart(2, "0")}`}
           </span>
           <label
             className={`inline-flex items-center gap-2 shrink-0 text-xs font-medium ${

@@ -220,7 +220,7 @@ export function validarItensEmbalado({
     if (item.reserva_id && item.sem_reserva !== true) {
       const reserva = (reservas || []).find((r) => r.id === item.reserva_id && r.status === 'ativa');
       if (!reserva) {
-        throw new Error(`Produto ${index + 1}: a reserva selecionada não está mais ativa.`);
+        throw new Error(`Item ${index + 1}: a reserva selecionada não está mais ativa.`);
       }
       const usado = acumuladoReserva.get(reserva.id) || 0;
       const disp =
@@ -228,7 +228,7 @@ export function validarItensEmbalado({
       if (qtd > disp) {
         const nome = reserva.solicitante || reserva.cliente_nome || 'reserva';
         throw new Error(
-          `Produto ${index + 1}: a quantidade solicitada excede o saldo da reserva ${nome} (${formatQtyReserva(Math.max(disp, 0), unidade)}).`
+          `Item ${index + 1}: a quantidade solicitada excede o saldo da reserva ${nome} (${formatQtyReserva(Math.max(disp, 0), unidade)}).`
         );
       }
       acumuladoReserva.set(reserva.id, usado + qtd);
@@ -263,7 +263,7 @@ export function validarItensEmbalado({
     }) - usado;
     if (qtd > disp) {
       throw new Error(
-        `Produto ${index + 1}: a quantidade solicitada excede o saldo disponível para saída sem reserva (${formatQtyReserva(Math.max(disp, 0), unidade)}).`
+        `Item ${index + 1}: a quantidade solicitada excede o saldo disponível para saída sem reserva (${formatQtyReserva(Math.max(disp, 0), unidade)}).`
       );
     }
     acumuladoExc.set(chave, usado + qtd);

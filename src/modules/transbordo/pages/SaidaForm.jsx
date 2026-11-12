@@ -518,17 +518,17 @@ export default function SaidaForm({
       const origem = resolveItemOrigem(item);
 
       if (showOrigemSelector && !origem) {
-        setError(`Produto ${i + 1}: selecione o módulo (Industrialização ou Transbordo).`);
+        setError(`Item ${i + 1}: selecione o módulo (Industrialização ou Transbordo).`);
         return;
       }
 
       if (item.tipo === TIPO_EMBALADO) {
         if (!item.entrada_id) {
-          setError(`Produto ${i + 1}: selecione um produto e lote.`);
+          setError(`Item ${i + 1}: selecione um produto e lote.`);
           return;
         }
         if (!item.quantidade_solicitada || item.quantidade_solicitada <= 0) {
-          setError(`Produto ${i + 1}: informe a quantidade solicitada.`);
+          setError(`Item ${i + 1}: informe a quantidade solicitada.`);
           return;
         }
         const entradaRef = entradas.find((e) => e.id === item.entrada_id);
@@ -550,20 +550,20 @@ export default function SaidaForm({
               ? formatVolume
               : formatMass;
           setError(
-            `Produto ${i + 1}: quantidade solicitada maior que o saldo disponível (${fmt(available)} ${um}).`
+            `Item ${i + 1}: quantidade solicitada maior que o saldo disponível (${fmt(available)} ${um}).`
           );
           return;
         }
       } else if (item.tipo === TIPO_CONVENCIONAL) {
         if (!item.produto_id && !item.produto_nome) {
-          setError(`Produto ${i + 1}: selecione o produto.`);
+          setError(`Item ${i + 1}: selecione o produto.`);
           return;
         }
         if (!item.vasilhame_id) {
           setError(
             showOrigemSelector
-              ? `Produto ${i + 1}: selecione a embalagem.`
-              : `Produto ${i + 1}: selecione um vasilhame.`
+              ? `Item ${i + 1}: selecione a embalagem.`
+              : `Item ${i + 1}: selecione um vasilhame.`
           );
           return;
         }
@@ -571,17 +571,17 @@ export default function SaidaForm({
           isDestinoEmbalagemUnitaria(item.tipo_embalagem) &&
           !(Number(item.quantidade_embalagens) > 0)
         ) {
-          setError(`Produto ${i + 1}: informe a quantidade de embalagens.`);
+          setError(`Item ${i + 1}: informe a quantidade de embalagens.`);
           return;
         }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
-          setError(`Produto ${i + 1}: informe o volume solicitado.`);
+          setError(`Item ${i + 1}: informe o volume solicitado.`);
           return;
         }
         const available = getAvailableVolume(item.vasilhame_id, i);
         if (item.volume_solicitado > available) {
           setError(
-            `Produto ${i + 1}: volume solicitado maior que o disponível (${formatVolume(available)} L).`
+            `Item ${i + 1}: volume solicitado maior que o disponível (${formatVolume(available)} L).`
           );
           return;
         }
@@ -589,8 +589,8 @@ export default function SaidaForm({
         if (!item.container_id) {
           setError(
             showOrigemSelector
-              ? `Produto ${i + 1}: selecione a embalagem.`
-              : `Produto ${i + 1}: selecione um vasilhame da Industrialização.`
+              ? `Item ${i + 1}: selecione a embalagem.`
+              : `Item ${i + 1}: selecione um vasilhame da Industrialização.`
           );
           return;
         }
@@ -598,42 +598,42 @@ export default function SaidaForm({
           isUnitPackagingType(item.container_type) &&
           !(Number(item.quantidade_embalagens) > 0)
         ) {
-          setError(`Produto ${i + 1}: informe a quantidade de embalagens.`);
+          setError(`Item ${i + 1}: informe a quantidade de embalagens.`);
           return;
         }
         if (!item.volume_solicitado || item.volume_solicitado <= 0) {
-          setError(`Produto ${i + 1}: informe o volume solicitado.`);
+          setError(`Item ${i + 1}: informe o volume solicitado.`);
           return;
         }
         const available = getAvailableContainerVolume(item.container_id, i);
         if (item.volume_solicitado > available) {
           setError(
-            `Produto ${i + 1}: volume solicitado maior que o disponível (${formatVolume(available)} L).`
+            `Item ${i + 1}: volume solicitado maior que o disponível (${formatVolume(available)} L).`
           );
           return;
         }
       } else if (item.tipo === TIPO_IND_RETORNO_MP) {
         if (!item.stock_id && !item.movement_id) {
           setError(
-            `Produto ${i + 1}: selecione um retorno de MP não aplicada.`
+            `Item ${i + 1}: selecione um retorno de MP não aplicada.`
           );
           return;
         }
         if (!item.quantidade_solicitada || item.quantidade_solicitada <= 0) {
-          setError(`Produto ${i + 1}: informe a quantidade solicitada.`);
+          setError(`Item ${i + 1}: informe a quantidade solicitada.`);
           return;
         }
         if (item.stock_id && !item.movement_id) {
           const available = getAvailableStockSaldo(item.stock_id, i);
           if (item.quantidade_solicitada > available) {
             setError(
-              `Produto ${i + 1}: quantidade maior que o saldo disponível (${formatMass(available)} ${item.unidade || "kg"}).`
+              `Item ${i + 1}: quantidade maior que o saldo disponível (${formatMass(available)} ${item.unidade || "kg"}).`
             );
             return;
           }
         }
       } else {
-        setError(`Produto ${i + 1}: tipo inválido.`);
+        setError(`Item ${i + 1}: tipo inválido.`);
         return;
       }
     }

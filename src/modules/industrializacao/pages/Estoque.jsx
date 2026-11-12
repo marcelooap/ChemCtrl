@@ -47,6 +47,7 @@ import {
   listTankas,
   normalizeTankaRow,
 } from '@transbordo/lib/cadastroTankaCentral';
+import { invalidateTransbordoWorkspaceCache } from '@transbordo/services/transbordoWorkspace';
 
 const VIEW_TAB_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
@@ -436,6 +437,8 @@ export default function Estoque() {
     try {
       await base44.entities.RawMaterialStock.update(item.id, { status_wms: newValue });
       await upsertEntradaFromMp({ ...item, status_wms: newValue });
+      // Garante que a Saída (ChemFlow) deixe de alertar NOK após marcar OK.
+      invalidateTransbordoWorkspaceCache();
     } catch (err) {
       setItems((prev) =>
         prev.map((e) => (e.id === item.id ? { ...e, status_wms: item.status_wms } : e))

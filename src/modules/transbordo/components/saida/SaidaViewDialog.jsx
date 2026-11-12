@@ -23,6 +23,7 @@ import {
 } from "@shared/components/ui/alert-dialog";
 import { entities } from "@transbordo/services/entities";
 import {
+  AlertTriangle,
   Check,
   ClipboardList,
   Download,
@@ -67,6 +68,10 @@ import {
   aggregateUnitarioSaidaItens,
   isSaidaModuloPainel,
 } from "@transbordo/lib/saidaOrigem";
+import {
+  isSaidaItemWmsNok,
+  WMS_ALERT_TITLE,
+} from "@transbordo/lib/saidaStatusWms";
 import {
   findChecklistItemForSaidaLinha,
   isChecklistItemRealizado,
@@ -408,6 +413,20 @@ export default function SaidaViewDialog({
     [displayItens]
   );
 
+  const wmsCtx = useMemo(
+    () => ({
+      vasilhames,
+      transbordos,
+      estoque: entradas,
+    }),
+    [vasilhames, transbordos, entradas]
+  );
+
+  const hasWmsNok = useMemo(
+    () => displayItens.some((item) => isSaidaItemWmsNok(item, wmsCtx)),
+    [displayItens, wmsCtx]
+  );
+
   if (!saida) return null;
 
   const isAgendamento = variant === "agendamento";
@@ -664,7 +683,7 @@ export default function SaidaViewDialog({
       }}
     >
       <DialogContent
-        className={`max-h-[90vh] overflow-y-auto gap-4 ${showChecklistColumn ? "max-w-6xl" : "max-w-5xl"}`}
+        className="max-h-[90vh] overflow-y-auto overflow-x-hidden gap-4 w-[min(96vw,90rem)] max-w-[min(96vw,90rem)]"
       >
         <DialogHeader>
           <DialogTitle>
@@ -687,12 +706,24 @@ export default function SaidaViewDialog({
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-border overflow-x-auto">
-          <table className="w-full text-sm">
+        {hasWmsNok ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-950/30 dark:border-amber-900 px-3 py-2.5 flex items-start gap-2">
+            <AlertTriangle
+              className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5"
+              aria-hidden
+            />
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {WMS_ALERT_TITLE}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border border-border">
+          <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
                 {canSelectFiscal ? (
-                  <th className="pl-3 pr-1 py-2.5 w-10">
+                  <th className="pl-2 pr-1 py-2.5 w-9">
                     <SelectDot
                       checked={allSelected}
                       indeterminate={someSelected}
@@ -705,30 +736,30 @@ export default function SaidaViewDialog({
                     />
                   </th>
                 ) : null}
-                <th className="px-3 py-2.5 font-medium">Código</th>
-                <th className="px-3 py-2.5 font-medium">Produto</th>
-                <th className="px-3 py-2.5 font-medium">Tipo</th>
-                <th className="px-3 py-2.5 font-medium">Lote</th>
-                <th className="px-3 py-2.5 font-medium">Embalagem</th>
-                <th className="px-3 py-2.5 font-medium">Qtd. Solicitada</th>
-                <th className="px-3 py-2.5 font-medium">
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Item</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Produto</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Tipo</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Lote</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Embalagem</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">Qtd. Solicitada</th>
+                <th className="px-2 py-2.5 font-medium whitespace-nowrap">
                   {isAgendamento
                     ? t("painel.comercial.agendamentos.qtdEmbalagens")
                     : "Qtd. Final Estoque"}
                 </th>
                 {canDevalidarItem ? (
                   <>
-                    <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                    <th className="px-2 py-2.5 font-medium text-center whitespace-nowrap">
                       Status
                     </th>
-                    <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                    <th className="px-2 py-2.5 font-medium text-center whitespace-nowrap">
                       Desvalidar
                     </th>
                   </>
                 ) : null}
-                {isAgendamento ? <th className="px-3 py-2.5 w-10" /> : null}
+                {isAgendamento ? <th className="px-2 py-2.5 w-10" /> : null}
                 {showChecklistColumn ? (
-                  <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap">
+                  <th className="px-2 py-2.5 font-medium text-center whitespace-nowrap">
                     {t("painel.logistica.carregamentos.checklistColumn")}
                   </th>
                 ) : null}
@@ -759,15 +790,20 @@ export default function SaidaViewDialog({
                       ? findChecklistItemForSaidaLinha(checklistItems, saida, item, i)
                       : null;
                   const checklistPronto = isChecklistItemRealizado(checklistItem);
+                  const wmsNok = isSaidaItemWmsNok(item, wmsCtx);
                   return (
                   <tr
                     key={i}
                     className={`border-b border-border last:border-0 ${
-                      i % 2 === 1 ? "bg-muted/30" : ""
+                      wmsNok
+                        ? "bg-amber-50/40 dark:bg-amber-950/20"
+                        : i % 2 === 1
+                          ? "bg-muted/30"
+                          : ""
                     } ${isForeignModule ? "text-muted-foreground/80" : ""}`}
                   >
                     {canSelectFiscal ? (
-                      <td className="pl-3 pr-1 py-2.5">
+                      <td className="pl-2 pr-1 py-2.5">
                         {isForeignModule ? null : (
                           <SelectDot
                             checked={selected.has(i)}
@@ -777,15 +813,24 @@ export default function SaidaViewDialog({
                         )}
                       </td>
                     ) : null}
-                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                    <td className={`px-2 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-primary"
                     }`}>
-                      {saida.codigo || item.produto_codigo || "—"}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{String(i + 1).padStart(2, "0")}</span>
+                        {wmsNok ? (
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-amber-600 shrink-0"
+                            title={WMS_ALERT_TITLE}
+                            aria-label={WMS_ALERT_TITLE}
+                          />
+                        ) : null}
+                      </span>
                     </td>
-                    <td className={`px-3 py-2.5 ${
+                    <td className={`px-2 py-2.5 whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
-                      <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         {canSelectFiscal && itemJaValidado(item) ? (
                           <Check
                             className="w-3.5 h-3.5 shrink-0 text-emerald-600"
@@ -793,14 +838,14 @@ export default function SaidaViewDialog({
                             title="Histórico: item já foi validado anteriormente"
                           />
                         ) : null}
-                        <span>
+                        <span className="whitespace-nowrap">
                           {isTanqueVazioItem(item)
                             ? "Tanque Vazio"
                             : item.produto_nome || "—"}
                         </span>
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
+                    <td className="px-2 py-2.5 whitespace-nowrap">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadgeClass(item)} ${
                           isForeignModule ? "opacity-60" : ""
@@ -809,25 +854,25 @@ export default function SaidaViewDialog({
                         {tipoItemLabel(item)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                    <td className="px-2 py-2.5 text-muted-foreground whitespace-nowrap">
                       {formatSaidaItemLote(item, { vasilhame })}
                     </td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
+                    <td className="px-2 py-2.5 text-muted-foreground whitespace-nowrap">
                       {formatSaidaItemEmbalagem(item, { vasilhame })}
                     </td>
-                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                    <td className={`px-2 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
                       {qtdSolicitada(item)}
                     </td>
-                    <td className={`px-3 py-2.5 font-medium whitespace-nowrap ${
+                    <td className={`px-2 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
                       {isAgendamento ? formatQtdEmbalagens(item) : qtdFinalEstoque(item)}
                     </td>
                     {canDevalidarItem ? (
                       <>
-                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap">
                           {isForeignModule ? (
                             <span className="text-muted-foreground">—</span>
                           ) : (
@@ -842,17 +887,17 @@ export default function SaidaViewDialog({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap">
                           {!isForeignModule && itemFoiBaixado(item, saida) ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                              className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-60"
                               title="Remover validação deste item"
                               aria-label={`Desvalidar ${item.produto_nome || "item"}`}
                               disabled={devalidando}
                               onClick={() => setDevalidarItem(item)}
                             >
-                              <Undo2 className="w-3.5 h-3.5" />
+                              <Undo2 className="w-3.5 h-3.5 shrink-0" />
                               Desvalidar
                             </button>
                           ) : (

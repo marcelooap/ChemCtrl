@@ -39,6 +39,7 @@ import {
 import {
   invalidateTransbordoWorkspaceCache,
   loadTransbordoWorkspaceLists,
+  patchTransbordoWorkspaceEstoque,
   peekTransbordoWorkspaceLists,
 } from "@transbordo/services/transbordoWorkspace";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
@@ -47,6 +48,7 @@ import {
   isMateriaPrimaIndustrializacao,
 } from "@transbordo/lib/materiaPrimaIndustrializacao";
 import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
+import { ESTOQUE_STATUS_WMS_EVENT } from "@transbordo/lib/saidaStatusWms";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
@@ -538,6 +540,16 @@ export default function Estoque() {
     );
     try {
       await entities.estoque.update(item.id, { status_wms: newValue });
+      // Mantém o cache do workspace alinhado para a Saída remover o alerta NOK
+      // do item correspondente assim que o Status WMS for marcado como OK.
+      patchTransbordoWorkspaceEstoque(item.id, { status_wms: newValue });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent(ESTOQUE_STATUS_WMS_EVENT, {
+            detail: { id: item.id, status_wms: newValue },
+          })
+        );
+      }
     } catch {
       setEstoque((prev) =>
         prev.map((e) =>

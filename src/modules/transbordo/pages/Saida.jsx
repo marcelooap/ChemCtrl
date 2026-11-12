@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { entities } from '@transbordo/services/entities';
 import { useInternalAuth as useAuth } from '@/lib/InternalAuthContext';
-import { Plus, Search, Eye, Pencil, Trash2, RefreshCw, Truck } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, RefreshCw, Truck, AlertTriangle } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Checkbox } from "@shared/components/ui/checkbox";
@@ -35,6 +35,12 @@ import {
   syncEstoqueSaldos,
   resolveEstoqueIdsFromSaidaConvencional,
 } from "@transbordo/lib/estoqueSaldo";
+import {
+  applyEstoqueStatusWmsPatch,
+  ESTOQUE_STATUS_WMS_EVENT,
+  saidaTemItemWmsNok,
+  WMS_ALERT_TITLE,
+} from "@transbordo/lib/saidaStatusWms";
 import {
   saidaHasIndustrializacaoItems,
   saidaVisivelNoTransbordo,
@@ -321,6 +327,20 @@ export default function Saida({
     loadData();
   }, [onlyIndustrializacao, excludeChemflow, isExpedicao]);
 
+  // Quando o Status WMS muda no Estoque, remove/exibe o alerta NOK na lista
+  // sem esperar um reload completo (mesmo item vinculado).
+  useEffect(() => {
+    const onEstoqueStatusWms = (event) => {
+      const id = event?.detail?.id;
+      if (id == null) return;
+      const statusWms = !!event.detail.status_wms;
+      setEntradas((prev) => applyEstoqueStatusWmsPatch(prev, id, statusWms));
+    };
+    window.addEventListener(ESTOQUE_STATUS_WMS_EVENT, onEstoqueStatusWms);
+    return () =>
+      window.removeEventListener(ESTOQUE_STATUS_WMS_EVENT, onEstoqueStatusWms);
+  }, []);
+
   const saidasRevisionSeen = useRef(saidasRevision);
   useEffect(() => {
     if (!trackNewFromPainel) return;
@@ -345,6 +365,15 @@ export default function Saida({
     }
     return map;
   }, [vasilhames]);
+
+  const wmsCtx = useMemo(
+    () => ({
+      vasilhames,
+      transbordos,
+      estoque: entradas,
+    }),
+    [vasilhames, transbordos, entradas]
+  );
 
   const filtered = useMemo(() => {
     const rows = saidas.filter((s) => {
@@ -856,6 +885,7 @@ export default function Saida({
                     ? expedicaoStatus === "expedido"
                     : isValidated;
                   const isNova = trackNewFromPainel && isNew(s.id);
+                  const wmsNok = saidaTemItemWmsNok(s, wmsCtx);
                   const next = filtered[i + 1];
                   const isLastNova =
                     isNova &&
@@ -873,14 +903,23 @@ export default function Saida({
                               ? "border-b-2 border-primary/25"
                               : "border-b border-primary/10"
                           }`
-                        : `border-b border-border last:border-0 hover:bg-muted/40 ${
-                            i % 2 === 1 ? "bg-muted/40/30" : ""
-                          }`
+                        : wmsNok
+                          ? `border-b border-border last:border-0 bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/60 dark:hover:bg-amber-950/30`
+                          : `border-b border-border last:border-0 hover:bg-muted/40 ${
+                              i % 2 === 1 ? "bg-muted/40/30" : ""
+                            }`
                     }`}
                   >
                     <td className="px-5 py-3 font-medium text-primary">
                       <span className="inline-flex items-center gap-1.5">
                         {s.codigo || "-"}
+                        {wmsNok ? (
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-amber-600 shrink-0"
+                            title={WMS_ALERT_TITLE}
+                            aria-label={WMS_ALERT_TITLE}
+                          />
+                        ) : null}
                         {trackNewFromPainel && isNew(s.id) ? (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none bg-primary/10 text-primary">
                             Novo
