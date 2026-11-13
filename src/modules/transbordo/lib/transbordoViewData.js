@@ -21,6 +21,7 @@ import {
   expandOrigensForFifo,
 } from "@transbordo/lib/fifo";
 import { sameTanqueIdentity } from "@transbordo/lib/vasilhameComposicao";
+import { resolveDensidadeOperacional } from "@transbordo/lib/densidadeOperacional";
 
 const LABEL_ORIGEM_EMBALADO = "IBC / BOMBONA / TAMBOR";
 
@@ -167,36 +168,38 @@ function destinoVolumeEmMassa(destino, origens = [], densidade) {
 }
 
 function resolveDensidadeDisplay(transbordo, produtos = [], entradas = []) {
-  const dens = parseDensidade(transbordo?.densidade);
-  if (!dens || dens <= 0) return "-";
+  const dens = resolveDensidadeOperacional({
+    densidade: transbordo?.densidade,
+    produtos,
+    produto:
+      produtos.find((p) => p.id === transbordo?.produto_id) ||
+      produtos.find(
+        (p) =>
+          p.codigo &&
+          transbordo?.produto_codigo &&
+          String(p.codigo) === String(transbordo.produto_codigo)
+      ),
+    entradas,
+    origens: transbordo?.origens,
+  });
+  return dens > 0 ? formatDensidade(dens) : "-";
+}
 
-  const produto =
-    produtos.find((p) => p.id === transbordo?.produto_id) ||
-    produtos.find(
-      (p) =>
-        p.codigo &&
-        transbordo?.produto_codigo &&
-        String(p.codigo) === String(transbordo.produto_codigo)
-    );
-
-  if (produto?.densidade_tabelada) {
-    return formatDensidade(dens);
-  }
-
-  const entradaIds = new Set(
-    (transbordo?.origens || []).map((o) => o.entrada_id).filter(Boolean)
-  );
-  const densEntrada = entradas
-    .filter((e) => entradaIds.has(e.id))
-    .flatMap((e) => [e.densidade, ...(e.lotes || []).map((l) => l.densidade)])
-    .map((v) => parseDensidade(v))
-    .find((d) => d > 0);
-
-  if (densEntrada > 0) {
-    return formatDensidade(dens);
-  }
-
-  return "-";
+function resolveDensOperacao(transbordo, produtos = [], entradas = []) {
+  return resolveDensidadeOperacional({
+    densidade: transbordo?.densidade,
+    produtos,
+    produto:
+      produtos.find((p) => String(p.id) === String(transbordo?.produto_id)) ||
+      produtos.find(
+        (p) =>
+          p.codigo &&
+          transbordo?.produto_codigo &&
+          String(p.codigo) === String(transbordo.produto_codigo)
+      ),
+    entradas,
+    origens: transbordo?.origens,
+  });
 }
 
 function isDestinoTanquePatio(tipo) {
@@ -288,8 +291,11 @@ function alignSlicesToVolume(slices, volume) {
 
 function massaDestino(destino, volume, densidade, isMassa) {
   if (isMassa) return destino?.peso_liquido ?? volume;
-  if (destino?.peso_liquido != null) return destino.peso_liquido;
-  if (densidade > 0) return (volume || 0) * densidade;
+  const vol = Number(volume) || 0;
+  const dens = parseDensidade(densidade);
+  if (vol > 0 && dens > 0) return vol * dens;
+  const stored = Number(destino?.peso_liquido);
+  if (Number.isFinite(stored) && stored > 0) return stored;
   return null;
 }
 
@@ -340,24 +346,31 @@ function buildDestinoLinhas(destino, composicao, densidade, isMassa) {
   }));
 }
 
-function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome }) {
+function buildOrigemRows(
+  transbordo,
+  { isotanques, entradas, produtoNome, densOperacao }
+) {
+  const dens = densOperacao > 0 ? densOperacao : parseDensidade(transbordo?.densidade);
   const rows = [];
   for (const o of transbordo?.origens || []) {
     const origem = labelOrigemLinha(o, isotanques, entradas);
     const lotes = (o.lotes_retirados || []).filter((l) => (l.volume_retirado || 0) > 0);
     const produto = origemProdutoNome(o, produtoNome);
-    const origemEmMassa = origemVolumeEmMassa(o, transbordo?.densidade);
-    const dens = parseDensidade(transbordo?.densidade);
+    const origemEmMassa = origemVolumeEmMassa(o, dens);
 
     if (lotes.length > 1) {
       for (const l of lotes) {
         const vol = l.volume_retirado || 0;
-        const massa = origemEmMassa ? vol : dens > 0 ? vol * dens : o.massa_retirada;
+        const massa = origemEmMassa
+          ? vol
+          : dens > 0
+            ? vol * dens
+            : o.massa_retirada;
         rows.push({
           origem,
           produto,
           lote: l.lote || "-",
-          volume: volumeLitrosDisplay(vol, transbordo?.densidade, origemEmMassa),
+          volume: volumeLitrosDisplay(vol, dens, origemEmMassa),
           massa: formatMass(massa, { empty: "-" }),
         });
       }
@@ -365,22 +378,29 @@ function buildOrigemRows(transbordo, { isotanques, entradas, produtoNome }) {
     }
 
     const vol = o.volume_retirado || 0;
-    const massa = origemEmMassa ? (o.massa_retirada ?? vol) : o.massa_retirada;
+    const massa = origemEmMassa
+      ? (o.massa_retirada ?? vol)
+      : dens > 0
+        ? vol * dens
+        : o.massa_retirada;
     rows.push({
       origem,
       produto,
       lote: o.lote || "-",
-      volume: volumeLitrosDisplay(vol, transbordo?.densidade, origemEmMassa),
+      volume: volumeLitrosDisplay(vol, dens, origemEmMassa),
       massa: formatMass(massa, { empty: "-" }),
     });
   }
   return rows;
 }
 
-function buildDestinoRows(transbordo, { vasilhames }) {
+function buildDestinoRows(transbordo, { vasilhames, densOperacao: densResolved }) {
   const origens = transbordo?.origens || [];
   const destinos = transbordo?.destinos || [];
-  const densOperacao = parseDensidade(transbordo?.densidade);
+  const densOperacao =
+    densResolved > 0
+      ? densResolved
+      : parseDensidade(transbordo?.densidade);
   const destinoCompositions = calculateFIFOAllocation(
     expandOrigensForFifo(origens, densOperacao),
     destinos,
@@ -447,13 +467,17 @@ export function buildTransbordoViewModel({
   const destinos = transbordo.destinos || [];
   const formatQtyOperacional = (valor) =>
     isMassa ? formatMass(valor, { empty: "-" }) : formatVolume(valor, { empty: "-" });
+  const densOperacao = resolveDensOperacao(transbordo, produtos, entradas);
   const totaisResolvidos = resolveVolumeMassaOperacional({
     volume: isVolume ? transbordo.volume_total : 0,
+    // Força L×dens quando a dens operacional veio da entrada (massa zerada/errada no OP).
     massa:
-      transbordo.massa_total ??
-      (isMassa ? transbordo.volume_total : 0) ??
-      0,
-    densidade: transbordo.densidade,
+      densOperacao > 0 && isVolume
+        ? 0
+        : transbordo.massa_total ??
+          (isMassa ? transbordo.volume_total : 0) ??
+          0,
+    densidade: densOperacao || transbordo.densidade,
   });
 
   const codigo = String(transbordo.codigo_transbordo || "").trim();
@@ -477,15 +501,19 @@ export function buildTransbordoViewModel({
       isotanques,
       entradas,
       produtoNome,
+      densOperacao,
     }),
-    destinoRows: buildDestinoRows(transbordo, { vasilhames }),
+    destinoRows: buildDestinoRows(transbordo, {
+      vasilhames,
+      densOperacao,
+    }),
     // Granel: volume_total já é L. Embalado em massa: converter a partir da massa.
     volumeTotal: isVolume
       ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
       : isMassa
         ? volumeLitrosDisplay(
             transbordo.massa_total ?? transbordo.volume_total,
-            transbordo.densidade,
+            densOperacao || transbordo.densidade,
             true
           )
         : totaisResolvidos.volume > 0

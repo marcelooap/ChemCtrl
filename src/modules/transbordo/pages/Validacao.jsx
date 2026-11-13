@@ -26,12 +26,11 @@ import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { entities } from "@transbordo/services/entities";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
-import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
+import ValidacaoOrdemEnvaseEditor from "@painel/components/operacional/ValidacaoOrdemEnvaseEditor";
 import {
   atualizarValidacaoTransbordoPayload,
-  buildEditingTransbordoFromValidacao,
   efetivarValidacao,
   excluirValidacao,
   resumoQuantidadeValidacao,
@@ -174,6 +173,7 @@ export default function Validacao() {
 
   const [viewOpen, setViewOpen] = useState(false);
   const [viewValidacao, setViewValidacao] = useState(null);
+  const [viewSaving, setViewSaving] = useState(false);
 
   const [editValidacao, setEditValidacao] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -277,15 +277,84 @@ export default function Validacao() {
     setEditModalOpen(true);
   };
 
+  const syncViewAfterUpdate = (updated, id) => {
+    if (!viewOpen) return;
+    if (viewValidacao?.id === id && updated) {
+      setViewValidacao(updated);
+    }
+  };
+
+  const handleSaveCamposView = async ({
+    header,
+    granelPayload,
+    transbordoPayload,
+    openEnvase = false,
+    deferPersist = false,
+  }) => {
+    if (!viewValidacao?.id) return;
+
+    // Alteração de pesagem/volume: abre envase sem gravar. Cancelar = descarta.
+    if (deferPersist && openEnvase) {
+      const pending = {
+        ...viewValidacao,
+        ...(header?.quantidade != null ? { quantidade: header.quantidade } : {}),
+        ...(header?.unidade_medida
+          ? { unidade_medida: header.unidade_medida }
+          : {}),
+        ...(header?.lote != null ? { lote: header.lote } : {}),
+        granel_payload: granelPayload ?? viewValidacao.granel_payload,
+        transbordo_payload: transbordoPayload ?? viewValidacao.transbordo_payload,
+      };
+      setEditValidacao(pending);
+      setEditSaveError("");
+      setEditModalOpen(true);
+      return;
+    }
+
+    setViewSaving(true);
+    try {
+      const updated = await atualizarValidacaoTransbordoPayload({
+        id: viewValidacao.id,
+        header: header || null,
+        granelPayload,
+        transbordoPayload,
+      });
+      await loadData({ silent: true });
+      setViewValidacao(updated);
+      if (openEnvase) {
+        setEditValidacao(updated);
+        setEditSaveError("");
+        setEditModalOpen(true);
+      }
+      toast({
+        title: t("transbordo.validacao.editSuccessTitle"),
+        description: t("transbordo.validacao.editSuccessDescription"),
+      });
+    } catch (err) {
+      console.error("[Validacao] save campos view:", err);
+      throw err;
+    } finally {
+      setViewSaving(false);
+    }
+  };
+
+  const handleEditTransbordoFromView = () => {
+    if (!viewValidacao || viewValidacao.status !== "pendente") return;
+    setEditValidacao(viewValidacao);
+    setEditSaveError("");
+    setEditModalOpen(true);
+  };
+
   const handleSaveEditEntrada = async (entradaPayload) => {
     if (!editValidacao) return;
     setEditSaveError("");
     try {
-      await atualizarValidacaoTransbordoPayload({
+      const updated = await atualizarValidacaoTransbordoPayload({
         id: editValidacao.id,
         granelPayload: entradaPayload,
       });
       await loadData({ silent: true });
+      syncViewAfterUpdate(updated, editValidacao.id);
       setEditModalOpen(false);
       setEditValidacao(null);
       toast({
@@ -298,42 +367,44 @@ export default function Validacao() {
     }
   };
 
-  const handleSaveEdit = async (transbordoPayload) => {
+  const handleSaveEdit = async (transbordoPayload, granelFromEditor = null) => {
     if (!editValidacao) return;
     setEditSaveError("");
     try {
-      // Sincroniza dados de cabeçalho no granel_payload (se existir), preservando
-      // dados específicos do recebimento (NF, ticket, peso).
-      const nextGranel = editValidacao.granel_payload
-        ? {
-            ...editValidacao.granel_payload,
-            data: transbordoPayload.data || editValidacao.granel_payload.data,
-            cliente_id:
-              transbordoPayload.cliente_id ||
-              editValidacao.granel_payload.cliente_id,
-            cliente_nome:
-              transbordoPayload.cliente_nome ||
-              editValidacao.granel_payload.cliente_nome,
-            produto_id:
-              transbordoPayload.produto_id ||
-              editValidacao.granel_payload.produto_id,
-            produto_nome:
-              transbordoPayload.produto_nome ||
-              editValidacao.granel_payload.produto_nome,
-            produto_codigo:
-              transbordoPayload.produto_codigo ||
-              editValidacao.granel_payload.produto_codigo,
-            densidade:
-              transbordoPayload.densidade ||
-              editValidacao.granel_payload.densidade,
-          }
-        : null;
-      await atualizarValidacaoTransbordoPayload({
+      // Preferência: payload editado no diálogo "Editar ordem"; senão sincroniza cabeçalho.
+      const nextGranel = granelFromEditor
+        ? granelFromEditor
+        : editValidacao.granel_payload
+          ? {
+              ...editValidacao.granel_payload,
+              data: transbordoPayload.data || editValidacao.granel_payload.data,
+              cliente_id:
+                transbordoPayload.cliente_id ||
+                editValidacao.granel_payload.cliente_id,
+              cliente_nome:
+                transbordoPayload.cliente_nome ||
+                editValidacao.granel_payload.cliente_nome,
+              produto_id:
+                transbordoPayload.produto_id ||
+                editValidacao.granel_payload.produto_id,
+              produto_nome:
+                transbordoPayload.produto_nome ||
+                editValidacao.granel_payload.produto_nome,
+              produto_codigo:
+                transbordoPayload.produto_codigo ||
+                editValidacao.granel_payload.produto_codigo,
+              densidade:
+                transbordoPayload.densidade ||
+                editValidacao.granel_payload.densidade,
+            }
+          : null;
+      const updated = await atualizarValidacaoTransbordoPayload({
         id: editValidacao.id,
         transbordoPayload,
         granelPayload: nextGranel,
       });
       await loadData({ silent: true });
+      syncViewAfterUpdate(updated, editValidacao.id);
       setEditModalOpen(false);
       setEditValidacao(null);
       toast({
@@ -439,37 +510,45 @@ export default function Validacao() {
       {/* Table */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="overflow-auto flex-1 min-h-0">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1080px] table-fixed text-sm">
+            <colgroup>
+              <col className="w-[72px]" />
+              <col className="w-[12%]" />
+              <col className="w-[9%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
+              <col className="w-[9%]" />
+              <col className="w-[11%]" />
+              <col className="w-[110px]" />
+              <col className="w-[168px]" />
+            </colgroup>
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.id")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.operador")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.origem", { defaultValue: "Origem" })}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.produto")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.cliente")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.lote")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0 text-right">
+                <th className="px-3 py-3 font-medium whitespace-nowrap text-right">
                   {t("transbordo.validacao.table.quantidade")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("transbordo.validacao.table.unidade")}
-                </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("transbordo.validacao.table.validar")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap sticky right-0 bg-muted/40 z-20 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
                   {t("transbordo.validacao.table.acoes")}
                 </th>
               </tr>
@@ -478,7 +557,7 @@ export default function Validacao() {
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-5 py-10 text-center text-muted-foreground"
                   >
                     {t("transbordo.validacao.empty")}
@@ -492,14 +571,18 @@ export default function Validacao() {
                   const isPendente = v.status === "pendente";
                   const qtd = resumoQuantidadeValidacao(v);
                   const origemBadges = resolveOrigemBadge(v, t);
+                  const qtdLabel = qtd.quantidade
+                    ? `${formatNum(Number(qtd.quantidade), 2)}${
+                        qtd.unidade_medida ? ` ${qtd.unidade_medida}` : ""
+                      }`
+                    : "-";
+                  const rowBg = i % 2 === 1 ? "bg-muted/20" : "bg-card";
                   return (
                     <tr
                       key={v.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
-                        i % 2 === 1 ? "bg-muted/40/30" : ""
-                      }`}
+                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors group ${rowBg}`}
                     >
-                      <td className="px-4 py-3 align-middle font-semibold text-primary whitespace-nowrap">
+                      <td className="px-3 py-3 align-middle font-semibold text-primary whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
                           #{formatNumero(v.numero)}
                           {isNew(v.id) ? (
@@ -509,21 +592,21 @@ export default function Validacao() {
                           ) : null}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground whitespace-nowrap">
+                      <td className="px-3 py-3 align-middle text-foreground">
                         <span
-                          className="block truncate max-w-[200px]"
+                          className="block truncate"
                           title={v.criado_por_nome || ""}
                         >
                           {v.criado_por_nome || "-"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <td className="px-3 py-3 align-middle">
                         {origemBadges.length > 0 ? (
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1">
                             {origemBadges.map((b) => (
                               <span
                                 key={b.key}
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${b.badgeClass}`}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${b.badgeClass}`}
                               >
                                 {b.label}
                               </span>
@@ -533,28 +616,37 @@ export default function Validacao() {
                           <span className="text-foreground/50">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground">
-                        <span className="block truncate max-w-[280px]" title={produtoLabel}>
+                      <td className="px-3 py-3 align-middle text-foreground">
+                        <span className="block truncate" title={produtoLabel}>
                           {produtoLabel}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
-                        {v.cliente_nome || "-"}
+                      <td className="px-3 py-3 align-middle text-muted-foreground">
+                        <span
+                          className="block truncate"
+                          title={v.cliente_nome || ""}
+                        >
+                          {v.cliente_nome || "-"}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground whitespace-nowrap">
-                        {v.lote || "-"}
+                      <td className="px-3 py-3 align-middle text-foreground">
+                        <span className="block truncate" title={v.lote || ""}>
+                          {v.lote || "-"}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground font-medium whitespace-nowrap text-right">
-                        {qtd.quantidade ? formatNum(Number(qtd.quantidade), 2) : "-"}
+                      <td
+                        className="px-3 py-3 align-middle text-foreground font-medium whitespace-nowrap text-right tabular-nums"
+                        title={qtdLabel}
+                      >
+                        {qtdLabel}
                       </td>
-                      <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
-                        {qtd.unidade_medida || "-"}
-                      </td>
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-3 py-3 align-middle">
                         <StatusPill status={v.status} t={t} />
                       </td>
-                      <td className="px-4 py-3 align-middle">
-                        <div className="flex items-center gap-1 whitespace-nowrap">
+                      <td
+                        className={`px-3 py-3 align-middle sticky right-0 z-10 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)] ${rowBg} group-hover:bg-muted/40`}
+                      >
+                        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                           <Can permission={`${PERM}.view`}>
                             <RowActionButton
                               onClick={() => handleView(v)}
@@ -627,7 +719,7 @@ export default function Validacao() {
         </div>
       </div>
 
-      {/* View Dialog */}
+      {/* View Dialog — edição inline Resumo/Recebimento; Transbordo abre envase */}
       <ValidacaoViewDialog
         open={viewOpen}
         onClose={() => {
@@ -637,9 +729,13 @@ export default function Validacao() {
         validacao={viewValidacao}
         produtos={produtos}
         entradas={entradas}
+        canEdit
+        saving={viewSaving}
+        onSaveCampos={handleSaveCamposView}
+        onEditTransbordo={handleEditTransbordoFromView}
       />
 
-      {/* Edit modal — recebimento usa EntradaModal; transbordo usa TransbordoModal */}
+      {/* Edit — recebimento: EntradaModal; ordem/transbordo: mesmo modal de envase da Ordem */}
       {editValidacao?.tipo === "entrada" ? (
         <EntradaModal
           open={editModalOpen}
@@ -660,23 +756,20 @@ export default function Validacao() {
           submitLabel={t("transbordo.validacao.actions.edit")}
         />
       ) : (
-      <TransbordoModal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setEditValidacao(null);
-          setEditSaveError("");
-        }}
-        onSave={handleSaveEdit}
-        editingTransbordo={buildEditingTransbordoFromValidacao(editValidacao)}
-        clientes={clientes}
-        produtos={produtos}
-        entradas={entradas}
-        isotanques={isotanques}
-        vasilhames={vasilhames}
-        transbordos={transbordos}
-        externalError={editSaveError}
-      />
+        <ValidacaoOrdemEnvaseEditor
+          open={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditValidacao(null);
+            setEditSaveError("");
+          }}
+          onSave={handleSaveEdit}
+          validacao={editValidacao}
+          isotanques={isotanques}
+          vasilhames={vasilhames}
+          transbordos={transbordos}
+          externalError={editSaveError}
+        />
       )}
 
       {/* Delete Confirmation */}

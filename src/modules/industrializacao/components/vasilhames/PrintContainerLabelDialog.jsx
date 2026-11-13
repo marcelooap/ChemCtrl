@@ -187,13 +187,12 @@ export default function PrintContainerLabelDialog({
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
   const embalagem = formatLabelEmbalagem(container);
   const dateOverride = containerLabelDateOverride(container);
+  // Fabricação só com data explícita — nunca usa data de recebimento/created_date.
   const fabDate =
-    contexto === 'convencional'
-      ? dateOverride?.manufactureDate || manufactureDate || null
-      : dateOverride?.manufactureDate ||
-        manufactureDate ||
-        production?.end_time ||
-        container?.created_date;
+    dateOverride?.manufactureDate ||
+    manufactureDate ||
+    (contexto === 'industrializacao' ? production?.end_time || null : null) ||
+    null;
   const labelExpiry = dateOverride?.expiryDate || expiryDate || calcValidityDate(fabDate, meta?.validityDays);
   const volumePlaceholder = suggestLabelVolumePlaceholder(
     container?.type || container?.tipo || stripAggregatedQtyPrefix(container?.container_number || container?.placa || ''),

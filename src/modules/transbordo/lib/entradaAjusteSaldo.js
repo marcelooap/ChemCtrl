@@ -31,6 +31,7 @@ import { entities } from "@transbordo/services/entities";
 import { allocateTransbordoCodigo } from "@transbordo/lib/allocateBusinessCodes";
 import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import { matchesTanka } from "@transbordo/lib/tankaVolume";
+import { syncSaidaVolumeDoVasilhame } from "@transbordo/lib/cascadeEntradaUpdate";
 
 export const AJUSTE_ENTRADA_CODIGO = "AJUSTE-ENTRADA";
 const TOLERANCIA_ALOCACAO = 0.05;
@@ -570,6 +571,17 @@ export async function persistAjustePatioAlocacoes({
     if (patch) {
       await entities.vasilhames.update(patch.id, patch);
       updated += 1;
+      try {
+        await syncSaidaVolumeDoVasilhame(v.id, { ...v, ...patch }, {
+          transbordos,
+          previousVolume: volumeItemPatio(v),
+        });
+      } catch (err) {
+        console.error(
+          "[Transbordo] Falha ao sincronizar saídas/checklist após ajuste de pátio:",
+          err
+        );
+      }
     }
   }
 

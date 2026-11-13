@@ -494,7 +494,6 @@ export function generateRelatorioEstoquePDF({
   estoqueCodigo,
   destinosList = [],
   historicoTransbordos = [],
-  saidasHistorico = [],
 }) {
   if (!item) return;
 
@@ -542,7 +541,6 @@ export function generateRelatorioEstoquePDF({
     y,
     [
       ["Tipo", getTipoRecebimentoLabel(resolveTipoRecebimentoEstoque(item))],
-      ["Status WMS", item.status_wms ? "OK" : "NOK"],
       [
         "Origem",
         item.origem === "industrializacao" || item.origem === "MATERIA_PRIMA"
@@ -627,28 +625,39 @@ export function generateRelatorioEstoquePDF({
     0
   );
 
+  const fmtSaida = (d) => d.saidaLabel || "-";
+  const fmtQtdSaida = (d) => {
+    const q = Number(d.saidaQuantidade) || 0;
+    if (q <= 0) return "-";
+    return `${fmtNum(q, 0)} ${d.saidaUnidade || ""}`.trim();
+  };
+
   y = ensureSpace(doc, y, 36);
   y = addSectionTitle(doc, y, "Destinos (Transbordo)");
   y = addTable(
     doc,
     y,
-    ["TRANSBORDO", "DATA", "DESTINO", "TIPO", "VOLUME (L)", "PESO LÍQ."],
+    ["TRANSBORDO", "DATA", "DESTINO", "TIPO", "SAÍDA", "VOLUME (L)", "QTD. SAÍDA", "PESO LÍQ."],
     destinosList.map((d) => [
       d.codigo || "-",
       fmtDate(d.data),
       d.destino || "-",
       d.tipo || "-",
+      fmtSaida(d),
       fmtVolume(roundVolume(d.volume || 0)),
+      fmtQtdSaida(d),
       fmtNum(roundMass(d.pesoLiq || 0), 0),
     ]),
-    [30, 24, 42, 28, 30, 28],
+    [24, 20, 30, 22, 28, 22, 24, 22],
     destinosList.length > 0
       ? [
           "TOTAL",
           "",
           "",
           "",
+          "",
           `${fmtVolume(roundVolume(totalVol))} L`,
+          "",
           `${fmtNum(roundMass(totalMass), 0)} kg`,
         ]
       : null
@@ -668,17 +677,19 @@ export function generateRelatorioEstoquePDF({
   y = addTable(
     doc,
     y,
-    ["TRANSBORDO", "DATA", "ORIGEM", "DESTINO", "TIPO", "VOLUME (L)", "PESO LÍQ."],
+    ["TRANSBORDO", "DATA", "ORIGEM", "DESTINO", "TIPO", "SAÍDA", "VOLUME (L)", "QTD. SAÍDA", "PESO LÍQ."],
     historicoTransbordos.map((d) => [
       d.codigo || "-",
       fmtDate(d.data),
       d.origem || "-",
       d.destino || "-",
       d.tipo || "-",
+      fmtSaida(d),
       fmtVolume(roundVolume(d.volume || 0)),
+      fmtQtdSaida(d),
       fmtNum(roundMass(d.pesoLiq || 0), 0),
     ]),
-    [26, 20, 32, 32, 24, 24, 24],
+    [22, 18, 24, 24, 20, 26, 20, 22, 20],
     historicoTransbordos.length > 0
       ? [
           "TOTAL",
@@ -686,28 +697,12 @@ export function generateRelatorioEstoquePDF({
           "",
           "",
           "",
+          "",
           `${fmtVolume(roundVolume(totalVolHist))} L`,
+          "",
           `${fmtNum(roundMass(totalMassHist), 0)} kg`,
         ]
       : null
-  );
-
-  y = ensureSpace(doc, y, 36);
-  y = addSectionTitle(doc, y, "Histórico de Saídas");
-  y = addTable(
-    doc,
-    y,
-    ["SAÍDA", "DATA", "TIPO", "QUANTIDADE", "STATUS", "RESPONSÁVEL"],
-    saidasHistorico.map((s) => [
-      s.codigo || "-",
-      fmtDate(s.data),
-      s.tipo || "-",
-      `${fmtNum(s.quantidade, 0)} ${s.unidade || ""}`.trim(),
-      s.status || "-",
-      s.responsavel || "-",
-    ]),
-    [28, 26, 26, 32, 36, 34],
-    null
   );
 
   addFooter(doc);

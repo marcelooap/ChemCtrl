@@ -3,6 +3,7 @@ import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import {
   alignSaidaItemVolumeToVasilhame,
   getDominantLote,
+  refreshSaidaItemMassaFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
 import { parseDensidade } from "@transbordo/lib/format";
 import {
@@ -17,6 +18,10 @@ import {
   calculateFIFOAllocation,
   expandOrigensForFifo,
 } from "@transbordo/lib/fifo";
+import {
+  parseStoredChecklist,
+  patchChecklistItemFromSaidaLinha,
+} from "@painel/lib/carregamentoChecklistConfig";
 
 /**
  * Mantém a entrada como fonte mandatória de identidade (lote, NF, produto, etc.).
@@ -711,8 +716,77 @@ export async function syncSaidaLoteDoVasilhame(vasilhameId, oldLote, newLote) {
 }
 
 /**
- * Propaga volume editado no vasilhame para saídas abertas desse tanque
- * (solicitação de saída / validação). Não altera saídas já enviadas ao fiscal.
+ * Atualiza quantidade / peso líquido / volume nos snapshots de checklist
+ * das saídas afetadas (agendamentos com checklist_respostas).
+ */
+async function syncChecklistMetricsForSaidaUpdates(saidaUpdates, vasilhame) {
+  if (!saidaUpdates?.length) return;
+  const bySaidaId = new Map(
+    saidaUpdates.map((u) => [String(u.id), u])
+  );
+  let bookings = [];
+  try {
+    bookings = (await entities.agendamentosCarregamento.list()) || [];
+  } catch (err) {
+    console.error(
+      "[Transbordo] Falha ao listar agendamentos para sync do checklist:",
+      err
+    );
+    return;
+  }
+
+  const bookingUpdates = [];
+  for (const booking of bookings) {
+    const update = bySaidaId.get(String(booking?.saida_id || ""));
+    if (!update) continue;
+    const parsed = parseStoredChecklist(booking.checklist_respostas);
+    if (!parsed.items?.length) continue;
+
+    const linhaByVasilhame = new Map();
+    for (const linha of update.itens || []) {
+      if (linha?.vasilhame_id) {
+        linhaByVasilhame.set(String(linha.vasilhame_id), linha);
+      }
+    }
+
+    let changed = false;
+    const items = parsed.items.map((it) => {
+      const linha = it?.vasilhame_id
+        ? linhaByVasilhame.get(String(it.vasilhame_id))
+        : null;
+      if (!linha) return it;
+      const next = patchChecklistItemFromSaidaLinha(it, linha, vasilhame);
+      if (
+        next.quantidade !== it.quantidade ||
+        Number(next.peso_liquido) !== Number(it.peso_liquido) ||
+        Number(next.volume_solicitado) !== Number(it.volume_solicitado) ||
+        Number(next.peso_bruto) !== Number(it.peso_bruto)
+      ) {
+        changed = true;
+      }
+      return next;
+    });
+    if (!changed) continue;
+
+    bookingUpdates.push({
+      id: booking.id,
+      checklist_respostas: {
+        ...parsed,
+        version: 2,
+        items,
+        saved_at: new Date().toISOString(),
+      },
+    });
+  }
+
+  if (bookingUpdates.length > 0) {
+    await entities.agendamentosCarregamento.bulkUpdate(bookingUpdates);
+  }
+}
+
+/**
+ * Propaga volume/peso editado no vasilhame para saídas abertas desse tanque
+ * (solicitação de saída / checklist). Não altera saídas já enviadas ao fiscal.
  */
 export async function syncSaidaVolumeDoVasilhame(
   vasilhameId,
@@ -729,12 +803,13 @@ export async function syncSaidaVolumeDoVasilhame(
     const itens = (saida.itens || []).map((item) => {
       if (String(item?.vasilhame_id || "") !== String(vasilhameId)) return item;
       if (!isSaidaVasilhameItem(item)) return item;
-      const next = alignSaidaItemVolumeToVasilhame(
+      let next = alignSaidaItemVolumeToVasilhame(
         item,
         vasilhame,
         transbordos,
         alignOpts
       );
+      next = refreshSaidaItemMassaFromVasilhame(next, vasilhame, transbordos);
       if (next !== item) changed = true;
       return next;
     });
@@ -745,7 +820,16 @@ export async function syncSaidaVolumeDoVasilhame(
     });
     updates.push({ id: saida.id, itens, quantidade_total });
   }
-  if (updates.length > 0) await entities.saidas.bulkUpdate(updates);
+  if (updates.length === 0) return;
+  await entities.saidas.bulkUpdate(updates);
+  try {
+    await syncChecklistMetricsForSaidaUpdates(updates, vasilhame);
+  } catch (err) {
+    console.error(
+      "[Transbordo] Falha ao sincronizar checklist após ajuste de volume:",
+      err
+    );
+  }
 }
 
 export async function healLinkedLotes({

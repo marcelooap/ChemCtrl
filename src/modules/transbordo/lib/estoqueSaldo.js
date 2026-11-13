@@ -516,18 +516,32 @@ function origemMatchesEmbalagemKeys(origem, keys, vasilhames = []) {
   return false;
 }
 
+/** Extrai só o código da origem (ex.: "TANKA 04"), sem produto/volume. */
+function stripOrigemCodigoLimpo(codigo) {
+  const raw = String(codigo || "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+  if (!raw) return "";
+  const sep = raw.indexOf(" - ");
+  if (sep > 0) return raw.slice(0, sep).trim();
+  return raw;
+}
+
 function labelOrigemTransbordo(origem, vasilhames = []) {
   if (!origem) return "—";
-  if (origem.entrada_codigo) return origem.entrada_codigo;
   const tipo = origem.tipo_origem || "";
   if (tipo === "tanka") {
-    return origem.tanka_codigo || "Tanka";
+    if (origem.tanka_codigo) return String(origem.tanka_codigo).trim();
+    return stripOrigemCodigoLimpo(origem.entrada_codigo) || "Tanka";
   }
   if (tipo === "vasilhame" && origem.entrada_id) {
     const v = getVasilhameIndex(vasilhames).byId.get(origem.entrada_id);
     if (v) {
       return [v.placa, v.barril].filter(Boolean).join(" / ") || v.codigo || "Vasilhame";
     }
+  }
+  if (origem.entrada_codigo) {
+    return stripOrigemCodigoLimpo(origem.entrada_codigo) || origem.entrada_codigo;
   }
   return tipo || "—";
 }
@@ -1590,12 +1604,25 @@ export function listSaidasHistoricoForEstoque(
               "—"
             }`;
 
+      const vasilhameRef = item.vasilhame_id
+        ? vasilhameById.get(item.vasilhame_id)
+        : null;
+
       rows.push({
         key: `${saida.id}-${idx}`,
         codigo: saida.codigo || "—",
         data: saida.data_solicitacao || saida.created_at,
         tipo: item.tipo || "—",
         vasilhame: vasilhameLabel,
+        vasilhame_id: item.vasilhame_id || null,
+        placa:
+          item.vasilhame_placa ||
+          vasilhameRef?.placa ||
+          "",
+        barril:
+          item.vasilhame_barril ||
+          vasilhameRef?.barril ||
+          "",
         quantidade,
         unidade,
         status: isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)

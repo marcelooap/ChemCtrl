@@ -72,6 +72,10 @@ import {
   syncSaidaVolumeDoVasilhame,
 } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
+  healVasilhameDensidadeMassaPatch,
+  resolveDensidadeVasilhame,
+} from "@transbordo/lib/densidadeOperacional";
+import {
   isDestinoEmbalagemUnitaria,
   isVasilhameLegadoEmbalado,
   getQuantidadeEmbalagensFromVasilhame,
@@ -191,15 +195,32 @@ function resolveVasilhameData(vasilhame, transbordos = []) {
   return fromComp || vasilhame.created_at || vasilhame.created_date || null;
 }
 
-function renderVolumeQuantidadeCells(vasilhame, medida, transbordos = []) {
+function renderVolumeQuantidadeCells(
+  vasilhame,
+  medida,
+  transbordos = [],
+  { produtos = [], entradas = [] } = {}
+) {
+  const densOperacional = resolveDensidadeVasilhame({
+    vasilhame,
+    produtos,
+    entradas,
+    transbordos,
+  });
   const operacional = resolveVasilhameOperacionalPar(vasilhame, {
     transbordos,
-    densidade: vasilhame?.densidade,
+    densidade: densOperacional || vasilhame?.densidade,
   });
+  const dens = densOperacional || operacional.densidade || vasilhame?.densidade;
+  const volOp = Number(operacional.volume) || 0;
+  const massaOp =
+    parseDensidade(dens) > 0 && volOp > 0
+      ? roundMass(volOp * parseDensidade(dens))
+      : Number(operacional.massa) || 0;
   const vDisplay = {
     ...vasilhame,
-    volume: operacional.volume,
-    peso_liquido: operacional.massa,
+    volume: volOp,
+    peso_liquido: massaOp,
   };
 
   // Fracionado é o destino parcial do tanque (TB), mesmo com mais de um lote na composição.
@@ -215,7 +236,7 @@ function renderVolumeQuantidadeCells(vasilhame, medida, transbordos = []) {
   const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
-  const densidade = operacional.densidade || vasilhame?.densidade;
+  const densidade = dens;
 
   if (isEmbalado && !umIsVolume) {
     const massKg =
@@ -268,10 +289,10 @@ function renderVolumeQuantidadeCells(vasilhame, medida, transbordos = []) {
     };
   }
 
-  // Granel: volume em L + quantidade em kg
+  // Granel: volume em L + quantidade em kg (L×dens da entrada quando disponível)
   const resolved = resolveVolumeMassaOperacional({
     volume: Number(vDisplay.volume) || 0,
-    massa: Number(vDisplay.peso_liquido) || 0,
+    massa: parseDensidade(densidade) > 0 ? 0 : Number(vDisplay.peso_liquido) || 0,
     densidade,
   });
   return {
@@ -450,14 +471,32 @@ export default function Vasilhames() {
           ...(patchPlaca || {}),
           ...(patchKgL || {}),
         };
-        const patchKgDens =
-          repairComposicaoKgFromDensidadePatch(afterStructural);
+        const densCtx = {
+          produtos: prods,
+          entradas: [...(volumes.estoque || []), ...(ents || [])],
+          transbordos: volumes.transbordos,
+        };
+        // Densidade da entrada do lote (ex.: 0,7908) prevalece sobre dens do produto no OP.
+        const patchEntradaDens = healVasilhameDensidadeMassaPatch(
+          afterStructural,
+          densCtx
+        );
+        const afterDens = {
+          ...afterStructural,
+          ...(patchEntradaDens || {}),
+        };
+        const patchKgDens = repairComposicaoKgFromDensidadePatch(afterDens);
         const patch =
-          patchDestinos || patchPlaca || patchKgL || patchKgDens
+          patchDestinos ||
+          patchPlaca ||
+          patchKgL ||
+          patchEntradaDens ||
+          patchKgDens
             ? {
                 ...(patchDestinos || {}),
                 ...(patchPlaca || {}),
                 ...(patchKgL || {}),
+                ...(patchEntradaDens || {}),
                 ...(patchKgDens || {}),
               }
             : null;
@@ -477,6 +516,19 @@ export default function Vasilhames() {
               codigo: row.codigo,
               transbordo_id: row.transbordo_id,
             });
+          }
+          if (patchEntradaDens) {
+            try {
+              await syncSaidaVolumeDoVasilhame(row.id, row, {
+                transbordos: volumes.transbordos,
+                previousVolume: source.volume,
+              });
+            } catch (syncErr) {
+              console.error(
+                "[Transbordo] Falha ao sincronizar saídas após heal de densidade:",
+                syncErr
+              );
+            }
           }
           list.push(row);
         } catch (err) {
@@ -1062,7 +1114,11 @@ export default function Vasilhames() {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }
       }
-      if (volumeChanged) {
+      const pesoChanged =
+        roundMass(saved.peso_liquido ?? 0) !==
+        roundMass(editingVasilhame.peso_liquido ?? 0);
+      const metricsChanged = volumeChanged || densChanged || pesoChanged;
+      if (metricsChanged) {
         try {
           await syncSaidaVolumeDoVasilhame(editingVasilhame.id, saved, {
             transbordos,
@@ -1070,7 +1126,7 @@ export default function Vasilhames() {
           });
         } catch (err) {
           console.error(
-            "[Transbordo] Falha ao atualizar volume nas saídas:",
+            "[Transbordo] Falha ao atualizar volume/peso nas saídas e checklist:",
             err
           );
         }
@@ -1435,7 +1491,11 @@ export default function Vasilhames() {
                         transbordos,
                       }),
                       medida,
-                      transbordos
+                      transbordos,
+                      {
+                        produtos,
+                        entradas: [...estoqueById.values()],
+                      }
                     );
                   return (
                     <tr

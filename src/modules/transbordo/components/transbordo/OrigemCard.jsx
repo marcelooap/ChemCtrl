@@ -15,6 +15,7 @@ import NumberInputBr from "@transbordo/components/NumberInputBr";
 import {
   formatVolume,
   formatMass,
+  parseDensidade,
   roundVolume,
   roundMass,
 } from "@transbordo/lib/format";
@@ -91,6 +92,7 @@ export default function OrigemCard({
   embaladoOptions = [],
   densidade,
   onChange,
+  onDensidadeResolved,
   onRemove,
   readOnly,
   collapsed = false,
@@ -200,15 +202,24 @@ export default function OrigemCard({
       // Preserva UOM do estoque (kg/lb) para persistência; saldo da opção já vem em L.
       const unid = item.unidade_medida || (emb ? "kg" : "L");
       const saldo = item.saldo_atual || 0;
-      const semDens = emb && !(Number(densidade) > 0);
+      const densHint =
+        parseDensidade(item.densidade) ||
+        parseDensidade(item.lotes?.[0]?.densidade) ||
+        parseDensidade(item.lotes_disponiveis?.[0]?.densidade) ||
+        0;
+      const densEfetiva = densHint > 0 ? densHint : Number(densidade) || 0;
+      const semDens = emb && !(densEfetiva > 0);
       const saldoOp = semDens
         ? 0
-        : unid === "kg" && !emb && densidade > 0
-          ? saldoKgToLitros(saldo, densidade, item)
+        : unid === "kg" && !emb && densEfetiva > 0
+          ? saldoKgToLitros(saldo, densEfetiva, item)
           : roundVolume(saldo);
       const lotes = item.lotes_disponiveis || [];
       const multi = lotes.length > 1;
       const lotesRet = multi ? buildLotesRetirados(lotes) : undefined;
+      if (densHint > 0 && typeof onDensidadeResolved === "function") {
+        onDensidadeResolved(densHint);
+      }
       onChange({
         ...origem,
         entrada_id: item.id,

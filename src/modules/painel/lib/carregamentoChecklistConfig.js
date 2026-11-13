@@ -14,7 +14,13 @@ import {
   tipoItemLabel,
   isTanqueVazioItem,
 } from '@transbordo/lib/saidaOrigem';
-import { formatMass, formatVolume } from '@transbordo/lib/format';
+import {
+  formatMass,
+  formatVolume,
+  parseDensidade,
+  roundMass,
+  roundVolume,
+} from '@transbordo/lib/format';
 import { resolveVasilhameLoteDatas } from '@transbordo/lib/vasilhameComposicao';
 import {
   calcularDataLimiteTestes,
@@ -269,6 +275,53 @@ function formatQtdItem(item) {
   return `${isVol ? formatVolume(qtd) : formatMass(qtd)} ${item.unidade || 'kg'}`;
 }
 
+/**
+ * Peso líquido exibido no checklist: prioriza o peso atual do tanque
+ * (após ajuste de volume) para não ficar com snapshot desatualizado da saída.
+ */
+export function resolveChecklistPesoLiquido(linha, vasilhame) {
+  const vol = roundVolume(linha?.volume_solicitado || 0);
+  const tankVol = roundVolume(vasilhame?.volume || 0);
+  const tankKg = roundMass(vasilhame?.peso_liquido || 0);
+
+  // Tanque cheio / volume alinhado: peso do vasilhame é a fonte da verdade.
+  if (vol > 0 && tankVol > 0 && tankKg > 0 && Math.abs(vol - tankVol) <= 1) {
+    return tankKg;
+  }
+
+  const dens =
+    parseDensidade(vasilhame?.densidade) || parseDensidade(linha?.densidade);
+  if (vol > 0 && dens > 0) return roundMass(vol * dens);
+
+  if (vol > 0 && tankVol > 0 && tankKg > 0) {
+    return roundMass((tankKg * vol) / tankVol);
+  }
+
+  const fromLinha = Number(linha?.peso_liquido);
+  if (Number.isFinite(fromLinha) && fromLinha > 0) return fromLinha;
+  if (tankKg > 0) return tankKg;
+  return linha?.peso_liquido ?? vasilhame?.peso_liquido ?? null;
+}
+
+/** Atualiza campos de exibição do item de checklist a partir da linha da saída. */
+export function patchChecklistItemFromSaidaLinha(item, linha, vasilhame) {
+  if (!item || !linha || item.tanque_vazio) return item;
+  const peso_liquido = resolveChecklistPesoLiquido(linha, vasilhame);
+  const volume_solicitado =
+    linha.volume_solicitado ?? item.volume_solicitado ?? null;
+  return {
+    ...item,
+    quantidade: formatQtdItem({
+      ...linha,
+      volume_solicitado,
+      tipo: linha.tipo || item.tipo,
+    }),
+    peso_liquido,
+    peso_bruto: linha.peso_bruto ?? vasilhame?.peso_bruto ?? item.peso_bruto,
+    volume_solicitado,
+  };
+}
+
 function tanqueLabel(item, vasilhame, index) {
   const placa =
     item?.vasilhame_placa ||
@@ -505,7 +558,7 @@ export function buildChecklistItemsFromSaidas({
           : linha.vasilhame_barril || vasilhame?.barril || '',
         peso_liquido: isTanqueVazio
           ? null
-          : linha.peso_liquido ?? vasilhame?.peso_liquido ?? null,
+          : resolveChecklistPesoLiquido(linha, vasilhame),
         peso_bruto: isTanqueVazio
           ? null
           : linha.peso_bruto ?? vasilhame?.peso_bruto ?? null,

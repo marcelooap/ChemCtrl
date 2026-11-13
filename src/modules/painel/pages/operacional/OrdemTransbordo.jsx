@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowRight, CheckCircle, Clock, Plus, Printer } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle, Clock, Eye, Plus, Printer, Trash2 } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
@@ -13,22 +13,35 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { UNIDADES } from "@transbordo/components/entrada/LoteBlock";
-import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import { entities } from "@transbordo/services/entities";
 import { base44 } from "@industrializacao/api/base44Client";
 import {
-  buildGranelPrefillFromPayload,
+  atualizarValidacaoTransbordoPayload,
   criarValidacao,
   resumoQuantidadeValidacao,
 } from "@transbordo/lib/validacaoTransbordo";
-import { criarValidacaoIndustrializacao } from "@industrializacao/lib/validacaoIndustrializacao";
+import {
+  atualizarValidacaoIndustrializacao,
+  criarValidacaoIndustrializacao,
+} from "@industrializacao/lib/validacaoIndustrializacao";
 import OperadorOrdemAuthDialog from "@painel/components/operacional/OperadorOrdemAuthDialog";
+import OrdemTransbordoEnvaseModal from "@painel/components/operacional/OrdemTransbordoEnvaseModal";
+import ValidacaoOrdemEnvaseEditor from "@painel/components/operacional/ValidacaoOrdemEnvaseEditor";
+import ValidacaoViewDialog, {
+  normalizeValidacaoView,
+} from "@transbordo/components/validacao/ValidacaoViewDialog";
 import {
   applyPesoLiquidoForaMargem,
   getLoteQuantidadeDeclarada,
   loteToKg,
 } from "@transbordo/lib/conversao";
-import { formatMass, formatNum, parseDensidade } from "@transbordo/lib/format";
+import {
+  formatMass,
+  formatNum,
+  formatVolume,
+  parseDensidade,
+  roundVolume,
+} from "@transbordo/lib/format";
 import {
   buildMpProdutos,
   buildPaProdutos,
@@ -43,6 +56,16 @@ import {
 } from "@painel/lib/recebimentoCatalog";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
+import {
+  buildTankaDetalhe,
+  computeTankaLotesDisponiveis,
+  computeTankaSaldo,
+} from "@transbordo/lib/tankaVolume";
+import { matchesProdutoOperacional } from "@transbordo/lib/produtoMatch";
+import {
+  aggregateComposicaoByLote,
+  seedComposicaoFromVasilhame,
+} from "@transbordo/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
 const PERM = "painel_operacional_ordem_transbordo";
@@ -77,6 +100,65 @@ function emptyGranel() {
   };
 }
 
+function createTankaItemId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `tanka_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function emptyTankaItem() {
+  return {
+    key: createTankaItemId(),
+    tankaId: "",
+    tankaCodigo: "",
+    lote: "",
+    quantidade: "",
+  };
+}
+
+function emptyVasilhameItem() {
+  return {
+    key: createTankaItemId(),
+    vasilhameId: "",
+    placa: "",
+    barril: "",
+    lote: "",
+    quantidade: "",
+    lotes: [],
+  };
+}
+
+function formatLotesLabel(lotes = []) {
+  const names = (lotes || [])
+    .map((l) => String(l.lote || "").trim())
+    .filter(Boolean);
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  return names.join(" / ");
+}
+
+/** Distribui quantidade editada nos lotes do tanque em ordem FIFO. */
+function allocateQtyToLotes(lotes = [], qty) {
+  let remaining = roundVolume(qty);
+  const out = [];
+  for (const l of lotes || []) {
+    if (!(remaining > 0)) break;
+    const disp = roundVolume(l.quantidade_l || 0);
+    if (!(disp > 0)) continue;
+    const take = roundVolume(Math.min(remaining, disp));
+    if (take > 0) {
+      out.push({
+        lote: l.lote || "",
+        volume_retirado: take,
+        saldo_disponivel: disp,
+      });
+      remaining = roundVolume(remaining - take);
+    }
+  }
+  return out;
+}
+
 /** IDs sintéticos da Industrialização não cabem em FK uuid do Transbordo. */
 function transbordoFkId(id) {
   if (!id || String(id).startsWith("ind-")) return "";
@@ -90,23 +172,26 @@ function isOrdemTransbordoTipo(tipo) {
 function mergeOrdemPendentes(valsTb, valsInd) {
   const convencionais = (valsTb || [])
     .filter((v) => v.status === "pendente" && isOrdemTransbordoTipo(v.tipo))
-    .map((v) => ({
-      ...v,
-      destino: "convencional",
-      granel_payload: v.granel_payload,
-      transbordo_payload: v.transbordo_payload,
-      sortAt: v.created_at || v.data || "",
-    }));
+    .map((v) => {
+      const normalized = normalizeValidacaoView({
+        ...v,
+        destino: "convencional",
+        sortAt: v.created_at || v.data || "",
+      });
+      return normalized;
+    });
 
   const industriais = (valsInd || [])
     .filter((v) => v.status === "pendente" && isOrdemTransbordoTipo(v.tipo))
-    .map((v) => ({
-      ...v,
-      destino: "industrializacao",
-      granel_payload: v.entrada_payload || v.granel_payload,
-      transbordo_payload: v.transbordo_payload,
-      sortAt: v.created_date || v.created_at || v.data || "",
-    }));
+    .map((v) => {
+      const normalized = normalizeValidacaoView({
+        ...v,
+        destino: "industrializacao",
+        granel_payload: v.entrada_payload || v.granel_payload,
+        sortAt: v.created_date || v.created_at || v.data || "",
+      });
+      return normalized;
+    });
 
   return [...convencionais, ...industriais].sort((a, b) =>
     String(b.sortAt).localeCompare(String(a.sortAt))
@@ -142,14 +227,57 @@ export default function OrdemTransbordo() {
   const moduloValidacaoRef = useRef("convencional");
   const [origemTipo, setOrigemTipo] = useState("");
   const [granel, setGranel] = useState(emptyGranel);
+  const [tankaItens, setTankaItens] = useState(() => [emptyTankaItem()]);
+  const [vasilhameItens, setVasilhameItens] = useState(() => [
+    emptyVasilhameItem(),
+  ]);
   const [formError, setFormError] = useState("");
   const [goingToTransbordo, setGoingToTransbordo] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [envaseModalOpen, setEnvaseModalOpen] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [prefillEntrada, setPrefillEntrada] = useState(null);
-  const [headerPrefill, setHeaderPrefill] = useState(null);
-  const [prefillOrigemTipo, setPrefillOrigemTipo] = useState("");
+  const [viewValidacao, setViewValidacao] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewSaving, setViewSaving] = useState(false);
+  const [editViewOpen, setEditViewOpen] = useState(false);
+  const [editViewValidacao, setEditViewValidacao] = useState(null);
+  const [editViewError, setEditViewError] = useState("");
+
+  const clearTankaSelection = () => {
+    setTankaItens([emptyTankaItem()]);
+  };
+
+  const clearVasilhameSelection = () => {
+    setVasilhameItens([emptyVasilhameItem()]);
+  };
+
+  const clearOperacaoOrigens = () => {
+    clearTankaSelection();
+    clearVasilhameSelection();
+  };
+
+  const syncGranelFromOrigemItens = (itens, densOverride) => {
+    const list = itens || [];
+    const total = roundVolume(
+      list.reduce((s, it) => s + (Number(it.quantidade) || 0), 0)
+    );
+    const lotesLabel = list
+      .map((it) => String(it.lote || "").trim())
+      .filter(Boolean)
+      .join(" / ");
+    setGranel((prev) => ({
+      ...prev,
+      unidade: "L",
+      quantidade: total > 0 ? total : "",
+      lote: lotesLabel,
+      ...(densOverride != null && densOverride !== ""
+        ? { densidade: densOverride }
+        : {}),
+    }));
+  };
+
+  const syncGranelFromTankaItens = (itens, densOverride) =>
+    syncGranelFromOrigemItens(itens, densOverride);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -302,7 +430,7 @@ export default function OrdemTransbordo() {
       : produtoNome;
 
   useEffect(() => {
-    if (modalOpen) return;
+    if (envaseModalOpen) return;
     if (produtoId && produtosDoCliente.length > 0) {
       const exists = produtosDoCliente.some((p) => p.id === produtoId);
       if (!exists) {
@@ -314,12 +442,10 @@ export default function OrdemTransbordo() {
         setGranel((prev) => ({ ...prev, densidade: "" }));
       }
     }
-  }, [produtosDoCliente, produtoId, modalOpen]);
+  }, [produtosDoCliente, produtoId, envaseModalOpen]);
 
-  // Prioriza o valor do formulário (populado a partir do produto no
-  // handleProdutoChange). Fallback: densidade cadastrada no produto.
-  // Assim, L/gal são sempre convertidos p/ kg quando há densidade — mesmo
-  // padrão da tela Entradas do módulo Transbordo.
+  // Densidade tabelada/cadastrada preenche o formulário; senão o operador
+  // informa no campo. Fallback no cadastro do produto se o campo estiver vazio.
   const headerDensidade =
     parseDensidade(granel.densidade) ||
     parseDensidade(produtoSelecionado?.densidade);
@@ -349,13 +475,23 @@ export default function OrdemTransbordo() {
     setProdutoCodigo("");
     setProdutoFonte("");
     moduloValidacaoRef.current = "convencional";
-    setGranel((prev) => ({ ...prev, densidade: "" }));
+    clearOperacaoOrigens();
+    setGranel((prev) => ({
+      ...prev,
+      densidade: "",
+      lote: "",
+      quantidade: "",
+      ...(origemTipo === "tanka" || origemTipo === "vasilhame"
+        ? { unidade: "L" }
+        : {}),
+    }));
     setFormError("");
   };
 
   const handleProdutoChange = (_label, item) => {
     const nextId = item?.id || "";
     const nextFonte = item?.fonte || "";
+    const densCadastro = item?.densidade || "";
     setProdutoId(nextId);
     setProdutoNome(item?.produto || item?.nome || "");
     setProdutoCodigo(item?.codigo || "");
@@ -366,9 +502,16 @@ export default function OrdemTransbordo() {
     })
       ? "industrializacao"
       : "convencional";
+    clearOperacaoOrigens();
     setGranel((prev) => ({
       ...prev,
-      densidade: item?.densidade_tabelada ? item.densidade || "" : "",
+      // Cadastro do produto (tabelada ou não). Sem cadastro, origem preenche depois.
+      densidade: densCadastro || "",
+      lote: "",
+      quantidade: "",
+      ...(origemTipo === "tanka" || origemTipo === "vasilhame"
+        ? { unidade: "L" }
+        : {}),
     }));
     setFormError("");
   };
@@ -383,7 +526,11 @@ export default function OrdemTransbordo() {
     setProdutoCodigo("");
     setProdutoFonte("");
     moduloValidacaoRef.current = "convencional";
-    setGranel((prev) => ({ ...prev, densidade: "" }));
+    clearOperacaoOrigens();
+    setGranel({
+      ...emptyGranel(),
+      ...(next === "tanka" || next === "vasilhame" ? { unidade: "L" } : {}),
+    });
     if (crossesGranel) {
       setClienteId("");
       setClienteNome("");
@@ -396,21 +543,362 @@ export default function OrdemTransbordo() {
     setFormError("");
   };
 
-  const buildHeaderPrefill = () => ({
-    data: dataOp,
-    cliente_id: transbordoFkId(clienteId),
-    cliente_nome: clienteNome,
-    produto_id: transbordoFkId(produtoId),
-    produto_nome: produtoNome,
-    produto_codigo: produtoCodigo,
-    densidade: headerDensidade || granel.densidade,
-  });
-
   const validateHeader = () => {
     if (!dataOp) return t("painel.operacional.ordemTransbordo.errors.date");
     if (!origemTipo) return t("painel.operacional.ordemTransbordo.errors.origin");
     if (!clienteNome) return t("painel.operacional.ordemTransbordo.errors.client");
     if (!produtoId) return t("painel.operacional.ordemTransbordo.errors.product");
+    return "";
+  };
+
+  const tankasComSaldo = useMemo(() => {
+    if (origemTipo !== "tanka" || !produtoId) return [];
+    const produtoCtx = {
+      produtoId,
+      produtoNome,
+      produtoCodigo,
+      clienteId,
+      clienteNome,
+    };
+    return (isotanques || [])
+      .filter((i) => matchesProdutoOperacional(i, produtoCtx))
+      .map((i) => {
+        const codigo = i.nome || i.tanka || i.codigo_itku || "";
+        const saldo = computeTankaSaldo({
+          isotanqueId: i.id,
+          tankaCodigo: codigo,
+          transbordos,
+        });
+        const lotes = computeTankaLotesDisponiveis({
+          isotanqueId: i.id,
+          tankaCodigo: codigo,
+          transbordos,
+        });
+        const detalhe = buildTankaDetalhe({
+          isotanque: i,
+          transbordos,
+        });
+        return {
+          ...i,
+          tankaCodigo: codigo,
+          saldo_atual: saldo,
+          lotes_disponiveis: lotes,
+          densidade_entrada:
+            parseDensidade(detalhe?.densidade) ||
+            parseDensidade(i.densidade) ||
+            0,
+          display_label: `${codigo} - ${formatVolume(saldo)} - L`,
+        };
+      })
+      .filter((i) => roundVolume(i.saldo_atual || 0) > 0)
+      .sort((a, b) =>
+        String(a.tankaCodigo).localeCompare(String(b.tankaCodigo), "pt-BR", {
+          sensitivity: "base",
+        })
+      );
+  }, [
+    origemTipo,
+    produtoId,
+    produtoNome,
+    produtoCodigo,
+    clienteId,
+    clienteNome,
+    isotanques,
+    transbordos,
+  ]);
+
+  const applyDensidadeFromSources = (tankaRow = null) => {
+    const densProduto = parseDensidade(produtoSelecionado?.densidade);
+    if (densProduto > 0) return densProduto;
+    const densForm = parseDensidade(granel.densidade);
+    if (densForm > 0) return densForm;
+    return (
+      parseDensidade(tankaRow?.densidade_entrada) ||
+      parseDensidade(tankaRow?.densidade) ||
+      0
+    );
+  };
+
+  const tankaOptionsForItem = (itemIndex) =>
+    tankasComSaldo.map((tanka) => {
+      const usedElse = tankaItens.reduce((s, it, i) => {
+        if (i === itemIndex) return s;
+        if (it.tankaId !== tanka.id) return s;
+        return s + (Number(it.quantidade) || 0);
+      }, 0);
+      const saldoDisp = roundVolume((tanka.saldo_atual || 0) - usedElse);
+      return {
+        ...tanka,
+        saldo_disponivel_item: saldoDisp,
+        display_label: `${tanka.tankaCodigo} - ${formatVolume(Math.max(0, saldoDisp))} - L`,
+      };
+    }).filter((t) => t.id === tankaItens[itemIndex]?.tankaId || t.saldo_disponivel_item > 0);
+
+  const lotesOptionsForItem = (itemIndex) => {
+    const item = tankaItens[itemIndex];
+    if (!item?.tankaId) return [];
+    const tanka = tankasComSaldo.find((t) => t.id === item.tankaId);
+    if (!tanka) return [];
+    return (tanka.lotes_disponiveis || [])
+      .map((l) => {
+        const usedElse = tankaItens.reduce((s, it, i) => {
+          if (i === itemIndex) return s;
+          if (it.tankaId !== item.tankaId) return s;
+          if (String(it.lote || "") !== String(l.lote || "")) return s;
+          return s + (Number(it.quantidade) || 0);
+        }, 0);
+        const qtdDisp = roundVolume((l.quantidade_l || 0) - usedElse);
+        return {
+          ...l,
+          quantidade_l: qtdDisp,
+          display_label: `${l.lote || "—"} - ${formatVolume(Math.max(0, qtdDisp))} - L`,
+        };
+      })
+      .filter(
+        (l) =>
+          l.quantidade_l > 0 ||
+          String(l.lote || "") === String(item.lote || "")
+      );
+  };
+
+  const patchTankaItem = (idx, patch, densOverride) => {
+    setTankaItens((prev) => {
+      const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+      syncGranelFromTankaItens(next, densOverride);
+      return next;
+    });
+    setFormError("");
+  };
+
+  const handleTankaItemChange = (idx, _label, tankaRow) => {
+    const nextId = tankaRow?.id || "";
+    const nextCodigo = tankaRow?.tankaCodigo || tankaRow?.nome || "";
+    const lotes = tankaRow?.lotes_disponiveis || [];
+    const dens = applyDensidadeFromSources(tankaRow);
+    const densVal = dens > 0 ? dens : undefined;
+    if (lotes.length === 1) {
+      const only = lotes[0];
+      // Desconta o que outras linhas já usaram deste lote.
+      const usedElse = tankaItens.reduce((s, it, i) => {
+        if (i === idx) return s;
+        if (it.tankaId !== nextId) return s;
+        if (String(it.lote || "") !== String(only.lote || "")) return s;
+        return s + (Number(it.quantidade) || 0);
+      }, 0);
+      const qtdDisp = roundVolume((only.quantidade_l || 0) - usedElse);
+      patchTankaItem(
+        idx,
+        {
+          tankaId: nextId,
+          tankaCodigo: nextCodigo,
+          lote: only.lote || "",
+          quantidade: qtdDisp > 0 ? qtdDisp : "",
+        },
+        densVal
+      );
+    } else {
+      patchTankaItem(
+        idx,
+        {
+          tankaId: nextId,
+          tankaCodigo: nextCodigo,
+          lote: "",
+          quantidade: "",
+        },
+        densVal
+      );
+    }
+  };
+
+  const handleTankaLoteChange = (idx, _label, loteRow) => {
+    const loteVal = loteRow?.lote || "";
+    const qtdL = roundVolume(loteRow?.quantidade_l || 0);
+    patchTankaItem(idx, {
+      lote: loteVal,
+      quantidade: qtdL > 0 ? qtdL : "",
+    });
+  };
+
+  const addTankaItem = () => {
+    setTankaItens((prev) => [...prev, emptyTankaItem()]);
+    setFormError("");
+  };
+
+  const removeTankaItem = (idx) => {
+    setTankaItens((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, i) => i !== idx);
+      syncGranelFromTankaItens(next);
+      return next;
+    });
+    setFormError("");
+  };
+
+  const vasilhamesNoPatio = useMemo(() => {
+    if (origemTipo !== "vasilhame" || !produtoId) return [];
+    const produtoCtx = {
+      produtoId,
+      produtoNome,
+      produtoCodigo,
+      clienteId,
+      clienteNome,
+    };
+    return (vasilhames || [])
+      .filter(
+        (v) =>
+          (v.status || "No Pátio") === "No Pátio" &&
+          matchesProdutoOperacional(v, produtoCtx) &&
+          roundVolume(v.volume || 0) > 0
+      )
+      .map((v) => {
+        const lotes = aggregateComposicaoByLote(seedComposicaoFromVasilhame(v))
+          .filter((l) => roundVolume(l.quantidade_l || 0) > 0)
+          .map((l) => ({
+            lote: l.lote || "",
+            quantidade_l: roundVolume(l.quantidade_l || 0),
+          }));
+        const placa = String(v.placa || "").trim();
+        const barril = String(v.barril || "").trim();
+        const ident =
+          placa || barril || v.codigo || v.container_number || "Vasilhame";
+        const identLabel = placa
+          ? `${placa}${barril ? ` - ${barril}` : ""}`
+          : barril || ident;
+        const vol = roundVolume(v.volume || 0);
+        return {
+          ...v,
+          lotes_disponiveis: lotes,
+          lote_label: formatLotesLabel(lotes) || v.lote || "",
+          densidade_entrada: parseDensidade(v.densidade) || 0,
+          display_label: `${identLabel} - ${formatVolume(vol)} - L`,
+          identLabel,
+        };
+      })
+      .sort((a, b) =>
+        String(a.identLabel).localeCompare(String(b.identLabel), "pt-BR", {
+          sensitivity: "base",
+        })
+      );
+  }, [
+    origemTipo,
+    produtoId,
+    produtoNome,
+    produtoCodigo,
+    clienteId,
+    clienteNome,
+    vasilhames,
+  ]);
+
+  const vasilhameOptionsForItem = (itemIndex) => {
+    const selectedIds = new Set(
+      vasilhameItens
+        .map((it, i) => (i === itemIndex ? null : it.vasilhameId))
+        .filter(Boolean)
+    );
+    return vasilhamesNoPatio.filter(
+      (v) =>
+        v.id === vasilhameItens[itemIndex]?.vasilhameId || !selectedIds.has(v.id)
+    );
+  };
+
+  const patchVasilhameItem = (idx, patch, densOverride) => {
+    setVasilhameItens((prev) => {
+      const next = prev.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+      syncGranelFromOrigemItens(next, densOverride);
+      return next;
+    });
+    setFormError("");
+  };
+
+  const handleVasilhameItemChange = (idx, _label, row) => {
+    const nextId = row?.id || "";
+    const lotes = row?.lotes_disponiveis || [];
+    const densProduto = parseDensidade(produtoSelecionado?.densidade);
+    const dens =
+      densProduto > 0
+        ? densProduto
+        : parseDensidade(row?.densidade_entrada) ||
+          parseDensidade(row?.densidade) ||
+          parseDensidade(granel.densidade) ||
+          0;
+    const vol = roundVolume(row?.volume || 0);
+    patchVasilhameItem(
+      idx,
+      {
+        vasilhameId: nextId,
+        placa: String(row?.placa || "").trim(),
+        barril: String(row?.barril || "").trim(),
+        lote: row?.lote_label || formatLotesLabel(lotes) || row?.lote || "",
+        quantidade: vol > 0 ? vol : "",
+        lotes,
+      },
+      dens > 0 ? dens : undefined
+    );
+  };
+
+  const addVasilhameItem = () => {
+    setVasilhameItens((prev) => [...prev, emptyVasilhameItem()]);
+    setFormError("");
+  };
+
+  const removeVasilhameItem = (idx) => {
+    setVasilhameItens((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, i) => i !== idx);
+      syncGranelFromOrigemItens(next);
+      return next;
+    });
+    setFormError("");
+  };
+
+  /** Lote / quantidade / unidade / densidade — comum a todas as origens. */
+  const validateQuantidadeBasica = () => {
+    if (origemTipo === "tanka") {
+      if (tankaItens.length === 0) {
+        return t("painel.operacional.ordemTransbordo.errors.tanka");
+      }
+      for (let i = 0; i < tankaItens.length; i++) {
+        const it = tankaItens[i];
+        if (!it.tankaId) {
+          return t("painel.operacional.ordemTransbordo.errors.tanka");
+        }
+        if (!String(it.lote || "").trim()) {
+          return t("painel.operacional.ordemTransbordo.errors.lot");
+        }
+        if (!(Number(it.quantidade) > 0)) {
+          return t("painel.operacional.ordemTransbordo.errors.qty");
+        }
+      }
+      if (!densidadeTabelada && !(Number(granel.densidade) > 0) && !(headerDensidade > 0)) {
+        return t("painel.operacional.ordemTransbordo.errors.density");
+      }
+      return "";
+    }
+    if (origemTipo === "vasilhame") {
+      if (vasilhameItens.length === 0) {
+        return t("painel.operacional.ordemTransbordo.errors.vasilhame");
+      }
+      for (let i = 0; i < vasilhameItens.length; i++) {
+        const it = vasilhameItens[i];
+        if (!it.vasilhameId) {
+          return t("painel.operacional.ordemTransbordo.errors.vasilhame");
+        }
+        if (!(Number(it.quantidade) > 0)) {
+          return t("painel.operacional.ordemTransbordo.errors.qty");
+        }
+      }
+      if (!densidadeTabelada && !(Number(granel.densidade) > 0) && !(headerDensidade > 0)) {
+        return t("painel.operacional.ordemTransbordo.errors.density");
+      }
+      return "";
+    }
+    const qtd = Number(granel.quantidade) || 0;
+    if (qtd <= 0) return t("painel.operacional.ordemTransbordo.errors.qty");
+    if (!granel.unidade) return t("painel.operacional.ordemTransbordo.errors.unit");
+    if (!granel.lote.trim()) return t("painel.operacional.ordemTransbordo.errors.lot");
+    if (!densidadeTabelada && !(Number(granel.densidade) > 0) && !(headerDensidade > 0)) {
+      return t("painel.operacional.ordemTransbordo.errors.density");
+    }
     return "";
   };
 
@@ -420,17 +908,17 @@ export default function OrdemTransbordo() {
     if (!granel.notaFiscal.trim()) {
       return t("painel.operacional.ordemTransbordo.errors.nf");
     }
-    const qtd = Number(granel.quantidade) || 0;
-    if (qtd <= 0) return t("painel.operacional.ordemTransbordo.errors.qty");
-    if (!granel.unidade) return t("painel.operacional.ordemTransbordo.errors.unit");
-    if (!granel.lote.trim()) return t("painel.operacional.ordemTransbordo.errors.lot");
-    if (!densidadeTabelada && !(Number(granel.densidade) > 0)) {
-      return t("painel.operacional.ordemTransbordo.errors.density");
-    }
+    const qtdErr = validateQuantidadeBasica();
+    if (qtdErr) return qtdErr;
     if (gPb <= 0) return t("painel.operacional.ordemTransbordo.errors.gross");
     if (gPl <= 0) return t("painel.operacional.ordemTransbordo.errors.net");
     return "";
   };
+
+  const origemTipoOperacional = useMemo(() => {
+    if (origemTipo === "granel") return "entrada";
+    return ORIGEM_VALUES.find((o) => o.value === origemTipo)?.tipoOrigem || origemTipo;
+  }, [origemTipo]);
 
   const buildGranelPayload = () => {
     // Densidade efetiva: prioriza o que está no formulário (populado a partir
@@ -503,15 +991,10 @@ export default function OrdemTransbordo() {
     };
   };
 
-  const openDestinosModal = ({
-    entradaPrefill = null,
-    origemTipoModal = "",
-  }) => {
-    setPrefillEntrada(entradaPrefill);
-    setPrefillOrigemTipo(origemTipoModal);
-    setHeaderPrefill(entradaPrefill ? null : buildHeaderPrefill());
+  const openEnvaseModal = (granelPayload = null) => {
+    setPendingGranelPayload(granelPayload);
     setSaveError("");
-    setModalOpen(true);
+    setEnvaseModalOpen(true);
   };
 
   const handleIrParaTransbordo = async () => {
@@ -529,44 +1012,42 @@ export default function OrdemTransbordo() {
       ? "industrializacao"
       : "convencional";
 
-    if (origemTipo !== "granel") {
-      const mapped = ORIGEM_VALUES.find((o) => o.value === origemTipo);
-      setPendingGranelPayload(null);
-      openDestinosModal({ origemTipoModal: mapped?.tipoOrigem || origemTipo });
+    if (origemTipo === "granel") {
+      const granelErr = validateGranel();
+      if (granelErr) {
+        setFormError(granelErr);
+        return;
+      }
+      setGoingToTransbordo(true);
+      setFormError("");
+      try {
+        openEnvaseModal(buildGranelPayload());
+      } catch (err) {
+        console.error("[OrdemTransbordo] granel prefill:", err);
+        setFormError(
+          err?.message ||
+            t("painel.operacional.ordemTransbordo.errors.saveEntrada")
+        );
+      } finally {
+        setGoingToTransbordo(false);
+      }
       return;
     }
 
-    const granelErr = validateGranel();
-    if (granelErr) {
-      setFormError(granelErr);
+    const qtdErr = validateQuantidadeBasica();
+    if (qtdErr) {
+      setFormError(qtdErr);
       return;
     }
 
-    // Fluxo Granel: não grava entrada aqui. A entrada só é criada quando a
-    // operação for validada — na Industrialização, se o produto for matéria-prima.
-    setGoingToTransbordo(true);
     setFormError("");
-    try {
-      const payload = buildGranelPayload();
-      setPendingGranelPayload(payload);
-      const entradaPrefill = buildGranelPrefillFromPayload(payload);
-      openDestinosModal({ entradaPrefill });
-    } catch (err) {
-      console.error("[OrdemTransbordo] granel prefill:", err);
-      setFormError(
-        err?.message || t("painel.operacional.ordemTransbordo.errors.saveEntrada")
-      );
-    } finally {
-      setGoingToTransbordo(false);
-    }
+    openEnvaseModal(null);
   };
 
   const resetForm = () => {
-    setPrefillEntrada(null);
-    setHeaderPrefill(null);
-    setPrefillOrigemTipo("");
     setPendingGranelPayload(null);
     setGranel(emptyGranel());
+    clearOperacaoOrigens();
     setOrigemTipo("");
     setDataOp(todayISO());
     setClienteId("");
@@ -622,7 +1103,7 @@ export default function OrdemTransbordo() {
       await criarValidacao(payload);
     }
     await loadData({ silent: true });
-    setModalOpen(false);
+    setEnvaseModalOpen(false);
     resetForm();
     setOrderOperator(null);
     toast({
@@ -636,15 +1117,39 @@ export default function OrdemTransbordo() {
   };
 
   const abandonOrder = () => {
-    setModalOpen(false);
-    setPrefillEntrada(null);
-    setHeaderPrefill(null);
-    setPrefillOrigemTipo("");
+    setEnvaseModalOpen(false);
     setPendingGranelPayload(null);
     setSaveError("");
     setFormError("");
     resetForm();
     setOrderOperator(null);
+  };
+
+  const handleQuantidadeFromModal = (value) => {
+    if (origemTipo === "tanka") {
+      // Uma origem: edita o item; várias: o total é a soma — editar por origem.
+      if (tankaItens.length === 1) {
+        patchTankaItem(0, { quantidade: value === "" ? "" : value });
+      }
+      return;
+    }
+    if (origemTipo === "vasilhame") {
+      if (vasilhameItens.length === 1) {
+        patchVasilhameItem(0, { quantidade: value === "" ? "" : value });
+      }
+      return;
+    }
+    patchGranel("quantidade", value);
+  };
+
+  const handleTankaOrigemQuantidadeFromModal = (index, value) => {
+    if (origemTipo === "tanka") {
+      patchTankaItem(index, { quantidade: value === "" ? "" : value });
+      return;
+    }
+    if (origemTipo === "vasilhame") {
+      patchVasilhameItem(index, { quantidade: value === "" ? "" : value });
+    }
   };
 
   const handleSaveTransbordo = async (data) => {
@@ -654,11 +1159,22 @@ export default function OrdemTransbordo() {
       return;
     }
     try {
+      // Quantidade pode ter sido editada no modal — regenera o payload granel.
+      const granelPayload =
+        origemTipo === "granel" ? buildGranelPayload() : null;
+      const operadoresTransbordo = Array.isArray(data?.operadores)
+        ? data.operadores.filter(Boolean)
+        : [];
       await submitOrdem({
-        granelPayload: pendingGranelPayload,
+        granelPayload,
         transbordoPayload: {
           ...data,
-          operadores: orderOperator.nome ? [orderOperator.nome] : [],
+          operadores:
+            operadoresTransbordo.length > 0
+              ? operadoresTransbordo
+              : orderOperator.nome
+                ? [orderOperator.nome]
+                : [],
           operador_usuario_id: String(orderOperator.id),
         },
       });
@@ -678,6 +1194,194 @@ export default function OrdemTransbordo() {
     },
     [navigate]
   );
+
+  const remapUpdatedView = (updated, destino) => {
+    if (!updated) return null;
+    if (destino === "industrializacao") {
+      return normalizeValidacaoView({
+        ...updated,
+        destino: "industrializacao",
+        granel_payload: updated.entrada_payload || updated.granel_payload,
+        sortAt: updated.created_date || updated.created_at || updated.data || "",
+      });
+    }
+    return normalizeValidacaoView({
+      ...updated,
+      destino: "convencional",
+      sortAt: updated.created_at || updated.data || "",
+    });
+  };
+
+  const handleSaveCamposView = async ({
+    header,
+    granelPayload,
+    transbordoPayload,
+    openEnvase = false,
+    deferPersist = false,
+  }) => {
+    if (!viewValidacao?.id) return;
+    const destino = viewValidacao.destino || "convencional";
+
+    // Alteração de pesagem/volume: abre envase sem gravar. Cancelar = descarta.
+    if (deferPersist && openEnvase) {
+      const pendingRaw = {
+        ...viewValidacao,
+        ...(header?.quantidade != null ? { quantidade: header.quantidade } : {}),
+        ...(header?.unidade_medida
+          ? { unidade_medida: header.unidade_medida }
+          : {}),
+        ...(header?.lote != null ? { lote: header.lote } : {}),
+        granel_payload: granelPayload ?? viewValidacao.granel_payload,
+        entrada_payload: granelPayload ?? viewValidacao.entrada_payload,
+        transbordo_payload: transbordoPayload ?? viewValidacao.transbordo_payload,
+      };
+      setEditViewValidacao(remapUpdatedView(pendingRaw, destino) || pendingRaw);
+      setEditViewError("");
+      setEditViewOpen(true);
+      return;
+    }
+
+    setViewSaving(true);
+    try {
+      let updated;
+      if (destino === "industrializacao") {
+        updated = await atualizarValidacaoIndustrializacao({
+          id: viewValidacao.id,
+          header: header || null,
+          ...(granelPayload != null ? { entradaPayload: granelPayload } : {}),
+          ...(transbordoPayload != null ? { transbordoPayload } : {}),
+        });
+      } else {
+        updated = await atualizarValidacaoTransbordoPayload({
+          id: viewValidacao.id,
+          header: header || null,
+          granelPayload,
+          transbordoPayload,
+        });
+      }
+      await loadData({ silent: true });
+      const remapped = remapUpdatedView(updated, destino);
+      setViewValidacao(remapped);
+      if (openEnvase) {
+        setEditViewValidacao(remapped);
+        setEditViewError("");
+        setEditViewOpen(true);
+      }
+      toast({
+        title: t("transbordo.validacao.editSuccessTitle", {
+          defaultValue: "Validação atualizada",
+        }),
+        description: t("transbordo.validacao.editSuccessDescription", {
+          defaultValue: "Alterações salvas com sucesso.",
+        }),
+      });
+    } catch (err) {
+      console.error("[OrdemTransbordo] save campos view:", err);
+      throw err;
+    } finally {
+      setViewSaving(false);
+    }
+  };
+
+  const handleEditTransbordoFromView = () => {
+    if (!viewValidacao || viewValidacao.status !== "pendente") return;
+    setEditViewValidacao(viewValidacao);
+    setEditViewError("");
+    setEditViewOpen(true);
+  };
+
+  const handleSaveEditFromView = async (
+    transbordoPayload,
+    granelFromEditor = null
+  ) => {
+    if (!editViewValidacao?.id) return;
+    const destino = editViewValidacao.destino || "convencional";
+    setEditViewError("");
+    try {
+      let updated;
+      if (destino === "industrializacao") {
+        const nextEntrada = granelFromEditor
+          ? granelFromEditor
+          : editViewValidacao.granel_payload ||
+            editViewValidacao.entrada_payload ||
+            null;
+        const syncedEntrada = nextEntrada
+          ? {
+              ...nextEntrada,
+              data: transbordoPayload.data || nextEntrada.data,
+              cliente_nome:
+                transbordoPayload.cliente_nome || nextEntrada.cliente_nome,
+              produto_nome:
+                transbordoPayload.produto_nome || nextEntrada.produto_nome,
+              produto_codigo:
+                transbordoPayload.produto_codigo || nextEntrada.produto_codigo,
+              densidade: transbordoPayload.densidade || nextEntrada.densidade,
+            }
+          : null;
+        updated = await atualizarValidacaoIndustrializacao({
+          id: editViewValidacao.id,
+          entradaPayload: syncedEntrada,
+          transbordoPayload,
+        });
+      } else {
+        const nextGranel = granelFromEditor
+          ? granelFromEditor
+          : editViewValidacao.granel_payload
+            ? {
+                ...editViewValidacao.granel_payload,
+                data:
+                  transbordoPayload.data ||
+                  editViewValidacao.granel_payload.data,
+                cliente_id:
+                  transbordoPayload.cliente_id ||
+                  editViewValidacao.granel_payload.cliente_id,
+                cliente_nome:
+                  transbordoPayload.cliente_nome ||
+                  editViewValidacao.granel_payload.cliente_nome,
+                produto_id:
+                  transbordoPayload.produto_id ||
+                  editViewValidacao.granel_payload.produto_id,
+                produto_nome:
+                  transbordoPayload.produto_nome ||
+                  editViewValidacao.granel_payload.produto_nome,
+                produto_codigo:
+                  transbordoPayload.produto_codigo ||
+                  editViewValidacao.granel_payload.produto_codigo,
+                densidade:
+                  transbordoPayload.densidade ||
+                  editViewValidacao.granel_payload.densidade,
+              }
+            : null;
+        updated = await atualizarValidacaoTransbordoPayload({
+          id: editViewValidacao.id,
+          transbordoPayload,
+          granelPayload: nextGranel,
+        });
+      }
+      await loadData({ silent: true });
+      if (viewOpen && viewValidacao?.id === editViewValidacao.id) {
+        setViewValidacao(remapUpdatedView(updated, destino));
+      }
+      setEditViewOpen(false);
+      setEditViewValidacao(null);
+      toast({
+        title: t("transbordo.validacao.editSuccessTitle", {
+          defaultValue: "Validação atualizada",
+        }),
+        description: t("transbordo.validacao.editSuccessDescription", {
+          defaultValue: "Alterações salvas com sucesso.",
+        }),
+      });
+    } catch (err) {
+      console.error("[OrdemTransbordo] edit from view:", err);
+      setEditViewError(
+        err?.message ||
+          t("transbordo.validacao.errors.editGeneric", {
+            defaultValue: "Não foi possível salvar a edição.",
+          })
+      );
+    }
+  };
 
   const fixedOperador = useMemo(
     () =>
@@ -811,6 +1515,463 @@ export default function OrdemTransbordo() {
                 />
               </div>
             </div>
+
+            {origemTipo && origemTipo !== "granel" && produtoId && (
+              <div className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t("painel.operacional.ordemTransbordo.operacao.title", {
+                      defaultValue: "Dados da operação",
+                    })}
+                  </p>
+                  {origemTipo === "tanka" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addTankaItem}
+                      className="gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t("painel.operacional.ordemTransbordo.addTankaItem")}
+                    </Button>
+                  )}
+                  {origemTipo === "vasilhame" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addVasilhameItem}
+                      className="gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t("painel.operacional.ordemTransbordo.addVasilhameItem")}
+                    </Button>
+                  )}
+                </div>
+
+                {origemTipo === "tanka" ? (
+                  <div className="space-y-3">
+                    {tankasComSaldo.length === 0 && (
+                      <p className="text-xs text-amber-700">
+                        {t("painel.operacional.ordemTransbordo.tankaEmpty")}
+                      </p>
+                    )}
+                    {tankaItens.map((item, idx) => {
+                      const tankaOpts = tankaOptionsForItem(idx);
+                      const loteOpts = lotesOptionsForItem(idx);
+                      const selectedTanka =
+                        tankaOpts.find((o) => o.id === item.tankaId) ||
+                        tankasComSaldo.find((o) => o.id === item.tankaId);
+                      const selectedLote =
+                        loteOpts.find((l) => l.lote === item.lote) || null;
+                      return (
+                        <div
+                          key={item.key}
+                          className="rounded-lg border border-border bg-card p-3 space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-primary">
+                              {t(
+                                "painel.operacional.ordemTransbordo.tankaItemLabel",
+                                { n: String(idx + 1).padStart(2, "0") }
+                              )}
+                            </p>
+                            {tankaItens.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeTankaItem(idx)}
+                                className="rounded p-1 text-red-400 hover:bg-destructive/10 hover:text-red-600"
+                                aria-label={t("buttons.delete", {
+                                  defaultValue: "Remover",
+                                })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.tanka"
+                                )}{" "}
+                                *
+                              </Label>
+                              <SearchableSelect
+                                value={
+                                  selectedTanka?.display_label ||
+                                  item.tankaCodigo ||
+                                  ""
+                                }
+                                onChange={(label, row) =>
+                                  handleTankaItemChange(idx, label, row)
+                                }
+                                options={tankaOpts}
+                                getOptionLabel={(o) => o.display_label}
+                                getOptionValue={(o) => o.id}
+                                placeholder={t(
+                                  "painel.operacional.ordemTransbordo.placeholders.tanka"
+                                )}
+                                inputClassName={INPUT_EDITABLE}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.lot"
+                                )}{" "}
+                                *
+                              </Label>
+                              <SearchableSelect
+                                value={
+                                  selectedLote?.display_label || item.lote || ""
+                                }
+                                onChange={(label, row) =>
+                                  handleTankaLoteChange(idx, label, row)
+                                }
+                                options={loteOpts}
+                                getOptionLabel={(o) => o.display_label}
+                                getOptionValue={(o) => o.lote}
+                                placeholder={
+                                  item.tankaId
+                                    ? t(
+                                        "painel.operacional.ordemTransbordo.placeholders.lot"
+                                      )
+                                    : t(
+                                        "painel.operacional.ordemTransbordo.placeholders.tankaFirst"
+                                      )
+                                }
+                                disabled={!item.tankaId}
+                                inputClassName={INPUT_EDITABLE}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.qty"
+                                )}{" "}
+                                *
+                              </Label>
+                              <NumberInputBr
+                                decimals={3}
+                                trimTrailingZeros
+                                min={0}
+                                value={item.quantidade}
+                                onChange={(v) =>
+                                  patchTankaItem(idx, {
+                                    quantidade: v === "" ? "" : v,
+                                  })
+                                }
+                                placeholder="0"
+                                className={INPUT_EDITABLE}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.unit"
+                                )}{" "}
+                                *
+                              </Label>
+                              <Input value="L" disabled className="bg-muted/50" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.density"
+                                )}
+                                {densidadeTabelada ? "" : " *"}
+                              </Label>
+                              <NumberInputBr
+                                decimals={4}
+                                min={0}
+                                value={granel.densidade}
+                                onChange={(v) =>
+                                  patchGranel("densidade", v === "" ? "" : v)
+                                }
+                                placeholder="0"
+                                disabled={densidadeTabelada || idx > 0}
+                                className={INPUT_EDITABLE}
+                              />
+                              {idx === 0 && densidadeTabelada ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t(
+                                    "painel.operacional.ordemTransbordo.densityListed"
+                                  )}
+                                </p>
+                              ) : null}
+                              {idx === 0 &&
+                              !densidadeTabelada &&
+                              parseDensidade(granel.densidade) > 0 &&
+                              !(
+                                parseDensidade(produtoSelecionado?.densidade) > 0
+                              ) ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t(
+                                    "painel.operacional.ordemTransbordo.densityFromEntrada"
+                                  )}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        "painel.operacional.ordemTransbordo.tankaTotalVolume"
+                      )}
+                      :{" "}
+                      <strong className="text-foreground tabular-nums">
+                        {formatVolume(Number(granel.quantidade) || 0)} L
+                      </strong>
+                    </p>
+                  </div>
+                ) : origemTipo === "vasilhame" ? (
+                  <div className="space-y-3">
+                    {vasilhamesNoPatio.length === 0 && (
+                      <p className="text-xs text-amber-700">
+                        {t("painel.operacional.ordemTransbordo.vasilhameEmpty")}
+                      </p>
+                    )}
+                    {vasilhameItens.map((item, idx) => {
+                      const vasOpts = vasilhameOptionsForItem(idx);
+                      const selectedVas =
+                        vasOpts.find((o) => o.id === item.vasilhameId) ||
+                        vasilhamesNoPatio.find(
+                          (o) => o.id === item.vasilhameId
+                        );
+                      return (
+                        <div
+                          key={item.key}
+                          className="rounded-lg border border-border bg-card p-3 space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-primary">
+                              {t(
+                                "painel.operacional.ordemTransbordo.tankaItemLabel",
+                                { n: String(idx + 1).padStart(2, "0") }
+                              )}
+                            </p>
+                            {vasilhameItens.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeVasilhameItem(idx)}
+                                className="rounded p-1 text-red-400 hover:bg-destructive/10 hover:text-red-600"
+                                aria-label={t("buttons.delete", {
+                                  defaultValue: "Remover",
+                                })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.tanque"
+                                )}{" "}
+                                *
+                              </Label>
+                              <SearchableSelect
+                                value={
+                                  selectedVas?.display_label ||
+                                  item.placa ||
+                                  item.barril ||
+                                  ""
+                                }
+                                onChange={(label, row) =>
+                                  handleVasilhameItemChange(idx, label, row)
+                                }
+                                options={vasOpts}
+                                getOptionLabel={(o) => o.display_label}
+                                getOptionValue={(o) => o.id}
+                                placeholder={t(
+                                  "painel.operacional.ordemTransbordo.placeholders.tanque"
+                                )}
+                                inputClassName={INPUT_EDITABLE}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.lot"
+                                )}{" "}
+                                *
+                              </Label>
+                              <Input
+                                value={item.lote || ""}
+                                disabled
+                                className="bg-muted/50"
+                                placeholder={
+                                  item.vasilhameId
+                                    ? "—"
+                                    : t(
+                                        "painel.operacional.ordemTransbordo.placeholders.tanqueFirst"
+                                      )
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.qty"
+                                )}{" "}
+                                *
+                              </Label>
+                              <NumberInputBr
+                                decimals={3}
+                                trimTrailingZeros
+                                min={0}
+                                value={item.quantidade}
+                                onChange={(v) =>
+                                  patchVasilhameItem(idx, {
+                                    quantidade: v === "" ? "" : v,
+                                  })
+                                }
+                                placeholder="0"
+                                className={INPUT_EDITABLE}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.unit"
+                                )}{" "}
+                                *
+                              </Label>
+                              <Input value="L" disabled className="bg-muted/50" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>
+                                {t(
+                                  "painel.operacional.ordemTransbordo.fields.density"
+                                )}
+                                {densidadeTabelada ? "" : " *"}
+                              </Label>
+                              <NumberInputBr
+                                decimals={4}
+                                min={0}
+                                value={granel.densidade}
+                                onChange={(v) =>
+                                  patchGranel("densidade", v === "" ? "" : v)
+                                }
+                                placeholder="0"
+                                disabled={densidadeTabelada || idx > 0}
+                                className={INPUT_EDITABLE}
+                              />
+                              {idx === 0 && densidadeTabelada ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t(
+                                    "painel.operacional.ordemTransbordo.densityListed"
+                                  )}
+                                </p>
+                              ) : null}
+                              {idx === 0 &&
+                              !densidadeTabelada &&
+                              parseDensidade(granel.densidade) > 0 &&
+                              !(
+                                parseDensidade(produtoSelecionado?.densidade) > 0
+                              ) ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {t(
+                                    "painel.operacional.ordemTransbordo.densityFromEntrada"
+                                  )}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        "painel.operacional.ordemTransbordo.tankaTotalVolume"
+                      )}
+                      :{" "}
+                      <strong className="text-foreground tabular-nums">
+                        {formatVolume(Number(granel.quantidade) || 0)} L
+                      </strong>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>
+                        {t("painel.operacional.ordemTransbordo.fields.lot")} *
+                      </Label>
+                      <Input
+                        value={granel.lote}
+                        onChange={(e) => patchGranel("lote", e.target.value)}
+                        placeholder={t(
+                          "painel.operacional.ordemTransbordo.placeholders.lot"
+                        )}
+                        className={INPUT_EDITABLE}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>
+                        {t("painel.operacional.ordemTransbordo.fields.qty")} *
+                      </Label>
+                      <NumberInputBr
+                        decimals={0}
+                        min={0}
+                        value={granel.quantidade}
+                        onChange={(v) =>
+                          patchGranel("quantidade", v === "" ? "" : v)
+                        }
+                        placeholder="0"
+                        className={INPUT_EDITABLE}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>
+                        {t("painel.operacional.ordemTransbordo.fields.unit")} *
+                      </Label>
+                      <SearchableSelect
+                        value={granel.unidade}
+                        onChange={(_label, item) =>
+                          patchGranel("unidade", item?.value || "")
+                        }
+                        options={UNIDADES.map((u) => ({ value: u }))}
+                        getOptionLabel={(u) => u.value}
+                        getOptionValue={(u) => u.value}
+                        placeholder={t(
+                          "painel.operacional.ordemTransbordo.placeholders.unit"
+                        )}
+                        inputClassName={INPUT_EDITABLE}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>
+                        {t("painel.operacional.ordemTransbordo.fields.density")}
+                        {densidadeTabelada ? "" : " *"}
+                      </Label>
+                      <NumberInputBr
+                        decimals={4}
+                        min={0}
+                        value={granel.densidade}
+                        onChange={(v) =>
+                          patchGranel("densidade", v === "" ? "" : v)
+                        }
+                        placeholder="0"
+                        disabled={densidadeTabelada}
+                        className={INPUT_EDITABLE}
+                      />
+                      {densidadeTabelada && (
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            "painel.operacional.ordemTransbordo.densityListed"
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {origemTipo === "granel" && produtoId && (
               <div className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
@@ -1035,34 +2196,111 @@ export default function OrdemTransbordo() {
         <PendentesCard
           validacoes={validacoesPendentes}
           t={t}
+          onView={(v) => {
+            setViewValidacao(v);
+            setViewOpen(true);
+          }}
           onPrint={handlePrintRelatorio}
         />
       </div>
 
-      <TransbordoModal
-        open={modalOpen}
+      <ValidacaoViewDialog
+        open={viewOpen}
         onClose={() => {
-          setModalOpen(false);
-          setPrefillEntrada(null);
-          setHeaderPrefill(null);
-          setPrefillOrigemTipo("");
+          setViewOpen(false);
+          setViewValidacao(null);
+        }}
+        validacao={viewValidacao}
+        produtos={[...produtosTb, ...produtosMp, ...produtosPa]}
+        entradas={entradas}
+        canEdit
+        saving={viewSaving}
+        onSaveCampos={handleSaveCamposView}
+        onEditTransbordo={handleEditTransbordoFromView}
+      />
+
+      <ValidacaoOrdemEnvaseEditor
+        open={editViewOpen}
+        onClose={() => {
+          setEditViewOpen(false);
+          setEditViewValidacao(null);
+          setEditViewError("");
+        }}
+        onSave={handleSaveEditFromView}
+        validacao={editViewValidacao}
+        isotanques={isotanques}
+        vasilhames={vasilhames}
+        transbordos={transbordos}
+        externalError={editViewError}
+      />
+
+      <OrdemTransbordoEnvaseModal
+        open={envaseModalOpen}
+        onClose={() => {
+          setEnvaseModalOpen(false);
           setPendingGranelPayload(null);
           setSaveError("");
         }}
         onSave={handleSaveTransbordo}
-        clientes={clientes}
-        produtos={produtosTb}
-        entradas={entradas}
+        onQuantidadeChange={handleQuantidadeFromModal}
+        onTankaOrigemQuantidadeChange={handleTankaOrigemQuantidadeFromModal}
+        productLabel={produtoDisplay}
+        produtoId={produtoId}
+        produtoNome={produtoNome}
+        produtoCodigo={produtoCodigo}
+        lote={granel.lote}
+        quantidade={granel.quantidade}
+        unidade={granel.unidade}
+        densidade={headerDensidade}
+        dataOp={dataOp}
+        clienteId={clienteId}
+        clienteNome={clienteNome}
+        origemTipoOperacional={origemTipoOperacional}
+        tankaOrigens={
+          origemTipo === "tanka"
+            ? tankaItens.map((it) => ({
+                tankaId: it.tankaId,
+                tankaCodigo: it.tankaCodigo,
+                lote: it.lote,
+                quantidade: it.quantidade,
+              }))
+            : []
+        }
+        vasilhameOrigens={
+          origemTipo === "vasilhame"
+            ? vasilhameItens.map((it) => {
+                const lotesRet = allocateQtyToLotes(
+                  it.lotes || [],
+                  Number(it.quantidade) || 0
+                );
+                const label =
+                  [it.placa, it.barril].filter(Boolean).join(" - ") ||
+                  "Vasilhame";
+                return {
+                  vasilhameId: it.vasilhameId,
+                  codigo: label,
+                  lote: it.lote,
+                  quantidade: it.quantidade,
+                  lotes_retirados: lotesRet,
+                  lotes_disponiveis: (it.lotes || []).map((l) => ({
+                    lote: l.lote || "",
+                    quantidade_l: roundVolume(l.quantidade_l || 0),
+                  })),
+                };
+              })
+            : []
+        }
+        quantidadeEditable={
+          (origemTipo !== "tanka" && origemTipo !== "vasilhame") ||
+          (origemTipo === "tanka" && tankaItens.length === 1) ||
+          (origemTipo === "vasilhame" && vasilhameItens.length === 1)
+        }
+        granelPayload={pendingGranelPayload}
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
-        prefillEntrada={prefillEntrada}
-        prefillOrigemTipo={prefillOrigemTipo}
-        headerPrefill={headerPrefill}
-        destinosOnly
-        lockHeader
-        externalError={saveError}
         fixedOperador={fixedOperador}
+        externalError={saveError}
       />
 
       <OperadorOrdemAuthDialog
@@ -1078,9 +2316,12 @@ export default function OrdemTransbordo() {
   );
 }
 
-function PendentesCard({ validacoes, t, onPrint }) {
+function PendentesCard({ validacoes, t, onView, onPrint }) {
   if (!validacoes || validacoes.length === 0) return null;
 
+  const viewLabel = t("painel.operacional.ordemTransbordo.pendentes.view", {
+    defaultValue: "Visualizar",
+  });
   const printLabel = t("painel.operacional.ordemTransbordo.pendentes.print", {
     defaultValue: "Imprimir relatório",
   });
@@ -1306,6 +2547,13 @@ function PendentesCard({ validacoes, t, onPrint }) {
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                       <Can permission={`${PERM}.view`}>
+                        <RowActionButton
+                          onClick={() => onView?.(v)}
+                          title={viewLabel}
+                          aria-label={viewLabel}
+                        >
+                          <Eye />
+                        </RowActionButton>
                         <RowActionButton
                           onClick={() => onPrint?.(v)}
                           title={printLabel}

@@ -28,6 +28,10 @@ import {
   parseDensidade,
   resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
+import {
+  healTransbordoDensidadeMassaPatch,
+  resolveDensidadeOperacional,
+} from "@transbordo/lib/densidadeOperacional";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
   migrateEstoqueEmbaladoParaVasilhames,
@@ -136,14 +140,25 @@ function resolveTransbordoMedida(transbordo) {
   return { embalado: false, unidade: first?.unidade_medida || "L" };
 }
 
-function renderTransbordoVolumeQuantidade(transbordo) {
+function renderTransbordoVolumeQuantidade(
+  transbordo,
+  { produtos = [], entradas = [] } = {}
+) {
   const medida = resolveTransbordoMedida(transbordo);
   const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
   const vol = Number(transbordo?.volume_total) || 0;
   const mass = Number(transbordo?.massa_total) || 0;
-  const densidade = transbordo?.densidade;
+  const densidade = resolveDensidadeOperacional({
+    densidade: transbordo?.densidade,
+    produtos,
+    produto: (produtos || []).find(
+      (p) => String(p.id) === String(transbordo?.produto_id)
+    ),
+    entradas,
+    origens: transbordo?.origens,
+  });
 
   if (isEmbalado && !umIsVolume) {
     const massKg = mass > 0 ? mass : vol;
@@ -178,9 +193,11 @@ function renderTransbordoVolumeQuantidade(transbordo) {
     return { volume: volTxt, quantidade: qtdTxt };
   }
 
+  const densOk = parseDensidade(densidade) > 0;
   const resolved = resolveVolumeMassaOperacional({
     volume: vol,
-    massa: mass,
+    // Recalcula pela dens da entrada quando o OP ficou sem massa ou dens errada.
+    massa: densOk ? 0 : mass,
     densidade,
   });
   return {
@@ -277,6 +294,33 @@ export default function Transbordo() {
         vasilhamesAlinhados = healed.vasilhames || vasilhamesAlinhados;
       } catch (healErr) {
         console.error("[Transbordo] Falha ao alinhar lotes:", healErr);
+      }
+      // Densidade/massa: entrada do lote prevalece (Tanka sem dens / dens do produto).
+      try {
+        const densCtx = {
+          produtos: prods,
+          entradas: [...(volumes.estoque || []), ...(entradasDoc || [])],
+        };
+        const densUpdates = [];
+        const nextTrans = [];
+        for (const t of transbordosAlinhados || []) {
+          const patch = healTransbordoDensidadeMassaPatch(t, densCtx);
+          if (!patch) {
+            nextTrans.push(t);
+            continue;
+          }
+          densUpdates.push({ id: t.id, ...patch });
+          nextTrans.push({ ...t, ...patch });
+        }
+        if (densUpdates.length > 0) {
+          await entities.transbordos.bulkUpdate(densUpdates);
+        }
+        transbordosAlinhados = nextTrans;
+      } catch (densErr) {
+        console.error(
+          "[Transbordo] Falha ao alinhar densidade/massa dos OPs:",
+          densErr
+        );
       }
       setTransbordos(transbordosAlinhados);
       setProdutos(prods);
@@ -552,7 +596,10 @@ export default function Transbordo() {
                 filtered.map((t, i) => {
                   const produtoLabel = `${t.produto_codigo ? `${t.produto_codigo} - ` : ""}${t.produto_nome || "-"}`;
                   const { volume: volumeCell, quantidade: quantidadeCell } =
-                    renderTransbordoVolumeQuantidade(t);
+                    renderTransbordoVolumeQuantidade(t, {
+                      produtos,
+                      entradas,
+                    });
                   const origemBadges = resolveOrigemBadge(t);
                   return (
                   <tr

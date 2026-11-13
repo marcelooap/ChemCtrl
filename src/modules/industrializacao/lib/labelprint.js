@@ -639,10 +639,9 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
 
   const opNum = container.op_number || '—';
   const dateOverride = containerLabelDateOverride(container);
+  // Fabricação só com data explícita — nunca usa data de recebimento/created_date.
   const fabDateStr =
-    contexto === 'convencional'
-      ? dateOverride?.manufactureDate || options?.manufactureDate || null
-      : dateOverride?.manufactureDate || options?.manufactureDate || container.created_date;
+    dateOverride?.manufactureDate || options?.manufactureDate || null;
   const volume =
     volumeRaw != null && Number(volumeRaw) > 0
       ? `${fmtNumber(volumeRaw, { maximumFractionDigits: 0 }, lang)} L`
@@ -662,10 +661,9 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
       });
   const campos = printConfig.campos;
   const dateFormat = printConfig.dateFormat;
-  const fabDate =
-    contexto === 'convencional' && !fabDateStr
-      ? ''
-      : formatEtiquetaDate(fabDateStr, dateFormat, lang);
+  const fabDate = !fabDateStr
+    ? ''
+    : formatEtiquetaDate(fabDateStr, dateFormat, lang);
   const envaseDateStr =
     options?.fillingDate || options?.envaseDate || container.created_date || null;
   const envaseDate =

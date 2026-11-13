@@ -2231,6 +2231,36 @@
           "missingOperator": "Identifique o operador antes de salvar a ordem."
         },
         "goToTransbordo": "Ir para transbordo",
+        "envaseModal": {
+          "title": "Registrar envase",
+          "subtitle": "Confira produto, lote e quantidade e informe as embalagens de destino.",
+          "conversion": "Conversão",
+          "convertedToL": "Equivalente em litros",
+          "convertedToKg": "Equivalente em kg",
+          "noDensity": "Informe a densidade para converter",
+          "densityUsed": "Densidade usada: {{density}}",
+          "itemsTitle": "Itens de envase",
+          "addItem": "Adicionar linha",
+          "operators": "Operadores",
+          "operatorsPlaceholder": "Selecionar operadores",
+          "operatorsSelected": "{{count}} operador(es) selecionado(s)",
+          "operatorsEmpty": "Nenhum operador do setor Transbordo cadastrado.",
+          "multipleLots": "{{count}} lotes (FIFO)",
+          "originsFifo": "Origens (ordem de consumo FIFO)",
+          "editOrdem": "Editar ordem",
+          "editOrdemTitle": "Editar dados da ordem",
+          "volumeRegistered": "Volume registrado",
+          "volumePacked": "Volume envasado",
+          "conferenceOk": "Conferência ok",
+          "conferenceExceeded": "Volume envasado excede o registrado",
+          "conferencePending": "Ajuste os itens até fechar a conferência",
+          "errors": {
+            "density": "Densidade é obrigatória para o envase.",
+            "items": "Preencha todos os itens de envase.",
+            "mismatch": "O volume envasado deve ser igual ao volume registrado.",
+            "operators": "Selecione ao menos um operador do setor Transbordo."
+          }
+        },
         "submitValidation": "Enviar para validação",
         "search": "Buscar por código, produto ou cliente...",
         "records": "{{count}} registro(s)",
@@ -2271,6 +2301,8 @@
           "manufacture": "Fabricação",
           "expiry": "Validade",
           "density": "Densidade",
+          "tanka": "Tanka",
+          "tanque": "Tanque",
           "unitPrice": "Preço unitário",
           "ticket": "Ticket",
           "gross": "Peso bruto (kg)",
@@ -2287,9 +2319,23 @@
           "nf": "Nº da NF",
           "unit": "Unidade",
           "lot": "Lote",
+          "tanka": "Selecione a tanka",
+          "tankaFirst": "Selecione a tanka primeiro",
+          "tanque": "Selecione o tanque no pátio",
+          "tanqueFirst": "Selecione o tanque primeiro",
           "supplier": "Nome do fornecedor",
           "ticket": "Nº do ticket"
         },
+        "operacao": {
+          "title": "Dados da operação"
+        },
+        "tankaEmpty": "Nenhuma tanka com saldo para este produto.",
+        "vasilhameEmpty": "Nenhum tanque No Pátio com este produto.",
+        "densityFromEntrada": "Densidade da entrada",
+        "addTankaItem": "Adicionar tanka",
+        "addVasilhameItem": "Adicionar tanque",
+        "tankaItemLabel": "Origem {{n}}",
+        "tankaTotalVolume": "Volume total das origens",
         "granel": {
           "title": "Dados do recebimento granel"
         },
@@ -2311,6 +2357,8 @@
           "qty": "Quantidade deve ser positiva.",
           "unit": "Unidade de medida é obrigatória.",
           "lot": "Lote é obrigatório.",
+          "tanka": "Tanka é obrigatória.",
+          "vasilhame": "Tanque (vasilhame) é obrigatório.",
           "density": "Densidade é obrigatória para este recebimento.",
           "gross": "Peso bruto é obrigatório.",
           "net": "Peso líquido é obrigatório.",
@@ -2319,6 +2367,7 @@
         },
         "pendentes": {
           "title": "Pendentes de validação",
+          "view": "Visualizar",
           "print": "Imprimir relatório"
         },
         "relatorio": {

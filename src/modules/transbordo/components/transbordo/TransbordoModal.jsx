@@ -46,6 +46,7 @@ import {
   multipleTransbordosMessage,
 } from "@transbordo/lib/findLinkedTransbordo";
 import { buildEstoqueDisplayCodigoMap } from "@transbordo/lib/entradaCodigo";
+import { densFromEntradasByLote } from "@transbordo/lib/densidadeOperacional";
 import {
   computeTankaSaldo,
   computeTankaLotesDisponiveis,
@@ -712,10 +713,16 @@ export default function TransbordoModal({
       transbordos,
       excludeTransbordoId: editingIdForSaldo,
     });
+    const lotePrincipal = lotesDisponiveis[0]?.lote || "";
+    const densTanka =
+      densFromEntradasByLote(lotePrincipal, entradas) ||
+      parseDensidade(i.densidade) ||
+      0;
     return {
       ...i,
       unidade_medida: "L",
-      lote: lotesDisponiveis[0]?.lote || "",
+      lote: lotePrincipal,
+      densidade: densTanka || i.densidade || "",
       lotes_disponiveis: lotesDisponiveis,
       display_label: `${tankaCodigo || "Tanka"} - ${i.produto_nome || ""} (${formatVolume(i.saldo_atual || 0)} L)`,
     };
@@ -742,11 +749,17 @@ export default function TransbordoModal({
           lote: l.lote || "",
           quantidade_l: roundVolume(l.quantidade_l || 0),
         }));
+      const lotePrincipal = lotesDisponiveis[0]?.lote || v.lote || "";
+      const densVas =
+        densFromEntradasByLote(lotePrincipal, entradas) ||
+        parseDensidade(v.densidade) ||
+        0;
       return {
         ...v,
         saldo_atual: v.volume || 0,
         unidade_medida: "L",
-        lote: lotesDisponiveis[0]?.lote || v.lote || "",
+        lote: lotePrincipal,
+        densidade: densVas || v.densidade || "",
         lotes_disponiveis: lotesDisponiveis,
         display_label: `${v.placa || v.barril || v.codigo || "Vasilhame"} - ${v.produto_nome || ""} (${formatVolume(v.volume || 0)} L)`,
       };
@@ -1037,7 +1050,10 @@ export default function TransbordoModal({
       setProdutoId(item.id);
       setProdutoNome(item.produto);
       setProdutoCodigo(item.codigo || "");
-      setDensidade(parseDensidade(item.densidade));
+      // Densidade tabelada: cadastro do produto. Senão, aguarda dens da origem/entrada.
+      setDensidade(
+        item.densidade_tabelada ? parseDensidade(item.densidade) : 0
+      );
     } else {
       setProdutoId("");
       setProdutoNome("");
@@ -1048,6 +1064,17 @@ export default function TransbordoModal({
     setDestinos([]);
     setCollapsedOrigens({});
     setCollapsedDestinos({});
+  };
+
+  const handleDensidadeFromOrigem = (densHint) => {
+    const dens = parseDensidade(densHint);
+    if (!(dens > 0)) return;
+    const produto = (produtos || []).find(
+      (p) => String(p.id) === String(produtoId)
+    );
+    // Produto com dens tabelada não herda dens da entrada.
+    if (produto?.densidade_tabelada) return;
+    setDensidade(dens);
   };
 
   const toggleOperador = (op) => {
@@ -1711,6 +1738,7 @@ export default function TransbordoModal({
                       )}
                       densidade={densidade}
                       onChange={(data) => handleUpdateOrigem(idx, data)}
+                      onDensidadeResolved={handleDensidadeFromOrigem}
                       onRemove={() => handleRemoveOrigem(idx)}
                       readOnly={readOnly}
                       lockOrigem={lockOrigens}

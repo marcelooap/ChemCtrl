@@ -37,6 +37,7 @@ import { formatMass, formatVolume } from "@transbordo/lib/format";
 import {
   alignSaidaItemVolumeToVasilhame,
   healSaidaVolumesFromVasilhames,
+  refreshSaidaItemMassaFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
@@ -396,7 +397,16 @@ export default function SaidaViewDialog({
         vasilhames,
         containersById
       );
-      return alignSaidaItemVolumeToVasilhame(item, vasilhame, transbordos);
+      const alignedVol = alignSaidaItemVolumeToVasilhame(
+        item,
+        vasilhame,
+        transbordos
+      );
+      return refreshSaidaItemMassaFromVasilhame(
+        alignedVol,
+        vasilhame,
+        transbordos
+      );
     });
     // Agendamento (comercial/logística): unifica bombonas/IBC do mesmo envase.
     if (variant === "agendamento") {

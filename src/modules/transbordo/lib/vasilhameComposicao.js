@@ -2313,6 +2313,48 @@ export function alignSaidaItemVolumeToVasilhame(
 }
 
 /**
+ * Recalcula peso líquido / quantidade (kg) do item de saída a partir do
+ * volume solicitado e da densidade (ou peso) atual do tanque.
+ * Corrige snapshot desatualizado após ajuste de volume/densidade no vasilhame.
+ */
+export function refreshSaidaItemMassaFromVasilhame(
+  item,
+  vasilhame,
+  transbordos = []
+) {
+  if (!saidaItemEhTanque(item) || !vasilhame) return item;
+  const vol = roundVolume(item.volume_solicitado || 0);
+  if (!(vol > 0)) return item;
+
+  const dens = parseDensidade(vasilhame.densidade);
+  const tankVol = volumeTanqueParaSaida(vasilhame, transbordos);
+  const tankKg = roundMass(vasilhame.peso_liquido || 0);
+  let massa = 0;
+  // Volume alinhado ao tanque: peso líquido atual do vasilhame prevalece
+  // (cobre ajuste de volume/densidade após o registro da saída).
+  if (tankVol > 0 && tankKg > 0 && Math.abs(vol - tankVol) <= 1) {
+    massa = tankKg;
+  } else if (dens > 0) {
+    massa = roundMass(vol * dens);
+  } else if (tankVol > 0 && tankKg > 0) {
+    massa = roundMass((tankKg * vol) / tankVol);
+  }
+  if (!(massa > 0)) return item;
+
+  const curPeso = roundMass(item.peso_liquido || 0);
+  const curQtd = roundMass(item.quantidade_solicitada || 0);
+  if (Math.abs(curPeso - massa) < 0.001 && Math.abs(curQtd - massa) < 0.001) {
+    return item;
+  }
+
+  return {
+    ...item,
+    peso_liquido: massa,
+    quantidade_solicitada: massa,
+  };
+}
+
+/**
  * Recupera massa de item de tanque com volume > 0 e peso zerado
  * (OP gravado sem densidade/peso líquido).
  */
@@ -2388,6 +2430,7 @@ export async function healSaidaVolumesFromVasilhames({
           String(item.vasilhame_placa || "").trim().toUpperCase()
         );
       let next = alignSaidaItemVolumeToVasilhame(item, v, transbordos);
+      next = refreshSaidaItemMassaFromVasilhame(next, v, transbordos);
       if (next !== item) changed = true;
       const withMass = alignSaidaItemMassaFromVolume(
         next,

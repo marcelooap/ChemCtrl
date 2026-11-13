@@ -20,9 +20,8 @@ import { entities } from "@transbordo/services/entities";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
-import TransbordoModal from "@transbordo/components/transbordo/TransbordoModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
-import { buildEditingTransbordoFromValidacao } from "@transbordo/lib/validacaoTransbordo";
+import ValidacaoOrdemEnvaseEditor from "@painel/components/operacional/ValidacaoOrdemEnvaseEditor";
 import {
   atualizarValidacaoIndustrializacao,
   efetivarValidacaoIndustrializacao,
@@ -84,6 +83,7 @@ export default function ValidacaoIndustrializacao() {
 
   const [viewOpen, setViewOpen] = useState(false);
   const [viewValidacao, setViewValidacao] = useState(null);
+  const [viewSaving, setViewSaving] = useState(false);
 
   const [editValidacao, setEditValidacao] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -166,13 +166,85 @@ export default function ValidacaoIndustrializacao() {
     [validacoes]
   );
 
+  const syncViewAfterUpdate = (updated, id) => {
+    if (!viewOpen) return;
+    if (viewValidacao?.id === id && updated) {
+      setViewValidacao(updated);
+    }
+  };
+
+  const handleSaveCamposView = async ({
+    header,
+    granelPayload,
+    transbordoPayload,
+    openEnvase = false,
+    deferPersist = false,
+  }) => {
+    if (!viewValidacao?.id) return;
+
+    // Alteração de pesagem/volume: abre envase sem gravar. Cancelar = descarta.
+    if (deferPersist && openEnvase) {
+      const pending = {
+        ...viewValidacao,
+        ...(header?.quantidade != null ? { quantidade: header.quantidade } : {}),
+        ...(header?.unidade_medida
+          ? { unidade_medida: header.unidade_medida }
+          : {}),
+        ...(header?.lote != null ? { lote: header.lote } : {}),
+        entrada_payload: granelPayload ?? viewValidacao.entrada_payload,
+        granel_payload: granelPayload ?? viewValidacao.granel_payload,
+        transbordo_payload: transbordoPayload ?? viewValidacao.transbordo_payload,
+      };
+      setEditValidacao(pending);
+      setEditSaveError("");
+      setEditModalOpen(true);
+      return;
+    }
+
+    setViewSaving(true);
+    try {
+      const updated = await atualizarValidacaoIndustrializacao({
+        id: viewValidacao.id,
+        header: header || null,
+        ...(granelPayload != null ? { entradaPayload: granelPayload } : {}),
+        ...(transbordoPayload != null
+          ? { transbordoPayload }
+          : {}),
+      });
+      await loadData({ silent: true });
+      setViewValidacao(updated);
+      if (openEnvase) {
+        setEditValidacao(updated);
+        setEditSaveError("");
+        setEditModalOpen(true);
+      }
+      toast({
+        title: t("industrializacao.validacao.editSuccessTitle"),
+        description: t("industrializacao.validacao.editSuccessDescription"),
+      });
+    } catch (err) {
+      console.error("[ValidacaoIndustrializacao] save campos view:", err);
+      throw err;
+    } finally {
+      setViewSaving(false);
+    }
+  };
+
+  const handleEditTransbordoFromView = () => {
+    if (!viewValidacao || viewValidacao.status !== "pendente") return;
+    setEditValidacao(viewValidacao);
+    setEditSaveError("");
+    setEditModalOpen(true);
+  };
+
   const handleSaveEdit = async (entradaPayload) => {
     if (!editValidacao) return;
-    await atualizarValidacaoIndustrializacao({
+    const updated = await atualizarValidacaoIndustrializacao({
       id: editValidacao.id,
       entradaPayload,
     });
     await loadData({ silent: true });
+    syncViewAfterUpdate(updated, editValidacao.id);
     setEditModalOpen(false);
     setEditValidacao(null);
     toast({
@@ -181,27 +253,36 @@ export default function ValidacaoIndustrializacao() {
     });
   };
 
-  const handleSaveEditTransbordo = async (transbordoPayload) => {
+  const handleSaveEditTransbordo = async (
+    transbordoPayload,
+    granelFromEditor = null
+  ) => {
     if (!editValidacao) return;
     setEditSaveError("");
     try {
-      const nextEntrada = parseEntradaPayload(editValidacao.entrada_payload);
+      const nextEntrada = granelFromEditor
+        ? granelFromEditor
+        : parseEntradaPayload(editValidacao.entrada_payload);
       const syncedEntrada = nextEntrada
         ? {
             ...nextEntrada,
             data: transbordoPayload.data || nextEntrada.data,
-            cliente_nome: transbordoPayload.cliente_nome || nextEntrada.cliente_nome,
-            produto_nome: transbordoPayload.produto_nome || nextEntrada.produto_nome,
-            produto_codigo: transbordoPayload.produto_codigo || nextEntrada.produto_codigo,
+            cliente_nome:
+              transbordoPayload.cliente_nome || nextEntrada.cliente_nome,
+            produto_nome:
+              transbordoPayload.produto_nome || nextEntrada.produto_nome,
+            produto_codigo:
+              transbordoPayload.produto_codigo || nextEntrada.produto_codigo,
             densidade: transbordoPayload.densidade || nextEntrada.densidade,
           }
         : null;
-      await atualizarValidacaoIndustrializacao({
+      const updated = await atualizarValidacaoIndustrializacao({
         id: editValidacao.id,
         entradaPayload: syncedEntrada,
         transbordoPayload,
       });
       await loadData({ silent: true });
+      syncViewAfterUpdate(updated, editValidacao.id);
       setEditModalOpen(false);
       setEditValidacao(null);
       toast({
@@ -210,7 +291,7 @@ export default function ValidacaoIndustrializacao() {
       });
     } catch (err) {
       setEditSaveError(
-                    err?.message || t("industrializacao.validacao.errors.editGeneric")
+        err?.message || t("industrializacao.validacao.errors.editGeneric")
       );
     }
   };
@@ -297,34 +378,41 @@ export default function ValidacaoIndustrializacao() {
 
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="overflow-auto flex-1 min-h-0">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1000px] table-fixed text-sm">
+            <colgroup>
+              <col className="w-[72px]" />
+              <col className="w-[14%]" />
+              <col className="w-[22%]" />
+              <col className="w-[16%]" />
+              <col className="w-[10%]" />
+              <col className="w-[12%]" />
+              <col className="w-[110px]" />
+              <col className="w-[168px]" />
+            </colgroup>
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.id")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.operador")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.produto")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.cliente")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.lote")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0 text-right">
+                <th className="px-3 py-3 font-medium whitespace-nowrap text-right">
                   {t("industrializacao.validacao.table.quantidade")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
-                  {t("industrializacao.validacao.table.unidade")}
-                </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap">
                   {t("industrializacao.validacao.table.validar")}
                 </th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap w-0">
+                <th className="px-3 py-3 font-medium whitespace-nowrap sticky right-0 bg-muted/40 z-20 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
                   {t("industrializacao.validacao.table.acoes")}
                 </th>
               </tr>
@@ -332,7 +420,7 @@ export default function ValidacaoIndustrializacao() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-5 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                     {t("industrializacao.validacao.empty")}
                   </td>
                 </tr>
@@ -343,14 +431,18 @@ export default function ValidacaoIndustrializacao() {
                     : v.produto_nome || "-";
                   const isPendente = v.status === "pendente";
                   const qtd = resumoQuantidadeValidacaoInd(v);
+                  const qtdLabel = qtd.quantidade
+                    ? `${formatNum(Number(qtd.quantidade), 2)}${
+                        qtd.unidade_medida ? ` ${qtd.unidade_medida}` : ""
+                      }`
+                    : "-";
+                  const rowBg = i % 2 === 1 ? "bg-muted/20" : "bg-card";
                   return (
                     <tr
                       key={v.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
-                        i % 2 === 1 ? "bg-muted/40/30" : ""
-                      }`}
+                      className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors group ${rowBg}`}
                     >
-                      <td className="px-4 py-3 align-middle font-semibold text-primary whitespace-nowrap">
+                      <td className="px-3 py-3 align-middle font-semibold text-primary whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
                           #{formatNumero(v.numero)}
                           {isNew(v.id) ? (
@@ -360,31 +452,45 @@ export default function ValidacaoIndustrializacao() {
                           ) : null}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground whitespace-nowrap">
-                        {v.criado_por_nome || "-"}
+                      <td className="px-3 py-3 align-middle text-foreground">
+                        <span
+                          className="block truncate"
+                          title={v.criado_por_nome || ""}
+                        >
+                          {v.criado_por_nome || "-"}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground">
-                        <span className="block truncate max-w-[280px]" title={produtoLabel}>
+                      <td className="px-3 py-3 align-middle text-foreground">
+                        <span className="block truncate" title={produtoLabel}>
                           {produtoLabel}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
-                        {v.cliente_nome || "-"}
+                      <td className="px-3 py-3 align-middle text-muted-foreground">
+                        <span
+                          className="block truncate"
+                          title={v.cliente_nome || ""}
+                        >
+                          {v.cliente_nome || "-"}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground whitespace-nowrap">
-                        {v.lote || "-"}
+                      <td className="px-3 py-3 align-middle text-foreground">
+                        <span className="block truncate" title={v.lote || ""}>
+                          {v.lote || "-"}
+                        </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-foreground font-medium whitespace-nowrap text-right">
-                        {qtd.quantidade ? formatNum(Number(qtd.quantidade), 2) : "-"}
+                      <td
+                        className="px-3 py-3 align-middle text-foreground font-medium whitespace-nowrap text-right tabular-nums"
+                        title={qtdLabel}
+                      >
+                        {qtdLabel}
                       </td>
-                      <td className="px-4 py-3 align-middle text-muted-foreground whitespace-nowrap">
-                        {qtd.unidade_medida || "-"}
-                      </td>
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-3 py-3 align-middle">
                         <StatusPill status={v.status} t={t} />
                       </td>
-                      <td className="px-4 py-3 align-middle">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
+                      <td
+                        className={`px-3 py-3 align-middle sticky right-0 z-10 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)] ${rowBg} group-hover:bg-muted/40`}
+                      >
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                           <Can permission={`${PERM}.view`}>
                             <button
                               type="button"
@@ -399,11 +505,7 @@ export default function ValidacaoIndustrializacao() {
                               <Eye className="w-4 h-4" />
                             </button>
                           </Can>
-                          {isPendente &&
-                            !(
-                              parseEntradaPayload(v.entrada_payload)?.origem ===
-                                "industrializacao" && !isValidacaoIndEntrada(v)
-                            ) && (
+                          {isPendente && (
                             <Can permission={`${PERM}.edit`}>
                               <button
                                 type="button"
@@ -482,6 +584,10 @@ export default function ValidacaoIndustrializacao() {
         validacao={toValidacaoViewModel(viewValidacao)}
         produtos={produtos}
         entradas={entradas}
+        canEdit
+        saving={viewSaving}
+        onSaveCampos={handleSaveCamposView}
+        onEditTransbordo={handleEditTransbordoFromView}
       />
 
       {isValidacaoIndEntrada(editValidacao) ? (
@@ -502,7 +608,7 @@ export default function ValidacaoIndustrializacao() {
           submitLabel={t("industrializacao.validacao.actions.edit")}
         />
       ) : (
-        <TransbordoModal
+        <ValidacaoOrdemEnvaseEditor
           open={editModalOpen}
           onClose={() => {
             setEditModalOpen(false);
@@ -510,12 +616,7 @@ export default function ValidacaoIndustrializacao() {
             setEditSaveError("");
           }}
           onSave={handleSaveEditTransbordo}
-          editingTransbordo={buildEditingTransbordoFromValidacao(
-            toValidacaoViewModel(editValidacao)
-          )}
-          clientes={clientes}
-          produtos={produtos}
-          entradas={entradas}
+          validacao={toValidacaoViewModel(editValidacao)}
           isotanques={isotanques}
           vasilhames={vasilhames}
           transbordos={transbordos}

@@ -124,7 +124,8 @@ export default function EtiquetaPreview({
       case 'lote':
         return v.lot || '—';
       case 'fabricacao':
-        if (convencional && !v.manufactureDate) return '';
+        // Sem data de fabricação preenchida → em branco (não usa recebimento).
+        if (!v.manufactureDate) return '';
         return formatEtiquetaDate(v.manufactureDate, dateFormat, i18n.language);
       case 'data_envase':
         if (convencional && !v.fillingDate) return '';

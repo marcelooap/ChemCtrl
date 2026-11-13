@@ -1645,6 +1645,32 @@
           "missingOperator": "Identifique al operador antes de guardar la orden."
         },
         "goToTransbordo": "Ir a transbordo",
+        "envaseModal": {
+          "title": "Registrar envasado",
+          "subtitle": "Revise producto, lote y cantidad e informe los envases de destino.",
+          "conversion": "Conversión",
+          "convertedToL": "Equivalente en litros",
+          "convertedToKg": "Equivalente en kg",
+          "noDensity": "Informe la densidad para convertir",
+          "densityUsed": "Densidad usada: {{density}}",
+          "itemsTitle": "Ítems de envasado",
+          "addItem": "Agregar línea",
+          "operators": "Operadores",
+          "operatorsPlaceholder": "Seleccionar operadores",
+          "operatorsSelected": "{{count}} operador(es) seleccionado(s)",
+          "operatorsEmpty": "Ningún operador del sector Transbordo registrado.",
+          "volumeRegistered": "Volumen registrado",
+          "volumePacked": "Volumen envasado",
+          "conferenceOk": "Conferencia ok",
+          "conferenceExceeded": "El volumen envasado excede el registrado",
+          "conferencePending": "Ajuste los ítems hasta cerrar la conferencia",
+          "errors": {
+            "density": "La densidad es obligatoria para el envasado.",
+            "items": "Complete todos los ítems de envasado.",
+            "mismatch": "El volumen envasado debe ser igual al volumen registrado.",
+            "operators": "Seleccione al menos un operador del sector Transbordo."
+          }
+        },
         "submitValidation": "Enviar a validación",
         "search": "Buscar por código, producto o cliente...",
         "records": "{{count}} registro(s)",
@@ -1702,6 +1728,9 @@
           "lot": "Lote",
           "supplier": "Nombre del proveedor",
           "ticket": "N.º de ticket"
+        },
+        "operacao": {
+          "title": "Datos de la operación"
         },
         "granel": {
           "title": "Datos del recibo a granel"

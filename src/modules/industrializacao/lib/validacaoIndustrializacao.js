@@ -1,7 +1,11 @@
 import { chemflowSupabase } from "@/services/supabase/chemflow";
 import { base44 } from "@industrializacao/api/base44Client";
 import { buildMpStockPayload } from "@industrializacao/lib/mpStockForm";
-import { persistOperacaoFromValidacao, resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
+import {
+  lotesLabelFromOrigens,
+  persistOperacaoFromValidacao,
+  resumoQuantidadeValidacao,
+} from "@transbordo/lib/validacaoTransbordo";
 import { allocateMpEntryIds } from "@industrializacao/lib/allocateMpEntryId";
 import {
   createEntradaFromMpRows,
@@ -249,6 +253,7 @@ export async function atualizarValidacaoIndustrializacao({
   id,
   entradaPayload,
   transbordoPayload,
+  header = null,
 }) {
   if (!id) throw new Error("id obrigatório");
   const atual = await base44.entities.IndValidacao.get(id);
@@ -273,19 +278,25 @@ export async function atualizarValidacaoIndustrializacao({
   });
   const resumo = resumoQuantidadeValidacaoInd(view);
   const lote =
-    (atual.tipo === "entrada" || atual.tipo === "granel_transbordo") && nextEntrada
+    header?.lote ||
+    ((atual.tipo === "entrada" || atual.tipo === "granel_transbordo") && nextEntrada
       ? nextEntrada.lote || nextEntrada.lotes?.[0]?.lote || resumo.lote
-      : nextTransbordo?.origens?.[0]?.lote || resumo.lote || atual.lote;
+      : lotesLabelFromOrigens(nextTransbordo?.origens) ||
+        nextTransbordo?.origens?.[0]?.lote ||
+        resumo.lote ||
+        atual.lote);
 
   return base44.entities.IndValidacao.update(id, {
     entrada_payload: nextEntrada,
     transbordo_payload: nextTransbordo,
     data:
+      header?.data ||
       nextTransbordo?.data ||
       nextEntrada?.data ||
       atual.data ||
       null,
     cliente_nome:
+      header?.cliente_nome ||
       nextTransbordo?.cliente_nome ||
       nextEntrada?.cliente_nome ||
       atual.cliente_nome,
@@ -297,9 +308,11 @@ export async function atualizarValidacaoIndustrializacao({
       nextTransbordo?.produto_codigo ||
       nextEntrada?.produto_codigo ||
       atual.produto_codigo,
-    lote: resumo.lote || atual.lote || null,
-    quantidade: resumo.quantidade || 0,
-    unidade_medida: resumo.unidade_medida || null,
+    lote: lote || atual.lote || null,
+    quantidade:
+      header?.quantidade != null ? header.quantidade : resumo.quantidade || 0,
+    unidade_medida:
+      header?.unidade_medida || resumo.unidade_medida || null,
   });
 }
 

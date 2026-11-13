@@ -176,6 +176,30 @@ export function resumoQuantidadeValidacao(validacao) {
   return { quantidade: totalVol, unidade_medida: "L" };
 }
 
+/** Junta lotes das origens (e lotes_retirados) para o resumo da validação. */
+export function lotesLabelFromOrigens(origens = []) {
+  const names = [];
+  for (const o of origens || []) {
+    const retirados = (o.lotes_retirados || [])
+      .filter((l) => Number(l.volume_retirado) > 0)
+      .map((l) => String(l.lote || "").trim())
+      .filter(Boolean);
+    if (retirados.length > 0) {
+      for (const n of retirados) {
+        if (!names.includes(n)) names.push(n);
+      }
+      continue;
+    }
+    const lote = String(o.lote || "").trim();
+    if (!lote) continue;
+    for (const part of lote.split(/\s*\/\s*/)) {
+      const p = part.trim();
+      if (p && !names.includes(p)) names.push(p);
+    }
+  }
+  return names.join(" / ");
+}
+
 function extractResumo(tipo, granelPayload, transbordoPayload) {
   const qty = resumoQuantidadeValidacao({
     tipo,
@@ -191,8 +215,161 @@ function extractResumo(tipo, granelPayload, transbordoPayload) {
   const lote =
     (tipo === "granel_transbordo" || tipo === "entrada") && granelPayload
       ? granelPayload.lote || granelPayload.lotes?.[0]?.lote || ""
-      : transbordoPayload?.origens?.[0]?.lote || "";
+      : lotesLabelFromOrigens(transbordoPayload?.origens) ||
+        transbordoPayload?.origens?.[0]?.lote ||
+        "";
   return { lote, ...qty };
+}
+
+/**
+ * Modelo para reabrir o OrdemTransbordoEnvaseModal a partir de uma validação
+ * pendente (mesma UX da Ordem de Transbordo).
+ */
+function asPayloadObject(v) {
+  if (v == null) return null;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return typeof parsed === "object" && parsed != null ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof v === "object" ? v : null;
+}
+
+export function buildEnvaseEditModelFromValidacao(validacao) {
+  if (!validacao) return null;
+  const tp = asPayloadObject(validacao.transbordo_payload);
+  if (!tp) return null;
+
+  const granel =
+    asPayloadObject(validacao.granel_payload) ||
+    asPayloadObject(validacao.entrada_payload) ||
+    null;
+  const origens = Array.isArray(tp.origens) ? tp.origens : [];
+  const origemTipoRaw =
+    validacao.origem_tipo ||
+    origens[0]?.tipo_origem ||
+    (validacao.tipo === "granel_transbordo" ? "granel" : "");
+  const origemTipoOperacional =
+    origemTipoRaw === "granel" ? "entrada" : origemTipoRaw || "entrada";
+
+  const tankaOrigens =
+    origemTipoOperacional === "tanka"
+      ? origens.map((o) => {
+          const codigo =
+            String(o.tanka_codigo || "").trim() ||
+            String(o.entrada_codigo || "")
+              .split("—")[0]
+              .trim() ||
+            "Tanka";
+          return {
+            tankaId: o.tanka_id || o.entrada_id || "",
+            tankaCodigo: codigo,
+            lote: o.lote || "",
+            quantidade:
+              o.volume_retirado === "" || o.volume_retirado == null
+                ? ""
+                : Number(o.volume_retirado) || 0,
+          };
+        })
+      : [];
+
+  const vasilhameOrigens =
+    origemTipoOperacional === "vasilhame"
+      ? origens.map((o) => {
+          const codigo =
+            String(o.entrada_codigo || "")
+              .split("—")[0]
+              .trim() || "Vasilhame";
+          const lotesDisp = Array.isArray(o.lotes_disponiveis)
+            ? o.lotes_disponiveis
+            : [];
+          const lotesRet = Array.isArray(o.lotes_retirados)
+            ? o.lotes_retirados
+            : [];
+          const loteLabel =
+            lotesRet.length > 1
+              ? lotesRet
+                  .map((l) => String(l.lote || "").trim())
+                  .filter(Boolean)
+                  .join(" / ")
+              : o.lote || lotesRet[0]?.lote || "";
+          return {
+            vasilhameId: o.entrada_id || "",
+            codigo,
+            lote: loteLabel,
+            quantidade:
+              o.volume_retirado === "" || o.volume_retirado == null
+                ? ""
+                : Number(o.volume_retirado) || 0,
+            lotes_retirados: lotesRet,
+            lotes_disponiveis: lotesDisp,
+          };
+        })
+      : [];
+
+  const totalFromOrigens = origens.reduce(
+    (s, o) => s + (Number(o.volume_retirado) || 0),
+    0
+  );
+  const isGranel =
+    validacao.tipo === "granel_transbordo" || origemTipoRaw === "granel";
+  const quantidade = isGranel
+    ? granel?.quantidade ??
+      granel?.lotes?.[0]?.quantidade ??
+      totalFromOrigens
+    : totalFromOrigens > 0
+      ? totalFromOrigens
+      : tp.volume_total || 0;
+  const unidade = isGranel
+    ? granel?.unidade_medida ||
+      granel?.lotes?.[0]?.unidade_medida ||
+      "kg"
+    : "L";
+  const densidade =
+    tp.densidade ||
+    granel?.densidade ||
+    granel?.lotes?.[0]?.densidade ||
+    "";
+  const lote =
+    lotesLabelFromOrigens(origens) ||
+    (isGranel
+      ? granel?.lote || granel?.lotes?.[0]?.lote || ""
+      : "") ||
+    tp.lote ||
+    "";
+
+  const productLabel = [tp.produto_codigo || validacao.produto_codigo, tp.produto_nome || validacao.produto_nome]
+    .filter(Boolean)
+    .join(" - ");
+
+  return {
+    productLabel,
+    produtoId: tp.produto_id || validacao.produto_id || "",
+    produtoNome: tp.produto_nome || validacao.produto_nome || "",
+    produtoCodigo: tp.produto_codigo || validacao.produto_codigo || "",
+    lote,
+    quantidade,
+    unidade,
+    densidade,
+    dataOp: tp.data || granel?.data || validacao.data || "",
+    clienteId: tp.cliente_id || granel?.cliente_id || validacao.cliente_id || "",
+    clienteNome:
+      tp.cliente_nome || granel?.cliente_nome || validacao.cliente_nome || "",
+    origemTipoOperacional,
+    tankaOrigens,
+    vasilhameOrigens,
+    quantidadeEditable:
+      origemTipoOperacional === "tanka"
+        ? tankaOrigens.length <= 1
+        : origemTipoOperacional === "vasilhame"
+          ? vasilhameOrigens.length <= 1
+          : true,
+    granelPayload: isGranel && granel ? granel : null,
+    initialPayload: tp,
+  };
 }
 
 /**
@@ -255,6 +432,7 @@ export async function atualizarValidacaoTransbordoPayload({
   id,
   transbordoPayload = null,
   granelPayload = null,
+  header = null,
 }) {
   if (!id) throw new Error("id obrigatório");
   const atual = await entities.transbordoValidacoes.get(id);
@@ -263,26 +441,35 @@ export async function atualizarValidacaoTransbordoPayload({
     throw new Error("Não é possível editar uma validação já processada");
   }
 
-  const nextGranel = granelPayload ?? atual.granel_payload;
-  const nextTransbordo = transbordoPayload ?? atual.transbordo_payload;
+  const nextGranel =
+    granelPayload ?? asPayloadObject(atual.granel_payload) ?? atual.granel_payload;
+  const nextTransbordo =
+    transbordoPayload ??
+    asPayloadObject(atual.transbordo_payload) ??
+    atual.transbordo_payload;
   const resumo = extractResumo(atual.tipo, nextGranel, nextTransbordo);
 
   return entities.transbordoValidacoes.update(id, {
     transbordo_payload: nextTransbordo,
     granel_payload: nextGranel,
-    lote: resumo.lote || null,
-    quantidade: resumo.quantidade || 0,
-    unidade_medida: resumo.unidade_medida || null,
+    lote: header?.lote ?? resumo.lote ?? null,
+    quantidade:
+      header?.quantidade != null ? header.quantidade : resumo.quantidade || 0,
+    unidade_medida:
+      header?.unidade_medida ?? resumo.unidade_medida ?? null,
     data:
+      header?.data ||
       nextTransbordo?.data ||
       nextGranel?.data ||
       atual.data ||
       null,
     cliente_id:
+      nullIfEmpty(header?.cliente_id) ??
       nullIfEmpty(nextTransbordo?.cliente_id) ??
       nullIfEmpty(nextGranel?.cliente_id) ??
       atual.cliente_id,
     cliente_nome:
+      header?.cliente_nome ||
       nextTransbordo?.cliente_nome ||
       nextGranel?.cliente_nome ||
       atual.cliente_nome,

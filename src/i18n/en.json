@@ -2231,6 +2231,36 @@
           "missingOperator": "Identify the operator before saving the order."
         },
         "goToTransbordo": "Go to transshipment",
+        "envaseModal": {
+          "title": "Register packaging",
+          "subtitle": "Review product, lot and quantity and enter the destination packages.",
+          "conversion": "Conversion",
+          "convertedToL": "Equivalent in liters",
+          "convertedToKg": "Equivalent in kg",
+          "noDensity": "Enter density to convert",
+          "densityUsed": "Density used: {{density}}",
+          "itemsTitle": "Packaging items",
+          "addItem": "Add row",
+          "operators": "Operators",
+          "operatorsPlaceholder": "Select operators",
+          "operatorsSelected": "{{count}} operator(s) selected",
+          "operatorsEmpty": "No operators registered for the Transshipment sector.",
+          "multipleLots": "{{count}} lots (FIFO)",
+          "originsFifo": "Origins (FIFO consumption order)",
+          "editOrdem": "Edit order",
+          "editOrdemTitle": "Edit order data",
+          "volumeRegistered": "Registered volume",
+          "volumePacked": "Packaged volume",
+          "conferenceOk": "Reconciliation ok",
+          "conferenceExceeded": "Packaged volume exceeds registered volume",
+          "conferencePending": "Adjust items until reconciliation closes",
+          "errors": {
+            "density": "Density is required for packaging.",
+            "items": "Fill in all packaging items.",
+            "mismatch": "Packaged volume must equal registered volume.",
+            "operators": "Select at least one Transshipment-sector operator."
+          }
+        },
         "submitValidation": "Send for validation",
         "search": "Search by code, product or client...",
         "records": "{{count}} record(s)",
@@ -2271,6 +2301,8 @@
           "manufacture": "Manufacture",
           "expiry": "Expiry",
           "density": "Density",
+          "tanka": "Tank",
+          "tanque": "Tank",
           "unitPrice": "Unit price",
           "ticket": "Ticket",
           "gross": "Gross weight (kg)",
@@ -2287,9 +2319,23 @@
           "nf": "Invoice no.",
           "unit": "Unit",
           "lot": "Lot",
+          "tanka": "Select the tank",
+          "tankaFirst": "Select the tank first",
+          "tanque": "Select the yard tank",
+          "tanqueFirst": "Select the tank first",
           "supplier": "Supplier name",
           "ticket": "Ticket no."
         },
+        "operacao": {
+          "title": "Operation data"
+        },
+        "tankaEmpty": "No tank with balance for this product.",
+        "vasilhameEmpty": "No yard tank with this product.",
+        "densityFromEntrada": "Density from receipt",
+        "addTankaItem": "Add tank",
+        "addVasilhameItem": "Add tank",
+        "tankaItemLabel": "Origin {{n}}",
+        "tankaTotalVolume": "Total origin volume",
         "granel": {
           "title": "Bulk receipt data"
         },
@@ -2311,6 +2357,8 @@
           "qty": "Quantity must be positive.",
           "unit": "Unit of measure is required.",
           "lot": "Lot is required.",
+          "tanka": "Tank is required.",
+          "vasilhame": "Yard tank (vasilhame) is required.",
           "density": "Density is required for this receipt.",
           "gross": "Gross weight is required.",
           "net": "Net weight is required.",
@@ -2319,6 +2367,7 @@
         },
         "pendentes": {
           "title": "Pending validation",
+          "view": "View",
           "print": "Print report"
         },
         "relatorio": {

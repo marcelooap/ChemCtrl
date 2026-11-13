@@ -1645,6 +1645,32 @@
           "missingOperator": "Identifiez l'opérateur avant d'enregistrer l'ordre."
         },
         "goToTransbordo": "Aller au transbordement",
+        "envaseModal": {
+          "title": "Enregistrer le conditionnement",
+          "subtitle": "Vérifiez le produit, le lot et la quantité, puis saisissez les emballages de destination.",
+          "conversion": "Conversion",
+          "convertedToL": "Équivalent en litres",
+          "convertedToKg": "Équivalent en kg",
+          "noDensity": "Indiquez la densité pour convertir",
+          "densityUsed": "Densité utilisée : {{density}}",
+          "itemsTitle": "Lignes de conditionnement",
+          "addItem": "Ajouter une ligne",
+          "operators": "Opérateurs",
+          "operatorsPlaceholder": "Sélectionner les opérateurs",
+          "operatorsSelected": "{{count}} opérateur(s) sélectionné(s)",
+          "operatorsEmpty": "Aucun opérateur du secteur Transbordement enregistré.",
+          "volumeRegistered": "Volume enregistré",
+          "volumePacked": "Volume conditionné",
+          "conferenceOk": "Contrôle ok",
+          "conferenceExceeded": "Le volume conditionné dépasse le volume enregistré",
+          "conferencePending": "Ajustez les lignes jusqu'à fermer le contrôle",
+          "errors": {
+            "density": "La densité est obligatoire pour le conditionnement.",
+            "items": "Renseignez toutes les lignes de conditionnement.",
+            "mismatch": "Le volume conditionné doit être égal au volume enregistré.",
+            "operators": "Sélectionnez au moins un opérateur du secteur Transbordement."
+          }
+        },
         "submitValidation": "Envoyer à la validation",
         "search": "Rechercher par code, produit ou client...",
         "records": "{{count}} enregistrement(s)",
@@ -1702,6 +1728,9 @@
           "lot": "Lot",
           "supplier": "Nom du fournisseur",
           "ticket": "N° de ticket"
+        },
+        "operacao": {
+          "title": "Données de l'opération"
         },
         "granel": {
           "title": "Données de réception en vrac"
