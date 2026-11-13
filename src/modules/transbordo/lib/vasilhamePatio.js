@@ -163,25 +163,41 @@ function isVasilhameExpedido(vasilhame) {
  * Valores de volume/peso para EXIBIÇÃO de vasilhame expedido.
  * A baixa zera `volume`/`peso_liquido` no cadastro; aqui recuperamos o conteúdo
  * (snapshot da saída → composição → OP/densidade) sem alterar o registro.
+ *
+ * Importante: se o volume já foi zerado mas o peso líquido sobrou (ex.: densidade
+ * ausente na validação fiscal), ainda assim restauramos o volume — senão boleta
+ * e telas de consulta saem com 0 L.
  */
 export function resolveVasilhameExpedidoDisplay(
   vasilhame,
   { linkedItems = [], transbordos = [] } = {}
 ) {
   if (!vasilhame || !isVasilhameExpedido(vasilhame)) return vasilhame;
-  if ((Number(vasilhame.volume) || 0) > 0 || (Number(vasilhame.peso_liquido) || 0) > 0) {
-    return vasilhame;
-  }
+
+  const currentVol = Number(vasilhame.volume) || 0;
+  const currentPeso = Number(vasilhame.peso_liquido) || 0;
+  if (currentVol > 0 && currentPeso > 0) return vasilhame;
+
   const restored = buildVasilhameYardRestorePatch(vasilhame, {
     linkedItems,
     transbordos,
   });
   if (!restored) return vasilhame;
+
+  const nextVol = currentVol > 0 ? currentVol : Number(restored.volume) || 0;
+  const nextPeso =
+    currentPeso > 0 ? currentPeso : Number(restored.peso_liquido) || 0;
+  if (nextVol <= 0 && nextPeso <= 0) return vasilhame;
+
+  const tara = Number(vasilhame.tara) || 0;
   return {
     ...vasilhame,
-    volume: restored.volume,
-    peso_liquido: restored.peso_liquido,
-    peso_bruto: restored.peso_bruto,
+    volume: nextVol,
+    peso_liquido: nextPeso,
+    peso_bruto:
+      nextPeso > 0
+        ? Number(restored.peso_bruto) || roundMass(tara + nextPeso)
+        : Number(vasilhame.peso_bruto) || tara,
   };
 }
 

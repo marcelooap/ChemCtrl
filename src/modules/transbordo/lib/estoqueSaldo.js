@@ -381,8 +381,86 @@ function origemMatchesEstoque(origem, estoqueItem) {
   const estoqueId = estoqueItem.id;
   if (origem.estoque_id && idsEqual(origem.estoque_id, estoqueId)) return true;
   // Em transbordos, `origem.entrada_id` aponta para `estoque.id`
-  if (origem.entrada_id && idsEqual(origem.entrada_id, estoqueId)) return true;
+  // (exceto origem tanka: aí entrada_id é o isotanque — ver abaixo).
+  if (
+    (origem.tipo_origem || "") !== "tanka" &&
+    origem.entrada_id &&
+    idsEqual(origem.entrada_id, estoqueId)
+  ) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * Ids gravados em composicao.estoque_id / entrada_id.
+ * Em OPs com origem tanka, o FIFO costumava lastrear o id do isotanque
+ * (não o id do estoque) — esses stamps não bloqueiam o saldo do lote.
+ */
+function collectComposicaoEstoqueStamps(composicao) {
+  const stamps = new Set();
+  for (const c of composicao || []) {
+    if (c?.estoque_id != null && String(c.estoque_id).trim() !== "") {
+      stamps.add(String(c.estoque_id));
+    }
+    if (c?.entrada_id != null && String(c.entrada_id).trim() !== "") {
+      stamps.add(String(c.entrada_id));
+    }
+  }
+  return stamps;
+}
+
+/**
+ * True quando todos os stamps da composição são ids de tanka/isotanque
+ * das OPs que geraram o tanque — não ids de registro de estoque.
+ */
+function compositionStampsAreOnlyTankaIds(vasilhame, transbordos = []) {
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
+  const stamps = collectComposicaoEstoqueStamps(composicao);
+  if (stamps.size === 0) return false;
+
+  const opCodes = new Set(
+    composicao
+      .map((c) => String(c?.transbordo_codigo || "").trim())
+      .filter(Boolean)
+  );
+  const tankaIds = new Set();
+  for (const t of transbordos || []) {
+    const code = String(t?.codigo_transbordo || "").trim();
+    const related =
+      (vasilhame?.transbordo_id && t.id === vasilhame.transbordo_id) ||
+      (code && opCodes.has(code));
+    if (!related) continue;
+    for (const o of t.origens || []) {
+      if ((o?.tipo_origem || "") !== "tanka") continue;
+      if (o.entrada_id != null && String(o.entrada_id).trim() !== "") {
+        tankaIds.add(String(o.entrada_id));
+      }
+    }
+  }
+  if (tankaIds.size === 0) return false;
+  for (const s of stamps) {
+    if (!tankaIds.has(s)) return false;
+  }
+  return true;
+}
+
+/**
+ * Id de estoque lastreável na origem do OP.
+ * Origem tanka usa entrada_id = isotanque — nunca promover a estoque_id.
+ */
+export function resolveEstoqueIdFromOrigemTransbordo(origem) {
+  if (!origem) return null;
+  if (origem.estoque_id != null && String(origem.estoque_id).trim() !== "") {
+    return origem.estoque_id;
+  }
+  if ((origem.tipo_origem || "") === "tanka") return null;
+  if (origem.entrada_id != null && String(origem.entrada_id).trim() !== "") {
+    return origem.entrada_id;
+  }
+  return null;
 }
 
 function addInListOrder(target, candidates, order) {
@@ -1400,10 +1478,9 @@ export function calcVasilhamesExpedidosPatio(
 
       // Composição lastreada por id manda: após troca de lote REP (OF→OS),
       // a fatia FIFO do OP pode apontar um tanque que já não carrega este estoque.
+      // Stamps que são só id de tanka (origem isotanque) não bloqueiam.
       const composicao = Array.isArray(v.composicao) ? v.composicao : [];
-      const hasStamps = composicao.some(
-        (c) => c?.estoque_id != null || c?.entrada_id != null
-      );
+      const hasStamps = collectComposicaoEstoqueStamps(composicao).size > 0;
       let qtd = volBruto;
       if (hasStamps) {
         const compOpts = composicaoOptsForVasilhame(
@@ -1420,8 +1497,25 @@ export function calcVasilhamesExpedidosPatio(
           }
           return s + quantidadeComposicaoOperacional(c, estoqueItem, compOpts);
         }, 0);
-        if (!(fromComp > 0)) return;
-        qtd = fromComp;
+        if (fromComp > 0) {
+          qtd = fromComp;
+        } else if (compositionStampsAreOnlyTankaIds(v, transbordos)) {
+          const loteEstoque = normLoteKey(
+            estoqueItem.lote || estoqueItem.lotes?.[0]?.lote
+          );
+          const fromLote = loteEstoque
+            ? composicao.reduce((s, c) => {
+                if (normLoteKey(c.lote) !== loteEstoque) return s;
+                return (
+                  s + quantidadeComposicaoOperacional(c, estoqueItem, compOpts)
+                );
+              }, 0)
+            : 0;
+          if (!(fromLote > 0)) return;
+          qtd = fromLote;
+        } else {
+          return;
+        }
       }
 
       const tankCap = resolveQuantidadeVasilhameParaBaixa(
@@ -1996,9 +2090,8 @@ function resolveQuantidadeEstoqueNoVasilhame(
     return roundOp(estoqueItem, tankCap);
   };
 
-  const hasEstoqueStamps = composicao.some(
-    (c) => c?.estoque_id != null || c?.entrada_id != null
-  );
+  const estoqueStamps = collectComposicaoEstoqueStamps(composicao);
+  const hasEstoqueStamps = estoqueStamps.size > 0;
   const byEstoqueId = roundOp(
     estoqueItem,
     sumComp(
@@ -2007,12 +2100,32 @@ function resolveQuantidadeEstoqueNoVasilhame(
     )
   );
   if (byEstoqueId > 0) return capToTankPhysical(byEstoqueId, byEstoqueId);
-  // Composição lastreada por id: se nenhum apontar para este estoque, o tanque
-  // não carrega este saldo. Evita fatia FIFO do OF antigo após troca REP→OS.
-  if (hasEstoqueStamps) return 0;
+
+  // Stamps de outro estoque (ex.: troca REP OF→OS) bloqueiam fatia antiga.
+  // Stamps que são só id de tanka (bug de lastro em origem tanka) NÃO bloqueiam:
+  // o volume ainda é deste lote via cadeia FIFO entrada→tanka→tanque.
+  const tankaStampsOnly =
+    hasEstoqueStamps &&
+    compositionStampsAreOnlyTankaIds(vasilhame, transbordos);
+  if (hasEstoqueStamps && !tankaStampsOnly) return 0;
 
   const fatia = Number(fatiaPorVasilhame?.get(vasilhame.id)) || 0;
   if (fatia > 0) return capToTankPhysical(fatia);
+
+  // Fallback: composição com stamp de tanka + mesmo lote deste estoque
+  // (quando a cadeia FIFO não indexou a fatia, ex. placa/legado).
+  if (tankaStampsOnly) {
+    const loteEstoque = normLoteKey(
+      estoqueItem.lote || estoqueItem.lotes?.[0]?.lote
+    );
+    if (loteEstoque) {
+      const byLote = roundOp(
+        estoqueItem,
+        sumComp((c) => normLoteKey(c.lote) === loteEstoque)
+      );
+      if (byLote > 0) return capToTankPhysical(byLote, byLote);
+    }
+  }
 
   const vKeys = collectVasilhameKeys(vasilhame);
   const linkedByTrack = [...vKeys].some((k) => trackedKeys.has(k));
@@ -2037,7 +2150,7 @@ function resolveQuantidadeEstoqueNoVasilhame(
     (t.origens || []).some((o) => origemMatchesEstoque(o, estoqueItem))
   );
 
-  // Vínculo com estoque é sempre por id (composicao/OP). Lote do vasilhame não vincula.
+  // Vínculo preferencial por id (composicao/OP). Lote só entra no fallback tanka.
   const linked =
     linkedByTrack || linkedDirect || share > 0 || linkedByOp;
 
@@ -2162,19 +2275,19 @@ export function computeEstoqueQuantidadesPorLocal(
     if (isVasilhameExpedido(v)) continue;
     if ((v.status || "No Pátio") !== "No Pátio") continue;
 
-    // Mesma regra da composição: se o tanque já declara outros estoque_id,
-    // a fatia FIFO do lote antigo (pré-troca) não entra neste saldo.
+    // Mesma regra da composição: stamps de outro estoque (REP) bloqueiam a
+    // fatia antiga. Stamps que são só id de tanka não bloqueiam.
     const compV = Array.isArray(v.composicao) ? v.composicao : [];
-    const stamped = compV.some(
-      (c) => c?.estoque_id != null || c?.entrada_id != null
+    const stamped = collectComposicaoEstoqueStamps(compV).size > 0;
+    const matchesThis = compV.some(
+      (c) =>
+        idsEqual(c.estoque_id, estoqueItem.id) ||
+        idsEqual(c.entrada_id, estoqueItem.id)
     );
     if (
       stamped &&
-      !compV.some(
-        (c) =>
-          idsEqual(c.estoque_id, estoqueItem.id) ||
-          idsEqual(c.entrada_id, estoqueItem.id)
-      )
+      !matchesThis &&
+      !compositionStampsAreOnlyTankaIds(v, transbordos)
     ) {
       continue;
     }

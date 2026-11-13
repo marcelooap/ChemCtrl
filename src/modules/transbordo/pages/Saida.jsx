@@ -464,12 +464,9 @@ export default function Saida({
             (wantRegistrado && registrado);
         }
 
-        // Mesma regra visual da coluna Dias: "Hoje" quando calcDias === 0
-        // e a saída ainda não está expedida (expedido exibe "-").
+        // Data programada = hoje (calcDias === 0), independente de já ter sido carregada.
         if (carregamentosHoje) {
-          const dias = calcDias(s.data_programada);
-          const isExpedido = isSaidaExpedida(s.id, expedidasIds);
-          matchCarregamentosHoje = !isExpedido && dias === 0;
+          matchCarregamentosHoje = calcDias(s.data_programada) === 0;
         }
       }
 

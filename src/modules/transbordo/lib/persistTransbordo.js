@@ -695,14 +695,22 @@ export async function persistTransbordo({
         destinosOperacionais,
         dens
       );
-      // Lastreia cada fatia FIFO ao id do registro de estoque (origem.entrada_id).
+      // Lastreia cada fatia FIFO ao id do registro de estoque.
+      // Origem tanka: entrada_id é o isotanque — não gravar como estoque_id
+      // (isso zerava Saldo Tanque na tela de Estoque).
       for (const comp of destinoCompositions) {
         for (const c of comp) {
           const o = origensFifo[c.origem_index];
-          const estoqueId = o?.estoque_id || o?.entrada_id || null;
+          const estoqueId =
+            o?.estoque_id ||
+            ((o?.tipo_origem || "") === "tanka" ? null : o?.entrada_id) ||
+            null;
           if (estoqueId) {
             c.estoque_id = estoqueId;
             c.entrada_id = estoqueId;
+          } else {
+            delete c.estoque_id;
+            delete c.entrada_id;
           }
           // Embalado em kg/lb: quantidade_l já é a massa envasada.
           // Não multiplicar de novo pela densidade.

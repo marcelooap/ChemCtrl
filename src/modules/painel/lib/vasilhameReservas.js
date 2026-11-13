@@ -18,6 +18,7 @@ import {
   resolveVasilhameLoteDatas,
 } from '@transbordo/lib/vasilhameComposicao';
 import { resolveVasilhameExpedidoDisplay } from '@transbordo/lib/vasilhamePatio';
+import { buildContainerYardRestorePatch } from '@transbordo/lib/saidaIndContainer';
 import { parseNumero } from '@transbordo/lib/format';
 import { entities } from '@transbordo/services/entities';
 
@@ -117,17 +118,56 @@ function rowCreatedAtMs(row) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+function normPlacaBarril(placa, barril) {
+  return `${String(placa ?? '')
+    .trim()
+    .toUpperCase()}|${String(barril ?? '')
+    .trim()
+    .toUpperCase()}`;
+}
+
 function saidaItemsByVasilhameId(saidas = []) {
   const map = new Map();
   for (const saida of saidas || []) {
     for (const item of saida?.itens || []) {
-      if (item?.tipo !== 'convencional' || !item.vasilhame_id) continue;
-      const list = map.get(item.vasilhame_id);
+      if (item?.tipo !== 'convencional' && item?.tipo !== 'ind_vasilhame') continue;
+      const id = item.vasilhame_id || item.container_id;
+      if (!id) continue;
+      const key = String(id);
+      const list = map.get(key);
       if (list) list.push({ saida, item });
-      else map.set(item.vasilhame_id, [{ saida, item }]);
+      else map.set(key, [{ saida, item }]);
     }
   }
   return map;
+}
+
+/** Amplia match por placa/barril quando o id da saída ficou defasado (regravação OP). */
+function resolveLinkedSaidaItems(vasilhame, saidaItems, saidas = []) {
+  const byId = saidaItems.get(String(vasilhame?.id)) || [];
+  if (byId.length > 0) return byId;
+
+  const placa = vasilhame?.placa;
+  const barril = vasilhame?.barril;
+  if (!placa && !barril) return [];
+
+  const selfKey = normPlacaBarril(placa, barril);
+  if (selfKey === '|') return [];
+
+  const linked = [];
+  for (const saida of saidas || []) {
+    for (const item of saida?.itens || []) {
+      if (item?.tipo !== 'convencional') continue;
+      const itemKey = normPlacaBarril(
+        item.vasilhame_placa || item.placa,
+        item.vasilhame_barril || item.barril
+      );
+      if (itemKey !== '|' && itemKey === selfKey) {
+        linked.push({ saida, item });
+      }
+    }
+  }
+  return linked;
 }
 
 function resolveIndContainerLoteSummary(container, productions = [], recipes = []) {
@@ -189,47 +229,138 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
   };
 }
 
+function resolveIndContainerDisplay(container, linkedItems = [], productions = []) {
+  if (!container) return container;
+  const status = (container.status || '').trim();
+  const expedido =
+    status === 'Expedido' || Boolean(String(container.departure_date || '').trim());
+  const currentVol = Number(container.volume) || 0;
+  if (!expedido || currentVol > 0.001) return container;
+
+  const restored = buildContainerYardRestorePatch(container, linkedItems);
+  if (!restored || !(Number(restored.volume) > 0)) {
+    // Fallback: volume apontado / nominal da OP (boleta de tanque já saído).
+    const production = productionOfContainer(container, productions);
+    const apontado = parseFloat(production?.volume_apontado);
+    const opVol = parseFloat(production?.volume) || 0;
+    const fallbackVol =
+      Number.isFinite(apontado) && apontado > 0 ? apontado : opVol > 0 ? opVol : 0;
+    if (fallbackVol <= 0) return container;
+    const dens =
+      parseFloat(production?.density) ||
+      (fallbackVol > 0 && container.net_weight
+        ? Number(container.net_weight) / fallbackVol
+        : 0);
+    const net =
+      dens > 0
+        ? Math.round(fallbackVol * dens)
+        : Number(container.net_weight) || 0;
+    const tare = Number(container.tare) || 0;
+    return {
+      ...container,
+      volume: fallbackVol,
+      net_weight: net,
+      gross_weight: Math.round(tare + net),
+    };
+  }
+
+  return {
+    ...container,
+    volume: restored.volume,
+    net_weight: restored.net_weight,
+    gross_weight: restored.gross_weight,
+  };
+}
+
 export function mapIndContainer(
   container,
   reservas = [],
   recipes = [],
   productions = [],
-  transfers = []
+  transfers = [],
+  context = {}
 ) {
+  const display = resolveIndContainerDisplay(
+    container,
+    context.linkedItems || [],
+    productions
+  );
   const origemId = container.id;
   const chave = buildVasilhameReservaChave(ORIGEM_INDUSTRIALIZACAO, origemId);
-  const production = productionOfContainer(container, productions);
-  const codigo = resolveProductCode(recipes, container, production);
-  const loteSummary = resolveIndContainerLoteSummary(container, productions, recipes);
+  const production = productionOfContainer(display, productions);
+  const codigo = resolveProductCode(recipes, display, production);
+  const loteSummary = resolveIndContainerLoteSummary(display, productions, recipes);
   return {
     id: chave,
     chave,
     origem: ORIGEM_INDUSTRIALIZACAO,
     origemId,
-    displayId: dash(padRegId(container.registration_id) || (origemId ? String(origemId).slice(0, 8) : '')),
-    placa: dash(container.container_number),
-    barril: dash(container.barril_number),
+    displayId: dash(padRegId(display.registration_id) || (origemId ? String(origemId).slice(0, 8) : '')),
+    placa: dash(display.container_number),
+    barril: dash(display.barril_number),
     clienteId: null,
     produtoId: null,
-    clienteNome: dash(container.client),
+    clienteNome: dash(display.client),
     codigo: dash(codigo),
-    produto: dash(container.product),
-    volume: containerDisplayVolume(container, productions),
-    massa: containerDisplayNetWeight(container, productions, recipes),
-    tara: Number(container.tare ?? container.tara) || 0,
-    lote: dash(container.lot),
+    produto: dash(display.product),
+    volume: containerDisplayVolume(display, productions),
+    massa: containerDisplayNetWeight(display, productions, recipes),
+    tara: Number(display.tare ?? display.tara) || 0,
+    lote: dash(display.lot),
     dataFabricacao: loteSummary.dataFabricacao,
     dataValidade: loteSummary.dataValidade,
     lacres: loteSummary.lacres,
-    createdAt: container.created_date || container.created_at || null,
+    createdAt: display.created_date || display.created_at || null,
     reservado: isVasilhameReservado(reservas, chave),
-    fracionado: isContainerFractional(container, production, transfers),
-    emPatio: (container.status || '') === 'No Pátio',
-    dataSaida: exitDateOrNull(container.departure_date),
-    observacao: dash(container.observations),
-    source: container,
+    fracionado: isContainerFractional(display, production, transfers),
+    emPatio: (display.status || '') === 'No Pátio',
+    dataSaida: exitDateOrNull(display.departure_date),
+    observacao: dash(display.observations),
+    source: display,
     // Referências (sem cópia) usadas para calcular pesos/volume da boleta.
     boletaContext: { productions, recipes },
+  };
+}
+
+/**
+ * Garante volume/massa da linha de reserva no payload da boleta.
+ * Tanque expedido pode ter volume zerado no cadastro; a row já traz o valor
+ * restaurado para exibição — a boleta precisa do mesmo conteúdo.
+ */
+function sourceForBoleta(row) {
+  const source = row?.source;
+  if (!source) return source;
+
+  const rowVol = Number(row.volume) || 0;
+  const rowMassa = Number(row.massa) || 0;
+  if (rowVol <= 0 && rowMassa <= 0) return source;
+
+  if (row.origem === ORIGEM_INDUSTRIALIZACAO) {
+    const srcVol = Number(source.volume) || 0;
+    const srcNet = Number(source.net_weight) || 0;
+    if (srcVol > 0 && srcNet > 0) return source;
+    const tare = Number(source.tare ?? source.tara) || Number(row.tara) || 0;
+    const volume = srcVol > 0 ? srcVol : rowVol;
+    const net_weight = srcNet > 0 ? srcNet : rowMassa;
+    return {
+      ...source,
+      volume,
+      net_weight,
+      gross_weight: Math.round(tare + net_weight),
+    };
+  }
+
+  const srcVol = Number(source.volume) || 0;
+  const srcPeso = Number(source.peso_liquido) || 0;
+  if (srcVol > 0 && srcPeso > 0) return source;
+  const tara = Number(source.tara) || Number(row.tara) || 0;
+  const volume = srcVol > 0 ? srcVol : rowVol;
+  const peso_liquido = srcPeso > 0 ? srcPeso : rowMassa;
+  return {
+    ...source,
+    volume,
+    peso_liquido,
+    peso_bruto: Math.round(tara + peso_liquido),
   };
 }
 
@@ -240,15 +371,17 @@ export function mapIndContainer(
 export async function generateVasilhameBoleta(row) {
   if (!row?.source) throw new Error('Vasilhame inválido.');
 
+  const source = sourceForBoleta(row);
+
   if (row.origem === ORIGEM_INDUSTRIALIZACAO) {
     const { generateBoletaPDF } = await import('@industrializacao/lib/pdfReports');
     const { productions = [], recipes = [] } = row.boletaContext || {};
-    generateBoletaPDF(row.source, productions, recipes);
+    generateBoletaPDF(source, productions, recipes);
     return;
   }
 
   const { generateBoletaPDF } = await import('@transbordo/lib/pdfBoleta');
-  generateBoletaPDF(row.source);
+  generateBoletaPDF(source);
 }
 
 export function buildVasilhameReservaRows({
@@ -271,7 +404,7 @@ export function buildVasilhameReservaRows({
     .filter((v) => isTransbordoVasilhameElegivel(v, includeSaidos))
     .map((v) =>
       mapTransbordoVasilhame(v, reservas, {
-        linkedItems: saidaItems.get(v.id) || [],
+        linkedItems: resolveLinkedSaidaItems(v, saidaItems, saidas),
         transbordos,
         estoqueById,
       })
@@ -279,7 +412,11 @@ export function buildVasilhameReservaRows({
 
   const industrializacao = (containers || [])
     .filter((c) => isIndContainerElegivel(c, includeSaidos))
-    .map((c) => mapIndContainer(c, reservas, recipes, productions, transfers));
+    .map((c) =>
+      mapIndContainer(c, reservas, recipes, productions, transfers, {
+        linkedItems: saidaItems.get(String(c.id)) || [],
+      })
+    );
 
   // Mais recente no topo (último cadastrado primeiro), sem agrupar por origem.
   return [...transbordo, ...industrializacao].sort((a, b) => {

@@ -916,7 +916,11 @@ export function composicaoFifoNaPlaca(transbordo, placa, barril) {
       const qL = roundVolume(c.quantidade_l || 0);
       if (qL <= 0) continue;
       const o = origensFifo[c.origem_index];
-      const estoqueId = o?.estoque_id || o?.entrada_id || null;
+      // Origem tanka: entrada_id = isotanque — não lastrear como estoque_id.
+      const estoqueId =
+        o?.estoque_id ||
+        ((o?.tipo_origem || "") === "tanka" ? null : o?.entrada_id) ||
+        null;
       const kgFromDestino =
         destinoVol > 0 && destinoKg > 0
           ? roundMass((destinoKg * qL) / destinoVol)
