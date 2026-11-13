@@ -51,6 +51,7 @@ import {
   saidaTemItemPendenteNoModulo,
   calcSaidaQuantidadeTotal,
   isSaidaCargaVazia,
+  resolveSaidaItemLote,
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
   TIPO_EMBALADO,
@@ -125,7 +126,7 @@ function compareSaidaCodigoDesc(a, b) {
   return String(b?.codigo || "").localeCompare(String(a?.codigo || ""), "pt-BR");
 }
 
-/** Busca textual: código, cliente ou tanque (placa / barril) nos itens. */
+/** Busca textual: código, cliente, lote ou tanque (placa / barril) nos itens. */
 function saidaMatchesSearch(saida, query, vasilhamesById) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;
@@ -139,8 +140,16 @@ function saidaMatchesSearch(saida, query, vasilhamesById) {
     if (placaItem.includes(q) || barrilItem.includes(q)) return true;
 
     const vasilhameId = String(item?.vasilhame_id || "").trim();
-    if (!vasilhameId || !vasilhamesById) continue;
-    const vasilhame = vasilhamesById.get(vasilhameId);
+    const vasilhame =
+      vasilhameId && vasilhamesById
+        ? vasilhamesById.get(vasilhameId)
+        : null;
+
+    const lote = String(
+      resolveSaidaItemLote(item, { vasilhame }) || item?.lote || ""
+    ).toLowerCase();
+    if (lote.includes(q)) return true;
+
     if (!vasilhame) continue;
 
     const placaCadastro = String(
@@ -748,7 +757,7 @@ export default function Saida({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por código, cliente ou tanque..."
+              placeholder="Buscar por código, cliente, lote ou tanque..."
               className="pl-10 bg-card"
             />
           </div>

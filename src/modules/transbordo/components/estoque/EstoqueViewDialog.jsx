@@ -1,13 +1,27 @@
 import {
+  AlertCircle,
+  CheckCircle,
+  FileText,
+  History,
+  Package,
+  Scale,
+  Truck,
+  Warehouse,
+} from "lucide-react";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { FileText } from "lucide-react";
-import { formatMass, formatVolume, formatCurrency, formatDensidade, formatQuantidade } from "@transbordo/lib/format";
+import {
+  formatMass,
+  formatVolume,
+  formatCurrency,
+  formatDensidade,
+  formatQuantidade,
+} from "@transbordo/lib/format";
 import { generateRelatorioEstoquePDF } from "@transbordo/lib/pdfEstoque";
 import {
   listSaidasHistoricoForEstoque,
@@ -36,24 +50,52 @@ const formatDate = (d) => {
   return date.toLocaleDateString("pt-BR");
 };
 
-function InfoItem({ label, value, highlight }) {
+function SectionCard({ icon: Icon, title, children, action = null, description = null }) {
   return (
-    <div className="space-y-0.5">
-      <p className="text-[11px] text-muted-foreground leading-none">{label}</p>
-      <p className={`text-sm font-medium leading-snug ${highlight || "text-foreground"}`}>
-        {value || "—"}
-      </p>
-    </div>
+    <section className="rounded-xl border border-border/80 bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/40 px-4 py-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          {Icon ? (
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground truncate">{title}</h3>
+            {description ? (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                {description}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        {action ? (
+          <div className="flex items-center gap-1.5 shrink-0">{action}</div>
+        ) : null}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
-function Section({ title, children }) {
+function InfoField({ label, value, mono = false, highlight = null }) {
+  const display =
+    value === null || value === undefined || value === "" ? "—" : value;
   return (
-    <div className="space-y-1.5">
-      <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
-        {title}
-      </h3>
-      <div className="grid grid-cols-3 gap-x-4 gap-y-2 pl-2">{children}</div>
+    <div className="space-y-1">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={`text-sm break-words ${
+          highlight ||
+          (mono
+            ? "font-semibold tabular-nums text-foreground"
+            : "font-medium text-foreground")
+        }`}
+      >
+        {display}
+      </div>
     </div>
   );
 }
@@ -63,13 +105,19 @@ function EmptyRow({ colSpan, message }) {
     <tr>
       <td
         colSpan={colSpan}
-        className="px-2.5 py-2 text-center text-sm text-muted-foreground"
+        className="px-3 py-3 text-center text-sm text-muted-foreground"
       >
         {message}
       </td>
     </tr>
   );
 }
+
+const thClass =
+  "px-2.5 py-1.5 text-left text-[11px] font-medium text-muted-foreground uppercase bg-muted/40";
+const thRightClass = `${thClass} text-right`;
+const tdClass = "px-2.5 py-1.5 text-sm text-foreground/80 border-t border-border";
+const tdRightClass = `${tdClass} text-right tabular-nums`;
 
 const placaBarrilKey = (placa, barril) =>
   `${String(placa || "").trim().toUpperCase()}||${String(barril || "")
@@ -166,6 +214,45 @@ function enrichComSaida(rows, saidasHistorico) {
   });
 }
 
+function StatusPill({ status }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const expedido = status === "Expedido";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+        expedido
+          ? "bg-red-50 text-red-700 border-red-200"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function MargemBadge({ margem }) {
+  if (!margem || (margem !== "dentro" && margem !== "fora")) {
+    return <span className="text-sm text-muted-foreground">—</span>;
+  }
+  const dentro = margem === "dentro";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+        dentro
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : "bg-red-50 text-red-700 border-red-200"
+      }`}
+    >
+      {dentro ? (
+        <CheckCircle className="w-3 h-3" />
+      ) : (
+        <AlertCircle className="w-3 h-3" />
+      )}
+      {dentro ? "Dentro da margem" : "Fora da margem"}
+    </span>
+  );
+}
+
 export default function EstoqueViewDialog({
   open,
   onClose,
@@ -183,6 +270,12 @@ export default function EstoqueViewDialog({
     estoqueCodigo || formatEstoqueCodigo(item.codigo_estoque);
   const custoTotal =
     (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
+  const tipoRecebimento = resolveTipoRecebimentoEstoque(item);
+  const notaTroca = getEstoqueNotaFiscalTroca(item);
+  const origemLabel =
+    item.origem === "industrializacao" || item.origem === "MATERIA_PRIMA"
+      ? "Matéria-prima"
+      : "Armazenagem";
 
   const resolveVasilhameStatus = (destino, transbordoCodigo) => {
     const key = placaBarrilKey(
@@ -207,7 +300,9 @@ export default function EstoqueViewDialog({
         transbordoCodigo &&
         (v.numero_op === transbordoCodigo ||
           v.codigo === transbordoCodigo ||
-          (v.composicao || []).some((c) => c.transbordo_codigo === transbordoCodigo))
+          (v.composicao || []).some(
+            (c) => c.transbordo_codigo === transbordoCodigo
+          ))
     );
     const chosen = byOp || matches[0];
     return chosen.status || "No Pátio";
@@ -272,388 +367,506 @@ export default function EstoqueViewDialog({
     vasilhames
   );
 
+  const isEmbalado = tipoRecebimento === "embalado";
+  const hasTransbordoMovimento =
+    destinosList.length > 0 || historicoTransbordos.length > 0;
+  /** Embalado sem OP: mostra saídas diretas em vez de destinos/histórico de transbordo. */
+  const showSaidasEmbalado = isEmbalado && !hasTransbordoMovimento;
+  const saidasEmbaladoList = showSaidasEmbalado
+    ? saidasHistorico.filter((s) => String(s.tipo || "").toLowerCase() === "embalado")
+    : [];
+  const totalQtdSaidasEmbalado = saidasEmbaladoList.reduce(
+    (sum, s) => sum + (Number(s.quantidade) || 0),
+    0
+  );
+
   const DESTINOS_COLS = 9;
   const HISTORICO_COLS = 10;
+  const SAIDAS_COLS = 7;
+
+  const handleRelatorio = () =>
+    generateRelatorioEstoquePDF({
+      item,
+      displayId,
+      estoqueCodigo: idEstoque,
+      destinosList,
+      historicoTransbordos,
+    });
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader className="pb-0">
-          <DialogTitle>Detalhe do Estoque</DialogTitle>
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4 text-left space-y-1">
+          <DialogTitle className="flex items-center gap-3 flex-wrap text-base">
+            <span>Detalhe do Estoque</span>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getTipoRecebimentoBadgeClass(
+                tipoRecebimento
+              )}`}
+            >
+              {getTipoRecebimentoLabel(tipoRecebimento)}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-slate-50 text-slate-700 border-slate-200">
+              {origemLabel}
+            </span>
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {[item.produto_codigo, item.produto_nome].filter(Boolean).join(" — ") ||
+              "—"}
+            {item.cliente_nome ? ` · ${item.cliente_nome}` : ""}
+          </p>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg bg-primary/10 px-3 py-2.5">
-          <InfoItem
-            label="ID"
-            value={idEstoque}
-            highlight="text-primary text-base font-bold"
-          />
-          <InfoItem
-            label="ENTRADA"
-            value={displayId || item.entrada_codigo || "—"}
-            highlight="text-foreground text-base font-bold"
-          />
-          <InfoItem
-            label="CÓDIGO"
-            value={item.produto_codigo}
-            highlight="text-foreground text-base font-bold"
-          />
-          <InfoItem
-            label="LOTE"
-            value={item.lote}
-            highlight="text-foreground text-base font-bold"
-          />
-        </div>
-
-        <div className="space-y-4">
-          <Section title="DADOS DO PRODUTO">
-            <InfoItem label="Produto" value={item.produto_nome} />
-            <InfoItem label="Cliente" value={item.cliente_nome} />
-            <div className="space-y-0.5">
-              <p className="text-[11px] text-muted-foreground leading-none">Tipo</p>
-              {(() => {
-                const tipo = resolveTipoRecebimentoEstoque(item);
-                return (
-                  <span
-                    className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getTipoRecebimentoBadgeClass(
-                      tipo
-                    )}`}
-                  >
-                    {getTipoRecebimentoLabel(tipo)}
-                  </span>
-                );
-              })()}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <SectionCard icon={Package} title="Identificação">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <InfoField label="ID" value={idEstoque} mono highlight="text-primary text-base font-bold tabular-nums" />
+              <InfoField
+                label="Entrada"
+                value={displayId || item.entrada_codigo || "—"}
+                mono
+              />
+              <InfoField label="Código" value={item.produto_codigo} mono />
+              <InfoField label="Lote" value={item.lote} mono />
             </div>
-            <InfoItem
-              label="Origem"
-              value={
-                item.origem === "industrializacao" || item.origem === "MATERIA_PRIMA"
-                  ? "Matéria-prima"
-                  : "Armazenagem"
-              }
-            />
-            <InfoItem
-              label="Recebimento"
-              value={formatDate(item.created_at || item.created_date)}
-            />
-          </Section>
+          </SectionCard>
 
-          <Section title="RECEBIMENTO / FISCAL">
-            <InfoItem label="Nota Fiscal" value={getEstoqueNotaFiscal(item) || "—"} />
-            <InfoItem
-              label="Troca Fiscal"
-              value={getEstoqueNotaFiscalTroca(item) || "—"}
-              highlight={
-                getEstoqueNotaFiscalTroca(item)
-                  ? "text-amber-700 font-semibold"
-                  : undefined
-              }
-            />
-            <InfoItem
-              label="Densidade"
-              value={formatDensidade(item.densidade)}
-            />
-            <InfoItem
-              label="Fabricação"
-              value={formatDate(item.data_fabricacao)}
-            />
-            <InfoItem
-              label="Validade"
-              value={
-                item.validade_indeterminada
-                  ? "Indeterminado"
-                  : formatDate(item.data_validade)
-              }
-            />
-          </Section>
-
-          <Section title="ESTOQUE">
-            <InfoItem
-              label={`Quantidade (${unidade})`}
-              value={formatQuantidade(estoqueInicial, { empty: "—" })}
-            />
-            <InfoItem
-              label={`Saldo Atual (${unidade})`}
-              value={formatQuantidade(saldoCalculado, { empty: "—" })}
-              highlight="text-primary font-bold"
-            />
-            <InfoItem label="Unidade" value={unidade} />
-            <InfoItem
-              label="Preço Unitário"
-              value={formatCurrency(item.preco_unitario)}
-            />
-            <InfoItem
-              label="Custo Total"
-              value={formatCurrency(custoTotal)}
-              highlight="text-green-600 font-bold"
-            />
-            {item.embalado && (
-              <>
-                <InfoItem
-                  label="Peso Líquido"
-                  value={formatMass(item.peso_liquido, { empty: "—" })}
-                />
-                <InfoItem
-                  label="Qtd. Embalagens"
-                  value={
-                    item.quantidade_embalagens != null
-                      ? String(item.quantidade_embalagens)
-                      : "—"
-                  }
-                />
-                <InfoItem
-                  label="Local Armazenagem"
-                  value={item.local_armazenagem || "—"}
-                />
-                <InfoItem
-                  label="Qtd Paletes"
-                  value={
-                    item.qtd_paletes != null && item.qtd_paletes !== ""
-                      ? String(item.qtd_paletes)
-                      : "—"
-                  }
-                />
-              </>
-            )}
-          </Section>
-
-          {item.granel_pesagem && (
-            <Section title="PESAGEM GRANEL">
-              <InfoItem label="Ticket" value={item.granel_ticket} />
-              <InfoItem
-                label="Peso Bruto (kg)"
-                value={formatMass(item.granel_peso_bruto, { empty: "—" })}
-              />
-              <InfoItem
-                label="Peso Líquido (kg)"
-                value={formatMass(item.granel_peso_liquido, { empty: "—" })}
-              />
-              <div className="space-y-0.5">
-                <p className="text-[11px] text-muted-foreground leading-none">Margem</p>
+          <SectionCard icon={Package} title="Dados do produto">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <InfoField label="Produto" value={item.produto_nome} />
+              <InfoField label="Cliente" value={item.cliente_nome} />
+              <div className="space-y-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Tipo
+                </div>
                 <span
-                  className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                    item.granel_margem === "dentro"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getTipoRecebimentoBadgeClass(
+                    tipoRecebimento
+                  )}`}
                 >
-                  {item.granel_margem === "dentro"
-                    ? "Dentro"
-                    : item.granel_margem === "fora"
-                      ? "Fora"
-                      : "—"}
+                  {getTipoRecebimentoLabel(tipoRecebimento)}
                 </span>
               </div>
-            </Section>
+              <InfoField label="Origem" value={origemLabel} />
+              <InfoField
+                label="Recebimento"
+                value={formatDate(item.created_at || item.created_date)}
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard icon={FileText} title="Recebimento / Fiscal">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <InfoField
+                label="Nota Fiscal"
+                value={getEstoqueNotaFiscal(item) || "—"}
+              />
+              <InfoField
+                label="Troca Fiscal"
+                value={notaTroca || "—"}
+                highlight={
+                  notaTroca
+                    ? "text-sm font-semibold text-amber-700"
+                    : undefined
+                }
+              />
+              <InfoField
+                label="Densidade"
+                value={formatDensidade(item.densidade)}
+                mono
+              />
+              <InfoField
+                label="Fabricação"
+                value={formatDate(item.data_fabricacao)}
+              />
+              <InfoField
+                label="Validade"
+                value={
+                  item.validade_indeterminada
+                    ? "Indeterminado"
+                    : formatDate(item.data_validade)
+                }
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard icon={Warehouse} title="Estoque">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <InfoField
+                label={`Quantidade (${unidade})`}
+                value={formatQuantidade(estoqueInicial, { empty: "—" })}
+                mono
+              />
+              <InfoField
+                label={`Saldo atual (${unidade})`}
+                value={formatQuantidade(saldoCalculado, { empty: "—" })}
+                highlight="text-sm font-bold tabular-nums text-primary"
+              />
+              <InfoField label="Unidade" value={unidade} />
+              <InfoField
+                label="Preço unitário"
+                value={formatCurrency(item.preco_unitario)}
+                mono
+              />
+              <InfoField
+                label="Custo total"
+                value={formatCurrency(custoTotal)}
+                highlight="text-sm font-bold tabular-nums text-emerald-600"
+              />
+              {item.embalado ? (
+                <>
+                  <InfoField
+                    label="Peso líquido"
+                    value={formatMass(item.peso_liquido, { empty: "—" })}
+                    mono
+                  />
+                  <InfoField
+                    label="Qtd. embalagens"
+                    value={
+                      item.quantidade_embalagens != null
+                        ? String(item.quantidade_embalagens)
+                        : "—"
+                    }
+                    mono
+                  />
+                  <InfoField
+                    label="Local armazenagem"
+                    value={item.local_armazenagem || "—"}
+                  />
+                  <InfoField
+                    label="Qtd. paletes"
+                    value={
+                      item.qtd_paletes != null && item.qtd_paletes !== ""
+                        ? String(item.qtd_paletes)
+                        : "—"
+                    }
+                    mono
+                  />
+                </>
+              ) : null}
+            </div>
+          </SectionCard>
+
+          {item.granel_pesagem ? (
+            <SectionCard icon={Scale} title="Pesagem granel">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <InfoField label="Ticket" value={item.granel_ticket} />
+                <InfoField
+                  label="Peso bruto (kg)"
+                  value={formatMass(item.granel_peso_bruto, { empty: "—" })}
+                  mono
+                />
+                <InfoField
+                  label="Peso líquido (kg)"
+                  value={formatMass(item.granel_peso_liquido, { empty: "—" })}
+                  mono
+                />
+                <div className="space-y-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Margem
+                  </div>
+                  <MargemBadge margem={item.granel_margem} />
+                </div>
+              </div>
+            </SectionCard>
+          ) : null}
+
+          {showSaidasEmbalado ? (
+            <SectionCard
+              icon={Truck}
+              title="Dados de saída"
+              description="Saídas deste lote embalado (sem movimento de transbordo)."
+              action={
+                saidasEmbaladoList.length > 0 ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-foreground/70">
+                    {saidasEmbaladoList.length}
+                  </span>
+                ) : null
+              }
+            >
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                  <thead>
+                    <tr>
+                      <th className={thClass}>Saída</th>
+                      <th className={thClass}>Data</th>
+                      <th className={thClass}>Lote</th>
+                      <th className={thClass}>Tipo</th>
+                      <th className={thRightClass}>Quantidade</th>
+                      <th className={thClass}>Status</th>
+                      <th className={thClass}>Responsável</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {saidasEmbaladoList.length === 0 ? (
+                      <EmptyRow
+                        colSpan={SAIDAS_COLS}
+                        message="Nenhuma saída registrada para este item embalado."
+                      />
+                    ) : (
+                      <>
+                        {saidasEmbaladoList.map((s) => (
+                          <tr key={s.key}>
+                            <td className={`${tdClass} font-medium text-foreground`}>
+                              {s.codigo}
+                            </td>
+                            <td
+                              className={`${tdClass} text-muted-foreground whitespace-nowrap`}
+                            >
+                              {formatDate(s.data)}
+                            </td>
+                            <td className={`${tdClass} text-foreground/80`}>
+                              {s.lote || "—"}
+                            </td>
+                            <td className={tdClass}>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-orange-200 text-orange-800 border-orange-300/60">
+                                Embalado
+                              </span>
+                            </td>
+                            <td className={`${tdRightClass} font-medium text-foreground`}>
+                              {`${formatQuantidade(s.quantidade, {
+                                empty: "—",
+                              })} ${s.unidade || ""}`.trim()}
+                            </td>
+                            <td className={tdClass}>
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                                  s.status === "Validado"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-800 border-amber-200"
+                                }`}
+                              >
+                                {s.status}
+                              </span>
+                            </td>
+                            <td className={`${tdClass} text-muted-foreground`}>
+                              {s.responsavel || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2 border-border bg-muted/40">
+                          <td
+                            colSpan={4}
+                            className="px-2.5 py-1.5 font-bold text-foreground"
+                          >
+                            Total
+                          </td>
+                          <td className="px-2.5 py-1.5 text-right font-bold text-primary tabular-nums">
+                            {`${formatQuantidade(totalQtdSaidasEmbalado, {
+                              empty: "—",
+                            })} ${unidade}`.trim()}
+                          </td>
+                          <td colSpan={2} className="px-2.5 py-1.5" />
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          ) : (
+            <>
+              <SectionCard
+                icon={Warehouse}
+                title="Destinos (transbordo)"
+                description="Embalagens que receberam este lote pela alocação FIFO do OP (volume da fração deste estoque)."
+                action={
+                  destinosList.length > 0 ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-foreground/70">
+                      {destinosList.length}
+                    </span>
+                  ) : null
+                }
+              >
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                    <thead>
+                      <tr>
+                        <th className={thClass}>Transbordo</th>
+                        <th className={thClass}>Data</th>
+                        <th className={thClass}>Destino</th>
+                        <th className={thClass}>Tipo</th>
+                        <th className={thClass}>Status</th>
+                        <th className={thClass}>Saída</th>
+                        <th className={thRightClass}>Volume (L)</th>
+                        <th className={thRightClass}>Qtd. Saída</th>
+                        <th className={thRightClass}>Peso Líq.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {destinosList.length === 0 ? (
+                        <EmptyRow
+                          colSpan={DESTINOS_COLS}
+                          message="Nenhum transbordo registrado para este item."
+                        />
+                      ) : (
+                        <>
+                          {destinosList.map((d) => (
+                            <tr key={d.key}>
+                              <td className={`${tdClass} font-medium text-foreground`}>
+                                {d.codigo}
+                              </td>
+                              <td
+                                className={`${tdClass} text-muted-foreground whitespace-nowrap`}
+                              >
+                                {formatDate(d.data)}
+                              </td>
+                              <td className={tdClass}>{d.destino}</td>
+                              <td className={`${tdClass} text-muted-foreground`}>
+                                {d.tipo}
+                              </td>
+                              <td className={tdClass}>
+                                <StatusPill status={d.status} />
+                              </td>
+                              <td className={`${tdClass} whitespace-nowrap`}>
+                                {d.saidaLabel}
+                              </td>
+                              <td className={tdRightClass}>
+                                {formatVolume(d.volume, { empty: "—" })}
+                              </td>
+                              <td className={`${tdRightClass} whitespace-nowrap`}>
+                                {d.saidaQuantidade != null &&
+                                Number(d.saidaQuantidade) > 0
+                                  ? `${formatQuantidade(d.saidaQuantidade, {
+                                      empty: "—",
+                                    })} ${d.saidaUnidade || ""}`.trim()
+                                  : "—"}
+                              </td>
+                              <td className={tdRightClass}>
+                                {formatMass(d.pesoLiq, { empty: "—" })}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-border bg-muted/40">
+                            <td
+                              colSpan={6}
+                              className="px-2.5 py-1.5 font-bold text-foreground"
+                            >
+                              Total
+                            </td>
+                            <td className="px-2.5 py-1.5 text-right font-bold text-primary tabular-nums">
+                              {formatVolume(totalVolumeDestinos, { empty: "—" })}
+                            </td>
+                            <td className="px-2.5 py-1.5" />
+                            <td className="px-2.5 py-1.5 text-right font-bold text-emerald-600 tabular-nums">
+                              {formatMass(totalMassaDestinos, { empty: "—" })}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                icon={History}
+                title="Histórico de embalagens"
+                description="Transbordos posteriores — todas as embalagens pelas quais o produto passou após o destino inicial."
+                action={
+                  historicoTransbordos.length > 0 ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-foreground/70">
+                      {historicoTransbordos.length}
+                    </span>
+                  ) : null
+                }
+              >
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                    <thead>
+                      <tr>
+                        <th className={thClass}>Transbordo</th>
+                        <th className={thClass}>Data</th>
+                        <th className={thClass}>Origem</th>
+                        <th className={thClass}>Destino</th>
+                        <th className={thClass}>Tipo</th>
+                        <th className={thClass}>Status</th>
+                        <th className={thClass}>Saída</th>
+                        <th className={thRightClass}>Volume (L)</th>
+                        <th className={thRightClass}>Qtd. Saída</th>
+                        <th className={thRightClass}>Peso Líq.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historicoTransbordos.length === 0 ? (
+                        <EmptyRow
+                          colSpan={HISTORICO_COLS}
+                          message="Nenhum re-transbordo registrado após o destino inicial."
+                        />
+                      ) : (
+                        <>
+                          {historicoTransbordos.map((d) => (
+                            <tr key={d.key}>
+                              <td className={`${tdClass} font-medium text-foreground`}>
+                                {d.codigo}
+                              </td>
+                              <td
+                                className={`${tdClass} text-muted-foreground whitespace-nowrap`}
+                              >
+                                {formatDate(d.data)}
+                              </td>
+                              <td className={`${tdClass} text-muted-foreground`}>
+                                {d.origem}
+                              </td>
+                              <td className={tdClass}>{d.destino}</td>
+                              <td className={`${tdClass} text-muted-foreground`}>
+                                {d.tipo}
+                              </td>
+                              <td className={tdClass}>
+                                <StatusPill status={d.status} />
+                              </td>
+                              <td className={`${tdClass} whitespace-nowrap`}>
+                                {d.saidaLabel}
+                              </td>
+                              <td className={tdRightClass}>
+                                {formatVolume(d.volume, { empty: "—" })}
+                              </td>
+                              <td className={`${tdRightClass} whitespace-nowrap`}>
+                                {d.saidaQuantidade != null &&
+                                Number(d.saidaQuantidade) > 0
+                                  ? `${formatQuantidade(d.saidaQuantidade, {
+                                      empty: "—",
+                                    })} ${d.saidaUnidade || ""}`.trim()
+                                  : "—"}
+                              </td>
+                              <td className={tdRightClass}>
+                                {formatMass(d.pesoLiq, { empty: "—" })}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 border-border bg-muted/40">
+                            <td
+                              colSpan={7}
+                              className="px-2.5 py-1.5 font-bold text-foreground"
+                            >
+                              Total
+                            </td>
+                            <td className="px-2.5 py-1.5 text-right font-bold text-primary tabular-nums">
+                              {formatVolume(totalVolumeHistorico, {
+                                empty: "—",
+                              })}
+                            </td>
+                            <td className="px-2.5 py-1.5" />
+                            <td className="px-2.5 py-1.5 text-right font-bold text-emerald-600 tabular-nums">
+                              {formatMass(totalMassaHistorico, { empty: "—" })}
+                            </td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+            </>
           )}
-
-          <div className="space-y-1.5">
-            <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
-              DESTINOS (TRANSBORDO)
-            </h3>
-            <p className="pl-2 text-xs text-muted-foreground">
-              Embalagens que receberam este lote pela alocação FIFO do OP
-              (volume da fração deste estoque).
-            </p>
-            <div className="pl-2 overflow-x-auto">
-              <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="bg-muted/40 text-[11px] text-muted-foreground uppercase">
-                    <th className="px-2.5 py-1.5 text-left font-medium">Transbordo</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Data</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Destino</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Tipo</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Status</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Saída</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Volume (L)</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Qtd. Saída</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Peso Líq.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {destinosList.length === 0 ? (
-                    <EmptyRow
-                      colSpan={DESTINOS_COLS}
-                      message="Nenhum transbordo registrado para este item."
-                    />
-                  ) : (
-                    <>
-                      {destinosList.map((d) => (
-                        <tr key={d.key} className="border-t border-border">
-                          <td className="px-2.5 py-1.5 font-medium text-foreground">
-                            {d.codigo}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">
-                            {formatDate(d.data)}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-foreground/80">{d.destino}</td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground">{d.tipo}</td>
-                          <td className="px-2.5 py-1.5">
-                            {d.status ? (
-                              <span
-                                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  d.status === "Expedido"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-green-100 text-green-700"
-                                }`}
-                              >
-                                {d.status}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-foreground/80 whitespace-nowrap">
-                            {d.saidaLabel}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80">
-                            {formatVolume(d.volume, { empty: "—" })}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80 whitespace-nowrap">
-                            {d.saidaQuantidade != null && Number(d.saidaQuantidade) > 0
-                              ? `${formatQuantidade(d.saidaQuantidade, { empty: "—" })} ${d.saidaUnidade || ""}`.trim()
-                              : "—"}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80">
-                            {formatMass(d.pesoLiq, { empty: "—" })}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="border-t-2 border-border bg-muted/40">
-                        <td
-                          colSpan={6}
-                          className="px-2.5 py-1.5 font-bold text-foreground"
-                        >
-                          Total
-                        </td>
-                        <td className="px-2.5 py-1.5 text-right font-bold text-primary">
-                          {formatVolume(totalVolumeDestinos, { empty: "—" })}
-                        </td>
-                        <td className="px-2.5 py-1.5" />
-                        <td className="px-2.5 py-1.5 text-right font-bold text-green-600">
-                          {formatMass(totalMassaDestinos, { empty: "—" })}
-                        </td>
-                      </tr>
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
-              HISTÓRICO DE EMBALAGENS
-            </h3>
-            <p className="pl-2 text-xs text-muted-foreground">
-              Transbordos posteriores — todas as embalagens pelas quais o produto
-              passou após o destino inicial.
-            </p>
-            <div className="pl-2 overflow-x-auto">
-              <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="bg-muted/40 text-[11px] text-muted-foreground uppercase">
-                    <th className="px-2.5 py-1.5 text-left font-medium">Transbordo</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Data</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Origem</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Destino</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Tipo</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Status</th>
-                    <th className="px-2.5 py-1.5 text-left font-medium">Saída</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Volume (L)</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Qtd. Saída</th>
-                    <th className="px-2.5 py-1.5 text-right font-medium">Peso Líq.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historicoTransbordos.length === 0 ? (
-                    <EmptyRow
-                      colSpan={HISTORICO_COLS}
-                      message="Nenhum re-transbordo registrado após o destino inicial."
-                    />
-                  ) : (
-                    <>
-                      {historicoTransbordos.map((d) => (
-                        <tr key={d.key} className="border-t border-border">
-                          <td className="px-2.5 py-1.5 font-medium text-foreground">
-                            {d.codigo}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">
-                            {formatDate(d.data)}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground">
-                            {d.origem}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-foreground/80">{d.destino}</td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground">{d.tipo}</td>
-                          <td className="px-2.5 py-1.5">
-                            {d.status ? (
-                              <span
-                                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  d.status === "Expedido"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-green-100 text-green-700"
-                                }`}
-                              >
-                                {d.status}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-foreground/80 whitespace-nowrap">
-                            {d.saidaLabel}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80">
-                            {formatVolume(d.volume, { empty: "—" })}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80 whitespace-nowrap">
-                            {d.saidaQuantidade != null && Number(d.saidaQuantidade) > 0
-                              ? `${formatQuantidade(d.saidaQuantidade, { empty: "—" })} ${d.saidaUnidade || ""}`.trim()
-                              : "—"}
-                          </td>
-                          <td className="px-2.5 py-1.5 text-right text-foreground/80">
-                            {formatMass(d.pesoLiq, { empty: "—" })}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="border-t-2 border-border bg-muted/40">
-                        <td
-                          colSpan={7}
-                          className="px-2.5 py-1.5 font-bold text-foreground"
-                        >
-                          Total
-                        </td>
-                        <td className="px-2.5 py-1.5 text-right font-bold text-primary">
-                          {formatVolume(totalVolumeHistorico, { empty: "—" })}
-                        </td>
-                        <td className="px-2.5 py-1.5" />
-                        <td className="px-2.5 py-1.5 text-right font-bold text-green-600">
-                          {formatMass(totalMassaHistorico, { empty: "—" })}
-                        </td>
-                      </tr>
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
 
-        <DialogFooter>
+        <div className="shrink-0 flex justify-end gap-2 border-t border-border px-5 py-3 bg-muted/20">
           <Button
             type="button"
             variant="default"
             className="gap-2"
-            onClick={() =>
-              generateRelatorioEstoquePDF({
-                item,
-                displayId,
-                estoqueCodigo: idEstoque,
-                destinosList,
-                historicoTransbordos,
-              })
-            }
+            onClick={handleRelatorio}
           >
             <FileText className="w-4 h-4" />
             Relatório
@@ -661,7 +874,7 @@ export default function EstoqueViewDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Fechar
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

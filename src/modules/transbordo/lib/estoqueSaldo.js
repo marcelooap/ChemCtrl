@@ -1543,6 +1543,43 @@ export function resolveEstoqueIdsFromVasilhame(
   return [...ids];
 }
 
+function isTipoSaidaEmbalado(tipo) {
+  return String(tipo || "").trim().toLowerCase() === "embalado";
+}
+
+function sameLoteText(a, b) {
+  const left = String(a || "").trim().toLowerCase();
+  const right = String(b || "").trim().toLowerCase();
+  return Boolean(left) && left === right;
+}
+
+function sameProdutoSaidaEstoque(item, estoqueItem) {
+  if (
+    item?.produto_id &&
+    estoqueItem?.produto_id &&
+    String(item.produto_id) === String(estoqueItem.produto_id)
+  ) {
+    return true;
+  }
+  if (
+    item?.produto_codigo &&
+    estoqueItem?.produto_codigo &&
+    String(item.produto_codigo).trim() ===
+      String(estoqueItem.produto_codigo).trim()
+  ) {
+    return true;
+  }
+  if (
+    item?.produto_nome &&
+    estoqueItem?.produto_nome &&
+    String(item.produto_nome).trim().toLowerCase() ===
+      String(estoqueItem.produto_nome).trim().toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Lista entradas do histórico de saídas vinculadas a um estoque
  * (embalado direto + convencional via vasilhame/transbordo).
@@ -1557,6 +1594,9 @@ export function listSaidasHistoricoForEstoque(
   if (!id) return [];
 
   const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
+  const estoqueEmbalado =
+    Boolean(estoqueItem?.embalado || estoqueItem?.lotes?.[0]?.embalado) ||
+    resolveTipoRecebimentoEstoque(estoqueItem) === "embalado";
   const rows = [];
 
   (saidas || []).forEach((saida) => {
@@ -1564,13 +1604,28 @@ export function listSaidasHistoricoForEstoque(
       let quantidade = 0;
       let unidade = "kg";
       let linked = false;
+      const tipoEmbalado = isTipoSaidaEmbalado(item.tipo);
 
-      if (item.tipo === "embalado") {
+      if (tipoEmbalado) {
         const qtdEstoque = quantidadeItemParaEstoque(item, id);
         if (qtdEstoque > 0) {
           linked = true;
           quantidade = qtdEstoque;
-          unidade = estoqueItem.unidade_medida || "kg";
+          unidade = estoqueItem.unidade_medida || item.unidade || "kg";
+        } else if (
+          estoqueEmbalado &&
+          sameLoteText(item.lote, estoqueItem.lote) &&
+          sameProdutoSaidaEstoque(item, estoqueItem) &&
+          // Fallback só quando a saída não aponta nenhum estoque físico.
+          estoqueIdsFromSaidaItem({ ...item, tipo: "embalado" }).length === 0
+        ) {
+          linked = true;
+          quantidade =
+            item.quantidade_carregada != null &&
+            item.quantidade_carregada !== ""
+              ? Number(item.quantidade_carregada) || 0
+              : Number(item.quantidade_solicitada) || 0;
+          unidade = item.unidade || estoqueItem.unidade_medida || "kg";
         }
       } else if (item.tipo === "convencional" && item.vasilhame_id) {
         const v = vasilhameById.get(item.vasilhame_id);
@@ -1595,14 +1650,13 @@ export function listSaidasHistoricoForEstoque(
 
       if (!linked) return;
 
-      const vasilhameLabel =
-        item.tipo === "embalado"
-          ? "Embalado"
-          : `${item.vasilhame_placa || vasilhameById.get(item.vasilhame_id)?.placa || "—"} - ${
-              item.vasilhame_barril ||
-              vasilhameById.get(item.vasilhame_id)?.barril ||
-              "—"
-            }`;
+      const vasilhameLabel = tipoEmbalado
+        ? "Embalado"
+        : `${item.vasilhame_placa || vasilhameById.get(item.vasilhame_id)?.placa || "—"} - ${
+            item.vasilhame_barril ||
+            vasilhameById.get(item.vasilhame_id)?.barril ||
+            "—"
+          }`;
 
       const vasilhameRef = item.vasilhame_id
         ? vasilhameById.get(item.vasilhame_id)
@@ -1611,8 +1665,13 @@ export function listSaidasHistoricoForEstoque(
       rows.push({
         key: `${saida.id}-${idx}`,
         codigo: saida.codigo || "—",
-        data: saida.data_solicitacao || saida.created_at,
-        tipo: item.tipo || "—",
+        data:
+          saida.data_solicitacao ||
+          saida.data_programada ||
+          saida.created_at ||
+          saida.created_date,
+        tipo: tipoEmbalado ? "embalado" : item.tipo || "—",
+        lote: item.lote || estoqueItem.lote || "—",
         vasilhame: vasilhameLabel,
         vasilhame_id: item.vasilhame_id || null,
         placa:
