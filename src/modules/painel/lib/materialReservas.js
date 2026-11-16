@@ -354,7 +354,7 @@ export async function createMaterialReserva({ row, quantidade, solicitante, user
   });
   if (criado.missing) {
     throw new Error(
-      'Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para reservar com controle de saldo.'
+      'Execute o script 063_t_assert_saida_reservas_cliente_chave.sql no SQL Editor do ChemFlow para reservar com controle de saldo.'
     );
   }
   return { changed: true };
@@ -406,6 +406,6 @@ export async function updateMaterialReservaQuantidade({
   });
   if (!ajustada.missing) return { changed: true, removed: target === 0 };
   throw new Error(
-    'Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para ajustar a reserva com controle de saldo.'
+    'Execute o script 063_t_assert_saida_reservas_cliente_chave.sql no SQL Editor do ChemFlow para ajustar a reserva com controle de saldo.'
   );
 }

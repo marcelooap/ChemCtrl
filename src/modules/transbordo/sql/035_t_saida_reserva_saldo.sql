@@ -98,7 +98,17 @@ begin
           'kg'
         ))) = v_unidade
     and (
-      (p_cliente_id is not null and e.cliente_id = p_cliente_id)
+      (
+        p_cliente_id is not null
+        and (
+          e.cliente_id = p_cliente_id
+          or (
+            e.cliente_id is null
+            and nullif(trim(coalesce(p_cliente_nome, '')), '') is not null
+            and t_norm_txt(e.cliente_nome) = t_norm_txt(p_cliente_nome)
+          )
+        )
+      )
       or (
         p_cliente_id is null
         and t_norm_txt(e.cliente_nome) = t_norm_txt(p_cliente_nome)
@@ -221,6 +231,45 @@ begin
 end;
 $$;
 
+-- Saldo físico alinhado à chave comercial do item (cliente||PRODUTO||LOTE||unidade).
+-- Evita zerar o disponível quando o cliente do formulário tem UUID diferente do
+-- estoque (clientes duplicados com o mesmo nome, ex.: BAKER HUGHES OIC).
+create or replace function t_fisico_embalado_por_chave(
+  p_chave text,
+  p_produto_codigo text,
+  p_lote text,
+  p_unidade text,
+  p_fallback_id uuid default null,
+  p_fallback_nome text default null
+) returns numeric
+language plpgsql
+as $$
+declare
+  v_part text := split_part(coalesce(p_chave, ''), '||', 1);
+  v_id uuid;
+  v_nome text;
+begin
+  if v_part ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+    v_id := v_part::uuid;
+    v_nome := nullif(trim(coalesce(p_fallback_nome, '')), '');
+  elsif nullif(trim(v_part), '') is not null then
+    v_id := null;
+    v_nome := v_part;
+  else
+    v_id := p_fallback_id;
+    v_nome := p_fallback_nome;
+  end if;
+
+  return t_fisico_embalado(
+    v_id,
+    v_nome,
+    p_produto_codigo,
+    p_lote,
+    coalesce(nullif(p_unidade, ''), 'kg')
+  );
+end;
+$$;
+
 -- Valida itens embalados de uma saída (ou o payload antes de gravar).
 create or replace function t_assert_saida_reservas(
   p_saida_id uuid,
@@ -315,12 +364,14 @@ begin
           v_payload, v_nome, greatest(v_disp, 0);
       end if;
     else
-      v_fisico := t_fisico_embalado(
-        p_cliente_id,
-        p_cliente_nome,
+      -- Cliente da chave do lote (estoque), não o UUID eventualmente divergente do formulário.
+      v_fisico := t_fisico_embalado_por_chave(
+        v_chave,
         v_item->>'produto_codigo',
         v_item->>'lote',
-        coalesce(nullif(v_item->>'unidade', ''), 'kg')
+        coalesce(nullif(v_item->>'unidade', ''), 'kg'),
+        p_cliente_id,
+        p_cliente_nome
       );
       v_reservado := t_reservas_ativas_chave(v_chave);
       v_bloqueio := t_bloqueio_pendente_chave(v_chave, p_saida_id);
@@ -353,7 +404,7 @@ begin
       v_disp := v_fisico + coalesce(v_ja_baixado, 0) - v_reservado - v_bloqueio;
       if v_payload > v_disp then
         raise exception 'A quantidade solicitada (%) excede o saldo disponível para saída sem reserva (%).',
-          v_qtd, greatest(round(v_disp), 0);
+          v_payload, greatest(round(v_disp), 0);
       end if;
     end if;
   end loop;
@@ -396,12 +447,13 @@ begin
   perform t_lock_chave_reserva(p_chave);
   v_ativas := t_reservas_ativas_chave(p_chave);
   v_bloqueio := t_bloqueio_pendente_chave(p_chave, null);
-  v_fisico := t_fisico_embalado(
-    p_cliente_id,
-    p_cliente_nome,
+  v_fisico := t_fisico_embalado_por_chave(
+    p_chave,
     p_produto_codigo,
     p_lote,
-    coalesce(nullif(p_unidade, ''), 'kg')
+    coalesce(nullif(p_unidade, ''), 'kg'),
+    p_cliente_id,
+    p_cliente_nome
   );
 
   if v_ativas + v_qtd > v_fisico - v_bloqueio then
@@ -487,12 +539,13 @@ begin
       and id <> p_reserva_id;
 
     v_bloqueio := t_bloqueio_pendente_chave(v_row.chave, null);
-    v_fisico := t_fisico_embalado(
-      v_row.cliente_id,
-      v_row.cliente_nome,
+    v_fisico := t_fisico_embalado_por_chave(
+      v_row.chave,
       v_row.produto_codigo,
       v_row.lote,
-      v_row.unidade_medida
+      v_row.unidade_medida,
+      v_row.cliente_id,
+      v_row.cliente_nome
     );
 
     if v_outras + v_target > v_fisico - v_bloqueio then
@@ -827,6 +880,7 @@ grant execute on function t_saida_pendente_baixa(jsonb, boolean, text) to anon, 
 grant execute on function t_estoque_eh_embalado(t_estoque) to anon, authenticated;
 grant execute on function t_lock_chave_reserva(text) to anon, authenticated;
 grant execute on function t_fisico_embalado(uuid, text, text, text, text) to anon, authenticated;
+grant execute on function t_fisico_embalado_por_chave(text, text, text, text, uuid, text) to anon, authenticated;
 grant execute on function t_item_qtd_bloqueio(jsonb) to anon, authenticated;
 grant execute on function t_bloqueio_pendente_chave(text, uuid) to anon, authenticated;
 grant execute on function t_comprometido_reserva(uuid, uuid) to anon, authenticated;

@@ -283,7 +283,7 @@ export function isMissingRpcError(error) {
 }
 
 const RPC_SETUP_MESSAGE =
-  'Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para garantir o saldo de reservas com usuários simultâneos.';
+  'Execute o script 063_t_assert_saida_reservas_cliente_chave.sql no SQL Editor do ChemFlow para garantir o saldo de reservas com usuários simultâneos.';
 
 async function callRpc(fn, args, { required = false } = {}) {
   if (!isChemFlowConfigured || !chemflowSupabase) {

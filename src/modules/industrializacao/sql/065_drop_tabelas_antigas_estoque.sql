@@ -185,7 +185,17 @@ BEGIN
     AND t_norm_txt(coalesce(e.lote, '')) = t_norm_txt(coalesce(p_lote, ''))
     AND lower(trim(coalesce(nullif(trim(e.unidade_medida), ''), 'kg'))) = v_unidade
     AND (
-      (p_cliente_id IS NOT NULL AND e.cliente_id = p_cliente_id)
+      (
+        p_cliente_id IS NOT NULL
+        AND (
+          e.cliente_id = p_cliente_id
+          OR (
+            e.cliente_id IS NULL
+            AND nullif(trim(coalesce(p_cliente_nome, '')), '') IS NOT NULL
+            AND t_norm_txt(e.cliente_nome) = t_norm_txt(p_cliente_nome)
+          )
+        )
+      )
       OR (
         p_cliente_id IS NULL
         AND t_norm_txt(e.cliente_nome) = t_norm_txt(p_cliente_nome)

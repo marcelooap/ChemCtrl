@@ -998,7 +998,7 @@ export default function SaidaForm({
         createdSaida = salvo.data;
       } else if (itensPersistidos.some((item) => item.tipo === TIPO_EMBALADO)) {
         throw new Error(
-          "Execute o script 035_t_saida_reserva_saldo.sql no SQL Editor do ChemFlow para gravar a saída com controle de reserva."
+          "Execute o script 063_t_assert_saida_reservas_cliente_chave.sql no SQL Editor do ChemFlow para gravar a saída com controle de reserva."
         );
       } else if (editingSaida) {
         await entities.saidas.update(editingSaida.id, data);
