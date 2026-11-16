@@ -1,11 +1,20 @@
 import React, { memo, useState } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { AppTopBar } from '@shared/components/layout/AppTopBar';
+import PageSuspense from '@shared/components/layout/PageSuspense';
 
 /** Isola o Outlet: providers de badge/realtime acima não re-renderizam a página. */
 const MemoOutlet = memo(function MemoOutlet({ context }) {
-  return <Outlet context={context} />;
+  const location = useLocation();
+  return (
+    <PageSuspense>
+      {/* pathname na key: estado da tela anterior não vaza para a próxima */}
+      <div key={location.pathname} className="flex min-h-0 flex-1 flex-col">
+        <Outlet context={context} />
+      </div>
+    </PageSuspense>
+  );
 });
 
 /**

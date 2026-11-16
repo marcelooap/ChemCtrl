@@ -42,8 +42,8 @@ function LegacyChemblendPrefixRedirect() {
 
 function ModuleLoadingFallback() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+    <div className="fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-[1px]">
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-muted-foreground/25 border-t-primary/80" />
     </div>
   );
 }
@@ -190,7 +190,13 @@ function App() {
         <TooltipProvider delayDuration={300}>
           <QueryClientProvider client={queryClientInstance}>
             <ModuleErrorBoundary title="ChemCtrl" homeTo="/login">
-              <Router>
+              <Router
+                future={{
+                  // Navegação em transition: mantém a tela atual até a próxima estar pronta
+                  // (evita fallback/piscar do Suspense em rotas lazy).
+                  v7_startTransition: true,
+                }}
+              >
                 <ScrollToTop />
                 <InternalAuthProvider>
                   <UpdateProvider>

@@ -15,6 +15,7 @@ import {
   Package,
   Save,
   Trash2,
+  X,
   XCircle,
 } from 'lucide-react';
 import {
@@ -31,6 +32,7 @@ import { cn } from '@shared/lib/utils';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { uploadFileToSupabase } from '@industrializacao/api/storage';
 import SignedImage from '@industrializacao/components/SignedImage';
+import { useSignedUrl } from '@industrializacao/hooks/useSignedUrl';
 import {
   ENCAIXE_HORARIO,
   formatDateBR,
@@ -94,6 +96,99 @@ function StatusBadge({ status, label, className }) {
       {Icon ? <Icon className="h-3 w-3" /> : null}
       {label}
     </span>
+  );
+}
+
+/** Overlay de visualização ampliada das fotos do checklist (sem Dialog aninhado). */
+function ChecklistPhotoPreview({ urls = [], index, onClose, onChangeIndex, t }) {
+  const total = urls.length;
+  const safeIndex = total > 0 ? Math.min(Math.max(index, 0), total - 1) : -1;
+  const currentUrl = safeIndex >= 0 ? urls[safeIndex] : null;
+  const { signedUrl, loading } = useSignedUrl(currentUrl);
+
+  useEffect(() => {
+    if (safeIndex < 0) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose?.();
+        return;
+      }
+      if (event.key === 'ArrowLeft' && total > 1) {
+        event.preventDefault();
+        onChangeIndex?.((safeIndex - 1 + total) % total);
+      }
+      if (event.key === 'ArrowRight' && total > 1) {
+        event.preventDefault();
+        onChangeIndex?.((safeIndex + 1) % total);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [safeIndex, total, onClose, onChangeIndex]);
+
+  if (safeIndex < 0 || !currentUrl) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex flex-col bg-black/85 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('painel.comercial.agendamentos.checklist.photoPreviewTitle')}
+      onClick={onClose}
+    >
+      <div className="flex items-center justify-between gap-3 px-4 py-3 text-white">
+        <p className="text-sm font-medium tabular-nums">
+          {safeIndex + 1} / {total}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+          aria-label={t('painel.comercial.agendamentos.checklist.photoPreviewClose')}
+          title={t('painel.comercial.agendamentos.checklist.photoPreviewClose')}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center px-4 pb-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {total > 1 ? (
+          <button
+            type="button"
+            onClick={() => onChangeIndex?.((safeIndex - 1 + total) % total)}
+            className="absolute left-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 sm:left-6"
+            aria-label={t('painel.comercial.agendamentos.checklist.photoPreviewPrev')}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        ) : null}
+
+        {loading || !signedUrl ? (
+          <div className="h-48 w-48 animate-pulse rounded-xl bg-white/10" />
+        ) : (
+          <img
+            src={signedUrl}
+            alt={t('painel.comercial.agendamentos.checklist.photoAlt')}
+            className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+          />
+        )}
+
+        {total > 1 ? (
+          <button
+            type="button"
+            onClick={() => onChangeIndex?.((safeIndex + 1) % total)}
+            className="absolute right-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 sm:right-6"
+            aria-label={t('painel.comercial.agendamentos.checklist.photoPreviewNext')}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -535,12 +630,14 @@ export default function AgendamentoCarregamentoChecklistModal({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [previewPhotoIndex, setPreviewPhotoIndex] = useState(null);
   const dirtyRef = useRef(false);
   const initializedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
       initializedRef.current = false;
+      setPreviewPhotoIndex(null);
       return;
     }
     if (
@@ -559,6 +656,7 @@ export default function AgendamentoCarregamentoChecklistModal({
     setSaving(false);
     setUploading(false);
     setError('');
+    setPreviewPhotoIndex(null);
     dirtyRef.current = false;
   }, [
     open,
@@ -663,12 +761,14 @@ export default function AgendamentoCarregamentoChecklistModal({
   };
 
   const handleBackToList = async () => {
+    setPreviewPhotoIndex(null);
     setActiveKey(null);
     await saveIfDirty(items);
   };
 
   const handleGoToNextItem = async () => {
     if (!nextItem || saving || uploading) return;
+    setPreviewPhotoIndex(null);
     setActiveKey(nextItem.item_key);
     await saveIfDirty(items);
   };
@@ -1187,17 +1287,28 @@ export default function AgendamentoCarregamentoChecklistModal({
                   onChange={handlePhotoUpload}
                 />
                 <div className="flex flex-wrap gap-2">
-                  {(active.fotos || []).map((url) => (
+                  {(active.fotos || []).map((url, photoIndex) => (
                     <div key={url} className="group relative">
-                      <SignedImage
-                        url={url}
-                        alt={t('painel.comercial.agendamentos.checklist.photoAlt')}
-                        className="h-16 w-16 rounded-lg border object-cover"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPhotoIndex(photoIndex)}
+                        className="block overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2575D1]"
+                        title={t('painel.comercial.agendamentos.checklist.photoPreviewTitle')}
+                        aria-label={t('painel.comercial.agendamentos.checklist.photoPreviewTitle')}
+                      >
+                        <SignedImage
+                          url={url}
+                          alt={t('painel.comercial.agendamentos.checklist.photoAlt')}
+                          className="h-16 w-16 object-cover"
+                        />
+                      </button>
                       {!readOnly ? (
                         <button
                           type="button"
-                          onClick={() => removePhoto(url)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removePhoto(url);
+                          }}
                           className="absolute -right-1 -top-1 rounded-full border bg-white p-0.5 text-red-500 opacity-0 group-hover:opacity-100"
                           title={t('buttons.delete')}
                         >
@@ -1318,6 +1429,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                       minute: '2-digit',
                     }
                   ),
+                  operador: booking.checklist_operador_nome || '—',
                 })}
               </p>
             ) : null}
@@ -1330,6 +1442,16 @@ export default function AgendamentoCarregamentoChecklistModal({
             </div>
           ) : null}
         </div>
+
+        {previewPhotoIndex != null && active ? (
+          <ChecklistPhotoPreview
+            urls={active.fotos || []}
+            index={previewPhotoIndex}
+            onClose={() => setPreviewPhotoIndex(null)}
+            onChangeIndex={setPreviewPhotoIndex}
+            t={t}
+          />
+        ) : null}
 
         <DialogFooter className="gap-2 border-t border-border bg-muted/30 px-6 py-3">
           <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>

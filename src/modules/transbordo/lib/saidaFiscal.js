@@ -827,8 +827,13 @@ async function estornarReservasItensSelecionados(
         try {
           const reserva = await entities.materialReservas.get(item.reserva_id);
           if (reserva?.id) {
+            const atual = Math.round(Number(reserva.quantidade) || 0);
+            // Baixa total preserva a qty no registro removido — só reativa.
+            // Baixa parcial (ou legado qty=0) devolve a parcela abatida.
+            const nextQty =
+              reserva.status === "removida" && atual > 0 ? atual : atual + qtd;
             await entities.materialReservas.update(reserva.id, {
-              quantidade: Math.round((Number(reserva.quantidade) || 0) + qtd),
+              quantidade: nextQty,
               status: "ativa",
               removido_em: null,
               removido_por_id: null,

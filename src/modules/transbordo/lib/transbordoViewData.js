@@ -5,6 +5,7 @@ import {
   formatDensidade,
   parseDensidade,
   roundVolume,
+  roundMass,
   distributeByWeights,
   litrosFromMassaKg,
   resolveVolumeMassaOperacional,

@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvider';
 import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
 import ScreenAccessRoute from '@/components/ScreenAccessRoute';
+import PageSuspense from '@shared/components/layout/PageSuspense';
 
 const Home = lazy(() => import('@painel/pages/Home'));
 const Configuracao = lazy(() => import('@painel/pages/configuracao/Configuracao'));
@@ -29,101 +30,95 @@ const Agendamentos = lazy(() => import('@painel/pages/comercial/Agendamentos'));
 const Usuarios = lazy(() => import('@industrializacao/pages/Usuarios'));
 const Permissoes = lazy(() => import('@painel/pages/Permissoes'));
 
-function PageFallback() {
-  return (
-    <div className="flex flex-1 items-center justify-center py-16">
-      <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
-    </div>
-  );
-}
-
 /**
  * Rotas internas do Painel, montadas em `/painel/*`.
  * Sem RealtimeProvider da Industrialização (evita assinar tabelas Ind no hub).
- * Páginas em lazy para reduzir o custo do primeiro open do módulo.
+ * Páginas em lazy; Suspense fica no AppShell (mantém sidebar/topbar sem piscar).
  */
 export default function PainelRoutes() {
   return (
     <PermissionProvider>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
-          <Route element={<MainLayout />}>
-            <Route index element={<Navigate to="home" replace />} />
-            <Route path="home" element={<Home />} />
-            <Route
-              path="comercial"
-              element={<Navigate to="/painel/comercial/reservar-material" replace />}
-            />
-            <Route
-              path="logistica"
-              element={<Navigate to="/painel/logistica/agendamentos" replace />}
-            />
-            <Route
-              path="operacional"
-              element={<Navigate to="/painel/operacional/ordem-transbordo" replace />}
-            />
-            <Route
-              path="comercial/composicao-carga"
-              element={<Navigate to="/painel/comercial/agendamentos" replace />}
-            />
-            <Route
-              path="comercial/composicao-carga/*"
-              element={<Navigate to="/painel/comercial/agendamentos" replace />}
-            />
-
-            <Route element={<ScreenAccessRoute />}>
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route
-                path="faturamento"
-                element={<Navigate to="/painel/faturamento/embalados" replace />}
-              />
-              <Route path="faturamento/embalados" element={<Faturamento />} />
-              <Route path="faturamento/vasilhames" element={<FaturamentoVasilhames />} />
-              <Route path="configuracao" element={<Configuracao />} />
-              <Route path="configuracao/operadores" element={<Operadores />} />
-              <Route path="configuracao/etiquetas" element={<Etiquetas />} />
-              <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
-              <Route path="configuracao/destino-carregamentos" element={<DestinoCarregamentos />} />
-              <Route path="configuracao/justificativas-atraso" element={<JustificativasAtraso />} />
-              <Route path="comercial/reservar-material" element={<ReservarMaterial />} />
-              <Route path="comercial/solicitacoes-saida" element={<SolicitacoesSaida />} />
-              <Route
-                path="comercial/solicitacoes-saida/novo"
-                element={<SolicitacaoSaidaForm />}
-              />
-              <Route
-                path="comercial/solicitacoes-saida/editar/:id"
-                element={<SolicitacaoSaidaForm />}
-              />
-              <Route
-                path="comercial/solicitacoes-saida/visualizar/:id"
-                element={<SolicitacaoSaidaView />}
-              />
-              <Route path="comercial/agendamentos" element={<Agendamentos />} />
-              <Route path="logistica/agendamentos" element={<LogisticaAgendamentos />} />
-              <Route path="logistica/carregamentos" element={<LogisticaCarregamentos />} />
-              <Route path="logistica/recebimento" element={<LogisticaRecebimento />} />
-              <Route path="operacional/ordem-transbordo" element={<OrdemTransbordo />} />
-              <Route path="operacional/estoque" element={<OperacionalEstoque />} />
-            </Route>
-
-            <Route element={<AdminRoute />}>
-              <Route path="usuarios" element={<Usuarios />} />
-              <Route path="permissoes" element={<Permissoes />} />
-              <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
-            </Route>
-          </Route>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<Home />} />
+          <Route
+            path="comercial"
+            element={<Navigate to="/painel/comercial/reservar-material" replace />}
+          />
+          <Route
+            path="logistica"
+            element={<Navigate to="/painel/logistica/agendamentos" replace />}
+          />
+          <Route
+            path="operacional"
+            element={<Navigate to="/painel/operacional/ordem-transbordo" replace />}
+          />
+          <Route
+            path="comercial/composicao-carga"
+            element={<Navigate to="/painel/comercial/agendamentos" replace />}
+          />
+          <Route
+            path="comercial/composicao-carga/*"
+            element={<Navigate to="/painel/comercial/agendamentos" replace />}
+          />
 
           <Route element={<ScreenAccessRoute />}>
+            <Route path="dashboard" element={<Dashboard />} />
             <Route
-              path="operacional/ordem-transbordo/relatorio/:destino/:id"
-              element={<OrdemTransbordoRelatorio />}
+              path="faturamento"
+              element={<Navigate to="/painel/faturamento/embalados" replace />}
             />
+            <Route path="faturamento/embalados" element={<Faturamento />} />
+            <Route path="faturamento/vasilhames" element={<FaturamentoVasilhames />} />
+            <Route path="configuracao" element={<Configuracao />} />
+            <Route path="configuracao/operadores" element={<Operadores />} />
+            <Route path="configuracao/etiquetas" element={<Etiquetas />} />
+            <Route path="configuracao/checklist-expedicao" element={<ChecklistExpedicao />} />
+            <Route path="configuracao/destino-carregamentos" element={<DestinoCarregamentos />} />
+            <Route path="configuracao/justificativas-atraso" element={<JustificativasAtraso />} />
+            <Route path="comercial/reservar-material" element={<ReservarMaterial />} />
+            <Route path="comercial/solicitacoes-saida" element={<SolicitacoesSaida />} />
+            <Route
+              path="comercial/solicitacoes-saida/novo"
+              element={<SolicitacaoSaidaForm />}
+            />
+            <Route
+              path="comercial/solicitacoes-saida/editar/:id"
+              element={<SolicitacaoSaidaForm />}
+            />
+            <Route
+              path="comercial/solicitacoes-saida/visualizar/:id"
+              element={<SolicitacaoSaidaView />}
+            />
+            <Route path="comercial/agendamentos" element={<Agendamentos />} />
+            <Route path="logistica/agendamentos" element={<LogisticaAgendamentos />} />
+            <Route path="logistica/carregamentos" element={<LogisticaCarregamentos />} />
+            <Route path="logistica/recebimento" element={<LogisticaRecebimento />} />
+            <Route path="operacional/ordem-transbordo" element={<OrdemTransbordo />} />
+            <Route path="operacional/estoque" element={<OperacionalEstoque />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/painel/home" replace />} />
-        </Routes>
-      </Suspense>
+          <Route element={<AdminRoute />}>
+            <Route path="usuarios" element={<Usuarios />} />
+            <Route path="permissoes" element={<Permissoes />} />
+            <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
+          </Route>
+        </Route>
+
+        <Route element={<ScreenAccessRoute />}>
+          <Route
+            path="operacional/ordem-transbordo/relatorio/:destino/:id"
+            element={
+              <PageSuspense>
+                <OrdemTransbordoRelatorio />
+              </PageSuspense>
+            }
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/painel/home" replace />} />
+      </Routes>
     </PermissionProvider>
   );
 }

@@ -734,9 +734,9 @@ begin
         end if;
 
         if v_loaded = round(v_reserva.quantidade) then
+          -- Mantém quantidade para histórico completo no Painel Comercial.
           update t_material_reservas
             set status = 'removida',
-                quantidade = 0,
                 removido_em = now(),
                 motivo_remocao = 'Baixa de carregamento'
           where id = v_reserva.id;
@@ -821,14 +821,27 @@ begin
       for update;
 
       if v_reserva.id is not null and v_abatida > 0 then
-        update t_material_reservas
-          set quantidade = round(coalesce(quantidade, 0)) + v_abatida,
-              status = 'ativa',
-              removido_em = null,
-              removido_por_id = null,
-              removido_por_nome = null,
-              motivo_remocao = null
-        where id = v_reserva.id;
+        -- Baixa total preserva quantidade no registro removido; só reativa.
+        -- Baixa parcial (ou legado qty=0) devolve a parcela abatida.
+        if v_reserva.status = 'removida'
+           and round(coalesce(v_reserva.quantidade, 0)) > 0 then
+          update t_material_reservas
+            set status = 'ativa',
+                removido_em = null,
+                removido_por_id = null,
+                removido_por_nome = null,
+                motivo_remocao = null
+          where id = v_reserva.id;
+        else
+          update t_material_reservas
+            set quantidade = round(coalesce(quantidade, 0)) + v_abatida,
+                status = 'ativa',
+                removido_em = null,
+                removido_por_id = null,
+                removido_por_nome = null,
+                motivo_remocao = null
+          where id = v_reserva.id;
+        end if;
       end if;
 
       v_item := v_item
@@ -846,7 +859,7 @@ begin
 end;
 $$;
 
--- Reserva zerada na baixa total continua auditável (status removida).
+-- Reserva baixada por completo continua auditável (status removida, qty preservada).
 do $$
 declare
   r record;
