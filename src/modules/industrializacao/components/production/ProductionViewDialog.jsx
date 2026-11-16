@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, QrCode, ArrowUpRight, Pencil, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
@@ -26,6 +26,8 @@ import FractionalBadge from '@industrializacao/components/production/FractionalB
 import { isComplementPending } from '@industrializacao/lib/fractionalSupply';
 import { packagingRowsForProduction, originShareKey } from '@industrializacao/lib/containerOrigins';
 import { useSubmitGuard } from '@industrializacao/hooks/useSubmitGuard';
+import { base44 } from '@industrializacao/api/base44Client';
+import { invalidate } from '@industrializacao/lib/queryCache';
 
 const StatusBadge = ({ status }) => {
   const c = {
@@ -57,44 +59,101 @@ export default function ProductionViewDialog({
   onGeneratePdf,
   onGenerateTanksPdf,
   onShowQr,
+  /** Chamado quando o dialog hidrata a OP completa (ex.: lista sem raw_materials_used). */
+  onProductionHydrated,
 }) {
   const { t, i18n } = useTranslation();
   const fmt = (n) => fmtNumber(n, { minimumFractionDigits: 0 }, i18n.language);
   const fmtGross = (n) => fmtNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 0 }, i18n.language);
   const fmtMoney = (n) => fmtCurrency(n, 'BRL', i18n.language);
 
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [editingMp, setEditingMp] = useState(false);
+  const [draftMps, setDraftMps] = useState([]);
+  const [detail, setDetail] = useState(production || null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
+  const onHydratedRef = useRef(onProductionHydrated);
+  onHydratedRef.current = onProductionHydrated;
+  const hydrateAttemptedRef = useRef('');
+
+  // Preferir detalhe hidratado (com MPs) sobre o registro projetado da lista.
+  const viewProduction = detail?.id === production?.id ? (detail || production) : production;
+
   const unitOf = (mp) => stockUnitOf(mp, stocks);
   const lotOf = (mp) => liveLotOf(mp, stocks);
   const densityOf = (mp) => stockDensityOf(mp, stocks);
   const fiscalOf = (mp) => (editingMp ? (mp.qty_fiscal || 0) : fiscalQtyOf(mp, stocks));
 
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [editingMp, setEditingMp] = useState(false);
-  const [draftMps, setDraftMps] = useState([]);
-  const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
-
   const packagingRows = packagingRowsProp
-    || packagingRowsForProduction(containers, origins, production);
+    || packagingRowsForProduction(containers, origins, viewProduction);
 
-  const rawMaterials = editingMp ? draftMps : parseArr(production?.raw_materials_used);
+  const rawMaterials = editingMp ? draftMps : parseArr(viewProduction?.raw_materials_used);
   const canShowEditMp = !simplified
     && canEditMp
     && !!onSaveMp
-    && production
-    && production.status !== 'Cancelado'
-    && parseArr(production.raw_materials_used).length > 0;
+    && viewProduction
+    && viewProduction.status !== 'Cancelado'
+    && parseArr(viewProduction.raw_materials_used).length > 0;
+
+  useEffect(() => {
+    if (!production) {
+      setDetail(null);
+      return;
+    }
+    setDetail((prev) => {
+      if (!prev || prev.id !== production.id) return production;
+      const incomingMps = parseArr(production.raw_materials_used);
+      const prevMps = parseArr(prev.raw_materials_used);
+      // Não descartar MPs já hidratadas quando a lista reenvia o registro projetado.
+      if (incomingMps.length === 0 && prevMps.length > 0) {
+        return { ...production, raw_materials_used: prev.raw_materials_used };
+      }
+      return {
+        ...prev,
+        ...production,
+        raw_materials_used: incomingMps.length > 0 ? production.raw_materials_used : prev.raw_materials_used,
+      };
+    });
+  }, [production]);
 
   useEffect(() => {
     if (!open) {
       setSelectedIds(new Set());
       setEditingMp(false);
       setDraftMps([]);
+      setLoadingDetail(false);
+      hydrateAttemptedRef.current = '';
+      return;
     }
-  }, [open, production?.id]);
+    if (!production?.id) return;
+
+    if (parseArr(production.raw_materials_used).length > 0) return;
+    if (hydrateAttemptedRef.current === production.id) return;
+    hydrateAttemptedRef.current = production.id;
+
+    let cancelled = false;
+    setLoadingDetail(true);
+    invalidate('Production');
+    base44.entities.Production.get(production.id)
+      .then((full) => {
+        if (cancelled || !full) return;
+        setDetail(full);
+        onHydratedRef.current?.(full);
+      })
+      .catch(() => {
+        /* mantém o registro parcial da lista */
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [open, production?.id, production?.raw_materials_used]);
 
   const startEditMp = () => {
     // Recalcula qty_fiscal pela unidade atual da nota (kg operacional é a fonte da verdade).
-    setDraftMps(parseArr(production.raw_materials_used).map((m) => ({
+    setDraftMps(parseArr(viewProduction.raw_materials_used).map((m) => ({
       ...m,
       qty_fiscal: fiscalQtyOf(m, stocks),
     })));
@@ -212,13 +271,13 @@ export default function ProductionViewDialog({
   };
 
   const rowLiveNet = (row) => {
-    const dens = resolveProductDensity(production, row.container, recipes);
+    const dens = resolveProductDensity(viewProduction, row.container, recipes);
     const vol = parseFloat(row.volume) || 0;
     if (vol <= 0) return 0;
     if (dens) return Math.round(vol * dens);
     // Fallback: scale container net
     const cVol = parseFloat(row.container?.volume) || 0;
-    const cNet = containerLiveNetWeight(row.container, production, recipes);
+    const cNet = containerLiveNetWeight(row.container, viewProduction, recipes);
     if (cVol > 0) return Math.round(cNet * (vol / cVol));
     return Math.round(parseFloat(row.container?.net_weight) || 0);
   };
@@ -236,43 +295,49 @@ export default function ProductionViewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{production?.op_number} · {production?.product}</DialogTitle></DialogHeader>
-        {production && (
+        <DialogHeader><DialogTitle>{viewProduction?.op_number} · {viewProduction?.product}</DialogTitle></DialogHeader>
+        {viewProduction && (
           <div>
             <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-              <div><p className="text-xs text-muted-foreground">{t('production.opNumber')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{production.op_number}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{production.lot}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('production.list.finishDate')}</p><p className="font-medium">{production.end_time ? fmtDateTime(production.end_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('common.product')}</p><p className="font-bold">{production.product}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('common.client')}</p><p className="font-medium">{production.client}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(production.volume, 'L', i18n.language)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-bold">{fmtMass(production.mass, 'kg', i18n.language)}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('production.list.revision')}</p><p className="font-medium">{production.recipe_revision}</p></div>
-              <div><p className="text-xs text-muted-foreground">{t('production.list.clientOrder')}</p><p className="font-medium">{production.client_order || t('common.notAvailable')}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.opNumber')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{viewProduction.op_number}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('common.lot')}</p><p className="font-medium">{viewProduction.lot}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.list.finishDate')}</p><p className="font-medium">{viewProduction.end_time ? fmtDateTime(viewProduction.end_time, undefined, i18n.language) : t('common.notAvailable')}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('common.product')}</p><p className="font-bold">{viewProduction.product}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('common.client')}</p><p className="font-medium">{viewProduction.client}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('common.volume')}</p><p className="font-medium">{fmtVolume(viewProduction.volume, 'L', i18n.language)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('common.mass')}</p><p className="font-bold">{fmtMass(viewProduction.mass, 'kg', i18n.language)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.list.revision')}</p><p className="font-medium">{viewProduction.recipe_revision}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('production.list.clientOrder')}</p><p className="font-medium">{viewProduction.client_order || t('common.notAvailable')}</p></div>
               <div><p className="text-xs text-muted-foreground">{t('production.list.stage')}</p>
-                {isComplementPending(production) ? (
-                  <FractionalBadge production={production} />
+                {isComplementPending(viewProduction) ? (
+                  <FractionalBadge production={viewProduction} />
                 ) : (
-                  <StatusBadge status={production.status} />
+                  <StatusBadge status={viewProduction.status} />
                 )}
               </div>
               {!simplified && (
                 <>
-                  <div><p className="text-xs text-muted-foreground">{t('production.fields.unitPrice')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{t('production.list.unitPricePerKg', { price: fmtCurrency(production.unit_price || 0, 'BRL', i18n.language) })}</p></div>
-                  <div><p className="text-xs text-muted-foreground">{t('production.fields.totalValue')}</p><p className="font-bold">{fmtMoney(production.total_value)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fields.unitPrice')}</p><p className="font-bold" style={{ color: '#2575D1' }}>{t('production.list.unitPricePerKg', { price: fmtCurrency(viewProduction.unit_price || 0, 'BRL', i18n.language) })}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fields.totalValue')}</p><p className="font-bold">{fmtMoney(viewProduction.total_value)}</p></div>
                 </>
               )}
-              {production.fractional_supply && (
+              {viewProduction.fractional_supply && (
                 <>
-                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumeApontado')}</p><p className="font-medium">{fmtVolume(production.volume_apontado ?? production.volume, 'L', i18n.language)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumePendente')}</p><p className="font-medium">{fmtVolume(production.volume_pendente ?? 0, 'L', i18n.language)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.complementStatus')}</p><p className="font-medium">{production.complement_status === 'Pendente' ? t('production.fractional.complementStatusPending') : t('production.fractional.complementStatusComplete')}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumeApontado')}</p><p className="font-medium">{fmtVolume(viewProduction.volume_apontado ?? viewProduction.volume, 'L', i18n.language)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.volumePendente')}</p><p className="font-medium">{fmtVolume(viewProduction.volume_pendente ?? 0, 'L', i18n.language)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t('production.fractional.complementStatus')}</p><p className="font-medium">{viewProduction.complement_status === 'Pendente' ? t('production.fractional.complementStatusPending') : t('production.fractional.complementStatusComplete')}</p></div>
                 </>
               )}
             </div>
 
             <div className="flex items-center gap-3 mt-4 mb-2 flex-wrap">
               <h4 className="text-sm font-semibold">{t('production.list.rawMaterialsUsed')}</h4>
+              {loadingDetail && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  {t('common.loading', { defaultValue: 'Carregando…' })}
+                </span>
+              )}
               {canShowEditMp && (
                 editingMp ? (
                   <div className="flex items-center gap-2">
@@ -424,11 +489,11 @@ export default function ProductionViewDialog({
               </div>
             )}
 
-            {production.fractional_supply && parseArr(production.supply_complements).length > 0 && (
+            {viewProduction.fractional_supply && parseArr(viewProduction.supply_complements).length > 0 && (
               <div className="mt-4 mb-4">
                 <h4 className="text-sm font-semibold mb-3">{t('production.fractional.historyTitle')}</h4>
                 <div className="space-y-3">
-                  {parseArr(production.supply_complements).map((entry, i) => (
+                  {parseArr(viewProduction.supply_complements).map((entry, i) => (
                     <div key={i} className="border rounded-lg p-3 text-sm">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold">
@@ -499,7 +564,7 @@ export default function ProductionViewDialog({
                         <td className="px-3 py-2 font-medium">
                           <span className="inline-flex items-center gap-1">
                             <span className="text-muted-foreground tabular-nums">{seq}-</span>
-                            {formatContainerPackagingForProduction(c, production, origins) || c?.container_number || t('common.notAvailable')}
+                            {formatContainerPackagingForProduction(c, viewProduction, origins) || c?.container_number || t('common.notAvailable')}
                             {fromTransfer && (
                               <ArrowUpRight
                                 className="w-3.5 h-3.5 shrink-0"
@@ -519,7 +584,7 @@ export default function ProductionViewDialog({
                             : (
                               <span className="inline-flex items-center justify-end gap-1">
                                 <FractionalBadge
-                                  production={production}
+                                  production={viewProduction}
                                   container={c}
                                   transfers={transfers}
                                   variant="container"
@@ -566,10 +631,10 @@ export default function ProductionViewDialog({
                   </div>
                 )}
               </>
-            ) : (production.packaging_info || production.packaging_type) ? (
+            ) : (viewProduction.packaging_info || viewProduction.packaging_type) ? (
               <div className="mt-4">
                 <h4 className="text-sm font-semibold mb-2">{t('production.list.suggestedPackaging')}</h4>
-                <p className="text-sm bg-muted/50 rounded-lg px-3 py-2 font-medium">{production.packaging_info || production.packaging_type}</p>
+                <p className="text-sm bg-muted/50 rounded-lg px-3 py-2 font-medium">{viewProduction.packaging_info || viewProduction.packaging_type}</p>
               </div>
             ) : null}
           </div>
@@ -580,7 +645,7 @@ export default function ProductionViewDialog({
               <Button variant="outline" onClick={onGeneratePdf} className="gap-2">
                 <FileText className="w-4 h-4" /> {t('production.actions.generatePdf')}
               </Button>
-              {production?.public_token && (
+              {viewProduction?.public_token && (
                 <Button variant="outline" onClick={onShowQr} className="gap-2">
                   <QrCode className="w-4 h-4" /> {t('production.list.qrCode')}
                 </Button>

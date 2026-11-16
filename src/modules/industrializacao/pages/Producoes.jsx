@@ -29,7 +29,7 @@ import { translateProductionStatus } from '@/i18n/domainMaps';
 import moment from 'moment';
 import { usePermissions } from '@industrializacao/lib/rbac/PermissionProvider';
 import { RBAC_ADMIN_SLUG } from '@industrializacao/lib/rbac/permissionCatalog';
-import { deductStock, restoreStock } from '@industrializacao/lib/stockRpc';
+import { deductStock, restoreStock, restoreStockFromMaterials } from '@industrializacao/lib/stockRpc';
 import {
   healProductionsCanceledByCqReject,
   syncOrderFromProductions,
@@ -380,29 +380,33 @@ export default function Producoes() {
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {
-      const mps = parseArr(cancelTarget.raw_materials_used);
-      // Return MP stock to inventory — aggregate by stock_id
-      const stockReturns = {};
-      for (const mp of mps) {
-        if (mp.stock_id && mp.qty_fiscal > 0) {
-          stockReturns[mp.stock_id] = (stockReturns[mp.stock_id] || 0) + mp.qty_fiscal;
-        }
-      }
-      for (const [stockId, returnQty] of Object.entries(stockReturns)) {
-        if (returnQty > 0) {
-          await restoreStock(stockId, returnQty);
-        }
+      // A listagem usa projeção sem raw_materials_used — buscar OP completa antes de devolver MP.
+      const fullOp = await base44.entities.Production.get(cancelTarget.id);
+      if (fullOp?.status === 'Cancelado') {
+        toast({
+          title: t('production.cancel.error'),
+          description: t('production.cancel.alreadyCanceled', {
+            defaultValue: 'Esta OP já está cancelada.',
+          }),
+          variant: 'destructive',
+        });
+        setCancelTarget(null);
+        load();
+        return;
       }
 
-      // Cancelar OP primeiro; depois recalcular o pedido só com OPs Finalizado / abertas
+      await restoreStockFromMaterials(fullOp.raw_materials_used);
+
+      // Cancelar OP; depois recalcular o pedido só com OPs Finalizado / abertas
       await base44.entities.Production.update(cancelTarget.id, {
         status: 'Cancelado',
-        end_time: cancelTarget.end_time || new Date().toISOString(),
+        end_time: fullOp.end_time || cancelTarget.end_time || new Date().toISOString(),
       });
 
-      if (cancelTarget.order_id) {
+      const orderId = fullOp.order_id || cancelTarget.order_id;
+      if (orderId) {
         try {
-          await syncOrderFromProductions(cancelTarget.order_id, base44.entities);
+          await syncOrderFromProductions(orderId, base44.entities);
         } catch (_orderErr) {
           toast({
             title: t('production.cancel.success', { op: cancelTarget.op_number }),
@@ -421,13 +425,26 @@ export default function Producoes() {
       setCancelTarget(null);
       load();
     } catch (err) {
-      toast({ title: t('production.cancel.error'), variant: 'destructive' });
+      toast({
+        title: t('production.cancel.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
     }
   };
 
-  const openView = (p) => {
+  const openView = async (p) => {
+    setShowView(true);
     setViewing(p);
-    const rows = packagingRowsForProduction(containers, containerOrigins, p);
+    let full = p;
+    try {
+      // Projeção da lista omite raw_materials_used e outros campos do detalhe.
+      full = await base44.entities.Production.get(p.id);
+      setViewing(full);
+    } catch (_err) {
+      // Mantém o registro da lista se o get falhar.
+    }
+    const rows = packagingRowsForProduction(containers, containerOrigins, full);
     setViewPackagingRows(rows);
     const uniqueContainers = [];
     const seen = new Set();
@@ -438,8 +455,7 @@ export default function Producoes() {
       }
     }
     // Fallback to lot-based list when no origin rows yet
-    setViewContainers(uniqueContainers.length ? uniqueContainers : containersOfProductionLot(containers, p));
-    setShowView(true);
+    setViewContainers(uniqueContainers.length ? uniqueContainers : containersOfProductionLot(containers, full));
   };
 
   return (
@@ -657,6 +673,12 @@ export default function Producoes() {
         canEditMp={isAdmin}
         savingMp={savingMp}
         onSaveMp={saveMpQuantities}
+        onProductionHydrated={(full) => {
+          setViewing(full);
+          setProductions((prev) =>
+            prev.map((p) => (p.id === full.id ? { ...p, ...full } : p))
+          );
+        }}
         onGeneratePdf={() => generateProductionPDF(viewing, viewContainers, stocks, recipes, containerOrigins)}
         onGenerateTanksPdf={(selected) => {
           if (!selected || selected.length === 0) {

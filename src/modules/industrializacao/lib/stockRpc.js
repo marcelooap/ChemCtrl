@@ -104,3 +104,49 @@ export async function deductStockBatch(items = []) {
   notifyStockAdjustedMany(results);
   return results;
 }
+
+/**
+ * Normaliza raw_materials_used (array, jsonb ou string JSON).
+ * @param {unknown} raw
+ * @returns {Array<object>}
+ */
+function parseMaterialsUsed(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Agrega qty_fiscal por stock_id a partir de raw_materials_used.
+ * @param {unknown} rawMaterialsUsed
+ * @returns {Record<string, number>}
+ */
+export function aggregateMpStockById(rawMaterialsUsed) {
+  const totals = {};
+  for (const mp of parseMaterialsUsed(rawMaterialsUsed)) {
+    const stockId = mp?.stock_id ? String(mp.stock_id) : '';
+    const qty = Number(mp?.qty_fiscal);
+    if (!stockId || !(qty > 0)) continue;
+    totals[stockId] = (totals[stockId] || 0) + qty;
+  }
+  return totals;
+}
+
+/**
+ * Devolve ao estoque as MPs consumidas por uma OP (ex.: cancelamento).
+ * @param {unknown} rawMaterialsUsed
+ * @returns {Promise<Array<object>>}
+ */
+export async function restoreStockFromMaterials(rawMaterialsUsed) {
+  const totals = aggregateMpStockById(rawMaterialsUsed);
+  const results = [];
+  for (const [stockId, qty] of Object.entries(totals)) {
+    results.push(await restoreStock(stockId, qty));
+  }
+  return results;
+}
