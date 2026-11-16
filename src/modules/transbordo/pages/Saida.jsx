@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { entities } from '@transbordo/services/entities';
@@ -8,6 +8,10 @@ import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Checkbox } from "@shared/components/ui/checkbox";
 import { Input } from "@shared/components/ui/input";
+import { ServerPaginationBar } from "@shared/components/ServerPaginationBar";
+import { DEFAULT_PAGE_SIZE } from "@shared/lib/pagination";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
+import { withScreenLoadPerf } from "@shared/lib/perfMarks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -184,7 +188,7 @@ export default function Saida({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isNew, markAsRead, saidasRevision } = useSaidaNovas();
+  const { isNew, markAsRead, saidasRevision, lastSaidaChange } = useSaidaNovas();
   const isExpedicao = statusMode === "expedicao";
   const trackNewFromPainel =
     !isExpedicao && (!excludeChemflow || onlyIndustrializacao);
@@ -203,6 +207,8 @@ export default function Saida({
   const [expedidasIds, setExpedidasIds] = useState(() => new Set());
   const [agendamentos, setAgendamentos] = useState([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
   const [agendamentoFilter, setAgendamentoFilter] = useState("");
@@ -218,148 +224,192 @@ export default function Saida({
   const [fiscalBusyId, setFiscalBusyId] = useState(null);
   const [fiscalError, setFiscalError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   // Expedição: remove Data Solicitação (-1) e adiciona Transporte (+1) → mantém 11.
   const tableColSpan = isExpedicao ? 11 : 10;
 
-  const loadData = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
-    try {
-      const [workspace, saics, cliens, expedidas, agends, entradasDoc] =
-        await Promise.all([
-        loadTransbordoWorkspaceLists(),
-        entities.saidas.list("-created_date"),
-        entities.clientes.list(),
-        isExpedicao ? listSaidaIdsExpedidas() : Promise.resolve(new Set()),
-        isExpedicao
-          ? entities.agendamentosCarregamento.list("-created_at").catch(() => [])
-          : Promise.resolve([]),
-        entities.entradas.list(),
-      ]);
-      const ents = workspace.estoque;
-      const vascs = workspace.vasilhames;
-      const trans = workspace.transbordos;
-      const volumes = applyDeclaredVolumeDecimals({
-        estoque: ents,
-        entradas: entradasDoc,
-        transbordos: trans,
-        vasilhames: vascs,
-      });
-      void persistDeclaredVolumeDecimals(volumes);
-
-      let transbordosAlinhados = volumes.transbordos || [];
-      try {
-        const densCtx = {
-          entradas: [...(volumes.estoque || []), ...(entradasDoc || [])],
-        };
-        const densUpdates = [];
-        const nextTrans = [];
-        for (const t of transbordosAlinhados) {
-          const patch = healTransbordoDensidadeMassaPatch(t, densCtx);
-          if (!patch) {
-            nextTrans.push(t);
-            continue;
-          }
-          densUpdates.push({ id: t.id, ...patch });
-          nextTrans.push({ ...t, ...patch });
-        }
-        if (densUpdates.length > 0) {
-          await entities.transbordos.bulkUpdate(densUpdates);
-        }
-        transbordosAlinhados = nextTrans;
-      } catch (densErr) {
-        console.error(
-          "[Transbordo] Falha ao alinhar densidade/massa dos OPs:",
-          densErr
-        );
-      }
-
-      let list = saics || [];
-      let vasilhamesAlinhados = volumes.vasilhames;
-      try {
-        const healed = await healLinkedLotes({
-          estoqueRows: volumes.estoque,
-          transbordos: transbordosAlinhados,
-          vasilhames: volumes.vasilhames,
-          saidas: list,
-        });
-        list = healed.saidas || list;
-        vasilhamesAlinhados = healed.vasilhames || volumes.vasilhames;
-        transbordosAlinhados = healed.transbordos || transbordosAlinhados;
-      } catch (err) {
-        console.error("[Transbordo] Falha ao alinhar lote das saídas:", err);
-      }
-      try {
-        const repaired = [];
-        for (const row of vasilhamesAlinhados || []) {
-          const patch = repairVolumeFromDestinosPatch(
-            row,
-            transbordosAlinhados
-          );
-          if (!patch) {
-            repaired.push(row);
-            continue;
-          }
-          try {
-            const updated = await entities.vasilhames.update(row.id, patch);
-            repaired.push({ ...row, ...(updated || {}), ...patch });
-          } catch (err) {
-            console.error(
-              "[Transbordo] Falha ao restaurar volume do vasilhame:",
-              err
-            );
-            repaired.push(row);
-          }
-        }
-        vasilhamesAlinhados = repaired;
-      } catch (err) {
-        console.error("[Transbordo] Falha ao alinhar volume dos vasilhames:", err);
-      }
-      try {
-        const volHealed = await healSaidaVolumesFromVasilhames({
-          saidas: list,
-          vasilhames: vasilhamesAlinhados,
-          transbordos: transbordosAlinhados,
-          entitiesApi: entities,
-        });
-        list = volHealed.saidas || list;
-      } catch (err) {
-        console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
-      }
-      try {
-        // Repara Validado + No Pátio (containers/vasilhames sem Expedido/data).
-        await reconcileValidatedSaidaEmbalagens(list, {
-          vasilhames: vasilhamesAlinhados,
-        });
-      } catch (err) {
-        console.error(
-          "[Transbordo] Falha ao reconciliar expedição das saídas validadas:",
-          err
-        );
-      }
+  const applySaidaVisibility = useCallback(
+    (list) => {
+      let next = list || [];
       if (onlyIndustrializacao) {
-        list = list.filter(saidaHasIndustrializacaoItems);
+        next = next.filter(saidaHasIndustrializacaoItems);
       } else if (!isExpedicao) {
-        list = list.filter(saidaVisivelNoTransbordo);
+        next = next.filter(saidaVisivelNoTransbordo);
       }
       if (excludeChemflow) {
-        list = list.filter((s) => !isSaidaModuloChemflow(s));
+        next = next.filter((s) => !isSaidaModuloChemflow(s));
       }
-      setSaidas(list);
-      setClientes(cliens);
-      setEntradas(volumes.estoque);
-      setVasilhames(vasilhamesAlinhados);
-      setTransbordos(transbordosAlinhados);
-      setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
-      setAgendamentos(Array.isArray(agends) ? agends : []);
-    } catch {
-      if (!silent) {
-        setSaidas([]);
-        setExpedidasIds(new Set());
-        setAgendamentos([]);
+      return next;
+    },
+    [onlyIndustrializacao, isExpedicao, excludeChemflow]
+  );
+
+  const runHealsInBackground = useCallback(
+    async ({ list, volumes, entradasDoc }) => {
+      setSyncing(true);
+      try {
+        let transbordosAlinhados = volumes.transbordos || [];
+        try {
+          const densCtx = {
+            entradas: [...(volumes.estoque || []), ...(entradasDoc || [])],
+          };
+          const densUpdates = [];
+          const nextTrans = [];
+          for (const t of transbordosAlinhados) {
+            const patch = healTransbordoDensidadeMassaPatch(t, densCtx);
+            if (!patch) {
+              nextTrans.push(t);
+              continue;
+            }
+            densUpdates.push({ id: t.id, ...patch });
+            nextTrans.push({ ...t, ...patch });
+          }
+          if (densUpdates.length > 0) {
+            await entities.transbordos.bulkUpdate(densUpdates);
+          }
+          transbordosAlinhados = nextTrans;
+        } catch (densErr) {
+          console.error(
+            "[Transbordo] Falha ao alinhar densidade/massa dos OPs:",
+            densErr
+          );
+        }
+
+        let nextList = list || [];
+        let vasilhamesAlinhados = volumes.vasilhames;
+        try {
+          const healed = await healLinkedLotes({
+            estoqueRows: volumes.estoque,
+            transbordos: transbordosAlinhados,
+            vasilhames: volumes.vasilhames,
+            saidas: nextList,
+          });
+          nextList = healed.saidas || nextList;
+          vasilhamesAlinhados = healed.vasilhames || volumes.vasilhames;
+          transbordosAlinhados = healed.transbordos || transbordosAlinhados;
+        } catch (err) {
+          console.error("[Transbordo] Falha ao alinhar lote das saídas:", err);
+        }
+        try {
+          const repairJobs = (vasilhamesAlinhados || []).map(async (row) => {
+            const patch = repairVolumeFromDestinosPatch(row, transbordosAlinhados);
+            if (!patch) return row;
+            try {
+              const updated = await entities.vasilhames.update(row.id, patch);
+              return { ...row, ...(updated || {}), ...patch };
+            } catch (err) {
+              console.error(
+                "[Transbordo] Falha ao restaurar volume do vasilhame:",
+                err
+              );
+              return row;
+            }
+          });
+          // Concorrência limitada em lotes de 8 para não saturar o PostgREST.
+          const repaired = [];
+          for (let i = 0; i < repairJobs.length; i += 8) {
+            const chunk = await Promise.all(repairJobs.slice(i, i + 8));
+            repaired.push(...chunk);
+          }
+          vasilhamesAlinhados = repaired;
+        } catch (err) {
+          console.error("[Transbordo] Falha ao alinhar volume dos vasilhames:", err);
+        }
+        try {
+          const volHealed = await healSaidaVolumesFromVasilhames({
+            saidas: nextList,
+            vasilhames: vasilhamesAlinhados,
+            transbordos: transbordosAlinhados,
+            entitiesApi: entities,
+          });
+          nextList = volHealed.saidas || nextList;
+        } catch (err) {
+          console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
+        }
+        try {
+          await reconcileValidatedSaidaEmbalagens(nextList, {
+            vasilhames: vasilhamesAlinhados,
+          });
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao reconciliar expedição das saídas validadas:",
+            err
+          );
+        }
+        setSaidas(applySaidaVisibility(nextList));
+        setVasilhames(vasilhamesAlinhados);
+        setTransbordos(transbordosAlinhados);
+      } finally {
+        setSyncing(false);
       }
-    }
-    if (!silent) setLoading(false);
+    },
+    [applySaidaVisibility]
+  );
+
+  const loadData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    await withScreenLoadPerf("saida", async () => {
+      try {
+        // Workspace já inclui saidas — evita double-fetch de t_saidas.
+        // Clientes/entradas não devem derrubar a lista se falharem.
+        const [workspace, cliens, expedidas, agends, entradasDoc] =
+          await Promise.all([
+            loadTransbordoWorkspaceLists({ force: silent }),
+            entities.clientes
+              .list("nome", { select: "id,nome,created_at" })
+              .catch((err) => {
+                console.error("[Saida] Falha ao carregar clientes:", err);
+                return [];
+              }),
+            isExpedicao ? listSaidaIdsExpedidas() : Promise.resolve(new Set()),
+            isExpedicao
+              ? entities.agendamentosCarregamento
+                  .list("-created_at")
+                  .catch(() => [])
+              : Promise.resolve([]),
+            entities.entradas.list().catch((err) => {
+              console.error("[Saida] Falha ao carregar entradas:", err);
+              return [];
+            }),
+          ]);
+        const ents = workspace.estoque;
+        const vascs = workspace.vasilhames;
+        const trans = workspace.transbordos;
+        const saics = workspace.saidas || [];
+        const volumes = applyDeclaredVolumeDecimals({
+          estoque: ents,
+          entradas: entradasDoc,
+          transbordos: trans,
+          vasilhames: vascs,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
+
+        const visible = applySaidaVisibility(saics);
+        setSaidas(visible);
+        setClientes(cliens || []);
+        setEntradas(volumes.estoque);
+        setVasilhames(volumes.vasilhames);
+        setTransbordos(volumes.transbordos);
+        setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
+        setAgendamentos(Array.isArray(agends) ? agends : []);
+        if (!silent) setLoading(false);
+
+        void runHealsInBackground({
+          list: saics,
+          volumes,
+          entradasDoc,
+        });
+      } catch (err) {
+        console.error("[Saida] Falha ao carregar listagem:", err);
+        if (!silent) {
+          setSaidas([]);
+          setExpedidasIds(new Set());
+          setAgendamentos([]);
+        }
+        if (!silent) setLoading(false);
+      }
+    });
   };
 
   useEffect(() => {
@@ -385,8 +435,37 @@ export default function Saida({
     if (!trackNewFromPainel) return;
     if (saidasRevision === saidasRevisionSeen.current) return;
     saidasRevisionSeen.current = saidasRevision;
-    loadData({ silent: true });
-  }, [saidasRevision, trackNewFromPainel]);
+    const change = lastSaidaChange;
+    if (!change?.eventType) {
+      loadData({ silent: true });
+      return;
+    }
+    if (change.eventType === "DELETE") {
+      const deletedId = change.old?.id;
+      if (!deletedId) return;
+      setSaidas((prev) => prev.filter((s) => s.id !== deletedId));
+      return;
+    }
+    const row = change.new;
+    if (!row?.id) {
+      loadData({ silent: true });
+      return;
+    }
+    const [visible] = applySaidaVisibility([row]);
+    if (!visible) {
+      setSaidas((prev) => prev.filter((s) => s.id !== row.id));
+      return;
+    }
+    setSaidas((prev) => {
+      const idx = prev.findIndex((s) => s.id === row.id);
+      if (idx === -1) {
+        return change.eventType === "INSERT" ? [visible, ...prev] : prev;
+      }
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...visible };
+      return next;
+    });
+  }, [saidasRevision, trackNewFromPainel, lastSaidaChange, applySaidaVisibility]);
 
   const getExpedicaoStatus = (saida) =>
     isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
@@ -416,7 +495,7 @@ export default function Saida({
 
   const filtered = useMemo(() => {
     const rows = saidas.filter((s) => {
-      const matchSearch = saidaMatchesSearch(s, search, vasilhamesById);
+      const matchSearch = saidaMatchesSearch(s, debouncedSearch, vasilhamesById);
 
       let matchStatus = true;
       if (
@@ -527,7 +606,7 @@ export default function Saida({
     return [...novas, ...demais];
   }, [
     saidas,
-    search,
+    debouncedSearch,
     statusFilter,
     clienteFilter,
     agendamentoFilter,
@@ -541,6 +620,22 @@ export default function Saida({
     operationalModule,
     vasilhamesById,
   ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedSearch,
+    statusFilter,
+    clienteFilter,
+    agendamentoFilter,
+    transporteFilter,
+    carregamentosHoje,
+  ]);
+
+  const pagedFiltered = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filtered, page]);
 
   const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -766,6 +861,7 @@ export default function Saida({
             <h1 className="text-2xl font-bold text-foreground">{title}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {saidas.length} registro(s) cadastrado(s)
+              {syncing ? " · sincronizando…" : ""}
             </p>
           </div>
           <Button
@@ -905,7 +1001,7 @@ export default function Saida({
                   </td>
                 </tr>
               ) : (
-                filtered.map((s, i) => {
+                pagedFiltered.map((s, i) => {
                   const expedicaoStatus = isExpedicao
                     ? getExpedicaoStatus(s)
                     : null;
@@ -922,7 +1018,7 @@ export default function Saida({
                     : isValidated;
                   const isNova = trackNewFromPainel && isNew(s.id);
                   const wmsNok = saidaTemItemWmsNok(s, wmsCtx);
-                  const next = filtered[i + 1];
+                  const next = pagedFiltered[i + 1];
                   const isLastNova =
                     isNova &&
                     (!next || !(trackNewFromPainel && isNew(next.id)));
@@ -1128,10 +1224,20 @@ export default function Saida({
           </table>
         </div>
 
+        <div className="px-5 shrink-0 border-t border-border">
+          <ServerPaginationBar
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            disabled={loading}
+          />
+        </div>
+
         {/* Footer Summary */}
         <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">
           <span className="text-muted-foreground">
-            Itens exibidos:{" "}
+            Itens filtrados:{" "}
             <span className="font-medium text-foreground">{filtered.length}</span>
           </span>
           <span className="text-muted-foreground">

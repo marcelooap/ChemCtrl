@@ -1,6 +1,14 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
+import {
+  loadTransbordoWorkspaceLists,
+  invalidateTransbordoWorkspaceCache,
+} from '@transbordo/services/transbordoWorkspace';
+import { withScreenLoadPerf } from '@shared/lib/perfMarks';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { ServerPaginationBar } from '@shared/components/ServerPaginationBar';
+import { DEFAULT_PAGE_SIZE } from '@shared/lib/pagination';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { Search, Eye, Pencil, Truck, X, Printer, FileText } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -98,6 +106,19 @@ import {
   resolveVasilhameExpedidoDisplay,
 } from "@transbordo/lib/vasilhamePatio";
 import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
+
+/** Gravações simultâneas máximas nos heals em segundo plano. */
+const HEAL_CONCURRENCY = 8;
+
+/** Executa `fn` sobre `items` em lotes concorrentes, preservando a ordem. */
+async function mapInChunks(items, size, fn) {
+  const results = [];
+  for (let i = 0; i < items.length; i += size) {
+    const chunk = items.slice(i, i + size);
+    results.push(...(await Promise.all(chunk.map(fn))));
+  }
+  return results;
+}
 
 /** Chave de agrupamento por cliente (id, com fallback para o nome). */
 function clienteKeyOf(vasilhame) {
@@ -344,6 +365,10 @@ export default function Vasilhames() {
   const [saidaQtdEmbalagens, setSaidaQtdEmbalagens] = useState("");
   const [saidaError, setSaidaError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [page, setPage] = useState(1);
+  const loadSeqRef = useRef(0);
+  const debouncedSearch = useDebouncedValue(search);
   const [labelVasilhame, setLabelVasilhame] = useState(null);
   const [transbordos, setTransbordos] = useState([]);
   const [estoqueById, setEstoqueById] = useState(() => new Map());
@@ -414,24 +439,76 @@ export default function Vasilhames() {
   }, [estoqueFilterId]);
 
   const loadData = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
+
+    await withScreenLoadPerf("vasilhames", async () => {
+      if (!silent) setLoading(true);
+      try {
+        // Workspace (vasilhames/transbordos/estoque/saidas) é compartilhado e cacheado;
+        // gravações da própria tela (silent) forçam releitura.
+        const [workspace, prods, cliens, ents] = await Promise.all([
+          loadTransbordoWorkspaceLists({ force: silent }),
+          listProdutos({ modulo: "ARMAZENAGEM" }),
+          entities.clientes.list(),
+          entities.entradas.list(),
+        ]);
+        if (isStale()) return;
+
+        // PAINT FIRST: listas cruas na tela; heals/reconcile rodam em segundo plano.
+        paintRaw(workspace, prods, cliens);
+        if (!silent) setLoading(false);
+
+        void runBackgroundSync({ seq, isStale, workspace, prods, cliens, ents });
+      } catch {
+        if (isStale()) return;
+        if (!silent) setVasilhames([]);
+        if (!silent) setLoading(false);
+      }
+    });
+  };
+
+  const paintRaw = (workspace, prods, cliens) => {
+    setSaidas(workspace.saidas || []);
+    setTransbordos(workspace.transbordos || []);
+    setEstoqueById(
+      new Map((workspace.estoque || []).filter((e) => e?.id).map((e) => [e.id, e]))
+    );
+    setVasilhames((workspace.vasilhames || []).map(normalizeVasilhameLote));
+    setProdutos(prods);
+    setClientes(cliens);
+  };
+
+  /**
+   * Consolidação + heals/reconcile em segundo plano (mesmas regras de antes),
+   * com as gravações concorrentes em lotes de HEAL_CONCURRENCY.
+   */
+  const runBackgroundSync = async ({ seq, isStale, workspace, prods, cliens, ents }) => {
+    setSyncing(true);
+    let wroteSomething = false;
     try {
+      let { vasilhames: vas, transbordos: trans, estoque: ests, saidas: saidasList } =
+        workspace;
+      let ents = ents;
+
       // Consolida bombonas/IBC/tambores No Pátio do mesmo OP em 1 linha.
       try {
-        await consolidateUnitarioVasilhamesDuplicados();
+        const consolidated = await consolidateUnitarioVasilhamesDuplicados();
+        if (consolidated?.mergedGroups > 0 || consolidated?.deleted > 0) {
+          wroteSomething = true;
+          // Lista de base mudou (linhas removidas/fundidas): relê antes dos heals.
+          const fresh = await loadTransbordoWorkspaceLists({ force: true });
+          vas = fresh.vasilhames;
+          trans = fresh.transbordos;
+          ests = fresh.estoque;
+          saidasList = fresh.saidas;
+          if (!isStale()) paintRaw(fresh, prods, cliens);
+        }
       } catch (consErr) {
         console.warn("[Vasilhames] Consolidação unitária:", consErr);
       }
+      if (isStale()) return;
 
-      const [vas, prods, cliens, trans, ests, ents, saidasList] = await Promise.all([
-        entities.vasilhames.list("-created_date"),
-        listProdutos({ modulo: "ARMAZENAGEM" }),
-        entities.clientes.list(),
-        entities.transbordos.list(),
-        entities.estoque.list(),
-        entities.entradas.list(),
-        entities.saidas.list("-created_date").catch(() => []),
-      ]);
       let vasilhameRows = vas;
       let estoqueRows = ests;
       try {
@@ -442,13 +519,13 @@ export default function Vasilhames() {
           produtos: prods,
         });
         if (healed.changed) {
+          wroteSomething = true;
           vasilhameRows = healed.vasilhames;
           estoqueRows = healed.estoque;
         }
       } catch (err) {
         console.error("[Transbordo] Falha ao registrar vasilhames da entrada:", err);
       }
-      setSaidas(saidasList || []);
       const volumes = applyDeclaredVolumeDecimals({
         estoque: estoqueRows,
         entradas: ents,
@@ -477,6 +554,7 @@ export default function Vasilhames() {
         }
         if (densUpdates.length > 0) {
           await entities.transbordos.bulkUpdate(densUpdates);
+          wroteSomething = true;
         }
         transbordosAlinhados = nextTrans;
       } catch (densErr) {
@@ -489,15 +567,12 @@ export default function Vasilhames() {
       const vasById = new Map(
         (volumes.vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
       );
-      setEstoqueById(
-        new Map((volumes.estoque || []).filter((e) => e?.id).map((e) => [e.id, e]))
-      );
 
       const produtoFiltrado = new Set(
         (prods || []).filter((p) => p.filtrado).map((p) => p.id)
       );
-      const list = [];
-      for (const raw of vas || []) {
+
+      const healVasilhame = async (raw) => {
         const source = vasById.get(raw.id) || raw;
         const patchDestinos = repairVolumeFromDestinosPatch(
           source,
@@ -543,12 +618,10 @@ export default function Vasilhames() {
                 ...(patchKgDens || {}),
               }
             : null;
-        if (!patch) {
-          list.push(normalizeVasilhameLote(source));
-          continue;
-        }
+        if (!patch) return normalizeVasilhameLote(source);
         try {
           const updated = await entities.vasilhames.update(raw.id, patch);
+          wroteSomething = true;
           const row = normalizeVasilhameLote({
             ...source,
             ...(updated || {}),
@@ -573,12 +646,13 @@ export default function Vasilhames() {
               );
             }
           }
-          list.push(row);
+          return row;
         } catch (err) {
           console.error("[Transbordo] Falha ao restaurar composição do vasilhame:", err);
-          list.push(normalizeVasilhameLote(source));
+          return normalizeVasilhameLote(source);
         }
-      }
+      };
+      const list = await mapInChunks(vas || [], HEAL_CONCURRENCY, healVasilhame);
 
       let aligned = list;
       let alignedTransbordos = transbordosAlinhados;
@@ -596,8 +670,7 @@ export default function Vasilhames() {
         console.error("[Transbordo] Falha ao alinhar lote dos vasilhames:", err);
       }
 
-      const withFracionado = [];
-      for (const row of aligned) {
+      const alignFracionado = async (row) => {
         const noPatio =
           (row.tipo || "Vasilhame") === "Vasilhame" &&
           (row.status || "No Pátio") === "No Pátio" &&
@@ -605,13 +678,11 @@ export default function Vasilhames() {
         const fracionado = noPatio
           ? resolveFracionadoFromTransbordos(row, alignedTransbordos)
           : !!row.fracionado;
-        if (!noPatio || Boolean(row.fracionado) === fracionado) {
-          withFracionado.push(row);
-          continue;
-        }
+        if (!noPatio || Boolean(row.fracionado) === fracionado) return row;
         const next = { ...row, fracionado };
         try {
           await entities.vasilhames.update(row.id, { fracionado });
+          wroteSomething = true;
           if (!fracionado && produtoFiltrado.has(next.produto_id)) {
             await upsertFiltracaoForVasilhame(entities, next, {
               codigo: next.codigo,
@@ -621,8 +692,13 @@ export default function Vasilhames() {
         } catch (err) {
           console.error("[Transbordo] Falha ao alinhar fracionado do vasilhame:", err);
         }
-        withFracionado.push(next);
-      }
+        return next;
+      };
+      const withFracionado = await mapInChunks(
+        aligned,
+        HEAL_CONCURRENCY,
+        alignFracionado
+      );
 
       let saidasAlinhadas = saidasList || [];
       try {
@@ -637,62 +713,93 @@ export default function Vasilhames() {
         console.error("[Transbordo] Falha ao alinhar volume das saídas:", err);
       }
 
+      // Gravações do heal deixam o snapshot compartilhado desatualizado.
+      if (wroteSomething) invalidateTransbordoWorkspaceCache();
+
+      if (isStale()) return;
+      setEstoqueById(
+        new Map((volumes.estoque || []).filter((e) => e?.id).map((e) => [e.id, e]))
+      );
       setTransbordos(alignedTransbordos);
       setVasilhames(withFracionado);
       setSaidas(saidasAlinhadas);
-      setProdutos(prods);
-      setClientes(cliens);
-    } catch {
-      if (!silent) setVasilhames([]);
+    } catch (err) {
+      console.error("[Transbordo] Falha na sincronização de vasilhames:", err);
+    } finally {
+      if (seq === loadSeqRef.current) setSyncing(false);
     }
-    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     loadData();
+    return () => {
+      // Invalida execuções pendentes (carga/sync) ao desmontar.
+      loadSeqRef.current += 1;
+    };
   }, []);
 
-  const filtered = vasilhames.filter((v) => {
-    // Tankagem fica só na tela de Tankagem
-    if ((v.tipo || "") === "Tankagem") return false;
+  const filtered = useMemo(() => {
+    const q = normalizeSearchKey(debouncedSearch);
+    return vasilhames.filter((v) => {
+      // Tankagem fica só na tela de Tankagem
+      if ((v.tipo || "") === "Tankagem") return false;
 
-    if (estoqueFilterId) {
-      if (!estoqueFilterItem) return false;
-      // Saldo no pátio: tanque já expedido não compõe o estoque atual,
-      // mesmo que o lote do cadastro tenha sido alterado depois.
-      if (isVasilhameExpedido(v)) return false;
-      if (
-        !isVasilhameLinkedToEstoque(v, estoqueFilterItem, {
-          transbordos,
-          vasilhames,
-        })
-      ) {
-        return false;
+      if (estoqueFilterId) {
+        if (!estoqueFilterItem) return false;
+        // Saldo no pátio: tanque já expedido não compõe o estoque atual,
+        // mesmo que o lote do cadastro tenha sido alterado depois.
+        if (isVasilhameExpedido(v)) return false;
+        if (
+          !isVasilhameLinkedToEstoque(v, estoqueFilterItem, {
+            transbordos,
+            vasilhames,
+          })
+        ) {
+          return false;
+        }
       }
-    }
 
-    const q = normalizeSearchKey(search);
-    const matchSearch =
-      !q ||
-      matchesSearchText(v.codigo, q) ||
-      matchesSearchText(v.placa, q) ||
-      matchesSearchText(v.barril, q) ||
-      matchesSearchText(v.produto_nome, q) ||
-      matchesSearchText(v.cliente_nome, q) ||
-      matchesSearchText(v.lote, q);
+      const matchSearch =
+        !q ||
+        matchesSearchText(v.codigo, q) ||
+        matchesSearchText(v.placa, q) ||
+        matchesSearchText(v.barril, q) ||
+        matchesSearchText(v.produto_nome, q) ||
+        matchesSearchText(v.cliente_nome, q) ||
+        matchesSearchText(v.lote, q);
 
-    const matchCliente =
-      !clienteFilter ||
-      clienteFilter === "Todos os clientes" ||
-      v.cliente_nome === clienteFilter;
+      const matchCliente =
+        !clienteFilter ||
+        clienteFilter === "Todos os clientes" ||
+        v.cliente_nome === clienteFilter;
 
-    const matchStatus =
-      !statusFilter ||
-      statusFilter === "Todos" ||
-      (v.status || "No Pátio") === statusFilter;
+      const matchStatus =
+        !statusFilter ||
+        statusFilter === "Todos" ||
+        (v.status || "No Pátio") === statusFilter;
 
-    return matchSearch && matchCliente && matchStatus;
-  });
+      return matchSearch && matchCliente && matchStatus;
+    });
+  }, [
+    vasilhames,
+    transbordos,
+    debouncedSearch,
+    clienteFilter,
+    statusFilter,
+    estoqueFilterId,
+    estoqueFilterItem,
+  ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, clienteFilter, statusFilter, estoqueFilterId]);
+
+  const pagedRows = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / DEFAULT_PAGE_SIZE));
+    const current = Math.min(page, totalPages);
+    const start = (current - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filtered, page]);
 
   const formatDate = (d) => {
     if (!d) return "-";
@@ -1402,6 +1509,7 @@ export default function Vasilhames() {
       (v.status || "No Pátio") === "No Pátio"
   );
   const volumePatio = noPatio.reduce((sum, v) => sum + (v.volume || 0), 0);
+  const estoqueEntradas = useMemo(() => [...estoqueById.values()], [estoqueById]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
@@ -1410,7 +1518,18 @@ export default function Vasilhames() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Vasilhames</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{vasilhames.length} embalagem(ns)</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {vasilhames.length} embalagem(ns)
+              {syncing && (
+                <span
+                  className="ml-2 text-xs italic text-muted-foreground/80"
+                  role="status"
+                  aria-live="polite"
+                >
+                  sincronizando…
+                </span>
+              )}
+            </p>
           </div>
           {selectedVasilhames.length > 0 && (
             <div className="flex items-center gap-2">
@@ -1524,7 +1643,7 @@ export default function Vasilhames() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((v, i) => {
+                pagedRows.map((v, i) => {
                   const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
                   const medida = resolveVasilhameMedida(v, transbordos, estoqueById);
                   const { volume: volumeCell, quantidade: quantidadeCell } =
@@ -1537,7 +1656,7 @@ export default function Vasilhames() {
                       transbordos,
                       {
                         produtos,
-                        entradas: [...estoqueById.values()],
+                        entradas: estoqueEntradas,
                       }
                     );
                   return (
@@ -1638,6 +1757,15 @@ export default function Vasilhames() {
             </tbody>
           </table>
         </div>
+
+        <ServerPaginationBar
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={filtered.length}
+          onPageChange={setPage}
+          disabled={loading}
+          className="px-4 border-t border-border shrink-0"
+        />
 
         {/* Footer Summary */}
         <div className="flex items-center justify-between gap-6 px-4 py-3 border-t border-border text-sm flex-wrap shrink-0">

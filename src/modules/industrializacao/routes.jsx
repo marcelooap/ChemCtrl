@@ -1,84 +1,94 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvider';
 import RealtimeProvider from '@industrializacao/components/RealtimeProvider';
 import AppLayout from '@industrializacao/components/layout/AppLayout';
 
-import Home from '@industrializacao/pages/Home';
-import Dashboard from '@industrializacao/pages/Dashboard';
-import EstoqueCliente from '@industrializacao/pages/EstoqueCliente';
-import TelaClientes from '@industrializacao/pages/TelaClientes';
-import ClienteEntradas from '@industrializacao/pages/ClienteEntradas';
-import ClienteFiltracao from '@industrializacao/pages/ClienteFiltracao';
-import Estoque from '@industrializacao/pages/Estoque';
-import Pedidos from '@industrializacao/pages/Pedidos';
-import Programacao from '@industrializacao/pages/Programacao';
-import Receitas from '@industrializacao/pages/Receitas';
-import NovaProducao from '@industrializacao/pages/NovaProducao';
-import OrdensProducao from '@industrializacao/pages/OrdensProducao';
-import ChecklistProducao from '@industrializacao/pages/ChecklistProducao';
-import Producoes from '@industrializacao/pages/Producoes';
-import Ensaios from '@industrializacao/pages/qualidade/Ensaios';
-import ListaEnsaios from '@industrializacao/pages/qualidade/ListaEnsaios';
-import ProducoesCQ from '@industrializacao/pages/qualidade/ProducoesCQ';
-import COA from '@industrializacao/pages/qualidade/COA';
-import EquipamentosLab from '@industrializacao/pages/qualidade/EquipamentosLab';
-import Vasilhames from '@industrializacao/pages/Vasilhames';
-import IndSaida from '@industrializacao/pages/Saida';
-import IndSaidaForm from '@industrializacao/pages/SaidaForm';
-import IndSaidaView from '@industrializacao/pages/SaidaView';
-import Tankagem from '@industrializacao/pages/Tankagem';
-import Transbordo from '@industrializacao/pages/Transbordo';
-import Inventario from '@industrializacao/pages/Inventario';
-import InventarioConferencia from '@industrializacao/pages/InventarioConferencia';
-import Validacao from '@industrializacao/pages/Validacao';
-import AcessoNegado from '@industrializacao/pages/AcessoNegado';
+const Home = lazy(() => import('@industrializacao/pages/Home'));
+const Dashboard = lazy(() => import('@industrializacao/pages/Dashboard'));
+const EstoqueCliente = lazy(() => import('@industrializacao/pages/EstoqueCliente'));
+const TelaClientes = lazy(() => import('@industrializacao/pages/TelaClientes'));
+const ClienteEntradas = lazy(() => import('@industrializacao/pages/ClienteEntradas'));
+const ClienteFiltracao = lazy(() => import('@industrializacao/pages/ClienteFiltracao'));
+const Estoque = lazy(() => import('@industrializacao/pages/Estoque'));
+const Pedidos = lazy(() => import('@industrializacao/pages/Pedidos'));
+const Programacao = lazy(() => import('@industrializacao/pages/Programacao'));
+const Receitas = lazy(() => import('@industrializacao/pages/Receitas'));
+const NovaProducao = lazy(() => import('@industrializacao/pages/NovaProducao'));
+const OrdensProducao = lazy(() => import('@industrializacao/pages/OrdensProducao'));
+const ChecklistProducao = lazy(() => import('@industrializacao/pages/ChecklistProducao'));
+const Producoes = lazy(() => import('@industrializacao/pages/Producoes'));
+const Ensaios = lazy(() => import('@industrializacao/pages/qualidade/Ensaios'));
+const ListaEnsaios = lazy(() => import('@industrializacao/pages/qualidade/ListaEnsaios'));
+const ProducoesCQ = lazy(() => import('@industrializacao/pages/qualidade/ProducoesCQ'));
+const COA = lazy(() => import('@industrializacao/pages/qualidade/COA'));
+const EquipamentosLab = lazy(() => import('@industrializacao/pages/qualidade/EquipamentosLab'));
+const Vasilhames = lazy(() => import('@industrializacao/pages/Vasilhames'));
+const IndSaida = lazy(() => import('@industrializacao/pages/Saida'));
+const IndSaidaForm = lazy(() => import('@industrializacao/pages/SaidaForm'));
+const IndSaidaView = lazy(() => import('@industrializacao/pages/SaidaView'));
+const Tankagem = lazy(() => import('@industrializacao/pages/Tankagem'));
+const Transbordo = lazy(() => import('@industrializacao/pages/Transbordo'));
+const Inventario = lazy(() => import('@industrializacao/pages/Inventario'));
+const InventarioConferencia = lazy(() => import('@industrializacao/pages/InventarioConferencia'));
+const Validacao = lazy(() => import('@industrializacao/pages/Validacao'));
+const AcessoNegado = lazy(() => import('@industrializacao/pages/AcessoNegado'));
+
+function PageFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-16">
+      <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
+    </div>
+  );
+}
 
 /**
  * Rotas principais do ChemCtrl, montadas na raiz `/*`.
  * Paths relativos (sem `/` inicial) — padrão de descendant routes do RR6.
- * O módulo ChemFlow vive em `/chemflow/*` (admin).
- * Usuarios/Perfis migraram para `/painel/*` — redirects preservam bookmarks.
+ * Páginas em lazy para reduzir o custo do primeiro open do módulo.
  */
 export default function ChemCtrlRoutes() {
   return (
     <PermissionProvider>
       <RealtimeProvider>
-        <Routes>
-          <Route path="usuarios" element={<Navigate to="/painel/usuarios" replace />} />
-          <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
-          <Route element={<AppLayout />}>
-            <Route index element={<Home />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="estoque-cliente" element={<EstoqueCliente />} />
-            <Route path="tela-clientes" element={<TelaClientes />} />
-            <Route path="clientes/entradas" element={<ClienteEntradas />} />
-            <Route path="clientes/filtracao" element={<ClienteFiltracao />} />
-            <Route path="estoque" element={<Estoque />} />
-            <Route path="validacao" element={<Validacao />} />
-            <Route path="pedidos" element={<Pedidos />} />
-            <Route path="programacao" element={<Programacao />} />
-            <Route path="receitas" element={<Receitas />} />
-            <Route path="nova-producao" element={<NovaProducao />} />
-            <Route path="ordens" element={<OrdensProducao />} />
-            <Route path="producao/:id/checklist" element={<ChecklistProducao />} />
-            <Route path="producoes" element={<Producoes />} />
-            <Route path="qualidade/ensaios" element={<Ensaios />} />
-            <Route path="qualidade/lista-ensaios" element={<ListaEnsaios />} />
-            <Route path="qualidade/equipamentos" element={<EquipamentosLab />} />
-            <Route path="qualidade/producoes" element={<ProducoesCQ />} />
-            <Route path="qualidade/coa" element={<COA />} />
-            <Route path="vasilhames" element={<Vasilhames />} />
-            <Route path="saida" element={<IndSaida />} />
-            <Route path="saida/novo" element={<IndSaidaForm />} />
-            <Route path="saida/editar/:id" element={<IndSaidaForm />} />
-            <Route path="saida/visualizar/:id" element={<IndSaidaView />} />
-            <Route path="tankagem" element={<Tankagem />} />
-            <Route path="transbordo" element={<Transbordo />} />
-            <Route path="inventario" element={<Inventario />} />
-            <Route path="inventario/:id" element={<InventarioConferencia />} />
-            <Route path="acesso-negado" element={<AcessoNegado />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="usuarios" element={<Navigate to="/painel/usuarios" replace />} />
+            <Route path="perfis" element={<Navigate to="/painel/permissoes" replace />} />
+            <Route element={<AppLayout />}>
+              <Route index element={<Home />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="estoque-cliente" element={<EstoqueCliente />} />
+              <Route path="tela-clientes" element={<TelaClientes />} />
+              <Route path="clientes/entradas" element={<ClienteEntradas />} />
+              <Route path="clientes/filtracao" element={<ClienteFiltracao />} />
+              <Route path="estoque" element={<Estoque />} />
+              <Route path="validacao" element={<Validacao />} />
+              <Route path="pedidos" element={<Pedidos />} />
+              <Route path="programacao" element={<Programacao />} />
+              <Route path="receitas" element={<Receitas />} />
+              <Route path="nova-producao" element={<NovaProducao />} />
+              <Route path="ordens" element={<OrdensProducao />} />
+              <Route path="producao/:id/checklist" element={<ChecklistProducao />} />
+              <Route path="producoes" element={<Producoes />} />
+              <Route path="qualidade/ensaios" element={<Ensaios />} />
+              <Route path="qualidade/lista-ensaios" element={<ListaEnsaios />} />
+              <Route path="qualidade/equipamentos" element={<EquipamentosLab />} />
+              <Route path="qualidade/producoes" element={<ProducoesCQ />} />
+              <Route path="qualidade/coa" element={<COA />} />
+              <Route path="vasilhames" element={<Vasilhames />} />
+              <Route path="saida" element={<IndSaida />} />
+              <Route path="saida/novo" element={<IndSaidaForm />} />
+              <Route path="saida/editar/:id" element={<IndSaidaForm />} />
+              <Route path="saida/visualizar/:id" element={<IndSaidaView />} />
+              <Route path="tankagem" element={<Tankagem />} />
+              <Route path="transbordo" element={<Transbordo />} />
+              <Route path="inventario" element={<Inventario />} />
+              <Route path="inventario/:id" element={<InventarioConferencia />} />
+              <Route path="acesso-negado" element={<AcessoNegado />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </RealtimeProvider>
     </PermissionProvider>
   );

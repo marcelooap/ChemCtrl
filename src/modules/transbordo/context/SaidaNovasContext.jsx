@@ -27,6 +27,8 @@ const SaidaNovasContext = createContext({
   isNew: () => false,
   markAsRead: async () => {},
   saidasRevision: 0,
+  /** Último evento Realtime de t_saidas (para patch seletivo nas listas). */
+  lastSaidaChange: null,
 });
 
 export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
@@ -34,12 +36,21 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
   const usuarioId = user?.id ? String(user.id) : '';
   const [unreadIds, setUnreadIds] = useState(EMPTY_SET);
   const [saidasRevision, setSaidasRevision] = useState(0);
+  const [lastSaidaChange, setLastSaidaChange] = useState(null);
   const usuarioIdRef = useRef(usuarioId);
   usuarioIdRef.current = usuarioId;
   const channelKey = onlyIndustrializacao ? 'ind' : 'tb';
   const modulo = onlyIndustrializacao ? ORIGEM_INDUSTRIALIZACAO : ORIGEM_TRANSBORDO;
 
-  const bumpSaidasRevision = useCallback(() => {
+  const bumpSaidasRevision = useCallback((payload) => {
+    if (payload) {
+      setLastSaidaChange({
+        eventType: payload.eventType,
+        new: payload.new || null,
+        old: payload.old || null,
+        at: Date.now(),
+      });
+    }
     setSaidasRevision((n) => n + 1);
   }, []);
 
@@ -69,7 +80,7 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
       't_saidas',
       (payload) => {
         const eventType = payload?.eventType;
-        bumpSaidasRevision();
+        bumpSaidasRevision(payload);
 
         if (eventType === 'DELETE') {
           const deletedId = payload?.old?.id;
@@ -211,8 +222,9 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
       isNew,
       markAsRead,
       saidasRevision,
+      lastSaidaChange,
     }),
-    [unreadIds, isNew, markAsRead, saidasRevision]
+    [unreadIds, isNew, markAsRead, saidasRevision, lastSaidaChange]
   );
 
   return (

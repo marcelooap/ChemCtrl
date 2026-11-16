@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { entities } from '@transbordo/services/entities';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
@@ -45,6 +45,11 @@ import {
   applyDeclaredVolumeDecimals,
   persistDeclaredVolumeDecimals,
 } from "@transbordo/lib/declaredVolume";
+import { loadTransbordoWorkspaceLists } from "@transbordo/services/transbordoWorkspace";
+import { withScreenLoadPerf } from "@shared/lib/perfMarks";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
+import { ServerPaginationBar } from "@shared/components/ServerPaginationBar";
+import { DEFAULT_PAGE_SIZE } from "@shared/lib/pagination";
 
 
 function labelUnidadeEntrada(unidade) {
@@ -253,6 +258,30 @@ function renderTransbordoVolumeQuantidade(
   };
 }
 
+/**
+ * Listas base da tela. Transbordos/estoque/vasilhames vêm do workspace
+ * compartilhado (cache curto, vasilhames reaproveitados na hidratação do
+ * estoque); o restante é buscado em paralelo.
+ */
+async function fetchTransbordoLists({ force = false } = {}) {
+  const [workspace, prods, cliens, isos, entradasDoc] = await Promise.all([
+    loadTransbordoWorkspaceLists({ force }),
+    listProdutos({ modulo: "ARMAZENAGEM" }),
+    entities.clientes.list(),
+    listTankas(),
+    entities.entradas.list(),
+  ]);
+  return {
+    trans: workspace.transbordos,
+    ents: workspace.estoque,
+    vascs: workspace.vasilhames,
+    prods,
+    cliens,
+    isos,
+    entradasDoc,
+  };
+}
+
 export default function Transbordo() {
   const [transbordos, setTransbordos] = useState([]);
   const [produtos, setProdutos] = useState([]);
@@ -269,6 +298,10 @@ export default function Transbordo() {
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [page, setPage] = useState(1);
+  const loadSeqRef = useRef(0);
+  const debouncedSearch = useDebouncedValue(search);
   const [saveError, setSaveError] = useState("");
   const [prefillConsumed, setPrefillConsumed] = useState(false);
   const [activePrefill, setActivePrefill] = useState(null);
@@ -284,9 +317,19 @@ export default function Transbordo() {
     }
   };
 
-  const loadData = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
+  /**
+   * Migrações + heals fora do caminho crítico: rodam depois do primeiro paint
+   * e atualizam o estado ao terminar. Resultados de rodadas obsoletas
+   * (nova carga ou unmount) são descartados.
+   */
+  const runBackgroundMaintenance = async (seq, snapshot) => {
+    setSyncing(true);
     try {
+      let { volumes, prods, entradasDoc } = snapshot;
+      let cliens = snapshot.cliens;
+      let isos = snapshot.isos;
+      let migrationChanged = false;
+
       // Migra Bombona/IBC/Tambor legados do Estoque → Vasilhames
       try {
         const mig = await migrateEstoqueEmbaladoParaVasilhames();
@@ -295,33 +338,40 @@ export default function Transbordo() {
             `[ChemFlow] Migrados ${mig.migrated} embalagem(ns) do Estoque → Vasilhames; removidos ${mig.deletedEstoque} do estoque.`
           );
         }
-        await normalizeBarrilEmbalagensUnitarias();
+        const norm = await normalizeBarrilEmbalagensUnitarias();
         const cons = await consolidateUnitarioVasilhamesDuplicados();
         if (cons.deleted > 0) {
           console.info(
             `[ChemFlow] Consolidadas ${cons.mergedGroups} embalagem(ns) unitária(s); removidas ${cons.deleted} linha(s) duplicada(s).`
           );
         }
+        migrationChanged =
+          mig.migrated > 0 ||
+          mig.deletedEstoque > 0 ||
+          norm?.updated > 0 ||
+          cons.deleted > 0;
       } catch (migErr) {
         console.warn("[ChemFlow] Migração embalado (estoque→vasilhame):", migErr);
       }
+      if (seq !== loadSeqRef.current) return;
 
-      const [trans, prods, cliens, ents, isos, vascs, entradasDoc] = await Promise.all([
-        entities.transbordos.list("-created_date"),
-        listProdutos({ modulo: "ARMAZENAGEM" }),
-        entities.clientes.list(),
-        entities.estoque.list(),
-        listTankas(),
-        entities.vasilhames.list(),
-        entities.entradas.list(),
-      ]);
-      const volumes = applyDeclaredVolumeDecimals({
-        estoque: ents,
-        entradas: entradasDoc,
-        transbordos: trans,
-        vasilhames: vascs,
-      });
-      void persistDeclaredVolumeDecimals(volumes);
+      // Só refaz a busca se a migração realmente alterou dados.
+      if (migrationChanged) {
+        const fresh = await fetchTransbordoLists({ force: true });
+        if (seq !== loadSeqRef.current) return;
+        volumes = applyDeclaredVolumeDecimals({
+          estoque: fresh.ents,
+          entradas: fresh.entradasDoc,
+          transbordos: fresh.trans,
+          vasilhames: fresh.vascs,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
+        prods = fresh.prods;
+        cliens = fresh.cliens;
+        isos = fresh.isos;
+        entradasDoc = fresh.entradasDoc;
+      }
+
       let transbordosAlinhados = volumes.transbordos;
       let vasilhamesAlinhados = volumes.vasilhames;
       try {
@@ -363,20 +413,65 @@ export default function Transbordo() {
           densErr
         );
       }
+      if (seq !== loadSeqRef.current) return;
       setTransbordos(transbordosAlinhados);
       setProdutos(prods);
       setClientes(cliens);
       setEntradas(volumes.estoque);
       setIsotanques(isos);
       setVasilhames(vasilhamesAlinhados);
+    } catch (maintErr) {
+      console.warn("[Transbordo] Manutenção em segundo plano falhou:", maintErr);
+    } finally {
+      if (seq === loadSeqRef.current) setSyncing(false);
+    }
+  };
+
+  const loadData = async ({ silent = false } = {}) => {
+    const seq = ++loadSeqRef.current;
+    if (!silent) setLoading(true);
+    let snapshot = null;
+    try {
+      snapshot = await withScreenLoadPerf("transbordo", async () => {
+        // Recargas silenciosas (pós-save/delete) ignoram o cache do workspace.
+        const lists = await fetchTransbordoLists({ force: silent });
+        const volumes = applyDeclaredVolumeDecimals({
+          estoque: lists.ents,
+          entradas: lists.entradasDoc,
+          transbordos: lists.trans,
+          vasilhames: lists.vascs,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
+        if (seq !== loadSeqRef.current) return null;
+        // Primeiro paint com as listas cruas; heals chegam em segundo plano.
+        setTransbordos(volumes.transbordos);
+        setProdutos(lists.prods);
+        setClientes(lists.cliens);
+        setEntradas(volumes.estoque);
+        setIsotanques(lists.isos);
+        setVasilhames(volumes.vasilhames);
+        return {
+          volumes,
+          prods: lists.prods,
+          cliens: lists.cliens,
+          isos: lists.isos,
+          entradasDoc: lists.entradasDoc,
+        };
+      });
     } catch {
       if (!silent) setTransbordos([]);
     }
     if (!silent) setLoading(false);
+    if (snapshot) void runBackgroundMaintenance(seq, snapshot);
   };
 
   useEffect(() => {
     loadData();
+    // Invalida rodadas em andamento ao desmontar (evita setState após unmount).
+    return () => {
+      loadSeqRef.current += 1;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -420,8 +515,8 @@ export default function Transbordo() {
     linkedTransbordoIdFromNav,
   ]);
 
-  const filtered = transbordos.filter((t) => {
-    const q = search.toLowerCase().trim();
+  const filtered = useMemo(() => transbordos.filter((t) => {
+    const q = debouncedSearch.toLowerCase().trim();
     const matchSearch =
       !q ||
       t.codigo_transbordo?.toLowerCase().includes(q) ||
@@ -447,7 +542,19 @@ export default function Transbordo() {
       t.cliente_nome === clienteFilter;
 
     return matchSearch && matchCliente;
-  });
+  }), [transbordos, debouncedSearch, clienteFilter]);
+
+  // Volta à primeira página quando o filtro muda.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, clienteFilter]);
+
+  const pageRows = useMemo(() => {
+    const maxPage = Math.max(1, Math.ceil(filtered.length / DEFAULT_PAGE_SIZE));
+    const current = Math.min(page, maxPage);
+    const start = (current - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filtered, page]);
 
   /** Largura da coluna Produto limitada (não estica com nomes longos). */
   const produtoColCh = useMemo(() => {
@@ -554,15 +661,18 @@ export default function Transbordo() {
     ...clientes,
   ];
 
-  const densCtx = { produtos, entradas };
-  const totalVolume = filtered.reduce((sum, t) => {
-    const { volumeL } = resolveTransbordoVolumeMassaNumeros(t, densCtx);
-    return sum + (volumeL || 0);
-  }, 0);
-  const totalMassa = filtered.reduce((sum, t) => {
-    const { massaKg } = resolveTransbordoVolumeMassaNumeros(t, densCtx);
-    return sum + (massaKg || 0);
-  }, 0);
+  // Totais sobre todo o conjunto filtrado (não só a página), numa única passada.
+  const { totalVolume, totalMassa } = useMemo(() => {
+    const densCtx = { produtos, entradas };
+    let vol = 0;
+    let massa = 0;
+    for (const t of filtered) {
+      const { volumeL, massaKg } = resolveTransbordoVolumeMassaNumeros(t, densCtx);
+      vol += volumeL || 0;
+      massa += massaKg || 0;
+    }
+    return { totalVolume: vol, totalMassa: massa };
+  }, [filtered, produtos, entradas]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
@@ -573,6 +683,11 @@ export default function Transbordo() {
             <h1 className="text-2xl font-bold text-foreground">Transbordos</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {transbordos.length} registro(s) cadastrado(s)
+              {syncing && (
+                <span className="ml-2 text-xs" role="status" aria-live="polite">
+                  · Sincronizando…
+                </span>
+              )}
             </p>
           </div>
           <Button onClick={handleNew} className="bg-primary hover:bg-primary/90 gap-2">
@@ -641,7 +756,7 @@ export default function Transbordo() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((t, i) => {
+                pageRows.map((t, i) => {
                   const produtoLabel = `${t.produto_codigo ? `${t.produto_codigo} - ` : ""}${t.produto_nome || "-"}`;
                   const { volume: volumeCell, quantidade: quantidadeCell } =
                     renderTransbordoVolumeQuantidade(t, {
@@ -732,6 +847,16 @@ export default function Transbordo() {
             </tbody>
           </table>
         </div>
+
+        {filtered.length > DEFAULT_PAGE_SIZE && (
+          <ServerPaginationBar
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            className="px-5 border-t border-border shrink-0"
+          />
+        )}
 
         {/* Footer Summary */}
         <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">

@@ -252,7 +252,14 @@ const createEntity = (entityName, preferredTableName) => {
     });
   },
   /** Listagem paginada (from/to inclusivo PostgREST via Range header). */
-  listPage: async ({ sort, page = 1, pageSize = 50, select = '*' } = {}) => {
+  listPage: async ({
+    sort,
+    page = 1,
+    pageSize = 50,
+    select = '*',
+    filters = {},
+    ilike = {},
+  } = {}) => {
     const tableName = await tableOf();
     const size = Math.min(200, Math.max(1, Number(pageSize) || 50));
     const p = Math.max(1, Number(page) || 1);
@@ -260,6 +267,11 @@ const createEntity = (entityName, preferredTableName) => {
     const to = from + size - 1;
     const params = new URLSearchParams();
     params.set('select', select);
+    applyFilters(params, filters);
+    Object.entries(ilike || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      params.set(key, `ilike.*${value}*`);
+    });
     const sortInfo = parseSort(sort);
     if (sortInfo) params.set('order', `${sortInfo.column}.${sortInfo.ascending ? 'asc' : 'desc'}`);
     const resp = await rateLimitedFetch(`${restUrl}/${tableName}?${params.toString()}`, {

@@ -1,42 +1,51 @@
+import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvider';
-import RealtimeProvider from '@industrializacao/components/RealtimeProvider';
 import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
-import Home from '@painel/pages/Home';
-import Configuracao from '@painel/pages/configuracao/Configuracao';
-import Operadores from '@painel/pages/configuracao/Operadores';
-import Etiquetas from '@painel/pages/configuracao/Etiquetas';
-import ChecklistExpedicao from '@painel/pages/configuracao/ChecklistExpedicao';
-import DestinoCarregamentos from '@painel/pages/configuracao/DestinoCarregamentos';
-import JustificativasAtraso from '@painel/pages/configuracao/JustificativasAtraso';
-import Dashboard from '@painel/pages/Dashboard';
-import Faturamento from '@painel/pages/Faturamento';
-import FaturamentoVasilhames from '@painel/pages/FaturamentoVasilhames';
-import LogisticaAgendamentos from '@painel/pages/logistica/Agendamentos';
-import LogisticaCarregamentos from '@painel/pages/logistica/Carregamentos';
-import LogisticaRecebimento from '@painel/pages/logistica/Recebimento';
-import OrdemTransbordo from '@painel/pages/operacional/OrdemTransbordo';
-import OrdemTransbordoRelatorio from '@painel/pages/operacional/OrdemTransbordoRelatorio';
-import OperacionalEstoque from '@painel/pages/operacional/Estoque';
-import ReservarMaterial from '@painel/pages/comercial/ReservarMaterial';
-import SolicitacoesSaida from '@painel/pages/comercial/SolicitacoesSaida';
-import SolicitacaoSaidaForm from '@painel/pages/comercial/SolicitacaoSaidaForm';
-import SolicitacaoSaidaView from '@painel/pages/comercial/SolicitacaoSaidaView';
-import Agendamentos from '@painel/pages/comercial/Agendamentos';
-import Usuarios from '@industrializacao/pages/Usuarios';
-import Permissoes from '@painel/pages/Permissoes';
 import ScreenAccessRoute from '@/components/ScreenAccessRoute';
+
+const Home = lazy(() => import('@painel/pages/Home'));
+const Configuracao = lazy(() => import('@painel/pages/configuracao/Configuracao'));
+const Operadores = lazy(() => import('@painel/pages/configuracao/Operadores'));
+const Etiquetas = lazy(() => import('@painel/pages/configuracao/Etiquetas'));
+const ChecklistExpedicao = lazy(() => import('@painel/pages/configuracao/ChecklistExpedicao'));
+const DestinoCarregamentos = lazy(() => import('@painel/pages/configuracao/DestinoCarregamentos'));
+const JustificativasAtraso = lazy(() => import('@painel/pages/configuracao/JustificativasAtraso'));
+const Dashboard = lazy(() => import('@painel/pages/Dashboard'));
+const Faturamento = lazy(() => import('@painel/pages/Faturamento'));
+const FaturamentoVasilhames = lazy(() => import('@painel/pages/FaturamentoVasilhames'));
+const LogisticaAgendamentos = lazy(() => import('@painel/pages/logistica/Agendamentos'));
+const LogisticaCarregamentos = lazy(() => import('@painel/pages/logistica/Carregamentos'));
+const LogisticaRecebimento = lazy(() => import('@painel/pages/logistica/Recebimento'));
+const OrdemTransbordo = lazy(() => import('@painel/pages/operacional/OrdemTransbordo'));
+const OrdemTransbordoRelatorio = lazy(() => import('@painel/pages/operacional/OrdemTransbordoRelatorio'));
+const OperacionalEstoque = lazy(() => import('@painel/pages/operacional/Estoque'));
+const ReservarMaterial = lazy(() => import('@painel/pages/comercial/ReservarMaterial'));
+const SolicitacoesSaida = lazy(() => import('@painel/pages/comercial/SolicitacoesSaida'));
+const SolicitacaoSaidaForm = lazy(() => import('@painel/pages/comercial/SolicitacaoSaidaForm'));
+const SolicitacaoSaidaView = lazy(() => import('@painel/pages/comercial/SolicitacaoSaidaView'));
+const Agendamentos = lazy(() => import('@painel/pages/comercial/Agendamentos'));
+const Usuarios = lazy(() => import('@industrializacao/pages/Usuarios'));
+const Permissoes = lazy(() => import('@painel/pages/Permissoes'));
+
+function PageFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-16">
+      <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
+    </div>
+  );
+}
 
 /**
  * Rotas internas do Painel, montadas em `/painel/*`.
- * Home é o hub de seleção de módulos (todos autenticados).
- * Demais áreas administrativas ficam atrás de AdminRoute.
+ * Sem RealtimeProvider da Industrialização (evita assinar tabelas Ind no hub).
+ * Páginas em lazy para reduzir o custo do primeiro open do módulo.
  */
 export default function PainelRoutes() {
   return (
     <PermissionProvider>
-      <RealtimeProvider>
+      <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route element={<MainLayout />}>
             <Route index element={<Navigate to="home" replace />} />
@@ -105,8 +114,6 @@ export default function PainelRoutes() {
             </Route>
           </Route>
 
-          {/* Visualização de documento: fora do MainLayout para que a impressão
-              contenha apenas a folha A4, sem sidebar nem cabeçalho do sistema. */}
           <Route element={<ScreenAccessRoute />}>
             <Route
               path="operacional/ordem-transbordo/relatorio/:destino/:id"
@@ -116,7 +123,7 @@ export default function PainelRoutes() {
 
           <Route path="*" element={<Navigate to="/painel/home" replace />} />
         </Routes>
-      </RealtimeProvider>
+      </Suspense>
     </PermissionProvider>
   );
 }

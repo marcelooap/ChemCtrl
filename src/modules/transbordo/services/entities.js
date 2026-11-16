@@ -129,7 +129,17 @@ function createEntity(preferredTable) {
       return presentRows(preferredTable, data);
     },
 
-    async listPage({ sort, page = 1, pageSize = 50, select = '*' } = {}) {
+    async listPage({
+      sort,
+      page = 1,
+      pageSize = 50,
+      select = '*',
+      filters = {},
+      ilike = {},
+      gte = {},
+      lte = {},
+      inFilters = {},
+    } = {}) {
       const table = await tableOf();
       assertConfigured(`${table}.listPage`);
       const { column, ascending } = normalizeOrder(sort);
@@ -137,11 +147,32 @@ function createEntity(preferredTable) {
       const p = Math.max(1, Number(page) || 1);
       const from = (p - 1) * size;
       const to = from + size - 1;
-      const { data, error, count } = await chemflowSupabase
+      let builder = chemflowSupabase
         .from(table)
         .select(select, { count: 'exact' })
-        .order(column, { ascending })
-        .range(from, to);
+        .order(column, { ascending });
+      for (const [key, value] of Object.entries(filters || {})) {
+        if (value === undefined || value === null || value === '') continue;
+        builder = builder.eq(key, value);
+      }
+      for (const [key, value] of Object.entries(ilike || {})) {
+        if (value === undefined || value === null || value === '') continue;
+        builder = builder.ilike(key, `%${value}%`);
+      }
+      for (const [key, value] of Object.entries(gte || {})) {
+        if (value === undefined || value === null || value === '') continue;
+        builder = builder.gte(key, value);
+      }
+      for (const [key, value] of Object.entries(lte || {})) {
+        if (value === undefined || value === null || value === '') continue;
+        builder = builder.lte(key, value);
+      }
+      for (const [key, value] of Object.entries(inFilters || {})) {
+        if (!Array.isArray(value) || value.length === 0) continue;
+        builder = builder.in(key, value);
+      }
+      builder = builder.range(from, to);
+      const { data, error, count } = await builder;
       throwIfError(error, `${table}.listPage`);
       return { rows: presentRows(preferredTable, data), page: p, pageSize: size, total: count };
     },

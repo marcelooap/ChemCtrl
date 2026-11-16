@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
+import { ServerPaginationBar } from '@shared/components/ServerPaginationBar';
+import { DEFAULT_PAGE_SIZE, LIST_PROJECTIONS } from '@shared/lib/pagination';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { perfMark } from '@shared/lib/perfMarks';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import InvoiceToggle from '@industrializacao/components/productions/InvoiceToggle';
 import { generateProductionPDF, generateProductionTanksPDF, generateProductionOriginsPDF, generateProductionOpFiscalPDF } from '@industrializacao/lib/pdfReports';
@@ -56,13 +60,35 @@ export default function Producoes() {
     || (user?.nivel_acesso || '').trim().toLowerCase() === 'administrador'
   );
   const [searchParams] = useSearchParams();
-  const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 2000));
-  const { data: containers } = useRealtimeEntity('Container', () => base44.entities.Container.list('-created_date', 500));
-  const { data: stocks } = useRealtimeEntity('RawMaterialStock', () => base44.entities.RawMaterialStock.list('-created_date', 2000));
+  const { data: productions, loading, reload: load, setData: setProductions } = useRealtimeEntity(
+    'Production',
+    () => {
+      perfMark('screen:producoes:fetch-start');
+      return base44.entities.Production.list('-created_date', 500, {
+        select: LIST_PROJECTIONS.Production,
+      }).finally(() => perfMark('screen:producoes:fetch-end'));
+    }
+  );
+  const { data: containers } = useRealtimeEntity('Container', () =>
+    base44.entities.Container.list('-created_date', 500, {
+      select: LIST_PROJECTIONS.Container,
+    })
+  );
+  const { data: stocks } = useRealtimeEntity('RawMaterialStock', () =>
+    base44.entities.RawMaterialStock.list('-created_date', 1000, {
+      select: LIST_PROJECTIONS.RawMaterialStock,
+    })
+  );
   const { data: recipes } = useRecipes('-created_date', 500);
-  const { data: transfers } = useRealtimeEntity('Transfer', () => base44.entities.Transfer.list('-created_date', 500));
-  const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () => base44.entities.ContainerOrigin.list('-created_date', 2000));
+  const { data: transfers } = useRealtimeEntity('Transfer', () =>
+    base44.entities.Transfer.list('-created_date', 500)
+  );
+  const { data: containerOrigins } = useRealtimeEntity('ContainerOrigin', () =>
+    base44.entities.ContainerOrigin.list('-created_date', 1000)
+  );
   const [search, setSearch] = useState(() => searchParams.get('product') || '');
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
   const [clientFilter, setClientFilter] = useState('todos');
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'todos');
   const [dateFrom, setDateFrom] = useState(() => searchParams.get('from') || '');
@@ -127,7 +153,7 @@ export default function Producoes() {
   );
 
   const filtered = useMemo(() => productions.filter(p => {
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     const rows = packagingRowsForProduction(containers, containerOrigins, p);
     const opContainersOf = () => {
       const seen = new Set();
@@ -158,7 +184,16 @@ export default function Producoes() {
         ? isComplementPending(p)
         : p.status === statusFilter;
     return matchSearch && matchFrom && matchTo && matchesClient && matchStatus;
-  }), [productions, containers, containerOrigins, search, dateFrom, dateTo, clientFilter, statusFilter]);
+  }), [productions, containers, containerOrigins, debouncedSearch, dateFrom, dateTo, clientFilter, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, dateFrom, dateTo, clientFilter, statusFilter]);
+
+  const pagedFiltered = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filtered, page]);
 
   const footerStats = useMemo(() => {
     let activeOPs = 0;
@@ -495,7 +530,7 @@ export default function Producoes() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(p => (
+                {pagedFiltered.map(p => (
                   <tr key={p.id} className="border-b border-border hover:bg-accent/30">
                     <td className="px-4 py-2.5 font-semibold text-sm" style={{ color: '#2575D1' }}>{p.op_number}</td>
                     <td className="px-4 py-2.5 text-sm">{p.end_time ? fmtDate(p.end_time, undefined, i18n.language) : t('common.notAvailable')}</td>
@@ -588,6 +623,16 @@ export default function Producoes() {
               </tbody>
             </table>
           )}
+        </div>
+
+        <div className="shrink-0 px-4 border-t border-border">
+          <ServerPaginationBar
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            disabled={loading && productions.length === 0}
+          />
         </div>
 
         {/* Fixed Footer */}

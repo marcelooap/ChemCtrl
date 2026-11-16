@@ -460,6 +460,29 @@ function compositionStampsAreOnlyTankaIds(vasilhame, transbordos = []) {
 }
 
 /**
+ * Tanque misto: há stamp de estoque real além de stamp de tanka/vazio.
+ * Só nesse caso o fallback por lote é seguro (ex.: BACTIREP 700,2 + 799,8).
+ * Em tanque só com stamp de tanka, lote compartilhado entre entradas
+ * (ex.: METANOL Vibra E508+E514) duplicaria o Saldo Tanque.
+ */
+function compositionHasMixedEstoqueAndTankaStamps(vasilhame, transbordos = []) {
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
+  const stamps = collectComposicaoEstoqueStamps(composicao);
+  if (stamps.size === 0) return false;
+  const tankaIds = collectTankaIdsForVasilhame(vasilhame, transbordos);
+  if (tankaIds.size === 0) return false;
+  let hasTanka = false;
+  let hasNonTanka = false;
+  for (const s of stamps) {
+    if (tankaIds.has(s)) hasTanka = true;
+    else hasNonTanka = true;
+  }
+  return hasTanka && hasNonTanka;
+}
+
+/**
  * Fatia atribuível por lote quando o stamp não é de outro estoque real.
  * Aceita: sem stamp, stamp deste estoque, ou stamp de tanka (legado).
  * Bloqueia: stamp de outro estoque (ex.: troca REP OF→OS).
@@ -1528,7 +1551,10 @@ export function calcVasilhamesExpedidosPatio(
         }, 0);
         if (fromComp > 0) {
           qtd = fromComp;
-        } else {
+        } else if (
+          compositionHasMixedEstoqueAndTankaStamps(v, transbordos)
+        ) {
+          // Mesma regra do Saldo Tanque: lote+tanka só em tanque misto.
           const loteEstoque = normLoteKey(
             estoqueItem.lote || estoqueItem.lotes?.[0]?.lote
           );
@@ -1536,10 +1562,7 @@ export function calcVasilhamesExpedidosPatio(
           const fromLote = loteEstoque
             ? composicao.reduce((s, c) => {
                 if (normLoteKey(c.lote) !== loteEstoque) return s;
-                if (
-                  !compositionStampsAreOnlyTankaIds(v, transbordos) &&
-                  !composicaoSliceAttributableByLote(c, id, tankaIds)
-                ) {
+                if (!composicaoSliceAttributableByLote(c, id, tankaIds)) {
                   return s;
                 }
                 return (
@@ -1549,6 +1572,13 @@ export function calcVasilhamesExpedidosPatio(
             : 0;
           if (!(fromLote > 0)) return;
           qtd = fromLote;
+        } else if (compositionStampsAreOnlyTankaIds(v, transbordos)) {
+          // Stamp só de tanka: mantém a fatia FIFO/cadeia (volBruto).
+          // Não redistribuir por lote entre entradas irmãs.
+          qtd = volBruto;
+        } else {
+          // Stamp de outro estoque real (ex.: troca REP) — não debita.
+          return;
         }
       }
 
@@ -2138,11 +2168,18 @@ function resolveQuantidadeEstoqueNoVasilhame(
   // Tanque misto (ex.: 700,2 L stamp tanka OF-1428 + 799,8 L stamp estoque OF-1393):
   // a fatia com stamp de tanka/sem lastro ainda pertence a este lote e deve
   // entrar no Saldo Tanque. Sem isso, só a fatia lastreada aparece (799,8 de 1500).
+  // NÃO usar este atalho em tanque homogêneo só com stamp de tanka: duas
+  // entradas com o mesmo lote (METANOL Vibra E508+E514) reivindicariam o
+  // pátio inteiro e o Saldo Tanque dobraria (~31.680 → ~63.360).
   const tankaIds = collectTankaIdsForVasilhame(vasilhame, transbordos);
   const loteEstoque = normLoteKey(
     estoqueItem.lote || estoqueItem.lotes?.[0]?.lote
   );
-  if (loteEstoque) {
+  const mixedTankaEstoque = compositionHasMixedEstoqueAndTankaStamps(
+    vasilhame,
+    transbordos
+  );
+  if (loteEstoque && mixedTankaEstoque) {
     const byLoteTanka = roundOp(
       estoqueItem,
       sumComp(
@@ -2165,14 +2202,9 @@ function resolveQuantidadeEstoqueNoVasilhame(
   const fatia = Number(fatiaPorVasilhame?.get(vasilhame.id)) || 0;
   if (fatia > 0) return capToTankPhysical(fatia);
 
-  // Fallback: composição só com stamp de tanka (cadeia FIFO sem fatia indexada).
-  if (tankaStampsOnly && loteEstoque) {
-    const byLote = roundOp(
-      estoqueItem,
-      sumComp((c) => normLoteKey(c.lote) === loteEstoque)
-    );
-    if (byLote > 0) return capToTankPhysical(byLote, byLote);
-  }
+  // Tanque só com stamp de tanka: a propriedade exclusiva vem da fatia
+  // FIFO/cadeia acima. Fallback por lote aqui reabriria o double-count
+  // entre entradas irmãs com o mesmo lote.
 
   const vKeys = collectVasilhameKeys(vasilhame);
   const linkedByTrack = [...vKeys].some((k) => trackedKeys.has(k));

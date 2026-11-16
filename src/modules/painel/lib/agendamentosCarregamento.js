@@ -999,14 +999,27 @@ export async function reverterCarregamento({ bookings }) {
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
 }
 
-export async function listAgendamentosConcluidos() {
+/**
+ * Lista agendamentos concluídos.
+ * Prefira passar `from`/`to` (YYYY-MM-DD) para evitar download ilimitado.
+ * @param {{ from?: string, to?: string, select?: string }} [options]
+ */
+export async function listAgendamentosConcluidos(options = {}) {
   assertConfigured('t_agendamentos_carregamento.listConcluidos');
-  const { data, error } = await chemflowSupabase
+  const from = String(options.from || '').slice(0, 10);
+  const to = String(options.to || '').slice(0, 10);
+  const select = options.select || '*';
+  let builder = chemflowSupabase
     .from('t_agendamentos_carregamento')
-    .select('*')
+    .select(select)
     .eq('status', 'concluido')
     .order('data', { ascending: false })
     .order('hora_carregamento', { ascending: false });
+  // Filtra pela data do slot (coluna indexada); a UI ainda pode refinar por data_carregamento.
+  if (from) builder = builder.gte('data', from);
+  if (to) builder = builder.lte('data', to);
+
+  const { data, error } = await builder;
 
   if (error) {
     throw new Error(

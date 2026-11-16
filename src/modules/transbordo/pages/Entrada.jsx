@@ -1,11 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { entities } from '@transbordo/services/entities';
 import { listProdutos } from '@transbordo/lib/cadastroProdutosCentral';
 import { listTankas } from '@transbordo/lib/cadastroTankaCentral';
+import { loadTransbordoWorkspaceLists } from '@transbordo/services/transbordoWorkspace';
 import { Plus, Search, Eye, Pencil, Printer, Trash2, Upload } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Input } from "@shared/components/ui/input";
+import { ServerPaginationBar } from "@shared/components/ServerPaginationBar";
+import { DEFAULT_PAGE_SIZE } from "@shared/lib/pagination";
+import { useDebouncedValue } from "@shared/hooks/useDebouncedValue";
+import { withScreenLoadPerf } from "@shared/lib/perfMarks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -151,6 +156,8 @@ export default function Entrada() {
   const [transbordos, setTransbordos] = useState([]);
   const [estoque, setEstoque] = useState([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
   const [clienteFilter, setClienteFilter] = useState("");
   const [origemFilter, setOrigemFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -167,140 +174,154 @@ export default function Entrada() {
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    try {
-      const [ents, prods, cliens, transbs, ests, nomesInd, vascs, isotanques] =
-        await Promise.all([
-          entities.entradas.list("-created_date"),
-          listProdutos({ modulo: "ARMAZENAGEM" }),
-          listAllClientes(),
-          entities.transbordos.list(),
-          entities.estoque.list(),
-          listNomesClientesIndustrializacao().catch((err) => {
-            console.warn(
-              "[Entrada] Clientes da Industrialização não carregaram:",
-              err?.message || err
-            );
-            return [];
-          }),
-          entities.vasilhames
-            .list("id", { select: "cliente_nome" })
-            .catch(() => []),
-          listTankas({ select: "id, cliente_nome" }).catch(() => []),
-        ]);
+    await withScreenLoadPerf("entrada", async () => {
+      try {
+        // Workspace cobre transbordos/estoque/vasilhames; entradas + catálogos em paralelo.
+        const [ents, prods, cliens, workspace, nomesInd, isotanques] =
+          await Promise.all([
+            entities.entradas.list("-created_date"),
+            listProdutos({ modulo: "ARMAZENAGEM" }),
+            listAllClientes(),
+            loadTransbordoWorkspaceLists({ force: silent }),
+            listNomesClientesIndustrializacao().catch((err) => {
+              console.warn(
+                "[Entrada] Clientes da Industrialização não carregaram:",
+                err?.message || err
+              );
+              return [];
+            }),
+            listTankas({ select: "id, cliente_nome" }).catch(() => []),
+          ]);
+        const transbs = workspace.transbordos || [];
+        const ests = workspace.estoque || [];
+        const vascs = workspace.vasilhames || [];
 
-      // Garante que clientes referenciados em produtos existam em t_clientes
-      const nomesExistentes = new Set(
-        cliens.map((c) => c.nome?.trim().toLowerCase()).filter(Boolean)
-      );
-      const nomesFaltando = [
-        ...new Set(
-          prods
-            .map((p) => p.cliente_nome?.trim())
-            .filter((n) => n && !nomesExistentes.has(n.toLowerCase()))
-        ),
-      ];
-      let clientesAtualizados = cliens;
-      if (nomesFaltando.length > 0) {
-        const criados = await Promise.all(
-          nomesFaltando.map((nome) => ensureClienteByNome(nome))
+        const nomesExistentes = new Set(
+          cliens.map((c) => c.nome?.trim().toLowerCase()).filter(Boolean)
         );
-        clientesAtualizados = [
-          ...cliens,
-          ...criados.filter((c) => c.id).map((c) => ({ id: c.id, nome: c.nome })),
+        const nomesFaltando = [
+          ...new Set(
+            prods
+              .map((p) => p.cliente_nome?.trim())
+              .filter((n) => n && !nomesExistentes.has(n.toLowerCase()))
+          ),
         ];
-      }
+        let clientesAtualizados = cliens;
+        if (nomesFaltando.length > 0) {
+          const criados = await Promise.all(
+            nomesFaltando.map((nome) => ensureClienteByNome(nome))
+          );
+          clientesAtualizados = [
+            ...cliens,
+            ...criados.filter((c) => c.id).map((c) => ({ id: c.id, nome: c.nome })),
+          ];
+        }
 
-      const volumes = applyDeclaredVolumeDecimals({
-        estoque: ests,
-        entradas: ents,
-        transbordos: transbs,
-        vasilhames: vascs,
-      });
-      void persistDeclaredVolumeDecimals(volumes);
+        const volumes = applyDeclaredVolumeDecimals({
+          estoque: ests,
+          entradas: ents,
+          transbordos: transbs,
+          vasilhames: vascs,
+        });
+        void persistDeclaredVolumeDecimals(volumes);
 
-      setEntradas(ents);
-      setProdutos(prods);
-      setClientes(
-        buildSaidaClienteOptions(clientesAtualizados, [
-          ...(nomesInd || []),
-          ...(prods || []).map((p) => p.cliente_nome),
-          ...(ents || []).map((e) => e.cliente_nome),
-          ...(vascs || []).map((v) => v.cliente_nome),
-          ...(isotanques || []).map((iso) => iso.cliente_nome),
-        ])
-      );
-      setTransbordos(volumes.transbordos);
-      setEstoque(volumes.estoque);
-    } catch (err) {
-      console.error("[Transbordo] Erro ao carregar Entrada:", err);
-      if (!silent) {
-        setEntradas([]);
-        setProdutos([]);
-        setClientes([]);
+        setEntradas(ents);
+        setProdutos(prods);
+        setClientes(
+          buildSaidaClienteOptions(clientesAtualizados, [
+            ...(nomesInd || []),
+            ...(prods || []).map((p) => p.cliente_nome),
+            ...(ents || []).map((e) => e.cliente_nome),
+            ...(vascs || []).map((v) => v.cliente_nome),
+            ...(isotanques || []).map((iso) => iso.cliente_nome),
+          ])
+        );
+        setTransbordos(volumes.transbordos);
+        setEstoque(volumes.estoque);
+      } catch (err) {
+        console.error("[Transbordo] Erro ao carregar Entrada:", err);
+        if (!silent) {
+          setEntradas([]);
+          setProdutos([]);
+          setClientes([]);
+        }
       }
-    }
-    if (!silent) setLoading(false);
+      if (!silent) setLoading(false);
+    });
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const idMap = buildEntradaCodigoById(entradas);
+  const idMap = useMemo(() => buildEntradaCodigoById(entradas), [entradas]);
 
-  const estoqueByEntradaId = estoque.reduce((acc, item) => {
-    if (!item?.entrada_id) return acc;
-    if (!acc[item.entrada_id]) acc[item.entrada_id] = [];
-    acc[item.entrada_id].push(item);
-    return acc;
-  }, {});
+  const estoqueByEntradaId = useMemo(() => {
+    return estoque.reduce((acc, item) => {
+      if (!item?.entrada_id) return acc;
+      if (!acc[item.entrada_id]) acc[item.entrada_id] = [];
+      acc[item.entrada_id].push(item);
+      return acc;
+    }, {});
+  }, [estoque]);
 
-  const filtered = entradas.filter((e) => {
-    const q = search.toLowerCase().trim();
-    const lotes = getEntradaLotes(e);
-    const estoqueItens = estoqueByEntradaId[e.id] || [];
-    const matchSearch =
-      !q ||
-      matchesText(idMap[e.id], q) ||
-      matchesText(e.produto_codigo, q) ||
-      matchesText(e.produto_nome, q) ||
-      matchesText(e.cliente_nome, q) ||
-      matchesText(e.lote, q) ||
-      matchesText(e.nota_fiscal, q) ||
-      matchesText(e.nota_fiscal_troca, q) ||
-      lotes.some(
-        (l) =>
-          matchesText(l.produto_codigo, q) ||
-          matchesText(l.produto_nome, q) ||
-          matchesText(l.lote, q) ||
-          matchesText(l.nota_fiscal, q) ||
-          matchesText(l.nota_fiscal_troca, q)
-      ) ||
-      estoqueItens.some(
-        (item) =>
-          matchesText(item.nota_fiscal, q) ||
-          matchesText(item.nota_fiscal_troca, q) ||
-          matchesText(item.lote, q) ||
-          asLoteList(item.lotes).some(
-            (l) =>
-              matchesText(l.nota_fiscal, q) ||
-              matchesText(l.nota_fiscal_troca, q) ||
-              matchesText(l.lote, q)
-          )
-      );
+  const filtered = useMemo(() => {
+    return entradas.filter((e) => {
+      const q = debouncedSearch.toLowerCase().trim();
+      const lotes = getEntradaLotes(e);
+      const estoqueItens = estoqueByEntradaId[e.id] || [];
+      const matchSearch =
+        !q ||
+        matchesText(idMap[e.id], q) ||
+        matchesText(e.produto_codigo, q) ||
+        matchesText(e.produto_nome, q) ||
+        matchesText(e.cliente_nome, q) ||
+        matchesText(e.lote, q) ||
+        matchesText(e.nota_fiscal, q) ||
+        matchesText(e.nota_fiscal_troca, q) ||
+        lotes.some(
+          (l) =>
+            matchesText(l.produto_codigo, q) ||
+            matchesText(l.produto_nome, q) ||
+            matchesText(l.lote, q) ||
+            matchesText(l.nota_fiscal, q) ||
+            matchesText(l.nota_fiscal_troca, q)
+        ) ||
+        estoqueItens.some(
+          (item) =>
+            matchesText(item.nota_fiscal, q) ||
+            matchesText(item.nota_fiscal_troca, q) ||
+            matchesText(item.lote, q) ||
+            asLoteList(item.lotes).some(
+              (l) =>
+                matchesText(l.nota_fiscal, q) ||
+                matchesText(l.nota_fiscal_troca, q) ||
+                matchesText(l.lote, q)
+            )
+        );
 
-    const sistema = getSistemaOrigem(e);
-    const matchOrigem =
-      !origemFilter ||
-      origemFilter === "all" ||
-      origemFilter === "Todas" ||
-      origemFilter === origemOperacional(e) ||
-      origemFilter === sistema;
+      const sistema = getSistemaOrigem(e);
+      const matchOrigem =
+        !origemFilter ||
+        origemFilter === "all" ||
+        origemFilter === "Todas" ||
+        origemFilter === origemOperacional(e) ||
+        origemFilter === sistema;
 
-    const matchCliente = matchesClienteFilter(e, clienteFilter, clientes);
+      const matchCliente = matchesClienteFilter(e, clienteFilter, clientes);
 
-    return matchSearch && matchOrigem && matchCliente;
-  });
+      return matchSearch && matchOrigem && matchCliente;
+    });
+  }, [entradas, debouncedSearch, origemFilter, clienteFilter, clientes, estoqueByEntradaId, idMap]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, origemFilter, clienteFilter]);
+
+  const pagedFiltered = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filtered.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filtered, page]);
 
   const clienteFilterOptions = [
     { id: "all", nome: "Todos os clientes" },
@@ -716,7 +737,7 @@ export default function Entrada() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((e, i) => {
+                pagedFiltered.map((e, i) => {
                   const lotes = getEntradaLotes(e);
                   const sistema = getSistemaOrigem(e);
                   const isMateriaPrima = origemOperacional(e) === "MATERIA_PRIMA";
@@ -847,10 +868,20 @@ export default function Entrada() {
           </table>
         </div>
 
+        <div className="px-5 shrink-0 border-t border-border">
+          <ServerPaginationBar
+            page={page}
+            pageSize={DEFAULT_PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            disabled={loading}
+          />
+        </div>
+
         {/* Footer Summary */}
         <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">
           <span className="text-muted-foreground">
-            Itens exibidos:{" "}
+            Itens filtrados:{" "}
             <span className="font-medium text-foreground">{filtered.length}</span>
           </span>
           <span className="text-muted-foreground">

@@ -10,6 +10,8 @@ import {
 import { SaidaNovasProvider } from '@transbordo/context/SaidaNovasContext';
 import { ValidacaoNovasProvider } from '@transbordo/context/ValidacaoNovasContext';
 
+const EMPTY_TOP_BAR_PROPS = {};
+
 export default function MainLayout() {
   const { user } = useInternalAuth();
   const location = useLocation();
@@ -37,7 +39,7 @@ export default function MainLayout() {
           )}
           banner={banner}
           contentClassName="overflow-hidden"
-          topBarProps={{}}
+          topBarProps={EMPTY_TOP_BAR_PROPS}
         />
       </ValidacaoNovasProvider>
     </SaidaNovasProvider>

@@ -1,8 +1,11 @@
-import ExcelJS from 'exceljs';
 import i18n from '@/i18n';
 import { getLatestRecipes } from '@industrializacao/lib/recipeRevisions';
 import { containerDisplayVolume } from '@industrializacao/lib/fractionalSupply';
 
+/**
+ * Exportação sob demanda — ExcelJS é carregado só quando o usuário exporta
+ * (evita puxar a lib no chunk inicial do módulo).
+ */
 export async function exportEstoqueClienteExcel({
   client,
   stocks,
@@ -10,6 +13,7 @@ export async function exportEstoqueClienteExcel({
   recipes = [],
   productions = [],
 }) {
+  const ExcelJS = (await import('exceljs')).default;
   const codeByProduct = {};
 
   getLatestRecipes(recipes).forEach((recipe) => {

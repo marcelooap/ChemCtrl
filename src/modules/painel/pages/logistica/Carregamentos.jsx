@@ -8,6 +8,10 @@ import { Input } from '@shared/components/ui/input';
 import { Label } from '@shared/components/ui/label';
 import DateInputBr from '@shared/components/ui/DateInputBr';
 import { useToast } from '@shared/components/ui/use-toast';
+import { ServerPaginationBar } from '@shared/components/ServerPaginationBar';
+import { DEFAULT_PAGE_SIZE, LIST_PROJECTIONS } from '@shared/lib/pagination';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
+import { loadTransbordoWorkspaceLists } from '@transbordo/services/transbordoWorkspace';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@shared/components/ui/select';
-import { entities } from '@transbordo/services/entities';
 import SaidaViewDialog from '@transbordo/components/saida/SaidaViewDialog';
 import PontualidadeStatsCard, {
   computePontualidadeStats,
@@ -93,6 +96,15 @@ const currentMonthKey = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
+/** Janela padrão no servidor (90 dias) quando o usuário não aplica filtro de data. */
+function defaultConcluidosRange() {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - 90);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  return { from: iso(from), to: iso(to) };
+}
+
 export default function LogisticaCarregamentos() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -111,6 +123,8 @@ export default function LogisticaCarregamentos() {
       '';
     return String(fromQuery).trim();
   });
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [appliedDateFrom, setAppliedDateFrom] = useState('');
@@ -146,16 +160,21 @@ export default function LogisticaCarregamentos() {
     async ({ silent = false } = {}) => {
       if (!silent) setLoading(true);
       try {
-        const [concluidos, saidasList, vascs, ents] = await Promise.all([
-          listAgendamentosConcluidos(),
-          entities.saidas.list('-created_date'),
-          entities.vasilhames.list(),
-          entities.estoque.list(),
+        const range =
+          appliedDateFrom || appliedDateTo
+            ? { from: appliedDateFrom || undefined, to: appliedDateTo || undefined }
+            : defaultConcluidosRange();
+        const [concluidos, workspace] = await Promise.all([
+          listAgendamentosConcluidos({
+            ...range,
+            select: LIST_PROJECTIONS.t_agendamentos_carregamento,
+          }),
+          loadTransbordoWorkspaceLists(),
         ]);
         setRows(groupCarregamentosConcluidos(concluidos || []));
-        setSaidas(saidasList || []);
-        setVasilhames(vascs || []);
-        setEntradas(ents || []);
+        setSaidas(workspace.saidas || []);
+        setVasilhames(workspace.vasilhames || []);
+        setEntradas(workspace.estoque || []);
       } catch (err) {
         console.error('[LogisticaCarregamentos] loadData:', err);
         toast({
@@ -169,7 +188,7 @@ export default function LogisticaCarregamentos() {
         if (!silent) setLoading(false);
       }
     },
-    [t, toast]
+    [t, toast, appliedDateFrom, appliedDateTo]
   );
 
   useEffect(() => {
@@ -190,7 +209,7 @@ export default function LogisticaCarregamentos() {
   }, [rows, saidasById]);
 
   const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     const from = String(appliedDateFrom || '').slice(0, 10);
     const to = String(appliedDateTo || '').slice(0, 10);
 
@@ -220,7 +239,16 @@ export default function LogisticaCarregamentos() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [displayRows, search, appliedDateFrom, appliedDateTo, vasilhames]);
+  }, [displayRows, debouncedSearch, appliedDateFrom, appliedDateTo, vasilhames]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, appliedDateFrom, appliedDateTo]);
+
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * DEFAULT_PAGE_SIZE;
+    return filteredRows.slice(start, start + DEFAULT_PAGE_SIZE);
+  }, [filteredRows, page]);
 
   const hasDateDraft = Boolean(dateFrom || dateTo);
   const hasDateFilter = Boolean(appliedDateFrom || appliedDateTo);
@@ -484,7 +512,7 @@ export default function LogisticaCarregamentos() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
+              {pagedRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={11}
@@ -494,7 +522,7 @@ export default function LogisticaCarregamentos() {
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
+                pagedRows.map((row) => (
                   <tr
                     key={row.id}
                     className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
@@ -557,6 +585,14 @@ export default function LogisticaCarregamentos() {
             </tbody>
           </table>
         </div>
+        <ServerPaginationBar
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={filteredRows.length}
+          onPageChange={setPage}
+          disabled={loading}
+          className="px-2"
+        />
       </div>
 
       <Dialog open={!!viewPicker} onOpenChange={(v) => !v && setViewPicker(null)}>

@@ -159,7 +159,7 @@ export default function Validacao() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useInternalAuth();
-  const { isNew, markAsRead, validacoesRevision } = useValidacaoNovas();
+  const { isNew, markAsRead, validacoesRevision, lastValidacaoChange } = useValidacaoNovas();
 
   const [loading, setLoading] = useState(true);
   const [validacoes, setValidacoes] = useState([]);
@@ -188,22 +188,23 @@ export default function Validacao() {
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [vals, cliens, prods, ents, isos, vascs, trans] = await Promise.all([
+      const { loadTransbordoWorkspaceLists } = await import(
+        "@transbordo/services/transbordoWorkspace"
+      );
+      const [vals, cliens, prods, isos, workspace] = await Promise.all([
         entities.transbordoValidacoes.list("-created_at"),
-        entities.clientes.list(),
+        entities.clientes.list("nome", { select: "id,nome,created_at" }),
         listProdutos({ modulo: "ARMAZENAGEM" }),
-        entities.estoque.list(),
         listTankas(),
-        entities.vasilhames.list(),
-        entities.transbordos.list("-created_at"),
+        loadTransbordoWorkspaceLists(),
       ]);
       setValidacoes(vals || []);
       setClientes(cliens || []);
       setProdutos(prods || []);
-      setEntradas(ents || []);
+      setEntradas(workspace.estoque || []);
       setIsotanques(isos || []);
-      setVasilhames(vascs || []);
-      setTransbordos(trans || []);
+      setVasilhames(workspace.vasilhames || []);
+      setTransbordos(workspace.transbordos || []);
     } catch (err) {
       console.error("[Validacao] load:", err);
       toast({
@@ -223,8 +224,32 @@ export default function Validacao() {
   useEffect(() => {
     if (validacoesRevision === validacoesRevisionSeen.current) return;
     validacoesRevisionSeen.current = validacoesRevision;
-    loadData({ silent: true });
-  }, [validacoesRevision, loadData]);
+    const change = lastValidacaoChange;
+    if (!change?.eventType) {
+      loadData({ silent: true });
+      return;
+    }
+    if (change.eventType === "DELETE") {
+      const deletedId = change.old?.id;
+      if (!deletedId) return;
+      setValidacoes((prev) => prev.filter((v) => v.id !== deletedId));
+      return;
+    }
+    const row = change.new;
+    if (!row?.id) {
+      loadData({ silent: true });
+      return;
+    }
+    setValidacoes((prev) => {
+      const idx = prev.findIndex((v) => v.id === row.id);
+      if (idx === -1) {
+        return change.eventType === "INSERT" ? [row, ...prev] : prev;
+      }
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...row };
+      return next;
+    });
+  }, [validacoesRevision, lastValidacaoChange, loadData]);
 
   const acknowledgeNew = (id) => {
     if (id && isNew(id)) markAsRead(id);

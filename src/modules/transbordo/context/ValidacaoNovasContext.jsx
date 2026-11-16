@@ -28,6 +28,7 @@ const ValidacaoNovasContext = createContext({
   isNew: () => false,
   markAsRead: async () => {},
   validacoesRevision: 0,
+  lastValidacaoChange: null,
 });
 
 export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false }) {
@@ -35,6 +36,7 @@ export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false 
   const usuarioId = user?.id ? String(user.id) : "";
   const [unreadIds, setUnreadIds] = useState(EMPTY_SET);
   const [validacoesRevision, setValidacoesRevision] = useState(0);
+  const [lastValidacaoChange, setLastValidacaoChange] = useState(null);
   const usuarioIdRef = useRef(usuarioId);
   usuarioIdRef.current = usuarioId;
   const channelKey = onlyIndustrializacao ? "ind-val" : "tb-val";
@@ -43,7 +45,15 @@ export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false 
     ? "ind_validacoes"
     : "t_transbordo_validacoes";
 
-  const bumpRevision = useCallback(() => {
+  const bumpRevision = useCallback((payload) => {
+    if (payload) {
+      setLastValidacaoChange({
+        eventType: payload.eventType,
+        new: payload.new || null,
+        old: payload.old || null,
+        at: Date.now(),
+      });
+    }
     setValidacoesRevision((n) => n + 1);
   }, []);
 
@@ -73,7 +83,7 @@ export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false 
       sourceTable,
       (payload) => {
         const eventType = payload?.eventType;
-        bumpRevision();
+        bumpRevision(payload);
 
         if (eventType === "DELETE") {
           const deletedId = payload?.old?.id;
@@ -191,8 +201,9 @@ export function ValidacaoNovasProvider({ children, onlyIndustrializacao = false 
       isNew,
       markAsRead,
       validacoesRevision,
+      lastValidacaoChange,
     }),
-    [unreadIds, isNew, markAsRead, validacoesRevision]
+    [unreadIds, isNew, markAsRead, validacoesRevision, lastValidacaoChange]
   );
 
   return (

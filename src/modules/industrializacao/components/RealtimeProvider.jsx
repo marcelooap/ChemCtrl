@@ -1,12 +1,18 @@
 /**
  * RealtimeProvider — pré-subscreve canais Supabase Realtime ao autenticar.
+ * O badge de status vive fora da árvore de `children` via portal-like sibling
+ * e o estado de status NÃO re-renderiza as páginas (children estáveis).
  */
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { subscribeAllTables, getRealtimeStatus } from '@industrializacao/lib/realtime';
 import { entityTableMap } from '@industrializacao/api/supabaseClient';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { Wifi, WifiOff, Loader2 } from 'lucide-react';
+
+const StableChildren = memo(function StableChildren({ children }) {
+  return children;
+});
 
 const IS_DEV = import.meta.env.DEV;
 const SKIP_REALTIME = new Set([
@@ -70,7 +76,7 @@ export default function RealtimeProvider({ children }) {
 
   return (
     <>
-      {children}
+      <StableChildren>{children}</StableChildren>
       {showBadge && (
         <div
           className="fixed bottom-3 left-3 z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shadow-lg select-none"

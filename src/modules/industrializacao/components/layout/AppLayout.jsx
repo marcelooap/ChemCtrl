@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import Sidebar from './Sidebar';
@@ -18,6 +18,19 @@ export default function AppLayout() {
     reconcileStuckEnvaseProductions(createSupabaseEntities());
   }, [user]);
 
+  const readOnly = user ? isReadOnly(user, location.pathname) : false;
+  const outletContext = useMemo(
+    () => ({ user, isReadOnly: readOnly }),
+    [user, readOnly]
+  );
+  const topBarProps = useMemo(
+    () => ({
+      userMenuExtras: user?.tipo === 'externo' ? null : <SystemManualMenu />,
+      getRoleLabel,
+    }),
+    [user?.tipo]
+  );
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -33,11 +46,8 @@ export default function AppLayout() {
           sidebar={({ collapsed, setCollapsed }) => (
             <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} user={user} />
           )}
-          topBarProps={{
-            userMenuExtras: user.tipo === 'externo' ? null : <SystemManualMenu />,
-            getRoleLabel,
-          }}
-          outletContext={{ user, isReadOnly: isReadOnly(user, location.pathname) }}
+          topBarProps={topBarProps}
+          outletContext={outletContext}
           requireAuth={false}
           contentClassName="overflow-y-auto"
         />
