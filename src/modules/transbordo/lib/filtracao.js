@@ -5,7 +5,7 @@
  */
 
 import { roundVolume } from "@transbordo/lib/format";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import { getDominantLote, placaKey } from "@transbordo/lib/vasilhameComposicao";
 import { resolveVasilhameExpedidoDisplay } from "@transbordo/lib/vasilhamePatio";
 
 export const PARTICULA_TAMANHOS = [
@@ -59,6 +59,9 @@ export function buildFiltracaoFromVasilhame(vasilhame, extras = {}) {
     particulas_21: extras.particulas_21 ?? null,
     particulas_38: extras.particulas_38 ?? null,
     particulas_70: extras.particulas_70 ?? null,
+    ...(extras.resultado_lancado_em
+      ? { resultado_lancado_em: extras.resultado_lancado_em }
+      : {}),
   };
 }
 
@@ -349,8 +352,100 @@ export function syncFiltracaoFromVasilhame(vasilhame, ctx = {}) {
 }
 
 /**
+ * Extrai SAE / partículas / filtro já lançados.
+ * Usado para não voltar o tanque a "Pendente" ao reeditar o OP.
+ */
+export function extractFiltracaoAnalise(filtracao) {
+  if (!filtracao) return null;
+  const hasSae = filtracaoTemSae(filtracao);
+  const hasParticulas = PARTICULA_TAMANHOS.some((p) => {
+    const v = filtracao[p.key];
+    return v !== null && v !== undefined && v !== "";
+  });
+  const hasFiltro = !!(filtracao.filtro_id || String(filtracao.filtro_codigo || "").trim());
+  if (!hasSae && !hasParticulas && !hasFiltro) return null;
+
+  const analise = {
+    sae: filtracao.sae ?? null,
+    particulas_6: filtracao.particulas_6 ?? null,
+    particulas_14: filtracao.particulas_14 ?? null,
+    particulas_21: filtracao.particulas_21 ?? null,
+    particulas_38: filtracao.particulas_38 ?? null,
+    particulas_70: filtracao.particulas_70 ?? null,
+  };
+  // Só devolve filtro se já havia vínculo — evita apagar o "Em uso" no recreate.
+  if (filtracao.filtro_id) {
+    analise.filtro_id = filtracao.filtro_id;
+    analise.filtro_codigo = filtracao.filtro_codigo || "";
+  }
+  if (filtracao.resultado_lancado_em) {
+    analise.resultado_lancado_em = filtracao.resultado_lancado_em;
+  }
+  return analise;
+}
+
+/**
+ * Snapshot das análises antes de apagar/recriar tanques do OP.
+ * Indexa por placa+barril e guarda ordem para fallback se a placa mudar.
+ */
+export async function snapshotFiltracaoAnalises(
+  entitiesApi,
+  { vasilhameIds = [], transbordoId = null } = {}
+) {
+  const byKey = new Map();
+  const ordered = [];
+  const seen = new Set();
+
+  const add = (filtracao) => {
+    if (!filtracao?.id || seen.has(filtracao.id)) return;
+    seen.add(filtracao.id);
+    const analise = extractFiltracaoAnalise(filtracao);
+    if (!analise) return;
+    const key = placaKey(filtracao.placa, filtracao.barril);
+    byKey.set(key, analise);
+    ordered.push({ key, analise });
+  };
+
+  if (transbordoId) {
+    const byTb = await entitiesApi.filtracoes.filter({
+      transbordo_id: transbordoId,
+    });
+    for (const row of byTb || []) add(row);
+  }
+
+  for (const id of vasilhameIds || []) {
+    if (!id) continue;
+    const list = await entitiesApi.filtracoes.filter({ vasilhame_id: id });
+    for (const row of list || []) add(row);
+  }
+
+  return { byKey, ordered };
+}
+
+/**
+ * Consome análise preservada do snapshot (placa+barril, senão próxima na ordem).
+ */
+export function takePreservedFiltracaoAnalise(preservadas, vasilhame) {
+  if (!preservadas?.byKey) return {};
+  const key = placaKey(vasilhame?.placa, vasilhame?.barril);
+  if (preservadas.byKey.has(key)) {
+    const analise = preservadas.byKey.get(key);
+    preservadas.byKey.delete(key);
+    preservadas.ordered = (preservadas.ordered || []).filter((o) => o.key !== key);
+    return analise || {};
+  }
+  if (preservadas.ordered?.length) {
+    const next = preservadas.ordered.shift();
+    if (next?.key) preservadas.byKey.delete(next.key);
+    return next?.analise || {};
+  }
+  return {};
+}
+
+/**
  * Cria ou atualiza registro de filtração ligado a um vasilhame.
  * Ignora Tankagem, outros tipos e tanque ainda fracionado.
+ * Em update, nunca sobrescreve SAE / partículas / filtro já lançados.
  */
 export async function upsertFiltracaoForVasilhame(entities, vasilhame, extras = {}) {
   if (!vasilhame?.id || !isFiltracaoElegivel(vasilhame)) return null;

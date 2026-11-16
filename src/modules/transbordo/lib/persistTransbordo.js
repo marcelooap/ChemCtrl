@@ -34,6 +34,8 @@ import {
   isFiltracaoElegivel,
   upsertFiltracaoForVasilhame,
   alignFiltracoesComVasilhames,
+  snapshotFiltracaoAnalises,
+  takePreservedFiltracaoAnalise,
 } from '@transbordo/lib/filtracao';
 import {
   TIPOS_EMBALAGEM_ESTOQUE,
@@ -328,8 +330,15 @@ export async function revertTopUpsDoTransbordo({
   }
 }
 
-/** Grava no tanque do pátio o fracionado do último destino desta placa. */
-async function syncFracionadoDosDestinos(destinos = []) {
+/**
+ * Grava no tanque do pátio o fracionado do último destino desta placa.
+ * Ao sair de fracionado com produto filtrado, cria/atualiza a filtração
+ * sem limpar SAE/partículas já lançados.
+ */
+async function syncFracionadoDosDestinos(
+  destinos = [],
+  { produtoFiltrado = false, filtroExtras = {}, codigo = "", transbordoId = null } = {}
+) {
   const byKey = new Map();
   for (const d of destinos) {
     if ((d?.tipo_embalagem || "") !== "Vasilhame") continue;
@@ -350,7 +359,15 @@ async function syncFracionadoDosDestinos(destinos = []) {
       capacidadeOperacionalDoTanque(row, row.volume)
     );
     if (Boolean(row.fracionado) === fracionado) continue;
-    await entities.vasilhames.update(row.id, { fracionado });
+    const updated = await entities.vasilhames.update(row.id, { fracionado });
+    const next = updated || { ...row, fracionado };
+    if (produtoFiltrado && fracionado !== true) {
+      await upsertFiltracaoForVasilhame(entities, next, {
+        codigo: codigo || next.codigo || "",
+        transbordo_id: transbordoId || next.transbordo_id || null,
+        ...filtroExtras,
+      });
+    }
   }
 }
 
@@ -660,6 +677,8 @@ export async function persistTransbordo({
         (editingId ? transbordos.find((t) => t.id === editingId) : null);
 
       let previousOwned = [];
+      /** Análises (SAE/partículas) a reaplicar após recriar tanques do OP. */
+      let filtracaoAnalisesPreservadas = { byKey: new Map(), ordered: [] };
       if (editingId && existingForEdit) {
         codigo = existingForEdit.codigo_transbordo;
         // Reverte top-ups de fracionados feitos por este transbordo antes de reaplicar
@@ -676,6 +695,18 @@ export async function persistTransbordo({
         previousOwned = (vasilhames || []).filter(
           (v) => v?.transbordo_id && v.transbordo_id === editingId
         );
+        // Preserva SAE/partículas antes do delete+recreate (evita voltar a Pendente).
+        try {
+          filtracaoAnalisesPreservadas = await snapshotFiltracaoAnalises(entities, {
+            vasilhameIds: previousOwned.map((v) => v.id).filter(Boolean),
+            transbordoId: editingId,
+          });
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao preservar análises de filtração na reedição:",
+            err
+          );
+        }
         // Remove apenas registros CRIADOS por este transbordo (não os top-ups)
         // Filtrações ligadas caem via ON DELETE CASCADE em vasilhame_id
         await entities.vasilhames.deleteMany({ transbordo_id: editingId });
@@ -901,13 +932,18 @@ export async function persistTransbordo({
         if (produtoFiltrado && createdVasilhames.length > 0) {
           const filtracaoRecords = createdVasilhames
             .filter(isFiltracaoElegivel)
-            .map((v) =>
-              buildFiltracaoFromVasilhame(v, {
+            .map((v) => {
+              const analisePreservada = takePreservedFiltracaoAnalise(
+                filtracaoAnalisesPreservadas,
+                v
+              );
+              return buildFiltracaoFromVasilhame(v, {
                 codigo,
                 transbordo_id: savedTransbordo.id,
                 ...filtroExtras,
-              })
-            );
+                ...analisePreservada,
+              });
+            });
           if (filtracaoRecords.length > 0) {
             await entities.filtracoes.bulkCreate(filtracaoRecords);
           }
@@ -920,7 +956,12 @@ export async function persistTransbordo({
       if (unified?.replacements?.length) {
         await relinkSaidasVasilhameIds(unified.replacements);
       }
-      await syncFracionadoDosDestinos(destinosOperacionais);
+      await syncFracionadoDosDestinos(destinosOperacionais, {
+        produtoFiltrado,
+        filtroExtras,
+        codigo,
+        transbordoId: savedTransbordo.id,
+      });
 
       // Origem tankagem: baixa volume + composição no vasilhame (parcial ou total)
       await syncTankaVasilhamesAfterOrigem({

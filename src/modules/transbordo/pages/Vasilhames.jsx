@@ -1294,16 +1294,12 @@ export default function Vasilhames() {
       }
       const deixouDeSerFracionado =
         editingVasilhame.fracionado === true && saved.fracionado !== true;
-      const refletirNaFiltracao =
-        saved.fracionado !== true &&
-        (deixouDeSerFracionado ||
-          volumeChanged ||
-          lotesRenamed ||
-          produtoChanged ||
-          identificacaoChanged ||
-          (multiLote && densChanged) ||
-          (!multiLote && newLote !== oldLote));
-      if (refletirNaFiltracao) {
+      const deveCriarFiltracao =
+        produtoNovoFiltrado &&
+        (produtoChanged || deixouDeSerFracionado);
+      // Fracionado fica de fora da filtração. Demais edições (placa, volume, lote…)
+      // espelham o tanque sem limpar SAE/partículas — mantém "Analisado".
+      if (saved.fracionado !== true) {
         try {
           const existentes = await entities.filtracoes.filter({
             vasilhame_id: editingVasilhame.id,
@@ -1313,10 +1309,7 @@ export default function Vasilhames() {
               existentes[0].id,
               syncFiltracaoFromVasilhame(saved)
             );
-          } else if (
-            produtoNovoFiltrado &&
-            (produtoChanged || deixouDeSerFracionado)
-          ) {
+          } else if (deveCriarFiltracao) {
             await upsertFiltracaoForVasilhame(entities, saved, {
               codigo: saved.codigo,
               transbordo_id: saved.transbordo_id,
