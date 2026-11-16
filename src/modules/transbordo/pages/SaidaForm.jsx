@@ -34,7 +34,7 @@ import {
 } from "@painel/lib/saidaReservas";
 import { promoverProdutosPorIds } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
-import { rescheduleSaidaAgendamento, ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
+import { ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
 import AgendamentoPosSaidaModal from "@painel/components/comercial/AgendamentoPosSaidaModal";
 import {
   ORIGEM_TRANSBORDO,
@@ -1093,21 +1093,7 @@ export default function SaidaForm({
         return;
       }
 
-      if (isEdit && agendamentoPendente && editingSaida?.id) {
-        await rescheduleSaidaAgendamento({
-          saida: {
-            id: editingSaida.id,
-            codigo: editingSaida.codigo,
-            cliente_id: clienteIdSalvo,
-            cliente_nome: clienteNomeSalvo,
-          },
-          dateIso: agendamentoPendente.dateIso,
-          horario: agendamentoPendente.horario,
-          tipo: agendamentoPendente.tipo,
-          user,
-        });
-      }
-
+      // Agendamento na edição já é persistido ao confirmar no modal.
       navigate(basePath);
     } catch (err) {
       setError(err?.message || "Erro ao salvar saída. Tente novamente.");
@@ -1166,6 +1152,7 @@ export default function SaidaForm({
               </Button>
               {agendamentoPendente ? (
                 <p className="text-xs text-emerald-700">
+                  Agendado:{" "}
                   {new Date(
                     `${agendamentoPendente.dateIso}T00:00:00`
                   ).toLocaleDateString("pt-BR")}
@@ -1173,7 +1160,6 @@ export default function SaidaForm({
                   {agendamentoPendente.horario === ENCAIXE_HORARIO
                     ? "Encaixe"
                     : agendamentoPendente.horario}
-                  {" (salvar para confirmar)"}
                 </p>
               ) : null}
             </div>

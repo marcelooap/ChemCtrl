@@ -44,6 +44,7 @@ import {
   getSlotsForWeekday,
   getWeekDays,
   resolveScheduleDateFromSaida,
+  rescheduleSaidaAgendamento,
   WEEKDAY_COUNT,
   groupCarregamentosConcluidos,
   groupSlotCarregamentos,
@@ -360,7 +361,7 @@ export default function AgendamentosGrade({
         return;
       }
       if (deferBooking) {
-        setPendingMove({
+        queuePendingMove({
           dateIso: selectedIso,
           horario,
           tipo: isEncaixeLocked ? 'encaixe' : tipo,
@@ -927,11 +928,35 @@ export default function AgendamentosGrade({
               {t('painel.comercial.agendamentos.reschedule.back')}
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                const move = pendingMoveRef.current;
-                queuePendingMove(null);
-                if (move && typeof onBooked === 'function') {
-                  onBooked({ ...move, saida: lockedSaida });
+              disabled={bookingLocked}
+              onClick={async (e) => {
+                // Impede o fechamento automático do Radix antes de persistir.
+                e.preventDefault();
+                const move = pendingMoveRef.current || pendingMove;
+                if (!move || !lockedSaida?.id || bookingLocked) return;
+                setBookingLocked(true);
+                try {
+                  await rescheduleSaidaAgendamento({
+                    saida: lockedSaida,
+                    dateIso: move.dateIso,
+                    horario: move.horario,
+                    tipo: move.tipo,
+                    user,
+                    t,
+                  });
+                  toast({ title: t('painel.comercial.agendamentos.saveSuccess') });
+                  queuePendingMove(null);
+                  if (typeof onBooked === 'function') {
+                    await onBooked({ ...move, saida: lockedSaida });
+                  }
+                } catch (err) {
+                  toast({
+                    title: t('painel.comercial.agendamentos.errors.saveFailed'),
+                    description: err?.message,
+                    variant: 'destructive',
+                  });
+                } finally {
+                  setBookingLocked(false);
                 }
               }}
             >

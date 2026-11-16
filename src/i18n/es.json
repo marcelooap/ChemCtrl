@@ -1336,7 +1336,7 @@
           "title": "Cambiar agendamiento — {{codigo}}",
           "subtitle": "Seleccione el nuevo día y horario. La fecha programada cambia al confirmar.",
           "confirmTitle": "Confirmar cambio",
-          "confirmDescription": "La fecha programada pasará a ser {{date}} a las {{time}}. El cambio se guarda al guardar la solicitud.",
+          "confirmDescription": "La fecha programada pasará a ser {{date}} a las {{time}}. El agendamiento se guardará al confirmar.",
           "confirm": "Confirmar",
           "back": "Volver"
         },

@@ -1269,15 +1269,34 @@ export function calcSaidasConvencional(
 
         const w = weightForEstoqueInVasilhame(v, transbordos, estoqueItem);
         if (w <= 0) return s;
-        // Baixa na unidade do estoque: L → volume_solicitado; kg → massa
-        const qtd =
-          estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem)
-            ? Number(item.volume_solicitado) ||
-              Number(item.quantidade_solicitada) ||
-              0
-            : Number(item.quantidade_solicitada) ||
-              Number(item.peso_liquido) ||
-              0;
+        // Baixa na UOM do estoque: L/gal → volume; kg/lb → massa.
+        // Embalado em kg NÃO pode preferir volume_solicitado (litros do tanque),
+        // senão 1500 L vira "1500 kg" e o saldo fica inflado (ex.: 8250−4500=3750).
+        let qtd = 0;
+        if (estoqueOperaEmLitros(estoqueItem)) {
+          qtd =
+            Number(item.volume_solicitado) ||
+            Number(item.quantidade_solicitada) ||
+            0;
+        } else if (isEstoqueEmbaladoMassa(estoqueItem)) {
+          qtd =
+            Number(item.quantidade_solicitada) ||
+            Number(item.peso_liquido) ||
+            0;
+          if (!(qtd > 0)) {
+            const vol = Number(item.volume_solicitado) || 0;
+            const dens = resolveDensidadeParaMassa(estoqueItem, {
+              vasilhame: v,
+              transbordos,
+            });
+            if (vol > 0 && dens > 0) qtd = roundMass(vol * dens);
+          }
+        } else {
+          qtd =
+            Number(item.quantidade_solicitada) ||
+            Number(item.peso_liquido) ||
+            0;
+        }
         return s + qtd * w;
       }, 0)
     );
@@ -1977,7 +1996,8 @@ function litrosParaQuantidadeOperacional(estoqueItem, litros, densOverride = 0) 
  * Quantidade de uma fatia de composição na UOM operacional do estoque.
  * - Entrada em L/gal → quantidade_l
  * - Embalado unitário em massa (`volumeIsMass`) → quantidade_l já é kg/lb
- * - Tanque/granel em massa → quantidade_kg ou L × densidade (nunca L cru)
+ * - Tanque clássico / tankagem / granel → quantidade_kg ou L × densidade
+ *   (nunca L cru — embalado→tanque grava litros físicos em quantidade_l)
  *
  * @param {object} [opts]
  * @param {number} [opts.densidade] Densidade do tanque/OP quando o estoque não tem.
@@ -1996,19 +2016,18 @@ function quantidadeComposicaoOperacional(c, estoqueItem, opts = {}) {
     (opts.volumeIsMass == null && isEstoqueEmbaladoMassa(estoqueItem));
 
   if (volumeIsMass) {
-    // OP embalado: quantidade_l já é a massa; quantidade_kg pode ter dens indevida
+    // IBC/bombona/tambor: quantidade_l já é a massa; quantidade_kg pode ter dens indevida
     return qL > 0 ? qL : qKg;
   }
 
+  // Tanque clássico / tankagem: quantidade_l é litro físico (persistTransbordo).
   const dens = resolveDensidadeParaMassa(estoqueItem, {
     densidade: opts.densidade,
   });
 
   if (qKg > 0) {
-    // Granel: quantidade_kg às vezes foi copiado do litro (dens ≠ 1).
-    // Não aplicar em embalado: aí qL e qKg são ambos massa do OP.
+    // qKg às vezes foi copiado do litro (dens ≠ 1), inclusive em embalado→tanque.
     if (
-      !isEstoqueEmbaladoMassa(estoqueItem) &&
       dens > 0 &&
       dens < 20 &&
       qL > 0 &&
@@ -2018,11 +2037,6 @@ function quantidadeComposicaoOperacional(c, estoqueItem, opts = {}) {
       return roundMass(qL * dens);
     }
     return roundMass(qKg);
-  }
-
-  // Embalado kg no tanque clássico: o OP grava a massa em quantidade_l.
-  if (isEstoqueEmbaladoMassa(estoqueItem) && qL > 0) {
-    return roundMass(qL);
   }
 
   if (qL > 0 && dens > 0) return roundMass(qL * dens);

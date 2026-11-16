@@ -1852,7 +1852,7 @@
           "title": "Change schedule — {{codigo}}",
           "subtitle": "Select the new day and time. The planned date changes when you confirm.",
           "confirmTitle": "Confirm change",
-          "confirmDescription": "The planned date will become {{date}} at {{time}}. The change is saved when you save the request.",
+          "confirmDescription": "The planned date will become {{date}} at {{time}}. The schedule will be saved when you confirm.",
           "confirm": "Confirm",
           "back": "Back"
         },

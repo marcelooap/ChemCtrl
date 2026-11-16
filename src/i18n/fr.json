@@ -1336,7 +1336,7 @@
           "title": "Modifier la planification — {{codigo}}",
           "subtitle": "Sélectionnez le nouveau jour et l'horaire. La date prévue change à la confirmation.",
           "confirmTitle": "Confirmer la modification",
-          "confirmDescription": "La date prévue deviendra {{date}} à {{time}}. La modification est enregistrée lorsque vous enregistrez la demande.",
+          "confirmDescription": "La date prévue deviendra {{date}} à {{time}}. La planification sera enregistrée à la confirmation.",
           "confirm": "Confirmer",
           "back": "Retour"
         },

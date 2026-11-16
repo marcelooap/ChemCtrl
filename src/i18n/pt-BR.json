@@ -1852,7 +1852,7 @@
           "title": "Alterar agendamento — {{codigo}}",
           "subtitle": "Selecione o novo dia e horário. A data programada muda ao confirmar.",
           "confirmTitle": "Confirmar alteração",
-          "confirmDescription": "A data programada passará a ser {{date}} às {{time}}. A alteração é gravada ao salvar a solicitação.",
+          "confirmDescription": "A data programada passará a ser {{date}} às {{time}}. O agendamento será salvo ao confirmar.",
           "confirm": "Confirmar",
           "back": "Voltar"
         },
