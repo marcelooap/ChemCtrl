@@ -26,6 +26,7 @@ import {
   formatVolume,
   formatMass,
   parseDensidade,
+  roundMass,
   resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
 import {
@@ -140,12 +141,12 @@ function resolveTransbordoMedida(transbordo) {
   return { embalado: false, unidade: first?.unidade_medida || "L" };
 }
 
-function renderTransbordoVolumeQuantidade(
+/** Volume (L) e massa (kg) canônicos do OP para listagem/totais. */
+function resolveTransbordoVolumeMassaNumeros(
   transbordo,
   { produtos = [], entradas = [] } = {}
 ) {
   const medida = resolveTransbordoMedida(transbordo);
-  const umLabel = labelUnidadeEntrada(medida.unidade);
   const isEmbalado = Boolean(medida.embalado);
   const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
   const vol = Number(transbordo?.volume_total) || 0;
@@ -161,19 +162,25 @@ function renderTransbordoVolumeQuantidade(
   });
 
   if (isEmbalado && !umIsVolume) {
-    const massKg = mass > 0 ? mass : vol;
+    // volume_total persistido em kg/lb. Se massa_total foi corrompida
+    // (kg × dens), usa o volume como massa canônica.
+    const densN = parseDensidade(densidade);
+    let massKg = mass > 0 ? mass : vol;
+    if (
+      vol > 0 &&
+      mass > 0 &&
+      densN > 0 &&
+      Math.abs(densN - 1) > 1e-6 &&
+      Math.abs(mass - roundMass(vol * densN)) <= Math.max(1, Math.abs(vol) * 0.02) &&
+      Math.abs(mass - vol) > Math.max(1, Math.abs(vol) * 0.02)
+    ) {
+      massKg = vol;
+    }
     const { volume: volL } = resolveVolumeMassaOperacional({
       massa: massKg,
       densidade,
     });
-    return {
-      volume:
-        volL > 0 ? `${formatVolume(volL, { empty: "-" })} L` : "-",
-      quantidade:
-        massKg > 0
-          ? `${formatMass(massKg, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
-          : "-",
-    };
+    return { volumeL: volL, massaKg: massKg };
   }
 
   if (isEmbalado && umIsVolume) {
@@ -182,15 +189,10 @@ function renderTransbordoVolumeQuantidade(
       volume: qtdVol,
       densidade,
     });
-    const volTxt =
-      qtdVol > 0
-        ? `${formatVolume(qtdVol, { empty: "-" })} ${umLabel || "L"}`
-        : "-";
-    const qtdTxt =
-      parseDensidade(densidade) > 0 && resolved.massa > 0
-        ? `${formatMass(resolved.massa, { empty: "-" })} kg`
-        : volTxt;
-    return { volume: volTxt, quantidade: qtdTxt };
+    return {
+      volumeL: qtdVol,
+      massaKg: parseDensidade(densidade) > 0 ? resolved.massa : 0,
+    };
   }
 
   const densOk = parseDensidade(densidade) > 0;
@@ -200,14 +202,53 @@ function renderTransbordoVolumeQuantidade(
     massa: densOk ? 0 : mass,
     densidade,
   });
+  return { volumeL: resolved.volume, massaKg: resolved.massa };
+}
+
+function renderTransbordoVolumeQuantidade(
+  transbordo,
+  { produtos = [], entradas = [] } = {}
+) {
+  const medida = resolveTransbordoMedida(transbordo);
+  const umLabel = labelUnidadeEntrada(medida.unidade);
+  const isEmbalado = Boolean(medida.embalado);
+  const umIsVolume = isUnidadeVolumeEntrada(medida.unidade);
+  const { volumeL, massaKg } = resolveTransbordoVolumeMassaNumeros(transbordo, {
+    produtos,
+    entradas,
+  });
+
+  if (isEmbalado && !umIsVolume) {
+    return {
+      volume:
+        volumeL > 0 ? `${formatVolume(volumeL, { empty: "-" })} L` : "-",
+      quantidade:
+        massaKg > 0
+          ? `${formatMass(massaKg, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
+          : "-",
+    };
+  }
+
+  if (isEmbalado && umIsVolume) {
+    const volTxt =
+      volumeL > 0
+        ? `${formatVolume(volumeL, { empty: "-" })} ${umLabel || "L"}`
+        : "-";
+    const qtdTxt =
+      massaKg > 0
+        ? `${formatMass(massaKg, { empty: "-" })} kg`
+        : volTxt;
+    return { volume: volTxt, quantidade: qtdTxt };
+  }
+
   return {
     volume:
-      resolved.volume > 0
-        ? `${formatVolume(resolved.volume, { empty: "-" })} L`
+      volumeL > 0
+        ? `${formatVolume(volumeL, { empty: "-" })} L`
         : "-",
     quantidade:
-      resolved.massa > 0
-        ? `${formatMass(resolved.massa, { empty: "-" })} kg`
+      massaKg > 0
+        ? `${formatMass(massaKg, { empty: "-" })} kg`
         : "-",
   };
 }
@@ -513,8 +554,15 @@ export default function Transbordo() {
     ...clientes,
   ];
 
-  const totalVolume = filtered.reduce((sum, t) => sum + (t.volume_total || 0), 0);
-  const totalMassa = filtered.reduce((sum, t) => sum + (t.massa_total || 0), 0);
+  const densCtx = { produtos, entradas };
+  const totalVolume = filtered.reduce((sum, t) => {
+    const { volumeL } = resolveTransbordoVolumeMassaNumeros(t, densCtx);
+    return sum + (volumeL || 0);
+  }, 0);
+  const totalMassa = filtered.reduce((sum, t) => {
+    const { massaKg } = resolveTransbordoVolumeMassaNumeros(t, densCtx);
+    return sum + (massaKg || 0);
+  }, 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">

@@ -242,9 +242,11 @@ export function validarItensEmbalado({
           ? tipo === 'embalado'
           : Boolean(e.embalado || e.lotes?.[0]?.embalado);
         if (!embalado) return sum;
+        // Mesma regra da agregação de lotes: preferir cliente da entrada,
+        // com fallback para o cliente selecionado no formulário.
         const eChave = buildChave?.({
-          clienteId: e.cliente_id,
-          clienteNome: e.cliente_nome,
+          clienteId: e.cliente_id ?? clienteId,
+          clienteNome: e.cliente_nome ?? clienteNome,
           produtoCodigo: e.produto_codigo,
           lote: e.lote,
           unidade: e.unidade_medida || unidade,

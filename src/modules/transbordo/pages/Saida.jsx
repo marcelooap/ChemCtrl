@@ -76,6 +76,7 @@ import {
   healSaidaVolumesFromVasilhames,
   repairVolumeFromDestinosPatch,
 } from "@transbordo/lib/vasilhameComposicao";
+import { healTransbordoDensidadeMassaPatch } from "@transbordo/lib/densidadeOperacional";
 import { loadTransbordoWorkspaceLists } from "@transbordo/services/transbordoWorkspace";
 
 const STATUS_OPTIONS_VALIDACAO = [
@@ -245,17 +246,46 @@ export default function Saida({
         vasilhames: vascs,
       });
       void persistDeclaredVolumeDecimals(volumes);
+
+      let transbordosAlinhados = volumes.transbordos || [];
+      try {
+        const densCtx = {
+          entradas: [...(volumes.estoque || []), ...(entradasDoc || [])],
+        };
+        const densUpdates = [];
+        const nextTrans = [];
+        for (const t of transbordosAlinhados) {
+          const patch = healTransbordoDensidadeMassaPatch(t, densCtx);
+          if (!patch) {
+            nextTrans.push(t);
+            continue;
+          }
+          densUpdates.push({ id: t.id, ...patch });
+          nextTrans.push({ ...t, ...patch });
+        }
+        if (densUpdates.length > 0) {
+          await entities.transbordos.bulkUpdate(densUpdates);
+        }
+        transbordosAlinhados = nextTrans;
+      } catch (densErr) {
+        console.error(
+          "[Transbordo] Falha ao alinhar densidade/massa dos OPs:",
+          densErr
+        );
+      }
+
       let list = saics || [];
       let vasilhamesAlinhados = volumes.vasilhames;
       try {
         const healed = await healLinkedLotes({
           estoqueRows: volumes.estoque,
-          transbordos: volumes.transbordos,
+          transbordos: transbordosAlinhados,
           vasilhames: volumes.vasilhames,
           saidas: list,
         });
         list = healed.saidas || list;
         vasilhamesAlinhados = healed.vasilhames || volumes.vasilhames;
+        transbordosAlinhados = healed.transbordos || transbordosAlinhados;
       } catch (err) {
         console.error("[Transbordo] Falha ao alinhar lote das saídas:", err);
       }
@@ -264,7 +294,7 @@ export default function Saida({
         for (const row of vasilhamesAlinhados || []) {
           const patch = repairVolumeFromDestinosPatch(
             row,
-            volumes.transbordos
+            transbordosAlinhados
           );
           if (!patch) {
             repaired.push(row);
@@ -289,7 +319,7 @@ export default function Saida({
         const volHealed = await healSaidaVolumesFromVasilhames({
           saidas: list,
           vasilhames: vasilhamesAlinhados,
-          transbordos: volumes.transbordos,
+          transbordos: transbordosAlinhados,
           entitiesApi: entities,
         });
         list = volHealed.saidas || list;
@@ -319,7 +349,7 @@ export default function Saida({
       setClientes(cliens);
       setEntradas(volumes.estoque);
       setVasilhames(vasilhamesAlinhados);
-      setTransbordos(volumes.transbordos || []);
+      setTransbordos(transbordosAlinhados);
       setExpedidasIds(expedidas instanceof Set ? expedidas : new Set());
       setAgendamentos(Array.isArray(agends) ? agends : []);
     } catch {

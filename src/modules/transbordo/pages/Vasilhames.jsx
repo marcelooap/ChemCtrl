@@ -72,6 +72,7 @@ import {
   syncSaidaVolumeDoVasilhame,
 } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
+  healTransbordoDensidadeMassaPatch,
   healVasilhameDensidadeMassaPatch,
   resolveDensidadeVasilhame,
 } from "@transbordo/lib/densidadeOperacional";
@@ -239,20 +240,32 @@ function renderVolumeQuantidadeCells(
   const densidade = dens;
 
   if (isEmbalado && !umIsVolume) {
+    // Envasado em L: litros operacionais do tanque prevalecem sobre massa÷dens
+    // (evita 1.665 L quando o heal corrompeu peso com dens×kg).
+    const volL = Number(vDisplay.volume) || 0;
+    const densN = parseDensidade(densidade);
     const massKg =
-      Number(vDisplay.peso_liquido) > 0
-        ? Number(vDisplay.peso_liquido)
-        : Number(vDisplay.volume) || 0;
-    const { volume: volL } = resolveVolumeMassaOperacional({
-      massa: massKg,
-      densidade,
-    });
+      densN > 0 && volL > 0
+        ? roundMass(volL * densN)
+        : Number(vDisplay.peso_liquido) > 0
+          ? Number(vDisplay.peso_liquido)
+          : 0;
+    const volTxt =
+      volL > 0
+        ? `${formatVolume(volL, { empty: "-" })} L`
+        : (() => {
+            const fromMass = resolveVolumeMassaOperacional({
+              massa: massKg,
+              densidade,
+            }).volume;
+            return fromMass > 0
+              ? `${formatVolume(fromMass, { empty: "-" })} L`
+              : "-";
+          })();
     const qtdTxt =
       massKg > 0
         ? `${formatMass(massKg, { empty: "-" })}${umLabel ? ` ${umLabel}` : ""}`
         : "-";
-    const volTxt =
-      volL > 0 ? `${formatVolume(volL, { empty: "-" })} L` : "-";
     return {
       volume: <span className="whitespace-nowrap">{volTxt}</span>,
       quantidade: (
@@ -443,6 +456,36 @@ export default function Vasilhames() {
         vasilhames: vasilhameRows,
       });
       void persistDeclaredVolumeDecimals(volumes);
+
+      // Repara massa de OPs embalados (evita dens × kg no volume persistido).
+      let transbordosAlinhados = volumes.transbordos || [];
+      try {
+        const densCtxOp = {
+          produtos: prods,
+          entradas: [...(volumes.estoque || []), ...(ents || [])],
+        };
+        const densUpdates = [];
+        const nextTrans = [];
+        for (const t of transbordosAlinhados) {
+          const patch = healTransbordoDensidadeMassaPatch(t, densCtxOp);
+          if (!patch) {
+            nextTrans.push(t);
+            continue;
+          }
+          densUpdates.push({ id: t.id, ...patch });
+          nextTrans.push({ ...t, ...patch });
+        }
+        if (densUpdates.length > 0) {
+          await entities.transbordos.bulkUpdate(densUpdates);
+        }
+        transbordosAlinhados = nextTrans;
+      } catch (densErr) {
+        console.error(
+          "[Transbordo] Falha ao alinhar densidade/massa dos OPs:",
+          densErr
+        );
+      }
+
       const vasById = new Map(
         (volumes.vasilhames || []).filter((v) => v?.id).map((v) => [v.id, v])
       );
@@ -458,12 +501,12 @@ export default function Vasilhames() {
         const source = vasById.get(raw.id) || raw;
         const patchDestinos = repairVolumeFromDestinosPatch(
           source,
-          volumes.transbordos
+          transbordosAlinhados
         );
-        const patchPlaca = collapsedPlacaHealPatch(source, volumes.transbordos);
+        const patchPlaca = collapsedPlacaHealPatch(source, transbordosAlinhados);
         const patchKgL = repairEmbaladoKgStoredAsLitersPatch(
           source,
-          volumes.transbordos
+          transbordosAlinhados
         );
         const afterStructural = {
           ...source,
@@ -474,7 +517,7 @@ export default function Vasilhames() {
         const densCtx = {
           produtos: prods,
           entradas: [...(volumes.estoque || []), ...(ents || [])],
-          transbordos: volumes.transbordos,
+          transbordos: transbordosAlinhados,
         };
         // Densidade da entrada do lote (ex.: 0,7908) prevalece sobre dens do produto no OP.
         const patchEntradaDens = healVasilhameDensidadeMassaPatch(
@@ -520,7 +563,7 @@ export default function Vasilhames() {
           if (patchEntradaDens) {
             try {
               await syncSaidaVolumeDoVasilhame(row.id, row, {
-                transbordos: volumes.transbordos,
+                transbordos: transbordosAlinhados,
                 previousVolume: source.volume,
               });
             } catch (syncErr) {
@@ -538,17 +581,17 @@ export default function Vasilhames() {
       }
 
       let aligned = list;
-      let alignedTransbordos = volumes.transbordos;
+      let alignedTransbordos = transbordosAlinhados;
       try {
         const healed = await healLinkedLotes({
           estoqueRows: volumes.estoque,
-          transbordos: volumes.transbordos,
+          transbordos: transbordosAlinhados,
           vasilhames: list,
         });
         aligned = (healed.vasilhames || list).map((row) =>
           normalizeVasilhameLote(row)
         );
-        alignedTransbordos = healed.transbordos || volumes.transbordos;
+        alignedTransbordos = healed.transbordos || transbordosAlinhados;
       } catch (err) {
         console.error("[Transbordo] Falha ao alinhar lote dos vasilhames:", err);
       }

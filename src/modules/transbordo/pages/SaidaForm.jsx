@@ -531,7 +531,8 @@ export default function SaidaForm({
           setError(`Item ${i + 1}: informe a quantidade solicitada.`);
           return;
         }
-        const entradaRef = entradas.find((e) => e.id === item.entrada_id);
+        const entradaRef =
+          entradas.find((e) => sameId(e.id, item.entrada_id)) || null;
         const um = entradaRef?.unidade_medida || item.unidade || "kg";
         const chave =
           item.reserva_chave ||
@@ -766,17 +767,20 @@ export default function SaidaForm({
 
         if (item.tipo === TIPO_EMBALADO) {
           const qtd = item.quantidade_solicitada || 0;
+          const entradaRef =
+            entradas.find((e) => sameId(e.id, item.entrada_id)) || null;
           const unidade =
-            entradas.find((e) => e.id === item.entrada_id)?.unidade_medida ||
-            item.unidade ||
-            "kg";
-          const reservaChave = buildReservaChave({
-            clienteId: clienteIdSalvo,
-            clienteNome: clienteNomeSalvo,
-            produtoCodigo: item.produto_codigo,
-            lote: item.lote,
-            unidade,
-          });
+            entradaRef?.unidade_medida || item.unidade || "kg";
+          // Manter a chave do lote selecionado (cliente do estoque). Recalcular
+          // com o cliente persistido do formulário zera o saldo quando há ids
+          // duplicados do mesmo nome.
+          const reservaChave =
+            item.reserva_chave ||
+            chaveFromEntradaEmbalado(entradaRef, {
+              clienteId: clienteIdSalvo,
+              clienteNome: clienteNomeSalvo,
+              unidadeFallback: unidade,
+            });
           // Saldo agregado do lote ANTES desta linha (para snapshot comercial).
           const saldoLoteAntes = entradas.reduce((sum, e) => {
             if (

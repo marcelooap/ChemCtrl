@@ -11,7 +11,12 @@ import {
   roundMass,
   roundVolume,
 } from "@transbordo/lib/format";
-import { alignComposicaoKgToDensidade } from "@transbordo/lib/vasilhameComposicao";
+import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
+import {
+  alignComposicaoKgToDensidade,
+  isOrigemEmbaladoMassa,
+  resolveVasilhameOperacionalPar,
+} from "@transbordo/lib/vasilhameComposicao";
 
 function sameLote(a, b) {
   return String(a || "").trim() === String(b || "").trim();
@@ -189,9 +194,20 @@ function densChanged(a, b) {
   return Math.abs(parseDensidade(a) - parseDensidade(b)) > 1e-6;
 }
 
+/** Massa (kg) a partir do volume persistido da origem embalada (kg/lb). */
+function massaFromEmbaladoVolumePersistido(qty, unidade) {
+  const raw = roundVolume(qty || 0);
+  if (!(raw > 0)) return 0;
+  const um = normalizeUnidadeEntrada(unidade || "kg");
+  return um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+}
+
 /**
  * Recalcula massa do OP a partir da densidade resolvida.
  * Retorna patch parcial ou null se já estiver coerente.
+ *
+ * Embalado em kg/lb: `volume_*` já é a massa persistida — nunca fazer
+ * volume × densidade de novo (gera 1.500 L → 1.665 kg → 1.848 kg).
  */
 export function healTransbordoDensidadeMassaPatch(
   transbordo,
@@ -213,12 +229,15 @@ export function healTransbordoDensidadeMassaPatch(
   const densAtual = parseDensidade(transbordo.densidade);
   const vol = roundVolume(transbordo.volume_total || 0);
   const massaAtual = roundMass(transbordo.massa_total || 0);
-  const massaAlvo = vol > 0 ? roundMass(vol * dens) : massaAtual;
+  const embaladoMassa = (transbordo.origens || []).some(isOrigemEmbaladoMassa);
 
   const origens = (transbordo.origens || []).map((o) => {
     const oVol = roundVolume(o.volume_retirado || 0);
-    const massa =
-      oVol > 0
+    const massa = isOrigemEmbaladoMassa(o)
+      ? oVol > 0
+        ? massaFromEmbaladoVolumePersistido(oVol, o.unidade_medida)
+        : roundMass(o.massa_retirada || 0)
+      : oVol > 0
         ? roundMass(oVol * dens)
         : roundMass(o.massa_retirada || 0);
     const lotes_retirados = Array.isArray(o.lotes_retirados)
@@ -226,8 +245,13 @@ export function healTransbordoDensidadeMassaPatch(
           const lVol = roundVolume(l.volume_retirado || 0);
           return {
             ...l,
-            massa_retirada:
-              lVol > 0 ? roundMass(lVol * dens) : roundMass(l.massa_retirada || 0),
+            massa_retirada: isOrigemEmbaladoMassa(o)
+              ? lVol > 0
+                ? massaFromEmbaladoVolumePersistido(lVol, o.unidade_medida)
+                : roundMass(l.massa_retirada || 0)
+              : lVol > 0
+                ? roundMass(lVol * dens)
+                : roundMass(l.massa_retirada || 0),
           };
         })
       : o.lotes_retirados;
@@ -236,14 +260,37 @@ export function healTransbordoDensidadeMassaPatch(
 
   const destinos = (transbordo.destinos || []).map((d) => {
     const dVol = roundVolume(d.volume_total || d.volume || 0);
-    const peso =
-      dVol > 0 ? roundMass(dVol * dens) : roundMass(d.peso_liquido || 0);
+    const origemLinked = (origens || []).find(
+      (o) => o?._uid && o._uid === d?.origem_uid
+    );
+    const destinoEmbaladoMassa =
+      isOrigemEmbaladoMassa(origemLinked) ||
+      (embaladoMassa && !origemLinked);
+    const peso = destinoEmbaladoMassa
+      ? dVol > 0
+        ? massaFromEmbaladoVolumePersistido(
+            dVol,
+            origemLinked?.unidade_medida || "kg"
+          )
+        : roundMass(d.peso_liquido || 0)
+      : dVol > 0
+        ? roundMass(dVol * dens)
+        : roundMass(d.peso_liquido || 0);
     return {
       ...d,
       peso_liquido: peso,
       peso_bruto: roundMass((Number(d.tara) || 0) + peso),
     };
   });
+
+  const massaAlvo = embaladoMassa
+    ? roundMass(
+        origens.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0) ||
+          (vol > 0 ? massaFromEmbaladoVolumePersistido(vol, "kg") : massaAtual)
+      )
+    : vol > 0
+      ? roundMass(vol * dens)
+      : massaAtual;
 
   const needsDens = densChanged(densAtual, dens) || !(densAtual > 0);
   const needsMassa =
@@ -293,8 +340,14 @@ export function healVasilhameDensidadeMassaPatch(
   });
   if (!(dens > 0)) return null;
 
+  // Litros operacionais dos destinos prevalecem (evita kg gravado como L).
+  const operacional = resolveVasilhameOperacionalPar(vasilhame, {
+    transbordos,
+    densidade: dens,
+  });
   const volume = roundVolume(
-    vasilhame.volume ||
+    operacional.volume ||
+      vasilhame.volume ||
       (vasilhame.composicao || []).reduce(
         (s, c) => s + (Number(c.quantidade_l) || 0),
         0

@@ -550,7 +550,7 @@ export default function SaidaItemRow({
   // ── Valores dinâmicos ──
   const selectedEntrada =
     item.entrada_id && item.tipo === TIPO_EMBALADO
-      ? entradas.find((e) => e.id === item.entrada_id) || null
+      ? entradas.find((e) => String(e.id) === String(item.entrada_id)) || null
       : null;
   const unidadeEmbalado =
     selectedEntrada?.unidade_medida ||
@@ -560,15 +560,25 @@ export default function SaidaItemRow({
   const isUnidadeVolume = isUnidadeVolumeMedida(unidadeEmbalado);
   const formatQtdEmbalado = (n) => formatQtdPorUnidade(n, unidadeEmbalado);
 
+  // Preferir a chave comercial do lote selecionado (entrada.cliente_id).
+  // Recalcular só com o cliente do formulário quebra o saldo quando o estoque
+  // está ligado a outro id do mesmo nome (ex.: BAKER HUGHES OIC duplicado).
   const chaveEmbalado =
     item.tipo === TIPO_EMBALADO && item.entrada_id
-      ? buildReservaChave({
-          clienteId,
-          clienteNome,
-          produtoCodigo: item.produto_codigo || selectedEntrada?.produto_codigo,
-          lote: item.lote || selectedEntrada?.lote,
-          unidade: unidadeEmbalado,
-        })
+      ? item.reserva_chave ||
+        (selectedEntrada
+          ? chaveFromEntradaEmbalado(selectedEntrada, {
+              clienteId,
+              clienteNome,
+              unidadeFallback: unidadeEmbalado,
+            })
+          : buildReservaChave({
+              clienteId,
+              clienteNome,
+              produtoCodigo: item.produto_codigo,
+              lote: item.lote,
+              unidade: unidadeEmbalado,
+            }))
       : "";
   const opcoesReserva = chaveEmbalado
     ? opcoesReservaEmbalado({
@@ -718,12 +728,10 @@ export default function SaidaItemRow({
       reserva_solicitante: "",
       reserva_chave:
         option.chave ||
-        buildReservaChave({
+        chaveFromEntradaEmbalado(primary, {
           clienteId,
           clienteNome,
-          produtoCodigo: item.produto_codigo || option.produto_codigo,
-          lote,
-          unidade,
+          unidadeFallback: unidade,
         }),
       estoque_alocacoes: null,
       quantidade_solicitada: 0,

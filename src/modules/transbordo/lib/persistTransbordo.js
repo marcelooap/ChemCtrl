@@ -61,14 +61,18 @@ function quantidadeOrigemParaLitros(qty, origem, dens) {
 /** Destino TB: volume_total informado em kg (origem embalada) → litros + peso coerente. */
 function destinoParaOperacaoLitros(d, origens, dens) {
   const origemLinked = origens.find((o) => o._uid && o._uid === d.origem_uid);
-  if (!isOrigemEmbaladoMassa(origemLinked) || !(dens > 0)) return d;
+  const origemEmbalado =
+    origemLinked && isOrigemEmbaladoMassa(origemLinked)
+      ? origemLinked
+      : (origens || []).find(isOrigemEmbaladoMassa) || null;
+  if (!origemEmbalado || !(dens > 0)) return d;
 
   const qtyKg = roundVolume(d.volume_total || d.volume || 0);
-  const volL = quantidadeOrigemParaLitros(qtyKg, origemLinked, dens);
+  const volL = quantidadeOrigemParaLitros(qtyKg, origemEmbalado, dens);
   const volPorEmbQty = roundVolume(d.volume_por_embalagem || 0);
   const volPorEmbL =
     volPorEmbQty > 0
-      ? quantidadeOrigemParaLitros(volPorEmbQty, origemLinked, dens)
+      ? quantidadeOrigemParaLitros(volPorEmbQty, origemEmbalado, dens)
       : 0;
   const peso = roundMass(qtyKg);
 
@@ -712,13 +716,13 @@ export async function persistTransbordo({
             delete c.estoque_id;
             delete c.entrada_id;
           }
-          // Embalado em kg/lb: quantidade_l já é a massa envasada.
-          // Não multiplicar de novo pela densidade.
+          // FIFO já opera em litros (origensFifo / destinosOperacionais).
+          // Embalado: quantidade_kg = L × dens (não copiar o litro como kg).
           const origemEmbaladoMassa =
             (o?.tipo_origem === "embalado" || o?.embalado) &&
             isUnidadeMassaEntrada(o?.unidade_medida || "kg");
-          if (origemEmbaladoMassa) {
-            c.quantidade_kg = roundMass(c.quantidade_l);
+          if (origemEmbaladoMassa && dens > 0) {
+            c.quantidade_kg = roundMass((Number(c.quantidade_l) || 0) * dens);
           }
         }
       }

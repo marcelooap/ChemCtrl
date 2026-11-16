@@ -289,8 +289,37 @@ function alignSlicesToVolume(slices, volume) {
   return next.filter((row) => row.quantidade_l > 0);
 }
 
+/**
+ * Massa canônica do OP embalado: volume_* persistido em kg/lb.
+ * Detecta massa corrompida por dens×kg (ex.: 1.665 → 1.848,15).
+ */
+function massaEmbaladoCanonico(volumePersistido, massaDeclarada, densidade) {
+  const volKg = Number(volumePersistido) || 0;
+  const massKg = Number(massaDeclarada) || 0;
+  const densN = parseDensidade(densidade);
+  if (
+    volKg > 0 &&
+    massKg > 0 &&
+    densN > 0 &&
+    Math.abs(densN - 1) > 1e-6 &&
+    Math.abs(massKg - roundMass(volKg * densN)) <=
+      Math.max(1, Math.abs(volKg) * 0.02) &&
+    Math.abs(massKg - volKg) > Math.max(1, Math.abs(volKg) * 0.02)
+  ) {
+    return volKg;
+  }
+  return massKg > 0 ? massKg : volKg;
+}
+
 function massaDestino(destino, volume, densidade, isMassa) {
-  if (isMassa) return destino?.peso_liquido ?? volume;
+  if (isMassa) {
+    const stored = Number(destino?.peso_liquido);
+    const vol = Number(volume) || 0;
+    if (Number.isFinite(stored) && stored > 0) {
+      return massaEmbaladoCanonico(vol, stored, densidade);
+    }
+    return vol;
+  }
   const vol = Number(volume) || 0;
   const dens = parseDensidade(densidade);
   if (vol > 0 && dens > 0) return vol * dens;
@@ -362,7 +391,7 @@ function buildOrigemRows(
       for (const l of lotes) {
         const vol = l.volume_retirado || 0;
         const massa = origemEmMassa
-          ? vol
+          ? massaEmbaladoCanonico(vol, l.massa_retirada ?? o.massa_retirada, dens)
           : dens > 0
             ? vol * dens
             : o.massa_retirada;
@@ -379,7 +408,7 @@ function buildOrigemRows(
 
     const vol = o.volume_retirado || 0;
     const massa = origemEmMassa
-      ? (o.massa_retirada ?? vol)
+      ? massaEmbaladoCanonico(vol, o.massa_retirada, dens)
       : dens > 0
         ? vol * dens
         : o.massa_retirada;
@@ -507,12 +536,16 @@ export function buildTransbordoViewModel({
       vasilhames,
       densOperacao,
     }),
-    // Granel: volume_total já é L. Embalado em massa: converter a partir da massa.
+    // Granel: volume_total já é L. Embalado em massa: volume_* é kg.
     volumeTotal: isVolume
       ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
       : isMassa
         ? volumeLitrosDisplay(
-            transbordo.massa_total ?? transbordo.volume_total,
+            massaEmbaladoCanonico(
+              transbordo.volume_total,
+              transbordo.massa_total,
+              densOperacao || transbordo.densidade
+            ),
             densOperacao || transbordo.densidade,
             true
           )
@@ -521,7 +554,13 @@ export function buildTransbordoViewModel({
           : "-",
     massaCaption: isMassa ? "Quantidade Total" : "Massa Total",
     massaTotal: isMassa
-      ? `${formatQtyOperacional(transbordo.massa_total ?? transbordo.volume_total)} ${unidadeLabel}`
+      ? `${formatQtyOperacional(
+          massaEmbaladoCanonico(
+            transbordo.volume_total,
+            transbordo.massa_total,
+            densOperacao || transbordo.densidade
+          )
+        )} ${unidadeLabel}`
       : `${formatMass(
           totaisResolvidos.massa || transbordo.massa_total,
           { empty: "-" }

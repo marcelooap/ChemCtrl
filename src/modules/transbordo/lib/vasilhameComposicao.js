@@ -806,8 +806,17 @@ export function resolveFracionadoFromTransbordos(vasilhame, transbordos = []) {
  * Origem embalada em kg grava a quantidade no volume do destino.
  * A soma dos destinos fecha com a massa (kg), não com os litros.
  * Volume já convertido (soma = litros da massa) não entra de novo.
+ *
+ * `volume_retirado` da origem é a fonte da verdade em kg/lb (persistência).
+ * Se `massa_total` foi corrompida por dens×volume (ex.: 4.995→5.544),
+ * ainda assim os volumes dos destinos permanecem em kg.
+ *
+ * Idempotência: cópia marcada com `_operacionalEmLitros` nunca reconverte
+ * (evita 1.665 kg → 1.500 L → 1.351 L).
  */
 function destinosGravadosEmKg(transbordo, dens) {
+  if (transbordo?._operacionalEmLitros) return false;
+
   const densidade = parseDensidade(dens || transbordo?.densidade);
   if (!(densidade > 0)) return false;
   const origens = transbordo?.origens || [];
@@ -820,28 +829,92 @@ function destinosGravadosEmKg(transbordo, dens) {
       0
     )
   );
-  const massaDeclarada = roundMass(transbordo?.massa_total || 0);
-  const massa =
-    massaDeclarada > 0
-      ? massaDeclarada
-      : roundMass(
-          origens.reduce((s, o) => {
-            if (!isOrigemEmbaladoMassa(o)) return s;
-            return s + roundMass(o.massa_retirada || o.volume_retirado || 0);
-          }, 0)
-        );
-  if (!(sumQty > 0) || !(massa > 0)) return false;
+  if (!(sumQty > 0)) return false;
 
   const tol = Math.max(1, destinos.length || 1);
-  if (Math.abs(sumQty - massa) <= tol) return true;
-  const litros = roundVolume(litrosFromMassaKg(massa, densidade));
+
+  // Peso ≈ volume ⇒ ambos em kg (estado saudável do OP embalado).
+  const pesoBateComVolumeKg = destinos.some((d) => {
+    const vol = roundVolume(d.volume_total || d.volume || 0);
+    const peso = roundMass(d.peso_liquido || 0);
+    return vol > 0 && peso > 0 && Math.abs(peso - vol) <= tol;
+  });
+  if (pesoBateComVolumeKg) return true;
+
+  // Já em litros: peso ≈ volume × dens e volume ≠ peso (cópia operacional).
+  const pareceJaEmLitros = destinos.some((d) => {
+    const vol = roundVolume(d.volume_total || d.volume || 0);
+    const peso = roundMass(d.peso_liquido || 0);
+    if (!(vol > 0) || !(peso > 0)) return false;
+    if (Math.abs(peso - vol) <= tol) return false;
+    return Math.abs(peso - roundMass(vol * densidade)) <= Math.max(tol, vol * 0.02);
+  });
+
+  // volume_retirado persistido em kg/lb (nunca usar massa corrompida aqui).
+  const sumOrigVol = roundMass(
+    origens.reduce((s, o) => {
+      if (!isOrigemEmbaladoMassa(o)) return s;
+      return s + roundMass(o.volume_retirado || 0);
+    }, 0)
+  );
+  const sumOrigMassa = roundMass(
+    origens.reduce((s, o) => {
+      if (!isOrigemEmbaladoMassa(o)) return s;
+      return s + roundMass(o.massa_retirada || 0);
+    }, 0)
+  );
+  // Preferir massa_retirada quando volume_retirado já foi convertido para L
+  // na cópia operacional (massa fica em kg, volume vira L).
+  const sumOrigKg =
+    sumOrigMassa > 0 &&
+    sumOrigVol > 0 &&
+    Math.abs(sumOrigMassa - sumOrigVol) > tol &&
+    Math.abs(sumOrigVol - roundVolume(litrosFromMassaKg(sumOrigMassa, densidade))) <=
+      tol
+      ? sumOrigMassa
+      : sumOrigVol > 0
+        ? sumOrigVol
+        : sumOrigMassa;
+
+  const massaDeclarada = roundMass(transbordo?.massa_total || 0);
+
+  // Massa duplicada por dens (volume_kg × dens): volumes ainda são kg.
+  // Tem prioridade sobre "parece litros" porque peso corrompido também é vol×dens.
+  if (
+    massaDeclarada > 0 &&
+    sumOrigKg > 0 &&
+    Math.abs(massaDeclarada - roundMass(sumOrigKg * densidade)) <=
+      Math.max(tol, sumOrigKg * 0.02) &&
+    Math.abs(massaDeclarada - sumOrigKg) > tol &&
+    Math.abs(sumQty - sumOrigKg) <= tol
+  ) {
+    return true;
+  }
+
+  if (sumOrigKg > 0 && Math.abs(sumQty - sumOrigKg) <= tol) {
+    // Só trata como kg se NÃO parecer já convertido para L.
+    if (!pareceJaEmLitros) return true;
+  }
+
+  if (massaDeclarada > 0 && Math.abs(sumQty - massaDeclarada) <= tol) {
+    if (!pareceJaEmLitros) return true;
+  }
+
+  // Já em litros operacionais: fecha com kg÷densidade.
+  const litros = roundVolume(
+    litrosFromMassaKg(sumOrigKg || massaDeclarada, densidade)
+  );
   if (litros > 0 && Math.abs(sumQty - litros) <= tol) return false;
-  return false;
+  if (pareceJaEmLitros) return false;
+
+  // Contrato de persistência: embalado massa grava kg no volume_*.
+  return sumOrigKg > 0 && !pareceJaEmLitros;
 }
 
 /** Copia o transbordo com origens e destinos em litros operacionais. */
 function transbordoOperacionalEmLitros(transbordo) {
-  if (!transbordo || !destinosGravadosEmKg(transbordo)) return transbordo;
+  if (!transbordo || transbordo._operacionalEmLitros) return transbordo;
+  if (!destinosGravadosEmKg(transbordo)) return transbordo;
   const dens = parseDensidade(transbordo.densidade);
   if (!(dens > 0)) return transbordo;
 
@@ -860,13 +933,27 @@ function transbordoOperacionalEmLitros(transbordo) {
       ...d,
       volume: vol,
       volume_total: vol,
+      // Peso canônico = kg do volume persistido (não propagar dens×kg).
       peso_liquido: kg > 0 ? kg : roundMass(d.peso_liquido || 0),
     };
   });
 
   const origens = (transbordo.origens || []).map((o) => {
     if (!isOrigemEmbaladoMassa(o)) return o;
-    const kg = roundMass(o.massa_retirada || o.volume_retirado || 0);
+    // volume_retirado é kg na persistência; massa pode estar corrompida (×dens).
+    const volPersistido = roundMass(o.volume_retirado || 0);
+    const massaRaw = roundMass(o.massa_retirada || 0);
+    const kg =
+      volPersistido > 0 &&
+      massaRaw > 0 &&
+      dens > 0 &&
+      Math.abs(massaRaw - roundMass(volPersistido * dens)) <=
+        Math.max(1, volPersistido * 0.02) &&
+      Math.abs(massaRaw - volPersistido) > Math.max(1, volPersistido * 0.02)
+        ? volPersistido
+        : massaRaw > 0
+          ? massaRaw
+          : volPersistido;
     const lotesRaw = Array.isArray(o.lotes_retirados) ? o.lotes_retirados : null;
     if (lotesRaw && lotesRaw.length > 0) {
       const loteKg = lotesRaw.map((l) => roundMass(l.volume_retirado || 0));
@@ -892,12 +979,18 @@ function transbordoOperacionalEmLitros(transbordo) {
     };
   });
 
-  return { ...transbordo, origens, destinos };
+  return {
+    ...transbordo,
+    origens,
+    destinos,
+    _operacionalEmLitros: true,
+  };
 }
 
 /** Fatias FIFO de um transbordo que caíram nesta placa. */
 export function composicaoFifoNaPlaca(transbordo, placa, barril) {
   if (!transbordo) return [];
+  // Idempotente: se já veio de rebuild em litros, não reconverte (1.500→1.351).
   const op = transbordoOperacionalEmLitros(transbordo);
   const dens = parseDensidade(op.densidade);
   const origensFifo = expandOrigensForFifo(op.origens || [], dens);
@@ -1306,14 +1399,27 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   const storedVol = roundVolume(vasilhame.volume || 0);
   const expected = expectedVolumeFromDestinos(vasilhame, transbordos);
   const storedKg = roundMass(vasilhame.peso_liquido || 0);
+  const densHint =
+    parseDensidade(vasilhame.densidade) ||
+    parseDensidade(expected?.densidade);
   // Volume gravado como kg (1245 no lugar de 1500 L) precisa subir.
+  // Dupla conversão (1.500 L → 1.351 = 1500/dens) também precisa restaurar.
   // Baixa real de origem continua sem devolver o volume do destino.
   const volumeEraKg =
     (expected?.massa > 0 && Math.abs(storedVol - expected.massa) <= 1) ||
     (storedKg > 0 &&
       Math.abs(storedVol - storedKg) <= 1 &&
       volume > storedVol + 0.01);
-  if (!volumeEraKg && storedVol + 0.01 < volume) return null;
+  const volumeDuplaConversao =
+    densHint > 0 &&
+    volume > 0 &&
+    storedVol > 0 &&
+    storedVol + 0.01 < volume &&
+    Math.abs(roundMass(storedVol * densHint) - volume) <=
+      Math.max(1, volume * 0.02);
+  if (!volumeEraKg && !volumeDuplaConversao && storedVol + 0.01 < volume) {
+    return null;
+  }
 
   const storedComp = Array.isArray(vasilhame.composicao)
     ? vasilhame.composicao.filter(
