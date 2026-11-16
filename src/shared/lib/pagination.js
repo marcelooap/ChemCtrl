@@ -26,7 +26,8 @@ export function pageRange(page = 1, pageSize = DEFAULT_PAGE_SIZE) {
 export const LIST_PROJECTIONS = {
   // raw_materials_used é necessário na lista: visualizar e cancelar OP usam o
   // registro da listagem; sem ele as MPs somem e o estoque não é devolvido.
-  Production: 'id,created_date,updated_date,op_number,product,client,lot,status,volume,density,mass,order_id,client_order,recipe_id,recipe_revision,end_time,invoiced,fractional_supply,complement_status,packaging_type,packaging_info,unit_price,total_value,raw_materials_used,public_token',
+  // volume_apontado/volume_pendente: necessários para isComplementPending (badge + ícone PackagePlus).
+  Production: 'id,created_date,updated_date,op_number,product,client,lot,status,volume,density,mass,order_id,client_order,recipe_id,recipe_revision,end_time,invoiced,fractional_supply,complement_status,volume_apontado,volume_pendente,packaging_type,packaging_info,unit_price,total_value,raw_materials_used,public_token',
   RawMaterialStock: 'id,created_date,updated_date,entry_id,mp_code,mp_name,client,lot,current_stock,unit,status_wms,expiry_date',
   Container: 'id,created_date,op_number,production_id,container_number,product,volume,status,packaging_type,lot,net_weight,mass',
   Recipe: 'id,created_date,product_name,revision_number,client,status,price,density',
