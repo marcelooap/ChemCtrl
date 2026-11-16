@@ -716,6 +716,51 @@ export async function syncSaidaLoteDoVasilhame(vasilhameId, oldLote, newLote) {
 }
 
 /**
+ * Propaga placa/barril editados no vasilhame para saídas abertas e checklist
+ * de carregamento. Não altera saídas já enviadas ao fiscal.
+ */
+export async function syncSaidaPlacaDoVasilhame(vasilhameId, vasilhame) {
+  if (!vasilhameId || !vasilhame) return;
+  const nextPlaca = String(vasilhame.placa || vasilhame.container_number || "").trim();
+  const nextBarril = String(
+    vasilhame.barril || vasilhame.barril_number || ""
+  ).trim();
+  const saidas = await entities.saidas.list();
+  const updates = [];
+  for (const saida of saidas || []) {
+    if (saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal") continue;
+    let changed = false;
+    const itens = (saida.itens || []).map((item) => {
+      if (String(item?.vasilhame_id || "") !== String(vasilhameId)) return item;
+      if (!isSaidaVasilhameItem(item)) return item;
+      if (
+        sameText(item.vasilhame_placa, nextPlaca) &&
+        sameText(item.vasilhame_barril, nextBarril)
+      ) {
+        return item;
+      }
+      changed = true;
+      return {
+        ...item,
+        vasilhame_placa: nextPlaca,
+        vasilhame_barril: nextBarril,
+      };
+    });
+    if (changed) updates.push({ id: saida.id, itens });
+  }
+  if (updates.length === 0) return;
+  await entities.saidas.bulkUpdate(updates);
+  try {
+    await syncChecklistMetricsForSaidaUpdates(updates, vasilhame);
+  } catch (err) {
+    console.error(
+      "[Transbordo] Falha ao sincronizar checklist após ajuste de placa/barril:",
+      err
+    );
+  }
+}
+
+/**
  * Atualiza quantidade / peso líquido / volume nos snapshots de checklist
  * das saídas afetadas (agendamentos com checklist_respostas).
  */
@@ -760,7 +805,10 @@ async function syncChecklistMetricsForSaidaUpdates(saidaUpdates, vasilhame) {
         next.quantidade !== it.quantidade ||
         Number(next.peso_liquido) !== Number(it.peso_liquido) ||
         Number(next.volume_solicitado) !== Number(it.volume_solicitado) ||
-        Number(next.peso_bruto) !== Number(it.peso_bruto)
+        Number(next.peso_bruto) !== Number(it.peso_bruto) ||
+        !sameText(next.vasilhame_placa, it.vasilhame_placa) ||
+        !sameText(next.vasilhame_barril, it.vasilhame_barril) ||
+        next.label !== it.label
       ) {
         changed = true;
       }

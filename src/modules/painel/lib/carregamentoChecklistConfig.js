@@ -303,36 +303,85 @@ export function resolveChecklistPesoLiquido(linha, vasilhame) {
   return linha?.peso_liquido ?? vasilhame?.peso_liquido ?? null;
 }
 
+/**
+ * Placa/barril do tanque no checklist.
+ * Cadastro vivo do vasilhame prevalece sobre o snapshot da saída
+ * (mesmo critério da solicitação comercial). Tanque vazio usa só o texto digitado.
+ */
+export function resolveChecklistPlacaBarril(item, vasilhame) {
+  if (item?.tanque_vazio || isTanqueVazioItem(item)) {
+    return {
+      placa: String(item?.vasilhame_placa || '').trim(),
+      barril: String(item?.vasilhame_barril || '').trim(),
+    };
+  }
+  const placa = String(
+    vasilhame?.placa ||
+      vasilhame?.container_number ||
+      item?.vasilhame_placa ||
+      item?.container_number ||
+      ''
+  ).trim();
+  const barril = String(
+    vasilhame?.barril ||
+      vasilhame?.barril_number ||
+      item?.vasilhame_barril ||
+      ''
+  ).trim();
+  return { placa, barril };
+}
+
+/** Mantém o prefixo "Tanque 01" / "Tanque Vazio 01" e atualiza o Nº. */
+export function withChecklistTanqueIdentificacao(item, placa, barril) {
+  if (!item) return item;
+  const next = {
+    ...item,
+    vasilhame_placa: placa || '',
+    vasilhame_barril: barril || '',
+  };
+  const prefixMatch = String(item.label || '').match(
+    /^(Tanque(?: Vazio)? \d+)/
+  );
+  if (prefixMatch && (placa || barril)) {
+    next.label = `${prefixMatch[1]} — Nº ${[placa, barril].filter(Boolean).join(' / ')}`;
+  }
+  return next;
+}
+
 /** Atualiza campos de exibição do item de checklist a partir da linha da saída. */
 export function patchChecklistItemFromSaidaLinha(item, linha, vasilhame) {
   if (!item || !linha || item.tanque_vazio) return item;
   const peso_liquido = resolveChecklistPesoLiquido(linha, vasilhame);
   const volume_solicitado =
     linha.volume_solicitado ?? item.volume_solicitado ?? null;
-  return {
-    ...item,
-    quantidade: formatQtdItem({
-      ...linha,
+  const { placa, barril } = resolveChecklistPlacaBarril(
+    { ...item, ...linha },
+    vasilhame
+  );
+  return withChecklistTanqueIdentificacao(
+    {
+      ...item,
+      quantidade: formatQtdItem({
+        ...linha,
+        volume_solicitado,
+        tipo: linha.tipo || item.tipo,
+      }),
+      peso_liquido,
+      peso_bruto: linha.peso_bruto ?? vasilhame?.peso_bruto ?? item.peso_bruto,
       volume_solicitado,
-      tipo: linha.tipo || item.tipo,
-    }),
-    peso_liquido,
-    peso_bruto: linha.peso_bruto ?? vasilhame?.peso_bruto ?? item.peso_bruto,
-    volume_solicitado,
-  };
+    },
+    placa,
+    barril
+  );
 }
 
 function tanqueLabel(item, vasilhame, index) {
-  const placa =
-    item?.vasilhame_placa ||
-    vasilhame?.placa ||
-    item?.container_number ||
-    vasilhame?.container_number ||
-    '';
-  const barril = item?.vasilhame_barril || vasilhame?.barril || vasilhame?.barril_number || '';
+  const { placa, barril } = resolveChecklistPlacaBarril(item, vasilhame);
   const num = placa || barril || String(index + 1).padStart(2, '0');
   const prefix = `Tanque ${String(index + 1).padStart(2, '0')}`;
-  return placa || barril ? `${prefix} — Nº ${[placa, barril].filter(Boolean).join(' / ')}` : `${prefix} — Nº ${num}`;
+  return placa || barril
+    ? `${prefix} — Nº ${[placa, barril].filter(Boolean).join(' / ')}`
+    : `${prefix} — Nº ${num}`;
 }
 
 /**
@@ -518,8 +567,10 @@ export function buildChecklistItemsFromSaidas({
         tanque_vazio: isTanqueVazio,
       });
 
-      const placa = String(linha.vasilhame_placa || '').trim();
-      const barril = String(linha.vasilhame_barril || '').trim();
+      const { placa, barril } = resolveChecklistPlacaBarril(
+        isTanqueVazio ? { ...linha, tanque_vazio: true } : linha,
+        isTanqueVazio ? null : vasilhame
+      );
 
       items.push({
         item_key: itemKey,
@@ -550,12 +601,8 @@ export function buildChecklistItemsFromSaidas({
           : linha.quantidade_embalagens ?? null,
         unidade: isTanqueVazio ? '' : linha.unidade || (isConv ? 'L' : 'kg'),
         vasilhame_id: isTanqueVazio ? null : linha.vasilhame_id || null,
-        vasilhame_placa: isTanqueVazio
-          ? placa
-          : linha.vasilhame_placa || vasilhame?.placa || '',
-        vasilhame_barril: isTanqueVazio
-          ? barril
-          : linha.vasilhame_barril || vasilhame?.barril || '',
+        vasilhame_placa: placa,
+        vasilhame_barril: barril,
         peso_liquido: isTanqueVazio
           ? null
           : resolveChecklistPesoLiquido(linha, vasilhame),
@@ -823,13 +870,45 @@ export function findChecklistItemForSaidaLinha(checklistItems, saida, linha, ind
 }
 
 /**
- * Extrai itens de checklist de um booking (checklist_respostas), filtrando por saída.
+ * Atualiza placa/barril/label dos itens a partir do cadastro vivo dos vasilhames.
  */
-export function checklistItemsFromBooking(booking, saidaId = null) {
+export function enrichChecklistItemsFromVasilhames(items, vasilhames = []) {
+  if (!items?.length || !vasilhames?.length) return items || [];
+  const byId = new Map(
+    (vasilhames || [])
+      .filter((v) => v?.id != null)
+      .map((v) => [String(v.id), v])
+  );
+  return items.map((it) => {
+    if (!it?.vasilhame_id || it.tanque_vazio) return it;
+    const vasilhame = byId.get(String(it.vasilhame_id));
+    if (!vasilhame) return it;
+    const { placa, barril } = resolveChecklistPlacaBarril(it, vasilhame);
+    if (
+      String(it.vasilhame_placa || '') === placa &&
+      String(it.vasilhame_barril || '') === barril
+    ) {
+      return it;
+    }
+    return withChecklistTanqueIdentificacao(it, placa, barril);
+  });
+}
+
+/**
+ * Extrai itens de checklist de um booking (checklist_respostas), filtrando por saída.
+ * Com `vasilhames`, o nº do tanque acompanha o cadastro vivo (não o snapshot antigo).
+ */
+export function checklistItemsFromBooking(
+  booking,
+  saidaId = null,
+  { vasilhames } = {}
+) {
   const parsed = parseStoredChecklist(booking?.checklist_respostas);
-  const items = parsed.items || [];
-  if (!saidaId) return items;
-  return items.filter((it) => String(it.saida_id) === String(saidaId));
+  let items = parsed.items || [];
+  if (saidaId) {
+    items = items.filter((it) => String(it.saida_id) === String(saidaId));
+  }
+  return enrichChecklistItemsFromVasilhames(items, vasilhames);
 }
 
 /**

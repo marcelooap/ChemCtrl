@@ -74,11 +74,12 @@ function tankSearchTokens(saidasResolvidas = [], vasilhames = []) {
       const vasilhame = resolveVasilhameDaSaida(item, vasilhames, {
         preferPatio: false,
       });
+      // Cadastro vivo prevalece — busca encontra o nº corrigido no vasilhame.
       const placa = String(
-        item?.vasilhame_placa || vasilhame?.placa || vasilhame?.container_number || ''
+        vasilhame?.placa || vasilhame?.container_number || item?.vasilhame_placa || ''
       ).trim();
       const barril = String(
-        item?.vasilhame_barril ?? vasilhame?.barril ?? vasilhame?.barril_number ?? ''
+        vasilhame?.barril ?? vasilhame?.barril_number ?? item?.vasilhame_barril ?? ''
       ).trim();
       if (placa && placa !== '—' && placa !== '-') tokens.push(placa);
       if (barril && barril !== '—' && barril !== '-') tokens.push(barril);
@@ -318,7 +319,9 @@ export default function LogisticaCarregamentos() {
         });
         return;
       }
-      setViewChecklistItems(checklistItemsFromBooking(booking, saida.id));
+      setViewChecklistItems(
+        checklistItemsFromBooking(booking, saida.id, { vasilhames })
+      );
       setViewAgendamento(booking);
       setViewSaida(saida);
       return;
@@ -617,7 +620,9 @@ export default function LogisticaCarregamentos() {
                     });
                     return;
                   }
-                  setViewChecklistItems(checklistItemsFromBooking(row, saida.id));
+                  setViewChecklistItems(
+                    checklistItemsFromBooking(row, saida.id, { vasilhames })
+                  );
                   setViewAgendamento(row);
                   setViewSaida(saida);
                 }}

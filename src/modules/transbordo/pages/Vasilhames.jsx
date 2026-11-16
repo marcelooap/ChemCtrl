@@ -77,6 +77,7 @@ import {
 import {
   healLinkedLotes,
   syncSaidaLoteDoVasilhame,
+  syncSaidaPlacaDoVasilhame,
   syncSaidaVolumeDoVasilhame,
 } from "@transbordo/lib/cascadeEntradaUpdate";
 import {
@@ -1277,6 +1278,16 @@ export default function Vasilhames() {
         } catch (err) {
           console.error(
             "[Transbordo] Falha ao atualizar volume/peso nas saídas e checklist:",
+            err
+          );
+        }
+      }
+      if (identificacaoChanged) {
+        try {
+          await syncSaidaPlacaDoVasilhame(editingVasilhame.id, saved);
+        } catch (err) {
+          console.error(
+            "[Transbordo] Falha ao atualizar placa/barril nas saídas e checklist:",
             err
           );
         }
