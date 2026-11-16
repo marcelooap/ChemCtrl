@@ -39,6 +39,7 @@ export const LIST_PROJECTIONS = {
     'id,created_at,codigo,cliente_id,cliente_nome,produto_id,produto_nome,status,volume,massa,densidade,lote,composicao,transbordo_id,placa,fracionado,capacidade,tipo',
   t_transbordos:
     'id,created_at,data,produto_id,produto_nome,cliente_id,cliente_nome,status,densidade,volume_total,massa_total,origens,destinos,operadores,lote',
+  // Colunas reais de t_agendamentos_carregamento (saida_id singular; destino vem de t_saidas).
   t_agendamentos_carregamento:
-    'id,created_at,data,hora_carregamento,status,saida_ids,cliente_nome,destino,placa,motorista,transportadora,checklist,grupo_conclusao_id',
+    'id,created_at,updated_at,data,horario,hora_carregamento,data_carregamento,status,saida_id,saida_codigo,cliente_nome,placa,motorista,transportadora,checklist_respostas,grupo_conclusao_id,operador_conclusao_nome,usuario_nome,justificativa_atraso_responsavel,justificativa_atraso_motivo',
 };
