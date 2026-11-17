@@ -31,6 +31,26 @@ import { calcPriceWithoutTax } from '@industrializacao/lib/recipePricing';
 import { addValidityDays } from '@industrializacao/lib/qualityValidity';
 // eslint-disable-next-line
 import { getSignedFileUrl } from '@industrializacao/api/storage'; // storage module (split from supabaseClient)
+import {
+  M as LAYOUT_M,
+  PW as LAYOUT_PW,
+  PH as LAYOUT_PH,
+  CW as LAYOUT_CW,
+  CARD_R as LAYOUT_CARD_R,
+  MUTED as LAYOUT_MUTED,
+  BLUE as LAYOUT_BLUE,
+  BLUE_DARK as LAYOUT_BLUE_DARK,
+  BORDER as LAYOUT_BORDER,
+  TEXT as LAYOUT_TEXT,
+  drawSectionTitle,
+  drawSoftTable,
+  paintFooter,
+  setPdfFooter,
+  ensurePdfSpace,
+  setColor as layoutSetColor,
+  setDraw as layoutSetDraw,
+  setFill as layoutSetFill,
+} from '@transbordo/lib/pdfReportLayout';
 
 const parseArr = (val) => {
   if (!val) return [];
@@ -1154,26 +1174,235 @@ export function generateEnsaioPDF(test) {
   doc.save('ensaio-' + (test.product || 'ensaio').replace(/\s+/g, '-') + '.pdf');
 }
 
+const INTERTANK_LOGO_URL = '/icons/intertank-logo.png';
+const INTERTANK_LOGO_FALLBACK =
+  'https://media.base44.com/images/public/6a3bc68b6dcf809125758419/afb4730f3_image.png';
+
+async function loadCoaLogoDataUrl() {
+  const sources = [INTERTANK_LOGO_URL, INTERTANK_LOGO_FALLBACK];
+  for (const url of sources) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      const reader = new FileReader();
+      const dataUrl = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      if (typeof dataUrl === 'string' && dataUrl.startsWith('data:')) return dataUrl;
+    } catch (_e) {}
+  }
+  return null;
+}
+
+function drawCoaHeader(doc, { title, subtitle, footerCenter, logoDataUrl }) {
+  setPdfFooter(doc, { center: footerCenter || '' });
+
+  const logoW = 36;
+  const logoH = 17.5;
+  const logoX = LAYOUT_PW - LAYOUT_M - logoW;
+  const textMaxW = LAYOUT_CW - (logoDataUrl ? logoW + 6 : 0);
+
+  let y = 10;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  layoutSetColor(doc, LAYOUT_MUTED);
+  doc.text('ChemCtrl', LAYOUT_M, y + 4);
+
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', logoX, y - 1, logoW, logoH);
+    } catch (_e) {}
+  }
+
+  y += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  layoutSetColor(doc, LAYOUT_BLUE_DARK);
+  const titleLines = doc.splitTextToSize(String(title || ''), textMaxW);
+  doc.text(titleLines, LAYOUT_M, y);
+  y += Math.max(6, titleLines.length * 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  layoutSetColor(doc, LAYOUT_MUTED);
+  const subLines = doc.splitTextToSize(String(subtitle || '—'), textMaxW);
+  doc.text(subLines, LAYOUT_M, y);
+  y += subLines.length * 4 + 1;
+
+  // Garante folga abaixo do logo antes da linha divisória
+  if (logoDataUrl) y = Math.max(y, 10 + logoH + 2);
+
+  layoutSetDraw(doc, LAYOUT_BLUE);
+  doc.setLineWidth(0.5);
+  doc.line(LAYOUT_M, y, LAYOUT_PW - LAYOUT_M, y);
+  doc.setLineWidth(0.2);
+  layoutSetColor(doc, LAYOUT_TEXT);
+  return y + 5;
+}
+
+function drawCoaSectionTitleWithAside(doc, y, title, aside) {
+  const barW = 2;
+  const titleGap = 5;
+  const asideGap = 6;
+  const titleFs = 10;
+  const asideFs = 6.2;
+  const asideLineH = 3;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(titleFs);
+  const titleW = doc.getTextWidth(String(title));
+  const asideMaxW = Math.max(40, LAYOUT_CW - titleGap - titleW - asideGap - barW);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(asideFs);
+  const asideLines = aside
+    ? doc.splitTextToSize(String(aside), asideMaxW)
+    : [];
+  const asideBlockH = asideLines.length ? asideLines.length * asideLineH : 0;
+  const rowH = Math.max(6.5, asideBlockH + 1);
+
+  layoutSetFill(doc, LAYOUT_BLUE);
+  doc.roundedRect(LAYOUT_M, y + 0.5, barW, 5.5, 0.6, 0.6, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(titleFs);
+  layoutSetColor(doc, LAYOUT_BLUE_DARK);
+  doc.text(String(title), LAYOUT_M + titleGap, y + 4.8);
+
+  if (asideLines.length) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(asideFs);
+    layoutSetColor(doc, LAYOUT_MUTED);
+    const asideX = LAYOUT_M + LAYOUT_CW;
+    asideLines.forEach((line, i) => {
+      doc.text(line, asideX, y + 3 + i * asideLineH, { align: 'right' });
+    });
+  }
+
+  layoutSetColor(doc, LAYOUT_TEXT);
+  return y + Math.max(9, rowH + 2);
+}
+
+/** Grade contínua em 2 colunas (estilo antigo), com borda arredondada do layout novo. */
+function addCoaInfoTable(doc, y, pairs, cols = 2) {
+  const labelFs = 6;
+  const valueFs = 8.5;
+  const lineH = 3.5;
+  const padX = 2.8;
+  const padTop = 2.2;
+  const padLabelGap = 5.8;
+  const padBottom = 2;
+  const colW = LAYOUT_CW / cols;
+
+  const rowsData = [];
+  let currentRow = [];
+  let usedCols = 0;
+  for (const p of pairs || []) {
+    const span = p[2] || 1;
+    if (usedCols + span > cols && currentRow.length > 0) {
+      rowsData.push(currentRow);
+      currentRow = [];
+      usedCols = 0;
+    }
+    currentRow.push({ label: p[0], value: p[1], span });
+    usedCols += span;
+    if (usedCols >= cols) {
+      rowsData.push(currentRow);
+      currentRow = [];
+      usedCols = 0;
+    }
+  }
+  if (currentRow.length > 0) rowsData.push(currentRow);
+
+  const rowHeights = rowsData.map((row) => {
+    let maxH = padTop + padLabelGap + lineH + padBottom;
+    row.forEach((cell) => {
+      const cellW = colW * cell.span;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFs);
+      const lines = doc.splitTextToSize(
+        String(cell.value != null && cell.value !== '' ? cell.value : '-'),
+        Math.max(8, cellW - padX * 2)
+      );
+      const textH = padTop + padLabelGap + lines.length * lineH + padBottom;
+      if (textH > maxH) maxH = textH;
+    });
+    return maxH;
+  });
+  const totalH = rowHeights.reduce((a, b) => a + b, 0);
+
+  y = ensurePdfSpace(doc, y, totalH + 4);
+
+  layoutSetDraw(doc, LAYOUT_BORDER);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(LAYOUT_M, y, LAYOUT_CW, totalH, LAYOUT_CARD_R, LAYOUT_CARD_R, 'S');
+
+  let yy = y;
+  rowsData.forEach((row, ri) => {
+    const rowH = rowHeights[ri];
+    let x = LAYOUT_M;
+
+    row.forEach((cell) => {
+      const cellW = colW * cell.span;
+      if (x > LAYOUT_M) {
+        layoutSetDraw(doc, LAYOUT_BORDER);
+        doc.setLineWidth(0.2);
+        doc.line(x, yy, x, yy + rowH);
+      }
+
+      doc.setFontSize(labelFs);
+      doc.setFont('helvetica', 'bold');
+      layoutSetColor(doc, LAYOUT_MUTED);
+      doc.text(String(cell.label).toUpperCase(), x + padX, yy + padTop + 2);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(valueFs);
+      layoutSetColor(doc, LAYOUT_TEXT);
+      const lines = doc.splitTextToSize(
+        String(cell.value != null && cell.value !== '' ? cell.value : '-'),
+        Math.max(8, cellW - padX * 2)
+      );
+      doc.text(lines, x + padX, yy + padTop + padLabelGap);
+      x += cellW;
+    });
+
+    if (ri < rowsData.length - 1) {
+      layoutSetDraw(doc, LAYOUT_BORDER);
+      doc.setLineWidth(0.2);
+      doc.line(LAYOUT_M, yy + rowH, LAYOUT_M + LAYOUT_CW, yy + rowH);
+    }
+    yy += rowH;
+  });
+
+  layoutSetColor(doc, LAYOUT_TEXT);
+  doc.setLineWidth(0.2);
+  return y + totalH + 3;
+}
+
 export async function generateCOAPDF(result, production, containers, recipe, options) {
   const opts = options || {};
   const { lang, t } = getPdfLabels(opts.locale);
   const { fmtDate, fmtNum } = makePdfFormatters(lang);
-  const doc = new jsPDF();
-  const logoUrl = 'https://media.base44.com/images/public/6a3bc68b6dcf809125758419/afb4730f3_image.png';
-  try {
-    const resp = await fetch(logoUrl);
-    const blob = await resp.blob();
-    const reader = new FileReader();
-    await new Promise(function(resolve) { reader.onload = resolve; reader.readAsDataURL(blob); });
-    doc.addImage(reader.result, 'PNG', PW - M - 38, 8, 38, 18);
-  } catch (_e) {}
-  doc.setFontSize(20); doc.setFont('helvetica', 'bold'); setColor(doc, BLUE_DARK);
-  doc.text(t('pdf.coa.title'), M, 22);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); setColor(doc, GRAY_LABEL);
-  doc.text(t('pdf.coa.subtitle', { product: result.product || '', lot: result.lot || '' }), M, 29);
-  setDraw(doc, BLUE_MID); doc.setLineWidth(0.6); doc.line(M, 33, PW - M, 33); doc.setLineWidth(0.2);
-  let y = 42;
-  y = addSectionTitle(doc, y, t('pdf.coa.sectionProduct'));
+  const doc = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+  const lotLabel = result.lot || result.op_number || '';
+  const subtitle = t('pdf.coa.subtitle', { product: result.product || '', lot: result.lot || '' });
+  const logoDataUrl = await loadCoaLogoDataUrl();
+
+  doc.setProperties({ title: `${t('pdf.coa.title')}${lotLabel ? ` · ${lotLabel}` : ''}` });
+
+  let y = drawCoaHeader(doc, {
+    title: t('pdf.coa.title'),
+    subtitle,
+    footerCenter: lotLabel || '',
+    logoDataUrl,
+  });
+
+  y = drawSectionTitle(doc, y, t('pdf.coa.sectionProduct'));
+
   const mfgDate = production && production.end_time ? fmtDate(production.end_time) : '-';
   const validityDays = Object.prototype.hasOwnProperty.call(opts, 'validityDays')
     ? opts.validityDays
@@ -1183,20 +1412,33 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
     : null;
   const expDate = exp ? fmtDate(exp) : '-';
   const massKg = production && production.mass ? fmtNum(production.mass, 3) + ' kg' : '-';
-  y = addInfoGrid(doc, y, [
-    [t('pdf.coa.fields.manufacturer'), 'OFFSHORE TANKS COMERCIO E SERVICOS EM UNIDADES DE CARGA LTDA', 2],
-    [t('pdf.coa.fields.lot'), result.lot || '-'],
-    [t('pdf.coa.fields.product'), result.product || '-'],
-    [t('pdf.coa.fields.client'), result.client || '-'],
-    [t('pdf.coa.fields.order'), (production && production.client_order) || '-'],
-    [t('pdf.coa.fields.mfgDate'), mfgDate],
-    [t('pdf.coa.fields.expiryDate'), expDate],
-    [t('pdf.coa.fields.quantity'), massKg],
-    [t('pdf.coa.fields.techResponsible'), 'Italo Giuseppe Cantisani CRQ III - 03213117'],
-    [t('pdf.coa.fields.countryOfOrigin'), 'Brasil'],
-    [t('pdf.coa.fields.coaObservations'), result.observations || t('pdf.coa.fields.noObservation'), 2],
-  ], 2);
-  y = addSectionTitle(doc, y, t('pdf.coa.sectionQuality'));
+
+  y = addCoaInfoTable(
+    doc,
+    y,
+    [
+      [t('pdf.coa.fields.manufacturer'), 'OFFSHORE TANKS COMERCIO E SERVICOS EM UNIDADES DE CARGA LTDA', 2],
+      [t('pdf.coa.fields.lot'), result.lot || '-'],
+      [t('pdf.coa.fields.product'), result.product || '-'],
+      [t('pdf.coa.fields.client'), result.client || '-'],
+      [t('pdf.coa.fields.order'), (production && production.client_order) || '-'],
+      [t('pdf.coa.fields.mfgDate'), mfgDate],
+      [t('pdf.coa.fields.expiryDate'), expDate],
+      [t('pdf.coa.fields.quantity'), massKg],
+      [t('pdf.coa.fields.techResponsible'), 'Italo Giuseppe Cantisani CRQ III - 03213117'],
+      [t('pdf.coa.fields.countryOfOrigin'), 'Brasil'],
+      [t('pdf.coa.fields.coaObservations'), result.observations || t('pdf.coa.fields.noObservation')],
+    ],
+    2
+  );
+
+  y = drawCoaSectionTitleWithAside(
+    doc,
+    y,
+    t('pdf.coa.sectionQuality'),
+    t('pdf.coa.disclaimer')
+  );
+
   const headers = [
     t('pdf.coa.columns.analysis'),
     t('pdf.coa.columns.methodology'),
@@ -1215,29 +1457,42 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
     }
     return [r.analysis_name || '-', r.methodology || '-', spec, r.unit || '-', r.result || '-', r.status || '-'];
   });
-  y = addTable(doc, y, headers, rows, [44, 44, 36, 14, 22, 22], null, [0, 1, 2, 4]);
-  y = ensureSpace(doc, y, 14);
+
+  y = drawSoftTable(doc, y, {
+    headerTone: 'dark',
+    headers,
+    widths: [44, 44, 36, 14, 22, 22],
+    aligns: ['left', 'left', 'left', 'center', 'center', 'center'],
+    fontSize: 7.5,
+    headerSize: 6,
+    lineH: 3.3,
+    rows,
+  });
+
   const statuses = (result.results || []).map(function(r) { return r.status; });
-  var finalStatus, finalColor;
-  if (statuses.some(function(s) { return s === 'Reprovado'; })) { finalStatus = 'Reprovado'; finalColor = [153, 27, 27]; }
-  else if (statuses.length && statuses.every(function(s) { return s === 'Aprovado'; })) { finalStatus = 'Aprovado'; finalColor = [22, 101, 52]; }
-  else { finalStatus = result.status || '-'; finalColor = GRAY_LABEL; }
-  y += 5;
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); setColor(doc, GRAY_LABEL);
-  doc.text(t('pdf.coa.finalResult'), M, y);
-  setColor(doc, finalColor);
-  doc.text(String(finalStatus).toUpperCase(), PW - M, y, { align: 'right' });
-  setColor(doc, BLACK);
-  y += 6;
-  doc.setFontSize(7); doc.setFont('helvetica', 'italic'); setColor(doc, GRAY_LABEL);
-  const disclaimer = t('pdf.coa.disclaimer');
-  const disclaimerLines = doc.splitTextToSize(disclaimer, CW);
-  doc.text(disclaimerLines, M, y); y += disclaimerLines.length * 3.5 + 3;
-  const footerLineY = PH - 13;
-  const phraseCenterY = (y + 8 + footerLineY) / 2;
-  doc.setFontSize(9); doc.setFont('helvetica', 'italic'); setColor(doc, GRAY_LABEL);
-  doc.text(t('pdf.coa.electronicDoc'), PW / 2, phraseCenterY, { align: 'center' });
-  addFooter(doc, lang);
+  let finalStatus;
+  if (statuses.some(function(s) { return s === 'Reprovado'; })) finalStatus = 'Reprovado';
+  else if (statuses.length && statuses.every(function(s) { return s === 'Aprovado'; })) finalStatus = 'Aprovado';
+  else finalStatus = result.status || '-';
+
+  y += 2;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  layoutSetColor(doc, LAYOUT_MUTED);
+  doc.text(t('pdf.coa.finalResult'), LAYOUT_M, y);
+  layoutSetColor(doc, LAYOUT_BLUE_DARK);
+  doc.text(String(finalStatus).toUpperCase(), LAYOUT_PW - LAYOUT_M, y, { align: 'right' });
+  layoutSetColor(doc, LAYOUT_TEXT);
+
+  const footerLineY = LAYOUT_PH - 18;
+  const phraseCenterY = Math.min(footerLineY - 6, Math.max(y + 8, (y + footerLineY) / 2));
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  layoutSetColor(doc, LAYOUT_MUTED);
+  doc.text(t('pdf.coa.electronicDoc'), LAYOUT_PW / 2, phraseCenterY, { align: 'center' });
+  layoutSetColor(doc, LAYOUT_TEXT);
+
+  // Página 2 dedicada apenas à foto da amostra (quando houver).
   if (result.sample_photo_url) {
     try {
       const signedUrl = await getSignedFileUrl(result.sample_photo_url);
@@ -1252,18 +1507,30 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
         ctx.drawImage(bitmap, 0, 0);
         const correctedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
         const props = doc.getImageProperties(correctedDataUrl);
-        const maxW = 160; const maxH = 170;
+        const maxW = 160;
+        const maxH = 190;
         const ratio = props.width / props.height;
-        let imgW = maxW; let imgH = maxW / ratio;
-        if (imgH > maxH) { imgH = maxH; imgW = maxH * ratio; }
-        const imgX = (PW - imgW) / 2;
+        let imgW = maxW;
+        let imgH = maxW / ratio;
+        if (imgH > maxH) {
+          imgH = maxH;
+          imgW = maxH * ratio;
+        }
+        const imgX = (LAYOUT_PW - imgW) / 2;
         doc.addPage();
-        addPageTitle(doc, t('pdf.coa.samplePhoto', { lot: result.lot || '-' }), t('pdf.coa.samplePhotoSubtitle'));
-        doc.addImage(correctedDataUrl, 'JPEG', imgX, 45, imgW, imgH);
-        addFooter(doc, lang);
+        const photoY = drawCoaHeader(doc, {
+          title: t('pdf.coa.samplePhoto', { lot: result.lot || '-' }),
+          subtitle: t('pdf.coa.samplePhotoSubtitle'),
+          footerCenter: lotLabel || '',
+          logoDataUrl,
+        });
+        doc.addImage(correctedDataUrl, 'JPEG', imgX, photoY + 4, imgW, imgH);
       }
     } catch (_e) {}
   }
+
+  paintFooter(doc);
+
   if (opts.returnBlob) {
     return doc.output('blob');
   }
