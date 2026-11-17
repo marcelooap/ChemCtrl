@@ -3962,7 +3962,7 @@
   "rawMaterialStock": {
     "title": "Controle de Estoque",
     "subtitle": "Matérias primas · {{count}} item(s)",
-    "fiscalSubtitle": "Movimentações fiscais · {{count}} registro(s)",
+    "fiscalSubtitle": "Baixas fiscais · {{count}} registro(s)",
     "printLabel": "Imprimir Etiqueta",
     "exportExcel": "Exportar Excel",
     "export": {
@@ -3985,7 +3985,7 @@
     "fiscalSearchPlaceholder": "Buscar por reg., código, produto, cliente ou lote...",
     "views": {
       "stock": "Estoque",
-      "fiscalMovement": "Movimentação Fiscal"
+      "fiscalMovement": "Baixa Fiscal"
     },
     "fiscalTable": {
       "product": "Produto",
@@ -4163,14 +4163,14 @@
       "unusedReturn": "Retorno de MP Não Aplicada"
     },
     "fiscalView": {
-      "title": "Movimentação Fiscal",
+      "title": "Baixa Fiscal",
       "before": "antes",
       "after": "depois",
       "downloadPdf": "Baixar PDF"
     },
     "fiscalDelete": {
-      "title": "Excluir Movimentação Fiscal",
-      "message": "Tem certeza que deseja excluir a movimentação \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nA quantidade será estornada automaticamente ao saldo do estoque.",
+      "title": "Excluir Baixa Fiscal",
+      "message": "Tem certeza que deseja excluir a baixa \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nA quantidade será estornada automaticamente ao saldo do estoque.",
       "confirm": "Sim, excluir e estornar",
       "restored": "{{qty}} {{unit}} estornados para {{entryId}}"
     }
@@ -5027,6 +5027,7 @@
         "expeditions": "Expedições"
       },
       "formTitle": "Novo Transbordo",
+      "formTitleEdit": "Editar Transbordo",
       "generalData": "Dados Gerais",
       "dateRequired": "Data *",
       "productRequired": "Produto *",
@@ -5046,6 +5047,8 @@
       "addDestination": "Adicionar Destino",
       "registering": "Registrando...",
       "register": "Registrar Transbordo",
+      "saving": "Salvando...",
+      "save": "Salvar Alterações",
       "loadUnits": "{{count}} x Unidades de Carga",
       "messages": {
         "selectProduct": "Selecione um produto",
@@ -5055,6 +5058,8 @@
         "volumeMismatch": "A soma dos volumes da origem deve ser igual à soma dos destinos",
         "registered": "Transbordo registrado",
         "registerError": "Erro ao registrar transbordo",
+        "updated": "Transbordo atualizado",
+        "updateError": "Erro ao atualizar transbordo",
         "deleted": "Transbordo excluído",
         "deleteError": "Erro ao excluir transbordo"
       },

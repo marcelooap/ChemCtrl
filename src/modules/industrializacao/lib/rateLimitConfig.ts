@@ -133,6 +133,7 @@ export const RPC_WRITE = new Set<string>([
   'restore_raw_material_stock',
   'deduct_raw_material_stock_batch',
   'adjust_raw_material_stock',
+  't_ajustar_saldo_estoque',
   'persist_transbordo_create',
   'optimistic_update_estoque_mp',
   'optimistic_update_row',

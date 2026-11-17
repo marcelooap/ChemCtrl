@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { entities } from '@transbordo/services/entities';
-import { Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, Scale } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { Switch } from "@shared/components/ui/switch";
@@ -17,6 +17,12 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import EstoqueEditModal from "@transbordo/components/estoque/EstoqueEditModal";
 import EstoqueViewDialog from "@transbordo/components/estoque/EstoqueViewDialog";
+import EstoqueAjusteSaldoModal from "@transbordo/components/estoque/EstoqueAjusteSaldoModal";
+import ConciliacaoEstoqueSection from "@transbordo/components/estoque/ConciliacaoEstoqueSection";
+import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
+import { isAdminUser } from "@industrializacao/lib/permissions";
+import { useToast } from "@shared/components/ui/use-toast";
+import { listAllAjustesManuais } from "@transbordo/lib/estoqueAjusteManual";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 import { formatVolume, formatCurrency, formatQuantidade } from "@transbordo/lib/format";
@@ -59,6 +65,12 @@ const STATUS_OPTIONS = [
   { value: "nok", label: "NOK" },
 ];
 
+const SALDO_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "com_saldo", label: "Com saldo" },
+  { value: "sem_saldo", label: "Sem saldo" },
+];
+
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
 /** Cede o frame para a transição de rota pintar antes do cálculo pesado. */
@@ -89,7 +101,11 @@ const ESTOQUE_BUILD_CHUNK = 40;
  *
  * Processa em chunks com yield para não congelar a UI em ~400 registros.
  */
-async function buildEstoqueView(workspace, entradas = [], { isCurrent } = {}) {
+async function buildEstoqueView(
+  workspace,
+  entradas = [],
+  { isCurrent, ajustes = [] } = {}
+) {
   const volumes = applyDeclaredVolumeDecimals({
     estoque: workspace.estoque,
     entradas,
@@ -101,7 +117,8 @@ async function buildEstoqueView(workspace, entradas = [], { isCurrent } = {}) {
   const saldoCtx = createEstoqueSaldoContext(
     volumes.transbordos,
     saidas,
-    volumes.vasilhames
+    volumes.vasilhames,
+    ajustes
   );
 
   // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
@@ -196,19 +213,26 @@ function SaldoBadge({ children, tone }) {
 }
 
 export default function Estoque() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isAdmin = isAdminUser(user);
   const [estoque, setEstoque] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [entradas, setEntradas] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [saidas, setSaidas] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [ajustesManuais, setAjustesManuais] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
+  const [saldoFilter, setSaldoFilter] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [viewItem, setViewItem] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
+  const [ajusteItem, setAjusteItem] = useState(null);
+  const [ajusteOpen, setAjusteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
@@ -267,7 +291,11 @@ export default function Estoque() {
     }
   }
 
-  const loadData = async ({ silent = false, reconcile = true } = {}) => {
+  const loadData = async ({
+    silent = false,
+    reconcile = true,
+    ajustes: ajustesOverride,
+  } = {}) => {
     const seq = ++loadSeqRef.current;
     const isCurrent = () => seq === loadSeqRef.current;
 
@@ -282,15 +310,20 @@ export default function Estoque() {
     const request = Promise.all([
       loadTransbordoWorkspaceLists({ force: true }),
       entities.clientes.list(),
+      ajustesOverride
+        ? Promise.resolve(ajustesOverride)
+        : listAllAjustesManuais().catch(() => []),
     ]);
 
     // Stale-while-revalidate: cede o frame (rota pinta) e só então calcula.
+    // Peek usa ajustes já em memória (podem estar vazios na 1ª pintura).
     if (cached) {
       setLoading(false);
       await yieldToPaint();
       if (!isCurrent()) return;
       const cachedView = await buildEstoqueView(cached, entradasRef.current, {
         isCurrent,
+        ajustes: ajustesOverride || ajustesManuais,
       });
       if (!isCurrent() || !cachedView) return;
       applyView(cachedView);
@@ -299,8 +332,9 @@ export default function Estoque() {
     }
 
     try {
-      const [workspace, cliens] = await request;
+      const [workspace, cliens, ajustesRows] = await request;
       if (!isCurrent()) return;
+      setAjustesManuais(ajustesRows || []);
 
       // Mesmo objeto do peek (revalidate reaproveitou in-flight): não recalcula.
       const sameSnapshot = Boolean(cached && workspace === cached);
@@ -309,9 +343,18 @@ export default function Estoque() {
         if (!isCurrent()) return;
         const view = await buildEstoqueView(workspace, entradasRef.current, {
           isCurrent,
+          ajustes: ajustesRows || [],
         });
         if (!isCurrent() || !view) return;
         void persistDeclaredVolumeDecimals(view.volumes);
+        applyView(view);
+      } else if (cached && (ajustesRows || []).length > 0) {
+        // Peek pintou sem ledger: recalcula com ajustes frescos.
+        const view = await buildEstoqueView(workspace, entradasRef.current, {
+          isCurrent,
+          ajustes: ajustesRows || [],
+        });
+        if (!isCurrent() || !view) return;
         applyView(view);
       }
       setClientes(uniqueClientesByNome(cliens));
@@ -373,7 +416,18 @@ export default function Estoque() {
           clienteFilter === "Todos os clientes" ||
           e.cliente_nome === clienteFilter;
 
-        return matchSearch && matchStatus && matchCliente;
+        // Mesmo critério visual da coluna Saldo Atual (embalado + tanque + tanka).
+        const saldoAtual =
+          e?.locaisSaldo != null
+            ? somaLocaisEstoque(e.locaisSaldo)
+            : valorNaUnidadeEntrada(e, Number(e.saldo_atual) || 0);
+        const matchSaldo =
+          !saldoFilter ||
+          saldoFilter === "Todos" ||
+          (saldoFilter === "Com saldo" && saldoAtual > 0) ||
+          (saldoFilter === "Sem saldo" && saldoAtual <= 0);
+
+        return matchSearch && matchStatus && matchCliente && matchSaldo;
       })
       .sort((a, b) => {
         const ca = Number(a.codigo_estoque) || 0;
@@ -381,11 +435,17 @@ export default function Estoque() {
         if (ca !== cb) return cb - ca; // mais novo (maior ID) no topo
         return String(b.id || "").localeCompare(String(a.id || ""));
       });
-  }, [estoque, search, statusFilter, clienteFilter, entradaIdMap]);
+  }, [estoque, search, statusFilter, clienteFilter, saldoFilter, entradaIdMap]);
 
   const saldoCtx = useMemo(
-    () => createEstoqueSaldoContext(transbordos, saidas, vasilhames),
-    [transbordos, saidas, vasilhames]
+    () =>
+      createEstoqueSaldoContext(
+        transbordos,
+        saidas,
+        vasilhames,
+        ajustesManuais
+      ),
+    [transbordos, saidas, vasilhames, ajustesManuais]
   );
 
   /**
@@ -450,6 +510,26 @@ export default function Estoque() {
   const handleView = (item) => {
     setViewItem(item);
     setViewOpen(true);
+  };
+
+  const handleAjuste = (item) => {
+    if (!isAdmin) return;
+    setAjusteItem(item);
+    setAjusteOpen(true);
+  };
+
+  const handleAjusteSuccess = async () => {
+    setAjusteOpen(false);
+    setAjusteItem(null);
+    toast({
+      title: "Ajuste realizado",
+      description: "O saldo foi atualizado e o movimento registrado.",
+    });
+    // Não chamar syncEstoqueSaldos aqui: ele recalcula sem o ledger e
+    // sobrescreve saldo_final, anulando o ajuste embalado na UI.
+    const ajustes = await listAllAjustesManuais().catch(() => []);
+    setAjustesManuais(ajustes);
+    await loadData({ silent: true, ajustes });
   };
 
   const handleEditSave = async (data) => {
@@ -663,8 +743,20 @@ export default function Estoque() {
               placeholder="Todos os clientes"
             />
           </div>
+          <div className="w-44">
+            <SearchableSelect
+              value={saldoFilter}
+              onChange={(label) => setSaldoFilter(label)}
+              options={SALDO_OPTIONS}
+              getOptionLabel={(o) => o.label}
+              getOptionValue={(o) => o.value}
+              placeholder="Saldo"
+            />
+          </div>
         </div>
       </div>
+
+      <ConciliacaoEstoqueSection estoqueItems={estoque} />
 
       {/* Table */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -811,6 +903,14 @@ export default function Estoque() {
                         <RowActionButton onClick={() => handleEdit(e)} title="Editar">
                           <Pencil />
                         </RowActionButton>
+                        {isAdmin && (
+                          <RowActionButton
+                            onClick={() => handleAjuste(e)}
+                            title="Ajuste manual de saldo"
+                          >
+                            <Scale />
+                          </RowActionButton>
+                        )}
                         <RowActionButton tone="danger" onClick={() => setDeleteId(e.id)} title="Excluir">
                           <Trash2 />
                         </RowActionButton>
@@ -857,6 +957,20 @@ export default function Estoque() {
         item={editingItem}
       />
 
+      <EstoqueAjusteSaldoModal
+        open={ajusteOpen}
+        onClose={() => {
+          setAjusteOpen(false);
+          setAjusteItem(null);
+        }}
+        onSuccess={handleAjusteSuccess}
+        item={ajusteItem}
+        locaisSaldo={ajusteItem ? locaisMap.get(ajusteItem.id) || {} : {}}
+        vasilhames={vasilhames}
+        transbordos={transbordos}
+        ajustes={ajustesManuais}
+      />
+
       {/* View Dialog */}
       <EstoqueViewDialog
         open={viewOpen}
@@ -870,6 +984,7 @@ export default function Estoque() {
         transbordos={transbordos}
         saidas={saidas}
         vasilhames={vasilhames}
+        ajustes={ajustesManuais}
       />
 
       {/* Delete Confirmation */}

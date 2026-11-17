@@ -73,6 +73,7 @@ import {
   updateTransporte,
 } from "@painel/lib/agendamentosCarregamento";
 import { checklistItemsFromBooking } from "@painel/lib/carregamentoChecklistConfig";
+import { uniqueClientesByNome } from "@painel/lib/recebimentoCatalog";
 import { useSaidaNovas } from "@transbordo/context/SaidaNovasContext";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { healLinkedLotes } from "@transbordo/lib/cascadeEntradaUpdate";
@@ -852,7 +853,13 @@ export default function Saida({
     setFiscalBusyId(null);
   };
 
-  const clienteFilterOptions = [{ id: "all", nome: "Todos os clientes" }, ...clientes];
+  const clienteFilterOptions = useMemo(
+    () => [
+      { id: "all", nome: "Todos os clientes" },
+      ...uniqueClientesByNome(clientes),
+    ],
+    [clientes]
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">
@@ -974,7 +981,7 @@ export default function Saida({
                 )}
                 <th className="px-5 py-3 font-medium">Data Programada</th>
                 <th className="px-5 py-3 font-medium">Dias</th>
-                <th className="px-5 py-3 font-medium">Pedido Cliente</th>
+                <th className="px-5 py-3 font-medium text-center">Pedido Cliente</th>
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Produtos</th>
                 <th className="px-5 py-3 font-medium">Qtd. Total (kg)</th>
@@ -1080,7 +1087,7 @@ export default function Saida({
                         ? "-"
                         : renderDias(s.data_programada)}
                     </td>
-                    <td className="px-5 py-3 text-foreground">
+                    <td className="px-5 py-3 text-foreground text-center">
                       {s.pedido_cliente || "-"}
                     </td>
                     <td className="px-5 py-3 text-foreground">{s.cliente_nome || "-"}</td>
@@ -1272,6 +1279,7 @@ export default function Saida({
         entradas={entradas}
         showRelatorioFiscal={!isExpedicao}
         showChecklistColumn={isExpedicao}
+        showValidadeLacreColumns={isExpedicao}
         checklistItems={
           isExpedicao
             ? checklistItemsFromBooking(

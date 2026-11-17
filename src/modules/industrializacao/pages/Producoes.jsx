@@ -110,6 +110,7 @@ export default function Producoes() {
   const [qrToken, setQrToken] = useState(null);
   const [qrLabel, setQrLabel] = useState('');
   const cqCancelHealRef = useRef('');
+  const openViewRequestRef = useRef(0);
 
   // Corrige legado: OP Cancelado por CQ Reprovado → Finalizado (ex.: OP146)
   useEffect(() => {
@@ -433,18 +434,20 @@ export default function Producoes() {
     }
   };
 
-  const openView = async (p) => {
-    setShowView(true);
-    setViewing(p);
-    let full = p;
-    try {
-      // Projeção da lista omite raw_materials_used e outros campos do detalhe.
-      full = await base44.entities.Production.get(p.id);
-      setViewing(full);
-    } catch (_err) {
-      // Mantém o registro da lista se o get falhar.
+  const mergeEntitiesById = (base = [], extra = []) => {
+    const map = new Map();
+    for (const item of base) {
+      if (item?.id) map.set(item.id, item);
     }
-    const rows = packagingRowsForProduction(containers, containerOrigins, full);
+    for (const item of extra) {
+      if (!item?.id) continue;
+      map.set(item.id, { ...map.get(item.id), ...item });
+    }
+    return Array.from(map.values());
+  };
+
+  const applyPackagingState = (prod, containerList, originsList) => {
+    const rows = packagingRowsForProduction(containerList, originsList, prod);
     setViewPackagingRows(rows);
     const uniqueContainers = [];
     const seen = new Set();
@@ -455,7 +458,83 @@ export default function Producoes() {
       }
     }
     // Fallback to lot-based list when no origin rows yet
-    setViewContainers(uniqueContainers.length ? uniqueContainers : containersOfProductionLot(containers, full));
+    setViewContainers(
+      uniqueContainers.length
+        ? uniqueContainers
+        : containersOfProductionLot(containerList, prod)
+    );
+    return rows;
+  };
+
+  const openView = async (p) => {
+    const requestId = ++openViewRequestRef.current;
+    // Limpa estado de embalagem da OP anterior ANTES de abrir o dialog,
+    // senão packagingRows antigas escondem o botão "Relatório Fiscal dos Tanques".
+    setViewing(p);
+    applyPackagingState(p, containers, containerOrigins);
+    setShowView(true);
+
+    let full = p;
+    try {
+      // Projeção da lista omite raw_materials_used e outros campos do detalhe.
+      full = await base44.entities.Production.get(p.id);
+      if (openViewRequestRef.current !== requestId) return;
+      setViewing(full);
+    } catch (_err) {
+      // Mantém o registro da lista se o get falhar.
+    }
+
+    let containerPool = containers || [];
+    let originsPool = containerOrigins || [];
+    let rows = applyPackagingState(full, containerPool, originsPool);
+
+    // Lista global de containers é limitada (500). Se esta OP não veio na janela,
+    // busca sob demanda para restaurar o relatório fiscal por tanque.
+    if (rows.length === 0 && full?.id) {
+      try {
+        const fetched = [];
+        const byProd = await base44.entities.Container.filter(
+          { production_id: full.id },
+          '-created_date',
+          200
+        );
+        if (Array.isArray(byProd)) fetched.push(...byProd);
+        if (full.op_number) {
+          const byOp = await base44.entities.Container.filter(
+            { op_number: full.op_number },
+            '-created_date',
+            200
+          );
+          if (Array.isArray(byOp)) fetched.push(...byOp);
+        }
+        if (full.lot) {
+          const byLot = await base44.entities.Container.filter(
+            { lot: full.lot },
+            '-created_date',
+            200
+          );
+          if (Array.isArray(byLot)) fetched.push(...byLot);
+        }
+        if (openViewRequestRef.current !== requestId) return;
+        if (fetched.length > 0) {
+          containerPool = mergeEntitiesById(containerPool, fetched);
+          const originLists = await Promise.all(
+            fetched
+              .map((c) => c.id)
+              .filter(Boolean)
+              .slice(0, 50)
+              .map((id) =>
+                base44.entities.ContainerOrigin.filter({ container_id: id }).catch(() => [])
+              )
+          );
+          if (openViewRequestRef.current !== requestId) return;
+          originsPool = mergeEntitiesById(originsPool, originLists.flat().filter(Boolean));
+          applyPackagingState(full, containerPool, originsPool);
+        }
+      } catch (_err) {
+        // Mantém o snapshot já aplicado da lista em memória.
+      }
+    }
   };
 
   return (
@@ -669,7 +748,14 @@ export default function Producoes() {
         transfers={transfers}
         productions={productions}
         open={showView}
-        onOpenChange={setShowView}
+        onOpenChange={(open) => {
+          setShowView(open);
+          if (!open) {
+            openViewRequestRef.current += 1;
+            setViewPackagingRows([]);
+            setViewContainers([]);
+          }
+        }}
         canEditMp={isAdmin}
         savingMp={savingMp}
         onSaveMp={saveMpQuantities}

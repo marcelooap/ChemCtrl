@@ -3417,7 +3417,7 @@
   "rawMaterialStock": {
     "title": "Contrôle de Stock",
     "subtitle": "Matières premières · {{count}} article(s)",
-    "fiscalSubtitle": "Mouvements fiscaux · {{count}} enregistrement(s)",
+    "fiscalSubtitle": "Sorties fiscales · {{count}} enregistrement(s)",
     "printLabel": "Imprimer l'étiquette",
     "exportExcel": "Exporter Excel",
     "export": {
@@ -3440,7 +3440,7 @@
     "fiscalSearchPlaceholder": "Rechercher par rég., code, produit, client ou lot...",
     "views": {
       "stock": "Stock",
-      "fiscalMovement": "Mouvement Fiscal"
+      "fiscalMovement": "Sortie Fiscale"
     },
     "fiscalTable": {
       "product": "Produit",
@@ -3618,14 +3618,14 @@
       "unusedReturn": "Retour MP Non Appliquée"
     },
     "fiscalView": {
-      "title": "Mouvement Fiscal",
+      "title": "Sortie Fiscale",
       "before": "avant",
       "after": "après",
       "downloadPdf": "Télécharger PDF"
     },
     "fiscalDelete": {
-      "title": "Supprimer le Mouvement Fiscal",
-      "message": "Voulez-vous vraiment supprimer le mouvement \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}}) ?\n\nLa quantité sera automatiquement réintégrée au solde du stock.",
+      "title": "Supprimer la Sortie Fiscale",
+      "message": "Voulez-vous vraiment supprimer la sortie \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}}) ?\n\nLa quantité sera automatiquement réintégrée au solde du stock.",
       "confirm": "Oui, supprimer et réintégrer",
       "restored": "{{qty}} {{unit}} réintégrés à {{entryId}}"
     }
@@ -4427,6 +4427,7 @@
         "expeditions": "Expéditions"
       },
       "formTitle": "Nouveau Transfert",
+      "formTitleEdit": "Modifier le Transfert",
       "generalData": "Données Générales",
       "dateRequired": "Date *",
       "productRequired": "Produit *",
@@ -4446,6 +4447,8 @@
       "addDestination": "Ajouter une Destination",
       "registering": "Enregistrement...",
       "register": "Enregistrer le Transfert",
+      "saving": "Enregistrement...",
+      "save": "Enregistrer les Modifications",
       "loadUnits": "{{count}} x Unités de Chargement",
       "messages": {
         "selectProduct": "Sélectionnez un produit",
@@ -4453,6 +4456,8 @@
         "addDestination": "Ajoutez au moins une destination",
         "registered": "Transfert enregistré",
         "registerError": "Erreur lors de l'enregistrement du transfert",
+        "updated": "Transfert mis à jour",
+        "updateError": "Erreur lors de la mise à jour du transfert",
         "deleted": "Transfert supprimé",
         "deleteError": "Erreur lors de la suppression du transfert"
       },

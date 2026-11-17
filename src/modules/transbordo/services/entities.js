@@ -294,6 +294,7 @@ export const entities = {
   estoque: createEstoqueEntity(),
   transbordos: createEntity('t_transbordos'),
   vasilhames: createEntity('t_vasilhames'),
+  estoqueAjustesManuais: createEntity('t_estoque_ajustes_manuais'),
   saidas: createEntity('t_saidas'),
   filtracoes: createEntity('t_filtracoes'),
   elementos_filtrantes: createEntity('t_elementos_filtrantes'),

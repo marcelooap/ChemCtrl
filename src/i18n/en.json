@@ -4043,7 +4043,7 @@
   "rawMaterialStock": {
     "title": "Stock Control",
     "subtitle": "Raw materials · {{count}} item(s)",
-    "fiscalSubtitle": "Fiscal movements · {{count}} record(s)",
+    "fiscalSubtitle": "Fiscal write-offs · {{count}} record(s)",
     "printLabel": "Print Label",
     "exportExcel": "Export Excel",
     "export": {
@@ -4066,7 +4066,7 @@
     "fiscalSearchPlaceholder": "Search by reg., code, product, client or lot...",
     "views": {
       "stock": "Stock",
-      "fiscalMovement": "Fiscal Movement"
+      "fiscalMovement": "Fiscal Write-off"
     },
     "fiscalTable": {
       "product": "Product",
@@ -4244,14 +4244,14 @@
       "unusedReturn": "Unused RM Return"
     },
     "fiscalView": {
-      "title": "Fiscal Movement",
+      "title": "Fiscal Write-off",
       "before": "before",
       "after": "after",
       "downloadPdf": "Download PDF"
     },
     "fiscalDelete": {
-      "title": "Delete Fiscal Movement",
-      "message": "Are you sure you want to delete the \"{{type}}\" movement of {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nThe quantity will be automatically restored to the stock balance.",
+      "title": "Delete Fiscal Write-off",
+      "message": "Are you sure you want to delete the \"{{type}}\" write-off of {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nThe quantity will be automatically restored to the stock balance.",
       "confirm": "Yes, delete and restore",
       "restored": "{{qty}} {{unit}} restored to {{entryId}}"
     }
@@ -5104,6 +5104,7 @@
         "expeditions": "Expeditions"
       },
       "formTitle": "New Transfer",
+      "formTitleEdit": "Edit Transfer",
       "generalData": "General Data",
       "dateRequired": "Date *",
       "productRequired": "Product *",
@@ -5123,6 +5124,8 @@
       "addDestination": "Add Destination",
       "registering": "Registering...",
       "register": "Register Transfer",
+      "saving": "Saving...",
+      "save": "Save Changes",
       "loadUnits": "{{count}} x Load Units",
       "messages": {
         "selectProduct": "Select a product",
@@ -5132,6 +5135,8 @@
         "volumeMismatch": "Origin volumes must equal destination volumes",
         "registered": "Transfer registered",
         "registerError": "Failed to register transfer",
+        "updated": "Transfer updated",
+        "updateError": "Failed to update transfer",
         "deleted": "Transfer deleted",
         "deleteError": "Failed to delete transfer"
       },

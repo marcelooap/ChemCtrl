@@ -65,6 +65,7 @@ import {
   mapIndContainersForEstoqueEnvio,
   resolveQuantidadeFisicaVasilhame,
 } from "@transbordo/lib/estoqueEnvioVasilhames";
+import { listAllAjustesManuais } from "@transbordo/lib/estoqueAjusteManual";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -261,12 +262,13 @@ export default function EstoqueEnvio() {
   const [generating, setGenerating] = useState(false);
   const [viewDetalhe, setViewDetalhe] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
+  const [ajustesManuais, setAjustesManuais] = useState([]);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [ests, vascs, isot, trans, cliens, saics, reservasList, ents] =
+        const [ests, vascs, isot, trans, cliens, saics, reservasList, ents, ajustes] =
           await Promise.all([
             entities.estoque.list(),
             entities.vasilhames.list(),
@@ -276,7 +278,9 @@ export default function EstoqueEnvio() {
             entities.saidas.list(),
             entities.materialReservas.list().catch(() => []),
             entities.entradas.list(),
+            listAllAjustesManuais().catch(() => []),
           ]);
+        setAjustesManuais(ajustes || []);
 
         // Corrige volumes inflados (duplicata de OP / unificação) pelo histórico real
         let vasilhamesOk = Array.isArray(vascs) ? vascs : [];
@@ -315,6 +319,12 @@ export default function EstoqueEnvio() {
           console.warn("[EstoqueEnvio] reparo vasilhames:", vasErr);
         }
 
+        const saldoCtxLoad = createEstoqueSaldoContext(
+          trans,
+          saics,
+          vasilhamesOk,
+          ajustes || []
+        );
         const estoqueWithSaldo = ests
           .filter((e) => !isEstoqueEmbalagemUnitaria(e))
           .map((e) => {
@@ -329,7 +339,8 @@ export default function EstoqueEnvio() {
                 { ...hydrated, quantidade },
                 trans,
                 saics,
-                vasilhamesOk
+                vasilhamesOk,
+                saldoCtxLoad
               ),
             };
           });
@@ -461,7 +472,8 @@ export default function EstoqueEnvio() {
     const saldoCtx = createEstoqueSaldoContext(
       volumes.transbordos,
       saidas,
-      volumes.vasilhames
+      volumes.vasilhames,
+      ajustesManuais
     );
     const corrigidoPorId = new Map(
       (volumes.estoque || []).map((row) => [String(row.id), row])
@@ -499,7 +511,7 @@ export default function EstoqueEnvio() {
         locais,
       };
     });
-  }, [estoque, entradas, transbordos, vasilhames, saidas]);
+  }, [estoque, entradas, transbordos, vasilhames, saidas, ajustesManuais]);
 
   const produtosAgregados = useMemo(() => {
     const map = new Map();

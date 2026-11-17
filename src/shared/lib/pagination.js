@@ -29,7 +29,8 @@ export const LIST_PROJECTIONS = {
   // volume_apontado/volume_pendente: necessários para isComplementPending (badge + ícone PackagePlus).
   Production: 'id,created_date,updated_date,op_number,product,client,lot,status,volume,density,mass,order_id,client_order,recipe_id,recipe_revision,end_time,invoiced,fractional_supply,complement_status,volume_apontado,volume_pendente,packaging_type,packaging_info,unit_price,total_value,raw_materials_used,public_token',
   RawMaterialStock: 'id,created_date,updated_date,entry_id,mp_code,mp_name,client,lot,current_stock,unit,status_wms,expiry_date',
-  Container: 'id,created_date,op_number,production_id,container_number,product,volume,status,packaging_type,lot,net_weight,mass',
+  // type/tare/registration_id: necessários na visualização da OP (envase + relatório fiscal por tanque).
+  Container: 'id,created_date,op_number,production_id,container_number,product,volume,status,packaging_type,lot,net_weight,mass,type,tare,registration_id',
   Recipe: 'id,created_date,product_name,revision_number,client,status,price,density',
   Order: 'id,created_date,order_number,client,client_id,status,client_order,volume,priority',
   // ChemFlow / Transbordo

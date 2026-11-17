@@ -173,7 +173,8 @@ function applyTankaFillFromTransbordo(map, t, isotanqueId, tankaCodigo) {
 }
 
 /**
- * Volume líquido da tanka: Σ destinos Tankagem − Σ origens tipo tanka.
+ * Volume líquido da tanka: Σ destinos Tankagem − Σ origens tipo tanka
+ * + Σ ajustes manuais do ledger (volume_l signed).
  */
 export function computeTankaSaldo({
   isotanqueId,
@@ -182,6 +183,7 @@ export function computeTankaSaldo({
   excludeTransbordoId = null,
   extraOrigens = [],
   extraDestinos = [],
+  ajustes = [],
 }) {
   let entrada = 0;
   let saida = 0;
@@ -221,6 +223,25 @@ export function computeTankaSaldo({
       matchesTanka(o, isotanqueId, tankaCodigo)
     ) {
       saida += roundVolume(o.volume_retirado || 0);
+    }
+  }
+
+  const codigoNorm = normPlaca(tankaCodigo);
+  for (const a of ajustes || []) {
+    if ((a?.tipo_local || "") !== "tanka") continue;
+    const matchId =
+      isotanqueId &&
+      (String(a.tanka_id || "") === String(isotanqueId) ||
+        String(a.vasilhame_id || "") === String(isotanqueId));
+    const matchCodigo =
+      codigoNorm &&
+      (normPlaca(a.tanka_codigo) === codigoNorm ||
+        normPlaca(a.vasilhame_placa) === codigoNorm);
+    if (!matchId && !matchCodigo) continue;
+    const vol = Number(a.volume_l);
+    if (Number.isFinite(vol)) {
+      if (vol >= 0) entrada += roundVolume(vol);
+      else saida += roundVolume(-vol);
     }
   }
 
@@ -500,7 +521,11 @@ function collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo) {
 /**
  * Detalhe completo da tanka para visualização (lotes, massa, envase, OP).
  */
-export function buildTankaDetalhe({ isotanque, transbordos = [] }) {
+export function buildTankaDetalhe({
+  isotanque,
+  transbordos = [],
+  ajustes = [],
+}) {
   if (!isotanque) return null;
 
   const isotanqueId = isotanque.id;
@@ -530,6 +555,7 @@ export function buildTankaDetalhe({ isotanque, transbordos = [] }) {
     isotanqueId,
     tankaCodigo,
     transbordos,
+    ajustes,
   });
 
   const lotesSaldo = computeTankaLotesDisponiveis({
@@ -578,7 +604,45 @@ export function buildTankaDetalhe({ isotanque, transbordos = [] }) {
         .map((o) => o.lote)
         .filter(Boolean)
         .join(", "),
+      tipo: "transbordo",
     };
+  });
+
+  const codigoNorm = normPlaca(tankaCodigo);
+  for (const a of ajustes || []) {
+    if ((a?.tipo_local || "") !== "tanka") continue;
+    const matchId =
+      isotanqueId &&
+      (String(a.tanka_id || "") === String(isotanqueId) ||
+        String(a.vasilhame_id || "") === String(isotanqueId));
+    const matchCodigo =
+      codigoNorm &&
+      (normPlaca(a.tanka_codigo) === codigoNorm ||
+        normPlaca(a.vasilhame_placa) === codigoNorm);
+    if (!matchId && !matchCodigo) continue;
+    const volSigned = Number(a.volume_l);
+    const volume = Number.isFinite(volSigned)
+      ? roundVolume(Math.abs(volSigned))
+      : roundVolume(Math.abs(Number(a.quantidade_signed) || 0));
+    historico.push({
+      codigo: "AJUSTE-MANUAL",
+      data: a.created_at || null,
+      produto_nome: a.produto_nome || "",
+      cliente_nome: a.cliente_nome || "",
+      volume: a.tipo_ajuste === "diminuir" ? -volume : volume,
+      massa: dens > 0 ? roundMass(volume * dens) : 0,
+      operadores: a.usuario_nome ? [a.usuario_nome] : [],
+      lotes: a.lote || "",
+      tipo: "ajuste_manual",
+      justificativa: a.justificativa || "",
+      tipo_ajuste: a.tipo_ajuste || "",
+    });
+  }
+
+  historico.sort((a, b) => {
+    const ta = new Date(a.data || 0).getTime();
+    const tb = new Date(b.data || 0).getTime();
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
   });
 
   return {

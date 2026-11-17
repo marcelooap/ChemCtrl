@@ -24,6 +24,7 @@ import {
   normalizeTankaRow,
   updateTanka,
 } from "@transbordo/lib/cadastroTankaCentral";
+import { listAllAjustesManuais } from "@transbordo/lib/estoqueAjusteManual";
 
 const PRODUCT_COLORS = [
   "#90EE90", "#87CEEB", "#DDA0DD", "#F0E68C", "#FFB6C1",
@@ -55,6 +56,7 @@ export default function Tankagem() {
   const [tankas, setTankas] = useState([]);
   const [transbordos, setTransbordos] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [ajustesManuais, setAjustesManuais] = useState([]);
   const [indContainers, setIndContainers] = useState([]);
   const [indStock, setIndStock] = useState([]);
   const [estoqueFilterItem, setEstoqueFilterItem] = useState(null);
@@ -77,12 +79,13 @@ export default function Tankagem() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [masterRows, trans, vas, ests, ents] = await Promise.all([
+        const [masterRows, trans, vas, ests, ents, ajustes] = await Promise.all([
           listTankas(),
           entities.transbordos.list(),
           entities.vasilhames.list(),
           entities.estoque.list(),
           entities.entradas.list(),
+          listAllAjustesManuais().catch(() => []),
         ]);
         const volumes = applyDeclaredVolumeDecimals({
           estoque: ests,
@@ -94,6 +97,7 @@ export default function Tankagem() {
         setTankas((masterRows || []).map(normalizeTankaRow));
         setTransbordos(volumes.transbordos);
         setVasilhames(volumes.vasilhames);
+        setAjustesManuais(ajustes || []);
 
         try {
           const loadIndList = async (fn) => {
@@ -169,8 +173,9 @@ export default function Tankagem() {
       transbordos,
       indContainers,
       indStock,
+      ajustes: ajustesManuais,
     }).filter((tank) => !tank.orfaoOperacional);
-  }, [tankas, transbordos, indContainers, indStock]);
+  }, [tankas, transbordos, indContainers, indStock, ajustesManuais]);
 
   const sortedTanks = useMemo(() => {
     return [...tanksWithVolume].sort((a, b) => {
@@ -306,6 +311,7 @@ export default function Tankagem() {
             capacidade: tank.isotanque?.capacidade || tank.capacidade,
           },
           transbordos,
+          ajustes: ajustesManuais,
         })
       );
     }

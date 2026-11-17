@@ -85,8 +85,11 @@ export default function ProductionViewDialog({
   const densityOf = (mp) => stockDensityOf(mp, stocks);
   const fiscalOf = (mp) => (editingMp ? (mp.qty_fiscal || 0) : fiscalQtyOf(mp, stocks));
 
-  const packagingRows = packagingRowsProp
-    || packagingRowsForProduction(containers, origins, viewProduction);
+  // Preferir prop explícita do parent (mesmo vazia) para não misturar com cálculo local
+  // enquanto o parent ainda não limpou embalagens da OP anterior.
+  const packagingRows = packagingRowsProp != null
+    ? packagingRowsProp
+    : packagingRowsForProduction(containers, origins, viewProduction);
 
   const rawMaterials = editingMp ? draftMps : parseArr(viewProduction?.raw_materials_used);
   const canShowEditMp = !simplified
@@ -645,6 +648,26 @@ export default function ProductionViewDialog({
               <Button variant="outline" onClick={onGeneratePdf} className="gap-2">
                 <FileText className="w-4 h-4" /> {t('production.actions.generatePdf')}
               </Button>
+              {/* Com embalagens, o botão principal fica acima da tabela; no rodapé
+                  mantemos atalho sempre visível (exige seleção). Sem embalagens,
+                  o botão azul após as MPs já cobre o relatório da OP. */}
+              {onGenerateTanksPdf && packagingRows.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateTanksPdf}
+                  disabled={!hasSelection}
+                  className="gap-2"
+                  title={
+                    !hasSelection
+                      ? t('production.list.selectPackaging', {
+                          defaultValue: 'Selecione a(s) embalagem(ns) para gerar o relatório',
+                        })
+                      : undefined
+                  }
+                >
+                  <FileText className="w-4 h-4" /> {t('production.actions.generateTanksPdf')}
+                </Button>
+              )}
               {viewProduction?.public_token && (
                 <Button variant="outline" onClick={onShowQr} className="gap-2">
                   <QrCode className="w-4 h-4" /> {t('production.list.qrCode')}

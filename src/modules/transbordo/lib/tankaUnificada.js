@@ -312,6 +312,7 @@ export function mergeTankasUnificadas({
   transbordos = [],
   indContainers = [],
   indStock = [],
+  ajustes = [],
 } = {}) {
   const masters = resolveMasterTankas({ tankas });
   const byName = new Map();
@@ -326,6 +327,7 @@ export function mergeTankasUnificadas({
         isotanqueId: m.id,
         tankaCodigo,
         transbordos,
+        ajustes,
       })
     );
 

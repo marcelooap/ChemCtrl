@@ -38,7 +38,9 @@ import {
   alignSaidaItemVolumeToVasilhame,
   healSaidaVolumesFromVasilhames,
   refreshSaidaItemMassaFromVasilhame,
+  resolveVasilhameLoteDatas,
 } from "@transbordo/lib/vasilhameComposicao";
+import { isValidadeIndeterminada } from "@transbordo/lib/entradaForm";
 import { generateRelatorioFiscalSaidaPDF } from "@transbordo/lib/pdfFiscal";
 import {
   generateChecklistCargaPDF,
@@ -125,6 +127,68 @@ function qtdFinalEstoque(item) {
     return `${formatVolume(item.saldo_final)} L`;
   }
   return "—";
+}
+
+function isItemVasilhameTipo(item) {
+  const tipo = String(item?.tipo || "");
+  return (
+    tipo === TIPO_CONVENCIONAL ||
+    tipo === TIPO_IND_VASILHAME ||
+    tipo === "Vasilhame"
+  );
+}
+
+function findEstoqueForItem(item, estoqueById) {
+  if (!item || !estoqueById?.size) return null;
+  for (const id of [item.entrada_id, item.stock_id, item.estoque_id]) {
+    if (!id) continue;
+    const row = estoqueById.get(String(id));
+    if (row) return row;
+  }
+  return null;
+}
+
+/** Validade do item da saída (vasilhame/container/estoque). */
+function formatItemValidade(
+  item,
+  { embalagemSource = null, estoqueById = null, transbordos = [] } = {}
+) {
+  if (isTanqueVazioItem(item)) return "—";
+
+  const estoque = findEstoqueForItem(item, estoqueById);
+  const sources = [item, embalagemSource, estoque].filter(Boolean);
+  if (sources.some((s) => isValidadeIndeterminada(s))) return "Indeterminado";
+
+  const isTransbordoVasilhame =
+    item?.tipo === TIPO_CONVENCIONAL ||
+    Array.isArray(embalagemSource?.composicao);
+
+  if (isTransbordoVasilhame && embalagemSource) {
+    const datas = resolveVasilhameLoteDatas(embalagemSource, estoqueById, {
+      transbordos,
+    });
+    if (datas.data_validade) return formatDate(datas.data_validade);
+  }
+
+  const raw =
+    embalagemSource?.data_validade ||
+    item?.data_validade ||
+    estoque?.data_validade ||
+    null;
+  return raw ? formatDate(raw) : "—";
+}
+
+/** Lacres só para vasilhame; demais tipos mostram "-". */
+function formatItemLacres(item, embalagemSource = null) {
+  if (!isItemVasilhameTipo(item) || isTanqueVazioItem(item)) return "-";
+  const lacres = String(
+    embalagemSource?.lacres ||
+      embalagemSource?.seals ||
+      item?.lacres ||
+      item?.seals ||
+      ""
+  ).trim();
+  return lacres || "-";
 }
 
 function tipoBadgeClass(item) {
@@ -294,6 +358,8 @@ export default function SaidaViewDialog({
   highlightModule = null,
   checklistItems = null,
   showChecklistColumn = false,
+  /** Solicitações de Saída: Validade + Lacre no lugar de Qtd. Final Estoque. */
+  showValidadeLacreColumns = false,
   showPrintEtiqueta = true,
   agendamento = null,
   onSaidaChange,
@@ -432,6 +498,14 @@ export default function SaidaViewDialog({
     [vasilhames, transbordos, entradas]
   );
 
+  const estoqueById = useMemo(() => {
+    const map = new Map();
+    (entradas || []).forEach((row) => {
+      if (row?.id) map.set(String(row.id), row);
+    });
+    return map;
+  }, [entradas]);
+
   const hasWmsNok = useMemo(
     () => displayItens.some((item) => isSaidaItemWmsNok(item, wmsCtx)),
     [displayItens, wmsCtx]
@@ -451,8 +525,9 @@ export default function SaidaViewDialog({
   const selectableSet = new Set(selectableIndexes);
   const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
   const canDevalidarItem = canSelectFiscal && Boolean(highlightModule || !isAgendamento);
+  const useValidadeLacre = showValidadeLacreColumns && !isAgendamento;
   const colCount =
-    (isAgendamento ? 8 : 7) +
+    (isAgendamento ? 8 : useValidadeLacre ? 8 : 7) +
     (canSelectFiscal ? 1 : 0) +
     (canDevalidarItem ? 2 : 0) +
     (showChecklistColumn ? 1 : 0);
@@ -693,7 +768,9 @@ export default function SaidaViewDialog({
       }}
     >
       <DialogContent
-        className="max-h-[90vh] overflow-y-auto overflow-x-hidden gap-4 w-[min(96vw,90rem)] max-w-[min(96vw,90rem)]"
+        className={`max-h-[90vh] overflow-y-auto gap-4 w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] ${
+          useValidadeLacre ? "overflow-x-auto" : "overflow-x-hidden"
+        }`}
       >
         <DialogHeader>
           <DialogTitle>
@@ -729,8 +806,16 @@ export default function SaidaViewDialog({
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-border">
-          <table className="w-full text-sm border-collapse">
+        <div
+          className={`rounded-lg border border-border ${
+            useValidadeLacre ? "overflow-x-auto" : ""
+          }`}
+        >
+          <table
+            className={`text-sm border-collapse ${
+              useValidadeLacre ? "w-max min-w-full table-auto" : "w-full"
+            }`}
+          >
             <thead>
               <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase">
                 {canSelectFiscal ? (
@@ -756,8 +841,13 @@ export default function SaidaViewDialog({
                 <th className="px-2 py-2.5 font-medium whitespace-nowrap">
                   {isAgendamento
                     ? t("painel.comercial.agendamentos.qtdEmbalagens")
-                    : "Qtd. Final Estoque"}
+                    : useValidadeLacre
+                      ? "Validade"
+                      : "Qtd. Final Estoque"}
                 </th>
+                {useValidadeLacre ? (
+                  <th className="px-2 py-2.5 font-medium whitespace-nowrap">Lacre</th>
+                ) : null}
                 {canDevalidarItem ? (
                   <>
                     <th className="px-2 py-2.5 font-medium text-center whitespace-nowrap">
@@ -879,8 +969,27 @@ export default function SaidaViewDialog({
                     <td className={`px-2 py-2.5 font-medium whitespace-nowrap ${
                       isForeignModule ? "text-muted-foreground" : "text-foreground"
                     }`}>
-                      {isAgendamento ? formatQtdEmbalagens(item) : qtdFinalEstoque(item)}
+                      {isAgendamento
+                        ? formatQtdEmbalagens(item)
+                        : useValidadeLacre
+                          ? formatItemValidade(item, {
+                              embalagemSource: vasilhame,
+                              estoqueById,
+                              transbordos,
+                            })
+                          : qtdFinalEstoque(item)}
                     </td>
+                    {useValidadeLacre ? (
+                      <td
+                        className={`px-2 py-2.5 whitespace-nowrap ${
+                          isForeignModule
+                            ? "text-muted-foreground"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {formatItemLacres(item, vasilhame)}
+                      </td>
+                    ) : null}
                     {canDevalidarItem ? (
                       <>
                         <td className="px-2 py-2.5 text-center whitespace-nowrap">

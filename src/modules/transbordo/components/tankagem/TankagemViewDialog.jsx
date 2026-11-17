@@ -207,28 +207,58 @@ export default function TankagemViewDialog({ open, onClose, detalhe }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {detalhe.historico.map((h, i) => (
+                    {detalhe.historico.map((h, i) => {
+                      const isAjuste = h.tipo === "ajuste_manual";
+                      return (
                       <tr key={`${h.codigo}-${i}`} className="border-t border-border">
                         <td className="px-3 py-2 font-medium text-primary">
-                          {h.codigo || "—"}
+                          {isAjuste ? (
+                            <span className="inline-flex flex-col gap-0.5">
+                              <span>Ajuste manual</span>
+                              {h.tipo_ajuste ? (
+                                <span
+                                  className={`text-[10px] font-semibold ${
+                                    h.tipo_ajuste === "aumentar"
+                                      ? "text-emerald-700"
+                                      : "text-red-700"
+                                  }`}
+                                >
+                                  {h.tipo_ajuste === "aumentar"
+                                    ? "Entrada (+)"
+                                    : "Saída (−)"}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            h.codigo || "—"
+                          )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {formatDate(h.data)}
                         </td>
-                        <td className="px-3 py-2 text-right text-foreground/80">
+                        <td
+                          className={`px-3 py-2 text-right tabular-nums ${
+                            isAjuste && Number(h.volume) < 0
+                              ? "text-red-700"
+                              : "text-foreground/80"
+                          }`}
+                        >
                           {formatVolume(h.volume, { empty: "—" })}
                         </td>
                         <td className="px-3 py-2 text-right text-foreground/80">
                           {formatMass(h.massa, { empty: "—" })}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {h.lotes || "—"}
+                          {isAjuste && h.justificativa
+                            ? h.justificativa
+                            : h.lotes || "—"}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {(h.operadores || []).join(", ") || "—"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -33,6 +33,10 @@ import {
   collectConvencionalItemsForVasilhame,
   resolveVasilhameExpedidoDisplay,
 } from "@transbordo/lib/vasilhamePatio";
+import {
+  listAjustesManuais,
+  formatAjusteDateTime,
+} from "@transbordo/lib/estoqueAjusteManual";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -77,6 +81,7 @@ const formatDate = (d) => {
   }) {
     const [fetchedSaidas, setFetchedSaidas] = useState([]);
     const [loadingSaidas, setLoadingSaidas] = useState(false);
+    const [ajustes, setAjustes] = useState([]);
     const saidas = Array.isArray(saidasProp) ? saidasProp : fetchedSaidas;
 
     const isUnitario = Boolean(
@@ -108,6 +113,24 @@ const formatDate = (d) => {
         cancelled = true;
       };
     }, [open, vasilhame?.id, isUnitario, saidasProp]);
+
+    useEffect(() => {
+      if (!open || !vasilhame?.id) {
+        setAjustes([]);
+        return undefined;
+      }
+      let cancelled = false;
+      listAjustesManuais({ vasilhameId: vasilhame.id, limit: 100 })
+        .then((rows) => {
+          if (!cancelled) setAjustes(rows || []);
+        })
+        .catch(() => {
+          if (!cancelled) setAjustes([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [open, vasilhame?.id]);
 
     const display = useMemo(() => {
       if (!vasilhame) return null;
@@ -297,6 +320,69 @@ const formatDate = (d) => {
                         </td>
                         <td className="px-4 py-2" />
                       </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {ajustes.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-primary border-l-2 border-primary pl-2">
+                  AJUSTES MANUAIS
+                </h3>
+                <div className="pl-2">
+                  <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="bg-muted/40 text-xs text-muted-foreground uppercase">
+                        <th className="px-4 py-2 text-left font-medium">Data/Hora</th>
+                        <th className="px-4 py-2 text-left font-medium">Tipo</th>
+                        <th className="px-4 py-2 text-right font-medium">Volume (L)</th>
+                        <th className="px-4 py-2 text-left font-medium">Usuário</th>
+                        <th className="px-4 py-2 text-left font-medium">Justificativa</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ajustes.map((a) => {
+                        const isUp = a.tipo_ajuste === "aumentar";
+                        const vol = Number(a.volume_l);
+                        const volAbs = Number.isFinite(vol)
+                          ? Math.abs(vol)
+                          : Math.abs(Number(a.quantidade_signed) || 0);
+                        return (
+                          <tr key={a.id} className="border-t border-border">
+                            <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+                              {formatAjusteDateTime(a.created_at)}
+                            </td>
+                            <td className="px-4 py-2">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                  isUp
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-red-50 text-red-700"
+                                }`}
+                              >
+                                {isUp ? "Entrada (+)" : "Saída (−)"}
+                              </span>
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-right tabular-nums ${
+                                isUp ? "text-emerald-700" : "text-red-700"
+                              }`}
+                            >
+                              {`${isUp ? "+" : "−"}${formatVolume(volAbs, {
+                                empty: "—",
+                              })}`}
+                            </td>
+                            <td className="px-4 py-2 text-muted-foreground">
+                              {a.usuario_nome || "—"}
+                            </td>
+                            <td className="px-4 py-2 text-muted-foreground">
+                              {a.justificativa || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

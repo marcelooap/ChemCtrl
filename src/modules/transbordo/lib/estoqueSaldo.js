@@ -1439,7 +1439,8 @@ function buildVasilhamePatioBuckets(vasilhames = []) {
 export function createEstoqueSaldoContext(
   transbordos = [],
   saidas = [],
-  vasilhames = []
+  vasilhames = [],
+  ajustes = []
 ) {
   const transbordoIndex = getTransbordoIndex(transbordos);
   const patioBuckets = buildVasilhamePatioBuckets(vasilhames);
@@ -1447,6 +1448,8 @@ export function createEstoqueSaldoContext(
     transbordos,
     saidas,
     vasilhames,
+    ajustes,
+    ajustesByEstoqueId: indexAjustesByEstoqueId(ajustes),
     vasilhameById: new Map((vasilhames || []).map((v) => [v.id, v])),
     fiscalVasilhameIds: buildFiscalVasilhameIds(saidas),
     embaladoByEstoqueId: buildEmbaladoByEstoqueId(saidas),
@@ -1463,6 +1466,38 @@ export function createEstoqueSaldoContext(
     /** @type {Map<string, Set<string>>} */
     tankaIdsByVasilhameId: new Map(),
   };
+}
+
+/** Indexa Σ quantidade_signed do ledger por estoque_id. */
+export function indexAjustesByEstoqueId(ajustes = []) {
+  /** @type {Map<string, { total: number, embalado: number, tanque: number, tanka: number }>} */
+  const map = new Map();
+  for (const a of ajustes || []) {
+    const id = String(a?.estoque_id || "");
+    if (!id) continue;
+    let entry = map.get(id);
+    if (!entry) {
+      entry = { total: 0, embalado: 0, tanque: 0, tanka: 0 };
+      map.set(id, entry);
+    }
+    const signed = Number(a.quantidade_signed) || 0;
+    entry.total = roundQuantidade(entry.total + signed);
+    if (a.tipo_local === "embalado") {
+      entry.embalado = roundQuantidade(entry.embalado + signed);
+    } else if (a.tipo_local === "tanque") {
+      entry.tanque = roundQuantidade(entry.tanque + signed);
+    } else if (a.tipo_local === "tanka") {
+      entry.tanka = roundQuantidade(entry.tanka + signed);
+    }
+  }
+  return map;
+}
+
+/** Δ de ajuste manual embalado (ledger) na UOM do estoque. */
+function ajusteEmbaladoFromContext(ctx, estoqueItem) {
+  const id = estoqueItem?.id;
+  if (!id || !ctx?.ajustesByEstoqueId) return 0;
+  return Number(ctx.ajustesByEstoqueId.get(String(id))?.embalado) || 0;
 }
 
 function saidasEmbaladoFromContext(ctx, estoqueItem) {
@@ -2270,11 +2305,14 @@ export function computeEstoqueSaldo(
     saidas,
     saldoCtx
   );
+  // Ajuste manual embalado: ledger (não altera saldo_inicial da entrada).
+  const ajusteEmb = ajusteEmbaladoFromContext(saldoCtx, estoqueItem);
+  const bruto = quantidade - saidoEmb - saidoConv - saidoPatio + ajusteEmb;
   return Math.max(
     0,
     estoqueOperaEmLitros(estoqueItem)
-      ? roundVolume(quantidade - saidoEmb - saidoConv - saidoPatio)
-      : roundQuantidade(quantidade - saidoEmb - saidoConv - saidoPatio)
+      ? roundVolume(bruto)
+      : roundQuantidade(bruto)
   );
 }
 
@@ -2917,6 +2955,16 @@ export function computeEstoqueQuantidadesPorLocal(
     // somados acima (composição / entrada direta / OP). Diff positivo após
     // expedição (ex.: troca de lote REP OF→OS) era estoque fantasma — o
     // tanque expedido não pode voltar a aparecer na coluna Saldo Tanque.
+  } else if (diff < 0) {
+    // Saldo menor que o alocado (ex.: ajuste manual embalado −1 L):
+    // em litros o envaseIntegral só absorve ≤0,001 — sem este ramo o
+    // pátio ficava inchado e a grade ignorava o ledger.
+    let remaining = roundOp(estoqueItem, -diff);
+    if ((qtyPatioOp > 0 || entradaEmbalado) && remaining > 0) {
+      const take = Math.min(qtyPatioOp, remaining);
+      qtyPatioOp = Math.max(0, roundOp(estoqueItem, qtyPatioOp - take));
+      remaining = roundOp(estoqueItem, remaining - take);
+    }
   }
 
   qtyVasilhamesOp = roundOp(estoqueItem, qtyVasilhamesOp);

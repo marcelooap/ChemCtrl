@@ -3422,7 +3422,7 @@
   "rawMaterialStock": {
     "title": "Control de Stock",
     "subtitle": "Materias primas · {{count}} ítem(s)",
-    "fiscalSubtitle": "Movimientos fiscales · {{count}} registro(s)",
+    "fiscalSubtitle": "Bajas fiscales · {{count}} registro(s)",
     "printLabel": "Imprimir Etiqueta",
     "exportExcel": "Exportar Excel",
     "export": {
@@ -3445,7 +3445,7 @@
     "fiscalSearchPlaceholder": "Buscar por reg., código, producto, cliente o lote...",
     "views": {
       "stock": "Stock",
-      "fiscalMovement": "Movimiento Fiscal"
+      "fiscalMovement": "Baja Fiscal"
     },
     "fiscalTable": {
       "product": "Producto",
@@ -3623,14 +3623,14 @@
       "unusedReturn": "Devolución de MP No Aplicada"
     },
     "fiscalView": {
-      "title": "Movimiento Fiscal",
+      "title": "Baja Fiscal",
       "before": "antes",
       "after": "después",
       "downloadPdf": "Descargar PDF"
     },
     "fiscalDelete": {
-      "title": "Eliminar Movimiento Fiscal",
-      "message": "¿Seguro que desea eliminar el movimiento \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nLa cantidad se repondrá automáticamente en el saldo de stock.",
+      "title": "Eliminar Baja Fiscal",
+      "message": "¿Seguro que desea eliminar la baja \"{{type}}\" de {{qty}} {{unit}} ({{product}} · {{entryId}})?\n\nLa cantidad se repondrá automáticamente en el saldo de stock.",
       "confirm": "Sí, eliminar y reponer",
       "restored": "{{qty}} {{unit}} repuestos en {{entryId}}"
     }
@@ -4433,6 +4433,7 @@
         "expeditions": "Expediciones"
       },
       "formTitle": "Nuevo Transbordo",
+      "formTitleEdit": "Editar Transbordo",
       "generalData": "Datos Generales",
       "dateRequired": "Fecha *",
       "productRequired": "Producto *",
@@ -4452,6 +4453,8 @@
       "addDestination": "Agregar Destino",
       "registering": "Registrando...",
       "register": "Registrar Transbordo",
+      "saving": "Guardando...",
+      "save": "Guardar Cambios",
       "loadUnits": "{{count}} x Unidades de Carga",
       "messages": {
         "selectProduct": "Seleccione un producto",
@@ -4461,6 +4464,8 @@
         "volumeMismatch": "La suma de los volúmenes de origen debe ser igual a la de los destinos",
         "registered": "Transbordo registrado",
         "registerError": "Error al registrar transbordo",
+        "updated": "Transbordo actualizado",
+        "updateError": "Error al actualizar transbordo",
         "deleted": "Transbordo eliminado",
         "deleteError": "Error al eliminar transbordo"
       },
