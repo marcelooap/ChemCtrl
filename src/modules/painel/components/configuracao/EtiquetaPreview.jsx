@@ -5,12 +5,30 @@ import {
   formatEtiquetaEmbalagemPlaca,
   getVerticalEtiquetaLayout,
   partitionEtiquetaCampos,
+  resolveEtiquetaFieldsScale,
 } from '@transbordo/lib/etiquetaConfig';
 
-function FieldRow({ label, value, wrap = false, stacked = false, fill = false, emphasis = false, flow = false, center = false }) {
+function FieldRow({
+  label,
+  value,
+  wrap = false,
+  stacked = false,
+  fill = false,
+  emphasis = false,
+  flow = false,
+  center = false,
+  scale = null,
+}) {
+  const scaledStyle = scale
+    ? { fontSize: `${scale.previewPx}px`, lineHeight: scale.lineHeight }
+    : undefined;
+
   if (center) {
     return (
-      <div className={`w-full text-center font-extrabold uppercase leading-snug ${emphasis ? 'text-[15px]' : 'text-[13px]'}`}>
+      <div
+        className={`w-full text-center font-extrabold uppercase leading-snug ${emphasis ? 'text-[15px]' : 'text-[13px]'}`}
+        style={scaledStyle}
+      >
         {value}
       </div>
     );
@@ -21,7 +39,7 @@ function FieldRow({ label, value, wrap = false, stacked = false, fill = false, e
       ? (emphasis ? 'text-[14px] leading-snug' : 'text-[12px] leading-snug')
       : (emphasis ? 'text-[12px] leading-tight' : 'text-[10px] leading-snug');
     return (
-      <p className={`w-full min-w-0 text-left font-extrabold ${size}`}>
+      <p className={`w-full min-w-0 text-left font-extrabold ${scale ? '' : size}`} style={scaledStyle}>
         <span className="uppercase">{label}</span>
         <span className="font-bold text-black/80"> • </span>
         <span className="font-bold">{value}</span>
@@ -42,14 +60,17 @@ function FieldRow({ label, value, wrap = false, stacked = false, fill = false, e
     );
   }
 
-  const sizeClass = fill
-    ? (emphasis ? 'w-full text-[14px] items-start leading-snug' : 'w-full text-[12px] items-start leading-snug')
-    : emphasis
-      ? `text-[12px] ${wrap ? 'items-start leading-tight' : 'items-baseline leading-tight'}`
-      : `text-[10px] ${wrap ? 'items-start leading-snug' : 'items-baseline leading-tight'}`;
+  const alignClass = wrap || fill ? 'items-start' : 'items-baseline';
+  const sizeClass = scale
+    ? alignClass
+    : fill
+      ? (emphasis ? `w-full text-[14px] ${alignClass} leading-snug` : `w-full text-[12px] ${alignClass} leading-snug`)
+      : emphasis
+        ? `text-[12px] ${alignClass} ${wrap ? 'leading-tight' : 'leading-tight'}`
+        : `text-[10px] ${alignClass} ${wrap ? 'leading-snug' : 'leading-tight'}`;
 
   return (
-    <div className={`flex gap-1 min-w-0 shrink-0 ${sizeClass}`}>
+    <div className={`flex gap-1 min-w-0 shrink-0 ${fill || scale ? 'w-full' : ''} ${sizeClass}`} style={scaledStyle}>
       <span className="font-extrabold uppercase shrink-0">{label}</span>
       <span className="font-bold text-black/80 shrink-0">•</span>
       <span className={`font-bold min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
@@ -116,6 +137,10 @@ export default function EtiquetaPreview({
   const convencionalVertical = vertical && convencional;
   const split = dataLayout.mode === 'split';
   const dense = split || dataLayout.left.length >= 4;
+  const fieldsCount = vertical
+    ? (verticalLayout.dataRows?.length || 0)
+    : (dataLayout.left?.length || 0);
+  const fieldsScale = resolveEtiquetaFieldsScale(fieldsCount, { emphasis });
 
   const dataValue = (key) => {
     switch (key) {
@@ -159,7 +184,7 @@ export default function EtiquetaPreview({
 
   const wrapKey = (key) => vertical || key === 'responsavel_tecnico' || key === 'cliente';
 
-  const renderRows = (rows, stacked = false) =>
+  const renderRows = (rows, stacked = false, { scaled = false } = {}) =>
     rows.map((row) => (
       <FieldRow
         key={row.key}
@@ -169,6 +194,7 @@ export default function EtiquetaPreview({
         emphasis={emphasis}
         center={convencionalVertical && row.key === 'cliente'}
         flow={row.key === 'responsavel_tecnico'}
+        scale={scaled && !stacked ? fieldsScale : null}
         label={dataLabel(row.key)}
         value={dataValue(row.key)}
       />
@@ -241,7 +267,7 @@ export default function EtiquetaPreview({
             )}
             <div className={`flex min-h-0 flex-1 flex-col justify-between ${emphasis ? 'gap-1.5' : 'gap-1'}`}>
               <div className={`flex w-full flex-1 flex-col justify-evenly ${emphasis ? 'gap-1.5' : 'gap-0.5'}`}>
-                {renderRows(verticalLayout.dataRows)}
+                {renderRows(verticalLayout.dataRows, false, { scaled: true })}
               </div>
               {qrBlock}
               <div className="flex w-full shrink-0 flex-col justify-evenly gap-1">
@@ -276,9 +302,9 @@ export default function EtiquetaPreview({
                     {v.product || '—'}
                   </div>
                 )}
-                <div className={`flex gap-2 min-h-0 overflow-hidden ${emphasis ? 'pt-1 flex-1' : 'pt-1'}`}>
-                  <div className={`flex-1 flex flex-col min-w-0 ${emphasis ? 'justify-between gap-0 pb-1' : 'justify-start gap-[3px]'}`}>
-                    {renderRows(dataLayout.left)}
+                <div className="flex flex-1 gap-2 min-h-0 overflow-hidden pt-1">
+                  <div className="flex-1 flex flex-col min-w-0 justify-between gap-0 pb-1">
+                    {renderRows(dataLayout.left, false, { scaled: true })}
                   </div>
                   {split && dataLayout.right.length > 0 && (
                     <div className="w-[34%] shrink-0 flex flex-col justify-start gap-1.5 min-w-0">

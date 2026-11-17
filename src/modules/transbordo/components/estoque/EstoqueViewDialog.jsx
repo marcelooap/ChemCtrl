@@ -32,6 +32,7 @@ import {
   getEstoqueNotaFiscal,
   getEstoqueNotaFiscalTroca,
   computeEstoqueSaldo,
+  createEstoqueSaldoContext,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   resolveTipoRecebimentoEstoque,
@@ -263,18 +264,19 @@ export default function EstoqueViewDialog({
   saidas = [],
   vasilhames = [],
   ajustes = [],
+  isAdmin = false,
 }) {
   if (!item) return null;
 
-  const ajustesDoItem = (ajustes || []).filter(
-    (a) => String(a.estoque_id || "") === String(item.id || "")
-  );
+  const ajustesDoItem = isAdmin
+    ? (ajustes || []).filter(
+        (a) => String(a.estoque_id || "") === String(item.id || "")
+      )
+    : [];
 
   const unidade = item.unidade_medida || "kg";
   const idEstoque =
     estoqueCodigo || formatEstoqueCodigo(item.codigo_estoque);
-  const custoTotal =
-    (Number(item.saldo_atual) || 0) * (Number(item.preco_unitario) || 0);
   const tipoRecebimento = resolveTipoRecebimentoEstoque(item);
   const notaTroca = getEstoqueNotaFiscalTroca(item);
   const origemLabel =
@@ -365,12 +367,22 @@ export default function EstoqueViewDialog({
   );
 
   const estoqueInicial = getEstoqueQuantidade(item);
+  // Mesmo contexto da tabela: inclui ledger de ajustes manuais no saldo.
+  const saldoCtx = createEstoqueSaldoContext(
+    transbordos,
+    saidas,
+    vasilhames,
+    ajustes
+  );
   const saldoCalculado = computeEstoqueSaldo(
     item,
     transbordos,
     saidas,
-    vasilhames
+    vasilhames,
+    saldoCtx
   );
+  const custoTotal =
+    (Number(saldoCalculado) || 0) * (Number(item.preco_unitario) || 0);
 
   const isEmbalado = tipoRecebimento === "embalado";
   const hasTransbordoMovimento =
@@ -865,100 +877,102 @@ export default function EstoqueViewDialog({
             </>
           )}
 
-          <SectionCard
-            icon={History}
-            title="Ajustes manuais"
-            description="Movimentações de ajuste de saldo (Administrador)."
-            action={
-              ajustesDoItem.length > 0 ? (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-foreground/70">
-                  {ajustesDoItem.length}
-                </span>
-              ) : null
-            }
-          >
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
-                <thead>
-                  <tr>
-                    <th className={thClass}>Data/Hora</th>
-                    <th className={thClass}>Local</th>
-                    <th className={thClass}>Tipo</th>
-                    <th className={thRightClass}>Quantidade</th>
-                    <th className={thRightClass}>Anterior</th>
-                    <th className={thRightClass}>Posterior</th>
-                    <th className={thClass}>Usuário</th>
-                    <th className={thClass}>Justificativa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ajustesDoItem.length === 0 ? (
-                    <EmptyRow
-                      colSpan={8}
-                      message="Nenhum ajuste manual registrado para este item."
-                    />
-                  ) : (
-                    ajustesDoItem.map((a) => {
-                      const isUp = a.tipo_ajuste === "aumentar";
-                      const localLabel =
-                        a.tipo_local === "embalado"
-                          ? "Embalado"
-                          : a.tipo_local === "tanque"
-                            ? "Tanque"
-                            : a.tipo_local === "tanka"
-                              ? "Tanka"
-                              : a.tipo_local || "—";
-                      return (
-                        <tr key={a.id}>
-                          <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
-                            {a.created_at
-                              ? new Date(a.created_at).toLocaleString("pt-BR")
-                              : "—"}
-                          </td>
-                          <td className={tdClass}>
-                            {localLabel}
-                            {a.vasilhame_placa
-                              ? ` · ${a.vasilhame_placa}`
-                              : a.tanka_codigo
-                                ? ` · ${a.tanka_codigo}`
-                                : ""}
-                          </td>
-                          <td className={tdClass}>
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                                isUp
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-red-50 text-red-700 border-red-200"
-                              }`}
-                            >
-                              {isUp ? "Entrada (+)" : "Saída (−)"}
-                            </span>
-                          </td>
-                          <td className={`${tdRightClass} font-medium`}>
-                            {`${isUp ? "+" : "−"}${formatQuantidade(a.quantidade, {
-                              empty: "—",
-                            })} ${a.unidade_medida || unidade}`.trim()}
-                          </td>
-                          <td className={tdRightClass}>
-                            {formatQuantidade(a.saldo_anterior, { empty: "—" })}
-                          </td>
-                          <td className={tdRightClass}>
-                            {formatQuantidade(a.saldo_posterior, { empty: "—" })}
-                          </td>
-                          <td className={`${tdClass} text-muted-foreground`}>
-                            {a.usuario_nome || "—"}
-                          </td>
-                          <td className={`${tdClass} text-muted-foreground max-w-[14rem]`}>
-                            {a.justificativa || "—"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
+          {isAdmin ? (
+            <SectionCard
+              icon={History}
+              title="Ajustes manuais"
+              description="Movimentações de ajuste de saldo (Administrador)."
+              action={
+                ajustesDoItem.length > 0 ? (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-foreground/70">
+                    {ajustesDoItem.length}
+                  </span>
+                ) : null
+              }
+            >
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
+                  <thead>
+                    <tr>
+                      <th className={thClass}>Data/Hora</th>
+                      <th className={thClass}>Local</th>
+                      <th className={thClass}>Tipo</th>
+                      <th className={thRightClass}>Quantidade</th>
+                      <th className={thRightClass}>Anterior</th>
+                      <th className={thRightClass}>Posterior</th>
+                      <th className={thClass}>Usuário</th>
+                      <th className={thClass}>Justificativa</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ajustesDoItem.length === 0 ? (
+                      <EmptyRow
+                        colSpan={8}
+                        message="Nenhum ajuste manual registrado para este item."
+                      />
+                    ) : (
+                      ajustesDoItem.map((a) => {
+                        const isUp = a.tipo_ajuste === "aumentar";
+                        const localLabel =
+                          a.tipo_local === "embalado"
+                            ? "Embalado"
+                            : a.tipo_local === "tanque"
+                              ? "Tanque"
+                              : a.tipo_local === "tanka"
+                                ? "Tanka"
+                                : a.tipo_local || "—";
+                        return (
+                          <tr key={a.id}>
+                            <td className={`${tdClass} whitespace-nowrap text-muted-foreground`}>
+                              {a.created_at
+                                ? new Date(a.created_at).toLocaleString("pt-BR")
+                                : "—"}
+                            </td>
+                            <td className={tdClass}>
+                              {localLabel}
+                              {a.vasilhame_placa
+                                ? ` · ${a.vasilhame_placa}`
+                                : a.tanka_codigo
+                                  ? ` · ${a.tanka_codigo}`
+                                  : ""}
+                            </td>
+                            <td className={tdClass}>
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                  isUp
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-red-50 text-red-700 border-red-200"
+                                }`}
+                              >
+                                {isUp ? "Entrada (+)" : "Saída (−)"}
+                              </span>
+                            </td>
+                            <td className={`${tdRightClass} font-medium`}>
+                              {`${isUp ? "+" : "−"}${formatQuantidade(a.quantidade, {
+                                empty: "—",
+                              })} ${a.unidade_medida || unidade}`.trim()}
+                            </td>
+                            <td className={tdRightClass}>
+                              {formatQuantidade(a.saldo_anterior, { empty: "—" })}
+                            </td>
+                            <td className={tdRightClass}>
+                              {formatQuantidade(a.saldo_posterior, { empty: "—" })}
+                            </td>
+                            <td className={`${tdClass} text-muted-foreground`}>
+                              {a.usuario_nome || "—"}
+                            </td>
+                            <td className={`${tdClass} text-muted-foreground max-w-[14rem]`}>
+                              {a.justificativa || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          ) : null}
         </div>
 
         <div className="shrink-0 flex justify-end gap-2 border-t border-border px-5 py-3 bg-muted/20">

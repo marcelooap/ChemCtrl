@@ -18,6 +18,7 @@ import {
   extractOrientation,
   getVerticalEtiquetaLayout,
   partitionEtiquetaCampos,
+  resolveEtiquetaFieldsScale,
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
@@ -169,7 +170,17 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .icon-col svg { width: 5.5mm; height: 5.5mm; }
   .fields { flex: 1; display: flex; gap: 2mm; min-width: 0; overflow: hidden; }
   .fields-left, .fields-right { display: flex; flex-direction: column; justify-content: flex-start; gap: 0.4mm; min-width: 0; }
-  .fields-left { flex: 1; }
+  .fields-left {
+    flex: 1;
+    justify-content: space-between;
+    gap: 0;
+    padding-bottom: 0.3mm;
+  }
+  .fields-left .field-row {
+    font-size: var(--field-font, 8pt);
+    line-height: var(--field-lh, 1.2);
+    flex-shrink: 0;
+  }
   .fields-right { width: 34%; flex-shrink: 0; gap: 1.2mm; }
   .field-row { display: flex; align-items: baseline; font-size: 7.5pt; line-height: 1.15; min-width: 0; }
   .field-row .lbl { font-weight: 800; text-transform: uppercase; flex-shrink: 0; }
@@ -201,6 +212,11 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     gap: 0.5mm;
     margin-top: 0;
     overflow: visible;
+  }
+  .label.vertical .fields:not(.fields-weights) .field-row,
+  .label.vertical .fields:not(.fields-weights) .field-row .val {
+    font-size: var(--field-font, 9.5pt);
+    line-height: var(--field-lh, 1.22);
   }
   .label.vertical .fields-weights {
     flex: 0 0 auto;
@@ -303,9 +319,11 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   }
   .label.ind .field-row { font-size: 9pt; line-height: 1.18; flex-shrink: 0; }
   .label.ind .fields-left {
-    justify-content: space-between;
-    gap: 0;
     padding-bottom: 0.4mm;
+  }
+  .label.ind .fields-left .field-row {
+    font-size: var(--field-font, 9pt);
+    line-height: var(--field-lh, 1.18);
   }
   .label.ind .data-block { margin-top: 0.7mm; overflow: hidden; }
   .label.ind .product { font-size: 13pt; }
@@ -314,8 +332,11 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .label.ind .weight-table td { font-size: 7.5pt; padding: 0.55mm 1.2mm; }
   .label.ind .footer { font-size: 8.5pt; margin-top: 0.45mm; }
   .label.ind .footer .emb { font-size: 9.5pt; }
-  .label.ind.vertical .field-row,
-  .label.ind.vertical .field-row .val { font-size: 11.5pt; line-height: 1.3; }
+  .label.ind.vertical .fields:not(.fields-weights) .field-row,
+  .label.ind.vertical .fields:not(.fields-weights) .field-row .val {
+    font-size: var(--field-font, 11.5pt);
+    line-height: var(--field-lh, 1.3);
+  }
   .label.ind.vertical .fields { gap: 1.4mm; }
   .label.ind.vertical .product { font-size: 14.5pt; }
   .label.ind.vertical .footer,
@@ -442,6 +463,14 @@ async function buildConfiguredLabelBody({
 
   const dataLayout = layout.dataLayout || { mode: 'stack', left: layout.dataRows || [], right: [] };
   const split = dataLayout.mode === 'split' && dataLayout.right.length > 0;
+  const emphasis = contexto !== 'convencional';
+  const fieldsCount = vertical
+    ? (verticalLayout?.dataRows?.length || 0)
+    : (dataLayout.left?.length || 0);
+  const fieldsScale = resolveEtiquetaFieldsScale(fieldsCount, { emphasis });
+  const fieldsScaleStyle = fieldsScale.distribute
+    ? ` style="--field-font:${fieldsScale.fontPt}pt;--field-lh:${fieldsScale.lineHeight};"`
+    : '';
 
   let fieldRows;
   if (vertical) {
@@ -450,8 +479,8 @@ async function buildConfiguredLabelBody({
     const leftHtml = dataLayout.left.map(fieldRowHtml).join('');
     const rightHtml = split ? dataLayout.right.map(fieldRowHtml).join('') : '';
     fieldRows = split
-      ? `<div class="fields-left">${leftHtml}</div><div class="fields-right">${rightHtml}</div>`
-      : `<div class="fields-left">${leftHtml}</div>`;
+      ? `<div class="fields-left"${fieldsScaleStyle}>${leftHtml}</div><div class="fields-right">${rightHtml}</div>`
+      : `<div class="fields-left"${fieldsScaleStyle}>${leftHtml}</div>`;
   }
 
   const productHtml = (vertical ? verticalLayout.showNome : layout.showNome)
@@ -520,7 +549,7 @@ async function buildConfiguredLabelBody({
     ? `<div class="${labelClass}">
   ${productHtml}
   <div class="vertical-body">
-    <div class="fields">${fieldRows}</div>
+    <div class="fields"${fieldsScaleStyle}>${fieldRows}</div>
     ${qrHtml}
     ${(verticalWeightRows || footer) ? `<div class="fields fields-weights">${verticalWeightRows}${footer}</div>` : ''}
   </div>

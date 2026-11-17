@@ -217,6 +217,37 @@ export function partitionEtiquetaCampos(campos = []) {
   };
 }
 
+/**
+ * Escala tipográfica da coluna de dados conforme a quantidade de campos.
+ * Poucos itens → fonte maior e distribuição vertical; muitos → compacto.
+ * Usado no preview do modal e na impressão (labelprint).
+ */
+export function resolveEtiquetaFieldsScale(itemCount, { emphasis = false } = {}) {
+  const n = Math.max(0, Math.floor(Number(itemCount) || 0));
+  const basePt = emphasis ? 9 : 8;
+  const maxPt = emphasis ? 11.5 : 10.5;
+
+  let bump = 0;
+  if (n > 0 && n <= 2) bump = 2.5;
+  else if (n === 3) bump = 2;
+  else if (n === 4) bump = 1.5;
+  else if (n === 5) bump = 1;
+  else if (n === 6) bump = 0.5;
+
+  const fontPt = Math.min(maxPt, Math.round((basePt + bump) * 10) / 10);
+  const lineHeight = n <= 3 ? 1.3 : n <= 5 ? 1.22 : 1.15;
+  // Preview ~105mm→420px: ~1.33–1.4× o pt de impressão
+  const previewPx = Math.round(fontPt * 1.35);
+
+  return {
+    count: n,
+    fontPt,
+    lineHeight,
+    distribute: n > 0,
+    previewPx,
+  };
+}
+
 /** Ordem fixa da etiqueta vertical: produto no topo, dados, QR, pesos, embalagem. */
 export const VERTICAL_DATA_FIELD_ORDER = [
   'cliente',

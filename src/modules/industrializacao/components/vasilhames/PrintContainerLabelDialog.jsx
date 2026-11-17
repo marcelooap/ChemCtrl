@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2, Printer } from 'lucide-react';
 import { Button } from '@shared/components/ui/button';
+import { Checkbox } from '@shared/components/ui/checkbox';
 import {
   Dialog,
   DialogClose,
@@ -10,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@shared/components/ui/dialog';
+import { Input } from '@shared/components/ui/input';
 import { useToast } from '@shared/components/ui/use-toast';
 import NumberInputBr from '@transbordo/components/NumberInputBr';
 import EtiquetaPreview from '@painel/components/configuracao/EtiquetaPreview';
@@ -137,6 +139,9 @@ export default function PrintContainerLabelDialog({
   const [volumeOverride, setVolumeOverride] = useState(null);
   const [tareOverride, setTareOverride] = useState(null);
   const [qty, setQty] = useState(1);
+  /** true = embalagem cadastrada; false = texto só desta impressão */
+  const [useRegisteredEmbalagem, setUseRegisteredEmbalagem] = useState(true);
+  const [embalagemOverride, setEmbalagemOverride] = useState('');
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [meta, setMeta] = useState(null);
@@ -150,6 +155,8 @@ export default function PrintContainerLabelDialog({
     setVolumeOverride(null);
     setTareOverride(null);
     setQty(1);
+    setUseRegisteredEmbalagem(true);
+    setEmbalagemOverride('');
   }, [sessionKey]);
 
   useEffect(() => {
@@ -157,6 +164,8 @@ export default function PrintContainerLabelDialog({
     setVolumeOverride(null);
     setTareOverride(null);
     setQty(1);
+    setUseRegisteredEmbalagem(true);
+    setEmbalagemOverride('');
     setPrinting(false);
     setMeta(null);
   }, [dialogOpen]);
@@ -185,7 +194,11 @@ export default function PrintContainerLabelDialog({
   const weights = calcLabelWeightsFromVolume({ volume, density, tare: tareKg });
   const volumeOk = Number(volume) > 0;
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
-  const embalagem = formatLabelEmbalagem(container);
+  const embalagemRegistrada = formatLabelEmbalagem(container);
+  // Override só nesta impressão — vazio não volta ao cadastro (evita fallback do preview).
+  const embalagem = useRegisteredEmbalagem
+    ? embalagemRegistrada
+    : (String(embalagemOverride ?? '').trim() || '—');
   const dateOverride = containerLabelDateOverride(container);
   // Fabricação só com data explícita — nunca usa data de recebimento/created_date.
   const fabDate =
@@ -415,6 +428,47 @@ export default function PrintContainerLabelDialog({
                     : '—'}
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label
+                  htmlFor="print-label-embalagem-registered"
+                  className="flex items-center gap-2 cursor-pointer select-none shrink-0"
+                >
+                  <Checkbox
+                    id="print-label-embalagem-registered"
+                    checked={useRegisteredEmbalagem}
+                    onCheckedChange={(checked) => {
+                      const next = checked === true;
+                      setUseRegisteredEmbalagem(next);
+                      if (!next) {
+                        setEmbalagemOverride(embalagemRegistrada || '');
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-medium">
+                    {t('containers.vasilhames.printLabelEmbalagem')}
+                  </span>
+                </label>
+                {useRegisteredEmbalagem ? (
+                  <p className="text-sm text-muted-foreground min-w-0 truncate sm:ml-1">
+                    {embalagemRegistrada || '—'}
+                  </p>
+                ) : (
+                  <Input
+                    value={embalagemOverride}
+                    onChange={(e) => setEmbalagemOverride(e.target.value)}
+                    placeholder={t('containers.vasilhames.printLabelEmbalagemPlaceholder')}
+                    aria-label={t('containers.vasilhames.printLabelEmbalagemCustom')}
+                    className="bg-white sm:flex-1"
+                    autoFocus
+                  />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {t('containers.vasilhames.printLabelEmbalagemHint')}
+              </p>
             </div>
           </div>
         )}

@@ -712,6 +712,8 @@ export default function Estoque() {
           </div>
         </div>
 
+        <ConciliacaoEstoqueSection estoqueItems={estoque} />
+
         {/* Filters */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="relative flex-1 min-w-[260px] max-w-md">
@@ -755,8 +757,6 @@ export default function Estoque() {
           </div>
         </div>
       </div>
-
-      <ConciliacaoEstoqueSection estoqueItems={estoque} />
 
       {/* Table */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -985,6 +985,7 @@ export default function Estoque() {
         saidas={saidas}
         vasilhames={vasilhames}
         ajustes={ajustesManuais}
+        isAdmin={isAdmin}
       />
 
       {/* Delete Confirmation */}
