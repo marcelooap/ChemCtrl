@@ -21,6 +21,7 @@ const EMPTY_TRANSBORDO_INDEX = Object.freeze({
   byId: new Map(),
   byCodigo: new Map(),
   byDestinoPlacaKey: new Map(),
+  byOrigemEstoqueId: new Map(),
   order: new Map(),
 });
 
@@ -45,10 +46,28 @@ function pushOrdered(map, key, value) {
   if (list[list.length - 1] !== value) list.push(value);
 }
 
+/**
+ * Id de estoque lastreável na origem do OP.
+ * Origem tanka usa entrada_id = isotanque — nunca promover a estoque_id.
+ * (Espelha resolveEstoqueIdFromOrigemTransbordo sem import circular.)
+ */
+function origemEstoqueIdKey(origem) {
+  if (!origem) return null;
+  if (origem.estoque_id != null && String(origem.estoque_id).trim() !== "") {
+    return String(origem.estoque_id);
+  }
+  if ((origem.tipo_origem || "") === "tanka") return null;
+  if (origem.entrada_id != null && String(origem.entrada_id).trim() !== "") {
+    return String(origem.entrada_id);
+  }
+  return null;
+}
+
 function buildTransbordoIndex(transbordos) {
   const byId = new Map();
   const byCodigo = new Map();
   const byDestinoPlacaKey = new Map();
+  const byOrigemEstoqueId = new Map();
   const order = new Map();
 
   transbordos.forEach((t, position) => {
@@ -61,9 +80,13 @@ function buildTransbordoIndex(transbordos) {
       if (key === EMPTY_PLACA_KEY) continue;
       pushOrdered(byDestinoPlacaKey, key, t);
     }
+    for (const o of t.origens || []) {
+      const estoqueKey = origemEstoqueIdKey(o);
+      if (estoqueKey) pushOrdered(byOrigemEstoqueId, estoqueKey, t);
+    }
   });
 
-  return { byId, byCodigo, byDestinoPlacaKey, order };
+  return { byId, byCodigo, byDestinoPlacaKey, byOrigemEstoqueId, order };
 }
 
 function buildVasilhameIndex(vasilhames) {

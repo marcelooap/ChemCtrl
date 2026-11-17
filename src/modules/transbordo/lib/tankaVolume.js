@@ -327,10 +327,16 @@ function drainTankaLayersFifo(layers, volume) {
   }
 }
 
+/** @type {WeakMap<Array, Map<string, Map<string, number>>>} */
+const tankaRemainingByEstoqueCache = new WeakMap();
+
 /**
  * Saldo residual na tanka por id de estoque de origem (FIFO cronológico).
  * Evita que um refill posterior com o mesmo lote (outra entrada) seja
  * atribuído a um estoque já drenado — ex.: METANOL E508 vs E632 em TANKA 17/18.
+ *
+ * Memoizado pela identidade do array de transbordos + chave da tanka: a tela
+ * de Estoque chama isto para o mesmo isotanque em dezenas de linhas.
  *
  * @returns {Map<string, number>} estoqueId → litros restantes
  */
@@ -340,6 +346,18 @@ export function computeTankaRemainingByEstoqueId({
   transbordos = [],
   excludeTransbordoId = null,
 }) {
+  const cacheKey = `${isotanqueId || ""}|${normPlaca(tankaCodigo)}|${
+    excludeTransbordoId || ""
+  }`;
+  if (Array.isArray(transbordos)) {
+    let bucket = tankaRemainingByEstoqueCache.get(transbordos);
+    if (!bucket) {
+      bucket = new Map();
+      tankaRemainingByEstoqueCache.set(transbordos, bucket);
+    }
+    if (bucket.has(cacheKey)) return bucket.get(cacheKey);
+  }
+
   /** @type {{ estoqueId: string, volume: number }[]} */
   const layers = [];
   const sorted = sortedChronoReadOnly(transbordos);
@@ -364,6 +382,11 @@ export function computeTankaRemainingByEstoqueId({
       layer.estoqueId,
       roundVolume((map.get(layer.estoqueId) || 0) + layer.volume)
     );
+  }
+
+  if (Array.isArray(transbordos)) {
+    const bucket = tankaRemainingByEstoqueCache.get(transbordos);
+    if (bucket) bucket.set(cacheKey, map);
   }
   return map;
 }

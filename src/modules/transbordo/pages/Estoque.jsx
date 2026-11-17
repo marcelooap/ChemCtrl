@@ -80,12 +80,16 @@ function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
   return formatQuantidade(valor, { empty: "-" });
 }
 
+const ESTOQUE_BUILD_CHUNK = 40;
+
 /**
  * Monta as linhas da tela a partir do workspace: reaplica casas decimais
  * declaradas, remove embalagens unitárias / MP da Industrialização e calcula
  * saldo + breakdown por local numa única passagem (contexto compartilhado).
+ *
+ * Processa em chunks com yield para não congelar a UI em ~400 registros.
  */
-function buildEstoqueView(workspace, entradas = []) {
+async function buildEstoqueView(workspace, entradas = [], { isCurrent } = {}) {
   const volumes = applyDeclaredVolumeDecimals({
     estoque: workspace.estoque,
     entradas,
@@ -103,7 +107,7 @@ function buildEstoqueView(workspace, entradas = []) {
   // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
   // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
   // Matéria-prima da Industrialização fica só no módulo Industrialização.
-  const estoque = volumes.estoque
+  const baseRows = volumes.estoque
     .filter((e) => !isEstoqueEmbalagemUnitaria(e))
     .filter(
       (e) =>
@@ -111,35 +115,44 @@ function buildEstoqueView(workspace, entradas = []) {
           e,
           entradasPorId.get(String(e?.entrada_id))
         )
-    )
-    .map((e) => {
-      const hydrated = hydrateEstoqueFiscal(e);
-      const quantidade = getEstoqueQuantidade(hydrated);
-      const unidade_medida = getEstoqueUnidade(hydrated);
-      const itemOp = { ...hydrated, quantidade, unidade_medida };
-      const saldo_final = computeEstoqueSaldo(
-        itemOp,
-        volumes.transbordos,
-        saidas,
-        volumes.vasilhames,
-        saldoCtx
-      );
-      const locaisSaldo = computeEstoqueQuantidadesPorLocal(itemOp, {
-        transbordos: volumes.transbordos,
-        vasilhames: volumes.vasilhames,
-        saidas,
-        saldo: saldo_final,
-        saldoCtx,
-      });
-      return {
-        ...itemOp,
-        saldo_inicial: quantidade,
-        saldo_final,
-        saldo_atual: saldo_final,
-        expedido: Math.max(0, quantidade - saldo_final),
-        locaisSaldo,
-      };
+    );
+
+  const estoque = [];
+  for (let i = 0; i < baseRows.length; i += 1) {
+    if (i > 0 && i % ESTOQUE_BUILD_CHUNK === 0) {
+      await yieldToPaint();
+      if (typeof isCurrent === "function" && !isCurrent()) {
+        return null;
+      }
+    }
+    const e = baseRows[i];
+    const hydrated = hydrateEstoqueFiscal(e);
+    const quantidade = getEstoqueQuantidade(hydrated);
+    const unidade_medida = getEstoqueUnidade(hydrated);
+    const itemOp = { ...hydrated, quantidade, unidade_medida };
+    const saldo_final = computeEstoqueSaldo(
+      itemOp,
+      volumes.transbordos,
+      saidas,
+      volumes.vasilhames,
+      saldoCtx
+    );
+    const locaisSaldo = computeEstoqueQuantidadesPorLocal(itemOp, {
+      transbordos: volumes.transbordos,
+      vasilhames: volumes.vasilhames,
+      saidas,
+      saldo: saldo_final,
+      saldoCtx,
     });
+    estoque.push({
+      ...itemOp,
+      saldo_inicial: quantidade,
+      saldo_final,
+      saldo_atual: saldo_final,
+      expedido: Math.max(0, quantidade - saldo_final),
+      locaisSaldo,
+    });
+  }
 
   return {
     estoque,
@@ -276,7 +289,11 @@ export default function Estoque() {
       setLoading(false);
       await yieldToPaint();
       if (!isCurrent()) return;
-      applyView(buildEstoqueView(cached, entradasRef.current));
+      const cachedView = await buildEstoqueView(cached, entradasRef.current, {
+        isCurrent,
+      });
+      if (!isCurrent() || !cachedView) return;
+      applyView(cachedView);
     } else if (!silent) {
       setLoading(true);
     }
@@ -290,8 +307,10 @@ export default function Estoque() {
       if (!sameSnapshot) {
         await yieldToPaint();
         if (!isCurrent()) return;
-        const view = buildEstoqueView(workspace, entradasRef.current);
-        if (!isCurrent()) return;
+        const view = await buildEstoqueView(workspace, entradasRef.current, {
+          isCurrent,
+        });
+        if (!isCurrent() || !view) return;
         void persistDeclaredVolumeDecimals(view.volumes);
         applyView(view);
       }

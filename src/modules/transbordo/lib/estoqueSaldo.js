@@ -416,8 +416,18 @@ function collectComposicaoEstoqueStamps(composicao) {
 /**
  * Ids de tanka/isotanque usados como origem nas OPs que geraram o tanque.
  * Em OPs origem tanka, composicao.estoque_id costumava gravar esse id.
+ * Usa índice por código/id — não varre todos os OPs a cada tanque.
  */
-function collectTankaIdsForVasilhame(vasilhame, transbordos = []) {
+function collectTankaIdsForVasilhame(
+  vasilhame,
+  transbordos = [],
+  saldoCtx = null
+) {
+  const vasId = vasilhame?.id != null ? String(vasilhame.id) : "";
+  if (vasId && saldoCtx?.tankaIdsByVasilhameId?.has(vasId)) {
+    return saldoCtx.tankaIdsByVasilhameId.get(vasId);
+  }
+
   const composicao = Array.isArray(vasilhame?.composicao)
     ? vasilhame.composicao
     : [];
@@ -426,19 +436,28 @@ function collectTankaIdsForVasilhame(vasilhame, transbordos = []) {
       .map((c) => String(c?.transbordo_codigo || "").trim())
       .filter(Boolean)
   );
+  const index = saldoCtx?.transbordoIndex || getTransbordoIndex(transbordos);
+  const related = new Set();
+  if (vasilhame?.transbordo_id) {
+    const t = index.byId.get(vasilhame.transbordo_id);
+    if (t) related.add(t);
+  }
+  for (const code of opCodes) {
+    for (const t of index.byCodigo.get(code) || []) related.add(t);
+  }
+
   const tankaIds = new Set();
-  for (const t of transbordos || []) {
-    const code = String(t?.codigo_transbordo || "").trim();
-    const related =
-      (vasilhame?.transbordo_id && t.id === vasilhame.transbordo_id) ||
-      (code && opCodes.has(code));
-    if (!related) continue;
+  for (const t of related) {
     for (const o of t.origens || []) {
       if ((o?.tipo_origem || "") !== "tanka") continue;
       if (o.entrada_id != null && String(o.entrada_id).trim() !== "") {
         tankaIds.add(String(o.entrada_id));
       }
     }
+  }
+
+  if (vasId && saldoCtx?.tankaIdsByVasilhameId) {
+    saldoCtx.tankaIdsByVasilhameId.set(vasId, tankaIds);
   }
   return tankaIds;
 }
@@ -697,14 +716,32 @@ function labelDestinoTransbordo(destino) {
  * Destinos de transbordo que receberam volume deste estoque via FIFO.
  * Não lista todos os destinos do OP — só as embalagens alocadas a esta origem,
  * com volume/peso da fração FIFO (não o volume total do destino).
+ *
+ * Com `saldoCtx`, reusa cache por estoque e só varre OPs indexados pela origem
+ * (em vez de todos os transbordos a cada linha da tela).
  */
-export function listDestinosFifoForEstoque(estoqueItem, transbordos = []) {
+export function listDestinosFifoForEstoque(
+  estoqueItem,
+  transbordos = [],
+  saldoCtx = null
+) {
   const id = estoqueItem?.id;
   if (!id) return [];
 
+  const idKey = String(id);
+  if (saldoCtx?.fifoByEstoqueId?.has(idKey)) {
+    return saldoCtx.fifoByEstoqueId.get(idKey);
+  }
+
+  const indexed =
+    saldoCtx?.transbordoIndex?.byOrigemEstoqueId?.get(idKey) || null;
+  // Índice presente e vazio → este estoque não é origem de nenhum OP.
+  const candidates =
+    indexed != null ? indexed : Array.isArray(transbordos) ? transbordos : [];
+
   const rows = [];
 
-  for (const t of transbordos || []) {
+  for (const t of candidates) {
     const origens = t.origens || [];
     const destinos = t.destinos || [];
     const matchOrigem = (o) => origemMatchesEstoque(o, estoqueItem);
@@ -770,12 +807,78 @@ export function listDestinosFifoForEstoque(estoqueItem, transbordos = []) {
     });
   }
 
-  return rows.sort((a, b) => {
+  const sorted = rows.sort((a, b) => {
     const da = new Date(a.data || 0).getTime();
     const db = new Date(b.data || 0).getTime();
     if (da !== db) return da - db;
     return String(a.codigo).localeCompare(String(b.codigo));
   });
+
+  if (saldoCtx?.fifoByEstoqueId) {
+    saldoCtx.fifoByEstoqueId.set(idKey, sorted);
+  }
+  return sorted;
+}
+
+/**
+ * Índice: chave de embalagem de origem → OPs que a consomem.
+ * Permite expandir a cadeia FIFO sem varrer todos os transbordos a cada passo.
+ */
+function buildOrigemEmbalagemIndex(transbordos = [], vasilhames = []) {
+  const map = new Map();
+  const vasIdx = getVasilhameIndex(vasilhames);
+  const push = (key, t) => {
+    if (!key || !t?.id) return;
+    const list = map.get(key);
+    if (!list) {
+      map.set(key, [t]);
+      return;
+    }
+    if (list[list.length - 1] !== t) list.push(t);
+  };
+
+  for (const t of transbordos || []) {
+    for (const o of t.origens || []) {
+      const tipo = o?.tipo_origem || "";
+      if (tipo === "tanka") {
+        if (o.entrada_id) push(`tanka:${o.entrada_id}`, t);
+        const codigo = normCodigo(o.entrada_codigo || o.tanka_codigo || "");
+        if (codigo) push(`tanka_codigo:${codigo}`, t);
+        continue;
+      }
+      if (tipo === "vasilhame") {
+        if (o.entrada_id) {
+          push(`vasilhame:${o.entrada_id}`, t);
+          const v = vasIdx.byId.get(o.entrada_id);
+          if (v) {
+            const pb = placaBarrilKey(v.placa, v.barril);
+            if (pb !== EMPTY_PLACA_KEY) push(`placa:${pb}`, t);
+            if (v.tipo === "Tankagem") {
+              const tankaCodigo = normCodigo(v.placa);
+              if (tankaCodigo) push(`tanka_codigo:${tankaCodigo}`, t);
+            }
+          }
+        }
+        const codigo = normCodigo(o.entrada_codigo || "");
+        if (codigo) {
+          const placaHint = codigo.split(/\s*[-–]\s*/)[0];
+          if (placaHint) push(`placa:${placaBarrilKey(placaHint, "")}`, t);
+        }
+      }
+    }
+  }
+  return map;
+}
+
+function collectCandidateTransbordosForKeys(keys, origemEmbalagemIndex) {
+  const set = new Set();
+  if (!origemEmbalagemIndex || !keys) return set;
+  for (const k of keys) {
+    for (const t of origemEmbalagemIndex.get(k) || []) {
+      if (t?.id) set.add(t);
+    }
+  }
+  return set;
 }
 
 /**
@@ -786,21 +889,34 @@ export function listDestinosFifoForEstoque(estoqueItem, transbordos = []) {
  * Importante: origem em tanka compartilhada só encadeia quando o lote
  * retirado coincide com o lote deste estoque — evita listar envases
  * de outro lote que saiu do mesmo isotanque.
+ *
+ * Com `saldoCtx`, reusa FIFO/cache e só visita OPs candidatos pelas chaves
+ * de embalagem rastreadas (não todos os transbordos a cada expansão).
  */
 export function listHistoricoTransbordosEncadeados(
   estoqueItem,
   transbordos = [],
-  vasilhames = []
+  vasilhames = [],
+  saldoCtx = null
 ) {
   const id = estoqueItem?.id;
   if (!id) return [];
+
+  const idKey = String(id);
+  if (saldoCtx?.chainByEstoqueId?.has(idKey)) {
+    return saldoCtx.chainByEstoqueId.get(idKey);
+  }
 
   const trackedLotes = new Set();
   const loteEstoque = normLoteKey(estoqueItem?.lote);
   if (loteEstoque) trackedLotes.add(loteEstoque);
 
   // Só rastreia destinos que o FIFO atribuiu a este estoque
-  const firstDestinos = listDestinosFifoForEstoque(estoqueItem, transbordos);
+  const firstDestinos = listDestinosFifoForEstoque(
+    estoqueItem,
+    transbordos,
+    saldoCtx
+  );
   const firstIds = new Set(firstDestinos.map((r) => r.transbordoId).filter(Boolean));
 
   const trackedKeys = new Set();
@@ -833,15 +949,29 @@ export function listHistoricoTransbordosEncadeados(
     }
   });
 
-  if (trackedKeys.size === 0) return [];
+  if (trackedKeys.size === 0) {
+    if (saldoCtx?.chainByEstoqueId) saldoCtx.chainByEstoqueId.set(idKey, []);
+    return [];
+  }
+
+  const origemEmbalagemIndex =
+    saldoCtx?.origemEmbalagemIndex ||
+    buildOrigemEmbalagemIndex(transbordos, vasilhames);
 
   const visited = new Set(firstIds);
   const rows = [];
-  let grew = true;
+  /** Chaves ainda não usadas para buscar candidatos. */
+  let frontierKeys = [...trackedKeys];
 
-  while (grew) {
-    grew = false;
-    for (const t of transbordos || []) {
+  while (frontierKeys.length > 0) {
+    const candidates = collectCandidateTransbordosForKeys(
+      frontierKeys,
+      origemEmbalagemIndex
+    );
+    frontierKeys = [];
+    const newKeys = [];
+
+    for (const t of candidates) {
       if (!t?.id || visited.has(t.id)) continue;
 
       const origens = t.origens || [];
@@ -876,7 +1006,6 @@ export function listHistoricoTransbordosEncadeados(
       if (matchingOrigemIdx.size === 0) continue;
 
       visited.add(t.id);
-      grew = true;
 
       const matchingOrigens = origensFifo.filter((_, idx) =>
         matchingOrigemIdx.has(idx)
@@ -927,19 +1056,28 @@ export function listHistoricoTransbordosEncadeados(
         });
 
         // Só continua o rastro pelas embalagens que receberam este lote
-        collectEmbalagemKeysFromDestino(d, t.id, vasilhames).forEach((k) =>
-          trackedKeys.add(k)
-        );
+        collectEmbalagemKeysFromDestino(d, t.id, vasilhames).forEach((k) => {
+          if (trackedKeys.has(k)) return;
+          trackedKeys.add(k);
+          newKeys.push(k);
+        });
       });
     }
+
+    frontierKeys = newKeys;
   }
 
-  return rows.sort((a, b) => {
+  const sorted = rows.sort((a, b) => {
     const da = new Date(a.data || 0).getTime();
     const db = new Date(b.data || 0).getTime();
     if (da !== db) return da - db;
     return String(a.codigo).localeCompare(String(b.codigo));
   });
+
+  if (saldoCtx?.chainByEstoqueId) {
+    saldoCtx.chainByEstoqueId.set(idKey, sorted);
+  }
+  return sorted;
 }
 
 function normLoteKey(value) {
@@ -1254,13 +1392,57 @@ function buildEmbaladoByEstoqueId(saidas) {
 }
 
 /**
- * Índices reutilizáveis para calcular saldo de muitos itens sem varrer saídas/vasilhames a cada linha.
+ * Índices reutilizáveis para calcular saldo de muitos itens sem varrer
+ * saídas/vasilhames/OPs a cada linha da tela de Estoque.
+ *
+ * Inclui cache de FIFO/cadeia por estoque e índice de origens de embalagem
+ * para a expansão encadeada — sem isso, ~N itens × 3 passagens × T OPs
+ * trava o carregamento da grade.
  */
+function buildVasilhamePatioBuckets(vasilhames = []) {
+  const noPatio = [];
+  const expedidos = [];
+  /** @type {Map<string, object[]>} */
+  const byEstoqueStamp = new Map();
+  /** @type {Map<string, object[]>} */
+  const tankagemByCodigo = new Map();
+
+  for (const v of vasilhames || []) {
+    if (!v) continue;
+    // Inline (evita depender da ordem de hoisting de isVasilhameExpedido).
+    const expedido =
+      v.status === "Expedido" ||
+      (v.data_saida != null && String(v.data_saida).trim() !== "");
+    if (expedido) {
+      expedidos.push(v);
+      continue;
+    }
+    if ((v.status || "No Pátio") !== "No Pátio") continue;
+    noPatio.push(v);
+    for (const stamp of collectComposicaoEstoqueStamps(v.composicao)) {
+      const list = byEstoqueStamp.get(stamp);
+      if (!list) byEstoqueStamp.set(stamp, [v]);
+      else list.push(v);
+    }
+    if ((v.tipo || "") === "Tankagem") {
+      const codigo = normCodigo(v.placa || v.tanka || "");
+      if (codigo) {
+        const list = tankagemByCodigo.get(codigo);
+        if (!list) tankagemByCodigo.set(codigo, [v]);
+        else list.push(v);
+      }
+    }
+  }
+  return { noPatio, expedidos, byEstoqueStamp, tankagemByCodigo };
+}
+
 export function createEstoqueSaldoContext(
   transbordos = [],
   saidas = [],
   vasilhames = []
 ) {
+  const transbordoIndex = getTransbordoIndex(transbordos);
+  const patioBuckets = buildVasilhamePatioBuckets(vasilhames);
   return {
     transbordos,
     saidas,
@@ -1268,6 +1450,18 @@ export function createEstoqueSaldoContext(
     vasilhameById: new Map((vasilhames || []).map((v) => [v.id, v])),
     fiscalVasilhameIds: buildFiscalVasilhameIds(saidas),
     embaladoByEstoqueId: buildEmbaladoByEstoqueId(saidas),
+    transbordoIndex,
+    origemEmbalagemIndex: buildOrigemEmbalagemIndex(transbordos, vasilhames),
+    vasilhamesNoPatio: patioBuckets.noPatio,
+    vasilhamesExpedidos: patioBuckets.expedidos,
+    vasilhamesByEstoqueStamp: patioBuckets.byEstoqueStamp,
+    tankagemByCodigo: patioBuckets.tankagemByCodigo,
+    /** @type {Map<string, Array>} */
+    fifoByEstoqueId: new Map(),
+    /** @type {Map<string, Array>} */
+    chainByEstoqueId: new Map(),
+    /** @type {Map<string, Set<string>>} */
+    tankaIdsByVasilhameId: new Map(),
   };
 }
 
@@ -1473,26 +1667,37 @@ function resolveVasilhameFromDestino(destino, transbordo, vasilhames = []) {
     if (byPlaca) return byPlaca;
   }
 
+  const sameOp = transbordo?.id
+    ? index.byTransbordoId.get(transbordo.id) || []
+    : [];
+
   if (transbordo?.id) {
-    const byOpExact = (index.byTransbordoId.get(transbordo.id) || []).find(
+    const byOpExact = sameOp.find(
       (v) => key === EMPTY_PLACA_KEY || placaBarrilKey(v.placa, v.barril) === key
     );
     if (byOpExact) return byOpExact;
   }
 
   // Fallback: typo de placa no destino vs cadastro, preferindo o mesmo OP.
+  // Só varre candidatos do OP (não a lista inteira de vasilhames) — no caminho
+  // quente da grade isso era O(V) por destino × item e travava o carregamento.
   const placaDest = destino.placa || destino.tanka_codigo || "";
   if (!placaDest) return null;
-  const list = Array.isArray(vasilhames) ? vasilhames : [];
-  const fuzzySameOp = list.find(
-    (v) =>
-      vasilhameMatchesTransbordo(v, transbordo) &&
-      placasQuaseIguais(placaDest, v.placa)
-  );
+  const fuzzySameOp = sameOp.find((v) => placasQuaseIguais(placaDest, v.placa));
   if (fuzzySameOp) return fuzzySameOp;
-  return (
-    list.find((v) => placasQuaseIguais(placaDest, v.placa)) || null
-  );
+
+  // Sem vínculo por transbordo_id: tenta casar por código OP (conjunto pequeno).
+  if (transbordo && sameOp.length === 0) {
+    const list = Array.isArray(vasilhames) ? vasilhames : [];
+    return (
+      list.find(
+        (v) =>
+          vasilhameMatchesTransbordo(v, transbordo) &&
+          placasQuaseIguais(placaDest, v.placa)
+      ) || null
+    );
+  }
+  return null;
 }
 
 /**
@@ -1730,7 +1935,11 @@ export function calcVasilhamesExpedidosPatio(
     // 1) Destinos FIFO deste estoque (mesma base da tela DESTINOS).
     // Nunca ratear origemVol por todos os destinos do OP — isso debitava
     // tanque expedido de outro lote no mesmo OP (ex.: 9.000 → 8.333,333).
-    const fifoRows = listDestinosFifoForEstoque(estoqueItem, transbordos);
+    const fifoRows = listDestinosFifoForEstoque(
+      estoqueItem,
+      transbordos,
+      saldoCtx
+    );
     const fatiasFifo = indexFatiasEstoquePorVasilhame(
       fifoRows,
       transbordos,
@@ -1748,7 +1957,8 @@ export function calcVasilhamesExpedidosPatio(
     const chainRows = listHistoricoTransbordosEncadeados(
       estoqueItem,
       transbordos,
-      vasilhames
+      vasilhames,
+      saldoCtx
     );
     const fatias = indexFatiasEstoquePorVasilhame(
       chainRows,
@@ -1761,7 +1971,8 @@ export function calcVasilhamesExpedidosPatio(
     }
 
     // 3) Entrada direta / composição em tanque expedido ainda não coberto
-    for (const v of vasilhames || []) {
+    const expedidosList = saldoCtx?.vasilhamesExpedidos || vasilhames || [];
+    for (const v of expedidosList) {
       if (countedDirect.has(v.id)) continue;
       if (!isVasilhameExpedido(v)) continue;
       if (
@@ -2413,11 +2624,17 @@ export function computeEstoqueQuantidadesPorLocal(
   };
   if (!estoqueItem?.id) return empty;
 
-  const fifoRows = listDestinosFifoForEstoque(estoqueItem, transbordos);
+  // Reusa FIFO/cadeia já calculados no saldo do mesmo item (cache do ctx).
+  const fifoRows = listDestinosFifoForEstoque(
+    estoqueItem,
+    transbordos,
+    saldoCtx
+  );
   const chainRows = listHistoricoTransbordosEncadeados(
     estoqueItem,
     transbordos,
-    vasilhames
+    vasilhames,
+    saldoCtx
   );
   const trackedKeys = new Set();
   for (const row of [...fifoRows, ...chainRows]) {
@@ -2441,7 +2658,56 @@ export function computeEstoqueQuantidadesPorLocal(
   const tankasContadasViaVasilhame = new Set();
   const vasilhamesContados = new Set();
 
-  for (const v of vasilhames || []) {
+  // Candidatos: fatias FIFO/cadeia + stamps de composição + chaves rastreadas.
+  // Evita O(V) completo por linha da grade (~383 × todos os tanques).
+  const vasIdx = getVasilhameIndex(vasilhames);
+  const vasilhameById = saldoCtx?.vasilhameById || vasIdx.byId;
+  /** @type {Map<string, object>} */
+  const candidateVas = new Map();
+  const addCandidate = (v) => {
+    if (!v?.id || isVasilhameExpedido(v)) return;
+    if ((v.status || "No Pátio") !== "No Pátio") return;
+    candidateVas.set(v.id, v);
+  };
+  for (const vasId of fatias.keys()) {
+    addCandidate(vasilhameById.get(vasId));
+  }
+  for (const v of saldoCtx?.vasilhamesByEstoqueStamp?.get(String(estoqueItem.id)) || []) {
+    addCandidate(v);
+  }
+  for (const k of trackedKeys) {
+    if (k.startsWith("vasilhame:")) {
+      addCandidate(vasilhameById.get(k.slice("vasilhame:".length)));
+    } else if (k.startsWith("placa:")) {
+      const placaKey = k.slice("placa:".length);
+      for (const v of vasIdx.byPlacaKey.get(placaKey) || []) addCandidate(v);
+    } else if (k.startsWith("tanka_codigo:")) {
+      const codigo = k.slice("tanka_codigo:".length);
+      const indexed = saldoCtx?.tankagemByCodigo?.get(codigo);
+      if (indexed) {
+        for (const v of indexed) addCandidate(v);
+      } else {
+        for (const v of saldoCtx?.vasilhamesNoPatio || vasilhames || []) {
+          if (
+            v?.tipo === "Tankagem" &&
+            normCodigo(v.placa || v.tanka || "") === codigo
+          ) {
+            addCandidate(v);
+          }
+        }
+      }
+    }
+  }
+  const loteVasId = estoqueItem?.lotes?.[0]?.vasilhame_id;
+  if (loteVasId) addCandidate(vasilhameById.get(loteVasId));
+
+  // Sem rastro FIFO e sem stamp: fallback legado (entrada direta / OP).
+  const patioList =
+    candidateVas.size > 0
+      ? candidateVas.values()
+      : saldoCtx?.vasilhamesNoPatio || vasilhames || [];
+
+  for (const v of patioList) {
     if (!v || isVasilhameExpedido(v)) continue;
     if ((v.status || "No Pátio") !== "No Pátio") continue;
 
