@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS movimentos_mp (
   observations text,
   operator text,
   movement_date timestamptz,
+  data_saida date,
   balance_before numeric,
   balance_after numeric
 );

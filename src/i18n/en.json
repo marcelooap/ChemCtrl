@@ -1837,6 +1837,7 @@
           "title": "Schedule loading",
           "editTitle": "Occupied slot",
           "slotLabel": "{{date}} · {{time}}",
+          "pedidoCliente": "Customer Order: {{pedido}}",
           "searchPlaceholder": "Search outbound by code or client...",
           "emptySaidas": "No outbound requests available to schedule.",
           "multiHint": "{{count}} outbound request(s) selected for this slot",
@@ -4070,7 +4071,8 @@
     "fiscalTable": {
       "product": "Product",
       "unit": "Unit",
-      "type": "Type"
+      "type": "Type",
+      "departureDate": "Exit Date"
     },
     "filters": {
       "all": "All",

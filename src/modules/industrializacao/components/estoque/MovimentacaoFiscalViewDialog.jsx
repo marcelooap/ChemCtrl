@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/compon
 import { Button } from '@shared/components/ui/button';
 import { FileDown, FileText } from 'lucide-react';
 import { generateMovimentacaoPDF } from '@industrializacao/lib/pdfMovimentacao.js';
-import { fmtDateTime, fmtNumber } from '@/i18n/formatters';
+import { fmtDate, fmtDateTime, fmtNumber } from '@/i18n/formatters';
 import { translateStockDestination } from '@/i18n/domainMaps';
 
 const DEST_COLORS = {
@@ -89,6 +89,14 @@ export default function MovimentacaoFiscalViewDialog({ movement, stock, open, on
               <span className={`inline-flex mt-0.5 text-xs font-semibold px-2 py-0.5 rounded-full ${DEST_COLORS[movement.destination] || 'bg-muted text-foreground'}`}>
                 {translateStockDestination(movement.destination)}
               </span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t('rawMaterialStock.fiscalTable.departureDate')}</p>
+              <p className="font-medium">
+                {movement.destination === 'Perda em Processo' || !movement.data_saida
+                  ? '—'
+                  : fmtDate(movement.data_saida, undefined, i18n.language)}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t('rawMaterialStock.movementDialog.balanceLabel')} ({t('rawMaterialStock.fiscalView.before')})</p>

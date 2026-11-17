@@ -138,6 +138,7 @@ function saidaMatchesSearch(saida, query, vasilhamesById) {
 
   if (String(saida?.codigo || "").toLowerCase().includes(q)) return true;
   if (String(saida?.cliente_nome || "").toLowerCase().includes(q)) return true;
+  if (String(saida?.pedido_cliente || "").toLowerCase().includes(q)) return true;
 
   for (const item of saida?.itens || []) {
     const placaItem = String(item?.vasilhame_placa || "").toLowerCase();
@@ -227,7 +228,7 @@ export default function Saida({
   const [syncing, setSyncing] = useState(false);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
   // Expedição: remove Data Solicitação (-1) e adiciona Transporte (+1) → mantém 11.
-  const tableColSpan = isExpedicao ? 11 : 10;
+  const tableColSpan = isExpedicao ? 12 : 11;
 
   const applySaidaVisibility = useCallback(
     (list) => {
@@ -880,7 +881,7 @@ export default function Saida({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por código, cliente, lote ou tanque..."
+              placeholder="Buscar por código, cliente, pedido, lote ou tanque..."
               className="pl-10 bg-card"
             />
           </div>
@@ -972,6 +973,7 @@ export default function Saida({
                 )}
                 <th className="px-5 py-3 font-medium">Data Programada</th>
                 <th className="px-5 py-3 font-medium">Dias</th>
+                <th className="px-5 py-3 font-medium">Pedido Cliente</th>
                 <th className="px-5 py-3 font-medium">Cliente</th>
                 <th className="px-5 py-3 font-medium">Produtos</th>
                 <th className="px-5 py-3 font-medium">Qtd. Total (kg)</th>
@@ -1076,6 +1078,9 @@ export default function Saida({
                       {hideDias || !s.data_programada
                         ? "-"
                         : renderDias(s.data_programada)}
+                    </td>
+                    <td className="px-5 py-3 text-foreground">
+                      {s.pedido_cliente || "-"}
                     </td>
                     <td className="px-5 py-3 text-foreground">{s.cliente_nome || "-"}</td>
                     <td className="px-5 py-3 text-muted-foreground">

@@ -89,6 +89,7 @@ function gerarSaidaPDF(saida) {
       [
         ["Cliente", saida.cliente_nome || "—", 2],
         ["Destino", saida.destino || "—", 2],
+        ["Pedido Cliente", saida.pedido_cliente || "—", 2],
         ["Data da Solicitação", formatDate(saida.data_solicitacao)],
         ["Data Programada", formatDate(saida.data_programada)],
       ],
@@ -395,6 +396,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
           <InfoItem label="Código" value={saida.codigo} highlight="text-primary text-lg font-bold" />
           <InfoItem label="Cliente" value={saida.cliente_nome} highlight="text-foreground text-lg font-bold" />
           <InfoItem label="Destino" value={saida.destino} />
+          <InfoItem label="Pedido Cliente" value={saida.pedido_cliente} />
           <InfoItem label="Data da Solicitação" value={formatDate(saida.data_solicitacao)} />
           <InfoItem label="Data Programada" value={formatDate(saida.data_programada)} />
           <InfoItem

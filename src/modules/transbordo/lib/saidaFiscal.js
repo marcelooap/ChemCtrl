@@ -689,8 +689,19 @@ export async function applySaidaFiscalToggle(
   // Industrialização: retorno de MP — baixa estoque e registra movimentação fiscal
   for (const item of itens) {
     if (item.tipo !== TIPO_IND_RETORNO_MP) continue;
-    // Movimentação fiscal já existente: estoque já foi baixado na Industrialização
-    if (item.movement_id) continue;
+
+    // Movimentação fiscal já existente: estoque já foi baixado na Industrialização.
+    // Ao validar/desvalidar a saída, apenas grava/limpa a data de saída (como vasilhames).
+    if (item.movement_id) {
+      try {
+        await base44.entities.StockMovement.update(item.movement_id, {
+          data_saida: checked ? dataSaida : null,
+        });
+      } catch {
+        // não bloqueia a validação fiscal se a atualização da data falhar
+      }
+      continue;
+    }
     if (!item.stock_id) continue;
 
     const stock = stockById.get(String(item.stock_id));
@@ -717,6 +728,7 @@ export async function applySaidaFiscalToggle(
         observations: obsTag,
         operator: userNome || "",
         movement_date: new Date().toISOString(),
+        data_saida: dataSaida,
         balance_before: balanceBefore,
         balance_after: newBalance,
       });

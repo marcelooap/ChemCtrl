@@ -1760,9 +1760,14 @@ export function generateMovimentacaoPDF(item, movement) {
     [t('pdf.fields.unitPrice'), (item.unit_price || 0).toFixed(4)],
   ], 3);
   y = addSectionTitle(doc, y, t('pdf.movement.sectionMovement'));
+  const dataSaidaPdf =
+    movement.destination === 'Perda em Processo' || !movement.data_saida
+      ? '-'
+      : fmtDate(movement.data_saida);
   y = addInfoGrid(doc, y, [
     [t('pdf.fields.dateTime'), movement.movement_date ? fmtDateTime(movement.movement_date) : '-'],
     [t('pdf.fields.destination'), movement.destination || '-'],
+    [t('rawMaterialStock.fiscalTable.departureDate'), dataSaidaPdf],
     [t('pdf.common.operator'), movement.operator || '-'],
     [t('pdf.fields.movedQty', { unit }), '-' + fmtNum(movement.quantity, 3) + ' ' + unit],
     [t('pdf.fields.fiscalQty', { unit }), fmtNum(movement.quantity, 3) + ' ' + unit],

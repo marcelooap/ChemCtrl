@@ -770,10 +770,10 @@ export function containerLabel(c) {
   return parts.join(" · ");
 }
 
+/** Formato: cod - produto - lote - quantidade - unidade */
 export function retornoMpLabel(row) {
   if (!row) return "—";
-  const reg = row.entry_id || "—";
-  const code = row.mp_code || row.produto_codigo || "—";
+  const cod = row.mp_code || row.produto_codigo || row.entry_id || "—";
   const name = row.mp_name || row.produto_nome || "—";
   const lot = row.lot || row.lote || "—";
   const qty = Number(row.quantity ?? row.quantidade_solicitada ?? 0);
@@ -781,7 +781,7 @@ export function retornoMpLabel(row) {
     ? qty.toLocaleString("pt-BR", { maximumFractionDigits: 3 })
     : "0";
   const unit = row.unit || row.unidade || "kg";
-  return `${reg} - ${code} - ${name} - ${lot} - ${qtd} ${unit}`;
+  return `${cod} - ${name} - ${lot} - ${qtd} - ${unit}`;
 }
 
 function isItemEmbalagemUnitaria(item, vasilhame = null) {

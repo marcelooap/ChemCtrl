@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from '@shared/components/ui/tabs';
 import { useToast } from '@shared/components/ui/use-toast';
 import ConfirmDialog from '@industrializacao/components/ConfirmDialog';
 import moment from 'moment';
-import { fmtNumber, fmtCurrency, fmtDateTime } from '@/i18n/formatters';
+import { fmtNumber, fmtCurrency, fmtDate, fmtDateTime } from '@/i18n/formatters';
 import { translateStockDestination } from '@/i18n/domainMaps';
 import { calcPackagingQty } from '@industrializacao/lib/stockUtils';
 import {
@@ -578,6 +578,7 @@ export default function Estoque() {
                     <th className="px-4 py-2 text-right text-xs font-semibold">{t('common.quantity')}</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.unit')}</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.type')}</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold">{t('rawMaterialStock.fiscalTable.departureDate')}</th>
                     <th className="px-4 py-2 text-center text-xs font-semibold">{t('rawMaterialStock.table.actions')}</th>
                   </tr>
                 </thead>
@@ -600,6 +601,11 @@ export default function Estoque() {
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${DEST_COLORS[m.destination] || 'bg-muted text-foreground'}`}>
                           {translateStockDestination(m.destination)}
                         </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">
+                        {m.destination === 'Perda em Processo' || !m.data_saida
+                          ? '—'
+                          : fmtDate(m.data_saida, undefined, i18n.language)}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1">

@@ -35,7 +35,7 @@ export const LIST_PROJECTIONS = {
   // ChemFlow / Transbordo
   t_clientes: 'id,nome,created_at',
   t_saidas:
-    'id,created_at,data_solicitacao,data_programada,cliente_id,cliente_nome,status,modulo_origem,itens,validacao_modulos,enviado_ao_fiscal,destino,observacao,tipo',
+    'id,created_at,codigo,data_solicitacao,data_programada,cliente_id,cliente_nome,status,modulo_origem,itens,validacao_modulos,enviado_ao_fiscal,destino,pedido_cliente,observacoes,quantidade_total,usuario_criador,usuario_responsavel',
   t_vasilhames:
     'id,created_at,codigo,cliente_id,cliente_nome,produto_id,produto_nome,status,volume,massa,densidade,lote,composicao,transbordo_id,placa,fracionado,capacidade,tipo',
   t_transbordos:

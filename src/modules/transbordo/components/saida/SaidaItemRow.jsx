@@ -23,6 +23,7 @@ function massaLiquidaFiscal(vasilhame, volumeL) {
   return roundMass(vasilhame?.peso_liquido || 0);
 }
 import { getEstoqueUnidade } from "@transbordo/lib/estoqueSaldo";
+import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
 import {
   isDestinoEmbalagemUnitaria,
   getQuantidadeEmbalagensFromVasilhame,
@@ -311,7 +312,10 @@ export default function SaidaItemRow({
   // ── Embalado: produtos do cliente com saldo disponível (após outras linhas) ──
   const embaladoEntradas = hasCliente
     ? entradas.filter(
-        (e) => e.embalado && sameClienteRecord(e, clienteId, clienteNome)
+        (e) =>
+          (e.embalado ||
+            resolveTipoRecebimentoEstoque(e) === "embalado") &&
+          sameClienteRecord(e, clienteId, clienteNome)
       )
     : [];
 
@@ -531,10 +535,13 @@ export default function SaidaItemRow({
       .map((it) => it.movement_id)
   );
 
+  // Somente "Retorno de MP Não Aplicada" sem data de saída (ainda não aplicada).
+  // Perda em Processo e retornos já aplicados não entram na lista.
   const retornosMovimento = hasCliente
     ? movementsInd.filter(
         (m) =>
           m.destination === DESTINO_RETORNO_MP &&
+          (!m.data_saida || m.id === item.movement_id) &&
           clientsMatch(m.client, clienteNome) &&
           (m.quantity || 0) > 0 &&
           (!movementsUsados.has(m.id) || m.id === item.movement_id)

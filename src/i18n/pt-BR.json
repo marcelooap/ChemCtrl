@@ -1837,6 +1837,7 @@
           "title": "Agendar carregamento",
           "editTitle": "Horário ocupado",
           "slotLabel": "{{date}} · {{time}}",
+          "pedidoCliente": "Pedido Cliente: {{pedido}}",
           "searchPlaceholder": "Buscar saída por código ou cliente...",
           "emptySaidas": "Nenhuma saída disponível para agendar.",
           "multiHint": "{{count}} saída(s) selecionada(s) para este horário",
@@ -3989,7 +3990,8 @@
     "fiscalTable": {
       "product": "Produto",
       "unit": "Unid.",
-      "type": "Tipo"
+      "type": "Tipo",
+      "departureDate": "Data de Saída"
     },
     "filters": {
       "all": "Todas",

@@ -5,6 +5,7 @@ import { base44 } from "@industrializacao/api/base44Client";
 import { useInternalAuth as useAuth } from "@/lib/InternalAuthContext";
 import { ArrowLeft, Calendar, Plus, Save } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
+import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
@@ -75,6 +76,11 @@ import {
   listNomesClientesIndustrializacao,
   persistClienteSelecionado,
 } from "@painel/lib/saidaClientes";
+import {
+  computeEstoqueSaldo,
+  hydrateEstoqueFiscal,
+} from "@transbordo/lib/estoqueSaldo";
+import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
 
 /** Data local de hoje em yyyy-mm-dd (evita deslocamento UTC). */
 const todayStr = () => {
@@ -141,6 +147,7 @@ export default function SaidaForm({
     destino: "",
     data_solicitacao: todayStr(),
     data_programada: "",
+    pedido_cliente: "",
     observacoes: "",
     itens: [emptySaidaItem(defaultOrigem)],
   });
@@ -177,7 +184,7 @@ export default function SaidaForm({
   useEffect(() => {
     const load = async () => {
       try {
-        const [ents, vascs, cliens, saics, reservasList, historicoList] =
+        const [ents, vascs, cliens, saics, reservasList, historicoList, transList] =
           await Promise.all([
             entities.estoque.list(),
             entities.vasilhames.list(),
@@ -185,9 +192,28 @@ export default function SaidaForm({
             entities.saidas.list("-created_date"),
             entities.materialReservas.list("-created_at").catch(() => []),
             listHistoricoTanquePendentes().catch(() => []),
+            entities.transbordos.list().catch(() => []),
           ]);
 
-        setEntradas(ents);
+        // Mesmo saldo live da tela Reservar Material — evita lote com saldo
+        // real sumir do dropdown por saldo_final persistido desatualizado.
+        const estoqueWithSaldo = (ents || []).map((e) => {
+          const hydrated = hydrateEstoqueFiscal(e);
+          const isEmbalado =
+            resolveTipoRecebimentoEstoque(hydrated) === "embalado";
+          return {
+            ...hydrated,
+            embalado: isEmbalado || Boolean(hydrated.embalado),
+            saldo_atual: computeEstoqueSaldo(
+              hydrated,
+              transList || [],
+              saics || [],
+              vascs || []
+            ),
+          };
+        });
+
+        setEntradas(estoqueWithSaldo);
         setVasilhames(vascs);
         setSaidas(saics);
         setReservas(reservasList || []);
@@ -254,6 +280,7 @@ export default function SaidaForm({
             destino: normalizeDestino(saida.destino),
             data_solicitacao: saida.data_solicitacao || todayStr(),
             data_programada: saida.data_programada || "",
+            pedido_cliente: saida.pedido_cliente || "",
             observacoes: saida.observacoes || "",
             itens,
           });
@@ -286,10 +313,11 @@ export default function SaidaForm({
     return total;
   };
 
-  // Só devolve o volume baixado quando o saldo físico já foi reduzido.
-  // Tanque ainda cheio (validação que não zerou o cadastro) não é somado de novo.
+  // Sempre devolve o que esta saída já baixou: o formulário reinsere esses
+  // itens e precisa enxergar o saldo pré-baixa para incluir novas linhas
+  // (ex.: lote com 44 kg restantes + 44 kg já validados na mesma S258).
   const aplicarCredito = (saldo, credito) =>
-    credito > 0 && saldo + 1e-6 < credito ? saldo + credito : saldo;
+    credito > 0 ? saldo + credito : saldo;
 
   const creditoBaixadoEstoque = (entradaId) => {
     if (!editingSaida) return 0;
@@ -969,6 +997,7 @@ export default function SaidaForm({
           agendamentoPendente?.dateIso ||
           formData.data_programada ||
           null,
+        pedido_cliente: String(formData.pedido_cliente || "").trim() || null,
         observacoes: formData.observacoes,
         itens: itensPersistidos,
         quantidade_total: quantidadeTotal,
@@ -1196,7 +1225,7 @@ export default function SaidaForm({
         </h2>
         <div
           className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
-            usesAgendamentoModal ? "xl:grid-cols-3" : "xl:grid-cols-4"
+            usesAgendamentoModal ? "xl:grid-cols-4" : "xl:grid-cols-5"
           }`}
         >
           <div className="space-y-1.5">
@@ -1247,6 +1276,19 @@ export default function SaidaForm({
                   data_solicitacao: iso,
                 }))
               }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Pedido Cliente</Label>
+            <Input
+              value={formData.pedido_cliente}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  pedido_cliente: e.target.value,
+                }))
+              }
+              placeholder="Número do pedido (opcional)"
             />
           </div>
           {!usesAgendamentoModal ? (

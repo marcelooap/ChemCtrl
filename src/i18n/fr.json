@@ -1321,6 +1321,7 @@
           "title": "Planifier un chargement",
           "editTitle": "Créneau occupé",
           "slotLabel": "{{date}} · {{time}}",
+          "pedidoCliente": "Commande client : {{pedido}}",
           "searchPlaceholder": "Rechercher une sortie par code ou client...",
           "emptySaidas": "Aucune sortie disponible à planifier.",
           "multiHint": "{{count}} sortie(s) sélectionnée(s) pour ce créneau",
@@ -3444,7 +3445,8 @@
     "fiscalTable": {
       "product": "Produit",
       "unit": "Unité",
-      "type": "Type"
+      "type": "Type",
+      "departureDate": "Date de Sortie"
     },
     "filters": {
       "all": "Toutes",

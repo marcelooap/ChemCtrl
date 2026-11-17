@@ -78,6 +78,7 @@ export default function AgendamentoSlotModal({
       const hay = [
         s.codigo,
         s.cliente_nome,
+        s.pedido_cliente,
         ...linhas.flatMap((linha) => [linha.produto, linha.vasilhame]),
       ]
         .join(' ')
@@ -85,6 +86,22 @@ export default function AgendamentoSlotModal({
       return hay.includes(q);
     });
   }, [availableSaidas, search, occupied, slotSaidaIds]);
+
+  const pedidosClienteLabel = useMemo(() => {
+    if (!occupied) return '';
+    const pedidos = [];
+    const seen = new Set();
+    for (const s of availableSaidas || []) {
+      if (!slotSaidaIds.has(String(s.id))) continue;
+      const pedido = String(s?.pedido_cliente || '').trim();
+      if (!pedido) continue;
+      const key = pedido.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pedidos.push(pedido);
+    }
+    return pedidos.join(', ');
+  }, [availableSaidas, occupied, slotSaidaIds]);
 
   if (!slot) return null;
 
@@ -143,6 +160,11 @@ export default function AgendamentoSlotModal({
               date: formatDateBR(slot.dateIso),
               time: horarioLabel,
             })}
+            {pedidosClienteLabel
+              ? ` · ${t('painel.comercial.agendamentos.modal.pedidoCliente', {
+                  pedido: pedidosClienteLabel,
+                })}`
+              : null}
           </p>
         </DialogHeader>
 

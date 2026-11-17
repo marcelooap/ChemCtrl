@@ -165,6 +165,9 @@ export default function MovimentacaoEstoqueDialog({ open, onOpenChange, stocks, 
         observations: observations || '',
         operator: user?.nome_completo || user?.usuario || '',
         movement_date: new Date().toISOString(),
+        // Data de saída só é preenchida ao aplicar o retorno em solicitação de saída.
+        // Perda em Processo permanece nula (UI exibe "—").
+        data_saida: null,
         balance_before: balanceBefore,
         balance_after: newBalance,
       });
