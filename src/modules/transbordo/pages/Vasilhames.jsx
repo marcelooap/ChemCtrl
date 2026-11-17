@@ -1768,21 +1768,26 @@ export default function Vasilhames() {
           total={filtered.length}
           onPageChange={setPage}
           disabled={loading}
-          className="px-4 border-t border-border shrink-0"
+          className="px-4 border-t border-border shrink-0 bg-card"
+          meta={
+            <>
+              <span>
+                Vasilhames no pátio:{" "}
+                <span className="font-medium text-foreground">{noPatio.length}</span>
+              </span>
+              <span>
+                Volume total no pátio:{" "}
+                <span className="font-medium text-foreground">
+                  {formatVolume(volumePatio)} L
+                </span>
+              </span>
+              <span>
+                Total exibido:{" "}
+                <span className="font-medium text-foreground">{filtered.length}</span>
+              </span>
+            </>
+          }
         />
-
-        {/* Footer Summary */}
-        <div className="flex items-center justify-between gap-6 px-4 py-3 border-t border-border text-sm flex-wrap shrink-0">
-          <span className="text-muted-foreground">
-            Vasilhames no pátio: <span className="font-medium text-foreground">{noPatio.length}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Volume total no pátio: <span className="font-medium text-foreground">{formatVolume(volumePatio)} L</span>
-          </span>
-          <span className="text-muted-foreground">
-            Total exibido: <span className="font-medium text-foreground">{filtered.length}</span>
-          </span>
-        </div>
       </div>
 
       {/* Modal */}

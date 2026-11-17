@@ -188,6 +188,7 @@ export default function ComunicacaoRecebimentoDialog({
                   <th className={thClass}>Lote</th>
                   <th className={thClass}>Fabricação</th>
                   <th className={thClass}>Validade</th>
+                  <th className={thClass}>Dias p/ Vencer</th>
                   <th className={thClass}>Densidade</th>
                 </tr>
               </thead>
@@ -197,6 +198,7 @@ export default function ComunicacaoRecebimentoDialog({
                     <td className={tdClass}>{r.lote}</td>
                     <td className={tdClass}>{r.fabricacao}</td>
                     <td className={tdClass}>{r.validade}</td>
+                    <td className={`${tdClass} tabular-nums`}>{r.diasParaVencer}</td>
                     <td className={`${tdClass} tabular-nums`}>{r.densidade}</td>
                   </tr>
                 ))}

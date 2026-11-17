@@ -28,6 +28,7 @@ export default function FiltracaoEditModal({
   onSave,
   filtracao,
   elementos = [],
+  mode = "editar",
 }) {
   const [sae, setSae] = useState("");
   const [filtroId, setFiltroId] = useState("");
@@ -102,7 +103,11 @@ export default function FiltracaoEditModal({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Editar Filtração</DialogTitle>
+          <DialogTitle>
+            {mode === "lancar"
+              ? "Lançar resultado da análise"
+              : "Editar Filtração"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -203,7 +208,11 @@ export default function FiltracaoEditModal({
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Salvando..." : "Salvar"}
+            {saving
+              ? "Salvando..."
+              : mode === "lancar"
+                ? "Lançar resultado"
+                : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>

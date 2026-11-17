@@ -28,6 +28,23 @@ export function formatDateEntrada(dateStr) {
   return d.toLocaleDateString("pt-BR");
 }
 
+/** Dias restantes até a validade (negativo se já vencido). Sem validade → "-". */
+export function formatDiasParaVencer(dateStr, { indeterminada = false } = {}) {
+  if (indeterminada || !dateStr) return "-";
+  const raw = String(dateStr).trim();
+  if (!raw) return "-";
+  const expiry = raw.includes("T")
+    ? new Date(raw)
+    : new Date(`${raw.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(expiry.getTime())) return "-";
+  expiry.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return String(
+    Math.round((expiry.getTime() - today.getTime()) / 86_400_000)
+  );
+}
+
 export function resolveProdutoCadastro(lote, produtosById) {
   if (!lote) return null;
   if (lote.produto_id && produtosById.has(lote.produto_id)) {
@@ -444,6 +461,9 @@ export function buildEntradaRecebimentoViewModel({
       validade: l.validade_indeterminada
         ? "Indeterminado"
         : formatDateEntrada(l.data_validade),
+      diasParaVencer: formatDiasParaVencer(l.data_validade, {
+        indeterminada: !!l.validade_indeterminada,
+      }),
       densidade: formatDensidade(resolveDensidade(l, produtosById)),
     })),
     pesagem: hasPesagem

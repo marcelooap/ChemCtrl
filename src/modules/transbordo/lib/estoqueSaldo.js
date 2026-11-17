@@ -16,7 +16,10 @@ import {
   expandOrigensForFifo,
 } from "@transbordo/lib/fifo";
 import { entities } from "@transbordo/services/entities";
-import { computeTankaLotesDisponiveis } from "@transbordo/lib/tankaVolume";
+import {
+  computeTankaLotesDisponiveis,
+  computeTankaRemainingByEstoqueId,
+} from "@transbordo/lib/tankaVolume";
 import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
 import {
   estoqueIdsFromSaidaItem,
@@ -801,6 +804,8 @@ export function listHistoricoTransbordosEncadeados(
   const firstIds = new Set(firstDestinos.map((r) => r.transbordoId).filter(Boolean));
 
   const trackedKeys = new Set();
+  /** @type {Map<string, number>} tanka key → instante do 1º fill deste estoque */
+  const tankaFillSince = new Map();
   firstDestinos.forEach((row) => {
     if (!row.rawDestino) return;
     collectEmbalagemKeysFromDestino(
@@ -808,6 +813,24 @@ export function listHistoricoTransbordosEncadeados(
       row.transbordoId,
       vasilhames
     ).forEach((k) => trackedKeys.add(k));
+
+    // Dreno de tanka só encadeia se for DEPOIS do fill deste estoque.
+    // Sem isso, E632 (T410) herdava envases Expedido de E508 (T293/T296)
+    // na mesma tanka/lote e zerava o saldo indevidamente.
+    const d = row.rawDestino;
+    if (d?.tipo_embalagem !== "Tankagem") return;
+    const fillMs = (() => {
+      const ms = new Date(row.data || 0).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    })();
+    const keys = [];
+    if (d.tanka_id) keys.push(`tanka:${d.tanka_id}`);
+    const codigo = normCodigo(d.tanka_codigo);
+    if (codigo) keys.push(`tanka_codigo:${codigo}`);
+    for (const k of keys) {
+      const prev = tankaFillSince.get(k);
+      if (prev == null || fillMs < prev) tankaFillSince.set(k, fillMs);
+    }
   });
 
   if (trackedKeys.size === 0) return [];
@@ -832,11 +855,22 @@ export function listHistoricoTransbordosEncadeados(
 
       const dens = parseDensidade(t.densidade);
       const origensFifo = expandOrigensForFifo(origens, dens);
+      const opMs = (() => {
+        const raw = t.created_at || t.created_date || t.data;
+        const ms = new Date(raw || 0).getTime();
+        return Number.isFinite(ms) ? ms : 0;
+      })();
 
       const matchingOrigemIdx = new Set();
       origensFifo.forEach((o, idx) => {
         if (!origemMatchesEmbalagemKeys(o, trackedKeys, vasilhames)) return;
         if (!origemCarregaLoteRastreado(o, trackedLotes)) return;
+        if (
+          (o.tipo_origem || "") === "tanka" &&
+          !origemTankaAposFillDesteEstoque(o, opMs, tankaFillSince)
+        ) {
+          return;
+        }
         matchingOrigemIdx.add(idx);
       });
       if (matchingOrigemIdx.size === 0) continue;
@@ -915,6 +949,30 @@ function normLoteKey(value) {
 }
 
 /**
+ * Saída de tanka só pertence a este estoque se ocorrer no/após o fill FIFO.
+ */
+function origemTankaAposFillDesteEstoque(origem, opMs, tankaFillSince) {
+  if (!origem || !tankaFillSince || tankaFillSince.size === 0) return true;
+  const keys = [];
+  if (origem.entrada_id) keys.push(`tanka:${origem.entrada_id}`);
+  const codigo = normCodigo(origem.tanka_codigo || "");
+  if (codigo) keys.push(`tanka_codigo:${codigo}`);
+  const fromLabel = normCodigo(
+    String(origem.entrada_codigo || "").split(/\s*[-–]\s*/)[0]
+  );
+  if (fromLabel) keys.push(`tanka_codigo:${fromLabel}`);
+
+  let earliest = null;
+  for (const k of keys) {
+    if (!tankaFillSince.has(k)) continue;
+    const ms = tankaFillSince.get(k);
+    if (earliest == null || ms < earliest) earliest = ms;
+  }
+  if (earliest == null) return true;
+  return opMs >= earliest;
+}
+
+/**
  * Origem em vasilhame específico: a embalagem já foi filtrada pelo FIFO.
  * Origem em tanka: só conta se o lote retirado for o do estoque visualizado.
  */
@@ -977,7 +1035,19 @@ export function getEstoqueWeightsForVasilhame(vasilhame, transbordos = [], estoq
       for (const [id, m] of weights) {
         weights.set(id, m / totalStamped);
       }
-      return weights;
+      // Stamp de tanka/isotanque (origem tanka) não é id de estoque — não
+      // retornar cedo com weight=0 para o estoque real; cai no matching por OP.
+      const tankaIds = collectTankaIdsForVasilhame(vasilhame, transbordos);
+      const stampKeys = [...weights.keys()].map(String);
+      const stampsOnlyTanka =
+        tankaIds.size > 0 && stampKeys.every((k) => tankaIds.has(k));
+      const matchesThis =
+        !!estoqueItem?.id &&
+        stampKeys.some((k) => idsEqual(k, estoqueItem.id));
+      if (!stampsOnlyTanka || matchesThis) {
+        return weights;
+      }
+      weights.clear();
     }
   }
 
@@ -1351,6 +1421,37 @@ export function resolveVolumeVasilhameParaBaixa(vasilhame, transbordos = []) {
   return fromOp > 0 ? fromOp : 0;
 }
 
+/**
+ * Placas quase iguais (diferença de 1 dígito) — cobre typo OP vs cadastro
+ * (ex.: destino `0326905002` vs vasilhame `032690502` no T296/METANOL).
+ */
+function placasQuaseIguais(a, b) {
+  const da = String(a || "").replace(/\D/g, "");
+  const db = String(b || "").replace(/\D/g, "");
+  if (!da || !db) return false;
+  if (da === db) return true;
+  if (Math.abs(da.length - db.length) !== 1) return false;
+  const longer = da.length > db.length ? da : db;
+  const shorter = da.length > db.length ? db : da;
+  for (let i = 0; i < longer.length; i += 1) {
+    if (longer.slice(0, i) + longer.slice(i + 1) === shorter) return true;
+  }
+  return false;
+}
+
+function vasilhameMatchesTransbordo(v, transbordo) {
+  if (!v || !transbordo) return false;
+  if (transbordo.id && v.transbordo_id && v.transbordo_id === transbordo.id) {
+    return true;
+  }
+  const code = String(transbordo.codigo_transbordo || "").trim();
+  if (!code) return false;
+  return (
+    String(v.numero_op || "").trim() === code ||
+    String(v.codigo || "").trim() === code
+  );
+}
+
 /** Localiza o vasilhame gerado/associado a um destino de OP. */
 function resolveVasilhameFromDestino(destino, transbordo, vasilhames = []) {
   if (!destino) return null;
@@ -1373,13 +1474,25 @@ function resolveVasilhameFromDestino(destino, transbordo, vasilhames = []) {
   }
 
   if (transbordo?.id) {
-    return (
-      (index.byTransbordoId.get(transbordo.id) || []).find(
-        (v) => key === EMPTY_PLACA_KEY || placaBarrilKey(v.placa, v.barril) === key
-      ) || null
+    const byOpExact = (index.byTransbordoId.get(transbordo.id) || []).find(
+      (v) => key === EMPTY_PLACA_KEY || placaBarrilKey(v.placa, v.barril) === key
     );
+    if (byOpExact) return byOpExact;
   }
-  return null;
+
+  // Fallback: typo de placa no destino vs cadastro, preferindo o mesmo OP.
+  const placaDest = destino.placa || destino.tanka_codigo || "";
+  if (!placaDest) return null;
+  const list = Array.isArray(vasilhames) ? vasilhames : [];
+  const fuzzySameOp = list.find(
+    (v) =>
+      vasilhameMatchesTransbordo(v, transbordo) &&
+      placasQuaseIguais(placaDest, v.placa)
+  );
+  if (fuzzySameOp) return fuzzySameOp;
+  return (
+    list.find((v) => placasQuaseIguais(placaDest, v.placa)) || null
+  );
 }
 
 /**
@@ -1528,8 +1641,10 @@ export function calcVasilhamesExpedidosPatio(
   const fiscalVasilhameIds =
     saldoCtx?.fiscalVasilhameIds ?? buildFiscalVasilhameIds(saidas);
 
-  const usaQtdOrigemOp =
-    estoqueOperaEmLitros(estoqueItem) || isEstoqueEmbalado(estoqueItem);
+  // Sempre baixa via FIFO/cadeia/composição. O ramo só-massa falhava quando
+  // composicao.estoque_id era id de tanka (origem isotanque): weight=0 e o
+  // granel em kg não debitava envases já Expedido (METANOL E508 / id 419).
+  const usaQtdOrigemOp = true;
 
   if (usaQtdOrigemOp) {
     let total = 0;
@@ -2415,17 +2530,36 @@ export function computeEstoqueQuantidadesPorLocal(
   );
   for (const [key, { id, codigo, enviado }] of tankaKeys) {
     if (tankasContadasViaVasilhame.has(key)) continue;
-    const lotes = computeTankaLotesDisponiveis({
+
+    // Preferir residual lastreado pelo id deste estoque (FIFO por origem).
+    // Matching só por lote reivindicava refill de entrada irmã (E632) no
+    // estoque já drenado (E508) — Saldo Tanka fantasma ~36.272 kg.
+    const byEstoque = computeTankaRemainingByEstoqueId({
       isotanqueId: id || null,
       tankaCodigo: codigo,
       transbordos,
     });
     let litros = 0;
-    for (const l of lotes) {
-      const loteL = normLoteKey(l.lote);
-      if (loteEstoque && loteL && loteL !== loteEstoque) continue;
-      litros += Number(l.quantidade_l) || 0;
+    for (const [estoqueId, vol] of byEstoque) {
+      if (idsEqual(estoqueId, estoqueItem.id)) {
+        litros += Number(vol) || 0;
+      }
     }
+
+    // Legado: fills sem id de estoque resolvível → cai no saldo por lote.
+    if (!(litros > 0) && byEstoque.size === 0) {
+      const lotes = computeTankaLotesDisponiveis({
+        isotanqueId: id || null,
+        tankaCodigo: codigo,
+        transbordos,
+      });
+      for (const l of lotes) {
+        const loteL = normLoteKey(l.lote);
+        if (loteEstoque && loteL && loteL !== loteEstoque) continue;
+        litros += Number(l.quantidade_l) || 0;
+      }
+    }
+
     if (enviado > 0) litros = Math.min(litros, enviado);
     qtyTankasOp += litrosParaQuantidadeOperacional(estoqueItem, litros);
   }

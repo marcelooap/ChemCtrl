@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { entities } from "@transbordo/services/entities";
-import { Search, Eye, Pencil, Trash2 } from "lucide-react";
+import { Search, Eye, Pencil, Printer, Trash2, Loader2, FlaskConical } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import { cn } from "@shared/lib/utils";
@@ -17,6 +17,7 @@ import {
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import FiltracaoEditModal from "@transbordo/components/filtracao/FiltracaoEditModal";
 import FiltracaoViewDialog from "@transbordo/components/filtracao/FiltracaoViewDialog";
+import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { formatVolume } from "@transbordo/lib/format";
 import {
   getDominantLote,
@@ -29,8 +30,10 @@ import {
   compareFiltracaoPorResultado,
   filtracaoTemSae,
 } from "@transbordo/lib/filtracao";
+import { loadFiltracaoLabelContext } from "@transbordo/lib/printSaidaAgendamento";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 import { sameClientName } from "@industrializacao/lib/permissions";
+import { useToast } from "@shared/components/ui/use-toast";
 
 function formatOperacaoData(value) {
   if (!value) return "—";
@@ -43,6 +46,7 @@ function formatOperacaoData(value) {
 }
 
 export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
+  const { toast } = useToast();
   const [filtracoes, setFiltracoes] = useState([]);
   const [elementos, setElementos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -55,6 +59,8 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
   const [deleteId, setDeleteId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [resultadoFilter, setResultadoFilter] = useState("pendente");
+  const [labelDialog, setLabelDialog] = useState(null);
+  const [labelLoadingId, setLabelLoadingId] = useState(null);
 
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -127,6 +133,28 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
     setEditingFiltracao(f);
     setEditOpen(true);
   };
+
+  const handlePrintLabel = async (f) => {
+    if (!f?.id || labelLoadingId) return;
+    setLabelLoadingId(f.id);
+    try {
+      const ctx = await loadFiltracaoLabelContext(f);
+      if (!ctx?.container) {
+        throw new Error("Não foi possível montar a etiqueta deste tanque.");
+      }
+      setLabelDialog(ctx);
+    } catch (err) {
+      toast({
+        title: "Imprimir etiqueta",
+        description: err?.message || "Não foi possível abrir a etiqueta.",
+        variant: "destructive",
+      });
+    } finally {
+      setLabelLoadingId(null);
+    }
+  };
+
+  const showPrintLabel = readOnly || resultadoFilter === "analisado";
 
   const handleSave = async (data) => {
     if (!editingFiltracao) return;
@@ -374,20 +402,60 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
                       ))}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          <RowActionButton onClick={() => handleView(f)} title="Visualizar">
-                            <Eye />
-                          </RowActionButton>
-                          {!readOnly && (
+                          {!readOnly && resultadoFilter === "pendente" ? (
                             <>
                               <RowActionButton
                                 onClick={() => handleEdit(f)}
-                                title="Editar SAE / partículas / filtro"
+                                title="Lançar resultado da análise"
                               >
-                                <Pencil />
+                                <FlaskConical />
                               </RowActionButton>
-                              <RowActionButton tone="danger" onClick={() => setDeleteId(f.id)} title="Excluir">
+                              <RowActionButton onClick={() => handleView(f)} title="Visualizar">
+                                <Eye />
+                              </RowActionButton>
+                              <RowActionButton
+                                tone="danger"
+                                onClick={() => setDeleteId(f.id)}
+                                title="Excluir"
+                              >
                                 <Trash2 />
                               </RowActionButton>
+                            </>
+                          ) : (
+                            <>
+                              <RowActionButton onClick={() => handleView(f)} title="Visualizar">
+                                <Eye />
+                              </RowActionButton>
+                              {showPrintLabel && (
+                                <RowActionButton
+                                  onClick={() => handlePrintLabel(f)}
+                                  title="Imprimir etiqueta"
+                                  disabled={labelLoadingId === f.id}
+                                >
+                                  {labelLoadingId === f.id ? (
+                                    <Loader2 className="animate-spin" />
+                                  ) : (
+                                    <Printer />
+                                  )}
+                                </RowActionButton>
+                              )}
+                              {!readOnly && (
+                                <>
+                                  <RowActionButton
+                                    onClick={() => handleEdit(f)}
+                                    title="Editar SAE / partículas / filtro"
+                                  >
+                                    <Pencil />
+                                  </RowActionButton>
+                                  <RowActionButton
+                                    tone="danger"
+                                    onClick={() => setDeleteId(f.id)}
+                                    title="Excluir"
+                                  >
+                                    <Trash2 />
+                                  </RowActionButton>
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -424,6 +492,7 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
         onSave={handleSave}
         filtracao={editingFiltracao}
         elementos={elementos}
+        mode={resultadoFilter === "pendente" ? "lancar" : "editar"}
       />
       )}
 
@@ -460,6 +529,23 @@ export default function FiltracaoTab({ readOnly = false, lockedCliente = "" }) {
         </AlertDialogContent>
       </AlertDialog>
       )}
+
+      <PrintContainerLabelDialog
+        key={labelDialog?.container?.id || "closed"}
+        open={Boolean(labelDialog?.container)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setLabelDialog(null);
+        }}
+        container={labelDialog?.container || null}
+        initialVolume={labelDialog?.initialVolume}
+        density={labelDialog?.density}
+        contexto={labelDialog?.contexto || "convencional"}
+        clienteId={labelDialog?.clienteId}
+        clienteNome={labelDialog?.clienteNome}
+        manufactureDate={labelDialog?.manufactureDate || undefined}
+        expiryDate={labelDialog?.expiryDate || undefined}
+        resolvePublicToken={labelDialog?.resolvePublicToken}
+      />
     </div>
   );
 }

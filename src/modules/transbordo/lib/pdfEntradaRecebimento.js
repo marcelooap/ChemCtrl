@@ -69,12 +69,13 @@ export async function buildEntradaRecebimentoPdfDoc(input = {}) {
   y = drawSectionTitle(doc, y, "Controle de Qualidade");
   y = drawSoftTable(doc, y, {
     ...TABLE_HEADER,
-    headers: ["Lote", "Fabricação", "Validade", "Densidade"],
-    widths: [38, 38, 38, 38],
+    headers: ["Lote", "Fabricação", "Validade", "Dias p/ Vencer", "Densidade"],
+    widths: [30, 30, 30, 32, 30],
     rows: view.qualidadeRows.map((r) => [
       r.lote,
       r.fabricacao,
       r.validade,
+      r.diasParaVencer,
       r.densidade,
     ]),
   });

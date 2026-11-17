@@ -698,6 +698,62 @@ function resolveUnitVolumeForLabel(vasilhame, item) {
 }
 
 /**
+ * Contexto de etiqueta a partir de um registro de Filtração
+ * (mesmo modal da tela de Vasilhames).
+ */
+export async function loadFiltracaoLabelContext(filtracao) {
+  if (!filtracao) return null;
+
+  let vasilhame = null;
+  if (filtracao.vasilhame_id) {
+    try {
+      vasilhame = await entities.vasilhames.get(filtracao.vasilhame_id);
+    } catch {
+      vasilhame = null;
+    }
+  }
+
+  if (!vasilhame) {
+    vasilhame = {
+      id: filtracao.vasilhame_id || filtracao.id,
+      codigo: filtracao.codigo,
+      placa: filtracao.placa,
+      barril: filtracao.barril,
+      tipo: 'Vasilhame',
+      produto_id: filtracao.produto_id,
+      produto_codigo: filtracao.produto_codigo,
+      produto_nome: filtracao.produto_nome,
+      cliente_id: filtracao.cliente_id,
+      cliente_nome: filtracao.cliente_nome,
+      lote: filtracao.lote,
+      composicao: filtracao.composicao,
+      volume: filtracao.volume,
+    };
+  }
+
+  const item = {
+    tipo: TIPO_CONVENCIONAL,
+    vasilhame_id: vasilhame.id,
+    vasilhame_placa: filtracao.placa || vasilhame.placa,
+    vasilhame_barril: filtracao.barril || vasilhame.barril,
+    produto_id: filtracao.produto_id || vasilhame.produto_id,
+    produto_codigo: filtracao.produto_codigo || vasilhame.produto_codigo,
+    produto_nome: filtracao.produto_nome || vasilhame.produto_nome,
+    tipo_embalagem: vasilhame.tipo || 'Vasilhame',
+    volume_disponivel: filtracao.volume || vasilhame.volume,
+    lote: filtracao.lote || vasilhame.lote,
+  };
+
+  const saida = {
+    codigo: filtracao.codigo || vasilhame.codigo,
+    cliente_id: filtracao.cliente_id || vasilhame.cliente_id,
+    cliente_nome: filtracao.cliente_nome || vasilhame.cliente_nome,
+  };
+
+  return loadConvencionalLabelContext(item, saida, [vasilhame]);
+}
+
+/**
  * Monta o contexto do PrintContainerLabelDialog para item convencional
  * (mesmo modal da tela de Vasilhames / Transbordo).
  */

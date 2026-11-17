@@ -1224,32 +1224,36 @@ export default function Saida({
           </table>
         </div>
 
-        <div className="px-5 shrink-0 border-t border-border">
-          <ServerPaginationBar
-            page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
-            total={filtered.length}
-            onPageChange={setPage}
-            disabled={loading}
-          />
-        </div>
-
-        {/* Footer Summary */}
-        <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">
-          <span className="text-muted-foreground">
-            Itens filtrados:{" "}
-            <span className="font-medium text-foreground">{filtered.length}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Quantidade total:{" "}
-            <span className="font-medium text-foreground">
-              {formatMass(
-                filtered.reduce((sum, s) => sum + quantidadeTotalSaida(s), 0)
-              )}{" "}
-              kg
-            </span>
-          </span>
-        </div>
+        <ServerPaginationBar
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={filtered.length}
+          onPageChange={setPage}
+          disabled={loading}
+          className="px-5 border-t border-border shrink-0 bg-card"
+          meta={
+            <>
+              <span>
+                Itens filtrados:{" "}
+                <span className="font-medium text-foreground">
+                  {filtered.length}
+                </span>
+              </span>
+              <span>
+                Quantidade total:{" "}
+                <span className="font-medium text-foreground">
+                  {formatMass(
+                    filtered.reduce(
+                      (sum, s) => sum + quantidadeTotalSaida(s),
+                      0
+                    )
+                  )}{" "}
+                  kg
+                </span>
+              </span>
+            </>
+          }
+        />
       </div>
 
       {/* View Modal */}

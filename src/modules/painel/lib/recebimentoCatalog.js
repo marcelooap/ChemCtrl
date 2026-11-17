@@ -325,9 +325,48 @@ function sortProdutosByNome(produtos) {
   });
 }
 
+function produtoHasDensidade(p) {
+  if (p?.densidade_tabelada) return true;
+  const n = parseFloat(String(p?.densidade ?? "").replace(",", "."));
+  return Number.isFinite(n) && n > 0;
+}
+
+/** Prefer UUID persistido e cadastro com densidade preenchida. */
+function preferProdutoOption(a, b) {
+  const aUuid = UUID_RE.test(String(a?.id || ""));
+  const bUuid = UUID_RE.test(String(b?.id || ""));
+  if (aUuid !== bUuid) return aUuid ? a : b;
+  const aDens = produtoHasDensidade(a);
+  const bDens = produtoHasDensidade(b);
+  if (aDens !== bDens) return aDens ? a : b;
+  return a;
+}
+
+/**
+ * Um produto por cliente + código/nome (e opcionalmente fonte).
+ * Evita o mesmo item repetido no select da Ordem de Transbordo.
+ */
+export function uniqueProdutosByIdentity(produtos, { byFonte = false } = {}) {
+  const map = new Map();
+  for (const p of produtos || []) {
+    const codigo = String(p?.codigo || "").trim();
+    const nome = String(p?.produto || p?.nome || "").trim();
+    if (!codigo && !nome) continue;
+    const clienteKey = p?.cliente_id
+      ? `id:${String(p.cliente_id)}`
+      : `nome:${normProdutoKey(p?.cliente_nome)}`;
+    const ident = produtoIdentityKey(codigo, nome);
+    const fonte = byFonte ? String(p?.fonte || "") : "";
+    const key = `${clienteKey}|${ident}|${fonte}`;
+    const prev = map.get(key);
+    map.set(key, prev ? preferProdutoOption(prev, p) : p);
+  }
+  return sortProdutosByNome([...map.values()]);
+}
+
 /** Filtra produtos do cadastro para uso no Transbordo (ARMAZENAGEM|AMBOS). */
 export function filterProdutosArmazenagem(produtosCatalog = []) {
-  return sortProdutosByNome(
+  return uniqueProdutosByIdentity(
     (produtosCatalog || [])
       .filter((p) => {
         const o = String(p.origem || "").toUpperCase();
@@ -358,12 +397,16 @@ export function isProdutoIndustrializacao(produto) {
 /**
  * Granel na Ordem de Transbordo: produtos cadastrados no Transbordo
  * e matérias-primas cadastradas na Industrialização.
+ * Mantém TB e IND como opções distintas; remove duplicatas dentro de cada fonte.
  */
 export function catalogProdutosGranel(produtosTb, produtosMp) {
-  return sortProdutosByNome([
-    ...(produtosTb || []).map((p) => ({ ...p, fonte: "transbordo" })),
-    ...(produtosMp || []).map((p) => ({ ...p, fonte: "industrializacao" })),
-  ]);
+  return uniqueProdutosByIdentity(
+    [
+      ...(produtosTb || []).map((p) => ({ ...p, fonte: "transbordo" })),
+      ...(produtosMp || []).map((p) => ({ ...p, fonte: "industrializacao" })),
+    ],
+    { byFonte: true }
+  );
 }
 
 /**

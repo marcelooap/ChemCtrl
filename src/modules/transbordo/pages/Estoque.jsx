@@ -48,6 +48,7 @@ import {
   isMateriaPrimaIndustrializacao,
 } from "@transbordo/lib/materiaPrimaIndustrializacao";
 import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
+import { uniqueClientesByNome } from "@painel/lib/recebimentoCatalog";
 import { ESTOQUE_STATUS_WMS_EVENT } from "@transbordo/lib/saidaStatusWms";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
@@ -60,6 +61,17 @@ const STATUS_OPTIONS = [
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
+/** Cede o frame para a transição de rota pintar antes do cálculo pesado. */
+function yieldToPaint() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
 function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
   const valor = Number(valorEntrada) || 0;
   if (isUnidadeVolumeEntrada(getEstoqueUnidadeEntrada(estoqueItem))) {
@@ -71,7 +83,7 @@ function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
 /**
  * Monta as linhas da tela a partir do workspace: reaplica casas decimais
  * declaradas, remove embalagens unitárias / MP da Industrialização e calcula
- * o saldo de cada registro uma única vez (contexto compartilhado).
+ * saldo + breakdown por local numa única passagem (contexto compartilhado).
  */
 function buildEstoqueView(workspace, entradas = []) {
   const volumes = applyDeclaredVolumeDecimals({
@@ -112,12 +124,20 @@ function buildEstoqueView(workspace, entradas = []) {
         volumes.vasilhames,
         saldoCtx
       );
+      const locaisSaldo = computeEstoqueQuantidadesPorLocal(itemOp, {
+        transbordos: volumes.transbordos,
+        vasilhames: volumes.vasilhames,
+        saidas,
+        saldo: saldo_final,
+        saldoCtx,
+      });
       return {
         ...itemOp,
         saldo_inicial: quantidade,
         saldo_final,
         saldo_atual: saldo_final,
         expedido: Math.max(0, quantidade - saldo_final),
+        locaisSaldo,
       };
     });
 
@@ -238,21 +258,25 @@ export default function Estoque() {
     const seq = ++loadSeqRef.current;
     const isCurrent = () => seq === loadSeqRef.current;
 
-    // 1) Dispara a busca de dados frescos antes de qualquer cálculo. Gravações de
-    //    outras telas não invalidam o cache do workspace, então a listagem
-    //    sempre revalida ao abrir.
+    // Após gravação local: limpa o cache para forçar dados frescos.
+    // Na abertura da tela NÃO invalidamos — o peek pinta na hora e a
+    // revalidação roda em paralelo sem apagar o snapshot.
+    if (silent) invalidateTransbordoWorkspaceCache();
+
     const cached = silent ? null : peekTransbordoWorkspaceLists();
-    invalidateTransbordoWorkspaceCache();
+    // force:true revalida ao abrir (outras telas podem ter gravado sem invalidar),
+    // mas sem apagar o peek — a tela pinta na hora e atualiza quando a rede volta.
     const request = Promise.all([
       loadTransbordoWorkspaceLists({ force: true }),
       entities.clientes.list(),
     ]);
 
-    // 2) Enquanto a rede responde, pinta com o último snapshot do módulo
-    //    (stale-while-revalidate) em vez de deixar a tela vazia.
+    // Stale-while-revalidate: cede o frame (rota pinta) e só então calcula.
     if (cached) {
-      applyView(buildEstoqueView(cached, entradasRef.current));
       setLoading(false);
+      await yieldToPaint();
+      if (!isCurrent()) return;
+      applyView(buildEstoqueView(cached, entradasRef.current));
     } else if (!silent) {
       setLoading(true);
     }
@@ -261,13 +285,20 @@ export default function Estoque() {
       const [workspace, cliens] = await request;
       if (!isCurrent()) return;
 
-      const view = buildEstoqueView(workspace, entradasRef.current);
-      void persistDeclaredVolumeDecimals(view.volumes);
-      applyView(view);
-      setClientes(cliens);
+      // Mesmo objeto do peek (revalidate reaproveitou in-flight): não recalcula.
+      const sameSnapshot = Boolean(cached && workspace === cached);
+      if (!sameSnapshot) {
+        await yieldToPaint();
+        if (!isCurrent()) return;
+        const view = buildEstoqueView(workspace, entradasRef.current);
+        if (!isCurrent()) return;
+        void persistDeclaredVolumeDecimals(view.volumes);
+        applyView(view);
+      }
+      setClientes(uniqueClientesByNome(cliens));
       setLoading(false);
 
-      // 3) Entradas + auto-reparo sem bloquear a tela.
+      // Entradas + auto-reparo sem bloquear a tela.
       if (reconcile) void syncEntradasInBackground(workspace, seq);
     } catch {
       if (!silent && isCurrent() && !cached) setEstoque([]);
@@ -339,10 +370,9 @@ export default function Estoque() {
   );
 
   /**
-   * Saldos por local (embalado/pátio, tanque/vasilhame, tanka) para todas as
-   * linhas. Calculado por objeto de linha e reaproveitado enquanto
-   * transbordos/vasilhames/saídas não mudarem — filtrar, buscar ou alternar o
-   * WMS de uma linha não recalcula a lista inteira.
+   * Saldos por local: preferem o breakdown já calculado em buildEstoqueView
+   * (`locaisSaldo`). Só recalcula linhas que perderam o campo (ex.: patch WMS
+   * legado) — filtrar/buscar não dispara o cálculo pesado de novo.
    */
   const locaisCacheRef = useRef({ deps: null, byRow: new WeakMap() });
   const locaisMap = useMemo(() => {
@@ -354,6 +384,10 @@ export default function Estoque() {
     }
     const map = new Map();
     for (const e of estoque) {
+      if (e?.locaisSaldo) {
+        map.set(e.id, e.locaisSaldo);
+        continue;
+      }
       let locais = store.byRow.get(e);
       if (!locais) {
         locais = computeEstoqueQuantidadesPorLocal(e, {
@@ -559,10 +593,13 @@ export default function Estoque() {
     }
   };
 
-  const clienteFilterOptions = [
-    { id: "all", nome: "Todos os clientes" },
-    ...clientes,
-  ];
+  const clienteFilterOptions = useMemo(
+    () => [
+      { id: "all", nome: "Todos os clientes" },
+      ...uniqueClientesByNome(clientes),
+    ],
+    [clientes]
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden gap-4">

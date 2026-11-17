@@ -228,6 +228,147 @@ export function computeTankaSaldo({
 }
 
 /**
+ * Id de estoque da origem que encheu a tanka.
+ * Origem tanka usa entrada_id = isotanque — não é estoque.
+ */
+function estoqueIdFromTankaFillOrigem(origem) {
+  if (!origem) return null;
+  if ((origem.tipo_origem || "") === "tanka") {
+    return origem.estoque_id != null && String(origem.estoque_id).trim() !== ""
+      ? String(origem.estoque_id)
+      : null;
+  }
+  if (origem.estoque_id != null && String(origem.estoque_id).trim() !== "") {
+    return String(origem.estoque_id);
+  }
+  if (origem.entrada_id != null && String(origem.entrada_id).trim() !== "") {
+    return String(origem.entrada_id);
+  }
+  return null;
+}
+
+/**
+ * Empilha fills da tanka lastreados pelo id do estoque de origem (FIFO).
+ */
+function applyTankaFillLayersByEstoque(
+  layers,
+  t,
+  isotanqueId,
+  tankaCodigo
+) {
+  const destinos = t.destinos || [];
+  const indices = [];
+  destinos.forEach((d, i) => {
+    if (
+      d.tipo_embalagem === "Tankagem" &&
+      matchesTanka(d, isotanqueId, tankaCodigo)
+    ) {
+      indices.push(i);
+    }
+  });
+  if (indices.length === 0) return;
+
+  const dens = parseDensidade(t.densidade);
+  const origensFifo = expandOrigensForFifo(t.origens || [], dens);
+  const { destinoCompositions } = calculateFIFOAllocation(
+    origensFifo,
+    destinos,
+    dens
+  );
+
+  const push = (estoqueId, volume) => {
+    const vol = roundVolume(volume);
+    if (!(vol > 0) || !estoqueId) return;
+    layers.push({ estoqueId: String(estoqueId), volume: vol });
+  };
+
+  for (const i of indices) {
+    const comp = destinoCompositions[i] || [];
+    if (comp.length > 0) {
+      for (const c of comp) {
+        const o = origensFifo[c.origem_index];
+        const estoqueId = estoqueIdFromTankaFillOrigem(o);
+        if (estoqueId) {
+          push(estoqueId, c.quantidade_l);
+        }
+      }
+      continue;
+    }
+    const d = destinos[i];
+    const volDest = roundVolume(d.volume_total || d.volume || 0);
+    const totalOrig = roundVolume(
+      origensFifo.reduce((s, o) => s + (o.volume_retirado || 0), 0)
+    );
+    if (origensFifo.length === 0 || totalOrig <= 0) continue;
+    let remaining = volDest;
+    origensFifo.forEach((o, oi) => {
+      if (remaining <= 0) return;
+      const oVol = roundVolume(o.volume_retirado || 0);
+      const share =
+        oi === origensFifo.length - 1
+          ? remaining
+          : Math.min(remaining, roundVolume((oVol / totalOrig) * volDest));
+      const estoqueId = estoqueIdFromTankaFillOrigem(o);
+      push(estoqueId, share);
+      remaining = roundVolume(remaining - share);
+    });
+  }
+}
+
+function drainTankaLayersFifo(layers, volume) {
+  let remaining = roundVolume(volume);
+  if (!(remaining > 0)) return;
+  for (const layer of layers) {
+    if (remaining <= 0) break;
+    if (!(layer.volume > 0)) continue;
+    const take = Math.min(layer.volume, remaining);
+    layer.volume = roundVolume(layer.volume - take);
+    remaining = roundVolume(remaining - take);
+  }
+}
+
+/**
+ * Saldo residual na tanka por id de estoque de origem (FIFO cronológico).
+ * Evita que um refill posterior com o mesmo lote (outra entrada) seja
+ * atribuído a um estoque já drenado — ex.: METANOL E508 vs E632 em TANKA 17/18.
+ *
+ * @returns {Map<string, number>} estoqueId → litros restantes
+ */
+export function computeTankaRemainingByEstoqueId({
+  isotanqueId,
+  tankaCodigo = "",
+  transbordos = [],
+  excludeTransbordoId = null,
+}) {
+  /** @type {{ estoqueId: string, volume: number }[]} */
+  const layers = [];
+  const sorted = sortedChronoReadOnly(transbordos);
+
+  for (const t of sorted) {
+    if (excludeTransbordoId && t.id === excludeTransbordoId) continue;
+    applyTankaFillLayersByEstoque(layers, t, isotanqueId, tankaCodigo);
+    for (const o of t.origens || []) {
+      if (
+        o.tipo_origem === "tanka" &&
+        matchesTanka(o, isotanqueId, tankaCodigo)
+      ) {
+        drainTankaLayersFifo(layers, o.volume_retirado || 0);
+      }
+    }
+  }
+
+  const map = new Map();
+  for (const layer of layers) {
+    if (!(layer.volume > 0)) continue;
+    map.set(
+      layer.estoqueId,
+      roundVolume((map.get(layer.estoqueId) || 0) + layer.volume)
+    );
+  }
+  return map;
+}
+
+/**
  * Saldo por lote na tanka (ordem cronológica de entrada — FIFO).
  * @returns {{ lote: string, quantidade_l: number }[]}
  */

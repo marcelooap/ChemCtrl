@@ -3,6 +3,7 @@ import { DEFAULT_PAGE_SIZE } from '@shared/lib/pagination';
 
 /**
  * Barra compacta de paginação server-side (50/página por padrão).
+ * `meta` opcional: contagens / resumo ao lado do texto "Mostrando…".
  */
 export function ServerPaginationBar({
   page = 1,
@@ -11,6 +12,7 @@ export function ServerPaginationBar({
   onPageChange,
   className = '',
   disabled = false,
+  meta = null,
 }) {
   const totalPages = Math.max(1, Math.ceil((Number(total) || 0) / (pageSize || DEFAULT_PAGE_SIZE)));
   const current = Math.min(Math.max(1, Number(page) || 1), totalPages);
@@ -19,14 +21,17 @@ export function ServerPaginationBar({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-muted-foreground ${className}`}
+      className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 text-sm text-muted-foreground ${className}`}
     >
-      <span>
-        {total === 0
-          ? 'Nenhum registro'
-          : `Mostrando ${from}–${to} de ${total}`}
-      </span>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="shrink-0">
+          {total === 0
+            ? 'Nenhum registro'
+            : `Mostrando ${from}–${to} de ${total}`}
+        </span>
+        {meta}
+      </div>
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
         <Button
           type="button"
           variant="outline"

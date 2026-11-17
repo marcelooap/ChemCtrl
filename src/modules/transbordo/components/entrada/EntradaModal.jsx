@@ -14,7 +14,7 @@ import { Switch } from "@shared/components/ui/switch";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
-import { AlertCircle, ArrowRight, CheckCircle, Plus } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle, Loader2, Plus } from "lucide-react";
 import { formatMass, formatNum } from "@transbordo/lib/format";
 import {
   loteToKg,
@@ -149,6 +149,7 @@ export default function EntradaModal({
   const [collapsedLotes, setCollapsedLotes] = useState({});
   const [vasilhames, setVasilhames] = useState([]);
   const { busy: submitBusy, run: runSubmit } = useSubmitGuard();
+  const [activeAction, setActiveAction] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -624,81 +625,92 @@ export default function EntradaModal({
     };
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const data = validateAndBuildData();
-    if (!data) return;
-    try {
-      await onSave(data);
-    } catch (err) {
-      setError(err?.message || "Não foi possível salvar. Tente novamente.");
-    }
+    void runSubmit(async () => {
+      setActiveAction("save");
+      try {
+        const data = validateAndBuildData();
+        if (!data) return;
+        await onSave(data);
+      } catch (err) {
+        setError(err?.message || "Não foi possível salvar. Tente novamente.");
+      } finally {
+        setActiveAction(null);
+      }
+    });
   };
 
-  const handleSaveAndTransbordo = () => runSubmit(async () => {
-    const data = validateAndBuildData();
-    if (!data) return;
-
-    let saved;
-    try {
-      saved = await onSave(data);
-    } catch (err) {
-      setError(err?.message || "Não foi possível salvar. Tente novamente.");
-      return;
-    }
-    if (saved) {
-      const savedEstoques = Array.isArray(saved)
-        ? saved
-        : saved.savedEstoques || [];
-      const savedEntrada = Array.isArray(saved) ? null : saved.savedEntrada;
-      const prefillEntrada = {
-        ...data,
-        id: savedEntrada?.id,
-        entrada_codigo: saved.entrada_codigo,
-        savedEstoques,
-      };
-
-      // Preferência: OP único; se houver cadeia, abre o mais antigo (OP de entrada).
-      let linkedTransbordo = null;
+  const handleSaveAndTransbordo = () =>
+    void runSubmit(async () => {
+      setActiveAction("transbordo");
       try {
-        const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
-          await Promise.all([
-            entities.transbordos.list("-created_date"),
-            savedEntrada?.id
-              ? entities.estoque.filter({ entrada_id: savedEntrada.id })
-              : Promise.resolve(savedEstoques),
-            entities.vasilhames.list(),
-          ]);
+        const data = validateAndBuildData();
+        if (!data) return;
 
-        const linked = findAllLinkedTransbordos(
-          allTransbordos,
-          prefillEntrada,
-          estoqueDaEntrada,
-          vasilhamesList
-        );
+        let saved;
+        try {
+          saved = await onSave(data);
+        } catch (err) {
+          setError(err?.message || "Não foi possível salvar. Tente novamente.");
+          return;
+        }
+        if (saved) {
+          const savedEstoques = Array.isArray(saved)
+            ? saved
+            : saved.savedEstoques || [];
+          const savedEntrada = Array.isArray(saved) ? null : saved.savedEntrada;
+          const prefillEntrada = {
+            ...data,
+            id: savedEntrada?.id,
+            entrada_codigo: saved.entrada_codigo,
+            savedEstoques,
+          };
 
-        linkedTransbordo =
-          findLinkedTransbordo(
-            allTransbordos,
-            prefillEntrada,
-            estoqueDaEntrada,
-            vasilhamesList
-          ) ||
-          linked[0] ||
-          null;
-      } catch {
-        linkedTransbordo = null;
+          // Preferência: OP único; se houver cadeia, abre o mais antigo (OP de entrada).
+          let linkedTransbordo = null;
+          try {
+            const [allTransbordos, estoqueDaEntrada, vasilhamesList] =
+              await Promise.all([
+                entities.transbordos.list("-created_date"),
+                savedEntrada?.id
+                  ? entities.estoque.filter({ entrada_id: savedEntrada.id })
+                  : Promise.resolve(savedEstoques),
+                entities.vasilhames.list(),
+              ]);
+
+            const linked = findAllLinkedTransbordos(
+              allTransbordos,
+              prefillEntrada,
+              estoqueDaEntrada,
+              vasilhamesList
+            );
+
+            linkedTransbordo =
+              findLinkedTransbordo(
+                allTransbordos,
+                prefillEntrada,
+                estoqueDaEntrada,
+                vasilhamesList
+              ) ||
+              linked[0] ||
+              null;
+          } catch {
+            linkedTransbordo = null;
+          }
+
+          navigate("/chemflow/transbordo", {
+            state: {
+              prefillEntrada,
+              linkedTransbordoId: linkedTransbordo?.id || null,
+              linkedTransbordo: linkedTransbordo || null,
+            },
+          });
+        }
+      } finally {
+        setActiveAction(null);
       }
-
-      navigate("/chemflow/transbordo", {
-        state: {
-          prefillEntrada,
-          linkedTransbordoId: linkedTransbordo?.id || null,
-          linkedTransbordo: linkedTransbordo || null,
-        },
-      });
-    }
-  });
+    });
 
   const title = readOnly
     ? "Visualizar Entrada"
@@ -706,11 +718,20 @@ export default function EntradaModal({
     ? "Editar Entrada"
     : "Nova Entrada";
 
+  const savingLabel =
+    activeAction === "transbordo" ? "Processando..." : "Salvando...";
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v && !submitBusy) onClose();
+      }}
+    >
       <DialogContent
         className="max-w-2xl max-h-[90vh] overflow-y-auto"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        aria-busy={submitBusy || undefined}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -953,22 +974,42 @@ export default function EntradaModal({
                   title={
                     !allSameProduct
                       ? "Todos os lotes devem ter o mesmo produto para ir ao transbordo"
-                      : ""
+                      : submitBusy
+                        ? "Processando a entrada..."
+                        : ""
                   }
                 >
-                  <ArrowRight className="w-4 h-4" />
-                  Ir para Transbordo
+                  {activeAction === "transbordo" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4" />
+                  )}
+                  {activeAction === "transbordo"
+                    ? "Processando..."
+                    : "Ir para Transbordo"}
                 </Button>
               ) : (
                 <div />
               )}
               <div className="flex gap-2">
-                <Button type="button" variant="ghost" onClick={onClose}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onClose}
+                  disabled={submitBusy}
+                >
                   Cancelar
                 </Button>
-                <Button type="submit">
-                  {submitLabel
-                    || (editingEntrada ? "Salvar Alterações" : "Cadastrar Entrada")}
+                <Button type="submit" disabled={submitBusy} className="gap-2">
+                  {activeAction === "save" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : null}
+                  {activeAction === "save"
+                    ? savingLabel
+                    : submitLabel ||
+                      (editingEntrada
+                        ? "Salvar Alterações"
+                        : "Cadastrar Entrada")}
                 </Button>
               </div>
             </DialogFooter>

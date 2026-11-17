@@ -848,28 +848,35 @@ export default function Transbordo() {
           </table>
         </div>
 
-        {filtered.length > DEFAULT_PAGE_SIZE && (
-          <ServerPaginationBar
-            page={page}
-            pageSize={DEFAULT_PAGE_SIZE}
-            total={filtered.length}
-            onPageChange={setPage}
-            className="px-5 border-t border-border shrink-0"
-          />
-        )}
-
-        {/* Footer Summary */}
-        <div className="flex items-center justify-between gap-6 px-5 py-3 border-t border-border text-sm flex-wrap shrink-0">
-          <span className="text-muted-foreground">
-            Itens exibidos: <span className="font-medium text-foreground">{filtered.length}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Volume total: <span className="font-medium text-foreground">{formatVolume(totalVolume)} L</span>
-          </span>
-          <span className="text-muted-foreground">
-            Quantidade total: <span className="font-medium text-foreground">{formatMass(totalMassa)} kg</span>
-          </span>
-        </div>
+        <ServerPaginationBar
+          page={page}
+          pageSize={DEFAULT_PAGE_SIZE}
+          total={filtered.length}
+          onPageChange={setPage}
+          className="px-5 border-t border-border shrink-0 bg-card"
+          meta={
+            <>
+              <span>
+                Itens exibidos:{" "}
+                <span className="font-medium text-foreground">
+                  {filtered.length}
+                </span>
+              </span>
+              <span>
+                Volume total:{" "}
+                <span className="font-medium text-foreground">
+                  {formatVolume(totalVolume)} L
+                </span>
+              </span>
+              <span>
+                Quantidade total:{" "}
+                <span className="font-medium text-foreground">
+                  {formatMass(totalMassa)} kg
+                </span>
+              </span>
+            </>
+          }
+        />
       </div>
 
       {/* Modal */}
