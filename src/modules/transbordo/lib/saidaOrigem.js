@@ -370,6 +370,8 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
     tipo: origem === ORIGEM_INDUSTRIALIZACAO ? TIPO_IND_VASILHAME : TIPO_EMBALADO,
     item_uid: newSaidaItemUid(),
     tanque_vazio: false,
+    // Novo item em edição: sempre pendente (não herda validação da saída).
+    validado: false,
     produto_id: "",
     produto_nome: "",
     produto_codigo: "",

@@ -432,8 +432,9 @@ export default function Saida({
   }, []);
 
   const saidasRevisionSeen = useRef(saidasRevision);
+  // Patch seletivo da lista em qualquer modo (inclui Solicitações/expedição).
+  // Antes só rodava com trackNewFromPainel — Pedido Cliente demorava a refletir.
   useEffect(() => {
-    if (!trackNewFromPainel) return;
     if (saidasRevision === saidasRevisionSeen.current) return;
     saidasRevisionSeen.current = saidasRevision;
     const change = lastSaidaChange;
@@ -466,7 +467,7 @@ export default function Saida({
       next[idx] = { ...next[idx], ...visible };
       return next;
     });
-  }, [saidasRevision, trackNewFromPainel, lastSaidaChange, applySaidaVisibility]);
+  }, [saidasRevision, lastSaidaChange, applySaidaVisibility]);
 
   const getExpedicaoStatus = (saida) =>
     isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";

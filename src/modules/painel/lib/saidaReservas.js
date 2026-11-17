@@ -2,7 +2,9 @@ import { formatMass, formatVolume } from '@transbordo/lib/format';
 import {
   ORIGEM_TRANSBORDO,
   TIPO_EMBALADO,
+  clientsMatch,
   isSaidaValidadaNoModulo,
+  sameClienteRecord,
 } from '@transbordo/lib/saidaOrigem';
 import {
   chemflowSupabase,
@@ -10,15 +12,114 @@ import {
 } from '@/services/supabase/chemflow';
 
 const SEM_RESERVA_ID = '__sem_reserva__';
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function norm(value) {
-  return String(value ?? '')
+  const s = String(value ?? '')
     .trim()
     .toUpperCase();
+  return s === '—' || s === '-' ? '' : s;
 }
 
 function roundQty(value) {
   return Math.round(Number(value) || 0);
+}
+
+function normUnidade(value) {
+  return String(value || 'kg').trim().toLowerCase() || 'kg';
+}
+
+function parseReservaChave(chave) {
+  const parts = String(chave || '').split('||');
+  if (parts.length < 4) return null;
+  const [clientePart, produtoCodigo, lote, ...unidadeParts] = parts;
+  return {
+    clientePart: String(clientePart || '').trim(),
+    produtoCodigo: norm(produtoCodigo),
+    lote: norm(lote),
+    unidade: normUnidade(unidadeParts.join('||')),
+  };
+}
+
+function sameClienteReserva(reservaAsCliente, ctxId, ctxNome) {
+  if (sameClienteRecord(reservaAsCliente, ctxId, ctxNome)) return true;
+  // Grafias curtas vs completas (ex.: "BAKER HUGHES" vs "BAKER HUGHES OIC").
+  return clientsMatch(reservaAsCliente?.cliente_nome, ctxNome);
+}
+
+/**
+ * Match de reserva à chave/lote do item embalado.
+ * Prioridade: chave exata → lote+unidade (+ cliente soft) → lote na chave.
+ * Não exige produto_codigo idêntico (variantes BB / códigos divergentes).
+ */
+export function reservaMatchesChave(
+  reserva,
+  chave,
+  {
+    clienteId = null,
+    clienteNome = '',
+    produtoId = null,
+    produtoNome = '',
+    lote = '',
+    unidade = '',
+  } = {}
+) {
+  if (!reserva) return false;
+  if (String(reserva.chave || '').startsWith('vasilhame||')) return false;
+  if (chave && reserva.chave === chave) return true;
+
+  const want = chave ? parseReservaChave(chave) : null;
+  const have = parseReservaChave(reserva.chave);
+  const wantLote = norm(lote) || want?.lote || '';
+  const rLote = norm(reserva.lote) || have?.lote || '';
+  if (!wantLote || !rLote || rLote !== wantLote) return false;
+
+  const wantUni = normUnidade(unidade || want?.unidade);
+  const rUni = normUnidade(reserva.unidade_medida || have?.unidade);
+  if (rUni !== wantUni) return false;
+
+  const chaveIsUuid = Boolean(want && UUID_RE.test(want.clientePart));
+  const ctxId = clienteId || (chaveIsUuid ? want.clientePart : null);
+  const ctxNome =
+    clienteNome ||
+    (!chaveIsUuid && want?.clientePart ? want.clientePart : '');
+
+  const haveClienteIsUuid = Boolean(have && UUID_RE.test(have.clientePart));
+  const reservaAsCliente = {
+    cliente_id:
+      reserva.cliente_id ||
+      (haveClienteIsUuid ? have.clientePart : null),
+    cliente_nome:
+      reserva.cliente_nome ||
+      (!haveClienteIsUuid && have?.clientePart ? have.clientePart : '') ||
+      '',
+  };
+
+  // Sem cliente na reserva: basta lote+unidade (legado).
+  if (!reservaAsCliente.cliente_id && !String(reservaAsCliente.cliente_nome || '').trim()) {
+    return true;
+  }
+  if (!ctxId && !String(ctxNome || '').trim()) return true;
+
+  if (sameClienteReserva(reservaAsCliente, ctxId, ctxNome)) return true;
+
+  // Último recurso: mesmo produto_id/nome + mesmo lote (cliente só na chave).
+  if (
+    produtoId &&
+    reserva.produto_id &&
+    String(produtoId) === String(reserva.produto_id)
+  ) {
+    return true;
+  }
+  if (
+    produtoNome &&
+    reserva.produto_nome &&
+    norm(produtoNome) === norm(reserva.produto_nome)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function isVolumeUnit(unidade) {
@@ -52,14 +153,39 @@ export function quantidadeEfetivaItem(item) {
   return Number(item?.quantidade_solicitada) || 0;
 }
 
-export function sumBloqueioPendenteChave(saidas, chave, { excludeSaidaId } = {}) {
+export function sumBloqueioPendenteChave(
+  saidas,
+  chave,
+  { excludeSaidaId, clienteId = null, clienteNome = '' } = {}
+) {
   if (!chave) return 0;
+  const parsedKey = parseReservaChave(chave);
   let total = 0;
   for (const saida of saidas || []) {
     if (!saida || !isSaidaPendenteBaixa(saida)) continue;
     if (excludeSaidaId && String(saida.id) === String(excludeSaidaId)) continue;
     for (const item of saida.itens || []) {
-      if (chaveReservaItem(saida, item) !== chave) continue;
+      const itemChave = chaveReservaItem(saida, item);
+      let sameChave = itemChave === chave;
+      if (!sameChave && parsedKey && itemChave) {
+        const parsedItem = parseReservaChave(itemChave);
+        if (
+          parsedItem &&
+          parsedItem.produtoCodigo === parsedKey.produtoCodigo &&
+          parsedItem.lote === parsedKey.lote &&
+          parsedItem.unidade === parsedKey.unidade
+        ) {
+          // Cliente duplicado: compara a saída (tem nome) com o contexto do lote.
+          sameChave = sameClienteRecord(
+            saida,
+            clienteId ||
+              (UUID_RE.test(parsedKey.clientePart) ? parsedKey.clientePart : null),
+            clienteNome ||
+              (!UUID_RE.test(parsedKey.clientePart) ? parsedKey.clientePart : '')
+          );
+        }
+      }
+      if (!sameChave) continue;
       if (item?.sem_reserva === true || item?.reserva_abatida) {
         total += item.reserva_abatida
           ? Number(item.quantidade_abatida ?? item.quantidade_carregada) || 0
@@ -123,8 +249,13 @@ export function opcoesReservaEmbalado({
   index = 0,
   chave,
   unidade = 'kg',
+  lote = '',
   excludeSaidaId = null,
   reservaIdAtual = '',
+  clienteId = null,
+  clienteNome = '',
+  produtoId = null,
+  produtoNome = '',
 }) {
   const options = [
     {
@@ -136,17 +267,30 @@ export function opcoesReservaEmbalado({
     },
   ];
 
+  const matchCtx = {
+    clienteId,
+    clienteNome,
+    produtoId,
+    produtoNome,
+    lote: lote || parseReservaChave(chave)?.lote || '',
+    unidade,
+  };
   const ativas = (reservas || []).filter(
-    (r) => r && r.status === 'ativa' && r.chave === chave && !String(r.chave || '').startsWith('vasilhame||')
+    (r) =>
+      r &&
+      r.status === 'ativa' &&
+      reservaMatchesChave(r, chave, matchCtx)
   );
 
   for (const reserva of ativas) {
     const disponivel = saldoDisponivelReserva(reserva, saidas, itens, index, excludeSaidaId);
     const selecionada = reservaIdAtual && String(reserva.id) === String(reservaIdAtual);
-    if (disponivel <= 0 && !selecionada) continue;
+    // Mantém na lista mesmo com saldo 0 (ex.: comprometida em outra saída),
+    // para o usuário ver a reserva do lote em vez de só "Sem reserva".
+    if (disponivel <= 0 && !selecionada && !(Number(reserva.quantidade) > 0)) continue;
     const solicitante = String(reserva.solicitante || reserva.cliente_nome || 'Reserva').trim();
     const uni = String(reserva.unidade_medida || unidade || 'kg').trim();
-    const qtd = selecionada ? Math.max(disponivel, 0) : disponivel;
+    const qtd = selecionada ? Math.max(disponivel, 0) : Math.max(disponivel, 0);
     options.push({
       id: reserva.id,
       semReserva: false,
@@ -154,17 +298,37 @@ export function opcoesReservaEmbalado({
       disponivel: qtd,
       unidade: uni,
       label: `${solicitante} - ${formatQtyReserva(qtd, uni)} ${uni}`,
+      disabled: qtd <= 0 && !selecionada,
     });
   }
 
   return options;
 }
 
-export function reservadoAtivoChave(reservas, chave) {
+export function reservadoAtivoChave(
+  reservas,
+  chave,
+  {
+    clienteId = null,
+    clienteNome = '',
+    produtoId = null,
+    produtoNome = '',
+    lote = '',
+    unidade = '',
+  } = {}
+) {
+  const matchCtx = {
+    clienteId,
+    clienteNome,
+    produtoId,
+    produtoNome,
+    lote: lote || parseReservaChave(chave)?.lote || '',
+    unidade,
+  };
   return roundQty(
     (reservas || []).reduce((sum, r) => {
-      if (!r || r.status !== 'ativa' || r.chave !== chave) return sum;
-      if (String(r.chave || '').startsWith('vasilhame||')) return sum;
+      if (!r || r.status !== 'ativa') return sum;
+      if (!reservaMatchesChave(r, chave, matchCtx)) return sum;
       return sum + (Number(r.quantidade) || 0);
     }, 0)
   );
@@ -255,8 +419,15 @@ export function validarItensEmbalado({
         return sum + (Number(e.saldo_atual) || 0);
       }, 0)
     );
-    const reservado = reservadoAtivoChave(reservas, chave);
-    const bloqueio = sumBloqueioPendenteChave(saidas, chave, { excludeSaidaId });
+    const reservado = reservadoAtivoChave(reservas, chave, {
+      clienteId,
+      clienteNome,
+    });
+    const bloqueio = sumBloqueioPendenteChave(saidas, chave, {
+      excludeSaidaId,
+      clienteId,
+      clienteNome,
+    });
     const usado = acumuladoExc.get(chave) || 0;
     const disp = saldoExcepcionalDisponivel({
       saldoFisico: fisico,

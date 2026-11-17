@@ -108,7 +108,10 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
 
   const historico = useMemo(() => {
     if (!row?.chave) return [];
-    return listReservasForChave(reservas, row.chave);
+    return listReservasForChave(reservas, row.chave, {
+      clienteId: row.clienteId,
+      clienteNome: row.clienteNome,
+    });
   }, [row, reservas]);
 
   if (!row) return null;

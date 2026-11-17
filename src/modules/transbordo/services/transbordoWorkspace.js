@@ -123,4 +123,36 @@ export function patchTransbordoWorkspaceEstoque(id, patch) {
   });
 }
 
+/**
+ * Atualiza/insere uma saída no snapshot do workspace (ex.: Pedido Cliente).
+ * Evita listagem stale por até o TTL de 45s após salvar no formulário.
+ */
+export function patchTransbordoWorkspaceSaida(saida) {
+  if (!saida?.id) {
+    queryClientInstance.invalidateQueries({
+      queryKey: TRANSBORDO_WORKSPACE_QUERY_KEY,
+    });
+    return;
+  }
+  const idStr = String(saida.id);
+  if (cache.data?.saidas) {
+    const idx = cache.data.saidas.findIndex((row) => String(row?.id) === idStr);
+    const nextSaidas = [...cache.data.saidas];
+    if (idx === -1) {
+      nextSaidas.unshift(saida);
+    } else {
+      nextSaidas[idx] = { ...nextSaidas[idx], ...saida };
+    }
+    cache.data = {
+      ...cache.data,
+      saidas: nextSaidas,
+    };
+    // Renova TTL para a listagem reaproveitar o patch ao remontar.
+    cache.expiresAt = Date.now() + CACHE_TTL_MS;
+  }
+  queryClientInstance.invalidateQueries({
+    queryKey: TRANSBORDO_WORKSPACE_QUERY_KEY,
+  });
+}
+
 export const TRANSBORDO_WORKSPACE_QUERY_KEY = ['transbordo', 'workspace'];

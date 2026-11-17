@@ -7,7 +7,13 @@ import { formatEstoqueCodigo } from '@transbordo/lib/estoqueCodigo';
 import { formatMass, formatVolume } from '@transbordo/lib/format';
 import { isEstoqueEmbalagemUnitaria } from '@transbordo/lib/transbordoEmbalado';
 import { isVasilhameReservaChave } from '@painel/lib/vasilhameReservas';
-import { sumBloqueioPendenteChave, rpcCriarMaterialReserva, rpcAtualizarMaterialReserva } from '@painel/lib/saidaReservas';
+import {
+  sumBloqueioPendenteChave,
+  rpcCriarMaterialReserva,
+  rpcAtualizarMaterialReserva,
+  reservaMatchesChave,
+} from '@painel/lib/saidaReservas';
+import { sameClienteRecord } from '@transbordo/lib/saidaOrigem';
 import { entities } from '@transbordo/services/entities';
 
 const UUID_RE =
@@ -156,10 +162,18 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
   }
 
   // Inclui chaves que só têm reserva (estoque zerado)
-  for (const [chave, qtd] of reservadoByChave) {
+  for (const [chave] of reservadoByChave) {
     if (map.has(chave)) continue;
     const sample = (reservas || []).find((r) => r.chave === chave);
     if (!sample) continue;
+    // Já creditada em linha de estoque com UUID/nome de cliente duplicado?
+    const covered = [...map.values()].some((row) =>
+      reservaMatchesChave(sample, row.chave, {
+        clienteId: row.clienteId,
+        clienteNome: row.clienteNome,
+      })
+    );
+    if (covered) continue;
     map.set(chave, {
       id: chave,
       chave,
@@ -182,9 +196,23 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
 
   return [...map.values()]
     .map((row) => {
-      const saldoReservado = Math.round(reservadoByChave.get(row.chave) || 0);
+      const clienteCtx = {
+        clienteId: row.clienteId,
+        clienteNome: row.clienteNome,
+      };
+      const saldoReservado = Math.round(
+        (reservas || []).reduce((sum, r) => {
+          if (!r || r.status !== 'ativa') return sum;
+          if (!reservaMatchesChave(r, row.chave, clienteCtx)) return sum;
+          return sum + (Number(r.quantidade) || 0);
+        }, 0)
+      );
       const saldoAtual = Math.round(row.saldoAtual || 0);
-      const bloqueioPendente = sumBloqueioPendenteChave(saidas, row.chave);
+      const bloqueioPendente = sumBloqueioPendenteChave(
+        saidas,
+        row.chave,
+        clienteCtx
+      );
       const saldoFinal = Math.max(0, saldoAtual - saldoReservado - bloqueioPendente);
       const entradaCodigos = [...(row.entradaCodigos || [])].sort((a, b) =>
         String(a).localeCompare(String(b), 'pt-BR', { numeric: true })
@@ -224,9 +252,9 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
     });
 }
 
-export function sumReservasAtivas(reservas = [], chave) {
+export function sumReservasAtivas(reservas = [], chave, clienteCtx = {}) {
   return (reservas || [])
-    .filter((r) => r.chave === chave && r.status === 'ativa')
+    .filter((r) => r.status === 'ativa' && reservaMatchesChave(r, chave, clienteCtx))
     .reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
 }
 
@@ -256,8 +284,6 @@ export function sumReservadoForProdutoCliente(
   const cod = norm(produtoCodigo);
   const nome = produtoNome != null ? norm(produtoNome) : '';
   const uni = String(unidade || 'kg').trim();
-  const cliNome = norm(clienteNome);
-  const cliId = clienteId ? String(clienteId).trim() : '';
 
   return (reservas || []).reduce((sum, r) => {
     if (!r || r.status !== 'ativa') return sum;
@@ -271,22 +297,15 @@ export function sumReservadoForProdutoCliente(
       if (rNome !== nome) return sum;
     }
 
-    const rId = r.cliente_id ? String(r.cliente_id).trim() : '';
-    const rCliNome = norm(r.cliente_nome);
-
-    let sameCliente = false;
-    if (cliId && rId) sameCliente = cliId === rId;
-    else if (cliNome && rCliNome) sameCliente = cliNome === rCliNome;
-    else sameCliente = !cliId && !cliNome && !rId && !rCliNome;
-
-    if (!sameCliente) return sum;
+    // Id OU nome (clientes duplicados com UUIDs distintos).
+    if (!sameClienteRecord(r, clienteId || null, clienteNome || '')) return sum;
     return sum + (Number(r.quantidade) || 0);
   }, 0);
 }
 
-export function listReservasForChave(reservas = [], chave) {
+export function listReservasForChave(reservas = [], chave, clienteCtx = {}) {
   return (reservas || [])
-    .filter((r) => r.chave === chave)
+    .filter((r) => reservaMatchesChave(r, chave, clienteCtx))
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 

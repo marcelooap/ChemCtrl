@@ -193,6 +193,8 @@ export default function SaidaItemRow({
   onRemove,
   getAvailableSaldo,
   getAvailableSaldoLote,
+  /** Saldo bruto da entrada com crédito de itens já baixados nesta saída. */
+  getEntradaSaldo,
   getAvailableVolume,
   getAvailableContainerVolume,
   getAvailableStockSaldo,
@@ -204,6 +206,18 @@ export default function SaidaItemRow({
   const origem = resolveItemOrigem(item) || lockedOrigem || ORIGEM_TRANSBORDO;
   const showOrigemSelector = enableMultiOrigem && !lockedOrigem;
   const tanqueVazio = isTanqueVazioItem(item);
+  // Só exibe o toggle enquanto o item está vazio ou já é tanque vazio.
+  // Com produto/vasilhame/etc selecionado, o toggle some da linha.
+  const temConteudoProduto = Boolean(
+    item.entrada_id ||
+      item.produto_id ||
+      item.produto_nome ||
+      item.vasilhame_id ||
+      item.container_id ||
+      item.stock_id ||
+      item.movement_id
+  );
+  const showTanqueVazioToggle = tanqueVazio || !temConteudoProduto;
   /** Rascunhos do outro modo ao alternar o toggle (não perde dados na sessão). */
   const draftRef = useRef({ cheio: null, vazio: null });
 
@@ -587,6 +601,14 @@ export default function SaidaItemRow({
               unidade: unidadeEmbalado,
             }))
       : "";
+  const clienteReservaCtx = {
+    clienteId: selectedEntrada?.cliente_id ?? clienteId,
+    clienteNome: selectedEntrada?.cliente_nome ?? clienteNome,
+    produtoId: selectedEntrada?.produto_id || item.produto_id || null,
+    produtoNome: selectedEntrada?.produto_nome || item.produto_nome || "",
+    lote: item.lote || selectedEntrada?.lote || "",
+    unidade: unidadeEmbalado,
+  };
   const opcoesReserva = chaveEmbalado
     ? opcoesReservaEmbalado({
         reservas,
@@ -595,8 +617,10 @@ export default function SaidaItemRow({
         index,
         chave: chaveEmbalado,
         unidade: unidadeEmbalado,
+        lote: clienteReservaCtx.lote,
         excludeSaidaId: saidaId,
         reservaIdAtual: item.reserva_id,
+        ...clienteReservaCtx,
       })
     : [];
   const reservaSelecionada = item.reserva_id
@@ -605,6 +629,8 @@ export default function SaidaItemRow({
   const dispReserva = reservaSelecionada
     ? saldoDisponivelReserva(reservaSelecionada, saidas, itens, index, saidaId)
     : 0;
+  // Usar saldo com crédito de baixados (Validado); saldo_atual cru zera o
+  // "Saldo disponível" ao editar item já baixado cujo lote ainda tem reserva.
   const fisicoChave = chaveEmbalado
     ? embaladoEntradas.reduce((sum, entrada) => {
         const chave = chaveFromEntradaEmbalado(entrada, {
@@ -613,7 +639,11 @@ export default function SaidaItemRow({
           unidadeFallback: unidadeEmbalado,
         });
         if (chave !== chaveEmbalado) return sum;
-        return sum + (Number(entrada.saldo_atual) || 0);
+        const saldo =
+          typeof getEntradaSaldo === "function"
+            ? getEntradaSaldo(entrada.id)
+            : Number(entrada.saldo_atual) || 0;
+        return sum + (Number(saldo) || 0);
       }, 0)
     : 0;
   const saldoLoteDisponivel = chaveEmbalado
@@ -624,10 +654,16 @@ export default function SaidaItemRow({
   const tetoExcepcional = chaveEmbalado
     ? saldoExcepcionalDisponivel({
         saldoFisico: fisicoChave,
-        reservadoAtivo: reservadoAtivoChave(reservas, chaveEmbalado),
+        reservadoAtivo: reservadoAtivoChave(
+          reservas,
+          chaveEmbalado,
+          clienteReservaCtx
+        ),
         bloqueioPendente:
-          sumBloqueioPendenteChave(saidas, chaveEmbalado, { excludeSaidaId: saidaId }) +
-          sumExcepcionalNoForm(itens, index, chaveEmbalado),
+          sumBloqueioPendenteChave(saidas, chaveEmbalado, {
+            excludeSaidaId: saidaId,
+            ...clienteReservaCtx,
+          }) + sumExcepcionalNoForm(itens, index, chaveEmbalado),
       })
     : 0;
   const semReservaAtivo = item.tipo === TIPO_EMBALADO && item.entrada_id && !item.reserva_id;
@@ -1178,21 +1214,27 @@ export default function SaidaItemRow({
           <span className="text-sm font-semibold text-primary shrink-0">
             {`Item ${String(index + 1).padStart(2, "0")}`}
           </span>
-          <label
-            className={`inline-flex items-center gap-2 shrink-0 text-xs font-medium ${
-              locked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-            }`}
-          >
-            <Switch
-              checked={tanqueVazio}
-              onCheckedChange={handleTanqueVazioToggle}
-              disabled={locked}
-              aria-label="Tanque vazio"
-            />
-            <span className={tanqueVazio ? "text-sky-700" : "text-muted-foreground"}>
-              Tanque vazio
-            </span>
-          </label>
+          {showTanqueVazioToggle ? (
+            <label
+              className={`inline-flex items-center gap-2 shrink-0 text-xs font-medium ${
+                locked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              }`}
+            >
+              <Switch
+                checked={tanqueVazio}
+                onCheckedChange={handleTanqueVazioToggle}
+                disabled={locked}
+                aria-label="Tanque vazio"
+              />
+              <span
+                className={
+                  tanqueVazio ? "text-sky-700" : "text-muted-foreground"
+                }
+              >
+                Tanque vazio
+              </span>
+            </label>
+          ) : null}
           {locked ? (
             <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
               Validado

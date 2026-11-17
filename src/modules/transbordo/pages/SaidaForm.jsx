@@ -33,6 +33,11 @@ import {
   rpcSalvarSaidaComReserva,
   validarItensEmbalado,
 } from "@painel/lib/saidaReservas";
+import {
+  loadTransbordoWorkspaceLists,
+  patchTransbordoWorkspaceSaida,
+  peekTransbordoWorkspaceLists,
+} from "@transbordo/services/transbordoWorkspace";
 import { promoverProdutosPorIds } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import { ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
@@ -168,6 +173,67 @@ export default function SaidaForm({
     return () => window.removeEventListener("focus", refreshHistorico);
   }, []);
 
+  // Garante reservas do lote selecionado (lista global pode estar truncada no PostgREST).
+  const lotesEmbaladoKey = useMemo(() => {
+    const lotes = (formData.itens || [])
+      .filter((i) => i?.tipo === TIPO_EMBALADO && String(i.lote || "").trim())
+      .map((i) => String(i.lote).trim());
+    return [...new Set(lotes)].sort().join("|");
+  }, [formData.itens]);
+
+  useEffect(() => {
+    if (!lotesEmbaladoKey) return undefined;
+    const lotes = lotesEmbaladoKey.split("|").filter(Boolean);
+    let cancelled = false;
+    (async () => {
+      try {
+        const batches = await Promise.all(
+          lotes.map(async (lote) => {
+            const [byLote, byChave] = await Promise.all([
+              entities.materialReservas
+                .filter({ lote, status: "ativa" })
+                .catch(() => []),
+              entities.materialReservas
+                .listPage({
+                  filters: { status: "ativa" },
+                  ilike: { chave: `||${lote}||` },
+                  pageSize: 200,
+                  sort: "-created_at",
+                })
+                .then((res) => res?.rows || [])
+                .catch(() => []),
+            ]);
+            return [...(byLote || []), ...(byChave || [])];
+          })
+        );
+        if (cancelled) return;
+        const extra = batches.flat().filter((r) => r?.id);
+        if (extra.length === 0) return;
+        setReservas((prev) => {
+          const byId = new Map((prev || []).map((r) => [String(r.id), r]));
+          let changed = false;
+          for (const row of extra) {
+            const id = String(row.id);
+            const prevRow = byId.get(id);
+            if (!prevRow) {
+              byId.set(id, row);
+              changed = true;
+            } else {
+              byId.set(id, { ...prevRow, ...row });
+              changed = true;
+            }
+          }
+          return changed ? [...byId.values()] : prev;
+        });
+      } catch (err) {
+        console.error("[SaidaForm] Falha ao carregar reservas do lote:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lotesEmbaladoKey]);
+
   useEffect(() => {
     if (historicoTanqueKeys.size === 0) return;
     setFormData((prev) => {
@@ -182,38 +248,103 @@ export default function SaidaForm({
   }, [historicoTanqueKeys]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const mapItensEdicao = (saida) => {
+      const raw = saida?.itens || [];
+      if (raw.length === 0) return [emptySaidaItem(defaultOrigem)];
+      return raw.map((it) => {
+        const origem = resolveItemOrigem(it);
+        const merged = {
+          ...emptySaidaItem(origem),
+          ...it,
+          origem,
+          item_uid: String(it.item_uid || "").trim() || newSaidaItemUid(),
+          tanque_vazio: Boolean(it.tanque_vazio),
+        };
+        // Trava/exclusão: estado explícito (não herdar false do emptySaidaItem).
+        if (it.validado === true || it.validado === false) {
+          merged.validado = it.validado;
+        } else {
+          merged.validado = itemFoiBaixado(it, saida);
+        }
+        return merged;
+      });
+    };
+
+    const hydrateEstoqueRows = (ents, transList, saics, vascs) =>
+      (ents || []).map((e) => {
+        const hydrated = hydrateEstoqueFiscal(e);
+        const isEmbalado =
+          resolveTipoRecebimentoEstoque(hydrated) === "embalado";
+        return {
+          ...hydrated,
+          embalado: isEmbalado || Boolean(hydrated.embalado),
+          saldo_atual: computeEstoqueSaldo(
+            hydrated,
+            transList || [],
+            saics || [],
+            vascs || []
+          ),
+        };
+      });
+
     const load = async () => {
       try {
-        const [ents, vascs, cliens, saics, reservasList, historicoList, transList] =
+        // 1) Pintar a saída o mais cedo possível (edição não espera o workspace).
+        if (id) {
+          const saida = await entities.saidas.get(id);
+          if (cancelled) return;
+          setEditingSaida(saida);
+          const itens = mapItensEdicao(saida);
+          setFormData({
+            cliente_id: saida.cliente_id || "",
+            cliente_nome: saida.cliente_nome || "",
+            destino: normalizeDestino(saida.destino),
+            data_solicitacao: saida.data_solicitacao || todayStr(),
+            data_programada: saida.data_programada || "",
+            pedido_cliente: saida.pedido_cliente || "",
+            observacoes: saida.observacoes || "",
+            itens,
+          });
+          const collapsed = {};
+          itens.forEach((_, i) => {
+            collapsed[i] = true;
+          });
+          setCollapsedByIndex(collapsed);
+          setLoading(false);
+        }
+
+        // 2) Workspace em cache (vindo da listagem) + complementos em paralelo.
+        const cached = peekTransbordoWorkspaceLists();
+        if (cached && !cancelled) {
+          setVasilhames(cached.vasilhames || []);
+          setSaidas(cached.saidas || []);
+          setEntradas(
+            hydrateEstoqueRows(
+              cached.estoque,
+              cached.transbordos,
+              cached.saidas,
+              cached.vasilhames
+            )
+          );
+        }
+
+        const [workspace, cliens, reservasList, historicoList] =
           await Promise.all([
-            entities.estoque.list(),
-            entities.vasilhames.list(),
-            entities.clientes.list(),
-            entities.saidas.list("-created_date"),
+            loadTransbordoWorkspaceLists(),
+            entities.clientes.list().catch(() => []),
             entities.materialReservas.list("-created_at").catch(() => []),
             listHistoricoTanquePendentes().catch(() => []),
-            entities.transbordos.list().catch(() => []),
           ]);
+        if (cancelled) return;
 
-        // Mesmo saldo live da tela Reservar Material — evita lote com saldo
-        // real sumir do dropdown por saldo_final persistido desatualizado.
-        const estoqueWithSaldo = (ents || []).map((e) => {
-          const hydrated = hydrateEstoqueFiscal(e);
-          const isEmbalado =
-            resolveTipoRecebimentoEstoque(hydrated) === "embalado";
-          return {
-            ...hydrated,
-            embalado: isEmbalado || Boolean(hydrated.embalado),
-            saldo_atual: computeEstoqueSaldo(
-              hydrated,
-              transList || [],
-              saics || [],
-              vascs || []
-            ),
-          };
-        });
+        const ents = workspace.estoque;
+        const vascs = workspace.vasilhames;
+        const saics = workspace.saidas || [];
+        const transList = workspace.transbordos || [];
 
-        setEntradas(estoqueWithSaldo);
+        setEntradas(hydrateEstoqueRows(ents, transList, saics, vascs));
         setVasilhames(vascs);
         setSaidas(saics);
         setReservas(reservasList || []);
@@ -227,16 +358,19 @@ export default function SaidaForm({
               base44.entities.RawMaterialStock.list("-created_date", 1000),
               base44.entities.StockMovement.list("-movement_date", 1000),
             ]);
+            if (cancelled) return;
             setContainersInd(Array.isArray(containers) ? containers : []);
             setStocksInd(Array.isArray(stocks) ? stocks : []);
             setMovementsInd(Array.isArray(movements) ? movements : []);
           } catch {
-            setContainersInd([]);
-            setStocksInd([]);
-            setMovementsInd([]);
-            setError(
-              "Dados da Industrialização não carregaram. Recarregue a página ou verifique a conexão."
-            );
+            if (!cancelled) {
+              setContainersInd([]);
+              setStocksInd([]);
+              setMovementsInd([]);
+              setError(
+                "Dados da Industrialização não carregaram. Recarregue a página ou verifique a conexão."
+              );
+            }
           }
 
           try {
@@ -247,6 +381,7 @@ export default function SaidaForm({
                 .catch(() => []),
               listTankas({ select: "id, cliente_nome" }).catch(() => []),
             ]);
+            if (cancelled) return;
             setClientes(
               buildSaidaClienteOptions(cliens, [
                 ...(nomesInd || []),
@@ -260,43 +395,16 @@ export default function SaidaForm({
             console.error("[SaidaForm] Falha ao unir clientes:", err);
           }
         }
-
-        if (id) {
-          const saida = await entities.saidas.get(id);
-          setEditingSaida(saida);
-          const itens =
-            (saida.itens || []).length > 0
-              ? saida.itens.map((it) => ({
-                  ...emptySaidaItem(resolveItemOrigem(it)),
-                  ...it,
-                  origem: resolveItemOrigem(it),
-                  item_uid: String(it.item_uid || "").trim() || newSaidaItemUid(),
-                  tanque_vazio: Boolean(it.tanque_vazio),
-                }))
-              : [emptySaidaItem(defaultOrigem)];
-          setFormData({
-            cliente_id: saida.cliente_id || "",
-            cliente_nome: saida.cliente_nome || "",
-            destino: normalizeDestino(saida.destino),
-            data_solicitacao: saida.data_solicitacao || todayStr(),
-            data_programada: saida.data_programada || "",
-            pedido_cliente: saida.pedido_cliente || "",
-            observacoes: saida.observacoes || "",
-            itens,
-          });
-          // Em edição, itens iniciam colapsados (resumo reduzido).
-          const collapsed = {};
-          itens.forEach((_, i) => {
-            collapsed[i] = true;
-          });
-          setCollapsedByIndex(collapsed);
-        }
       } catch {
-        setError("Erro ao carregar dados.");
+        if (!cancelled) setError("Erro ao carregar dados.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [id, loadIndData, defaultOrigem]);
 
   const sameId = (a, b) => Boolean(a) && Boolean(b) && String(a) === String(b);
@@ -448,9 +556,29 @@ export default function SaidaForm({
     return map;
   };
 
+  /**
+   * Trava só o item que já foi baixado — não o lote/entrada inteiro.
+   * Dois embalados no mesmo lote compartilham `emb:entrada_id`; item novo
+   * (uid novo / validado:false) deve permanecer editável e excluível.
+   */
   const itemTravado = (item) => {
-    if (!editingSaida) return false;
-    const original = originalPorChave().get(saidaItemChave(item));
+    if (!editingSaida || !item) return false;
+    if (item.validado === false) return false;
+    if (item.validado === true) return true;
+
+    const uid = String(item.item_uid || "").trim();
+    if (uid) {
+      const byUid = (editingSaida.itens || []).find(
+        (it) => String(it.item_uid || "").trim() === uid
+      );
+      // uid só existe no formulário → item adicionado na edição
+      if (!byUid) return false;
+      return itemFoiBaixado(byUid, editingSaida);
+    }
+
+    const chave = saidaItemChave(item);
+    if (!chave) return false;
+    const original = originalPorChave().get(chave);
     return Boolean(original && itemFoiBaixado(original, editingSaida));
   };
 
@@ -718,6 +846,19 @@ export default function SaidaForm({
       const isFiscal = editingSaida?.enviado_ao_fiscal;
       const origemPorChave = originalPorChave();
       const jaBaixadoOriginal = (item) => {
+        if (!item || !editingSaida) return false;
+        // Mesma regra do itemTravado: não confundir item novo com outro
+        // embalado já baixado no mesmo lote/entrada.
+        if (item.validado === false) return false;
+        if (item.validado === true) return true;
+        const uid = String(item.item_uid || "").trim();
+        if (uid) {
+          const byUid = (editingSaida.itens || []).find(
+            (it) => String(it.item_uid || "").trim() === uid
+          );
+          if (!byUid) return false;
+          return itemFoiBaixado(byUid, editingSaida);
+        }
         const original = origemPorChave.get(saidaItemChave(item));
         return Boolean(original && itemFoiBaixado(original, editingSaida));
       };
@@ -1116,6 +1257,15 @@ export default function SaidaForm({
         }
       }
 
+      // Mantém a listagem de solicitações alinhada (Pedido Cliente etc.)
+      // sem esperar TTL/realtime — crítico no Painel (modo expedição).
+      const savedRow =
+        createdSaida ||
+        (editingSaida?.id ? { ...editingSaida, ...data, id: editingSaida.id } : null);
+      if (savedRow?.id) {
+        patchTransbordoWorkspaceSaida(savedRow);
+      }
+
       if (!editingSaida && typeof onCreateSuccess === "function" && createdSaida?.id) {
         onCreateSuccess(createdSaida);
         setSaving(false);
@@ -1369,6 +1519,7 @@ export default function SaidaForm({
               locked={itemTravado(item)}
               getAvailableSaldo={getAvailableSaldo}
               getAvailableSaldoLote={getAvailableSaldoLote}
+              getEntradaSaldo={getEntradaSaldoBruto}
               getAvailableVolume={getAvailableVolume}
               getAvailableContainerVolume={getAvailableContainerVolume}
               getAvailableStockSaldo={getAvailableStockSaldo}

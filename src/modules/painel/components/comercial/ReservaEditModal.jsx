@@ -48,8 +48,11 @@ export default function ReservaEditModal({
 
   const ativas = useMemo(() => {
     if (!row?.chave) return [];
-    return listReservasForChave(reservas, row.chave).filter((r) => r.status === 'ativa');
-  }, [reservas, row?.chave]);
+    return listReservasForChave(reservas, row.chave, {
+      clienteId: row.clienteId,
+      clienteNome: row.clienteNome,
+    }).filter((r) => r.status === 'ativa');
+  }, [reservas, row?.chave, row?.clienteId, row?.clienteNome]);
 
   const editing = ativas.find((r) => r.id === editingId) || null;
 
