@@ -60,11 +60,43 @@ function origemTankaCodigo(origem, isotanques = []) {
   return codigo;
 }
 
-function labelOrigemLinha(origem, isotanques = [], entradas = []) {
+function origemVasilhameCodigo(origem, vasilhames = []) {
+  const byId = (vasilhames || []).find(
+    (v) => v.id && origem?.entrada_id && String(v.id) === String(origem.entrada_id)
+  );
+  if (byId) {
+    return (
+      formatEmbalagemPlacaBarril(byId.placa, byId.barril) ||
+      String(byId.codigo || "").trim() ||
+      ""
+    );
+  }
+
+  const fromOrigem = formatEmbalagemPlacaBarril(origem?.placa, origem?.barril);
+  if (fromOrigem) return fromOrigem;
+
+  // Fallback: rótulo persistido "PLACA - Produto (N L)" / "BARRIL - Produto..."
+  const codigo = String(origem?.entrada_codigo || "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim();
+  const sep = codigo.indexOf(" - ");
+  const hint = (sep > 0 ? codigo.slice(0, sep) : codigo).trim();
+  if (hint && hint.toLowerCase() !== "vasilhame") return hint;
+  return "";
+}
+
+function labelOrigemLinha(
+  origem,
+  isotanques = [],
+  entradas = [],
+  vasilhames = []
+) {
   const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
   if (tipo === "tanka") return origemTankaCodigo(origem, isotanques) || "-";
   if (isOrigemEmbalado(origem, entradas)) return LABEL_ORIGEM_EMBALADO;
-  if (tipo === "vasilhame") return "Vasilhame";
+  if (tipo === "vasilhame") {
+    return origemVasilhameCodigo(origem, vasilhames) || "Vasilhame";
+  }
   return "Granel";
 }
 
@@ -226,6 +258,45 @@ function embalagemDestinoLabel(destino) {
   return formatEmbalagemPlacaBarril(destino?.placa, destino?.barril) || "-";
 }
 
+function findVasilhameDoDestino(destino, vasilhames = []) {
+  const id = destino?.vasilhame_existente_id || destino?.vasilhame_id;
+  if (id) {
+    const byId = (vasilhames || []).find((v) => String(v.id) === String(id));
+    if (byId) return byId;
+  }
+  const placa = String(destino?.placa || "").trim().toUpperCase();
+  if (!placa) return null;
+  const barril = String(destino?.barril || "").trim().toUpperCase();
+  return (
+    (vasilhames || []).find((v) => {
+      if (String(v.placa || "").trim().toUpperCase() !== placa) return false;
+      if (!barril) return true;
+      return String(v.barril || "").trim().toUpperCase() === barril;
+    }) || null
+  );
+}
+
+/**
+ * Tanque que já estava no pátio (fracionado) e neste OP deixou de ser fracionado.
+ * Indicativo visual no card Destinos — o volume da linha continua sendo só o aporte do OP.
+ */
+function destinoCompletouTanque(destino, vasilhames = []) {
+  if ((destino?.tipo_embalagem || "") !== "Vasilhame") return false;
+  if (destino?.fracionado === true) return false;
+
+  if (destino?.vasilhame_existente_id) return true;
+
+  const destVol = roundVolume(destino?.volume_total || destino?.volume || 0);
+  if (destVol <= 0) return false;
+
+  const vasilhame = findVasilhameDoDestino(destino, vasilhames);
+  if (!vasilhame || vasilhame.fracionado === true) return false;
+
+  const tankVol = roundVolume(vasilhame.volume || 0);
+  // Volume do tanque > aporte deste OP → havia conteúdo prévio e o OP completou/topou.
+  return tankVol > destVol + 0.01;
+}
+
 function textoLacre(value) {
   const text = Array.isArray(value)
     ? value.map((item) => String(item || "").trim()).filter(Boolean).join(", ")
@@ -378,12 +449,12 @@ function buildDestinoLinhas(destino, composicao, densidade, isMassa) {
 
 function buildOrigemRows(
   transbordo,
-  { isotanques, entradas, produtoNome, densOperacao }
+  { isotanques, entradas, vasilhames, produtoNome, densOperacao }
 ) {
   const dens = densOperacao > 0 ? densOperacao : parseDensidade(transbordo?.densidade);
   const rows = [];
   for (const o of transbordo?.origens || []) {
-    const origem = labelOrigemLinha(o, isotanques, entradas);
+    const origem = labelOrigemLinha(o, isotanques, entradas, vasilhames);
     const lotes = (o.lotes_retirados || []).filter((l) => (l.volume_retirado || 0) > 0);
     const produto = origemProdutoNome(o, produtoNome);
     const origemEmMassa = origemVolumeEmMassa(o, dens);
@@ -454,6 +525,7 @@ function buildDestinoRows(transbordo, { vasilhames, densOperacao: densResolved }
       volumeEmMassa
     );
     const lacre = lacreDoDestino(d, transbordo, vasilhames);
+    const completado = destinoCompletouTanque(d, vasilhames);
     linhas.forEach((linha, groupIndex) => {
       rows.push({
         embalagem: tanque ? embalagemDestinoLabel(d) : "-",
@@ -462,6 +534,7 @@ function buildDestinoRows(transbordo, { vasilhames, densOperacao: densResolved }
         volume: volumeLitrosDisplay(linha.volume, densOperacao, volumeEmMassa),
         massa: formatMass(linha.massa, { empty: "-" }),
         lacre,
+        completado,
         groupId: i,
         groupIndex,
         groupSize: linhas.length,
@@ -530,6 +603,7 @@ export function buildTransbordoViewModel({
     origemRows: buildOrigemRows(transbordo, {
       isotanques,
       entradas,
+      vasilhames,
       produtoNome,
       densOperacao,
     }),

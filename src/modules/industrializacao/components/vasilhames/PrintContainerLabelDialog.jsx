@@ -12,6 +12,13 @@ import {
   DialogTitle,
 } from '@shared/components/ui/dialog';
 import { Input } from '@shared/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shared/components/ui/select';
 import { useToast } from '@shared/components/ui/use-toast';
 import NumberInputBr from '@transbordo/components/NumberInputBr';
 import EtiquetaPreview from '@painel/components/configuracao/EtiquetaPreview';
@@ -20,6 +27,10 @@ import {
   resolveResponsavelTecnico,
 } from '@transbordo/lib/etiquetaConfig';
 import { parseDensidade } from '@transbordo/lib/format';
+import {
+  aggregateComposicaoByLote,
+  LOTE_APORTE_ANTERIOR,
+} from '@transbordo/lib/vasilhameComposicao';
 import { printContainerLabel, calcValidityDate } from '@industrializacao/lib/labelprint';
 import { containerLabelDateOverride } from '@industrializacao/lib/containerLabelDateOverride';
 import { ensureProductionPublicToken } from '@industrializacao/lib/ensurePublicToken';
@@ -39,6 +50,20 @@ import {
 import { fmtNumber } from '@/i18n/formatters';
 
 const REP_BRASIL_CLIENT = 'REP BRASIL';
+
+/** Lotes reais da composição (maior volume primeiro) para escolha só na etiqueta. */
+export function lotesDisponiveisParaEtiqueta(container) {
+  const fromComp = aggregateComposicaoByLote(container?.composicao || [])
+    .map((row) => String(row.lote || '').trim())
+    .filter((lote) => lote && lote !== '—' && lote !== LOTE_APORTE_ANTERIOR);
+
+  const seen = new Set(fromComp);
+  const header = String(container?.lot || container?.lote || '').trim();
+  if (header && header !== '—' && !seen.has(header)) {
+    fromComp.unshift(header);
+  }
+  return fromComp;
+}
 
 /** Alerta REP BRASIL: lote de etiqueta não pode iniciar com OF (deve ser OS-…). */
 export function shouldWarnRepBrasilOfLot(clienteNome, lot) {
@@ -142,6 +167,8 @@ export default function PrintContainerLabelDialog({
   /** true = embalagem cadastrada; false = texto só desta impressão */
   const [useRegisteredEmbalagem, setUseRegisteredEmbalagem] = useState(true);
   const [embalagemOverride, setEmbalagemOverride] = useState('');
+  /** null = lote majoritário/atual do container; string = escolha só desta impressão */
+  const [lotOverride, setLotOverride] = useState(null);
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [meta, setMeta] = useState(null);
@@ -150,6 +177,19 @@ export default function PrintContainerLabelDialog({
   const volume = volumeOverride !== null ? volumeOverride : seedVolume;
   const tare = tareOverride !== null ? tareOverride : seedTare;
 
+  const lotesOpcoes = useMemo(
+    () => lotesDisponiveisParaEtiqueta(container),
+    // sessionKey garante reset visual ao reabrir
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionKey, container, container?.composicao, container?.lot, container?.lote],
+  );
+  const defaultLot = String(container?.lot || container?.lote || lotesOpcoes[0] || '').trim();
+  const selectedLotRaw = lotOverride != null ? lotOverride : defaultLot;
+  const selectedLot = lotesOpcoes.includes(selectedLotRaw)
+    ? selectedLotRaw
+    : (lotesOpcoes[0] || (selectedLotRaw !== '—' ? selectedLotRaw : '') || '');
+  const showLoteSelect = lotesOpcoes.length > 1;
+
   useEffect(() => {
     // Nova sessão: descarta edições locais e volta ao seed
     setVolumeOverride(null);
@@ -157,6 +197,7 @@ export default function PrintContainerLabelDialog({
     setQty(1);
     setUseRegisteredEmbalagem(true);
     setEmbalagemOverride('');
+    setLotOverride(null);
   }, [sessionKey]);
 
   useEffect(() => {
@@ -166,6 +207,7 @@ export default function PrintContainerLabelDialog({
     setQty(1);
     setUseRegisteredEmbalagem(true);
     setEmbalagemOverride('');
+    setLotOverride(null);
     setPrinting(false);
     setMeta(null);
   }, [dialogOpen]);
@@ -267,24 +309,29 @@ export default function PrintContainerLabelDialog({
     }
     setPrinting(true);
     try {
-      await printContainerLabel(container, meta?.validityDays, meta?.publicToken, {
-        manufactureDate: fabDate,
-        fillingDate: container?.created_date || undefined,
-        expiryDate: labelExpiry || undefined,
-        locale: i18n.language,
-        clienteNome: meta?.clienteNome,
-        clienteId,
-        contexto,
-        volume: weights.volume,
-        netWeight: weights.netWeight,
-        grossWeight: weights.grossWeight,
-        copies: Math.round(Number(qty)),
-        embalagem,
-        campos: meta?.printConfig?.campos,
-        dateFormat: meta?.printConfig?.dateFormat,
-        orientation: meta?.printConfig?.orientation,
-        responsavelTecnico: meta?.responsavelTecnico,
-      });
+      await printContainerLabel(
+        { ...container, lot: selectedLot || container?.lot || container?.lote || '—' },
+        meta?.validityDays,
+        meta?.publicToken,
+        {
+          manufactureDate: fabDate,
+          fillingDate: container?.created_date || undefined,
+          expiryDate: labelExpiry || undefined,
+          locale: i18n.language,
+          clienteNome: meta?.clienteNome,
+          clienteId,
+          contexto,
+          volume: weights.volume,
+          netWeight: weights.netWeight,
+          grossWeight: weights.grossWeight,
+          copies: Math.round(Number(qty)),
+          embalagem,
+          campos: meta?.printConfig?.campos,
+          dateFormat: meta?.printConfig?.dateFormat,
+          orientation: meta?.printConfig?.orientation,
+          responsavelTecnico: meta?.responsavelTecnico,
+        },
+      );
       handleOpenChange(false);
     } catch (err) {
       toast({ title: t('errors.saveFailed'), description: err.message, variant: 'destructive' });
@@ -295,7 +342,7 @@ export default function PrintContainerLabelDialog({
 
   const resolvedClienteNome =
     meta?.clienteNome || clienteNome || container?.client || container?.cliente_nome || production?.client || '';
-  const resolvedLot = container?.lot || container?.lote || '';
+  const resolvedLot = selectedLot || '';
   const showRepBrasilOfLotWarning = shouldWarnRepBrasilOfLot(resolvedClienteNome, resolvedLot);
 
   const previewValues = {
@@ -355,6 +402,35 @@ export default function PrintContainerLabelDialog({
                 />
               )}
             </div>
+
+            {showLoteSelect && (
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-3">
+                <label
+                  htmlFor="print-label-lote-select"
+                  className="text-xs font-medium text-muted-foreground mb-1.5 block"
+                >
+                  {t('common.lot')}
+                </label>
+                <Select
+                  value={selectedLot || undefined}
+                  onValueChange={(value) => setLotOverride(value)}
+                >
+                  <SelectTrigger id="print-label-lote-select" className="bg-white">
+                    <SelectValue placeholder={t('common.lot')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lotesOpcoes.map((lote) => (
+                      <SelectItem key={lote} value={lote}>
+                        {lote}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {t('containers.vasilhames.printLabelLoteHint')}
+                </p>
+              </div>
+            )}
 
             <div className={`grid grid-cols-1 gap-4 ${manualVolume ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
               <div>

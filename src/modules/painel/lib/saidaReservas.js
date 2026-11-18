@@ -52,6 +52,7 @@ function sameClienteReserva(reservaAsCliente, ctxId, ctxNome) {
  * Match de reserva à chave/lote do item embalado.
  * Prioridade: chave exata → lote+unidade (+ cliente soft) → lote na chave.
  * Não exige produto_codigo idêntico (variantes BB / códigos divergentes).
+ * Reservas de vasilhame só batem por chave exata (não entram no soft-match de embalados).
  */
 export function reservaMatchesChave(
   reserva,
@@ -66,8 +67,9 @@ export function reservaMatchesChave(
   } = {}
 ) {
   if (!reserva) return false;
-  if (String(reserva.chave || '').startsWith('vasilhame||')) return false;
   if (chave && reserva.chave === chave) return true;
+  // Vasilhame: bloqueia soft-match (lote/cliente) usado só para embalados.
+  if (String(reserva.chave || '').startsWith('vasilhame||')) return false;
 
   const want = chave ? parseReservaChave(chave) : null;
   const have = parseReservaChave(reserva.chave);

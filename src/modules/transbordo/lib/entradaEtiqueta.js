@@ -42,15 +42,16 @@ function produtoKey(lote) {
   ].join("|");
 }
 
-/** Rótulo da lista suspensa. O lote entra só quando o mesmo produto se repete. */
+/** Rótulo da lista suspensa do modal de etiqueta (prioriza o número do lote). */
 export function entradaEtiquetaOptionLabel(lote, index, lotes) {
+  const loteNome = String(lote?.lote || "").trim() || `Lote ${index + 1}`;
+  const produtos = new Set((lotes || []).map((item) => produtoKey(item)));
+  if (produtos.size <= 1) return loteNome;
+
   const nome = String(lote?.produto_nome || "").trim() || "Produto";
   const codigo = String(lote?.produto_codigo || "").trim();
-  const base = codigo ? `${codigo} — ${nome}` : nome;
-  const duplicates = (lotes || []).filter((item) => produtoKey(item) === produtoKey(lote));
-  if (duplicates.length < 2) return base;
-  const loteNome = String(lote?.lote || "").trim();
-  return loteNome ? `${base} · ${loteNome}` : `${base} · ${index + 1}`;
+  const produto = codigo ? `${codigo} — ${nome}` : nome;
+  return `${loteNome} · ${produto}`;
 }
 
 function positiveNumber(value) {
@@ -167,11 +168,15 @@ export async function printEntradaEtiqueta(
     refId: model?.id || "—",
     lot: model?.lote || "—",
     client: model?.cliente || "—",
-    fabDate: formatEtiquetaDate(model?.fabricacao, dateFormat, locale),
+    fabDate: model?.fabricacao
+      ? formatEtiquetaDate(model.fabricacao, dateFormat, locale)
+      : "",
     envaseDate: model?.envase
       ? formatEtiquetaDate(model.envase, dateFormat, locale)
       : "",
-    valDate: formatEtiquetaDate(model?.validade, dateFormat, locale),
+    valDate: model?.validade
+      ? formatEtiquetaDate(model.validade, dateFormat, locale)
+      : "",
     netWeight: formatWeight(model?.netWeight, locale),
     grossWeight: formatWeight(model?.grossWeight, locale),
     volume: formatVolume(model?.volumeLitros, locale),

@@ -4978,6 +4978,7 @@
       "printLabelEmbalagemHint": "Checked: uses the registered packaging. Uncheck to enter different text for this print only.",
       "printLabelVolumeRequired": "Enter the volume and the number of labels.",
       "printLabelRepBrasilOfLotWarning": "CHECK THE BATCH: IT MUST START WITH \"OS - XXXXXX - XX\"",
+      "printLabelLoteHint": "Choose which lot appears on the label. This does not change the item lot.",
       "printLabelConfirm": "Print",
       "printingLabels": "Printing...",
       "delete": "Delete",

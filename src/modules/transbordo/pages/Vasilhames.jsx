@@ -934,6 +934,7 @@ export default function Vasilhames() {
         net_weight: labelResolved.peso_liquido,
         gross_weight: labelResolved.peso_bruto,
         created_date: labelResolved.created_at || labelResolved.created_date,
+        composicao: labelResolved.composicao,
       }
     : null;
 

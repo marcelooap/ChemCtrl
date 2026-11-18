@@ -184,8 +184,17 @@ function labelCss(orientation = 'horizontal', copies = 1) {
   .fields-right { width: 34%; flex-shrink: 0; gap: 1.2mm; }
   .field-row { display: flex; align-items: baseline; font-size: 7.5pt; line-height: 1.15; min-width: 0; }
   .field-row .lbl { font-weight: 800; text-transform: uppercase; flex-shrink: 0; }
-  .field-row .sep { margin: 0 0.6mm; flex-shrink: 0; }
-  .field-row .val { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-row .sep { margin: 0 0.6mm; flex-shrink: 0; font-weight: 400; }
+  .field-row .val { font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-row.value-only { display: block; width: 100%; }
+  .field-row.value-only .val {
+    display: block;
+    width: 100%;
+    font-weight: 700;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
   .field-row.wrap .val { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: ellipsis; }
   .fields-right .field-row { flex-direction: column; align-items: flex-start; gap: 0.15mm; }
   .fields-right .sep { display: none; }
@@ -270,8 +279,8 @@ function labelCss(orientation = 'horizontal', copies = 1) {
     align-items: flex-start;
     font-size: 9.5pt;
   }
-  .footer .sep { margin: 0 0.6mm; }
-  .footer .emb { font-size: 9pt; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .footer .sep { margin: 0 0.6mm; font-weight: 400; }
+  .footer .emb { font-size: 9pt; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .label.vertical .footer .emb {
     font-size: 9.5pt;
     white-space: normal;
@@ -451,8 +460,12 @@ async function buildConfiguredLabelBody({
   const convencionalVertical = vertical && contexto === 'convencional';
   const fieldRowHtml = (row, { forceWrap = false } = {}) => {
     const val = dataValues[row.key] ?? '—';
-    if (convencionalVertical && row.key === 'cliente') {
-      return `<div class="field-row center-only"><span class="val">${escapeHtml(val)}</span></div>`;
+    if (row.key === 'cliente') {
+      if (convencionalVertical) {
+        return `<div class="field-row center-only"><span class="val">${escapeHtml(val)}</span></div>`;
+      }
+      const wrap = forceWrap || wrapKeys.has(row.key) ? ' wrap' : '';
+      return `<div class="field-row value-only${wrap}"><span class="val">${escapeHtml(val)}</span></div>`;
     }
     if (row.key === 'responsavel_tecnico') {
       return `<div class="field-row rt-flow"><span class="lbl">${dataRowLabel(row.key, t)}</span><span class="sep">•</span><span class="val">${escapeHtml(val)}</span></div>`;
@@ -699,11 +712,9 @@ async function prepareContainerLabelJob(container, validityDays, publicToken, op
     contexto === 'convencional' && !envaseDateStr
       ? ''
       : formatEtiquetaDate(envaseDateStr, dateFormat, lang);
-  const valDate = formatEtiquetaDate(
-    dateOverride?.expiryDate || options?.expiryDate || calcValidityDate(fabDateStr, validityDays),
-    dateFormat,
-    lang
-  );
+  const expiryRaw =
+    dateOverride?.expiryDate || options?.expiryDate || calcValidityDate(fabDateStr, validityDays);
+  const valDate = expiryRaw ? formatEtiquetaDate(expiryRaw, dateFormat, lang) : '';
   const responsavelTecnico =
     options?.responsavelTecnico ??
     (await resolveResponsavelTecnico({
@@ -797,7 +808,9 @@ export const printRawMaterialLabel = async (stockItem, publicToken, options) => 
     dateFormat,
     lang
   );
-  const valDate = formatEtiquetaDate(stockItem.expiry_date, dateFormat, lang);
+  const valDate = stockItem.expiry_date
+    ? formatEtiquetaDate(stockItem.expiry_date, dateFormat, lang)
+    : '';
   const responsavelTecnico =
     options?.responsavelTecnico ??
     (await resolveResponsavelTecnico({

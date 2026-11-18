@@ -67,6 +67,14 @@ import {
 
 const INPUT_EDITABLE = "bg-white";
 
+/** Nº placa (nº barril), ou só o que estiver cadastrado. */
+function formatVasilhameOrigemLabel(vasilhame) {
+  const placa = String(vasilhame?.placa || "").trim();
+  const barril = String(vasilhame?.barril || "").trim();
+  if (placa && barril) return `${placa} (${barril})`;
+  return placa || barril || String(vasilhame?.codigo || "").trim() || "Vasilhame";
+}
+
 /** UID estável na sessão do formulário (não confundir com composicao.origem_index do FIFO). */
 function createClientUid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -761,7 +769,7 @@ export default function TransbordoModal({
         lote: lotePrincipal,
         densidade: densVas || v.densidade || "",
         lotes_disponiveis: lotesDisponiveis,
-        display_label: `${v.placa || v.barril || v.codigo || "Vasilhame"} - ${v.produto_nome || ""} (${formatVolume(v.volume || 0)} L)`,
+        display_label: `${formatVasilhameOrigemLabel(v)} - ${v.produto_nome || ""} (${formatVolume(v.volume || 0)} L)`,
       };
     });
 

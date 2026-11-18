@@ -13,21 +13,25 @@ import QualityAnalysisDialog from '@industrializacao/components/qualidade/Qualit
 
 export default function ProducoesCQ() {
   const { t } = useTranslation();
-  const { data: allProds, loading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
+  const { data: allProds, loading: prodsLoading } = useRealtimeEntity('Production', () => base44.entities.Production.list('-created_date', 500));
   const { data: tests } = useQualityTests();
-  const { data: results, reload: load } = useQualityResults();
+  const { data: results, loading: resultsLoading, reload: load } = useQualityResults();
   const [search, setSearch] = useState('');
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [selectedProd, setSelectedProd] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const productions = useMemo(() =>
-    allProds.filter(p =>
+  // Aguarda Production + QualityResult: sem results, bypass_qc Finalizado/Envase
+  // aparecia como pendente e sumia após o load (flash/flicker).
+  const loading = prodsLoading || resultsLoading;
+
+  const productions = useMemo(() => {
+    const analyzedIds = new Set(results.map((res) => res.production_id));
+    return allProds.filter((p) =>
       p.status === 'Qualidade' ||
-      (p.bypass_qc && ['Envase', 'Finalizado'].includes(p.status) && !results.some(res => res.production_id === p.id))
-    ),
-    [allProds, results]
-  );
+      (p.bypass_qc && ['Envase', 'Finalizado'].includes(p.status) && !analyzedIds.has(p.id))
+    );
+  }, [allProds, results]);
 
   const openAnalysis = useCallback((prod) => {
     setSelectedProd(prod);

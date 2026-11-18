@@ -3,6 +3,8 @@ import {
   FileText,
   Loader2,
   Package,
+  Printer,
+  RotateCw,
   Scale,
   User,
   Warehouse,
@@ -14,7 +16,38 @@ import {
   DialogTitle,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
+import { useToast } from "@shared/components/ui/use-toast";
+import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
 import { buildTransbordoViewModel } from "@transbordo/lib/transbordoViewData";
+import { loadConvencionalLabelContext } from "@transbordo/lib/printSaidaAgendamento";
+import { TIPO_CONVENCIONAL } from "@transbordo/lib/saidaOrigem";
+
+function destinoPodeImprimirEtiqueta(destino) {
+  const tipo = String(destino?.tipo_embalagem || "").trim();
+  if (!tipo || tipo === "Tankagem") return false;
+  return true;
+}
+
+function buildLabelItemFromDestino(destino, transbordo) {
+  return {
+    tipo: TIPO_CONVENCIONAL,
+    vasilhame_id:
+      destino?.vasilhame_existente_id || destino?.vasilhame_id || null,
+    vasilhame_placa: destino?.placa || "",
+    vasilhame_barril: destino?.barril || "",
+    produto_id: transbordo?.produto_id,
+    produto_codigo: transbordo?.produto_codigo,
+    produto_nome: transbordo?.produto_nome,
+    tipo_embalagem: destino?.tipo_embalagem || "Vasilhame",
+    volume_disponivel: destino?.volume_total || destino?.volume || 0,
+    volume_solicitado: destino?.volume_total || destino?.volume || 0,
+    volume_por_embalagem: destino?.volume_por_embalagem || 0,
+    quantidade_embalagens: destino?.quantidade_embalagens,
+    peso_liquido: destino?.peso_liquido,
+    lote: destino?.lote || "",
+    cliente_nome: transbordo?.cliente_nome,
+  };
+}
 
 function SectionCard({ icon: Icon, title, children, action = null }) {
   return (
@@ -70,7 +103,11 @@ export default function TransbordoViewDialog({
   isotanques = [],
   vasilhames = [],
 }) {
+  const { toast } = useToast();
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [labelDialog, setLabelDialog] = useState(null);
+  const [labelLoadingIndex, setLabelLoadingIndex] = useState(null);
+
   if (!transbordo) return null;
 
   const view = buildTransbordoViewModel({
@@ -83,6 +120,9 @@ export default function TransbordoViewDialog({
 
   const codigo = transbordo.codigo_transbordo || "";
   const produtoSubtitle = [view.produto, view.cliente].filter(Boolean).join(" · ") || "—";
+  const destinos = Array.isArray(transbordo.destinos) ? transbordo.destinos : [];
+  const destinoColSpan =
+    4 + (view.showEmbalagem ? 1 : 0) + (view.showQtd ? 1 : 0);
 
   const handlePdf = async () => {
     setGeneratingPdf(true);
@@ -104,8 +144,46 @@ export default function TransbordoViewDialog({
     }
   };
 
+  const handlePrintEtiqueta = async (destinoIndex) => {
+    const destino = destinos[destinoIndex];
+    if (!destino || !destinoPodeImprimirEtiqueta(destino) || labelLoadingIndex != null) {
+      return;
+    }
+    setLabelLoadingIndex(destinoIndex);
+    try {
+      const ctx = await loadConvencionalLabelContext(
+        buildLabelItemFromDestino(destino, transbordo),
+        {
+          codigo: transbordo.codigo_transbordo,
+          cliente_id: transbordo.cliente_id,
+          cliente_nome: transbordo.cliente_nome,
+        },
+        vasilhames
+      );
+      if (!ctx?.container) {
+        throw new Error("Não foi possível montar a etiqueta deste destino.");
+      }
+      setLabelDialog(ctx);
+    } catch (err) {
+      toast({
+        title: "Imprimir etiqueta",
+        description: err?.message || "Não foi possível abrir a etiqueta.",
+        variant: "destructive",
+      });
+    } finally {
+      setLabelLoadingIndex(null);
+    }
+  };
+
+  const handleClose = () => {
+    setLabelDialog(null);
+    setLabelLoadingIndex(null);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <>
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 text-left space-y-1">
           <DialogTitle className="flex items-center gap-3 flex-wrap text-base">
@@ -241,17 +319,14 @@ export default function TransbordoViewDialog({
                       <th className={thClass}>Volume (L)</th>
                       <th className={thClass}>Massa (kg)</th>
                       <th className={thClass}>Lacre</th>
+                      <th className={`${thClass} w-12`}>Etiqueta</th>
                     </tr>
                   </thead>
                   <tbody>
                     {view.destinoRows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={
-                            3 +
-                            (view.showEmbalagem ? 1 : 0) +
-                            (view.showQtd ? 1 : 0)
-                          }
+                          colSpan={destinoColSpan}
                           className="px-3 py-3 text-center text-sm text-muted-foreground"
                         >
                           Nenhum destino registrado.
@@ -270,13 +345,27 @@ export default function TransbordoViewDialog({
                           lastOfGroup && !groupIsLast
                             ? "border-b border-border"
                             : "";
+                        const destino = destinos[row.groupId];
+                        const canPrint = destinoPodeImprimirEtiqueta(destino);
+                        const printingThis = labelLoadingIndex === row.groupId;
                         return (
                           <tr key={`${row.groupId}-${row.groupIndex}`}>
                             {view.showEmbalagem ? (
                               <td
                                 className={`${tdClass} font-medium text-foreground ${divider}`}
                               >
-                                {row.embalagem}
+                                <span className="inline-flex items-center justify-center gap-1.5">
+                                  <span>{row.embalagem}</span>
+                                  {row.completado ? (
+                                    <span
+                                      className="inline-flex items-center justify-center"
+                                      title="Tanque completado neste transbordo"
+                                      aria-label="Tanque completado neste transbordo"
+                                    >
+                                      <RotateCw className="h-3.5 w-3.5 text-orange-500" />
+                                    </span>
+                                  ) : null}
+                                </span>
                               </td>
                             ) : null}
                             <td
@@ -309,6 +398,33 @@ export default function TransbordoViewDialog({
                                 }`}
                               >
                                 {row.lacre}
+                              </td>
+                            ) : null}
+                            {!mixed || firstOfGroup ? (
+                              <td
+                                rowSpan={mixed ? row.groupSize : undefined}
+                                className={`${tdClass} ${
+                                  groupIsLast ? "" : "border-b border-border"
+                                }`}
+                              >
+                                {canPrint ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-colors disabled:opacity-50"
+                                    title="Imprimir etiqueta"
+                                    aria-label="Imprimir etiqueta"
+                                    disabled={labelLoadingIndex != null}
+                                    onClick={() => handlePrintEtiqueta(row.groupId)}
+                                  >
+                                    {printingThis ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Printer className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </td>
                             ) : null}
                           </tr>
@@ -355,11 +471,29 @@ export default function TransbordoViewDialog({
             )}
             Gerar PDF
           </Button>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={handleClose}>
             Fechar
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+
+    <PrintContainerLabelDialog
+      key={labelDialog?.container?.id || "closed"}
+      open={Boolean(labelDialog?.container)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setLabelDialog(null);
+      }}
+      container={labelDialog?.container || null}
+      initialVolume={labelDialog?.initialVolume}
+      density={labelDialog?.density}
+      contexto={labelDialog?.contexto || "convencional"}
+      clienteId={labelDialog?.clienteId}
+      clienteNome={labelDialog?.clienteNome}
+      manufactureDate={labelDialog?.manufactureDate || undefined}
+      expiryDate={labelDialog?.expiryDate || undefined}
+      resolvePublicToken={labelDialog?.resolvePublicToken}
+    />
+    </>
   );
 }

@@ -4901,6 +4901,7 @@
       "printLabelEmbalagemHint": "Marcado: usa a embalagem cadastrada. Desmarque para informar outro texto só nesta impressão.",
       "printLabelVolumeRequired": "Informe o volume e a quantidade de etiquetas.",
       "printLabelRepBrasilOfLotWarning": "VERIFICAR LOTE, O MESMO DEVE COMEÇAR COM \"OS - XXXXXX - XX\"",
+      "printLabelLoteHint": "Escolha qual lote aparece na etiqueta. Isso não altera o lote do item.",
       "printLabelConfirm": "Imprimir",
       "printingLabels": "Imprimindo...",
       "delete": "Excluir",

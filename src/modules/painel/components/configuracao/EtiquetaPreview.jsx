@@ -17,19 +17,29 @@ function FieldRow({
   emphasis = false,
   flow = false,
   center = false,
+  valueOnly = false,
   scale = null,
 }) {
   const scaledStyle = scale
     ? { fontSize: `${scale.previewPx}px`, lineHeight: scale.lineHeight }
     : undefined;
 
-  if (center) {
+  if (center || valueOnly) {
+    const sizeClass = center
+      ? (emphasis ? 'text-[15px]' : 'text-[13px]')
+      : scale
+        ? ''
+        : fill
+          ? (emphasis ? 'text-[14px] leading-snug' : 'text-[12px] leading-snug')
+          : (emphasis ? 'text-[12px] leading-tight' : 'text-[10px] leading-tight');
     return (
       <div
-        className={`w-full text-center font-extrabold uppercase leading-snug ${emphasis ? 'text-[15px]' : 'text-[13px]'}`}
+        className={`w-full min-w-0 leading-snug ${center ? 'text-center uppercase font-extrabold' : 'text-left font-bold'} ${sizeClass}`}
         style={scaledStyle}
       >
-        {value}
+        <span className={center ? '' : (wrap || fill ? 'whitespace-normal break-words' : 'truncate block')}>
+          {value}
+        </span>
       </div>
     );
   }
@@ -39,10 +49,10 @@ function FieldRow({
       ? (emphasis ? 'text-[14px] leading-snug' : 'text-[12px] leading-snug')
       : (emphasis ? 'text-[12px] leading-tight' : 'text-[10px] leading-snug');
     return (
-      <p className={`w-full min-w-0 text-left font-extrabold ${scale ? '' : size}`} style={scaledStyle}>
-        <span className="uppercase">{label}</span>
-        <span className="font-bold text-black/80"> • </span>
-        <span className="font-bold">{value}</span>
+      <p className={`w-full min-w-0 text-left ${scale ? '' : size}`} style={scaledStyle}>
+        <span className="font-extrabold uppercase">{label}</span>
+        <span className="font-normal text-black/80"> • </span>
+        <span className="font-normal">{value}</span>
       </p>
     );
   }
@@ -53,7 +63,7 @@ function FieldRow({
         <div className={`font-extrabold uppercase leading-none tracking-wide ${emphasis ? 'text-[10px]' : 'text-[8px]'}`}>
           {label}
         </div>
-        <div className={`font-bold leading-tight truncate mt-[1px] ${emphasis ? 'text-[12px]' : 'text-[10px]'}`}>
+        <div className={`font-normal leading-tight truncate mt-[1px] ${emphasis ? 'text-[12px]' : 'text-[10px]'}`}>
           {value}
         </div>
       </div>
@@ -72,8 +82,8 @@ function FieldRow({
   return (
     <div className={`flex gap-1 min-w-0 shrink-0 ${fill || scale ? 'w-full' : ''} ${sizeClass}`} style={scaledStyle}>
       <span className="font-extrabold uppercase shrink-0">{label}</span>
-      <span className="font-bold text-black/80 shrink-0">•</span>
-      <span className={`font-bold min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
+      <span className="font-normal text-black/80 shrink-0">•</span>
+      <span className={`font-normal min-w-0 flex-1 ${fill || wrap ? 'whitespace-normal break-words' : 'truncate'}`}>
         {value}
       </span>
     </div>
@@ -156,6 +166,7 @@ export default function EtiquetaPreview({
         if (convencional && !v.fillingDate) return '';
         return formatEtiquetaDate(v.fillingDate, dateFormat, i18n.language);
       case 'validade':
+        if (!v.expiryDate) return '';
         return formatEtiquetaDate(v.expiryDate, dateFormat, i18n.language);
       case 'cliente':
         return v.client || '—';
@@ -188,11 +199,12 @@ export default function EtiquetaPreview({
     rows.map((row) => (
       <FieldRow
         key={row.key}
-        stacked={stacked}
+        stacked={stacked && row.key !== 'cliente'}
         fill={vertical}
         wrap={wrapKey(row.key)}
         emphasis={emphasis}
         center={convencionalVertical && row.key === 'cliente'}
+        valueOnly={row.key === 'cliente' && !(convencionalVertical)}
         flow={row.key === 'responsavel_tecnico'}
         scale={scaled && !stacked ? fieldsScale : null}
         label={dataLabel(row.key)}
@@ -219,9 +231,9 @@ export default function EtiquetaPreview({
         {embalagem}
       </div>
     ) : (
-      <div className={`font-extrabold uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? `w-full items-start leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}` : `${emphasis ? 'text-[12px]' : 'text-[10px]'} mt-0.5 items-baseline`}`}>
-        <span className="shrink-0">{t('pdf.label.packaging')}</span>
-        <span className="font-bold text-black/80 shrink-0">•</span>
+      <div className={`uppercase flex gap-1 shrink-0 min-w-0 ${vertical ? `w-full items-start leading-snug ${emphasis ? 'text-[14px]' : 'text-[12px]'}` : `${emphasis ? 'text-[12px]' : 'text-[10px]'} mt-0.5 items-baseline`}`}>
+        <span className="font-extrabold shrink-0">{t('pdf.label.packaging')}</span>
+        <span className="font-normal text-black/80 shrink-0">•</span>
         <span className={`font-bold min-w-0 flex-1 ${vertical ? 'whitespace-normal break-words' : 'truncate text-[11px]'}`}>{embalagem}</span>
       </div>
     )

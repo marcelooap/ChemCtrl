@@ -4301,6 +4301,7 @@
       "printLabelEmbalagemHint": "Coché : utilise l'emballage enregistré. Décochez pour saisir un autre texte pour cette impression uniquement.",
       "printLabelVolumeRequired": "Saisissez le volume et le nombre d'étiquettes.",
       "printLabelRepBrasilOfLotWarning": "VÉRIFIER LE LOT : IL DOIT COMMENCER PAR \"OS - XXXXXX - XX\"",
+      "printLabelLoteHint": "Choisissez le lot affiché sur l'étiquette. Cela ne modifie pas le lot de l'article.",
       "printLabelConfirm": "Imprimer",
       "printingLabels": "Impression...",
       "delete": "Supprimer",

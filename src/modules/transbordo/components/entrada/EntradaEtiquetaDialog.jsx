@@ -196,51 +196,53 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
               </p>
             ) : null}
 
-            <div className={`grid grid-cols-1 gap-4 ${multiple ? "sm:grid-cols-2" : ""}`}>
-              {multiple && (
-                <div>
-                  <label
-                    htmlFor="entrada-etiqueta-produto"
-                    className="text-xs font-medium text-muted-foreground mb-1 block"
-                  >
-                    {t("common.product")}
-                  </label>
-                  <Select
-                    value={String(loteIndex)}
-                    onValueChange={(value) => setSelectedIndex(Number(value))}
-                  >
-                    <SelectTrigger id="entrada-etiqueta-produto" className="bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {lotes.map((item, index) => (
-                        <SelectItem key={`${item.produto_id || "p"}-${index}`} value={String(index)}>
-                          {entradaEtiquetaOptionLabel(item, index, lotes)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className={multiple ? "" : "max-w-xs"}>
+            {multiple && (
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-3">
                 <label
-                  htmlFor="entrada-etiqueta-qty"
-                  className="text-xs font-medium text-muted-foreground mb-1 block"
+                  htmlFor="entrada-etiqueta-lote"
+                  className="text-xs font-medium text-muted-foreground mb-1.5 block"
                 >
-                  {t("containers.vasilhames.printLabelQty")} *
+                  {t("common.lot")}
                 </label>
-                <NumberInputBr
-                  id="entrada-etiqueta-qty"
-                  value={qty}
-                  onChange={(value) =>
-                    setQty(value === "" ? "" : Math.max(1, Math.round(Number(value) || 1)))
-                  }
-                  decimals={0}
-                  min={1}
-                  placeholder="1"
-                  aria-label={t("containers.vasilhames.printLabelQty")}
-                />
+                <Select
+                  value={String(loteIndex)}
+                  onValueChange={(value) => setSelectedIndex(Number(value))}
+                >
+                  <SelectTrigger id="entrada-etiqueta-lote" className="bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lotes.map((item, index) => (
+                      <SelectItem key={`${item.produto_id || "p"}-${index}`} value={String(index)}>
+                        {entradaEtiquetaOptionLabel(item, index, lotes)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {t("containers.vasilhames.printLabelLoteHint")}
+                </p>
               </div>
+            )}
+
+            <div className="max-w-xs">
+              <label
+                htmlFor="entrada-etiqueta-qty"
+                className="text-xs font-medium text-muted-foreground mb-1 block"
+              >
+                {t("containers.vasilhames.printLabelQty")} *
+              </label>
+              <NumberInputBr
+                id="entrada-etiqueta-qty"
+                value={qty}
+                onChange={(value) =>
+                  setQty(value === "" ? "" : Math.max(1, Math.round(Number(value) || 1)))
+                }
+                decimals={0}
+                min={1}
+                placeholder="1"
+                aria-label={t("containers.vasilhames.printLabelQty")}
+              />
             </div>
           </div>
         )}
