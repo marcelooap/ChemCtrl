@@ -145,6 +145,7 @@ export default function OperadorOrdemAuthDialog({ open, onOpenChange, onAuthenti
                   : t("painel.operacional.ordemTransbordo.operatorAuth.userPlaceholder")
               }
               disabled={submitting}
+              openOnFocus={false}
               inputClassName="bg-white"
             />
             {!loadingUsers && users.length === 0 && !errorMessage && (

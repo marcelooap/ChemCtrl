@@ -5,6 +5,7 @@ import {
 import {
   TIPO_CONVENCIONAL,
   TIPO_EMBALADO,
+  isTanqueVazioItem,
 } from "@transbordo/lib/saidaOrigem";
 
 const WMS_ALERT_TITLE =
@@ -49,6 +50,7 @@ export function resolveEstoqueIdsForSaidaItemWms(
   item,
   { vasilhames = [], transbordos = [], estoque = [] } = {}
 ) {
+  if (isTanqueVazioItem(item)) return [];
   if (!isTipoEmbaladoOuVasilhame(item)) return [];
 
   if (item.tipo === TIPO_EMBALADO || item.tipo === "embalado") {
@@ -71,6 +73,7 @@ export function isSaidaItemWmsNok(
   item,
   { vasilhames = [], transbordos = [], estoque = [] } = {}
 ) {
+  if (isTanqueVazioItem(item)) return false;
   const ids = resolveEstoqueIdsForSaidaItemWms(item, {
     vasilhames,
     transbordos,

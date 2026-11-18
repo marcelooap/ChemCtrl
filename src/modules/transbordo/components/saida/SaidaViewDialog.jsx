@@ -67,6 +67,8 @@ import {
   itemFoiBaixado,
   saidaTemItemPendenteNoModulo,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
+  isItemSaidaVazio,
   calcSaidaQuantidadeTotal,
   aggregateUnitarioSaidaItens,
   isSaidaModuloPainel,
@@ -520,7 +522,9 @@ export default function SaidaViewDialog({
   const itemPertenceAoModulo = (item) =>
     !highlightModule || resolveItemOrigem(item) === highlightModule;
   const selectableIndexes = itens
-    .map((item, index) => (itemPertenceAoModulo(item) ? index : -1))
+    .map((item, index) =>
+      itemPertenceAoModulo(item) && !isItemSaidaVazio(item) ? index : -1
+    )
     .filter((index) => index >= 0);
   const selectableSet = new Set(selectableIndexes);
   const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
@@ -878,20 +882,52 @@ export default function SaidaViewDialog({
                 </tr>
               ) : (
                 itens.map((item, i) => {
-                  const vasilhame = resolveEmbalagemSource(
-                    item,
-                    vasilhames,
-                    containersById
-                  );
+                  const aguardandoInfo = isItemSaidaVazio(item);
+                  const vasilhame = aguardandoInfo
+                    ? null
+                    : resolveEmbalagemSource(
+                        item,
+                        vasilhames,
+                        containersById
+                      );
                   const isForeignModule =
+                    !aguardandoInfo &&
                     Boolean(highlightModule) &&
                     resolveItemOrigem(item) !== highlightModule;
                   const checklistItem =
-                    hasChecklist || showChecklistColumn
+                    !aguardandoInfo && (hasChecklist || showChecklistColumn)
                       ? findChecklistItemForSaidaLinha(checklistItems, saida, item, i)
                       : null;
                   const checklistPronto = isChecklistItemRealizado(checklistItem);
-                  const wmsNok = isSaidaItemWmsNok(item, wmsCtx);
+                  const wmsNok =
+                    !aguardandoInfo && isSaidaItemWmsNok(item, wmsCtx);
+
+                  if (aguardandoInfo) {
+                    const awaitingCols =
+                      colCount - (canSelectFiscal ? 1 : 0) - 1;
+                    return (
+                      <tr
+                        key={i}
+                        className={`border-b border-border last:border-0 ${
+                          i % 2 === 1 ? "bg-muted/30" : ""
+                        }`}
+                      >
+                        {canSelectFiscal ? (
+                          <td className="pl-2 pr-1 py-2.5" />
+                        ) : null}
+                        <td className="px-2 py-2.5 font-medium whitespace-nowrap text-primary">
+                          {String(i + 1).padStart(2, "0")}
+                        </td>
+                        <td
+                          colSpan={Math.max(awaitingCols, 1)}
+                          className="px-2 py-2.5 text-center text-sm text-muted-foreground"
+                        >
+                          {t("painel.comercial.agendamentos.awaitingInfo")}
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                   <tr
                     key={i}
@@ -941,7 +977,8 @@ export default function SaidaViewDialog({
                         ) : null}
                         <span className="whitespace-nowrap">
                           {isTanqueVazioItem(item)
-                            ? "Tanque Vazio"
+                            ? descricaoCarregamentoGenerico(item) ||
+                              "Carregamento genérico"
                             : item.produto_nome || "—"}
                         </span>
                       </span>
@@ -1200,13 +1237,16 @@ export default function SaidaViewDialog({
           <AlertDialogDescription>
             Confirma a remoção da validação de{" "}
             <strong>
-              {devalidarItem?.produto_nome ||
-                (isTanqueVazioItem(devalidarItem)
-                  ? "Tanque Vazio"
-                  : "este item")}
+              {isTanqueVazioItem(devalidarItem)
+                ? descricaoCarregamentoGenerico(devalidarItem) ||
+                  "carregamento genérico"
+                : devalidarItem?.produto_nome || "este item"}
             </strong>
-            ? O saldo correspondente retorna ao estoque. Os demais itens
-            permanecem validados e o histórico deste produto é preservado.
+            ?{" "}
+            {isTanqueVazioItem(devalidarItem)
+              ? "Nenhum saldo é alterado, porque este carregamento não está cadastrado no sistema."
+              : "O saldo correspondente retorna ao estoque."}{" "}
+            Os demais itens permanecem validados e o histórico é preservado.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

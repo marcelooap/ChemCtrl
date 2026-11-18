@@ -2,10 +2,12 @@ import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '@shared/components/ui/dialog';
+import { Button } from '@shared/components/ui/button';
 import AgendamentosGrade from '@painel/components/comercial/AgendamentosGrade';
 
 export default function AgendamentoPosSaidaModal({
@@ -13,10 +15,16 @@ export default function AgendamentoPosSaidaModal({
   saida,
   onScheduled,
   onClose,
+  onRemoveSchedule,
+  allowRemoveSchedule = false,
   deferBooking = false,
 }) {
   const { t } = useTranslation();
   const dismissible = deferBooking && typeof onClose === 'function';
+  const showRemove =
+    deferBooking &&
+    allowRemoveSchedule &&
+    typeof onRemoveSchedule === 'function';
 
   return (
     <Dialog
@@ -66,6 +74,19 @@ export default function AgendamentoPosSaidaModal({
             permissionPrefix="painel_comercial_agendamentos"
             onBooked={onScheduled}
           />
+        ) : null}
+
+        {showRemove ? (
+          <DialogFooter className="sm:justify-end border-t border-border pt-3 mt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+              onClick={onRemoveSchedule}
+            >
+              {t('painel.comercial.agendamentos.reschedule.remove')}
+            </Button>
+          </DialogFooter>
         ) : null}
       </DialogContent>
     </Dialog>

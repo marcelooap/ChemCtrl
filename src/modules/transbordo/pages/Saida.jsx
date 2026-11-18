@@ -55,6 +55,10 @@ import {
   saidaTemItemPendenteNoModulo,
   calcSaidaQuantidadeTotal,
   isSaidaCargaVazia,
+  isItemSaidaVazio,
+  isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
+  resolveItemOrigem,
   resolveSaidaItemLote,
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
@@ -145,6 +149,10 @@ function saidaMatchesSearch(saida, query, vasilhamesById) {
     const placaItem = String(item?.vasilhame_placa || "").toLowerCase();
     const barrilItem = String(item?.vasilhame_barril || "").toLowerCase();
     if (placaItem.includes(q) || barrilItem.includes(q)) return true;
+    if (String(item?.descricao_carregamento || "").toLowerCase().includes(q)) {
+      return true;
+    }
+    if (String(item?.produto_nome || "").toLowerCase().includes(q)) return true;
 
     const vasilhameId = String(item?.vasilhame_id || "").trim();
     const vasilhame =
@@ -672,7 +680,16 @@ export default function Saida({
   };
 
   const renderProdutosLabel = (s) => {
-    if (isSaidaCargaVazia(s)) return "Carga vazia";
+    if (isSaidaCargaVazia(s)) {
+      const descricoes = (s.itens || [])
+        .map((item) => descricaoCarregamentoGenerico(item))
+        .filter(Boolean);
+      if (descricoes.length === 1) return descricoes[0];
+      if (descricoes.length > 1) {
+        return `${String(descricoes.length).padStart(2, "0")} itens genéricos`;
+      }
+      return "Carregamento genérico";
+    }
     // Comercial: saída agendada antes do cliente informar produto/tanque.
     if (isExpedicao && !saidaTemProdutoInformado(s)) {
       return "Aguardando informações";
@@ -680,6 +697,17 @@ export default function Saida({
     const itens = s.itens || [];
     const distinct = new Map();
     for (const item of itens) {
+      if (isItemSaidaVazio(item)) continue;
+      if (isTanqueVazioItem(item)) {
+        const key = `gen:${item.item_uid || descricaoCarregamentoGenerico(item)}`;
+        if (!distinct.has(key)) {
+          distinct.set(
+            key,
+            descricaoCarregamentoGenerico(item) || "Carregamento genérico"
+          );
+        }
+        continue;
+      }
       const key = item.produto_id || item.produto_nome;
       if (!key) continue;
       if (!distinct.has(key)) {
@@ -820,7 +848,20 @@ export default function Saida({
     if (fiscalBusyId) return;
     const temPendente = saidaTemItemPendenteNoModulo(saida, operationalModule);
     const enviar = temPendente || !isSaidaValidadaNoModulo(saida, operationalModule);
-    setFiscalConfirm({ saida, enviar, somentePendentes: temPendente });
+    const painel = isSaidaModuloPainel(saida);
+    const itensEscopo = (saida?.itens || []).filter((item) => {
+      if (!item || isItemSaidaVazio(item)) return false;
+      if (!painel) return true;
+      return resolveItemOrigem(item) === operationalModule;
+    });
+    const somenteGenerico =
+      itensEscopo.length > 0 && itensEscopo.every(isTanqueVazioItem);
+    setFiscalConfirm({
+      saida,
+      enviar,
+      somentePendentes: temPendente,
+      somenteGenerico,
+    });
   };
 
   const confirmFiscalToggle = async () => {
@@ -1331,13 +1372,17 @@ export default function Saida({
                   : "Reverter validação"}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {fiscalConfirm?.enviar
+                {fiscalConfirm?.somenteGenerico
+                  ? fiscalConfirm?.enviar
+                    ? "Confirma a validação deste carregamento genérico? Nenhum saldo será baixado e nenhum item será registrado como saída."
+                    : "A validação será removida. Nenhum saldo é alterado, porque este carregamento não está cadastrado no sistema."
+                  : fiscalConfirm?.enviar
                   ? fiscalConfirm?.somentePendentes
-                    ? "Há itens novos nesta saída. A baixa de estoque será feita só neles. Os itens que já foram validados permanecem com o check de histórico."
-                    : "Confirma a validação desta saída?"
+                    ? "Há itens novos nesta saída. A baixa de estoque será feita só nos itens cadastrados. Carregamento genérico é validado sem baixa nem registro de saída. Os itens que já foram validados permanecem com o check de histórico."
+                    : "Confirma a validação desta saída? Itens cadastrados seguem a baixa atual. Carregamento genérico é validado sem baixa nem registro de saída."
                   : isSaidaModuloPainel(fiscalConfirm?.saida)
-                    ? "Os saldos dos produtos deste módulo retornarão para o estoque. O histórico de validação é preservado. Itens de outros módulos não são alterados."
-                    : "Tem certeza que deseja mudar o status dessa saída para Pendente? Todos os saldos dos produtos retornarão ao estoque. O histórico de validação é preservado."}
+                    ? "Os saldos dos produtos deste módulo retornarão para o estoque. Carregamento genérico não altera saldo. O histórico de validação é preservado. Itens de outros módulos não são alterados."
+                    : "Tem certeza que deseja mudar o status dessa saída para Pendente? Os saldos dos produtos cadastrados retornarão ao estoque. Carregamento genérico não altera saldo. O histórico de validação é preservado."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

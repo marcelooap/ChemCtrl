@@ -1062,21 +1062,11 @@ export default function AgendamentoCarregamentoChecklistModal({
                   <>
                     <InfoChip
                       label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
-                      value={active.tipo_label}
+                      value={active.tipo_label || 'Genérico'}
                     />
                     <InfoChip
-                      label={t(
-                        'painel.comercial.agendamentos.checklist.fields.placa',
-                        { defaultValue: 'Nº da placa' }
-                      )}
-                      value={active.vasilhame_placa || '—'}
-                    />
-                    <InfoChip
-                      label={t(
-                        'painel.comercial.agendamentos.checklist.fields.barril',
-                        { defaultValue: 'Nº do barril' }
-                      )}
-                      value={active.vasilhame_barril || '—'}
+                      label="Carregamento"
+                      value={active.produto || active.label || '—'}
                     />
                   </>
                 ) : (

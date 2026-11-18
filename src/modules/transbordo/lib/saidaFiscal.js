@@ -445,8 +445,8 @@ export async function applySaidaFiscalToggle(
   };
 
   if (checked) {
-    // Tanque vazio não está cadastrado em vasilhames — só identifica placa/barril
-    // na saída; não exige (nem registra) data_saida no cadastro de vasilhames.
+    // Carregamento genérico não existe no cadastro: valida o item da saída
+    // e não exige (nem registra) saída de vasilhame, saldo ou produto.
     const lost = itens.find(
       (item) =>
         item?.tipo === "convencional" &&

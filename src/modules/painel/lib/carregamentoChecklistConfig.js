@@ -13,6 +13,7 @@ import {
   formatSaidaItemLote,
   tipoItemLabel,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
 } from '@transbordo/lib/saidaOrigem';
 import {
   formatMass,
@@ -310,10 +311,7 @@ export function resolveChecklistPesoLiquido(linha, vasilhame) {
  */
 export function resolveChecklistPlacaBarril(item, vasilhame) {
   if (item?.tanque_vazio || isTanqueVazioItem(item)) {
-    return {
-      placa: String(item?.vasilhame_placa || '').trim(),
-      barril: String(item?.vasilhame_barril || '').trim(),
-    };
+    return { placa: '', barril: '' };
   }
   const placa = String(
     vasilhame?.placa ||
@@ -473,7 +471,6 @@ export function buildChecklistItemsFromSaidas({
         : null;
   const items = [];
   let convencionalSeq = 0;
-  let tanqueVazioSeq = 0;
 
   for (const booking of bookings || []) {
     const saida = saidaById.get(String(booking.saida_id));
@@ -517,7 +514,6 @@ export function buildChecklistItemsFromSaidas({
           );
       const isConv = kind === CHECKLIST_KIND.CONVENCIONAL;
       if (isConv) convencionalSeq += 1;
-      if (isTanqueVazio) tanqueVazioSeq += 1;
 
       const itemKey = isTanqueVazio
         ? `vazio:${saida.id}:${linha.item_uid || idx}`
@@ -583,15 +579,12 @@ export function buildChecklistItemsFromSaidas({
         tipo: linha.tipo,
         tipo_label: tipoItemLabel(linha),
         label: isTanqueVazio
-          ? tanqueLabel(linha, null, tanqueVazioSeq - 1).replace(
-              /^Tanque/,
-              'Tanque Vazio'
-            )
+          ? descricaoCarregamentoGenerico(linha) || 'Carregamento genérico'
           : isConv
             ? tanqueLabel(linha, vasilhame, convencionalSeq - 1)
             : `${linha.produto_nome || linha.produto || 'Produto'} · ${saida.codigo || ''}`.trim(),
         produto: isTanqueVazio
-          ? 'Tanque Vazio'
+          ? descricaoCarregamentoGenerico(linha) || 'Carregamento genérico'
           : linha.produto_nome || linha.produto || '—',
         produto_codigo: isTanqueVazio ? '' : linha.produto_codigo || '',
         lote: isTanqueVazio ? '—' : lote,

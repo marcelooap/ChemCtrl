@@ -196,19 +196,11 @@ export default function SaidaChecklistItemViewDialog({
               <>
                 <InfoChip
                   label={t('painel.comercial.agendamentos.checklist.fields.tipo')}
-                  value={item.tipo_label}
+                  value={item.tipo_label || 'Genérico'}
                 />
                 <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.placa', {
-                    defaultValue: 'Nº da placa',
-                  })}
-                  value={item.vasilhame_placa || '—'}
-                />
-                <InfoChip
-                  label={t('painel.comercial.agendamentos.checklist.fields.barril', {
-                    defaultValue: 'Nº do barril',
-                  })}
-                  value={item.vasilhame_barril || '—'}
+                  label="Carregamento"
+                  value={item.produto || item.label || '—'}
                 />
               </>
             ) : (

@@ -1219,6 +1219,7 @@
         "available": "Disponible",
         "occupied": "Ocupado",
         "awaitingInfo": "Esperando información",
+        "partialInfo": "Información parcial",
         "saidasCount": "{{count}} salidas",
         "viewSaidaPickTitle": "¿Qué salida desea visualizar?",
         "slotSummary": "{{free}} disponibles · {{occupied}} ocupados · {{total}} horarios",
@@ -1343,7 +1344,9 @@
           "confirmTitle": "Confirmar cambio",
           "confirmDescription": "La fecha programada pasará a ser {{date}} a las {{time}}. El agendamiento se guardará al confirmar.",
           "confirm": "Confirmar",
-          "back": "Volver"
+          "back": "Volver",
+          "remove": "Quitar agendamiento",
+          "removeHint": "El agendamiento se quitará al guardar"
         },
         "errors": {
           "selectSaida": "Seleccione al menos una salida para agendar.",

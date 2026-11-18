@@ -26,6 +26,8 @@ import {
   formatSaidaItemEmbalagem,
   formatSaidaItemLote,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
+  isItemSaidaVazio,
   resolveSaidaItemLote,
   tipoItemLabel,
   aggregateUnitarioSaidaItens,
@@ -383,6 +385,15 @@ export async function printSaidaAgendamento(
       ? `<tr><td colspan="${REPORT_COL_COUNT}" class="empty">Nenhum produto nesta saída.</td></tr>`
       : itens
           .map((item, i) => {
+            if (isItemSaidaVazio(item)) {
+              return `
+      <tr>
+        <td class="code">${escapeHtml(String(i + 1).padStart(2, '0'))}</td>
+        <td colspan="${REPORT_COL_COUNT - 1}" class="empty" style="text-align:center">
+          Aguardando Informações
+        </td>
+      </tr>`;
+            }
             const vasilhame = resolveVasilhameForReport(item, vasilhameById);
             const container = findById(containerDatas, item?.container_id);
             const embalagemSource = vasilhame || container;
@@ -395,7 +406,11 @@ export async function printSaidaAgendamento(
             return `
       <tr>
         <td class="code">${escapeHtml(String(i + 1).padStart(2, '0'))}</td>
-        <td class="produto">${escapeHtml(item.produto_nome || '—')}</td>
+        <td class="produto">${escapeHtml(
+          isTanqueVazioItem(item)
+            ? descricaoCarregamentoGenerico(item) || 'Carregamento genérico'
+            : item.produto_nome || '—'
+        )}</td>
         <td class="tipo">${escapeHtml(tipoItemLabelRelatorio(item, embalagemSource))}</td>
         <td class="info">${escapeHtml(formatRelatorioInformacoes(item, embalagemSource))}</td>
         <td class="lote">${escapeHtml(formatSaidaItemLote(item, { vasilhame: embalagemSource }))}</td>

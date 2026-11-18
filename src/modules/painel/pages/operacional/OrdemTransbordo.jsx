@@ -34,10 +34,12 @@ import {
   applyPesoLiquidoForaMargem,
   getLoteQuantidadeDeclarada,
   loteToKg,
+  loteToLitros,
 } from "@transbordo/lib/conversao";
 import {
   formatMass,
   formatNum,
+  formatQuantidade,
   formatVolume,
   parseDensidade,
   roundVolume,
@@ -62,6 +64,12 @@ import {
   computeTankaSaldo,
 } from "@transbordo/lib/tankaVolume";
 import { matchesProdutoOperacional } from "@transbordo/lib/produtoMatch";
+import {
+  computeEstoqueQuantidadesPorLocal,
+  getEstoqueUnidadeEntrada,
+  isEstoqueEmbalado,
+  isUnidadeMassaEntrada,
+} from "@transbordo/lib/estoqueSaldo";
 import {
   aggregateComposicaoByLote,
   seedComposicaoFromVasilhame,
@@ -224,6 +232,7 @@ export default function OrdemTransbordo() {
   const [produtoNome, setProdutoNome] = useState("");
   const [produtoCodigo, setProdutoCodigo] = useState("");
   const [produtoFonte, setProdutoFonte] = useState("");
+  const [observacao, setObservacao] = useState("");
   const moduloValidacaoRef = useRef("convencional");
   const [origemTipo, setOrigemTipo] = useState("");
   const [granel, setGranel] = useState(emptyGranel);
@@ -231,6 +240,8 @@ export default function OrdemTransbordo() {
   const [vasilhameItens, setVasilhameItens] = useState(() => [
     emptyVasilhameItem(),
   ]);
+  /** Entrada de estoque embalado selecionada (origem IBC/Bombona/Tambor). */
+  const [embaladoEntradaId, setEmbaladoEntradaId] = useState("");
   const [formError, setFormError] = useState("");
   const [goingToTransbordo, setGoingToTransbordo] = useState(false);
 
@@ -251,9 +262,14 @@ export default function OrdemTransbordo() {
     setVasilhameItens([emptyVasilhameItem()]);
   };
 
+  const clearEmbaladoSelection = () => {
+    setEmbaladoEntradaId("");
+  };
+
   const clearOperacaoOrigens = () => {
     clearTankaSelection();
     clearVasilhameSelection();
+    clearEmbaladoSelection();
   };
 
   const syncGranelFromOrigemItens = (itens, densOverride) => {
@@ -439,7 +455,14 @@ export default function OrdemTransbordo() {
         setProdutoCodigo("");
         setProdutoFonte("");
         moduloValidacaoRef.current = "convencional";
-        setGranel((prev) => ({ ...prev, densidade: "" }));
+        clearEmbaladoSelection();
+        setGranel((prev) => ({
+          ...prev,
+          densidade: "",
+          lote: "",
+          quantidade: "",
+          ...(origemTipo === "embalado" ? { unidade: "L" } : {}),
+        }));
       }
     }
   }, [produtosDoCliente, produtoId, envaseModalOpen]);
@@ -481,7 +504,9 @@ export default function OrdemTransbordo() {
       densidade: "",
       lote: "",
       quantidade: "",
-      ...(origemTipo === "tanka" || origemTipo === "vasilhame"
+      ...(origemTipo === "tanka" ||
+      origemTipo === "vasilhame" ||
+      origemTipo === "embalado"
         ? { unidade: "L" }
         : {}),
     }));
@@ -509,7 +534,9 @@ export default function OrdemTransbordo() {
       densidade: densCadastro || "",
       lote: "",
       quantidade: "",
-      ...(origemTipo === "tanka" || origemTipo === "vasilhame"
+      ...(origemTipo === "tanka" ||
+      origemTipo === "vasilhame" ||
+      origemTipo === "embalado"
         ? { unidade: "L" }
         : {}),
     }));
@@ -529,7 +556,9 @@ export default function OrdemTransbordo() {
     clearOperacaoOrigens();
     setGranel({
       ...emptyGranel(),
-      ...(next === "tanka" || next === "vasilhame" ? { unidade: "L" } : {}),
+      ...(next === "tanka" || next === "vasilhame" || next === "embalado"
+        ? { unidade: "L" }
+        : {}),
     });
     if (crossesGranel) {
       setClienteId("");
@@ -770,7 +799,7 @@ export default function OrdemTransbordo() {
           lotes_disponiveis: lotes,
           lote_label: formatLotesLabel(lotes) || v.lote || "",
           densidade_entrada: parseDensidade(v.densidade) || 0,
-          display_label: `${identLabel} - ${formatVolume(vol)} - L`,
+          display_label: `${identLabel} - ${formatVolume(vol)} L`,
           identLabel,
         };
       })
@@ -851,6 +880,95 @@ export default function OrdemTransbordo() {
     setFormError("");
   };
 
+  /** Estoque embalado no pátio do produto — mesma regra do módulo Transbordo. */
+  const embaladosComSaldo = useMemo(() => {
+    if (origemTipo !== "embalado" || !produtoId) return [];
+    const produtoCtx = {
+      produtoId,
+      produtoNome,
+      produtoCodigo,
+      clienteId,
+      clienteNome,
+    };
+    return (entradas || [])
+      .filter((e) => isEstoqueEmbalado(e) && matchesProdutoOperacional(e, produtoCtx))
+      .map((e) => {
+        const locais = computeEstoqueQuantidadesPorLocal(e, {
+          transbordos,
+          vasilhames,
+          saldo: e.saldo_atual,
+        });
+        const saldoPatio = Number(locais?.patio) || 0;
+        if (!(saldoPatio > 0)) return null;
+        const um = getEstoqueUnidadeEntrada(e) || locais.unidade || "kg";
+        const lote =
+          String(e.lote || e.lotes?.[0]?.lote || "").trim() || "—";
+        const densEntrada =
+          parseDensidade(e.densidade) ||
+          parseDensidade(e.lotes?.[0]?.densidade) ||
+          0;
+        return {
+          ...e,
+          embalado: true,
+          unidade_medida: um,
+          saldo_atual: saldoPatio,
+          lote,
+          densidade_entrada: densEntrada,
+          display_label: `${lote} - ${formatQuantidade(saldoPatio)} ${um}`,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) =>
+        String(a.lote).localeCompare(String(b.lote), "pt-BR", {
+          sensitivity: "base",
+        })
+      );
+  }, [
+    origemTipo,
+    produtoId,
+    produtoNome,
+    produtoCodigo,
+    clienteId,
+    clienteNome,
+    entradas,
+    transbordos,
+    vasilhames,
+  ]);
+
+  const embaladoSelecionado = useMemo(
+    () => embaladosComSaldo.find((e) => e.id === embaladoEntradaId) || null,
+    [embaladosComSaldo, embaladoEntradaId]
+  );
+
+  const embaladoSemDensidade =
+    origemTipo === "embalado" &&
+    Boolean(embaladoEntradaId || produtoId) &&
+    !(headerDensidade > 0);
+
+  const handleEmbaladoLoteChange = (_label, row) => {
+    const nextId = row?.id || "";
+    const densProduto = parseDensidade(produtoSelecionado?.densidade);
+    const dens =
+      densProduto > 0
+        ? densProduto
+        : parseDensidade(row?.densidade_entrada) ||
+          parseDensidade(row?.densidade) ||
+          parseDensidade(granel.densidade) ||
+          0;
+    setEmbaladoEntradaId(nextId);
+    setGranel((prev) => ({
+      ...prev,
+      lote: row?.lote || "",
+      // Embalado: operador informa a quantidade em L manualmente.
+      quantidade: "",
+      unidade: "L",
+      ...(dens > 0 && !(parseDensidade(prev.densidade) > 0)
+        ? { densidade: dens }
+        : {}),
+    }));
+    setFormError("");
+  };
+
   /** Lote / quantidade / unidade / densidade — comum a todas as origens. */
   const validateQuantidadeBasica = () => {
     if (origemTipo === "tanka") {
@@ -889,6 +1007,36 @@ export default function OrdemTransbordo() {
       }
       if (!densidadeTabelada && !(Number(granel.densidade) > 0) && !(headerDensidade > 0)) {
         return t("painel.operacional.ordemTransbordo.errors.density");
+      }
+      return "";
+    }
+    if (origemTipo === "embalado") {
+      if (!embaladoEntradaId) {
+        return t("painel.operacional.ordemTransbordo.errors.lot");
+      }
+      if (!String(granel.lote || "").trim()) {
+        return t("painel.operacional.ordemTransbordo.errors.lot");
+      }
+      if (!(Number(granel.quantidade) > 0)) {
+        return t("painel.operacional.ordemTransbordo.errors.qty");
+      }
+      // Embalado exige densidade cadastrada para converter massa ↔ L (módulo Transbordo).
+      if (!(headerDensidade > 0)) {
+        return t("painel.operacional.ordemTransbordo.errors.densityEmbalado");
+      }
+      const saldoPatio = Number(embaladoSelecionado?.saldo_atual) || 0;
+      const umEstoque = embaladoSelecionado?.unidade_medida || "kg";
+      if (saldoPatio > 0 && isUnidadeMassaEntrada(umEstoque)) {
+        const maxL = roundVolume(
+          loteToLitros({
+            quantidade: saldoPatio,
+            unidade_medida: umEstoque,
+            densidade: headerDensidade,
+          })
+        );
+        if (roundVolume(granel.quantidade) > maxL) {
+          return t("painel.operacional.ordemTransbordo.errors.qtyExceedsStock");
+        }
       }
       return "";
     }
@@ -1056,6 +1204,7 @@ export default function OrdemTransbordo() {
     setProdutoNome("");
     setProdutoCodigo("");
     setProdutoFonte("");
+    setObservacao("");
     moduloValidacaoRef.current = "convencional";
   };
 
@@ -1501,7 +1650,7 @@ export default function OrdemTransbordo() {
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
                 <Label>{t("painel.operacional.ordemTransbordo.fields.product")} *</Label>
                 <SearchableSelect
                   value={produtoDisplay}
@@ -1512,6 +1661,23 @@ export default function OrdemTransbordo() {
                   placeholder={productPlaceholder}
                   disabled={!productEnabled}
                   inputClassName={INPUT_EDITABLE}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                <Label>
+                  {t("painel.operacional.ordemTransbordo.fields.observation", {
+                    defaultValue: "Observação",
+                  })}
+                </Label>
+                <Input
+                  value={observacao}
+                  onChange={(e) => setObservacao(e.target.value)}
+                  placeholder={t(
+                    "painel.operacional.ordemTransbordo.placeholders.observation",
+                    { defaultValue: "Observação da operação" }
+                  )}
+                  className={INPUT_EDITABLE}
+                  maxLength={500}
                 />
               </div>
             </div>
@@ -1897,76 +2063,98 @@ export default function OrdemTransbordo() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>
-                        {t("painel.operacional.ordemTransbordo.fields.lot")} *
-                      </Label>
-                      <Input
-                        value={granel.lote}
-                        onChange={(e) => patchGranel("lote", e.target.value)}
-                        placeholder={t(
-                          "painel.operacional.ordemTransbordo.placeholders.lot"
+                  <div className="space-y-3">
+                    {embaladosComSaldo.length === 0 && (
+                      <p className="text-xs text-amber-700">
+                        {t("painel.operacional.ordemTransbordo.embaladoEmpty")}
+                      </p>
+                    )}
+                    {embaladoSemDensidade && (
+                      <p className="text-xs text-amber-700">
+                        {t(
+                          "painel.operacional.ordemTransbordo.errors.densityEmbalado"
                         )}
-                        className={INPUT_EDITABLE}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>
-                        {t("painel.operacional.ordemTransbordo.fields.qty")} *
-                      </Label>
-                      <NumberInputBr
-                        decimals={0}
-                        min={0}
-                        value={granel.quantidade}
-                        onChange={(v) =>
-                          patchGranel("quantidade", v === "" ? "" : v)
-                        }
-                        placeholder="0"
-                        className={INPUT_EDITABLE}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>
-                        {t("painel.operacional.ordemTransbordo.fields.unit")} *
-                      </Label>
-                      <SearchableSelect
-                        value={granel.unidade}
-                        onChange={(_label, item) =>
-                          patchGranel("unidade", item?.value || "")
-                        }
-                        options={UNIDADES.map((u) => ({ value: u }))}
-                        getOptionLabel={(u) => u.value}
-                        getOptionValue={(u) => u.value}
-                        placeholder={t(
-                          "painel.operacional.ordemTransbordo.placeholders.unit"
-                        )}
-                        inputClassName={INPUT_EDITABLE}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>
-                        {t("painel.operacional.ordemTransbordo.fields.density")}
-                        {densidadeTabelada ? "" : " *"}
-                      </Label>
-                      <NumberInputBr
-                        decimals={4}
-                        min={0}
-                        value={granel.densidade}
-                        onChange={(v) =>
-                          patchGranel("densidade", v === "" ? "" : v)
-                        }
-                        placeholder="0"
-                        disabled={densidadeTabelada}
-                        className={INPUT_EDITABLE}
-                      />
-                      {densidadeTabelada && (
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            "painel.operacional.ordemTransbordo.densityListed"
+                      </p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>
+                          {t("painel.operacional.ordemTransbordo.fields.lot")} *
+                        </Label>
+                        <SearchableSelect
+                          value={embaladoSelecionado?.display_label || ""}
+                          onChange={(label, row) =>
+                            handleEmbaladoLoteChange(label, row)
+                          }
+                          options={embaladosComSaldo}
+                          getOptionLabel={(o) => o.display_label}
+                          getOptionValue={(o) => o.id}
+                          placeholder={t(
+                            "painel.operacional.ordemTransbordo.placeholders.lotStock"
                           )}
-                        </p>
-                      )}
+                          inputClassName={INPUT_EDITABLE}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>
+                          {t("painel.operacional.ordemTransbordo.fields.qty")} *
+                        </Label>
+                        <NumberInputBr
+                          decimals={3}
+                          trimTrailingZeros
+                          min={0}
+                          value={granel.quantidade}
+                          onChange={(v) =>
+                            patchGranel("quantidade", v === "" ? "" : v)
+                          }
+                          placeholder="0"
+                          disabled={embaladoSemDensidade}
+                          className={INPUT_EDITABLE}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>
+                          {t("painel.operacional.ordemTransbordo.fields.unit")} *
+                        </Label>
+                        <Input value="L" disabled className="bg-muted/50" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>
+                          {t(
+                            "painel.operacional.ordemTransbordo.fields.density"
+                          )}{" "}
+                          *
+                        </Label>
+                        <NumberInputBr
+                          decimals={4}
+                          min={0}
+                          value={granel.densidade}
+                          onChange={(v) =>
+                            patchGranel("densidade", v === "" ? "" : v)
+                          }
+                          placeholder="0"
+                          disabled={densidadeTabelada}
+                          className={INPUT_EDITABLE}
+                        />
+                        {densidadeTabelada ? (
+                          <p className="text-xs text-muted-foreground">
+                            {t(
+                              "painel.operacional.ordemTransbordo.densityListed"
+                            )}
+                          </p>
+                        ) : null}
+                        {!densidadeTabelada &&
+                        parseDensidade(granel.densidade) > 0 &&
+                        !(
+                          parseDensidade(produtoSelecionado?.densidade) > 0
+                        ) ? (
+                          <p className="text-xs text-muted-foreground">
+                            {t(
+                              "painel.operacional.ordemTransbordo.densityFromEntrada"
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2179,7 +2367,13 @@ export default function OrdemTransbordo() {
               <Button
                 type="button"
                 onClick={handleIrParaTransbordo}
-                disabled={goingToTransbordo || !origemTipo || !clienteNome || !produtoId}
+                disabled={
+                  goingToTransbordo ||
+                  !origemTipo ||
+                  !clienteNome ||
+                  !produtoId ||
+                  embaladoSemDensidade
+                }
                 className="bg-primary hover:bg-primary/90 gap-2"
               >
                 {goingToTransbordo
@@ -2248,6 +2442,7 @@ export default function OrdemTransbordo() {
         produtoId={produtoId}
         produtoNome={produtoNome}
         produtoCodigo={produtoCodigo}
+        observacoes={observacao}
         lote={granel.lote}
         quantidade={granel.quantidade}
         unidade={granel.unidade}
@@ -2290,10 +2485,24 @@ export default function OrdemTransbordo() {
               })
             : []
         }
+        embaladoOrigem={
+          origemTipo === "embalado" && embaladoSelecionado
+            ? {
+                entrada_id: embaladoSelecionado.id,
+                lote: embaladoSelecionado.lote || granel.lote,
+                unidade_medida: embaladoSelecionado.unidade_medida || "kg",
+                saldo_atual: Number(embaladoSelecionado.saldo_atual) || 0,
+                quantidade: granel.quantidade,
+              }
+            : null
+        }
         quantidadeEditable={
-          (origemTipo !== "tanka" && origemTipo !== "vasilhame") ||
+          (origemTipo !== "tanka" &&
+            origemTipo !== "vasilhame" &&
+            origemTipo !== "embalado") ||
           (origemTipo === "tanka" && tankaItens.length === 1) ||
-          (origemTipo === "vasilhame" && vasilhameItens.length === 1)
+          (origemTipo === "vasilhame" && vasilhameItens.length === 1) ||
+          (origemTipo === "embalado" && Boolean(embaladoEntradaId))
         }
         granelPayload={pendingGranelPayload}
         isotanques={isotanques}

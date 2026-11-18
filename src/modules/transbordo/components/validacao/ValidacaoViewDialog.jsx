@@ -364,6 +364,7 @@ function buildResumoDraft(view, granel, transbordo) {
       granel?.lotes?.[0]?.densidade ||
       transbordo?.densidade ||
       "",
+    observacoes: String(transbordo?.observacoes || "").trim(),
   };
 }
 
@@ -741,12 +742,14 @@ export default function ValidacaoViewDialog({
               : granel.lotes,
           }
         : null;
+      const observacoes = String(resumoDraft.observacoes || "").trim();
       const nextTransbordo = transbordo
         ? {
             ...transbordo,
             data: resumoDraft.data || transbordo.data,
             cliente_nome: resumoDraft.cliente_nome || transbordo.cliente_nome,
             densidade: dens || transbordo.densidade,
+            observacoes,
           }
         : null;
       await onSaveCampos({
@@ -1010,6 +1013,17 @@ export default function ValidacaoViewDialog({
                       "—"
                     }
                   />
+                  {transbordo ? (
+                    <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                      <EditTextField
+                        label={t("transbordo.validacao.fields.observacoes")}
+                        value={resumoDraft.observacoes}
+                        onChange={(v) =>
+                          setResumoDraft((p) => ({ ...p, observacoes: v }))
+                        }
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1047,6 +1061,16 @@ export default function ValidacaoViewDialog({
                       "—"
                     }
                   />
+                  {transbordo ? (
+                    <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+                      <InfoField
+                        label={t("transbordo.validacao.fields.observacoes")}
+                        value={
+                          String(transbordo?.observacoes || "").trim() || "—"
+                        }
+                      />
+                    </div>
+                  ) : null}
                 </div>
               )}
             </SectionCard>
@@ -1302,16 +1326,6 @@ export default function ValidacaoViewDialog({
                     </p>
                   )}
 
-                  {transbordo.observacoes ? (
-                    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                        {t("transbordo.validacao.fields.observacoes")}
-                      </div>
-                      <div className="text-sm text-foreground whitespace-pre-wrap">
-                        {transbordo.observacoes}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </SectionCard>
             ) : null}

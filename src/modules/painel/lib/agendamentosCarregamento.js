@@ -13,6 +13,7 @@ import {
   formatSaidaItemEmbalagem,
   isItemSaidaVazio,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
 } from '@transbordo/lib/saidaOrigem';
 import { notifyAgendamentoSePendenteValidacao } from '@transbordo/lib/saidaNovas';
 
@@ -185,8 +186,10 @@ function quantidadeItemKg(item) {
 
 function produtoDoItem(item) {
   const nome = String(item?.produto_nome || '').trim();
+  if (isTanqueVazioItem(item)) {
+    return descricaoCarregamentoGenerico(item) || 'Carregamento genérico';
+  }
   if (nome) return nome;
-  if (isTanqueVazioItem(item)) return 'Tanque vazio';
   return '—';
 }
 
@@ -197,20 +200,36 @@ function vasilhameDoItem(item) {
 
 /**
  * Uma linha por item da saída: produto, vasilhame e quantidade daquele item.
- * Saída ainda sem itens entra como uma linha vazia.
+ * Placeholders vazios (salvos) e saída sem itens entram como "Aguardando Informações".
  */
 export function listLinhasSlotSaida(saida) {
-  const itens = (Array.isArray(saida?.itens) ? saida.itens : []).filter(
-    (item) => item && !isItemSaidaVazio(item)
-  );
+  const itens = Array.isArray(saida?.itens) ? saida.itens : [];
   if (itens.length === 0) {
-    return [{ produto: '—', vasilhame: '—', quantidade: null }];
+    return [
+      {
+        produto: 'Aguardando Informações',
+        vasilhame: '—',
+        quantidade: null,
+        aguardando: true,
+      },
+    ];
   }
-  return itens.map((item) => ({
-    produto: produtoDoItem(item),
-    vasilhame: vasilhameDoItem(item),
-    quantidade: quantidadeItemKg(item),
-  }));
+  return itens.map((item) => {
+    if (!item || isItemSaidaVazio(item)) {
+      return {
+        produto: 'Aguardando Informações',
+        vasilhame: '—',
+        quantidade: null,
+        aguardando: true,
+      };
+    }
+    return {
+      produto: produtoDoItem(item),
+      vasilhame: vasilhameDoItem(item),
+      quantidade: quantidadeItemKg(item),
+      aguardando: false,
+    };
+  });
 }
 
 /**
@@ -222,17 +241,60 @@ export function saidaTemProdutoInformado(saida) {
   return itens.some((item) => item && !isItemSaidaVazio(item));
 }
 
-/** Alguma saída do horário ainda está sem produto. */
-export function slotAguardandoInformacoes(bookings, saidasById) {
-  if (!saidasById || typeof saidasById.get !== 'function') return false;
+/** Há linha sem produto (array vazio ou placeholder salvo). */
+export function saidaTemItemAguardandoInformacoes(saida) {
+  return saidaStatusInformacoes(saida) !== 'none';
+}
+
+/**
+ * Status das informações de produto da saída:
+ * - `aguardando`: sem nenhum produto informado
+ * - `parciais`: mistura de itens preenchidos e placeholders
+ * - `none`: todos os itens preenchidos (ou sem pendência)
+ */
+export function saidaStatusInformacoes(saida) {
+  const itens = Array.isArray(saida?.itens) ? saida.itens : [];
+  if (itens.length === 0) return 'aguardando';
+  let hasFilled = false;
+  let hasEmpty = false;
+  for (const item of itens) {
+    if (!item || isItemSaidaVazio(item)) hasEmpty = true;
+    else hasFilled = true;
+    if (hasFilled && hasEmpty) return 'parciais';
+  }
+  if (!hasFilled) return 'aguardando';
+  return 'none';
+}
+
+/**
+ * Status agregado do horário/card:
+ * - parcial se alguma saída estiver parcial, ou misturar completa + aguardando
+ * - aguardando se só houver saídas sem produto
+ */
+export function slotStatusInformacoes(bookings, saidasById) {
+  if (!saidasById || typeof saidasById.get !== 'function') return 'none';
+  let hasAguardando = false;
+  let hasParciais = false;
+  let hasCompleto = false;
   for (const booking of normalizeBookings(bookings)) {
     const id = booking?.saida_id;
     if (!id) continue;
     const saida = saidasById.get(String(id));
     if (!saida) continue;
-    if (!saidaTemProdutoInformado(saida)) return true;
+    const status = saidaStatusInformacoes(saida);
+    if (status === 'parciais') hasParciais = true;
+    else if (status === 'aguardando') hasAguardando = true;
+    else hasCompleto = true;
   }
-  return false;
+  if (hasParciais) return 'parciais';
+  if (hasAguardando && hasCompleto) return 'parciais';
+  if (hasAguardando) return 'aguardando';
+  return 'none';
+}
+
+/** Alguma saída do horário ainda tem item pendente de produto/tanque. */
+export function slotAguardandoInformacoes(bookings, saidasById) {
+  return slotStatusInformacoes(bookings, saidasById) !== 'none';
 }
 
 /** Agendados e concluídos — a grade mantém o horário preenchido após o carregamento. */
@@ -695,6 +757,31 @@ export async function releaseSlotBookings(bookings) {
       entities.agendamentosCarregamento.update(row.id, { status: 'cancelado' })
     )
   );
+}
+
+/**
+ * Cancela o agendamento ativo da saída (status → cancelado).
+ * Opcionalmente zera `data_programada` para a listagem voltar a "Pendente".
+ */
+export async function cancelSaidaAgendamento({
+  saida,
+  clearDataProgramada = true,
+} = {}) {
+  if (!saida?.id) throw new Error('Saída inválida.');
+
+  const ativos =
+    (await entities.agendamentosCarregamento.filter({ status: 'agendado' })) ||
+    [];
+  const current = ativos.filter(
+    (row) => String(row.saida_id) === String(saida.id)
+  );
+  if (current.length > 0) {
+    await releaseSlotBookings(current);
+  }
+
+  if (clearDataProgramada) {
+    await entities.saidas.update(saida.id, { data_programada: null });
+  }
 }
 
 export function normalizePlaca(value) {

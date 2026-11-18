@@ -47,6 +47,7 @@ import {
   filterContainersIndForSaida,
   sameClienteRecord,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
   newSaidaItemUid,
   formatSaidaItemEmbalagem,
 } from "@transbordo/lib/saidaOrigem";
@@ -268,44 +269,18 @@ export default function SaidaItemRow({
       draftRef.current.cheio = { ...item, tanque_vazio: false };
       const restored = draftRef.current.vazio;
       onChange({
-        ...emptySaidaItem(origem),
-        ...(restored || {}),
+        ...emptySaidaItem(ORIGEM_TRANSBORDO),
         item_uid: uid,
-        origem,
+        origem: ORIGEM_TRANSBORDO,
         tanque_vazio: true,
         tipo: TIPO_CONVENCIONAL,
-        produto_id: "",
-        produto_nome: "",
-        produto_codigo: "",
-        quantidade_solicitada: 0,
-        peso_liquido_embalagem: 0,
-        quantidade_embalagens: 0,
-        lote: "",
-        estoque_atual: 0,
-        estoque_final: 0,
-        entrada_id: "",
-        vasilhame_id: "",
-        vasilhame_placa: restored?.vasilhame_placa || "",
-        vasilhame_barril: restored?.vasilhame_barril || "",
-        volume_disponivel: 0,
-        volume_solicitado: 0,
-        saldo_final: 0,
-        peso_liquido: 0,
-        peso_bruto: 0,
-        container_id: "",
-        container_type: "",
-        stock_id: "",
-        movement_id: "",
-        reserva_id: "",
-        sem_reserva: false,
-        reserva_solicitante: "",
-        reserva_chave: "",
+        descricao_carregamento: restored?.descricao_carregamento || "",
+        sem_reserva: true,
       });
       return;
     }
     draftRef.current.vazio = {
-      vasilhame_placa: item.vasilhame_placa || "",
-      vasilhame_barril: item.vasilhame_barril || "",
+      descricao_carregamento: item.descricao_carregamento || "",
     };
     const restored = draftRef.current.cheio;
     if (restored) {
@@ -1174,7 +1149,9 @@ export default function SaidaItemRow({
     embalagemResumo !== "-";
 
   const resumoProduto = (() => {
-    if (tanqueVazio) return embalagemResumo;
+    if (tanqueVazio) {
+      return descricaoCarregamentoGenerico(item) || "Carregamento genérico";
+    }
 
     const nomeProduto = String(item.produto_nome || "").trim();
     if (temEmbalagemResumo && nomeProduto) {
@@ -1224,14 +1201,14 @@ export default function SaidaItemRow({
                 checked={tanqueVazio}
                 onCheckedChange={handleTanqueVazioToggle}
                 disabled={locked}
-                aria-label="Tanque vazio"
+                aria-label="Carregamento genérico"
               />
               <span
                 className={
                   tanqueVazio ? "text-sky-700" : "text-muted-foreground"
                 }
               >
-                Tanque vazio
+                Genérico
               </span>
             </label>
           ) : null}
@@ -1303,44 +1280,31 @@ export default function SaidaItemRow({
       {!collapsed && (
         <fieldset disabled={locked} className="min-w-0 space-y-3 border-0 p-0 m-0">
           {tanqueVazio ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`tanque-placa-${index}`}>Nº da placa</Label>
-                <Input
-                  id={`tanque-placa-${index}`}
-                  value={item.vasilhame_placa || ""}
-                  onChange={(e) =>
-                    onChange({
-                      ...item,
-                      item_uid: ensureItemUid(item),
-                      tanque_vazio: true,
-                      vasilhame_placa: e.target.value,
-                    })
-                  }
-                  placeholder="Informe o número da placa"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`tanque-barril-${index}`}>Nº do barril</Label>
-                <Input
-                  id={`tanque-barril-${index}`}
-                  value={item.vasilhame_barril || ""}
-                  onChange={(e) =>
-                    onChange({
-                      ...item,
-                      item_uid: ensureItemUid(item),
-                      tanque_vazio: true,
-                      vasilhame_barril: e.target.value,
-                    })
-                  }
-                  placeholder="Informe o número do barril"
-                  autoComplete="off"
-                />
-              </div>
-              <p className="col-span-full text-xs text-muted-foreground">
-                Informe pelo menos um dos dois campos. O tanque não precisa estar
-                cadastrado no sistema.
+            <div className="space-y-1.5">
+              <Label htmlFor={`generico-desc-${index}`}>
+                O que será carregado *
+              </Label>
+              <Input
+                id={`generico-desc-${index}`}
+                value={item.descricao_carregamento || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...item,
+                    item_uid: ensureItemUid(item),
+                    origem: ORIGEM_TRANSBORDO,
+                    tanque_vazio: true,
+                    descricao_carregamento: e.target.value,
+                    vasilhame_placa: "",
+                    vasilhame_barril: "",
+                    vasilhame_id: "",
+                  })
+                }
+                placeholder="Ex.: tanque, paletes, eslinga"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                Descreva o carregamento. Este item não dá baixa de saldo nem
+                registra saída de produto.
               </p>
             </div>
           ) : (

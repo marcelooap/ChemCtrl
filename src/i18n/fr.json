@@ -1219,6 +1219,7 @@
         "available": "Disponible",
         "occupied": "Occupé",
         "awaitingInfo": "En attente d'informations",
+        "partialInfo": "Informations partielles",
         "saidasCount": "{{count}} sorties",
         "viewSaidaPickTitle": "Quelle sortie souhaitez-vous consulter ?",
         "slotSummary": "{{free}} disponibles · {{occupied}} occupés · {{total}} créneaux",
@@ -1343,7 +1344,9 @@
           "confirmTitle": "Confirmer la modification",
           "confirmDescription": "La date prévue deviendra {{date}} à {{time}}. La planification sera enregistrée à la confirmation.",
           "confirm": "Confirmer",
-          "back": "Retour"
+          "back": "Retour",
+          "remove": "Supprimer la planification",
+          "removeHint": "La planification sera supprimée à l'enregistrement"
         },
         "errors": {
           "selectSaida": "Sélectionnez au moins une sortie à planifier.",

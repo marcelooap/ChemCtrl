@@ -259,7 +259,15 @@ export default function AgendamentoSlotModal({
                         )}
                         <td className="px-3 py-2.5 font-medium text-primary">{s.codigo || '—'}</td>
                         <td className="px-3 py-2.5 text-foreground">{s.cliente_nome || '—'}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{linha.produto}</td>
+                        <td
+                          className={`px-3 py-2.5 ${
+                            linha.aguardando
+                              ? 'text-muted-foreground text-center'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          {linha.produto}
+                        </td>
                         <td
                           className={`px-3 py-2.5 whitespace-nowrap ${
                             linha.vasilhame === '—' ? 'text-muted-foreground' : 'text-foreground'

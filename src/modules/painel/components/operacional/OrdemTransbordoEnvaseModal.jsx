@@ -24,13 +24,17 @@ import {
 } from "@transbordo/lib/format";
 import { loteToLitros, loteToKg } from "@transbordo/lib/conversao";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
+import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
 import { computeTankaSaldo } from "@transbordo/lib/tankaVolume";
 import {
   listOperadoresAtivosNomes,
   mergeOperadoresDropdown,
 } from "@transbordo/lib/operadoresCadastro";
 import { calculateFIFOAllocation } from "@transbordo/lib/fifo";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+import {
+  getDominantLote,
+  isOrigemEmbaladoMassa,
+} from "@transbordo/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -52,6 +56,15 @@ function normalizeUnit(unidade) {
     return "gal";
   }
   return unidade || "";
+}
+
+/** litros do formulário → kg/lb persistido no estoque embalado (paridade TransbordoModal). */
+function embaladoLitrosToMassa(qtyL, unidade, dens) {
+  const vol = Number(qtyL) || 0;
+  if (!(vol > 0) || !(dens > 0)) return 0;
+  const kg = roundMass(vol * dens);
+  const um = normalizeUnidadeEntrada(unidade);
+  return um === "lb" ? roundMass(kg / 0.453592) : kg;
 }
 
 function isDestinoPreenchido(destino) {
@@ -96,6 +109,8 @@ export default function OrdemTransbordoEnvaseModal({
   produtoId = "",
   produtoNome = "",
   produtoCodigo = "",
+  /** Observação da operação (Nova ordem) — gravada em t_transbordos.observacoes. */
+  observacoes = "",
   lote = "",
   quantidade = 0,
   unidade = "kg",
@@ -109,6 +124,11 @@ export default function OrdemTransbordoEnvaseModal({
   tankaOrigens = [],
   /** Origens vasilhame (tanques No Pátio) na ordem de registro (FIFO no envase). */
   vasilhameOrigens = [],
+  /**
+   * Origem embalada selecionada na Nova ordem.
+   * UI opera em L; persistência usa unidade_medida do estoque (kg/lb).
+   */
+  embaladoOrigem = null,
   quantidadeEditable = true,
   granelPayload = null,
   /** Payload já salvo (edição na Validação) — hidrata destinos/operadores. */
@@ -546,9 +566,24 @@ export default function OrdemTransbordoEnvaseModal({
       });
     } else {
       const prevOrigem = (initialPayload?.origens || [])[0] || {};
+      const isEmbalado =
+        tipoOrigem === "embalado" ||
+        Boolean(prevOrigem.embalado) ||
+        Boolean(embaladoOrigem);
+      const umEstoque =
+        embaladoOrigem?.unidade_medida ||
+        prevOrigem.unidade_medida ||
+        (isEmbalado ? "kg" : "L");
       const prevEntradaId =
+        embaladoOrigem?.entrada_id ||
         prevOrigem.entrada_id ||
         (tipoOrigem === "entrada" ? granelPayload?.id || null : null);
+      const loteEfetivo =
+        loteOrigem ||
+        embaladoOrigem?.lote ||
+        prevOrigem.lote ||
+        "";
+      // FIFO sempre em L; conversão massa ocorre depois (paridade TransbordoModal).
       origensNorm = [
         {
           _uid: origemUid,
@@ -556,14 +591,14 @@ export default function OrdemTransbordoEnvaseModal({
           entrada_id: prevEntradaId,
           entrada_codigo:
             prevOrigem.entrada_codigo ||
-            `${origemLabel} — Lote ${loteOrigem || "—"}`,
-          lote: loteOrigem || prevOrigem.lote || "",
-          unidade_medida: prevOrigem.unidade_medida || "L",
+            `${origemLabel} — Lote ${loteEfetivo || "—"}`,
+          lote: loteEfetivo,
+          unidade_medida: umEstoque,
           volume_retirado: volumeRegistradoL,
           massa_retirada: dens > 0 ? roundMass(volumeRegistradoL * dens) : 0,
           saldo_restante: 0,
           saldo_disponivel: volumeRegistradoL,
-          embalado: tipoOrigem === "embalado" || Boolean(prevOrigem.embalado),
+          embalado: isEmbalado,
           ...(Array.isArray(prevOrigem.lotes_retirados) &&
           prevOrigem.lotes_retirados.length > 0
             ? { lotes_retirados: prevOrigem.lotes_retirados }
@@ -615,6 +650,70 @@ export default function OrdemTransbordoEnvaseModal({
       };
     });
 
+    // Embalado em massa: formulário em L → persiste volume na UOM do estoque (kg/lb).
+    const origem0 = origensNorm[0];
+    const origemEmbaladoMassa = isOrigemEmbaladoMassa(origem0);
+    if (origemEmbaladoMassa && dens > 0) {
+      const um = origem0.unidade_medida || "kg";
+      const toPersist = (qtyL) => embaladoLitrosToMassa(qtyL, um, dens);
+      origensNorm = origensNorm.map((o) => {
+        const volL = roundVolume(o.volume_retirado || 0);
+        const volumePersistido = toPersist(volL);
+        const massaKg =
+          normalizeUnidadeEntrada(um) === "lb"
+            ? roundMass(volumePersistido * 0.453592)
+            : roundMass(volumePersistido);
+        return {
+          ...o,
+          volume_retirado: volumePersistido,
+          massa_retirada: massaKg,
+          saldo_disponivel: toPersist(o.saldo_disponivel),
+          saldo_restante: toPersist(
+            Math.max(0, roundVolume(o.saldo_disponivel) - volL)
+          ),
+          unidade_medida: um,
+          embalado: true,
+        };
+      });
+      destinosNorm = destinosNorm.map((d) => {
+        const volumeFormL = roundVolume(d.volume_total || d.volume || 0);
+        const volumePorFormL = roundVolume(d.volume_por_embalagem || 0);
+        const volume_total = toPersist(volumeFormL);
+        const volume_por_embalagem = toPersist(volumePorFormL);
+        const massaDestino =
+          normalizeUnidadeEntrada(um) === "lb"
+            ? roundMass(volume_total * 0.453592)
+            : roundMass(volume_total);
+        return {
+          ...d,
+          volume: volume_total,
+          volume_total,
+          volume_por_embalagem,
+          quantidade_embalagens: isDestinoEstoqueEmbalado(d.tipo_embalagem)
+            ? qtdEmbalagensFromVolume(volumeFormL, volumePorFormL) ||
+              Number(d.quantidade_embalagens) ||
+              0
+            : roundVolume(d.quantidade_embalagens || 0),
+          peso_liquido: massaDestino,
+          peso_bruto: roundMass((d.tara || 0) + massaDestino),
+        };
+      });
+    }
+
+    const volumeTotalPersistido = origemEmbaladoMassa && dens > 0
+      ? roundVolume(
+          origensNorm.reduce((s, o) => s + (Number(o.volume_retirado) || 0), 0)
+        )
+      : volumeRegistradoL;
+    const massaTotal =
+      dens > 0
+        ? origemEmbaladoMassa
+          ? roundMass(
+              origensNorm.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0)
+            )
+          : roundMass(volumeRegistradoL * dens)
+        : 0;
+
     return {
       id: null,
       data: dataOp || granelPayload?.data || new Date().toISOString().slice(0, 10),
@@ -624,13 +723,15 @@ export default function OrdemTransbordoEnvaseModal({
       produto_nome: produtoNome || granelPayload?.produto_nome || "",
       produto_codigo: produtoCodigo || granelPayload?.produto_codigo || "",
       densidade: densStr,
-      volume_total: volumeRegistradoL,
-      massa_total: dens > 0 ? roundMass(volumeRegistradoL * dens) : 0,
+      volume_total: volumeTotalPersistido,
+      massa_total: massaTotal,
       operadores: [...operadores],
       ...(fixedOperador?.id
         ? { operador_usuario_id: String(fixedOperador.id) }
         : {}),
-      observacoes: "",
+      observacoes: String(
+        observacoes || initialPayload?.observacoes || ""
+      ).trim(),
       origens: origensNorm,
       destinos: destinosNorm,
     };

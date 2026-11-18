@@ -55,7 +55,7 @@ import {
   isSameISODate,
   listAgendamentosByRange,
   normalizeBookings,
-  slotAguardandoInformacoes,
+  slotStatusInformacoes,
   startOfWeekMonday,
   saveCarregamentoChecklistProgress,
   summarizeSlotBookings,
@@ -702,6 +702,7 @@ export default function AgendamentosGrade({
                 }
                 saidasById={saidasById}
                 awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
+                partialInfoLabel={t('painel.comercial.agendamentos.partialInfo')}
                 compact={compact}
               />
             ))}
@@ -742,6 +743,7 @@ export default function AgendamentosGrade({
                 }
                 saidasById={saidasById}
                 awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
+                partialInfoLabel={t('painel.comercial.agendamentos.partialInfo')}
                 compact={compact}
               />
             ))}
@@ -787,6 +789,7 @@ export default function AgendamentosGrade({
                   }
                   saidasById={saidasById}
                   awaitingInfoLabel={t('painel.comercial.agendamentos.awaitingInfo')}
+                  partialInfoLabel={t('painel.comercial.agendamentos.partialInfo')}
                   compact={compact}
                   encaixe
                 />
@@ -1030,12 +1033,19 @@ function TimeSlotButton({
   saidasCountLabel,
   saidasById,
   awaitingInfoLabel,
+  partialInfoLabel,
   compact = false,
 }) {
   const list = normalizeBookings(bookings);
   const summary = summarizeSlotBookings(list);
   const occupied = list.length > 0;
-  const awaitingInfo = occupied && slotAguardandoInformacoes(list, saidasById);
+  const infoStatus = occupied ? slotStatusInformacoes(list, saidasById) : 'none';
+  const infoLabel =
+    infoStatus === 'parciais'
+      ? partialInfoLabel || awaitingInfoLabel
+      : infoStatus === 'aguardando'
+        ? awaitingInfoLabel
+        : '';
   const carregado = isCarregado(list);
   const checklistValidado = isChecklistValidado(list);
   const interactive = typeof onClick === 'function' && !carregado;
@@ -1143,12 +1153,12 @@ function TimeSlotButton({
         </span>
         {occupied ? (
           <span className="mt-1.5 block space-y-0.5">
-            {awaitingInfo ? (
+            {infoLabel ? (
               <span
-                className="block break-words text-[11px] font-semibold leading-snug text-amber-800"
-                title={awaitingInfoLabel}
+                className="block break-words text-[11px] font-semibold leading-snug text-amber-800 not-italic"
+                title={infoLabel}
               >
-                {awaitingInfoLabel}
+                {infoLabel}
               </span>
             ) : null}
             {carregado ? (

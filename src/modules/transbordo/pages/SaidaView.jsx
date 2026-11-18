@@ -34,6 +34,8 @@ import {
   TIPO_IND_VASILHAME,
   TIPO_IND_RETORNO_MP,
   tipoItemLabel,
+  isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
   resolveItemOrigem,
   origemLabel,
 } from "@transbordo/lib/saidaOrigem";
@@ -113,7 +115,9 @@ function gerarSaidaPDF(saida) {
     const rows = (saida.itens || []).map((item, i) => [
       String(i + 1).padStart(2, "0"),
       tipoItemLabel(item),
-      item.produto_nome || "—",
+      isTanqueVazioItem(item)
+        ? descricaoCarregamentoGenerico(item) || "Carregamento genérico"
+        : item.produto_nome || "—",
       item.lote || "—",
       formatMass(item.quantidade_solicitada, { empty: EMPTY }),
       formatMass(
@@ -123,18 +127,26 @@ function gerarSaidaPDF(saida) {
       item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
         ? formatNum(item.quantidade_embalagens, 1, { empty: EMPTY })
         : "—",
-      item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-        ? item.vasilhame_placa || "—"
-        : "—",
-      item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-        ? formatVolume(item.volume_solicitado, { empty: EMPTY })
-        : "—",
-      item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-        ? formatMass(item.estoque_atual, { empty: EMPTY })
-        : formatVolume(item.volume_disponivel, { empty: EMPTY }),
-      item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-        ? formatMass(item.estoque_final, { empty: EMPTY })
-        : formatVolume(item.saldo_final, { empty: EMPTY }),
+      isTanqueVazioItem(item)
+        ? "—"
+        : item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+          ? item.vasilhame_placa || "—"
+          : "—",
+      isTanqueVazioItem(item)
+        ? "—"
+        : item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
+          ? formatVolume(item.volume_solicitado, { empty: EMPTY })
+          : "—",
+      isTanqueVazioItem(item)
+        ? "—"
+        : item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+          ? formatMass(item.estoque_atual, { empty: EMPTY })
+          : formatVolume(item.volume_disponivel, { empty: EMPTY }),
+      isTanqueVazioItem(item)
+        ? "—"
+        : item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+          ? formatMass(item.estoque_final, { empty: EMPTY })
+          : formatVolume(item.saldo_final, { empty: EMPTY }),
     ]);
     y = drawSoftTable(doc, y, {
       headers,
@@ -516,7 +528,12 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                     </td>
                     <td className="px-4 py-3 text-foreground">
                       <span className="inline-flex items-center gap-1.5">
-                        <span>{item.produto_nome || "—"}</span>
+                        <span>
+                          {isTanqueVazioItem(item)
+                            ? descricaoCarregamentoGenerico(item) ||
+                              "Carregamento genérico"
+                            : item.produto_nome || "—"}
+                        </span>
                         {wmsNok ? (
                           <AlertTriangle
                             className="h-3.5 w-3.5 text-amber-600 shrink-0"
@@ -527,16 +544,21 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-foreground">
-                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-                        ? `${formatVolume(item.volume_solicitado, { empty: EMPTY })} L`
-                        : formatQtdComUnidade(item.quantidade_solicitada, item.unidade, {
-                            empty: EMPTY,
-                          })}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_CONVENCIONAL ||
+                            item.tipo === TIPO_IND_VASILHAME
+                          ? `${formatVolume(item.volume_solicitado, { empty: EMPTY })} L`
+                          : formatQtdComUnidade(item.quantidade_solicitada, item.unidade, {
+                              empty: EMPTY,
+                            })}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === TIPO_EMBALADO
-                        ? formatMass(item.peso_liquido_embalagem, { empty: EMPTY })
-                        : formatMass(item.peso_liquido, { empty: EMPTY })}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_EMBALADO
+                          ? formatMass(item.peso_liquido_embalagem, { empty: EMPTY })
+                          : formatMass(item.peso_liquido, { empty: EMPTY })}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_VASILHAME
@@ -544,34 +566,49 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-                        ? item.vasilhame_placa || "—"
-                        : "—"}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_CONVENCIONAL ||
+                            item.tipo === TIPO_IND_VASILHAME
+                          ? item.vasilhame_placa || "—"
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-                        ? formatVolume(item.volume_solicitado, { empty: EMPTY })
-                        : "—"}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_CONVENCIONAL ||
+                            item.tipo === TIPO_IND_VASILHAME
+                          ? formatVolume(item.volume_solicitado, { empty: EMPTY })
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === TIPO_CONVENCIONAL || item.tipo === TIPO_IND_VASILHAME
-                        ? formatMass(item.peso_bruto, { empty: EMPTY })
-                        : "—"}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_CONVENCIONAL ||
+                            item.tipo === TIPO_IND_VASILHAME
+                          ? formatMass(item.peso_bruto, { empty: EMPTY })
+                          : "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.lote || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-                        ? formatQtdComUnidade(item.estoque_atual, item.unidade, {
-                            empty: EMPTY,
-                          })
-                        : `${formatVolume(item.volume_disponivel, { empty: EMPTY })} L`}
+                      {isTanqueVazioItem(item) ? "—" : item.lote || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+                          ? formatQtdComUnidade(item.estoque_atual, item.unidade, {
+                              empty: EMPTY,
+                            })
+                          : `${formatVolume(item.volume_disponivel, { empty: EMPTY })} L`}
                     </td>
                     <td className="px-4 py-3 font-medium text-green-600">
-                      {item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
-                        ? formatQtdComUnidade(item.estoque_final, item.unidade, {
-                            empty: EMPTY,
-                          })
-                        : `${formatVolume(item.saldo_final, { empty: EMPTY })} L`}
+                      {isTanqueVazioItem(item)
+                        ? "—"
+                        : item.tipo === TIPO_EMBALADO || item.tipo === TIPO_IND_RETORNO_MP
+                          ? formatQtdComUnidade(item.estoque_final, item.unidade, {
+                              empty: EMPTY,
+                            })
+                          : `${formatVolume(item.saldo_final, { empty: EMPTY })} L`}
                     </td>
                   </tr>
                   );

@@ -40,7 +40,10 @@ import {
 } from "@transbordo/services/transbordoWorkspace";
 import { promoverProdutosPorIds } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
-import { ENCAIXE_HORARIO } from "@painel/lib/agendamentosCarregamento";
+import {
+  ENCAIXE_HORARIO,
+  cancelSaidaAgendamento,
+} from "@painel/lib/agendamentosCarregamento";
 import AgendamentoPosSaidaModal from "@painel/components/comercial/AgendamentoPosSaidaModal";
 import {
   ORIGEM_TRANSBORDO,
@@ -53,6 +56,7 @@ import {
   emptySaidaItem,
   isItemSaidaVazio,
   isTanqueVazioItem,
+  descricaoCarregamentoGenerico,
   tanqueVazioTemIdentificacao,
   newSaidaItemUid,
   resolveItemOrigem,
@@ -145,6 +149,8 @@ export default function SaidaForm({
   const [editingSaida, setEditingSaida] = useState(null);
   const [agendamentoOpen, setAgendamentoOpen] = useState(false);
   const [agendamentoPendente, setAgendamentoPendente] = useState(null);
+  const [agendamentoRemocaoPendente, setAgendamentoRemocaoPendente] =
+    useState(false);
   const [collapsedByIndex, setCollapsedByIndex] = useState({});
   const [formData, setFormData] = useState({
     cliente_id: "",
@@ -261,6 +267,9 @@ export default function SaidaForm({
           origem,
           item_uid: String(it.item_uid || "").trim() || newSaidaItemUid(),
           tanque_vazio: Boolean(it.tanque_vazio),
+          descricao_carregamento: it.tanque_vazio
+            ? descricaoCarregamentoGenerico(it)
+            : "",
         };
         // Trava/exclusão: estado explícito (não herdar false do emptySaidaItem).
         if (it.validado === true || it.validado === false) {
@@ -297,6 +306,8 @@ export default function SaidaForm({
           if (cancelled) return;
           setEditingSaida(saida);
           const itens = mapItensEdicao(saida);
+          setAgendamentoPendente(null);
+          setAgendamentoRemocaoPendente(false);
           setFormData({
             cliente_id: saida.cliente_id || "",
             cliente_nome: saida.cliente_nome || "",
@@ -657,6 +668,64 @@ export default function SaidaForm({
       return;
     }
 
+    // Remoção de agendamento: grava só data_programada + cancela o slot.
+    // Não revalida saldo — saída validada já baixou estoque e o saldo físico
+    // fica 0, o que bloquearia indevidamente a exclusão do horário.
+    if (editingSaida?.id && agendamentoRemocaoPendente) {
+      setSaving(true);
+      try {
+        const clientePersistido = await persistClienteSelecionado(
+          formData.cliente_id,
+          formData.cliente_nome
+        );
+        if (!clientePersistido.id) {
+          setError("Selecione um cliente.");
+          setSaving(false);
+          return;
+        }
+
+        await cancelSaidaAgendamento({
+          saida: editingSaida,
+          clearDataProgramada: false,
+        });
+
+        const data = {
+          cliente_id: clientePersistido.id,
+          cliente_nome: clientePersistido.nome || formData.cliente_nome,
+          destino: normalizeDestino(formData.destino) || null,
+          data_solicitacao: formData.data_solicitacao,
+          data_programada: null,
+          pedido_cliente:
+            String(formData.pedido_cliente || "").trim() || null,
+          observacoes: formData.observacoes,
+          // Mantém os itens já persistidos — sem realocar estoque.
+          itens: editingSaida.itens || itensPreenchidos,
+          quantidade_total:
+            editingSaida.quantidade_total ??
+            calcSaidaQuantidadeTotal(editingSaida.itens || itensPreenchidos),
+          usuario_criador: editingSaida.usuario_criador || user?.nome || "",
+          usuario_responsavel: user?.nome || "",
+          codigo: editingSaida.codigo,
+          modulo_origem:
+            editingSaida.modulo_origem || moduloOrigem || MODULO_SAIDA_CHEMFLOW,
+        };
+
+        await entities.saidas.update(editingSaida.id, data);
+        patchTransbordoWorkspaceSaida({
+          ...editingSaida,
+          ...data,
+          id: editingSaida.id,
+        });
+        navigate(basePath);
+      } catch (err) {
+        setError(
+          err?.message || "Erro ao remover agendamento. Tente novamente."
+        );
+      }
+      setSaving(false);
+      return;
+    }
+
     for (let i = 0; i < formData.itens.length; i++) {
       const item = formData.itens[i];
       if (isItemSaidaVazio(item)) continue;
@@ -664,7 +733,7 @@ export default function SaidaForm({
       if (isTanqueVazioItem(item)) {
         if (!tanqueVazioTemIdentificacao(item)) {
           setError(
-            "Informe o número da placa ou o número do barril para identificar o tanque vazio."
+            `Item ${i + 1}: informe o que será carregado.`
           );
           return;
         }
@@ -904,16 +973,33 @@ export default function SaidaForm({
         });
       }
 
-      const itensWithStock = itensPreenchidos.map((item) => {
-        if (isTanqueVazioItem(item)) {
+      // Mantém linhas em branco adicionadas no formulário (placeholders
+      // "Aguardando Informações") na mesma ordem — só aloca estoque nas preenchidas.
+      const itensWithStock = formData.itens.map((item) => {
+        if (isItemSaidaVazio(item)) {
+          const origem =
+            resolveItemOrigem(item) || defaultOrigem || ORIGEM_TRANSBORDO;
+          const base = emptySaidaItem(origem);
           return {
-            ...emptySaidaItem(resolveItemOrigem(item) || defaultOrigem),
+            ...base,
+            item_uid: String(item.item_uid || "").trim() || newSaidaItemUid(),
+            origem,
+            tipo: item.tipo || base.tipo,
+            validado: false,
+          };
+        }
+
+        if (isTanqueVazioItem(item)) {
+          const descricao = descricaoCarregamentoGenerico(item);
+          return {
+            ...emptySaidaItem(ORIGEM_TRANSBORDO),
             item_uid: String(item.item_uid || "").trim() || newSaidaItemUid(),
             tanque_vazio: true,
-            origem: resolveItemOrigem(item) || defaultOrigem || ORIGEM_TRANSBORDO,
+            descricao_carregamento: descricao,
+            origem: ORIGEM_TRANSBORDO,
             tipo: TIPO_CONVENCIONAL,
-            vasilhame_placa: String(item.vasilhame_placa || "").trim(),
-            vasilhame_barril: String(item.vasilhame_barril || "").trim(),
+            vasilhame_placa: "",
+            vasilhame_barril: "",
             produto_id: "",
             produto_nome: "",
             produto_codigo: "",
@@ -1129,15 +1215,16 @@ export default function SaidaForm({
 
       const codigo = editingSaida?.codigo || (await generateCodigo());
 
+      const dataProgramadaSalva = agendamentoRemocaoPendente
+        ? null
+        : agendamentoPendente?.dateIso || formData.data_programada || null;
+
       const data = {
         cliente_id: clienteIdSalvo,
         cliente_nome: clienteNomeSalvo,
         destino: normalizeDestino(formData.destino) || null,
         data_solicitacao: formData.data_solicitacao,
-        data_programada:
-          agendamentoPendente?.dateIso ||
-          formData.data_programada ||
-          null,
+        data_programada: dataProgramadaSalva,
         pedido_cliente: String(formData.pedido_cliente || "").trim() || null,
         observacoes: formData.observacoes,
         itens: itensPersistidos,
@@ -1329,7 +1416,11 @@ export default function SaidaForm({
                 <Calendar className="w-4 h-4" />
                 Agendamento
               </Button>
-              {agendamentoPendente ? (
+              {agendamentoRemocaoPendente ? (
+                <p className="text-xs text-amber-700">
+                  Agendamento será removido ao salvar
+                </p>
+              ) : agendamentoPendente ? (
                 <p className="text-xs text-emerald-700">
                   Agendado:{" "}
                   {new Date(
@@ -1548,11 +1639,30 @@ export default function SaidaForm({
             codigo: editingSaida?.codigo,
             cliente_id: formData.cliente_id,
             cliente_nome: formData.cliente_nome,
-            data_programada: formData.data_programada,
+            data_programada:
+              formData.data_programada || editingSaida?.data_programada || "",
           }}
+          allowRemoveSchedule={
+            !agendamentoRemocaoPendente &&
+            Boolean(
+              formData.data_programada ||
+                agendamentoPendente ||
+                editingSaida?.data_programada
+            )
+          }
           onClose={() => setAgendamentoOpen(false)}
+          onRemoveSchedule={() => {
+            setAgendamentoRemocaoPendente(true);
+            setAgendamentoPendente(null);
+            setFormData((prev) => ({
+              ...prev,
+              data_programada: "",
+            }));
+            setAgendamentoOpen(false);
+          }}
           onScheduled={(payload) => {
             if (!payload?.dateIso) return;
+            setAgendamentoRemocaoPendente(false);
             setFormData((prev) => ({
               ...prev,
               data_programada: payload.dateIso,

@@ -6,7 +6,7 @@ import {
 import { resolveTipoRecebimentoEstoque } from "@transbordo/lib/tipoRecebimento";
 import {
   isEstoqueEmbalado,
-  computeDisponivelTransbordo,
+  computeEstoqueQuantidadesPorLocal,
 } from "@transbordo/lib/estoqueSaldo";
 import {
   computeTankaSaldo,
@@ -541,48 +541,26 @@ export function filterProdutosByOrigem({
   }
 
   if (origemTipo === "embalado") {
+    // Mesma regra do módulo Transbordo: entrada embalada com saldo no pátio > 0.
+    // saldo_atual/quantidade sozinhos incluem itens já transbordados sem saldo real.
     const estoqueEmbaladoComSaldo = (estoque || []).filter((e) => {
       if (!e) return false;
       if (!matchClienteRecord(clienteId, clienteNome, e)) return false;
       const isEmb =
         resolveTipoRecebimentoEstoque(e) === "embalado" ||
-        isEstoqueEmbalado(e) ||
-        isDestinoEstoqueEmbalado(e.tipo_embalagem) ||
-        isDestinoEstoqueEmbalado(e.lotes?.[0]?.tipo_embalagem);
+        isEstoqueEmbalado(e);
       if (!isEmb) return false;
-      const disponivel = computeDisponivelTransbordo(e, transbordos);
-      const saldoAtual = Number(e.saldo_atual) || 0;
-      const qtd = Number(e.quantidade) || 0;
-      return disponivel > 0 || saldoAtual > 0 || qtd > 0;
+      const locais = computeEstoqueQuantidadesPorLocal(e, {
+        transbordos,
+        vasilhames,
+        saldo: e.saldo_atual,
+      });
+      return (Number(locais?.patio) || 0) > 0;
     });
 
-    const vasilhamesEmbaladosNoPatio = (vasilhames || []).filter((v) => {
-      if (!v) return false;
-      if (!matchClienteRecord(clienteId, clienteNome, v)) return false;
-      const isEmb =
-        isDestinoEstoqueEmbalado(v.tipo) ||
-        isVasilhameLegadoEmbalado(v.tipo);
-      if (!isEmb) return false;
-      const status = v.status || (v.data_saida ? "Expedido" : "No Pátio");
-      if (status !== "No Pátio") return false;
-      const vol =
-        Number(v.volume) ||
-        Number(v.peso_liquido) ||
-        Number(v.saldo_atual) ||
-        0;
-      return vol > 0;
-    });
-
-    return produtos.filter((p) => {
-      const hasEstoqueEmb = estoqueEmbaladoComSaldo.some((e) =>
-        matchProdutoRecord(p, e)
-      );
-      if (hasEstoqueEmb) return true;
-      const hasVasilhameEmb = vasilhamesEmbaladosNoPatio.some((v) =>
-        matchProdutoRecord(p, v)
-      );
-      return hasVasilhameEmb;
-    });
+    return produtos.filter((p) =>
+      estoqueEmbaladoComSaldo.some((e) => matchProdutoRecord(p, e))
+    );
   }
 
   if (origemTipo === "tanka") {

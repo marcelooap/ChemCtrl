@@ -165,6 +165,8 @@ export function filterContainersIndForSaida(
 }
 
 export function resolveItemOrigem(item) {
+  // Carregamento genérico não existe no cadastro: entra sempre na validação do Transbordo.
+  if (item?.tanque_vazio) return ORIGEM_TRANSBORDO;
   if (item?.origem === ORIGEM_INDUSTRIALIZACAO || item?.origem === ORIGEM_TRANSBORDO) {
     return item.origem;
   }
@@ -236,16 +238,33 @@ export function isSaidaValidadaNoModulo(saida, modulo) {
   return Boolean(saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal");
 }
 
-/** Item de carregamento de tanque vazio (sem produto). */
+/**
+ * Carregamento genérico (flag histórica `tanque_vazio`): não há produto,
+ * tanque nem saldo no sistema. A validação só registra o status do item.
+ */
 export function isTanqueVazioItem(item) {
   return Boolean(item?.tanque_vazio);
 }
 
-/** Saída só com contentores/tanques vazios (sem produto). */
+/** Saída só com carregamentos genéricos (sem produto cadastrado). */
 export function isSaidaCargaVazia(saida) {
   const itens = saida?.itens || [];
   if (itens.length === 0) return false;
   return itens.every(isTanqueVazioItem);
+}
+
+/** Texto livre do carregamento genérico. Legado: placa/barril digitados antes. */
+export function descricaoCarregamentoGenerico(item) {
+  const texto = String(item?.descricao_carregamento || "").trim();
+  if (texto) return texto;
+  const placa = String(item?.vasilhame_placa || "").trim();
+  const barril = String(item?.vasilhame_barril || "").trim();
+  if (placa && barril) return `${placa} (${barril})`;
+  return placa || barril || "";
+}
+
+export function carregamentoGenericoInformado(item) {
+  return Boolean(descricaoCarregamentoGenerico(item));
 }
 
 /** Gera uid estável para chave de edição/checklist (tanque vazio sem cadastro). */
@@ -257,7 +276,7 @@ export function newSaidaItemUid() {
 }
 
 /**
- * Identidade estável do item (tanque, lote, retorno ou tanque vazio).
+ * Identidade estável do item (tanque, lote, retorno ou carregamento genérico).
  * Item vazio não tem chave.
  */
 export function saidaItemChave(item) {
@@ -370,6 +389,7 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
     tipo: origem === ORIGEM_INDUSTRIALIZACAO ? TIPO_IND_VASILHAME : TIPO_EMBALADO,
     item_uid: newSaidaItemUid(),
     tanque_vazio: false,
+    descricao_carregamento: "",
     // Novo item em edição: sempre pendente (não herda validação da saída).
     validado: false,
     produto_id: "",
@@ -409,9 +429,9 @@ export function emptySaidaItem(origem = ORIGEM_TRANSBORDO) {
 }
 
 /**
- * Linha de produto sem nenhuma seleção/quantidade (placeholder do formulário).
- * Permite reservar o horário da saída antes de o cliente informar os tanques.
- * Tanque vazio (toggle ligado) conta como item preenchido mesmo sem produto.
+ * Linha de produto sem nenhuma seleção/quantidade (placeholder).
+ * Pode ser salva na saída para reservar slots e indicar "Aguardando Informações".
+ * Carregamento genérico (toggle ligado) conta como item preenchido mesmo sem produto.
  */
 export function isItemSaidaVazio(item) {
   if (!item) return true;
@@ -430,11 +450,9 @@ export function isItemSaidaVazio(item) {
   return semSelecao && semQuantidade;
 }
 
-/** Placa ou barril informados no item de tanque vazio. */
+/** Descrição (ou placa/barril legado) informada no carregamento genérico. */
 export function tanqueVazioTemIdentificacao(item) {
-  const placa = String(item?.vasilhame_placa || "").trim();
-  const barril = String(item?.vasilhame_barril || "").trim();
-  return Boolean(placa || barril);
+  return carregamentoGenericoInformado(item);
 }
 
 function isSaidaItemTanque(item) {
@@ -689,13 +707,8 @@ export function formatSaidaItemEmbalagem(item, { vasilhame } = {}) {
     return "-";
   }
 
-  // Tanque vazio: só o texto digitado na solicitação (sem cadastro).
-  if (isTanqueVazioItem(item)) {
-    const placa = codigoEmbalagem(item?.vasilhame_placa);
-    const barril = codigoEmbalagem(item?.vasilhame_barril);
-    if (placa && barril) return `${placa} (${barril})`;
-    return placa || barril || "—";
-  }
+  // Carregamento genérico não tem embalagem cadastrada.
+  if (isTanqueVazioItem(item)) return "—";
 
   // Cadastro do vasilhame (Transbordo: placa/barril; Industrialização:
   // container_number/barril_number) prevalece sobre a cópia da saída.
@@ -726,7 +739,7 @@ export function formatSaidaItemInformacoes(
   { vasilhame, includeLote = true, context = "default" } = {}
 ) {
   if (isTanqueVazioItem(item)) {
-    return formatSaidaItemEmbalagem(item);
+    return descricaoCarregamentoGenerico(item) || "—";
   }
 
   const lote = resolveSaidaItemLote(item, { vasilhame });
@@ -746,7 +759,7 @@ export function formatSaidaItemInformacoes(
 }
 
 export function tipoItemLabel(item) {
-  if (isTanqueVazioItem(item)) return "Tanque Vazio";
+  if (isTanqueVazioItem(item)) return "Genérico";
   const tipo = item?.tipo;
   if (tipo === TIPO_EMBALADO) return "Embalado";
   if (tipo === TIPO_CONVENCIONAL) return "Vasilhame";

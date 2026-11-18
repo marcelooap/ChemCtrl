@@ -23,6 +23,7 @@ import {
 import {
   isSaidaValidadaNoModulo,
   itemFoiBaixado,
+  isTanqueVazioItem,
   ORIGEM_TRANSBORDO,
 } from "@transbordo/lib/saidaOrigem";
 import {
@@ -2258,6 +2259,7 @@ export function resolveEstoqueIdsFromSaidaConvencional(
   const vasilhameById = new Map((vasilhames || []).map((v) => [v.id, v]));
   const ids = new Set();
   itens.forEach((item) => {
+    if (isTanqueVazioItem(item)) return;
     if (item.tipo !== "convencional" || !item.vasilhame_id) return;
     const v = vasilhameById.get(item.vasilhame_id);
     if (!v) return;
