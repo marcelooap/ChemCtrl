@@ -20,7 +20,11 @@ import {
   computeTankaLotesDisponiveis,
   computeTankaRemainingByEstoqueId,
 } from "@transbordo/lib/tankaVolume";
-import { isSaidaValidadaNoModulo, ORIGEM_TRANSBORDO } from "@transbordo/lib/saidaOrigem";
+import {
+  isSaidaValidadaNoModulo,
+  itemFoiBaixado,
+  ORIGEM_TRANSBORDO,
+} from "@transbordo/lib/saidaOrigem";
 import {
   estoqueIdsFromSaidaItem,
   quantidadeItemParaEstoque,
@@ -2119,8 +2123,10 @@ function sameProdutoSaidaEstoque(item, estoqueItem) {
 }
 
 /**
- * Lista entradas do histórico de saídas vinculadas a um estoque
+ * Lista saídas que efetivamente baixaram o estoque
  * (embalado direto + convencional via vasilhame/transbordo).
+ * Alinha com o saldo: item desvalidado ou saída pendente não entram.
+ * Ao validar de novo, o registro volta a aparecer.
  */
 export function listSaidasHistoricoForEstoque(
   estoqueItem,
@@ -2139,6 +2145,9 @@ export function listSaidasHistoricoForEstoque(
 
   (saidas || []).forEach((saida) => {
     (saida.itens || []).forEach((item, idx) => {
+      // Mesmo critério de calcSaidasEmbalado / baixa fiscal: só o que debitou.
+      if (!itemFoiBaixado(item, saida)) return;
+
       let quantidade = 0;
       let unidade = "kg";
       let linked = false;
@@ -2222,16 +2231,14 @@ export function listSaidasHistoricoForEstoque(
           "",
         quantidade,
         unidade,
-        status: isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO)
-          ? "Validado"
-          : "Pendente",
+        status: "Validado",
         enviadoEm: saida.enviado_fiscal_data,
         responsavel:
           saida.enviado_fiscal_usuario ||
           saida.usuario_responsavel ||
           saida.usuario_criador ||
           "—",
-        enviado_ao_fiscal: isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO),
+        enviado_ao_fiscal: true,
       });
     });
   });
