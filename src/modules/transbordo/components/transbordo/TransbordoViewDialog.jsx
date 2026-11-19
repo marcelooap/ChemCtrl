@@ -18,6 +18,11 @@ import {
 import { Button } from "@shared/components/ui/button";
 import { useToast } from "@shared/components/ui/use-toast";
 import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/PrintContainerLabelDialog";
+import EntradaEtiquetaDialog, {
+  EMBALAGEM_ORIGEM_GRANEL_OPTIONS,
+} from "@transbordo/components/entrada/EntradaEtiquetaDialog";
+import { entities } from "@transbordo/services/entities";
+import { buildEstoqueDisplayCodigoMap } from "@transbordo/lib/entradaCodigo";
 import { buildTransbordoViewModel } from "@transbordo/lib/transbordoViewData";
 import { loadConvencionalLabelContext } from "@transbordo/lib/printSaidaAgendamento";
 import { TIPO_CONVENCIONAL } from "@transbordo/lib/saidaOrigem";
@@ -90,9 +95,12 @@ function InfoField({ label, value, mono = false }) {
 }
 
 const thClass =
-  "px-3 py-1.5 text-center text-[11px] font-medium text-muted-foreground uppercase bg-muted/40";
+  "px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground uppercase bg-muted/40";
 const tdClass =
-  "px-3 py-2 text-center align-middle text-sm border-t border-border whitespace-nowrap";
+  "px-2 py-1.5 text-center align-middle text-sm border-t border-border whitespace-nowrap";
+const thDestinoClass = `${thClass}`;
+const tdDestinoBase =
+  "px-2 py-1.5 text-center align-middle text-sm border-t border-border";
 
 export default function TransbordoViewDialog({
   open,
@@ -107,6 +115,8 @@ export default function TransbordoViewDialog({
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [labelDialog, setLabelDialog] = useState(null);
   const [labelLoadingIndex, setLabelLoadingIndex] = useState(null);
+  const [origemLabelDialog, setOrigemLabelDialog] = useState(null);
+  const [origemLabelLoadingKey, setOrigemLabelLoadingKey] = useState(null);
 
   if (!transbordo) return null;
 
@@ -122,7 +132,10 @@ export default function TransbordoViewDialog({
   const produtoSubtitle = [view.produto, view.cliente].filter(Boolean).join(" · ") || "—";
   const destinos = Array.isArray(transbordo.destinos) ? transbordo.destinos : [];
   const destinoColSpan =
-    4 + (view.showEmbalagem ? 1 : 0) + (view.showQtd ? 1 : 0);
+    5 + (view.showEmbalagem ? 1 : 0) + (view.showQtd ? 1 : 0);
+  const showOrigemEtiqueta = view.origemRows.some((row) => row.isGranel);
+  const origemColSpan = showOrigemEtiqueta ? 6 : 5;
+  const estoqueCodigoMap = buildEstoqueDisplayCodigoMap(entradas);
 
   const handlePdf = async () => {
     setGeneratingPdf(true);
@@ -175,16 +188,72 @@ export default function TransbordoViewDialog({
     }
   };
 
+  const resolveEntradaRecebimento = async (origemRow) => {
+    const estoqueId = origemRow?.entradaId;
+    if (!estoqueId) {
+      throw new Error("Origem granel sem vínculo com o recebimento.");
+    }
+    const estoque =
+      (entradas || []).find((e) => String(e?.id) === String(estoqueId)) || null;
+    const parentId = estoque?.entrada_id || null;
+
+    let entrada = null;
+    if (parentId) {
+      entrada = await entities.entradas.get(parentId).catch(() => null);
+    }
+    if (!entrada?.id) {
+      entrada = await entities.entradas.get(estoqueId).catch(() => null);
+    }
+    if (!entrada?.id && estoque?.id) {
+      entrada = estoque;
+    }
+    if (!entrada?.id) {
+      throw new Error("Não foi possível carregar o recebimento desta origem.");
+    }
+
+    const entradaCodigo =
+      String(entrada.id_entrada || "").trim() ||
+      (estoqueId ? estoqueCodigoMap[estoqueId] : "") ||
+      estoqueCodigoMap[entrada.id] ||
+      String(estoque?.entrada_codigo || "").trim() ||
+      "";
+    return { entrada, entradaCodigo };
+  };
+
+  const handlePrintOrigemEtiqueta = async (origemRow) => {
+    if (!origemRow?.isGranel || origemLabelLoadingKey != null) return;
+    const loadingKey = `${origemRow.origemIndex}-${origemRow.groupIndex}`;
+    setOrigemLabelLoadingKey(loadingKey);
+    try {
+      const { entrada, entradaCodigo } = await resolveEntradaRecebimento(origemRow);
+      setOrigemLabelDialog({
+        entrada,
+        entradaCodigo,
+        initialLote: origemRow.loteKey || "",
+      });
+    } catch (err) {
+      toast({
+        title: "Imprimir etiqueta",
+        description: err?.message || "Não foi possível abrir a etiqueta.",
+        variant: "destructive",
+      });
+    } finally {
+      setOrigemLabelLoadingKey(null);
+    }
+  };
+
   const handleClose = () => {
     setLabelDialog(null);
     setLabelLoadingIndex(null);
+    setOrigemLabelDialog(null);
+    setOrigemLabelLoadingKey(null);
     onClose();
   };
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+      <DialogContent className="w-[min(96vw,64rem)] max-w-[min(96vw,64rem)] max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 text-left space-y-1">
           <DialogTitle className="flex items-center gap-3 flex-wrap text-base">
             <span>Transbordo {codigo}</span>
@@ -248,7 +317,7 @@ export default function TransbordoViewDialog({
               ) : null
             }
           >
-            <div className="overflow-x-auto -mx-1">
+            <div className="-mx-1">
               <table className="w-full border border-border rounded-lg overflow-hidden">
                 <thead>
                   <tr>
@@ -257,36 +326,68 @@ export default function TransbordoViewDialog({
                     <th className={thClass}>Lote</th>
                     <th className={thClass}>Vol. Retirado (L)</th>
                     <th className={thClass}>Massa (kg)</th>
+                    {showOrigemEtiqueta ? (
+                      <th className={`${thClass} w-14`}>Etiqueta</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
                   {view.origemRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={origemColSpan}
                         className="px-3 py-3 text-center text-sm text-muted-foreground"
                       >
                         Nenhuma origem registrada.
                       </td>
                     </tr>
                   ) : (
-                    view.origemRows.map((row, i) => (
-                      <tr key={i}>
-                        <td className={`${tdClass} font-medium text-foreground`}>
-                          {row.origem}
-                        </td>
-                        <td className={`${tdClass} text-foreground`}>{row.produto}</td>
-                        <td className={`${tdClass} text-muted-foreground`}>
-                          {row.lote}
-                        </td>
-                        <td className={`${tdClass} font-medium tabular-nums text-foreground`}>
-                          {row.volume}
-                        </td>
-                        <td className={`${tdClass} text-muted-foreground tabular-nums`}>
-                          {row.massa}
-                        </td>
-                      </tr>
-                    ))
+                    view.origemRows.map((row, i) => {
+                      const showPrint =
+                        row.isGranel &&
+                        (row.groupSize <= 1 || row.groupIndex === 0);
+                      const loadingKey = `${row.origemIndex}-${row.groupIndex}`;
+                      const printingThis = origemLabelLoadingKey === loadingKey;
+                      return (
+                        <tr key={i}>
+                          <td className={`${tdClass} font-medium text-foreground`}>
+                            {row.origem}
+                          </td>
+                          <td className={`${tdClass} text-foreground`}>{row.produto}</td>
+                          <td className={`${tdClass} text-muted-foreground`}>
+                            {row.lote}
+                          </td>
+                          <td className={`${tdClass} font-medium tabular-nums text-foreground`}>
+                            {row.volume}
+                          </td>
+                          <td className={`${tdClass} text-muted-foreground tabular-nums`}>
+                            {row.massa}
+                          </td>
+                          {showOrigemEtiqueta ? (
+                            <td className={tdClass}>
+                              {showPrint ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-colors disabled:opacity-50"
+                                  title="Imprimir etiqueta"
+                                  aria-label="Imprimir etiqueta"
+                                  disabled={origemLabelLoadingKey != null}
+                                  onClick={() => handlePrintOrigemEtiqueta(row)}
+                                >
+                                  {printingThis ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Printer className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -305,21 +406,36 @@ export default function TransbordoViewDialog({
             }
           >
             <div className="space-y-4">
-              <div className="overflow-x-auto -mx-1">
-                <table className="w-full border border-border rounded-lg overflow-hidden">
+              <div className="-mx-1">
+                <table className="w-full table-fixed border border-border rounded-lg overflow-hidden">
+                  <colgroup>
+                    {view.showEmbalagem ? <col style={{ width: "12.5rem" }} /> : null}
+                    <col style={{ width: "7.5rem" }} />
+                    {view.showQtd ? <col style={{ width: "4rem" }} /> : null}
+                    <col style={{ width: "5.5rem" }} />
+                    <col style={{ width: "6.5rem" }} />
+                    <col />
+                    <col style={{ width: "3rem" }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       {view.showEmbalagem ? (
-                        <th className={thClass}>Embalagem</th>
+                        <th className={thDestinoClass}>Embalagem</th>
                       ) : null}
-                      <th className={thClass}>Lote</th>
+                      <th className={thDestinoClass}>Lote</th>
                       {view.showQtd ? (
-                        <th className={thClass}>Qtd. Embalagens</th>
+                        <th className={thDestinoClass}>Qtd.</th>
                       ) : null}
-                      <th className={thClass}>Volume (L)</th>
-                      <th className={thClass}>Massa (kg)</th>
-                      <th className={thClass}>Lacre</th>
-                      <th className={`${thClass} w-12`}>Etiqueta</th>
+                      <th className={thDestinoClass}>Vol. (L)</th>
+                      <th className={thDestinoClass}>Massa (kg)</th>
+                      <th className={thDestinoClass}>Lacre</th>
+                      <th
+                        className={`${thDestinoClass} px-1`}
+                        title="Etiqueta"
+                        aria-label="Etiqueta"
+                      >
+                        <Printer className="mx-auto h-3.5 w-3.5" aria-hidden />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -352,13 +468,13 @@ export default function TransbordoViewDialog({
                           <tr key={`${row.groupId}-${row.groupIndex}`}>
                             {view.showEmbalagem ? (
                               <td
-                                className={`${tdClass} font-medium text-foreground ${divider}`}
+                                className={`${tdDestinoBase} font-medium text-foreground whitespace-nowrap ${divider}`}
                               >
-                                <span className="inline-flex items-center justify-center gap-1.5">
+                                <span className="inline-flex items-center justify-center gap-1">
                                   <span>{row.embalagem}</span>
                                   {row.completado ? (
                                     <span
-                                      className="inline-flex items-center justify-center"
+                                      className="inline-flex items-center justify-center shrink-0"
                                       title="Tanque completado neste transbordo"
                                       aria-label="Tanque completado neste transbordo"
                                     >
@@ -369,41 +485,43 @@ export default function TransbordoViewDialog({
                               </td>
                             ) : null}
                             <td
-                              className={`${tdClass} text-muted-foreground ${divider}`}
+                              className={`${tdDestinoBase} text-muted-foreground whitespace-normal break-all overflow-hidden ${divider}`}
                             >
                               {row.lote}
                             </td>
                             {view.showQtd ? (
                               <td
-                                className={`${tdClass} text-muted-foreground ${divider}`}
+                                className={`${tdDestinoBase} text-muted-foreground whitespace-nowrap ${divider}`}
                               >
                                 {row.qtd}
                               </td>
                             ) : null}
                             <td
-                              className={`${tdClass} text-primary font-medium tabular-nums ${divider}`}
+                              className={`${tdDestinoBase} text-primary font-medium tabular-nums whitespace-nowrap ${divider}`}
                             >
                               {row.volume}
                             </td>
                             <td
-                              className={`${tdClass} text-muted-foreground tabular-nums ${divider}`}
+                              className={`${tdDestinoBase} text-muted-foreground tabular-nums whitespace-nowrap ${divider}`}
                             >
                               {row.massa}
                             </td>
                             {!mixed || firstOfGroup ? (
                               <td
                                 rowSpan={mixed ? row.groupSize : undefined}
-                                className={`${tdClass} text-muted-foreground ${
+                                className={`${tdDestinoBase} text-muted-foreground whitespace-normal break-words overflow-hidden text-[12px] leading-snug ${
                                   groupIsLast ? "" : "border-b border-border"
                                 }`}
                               >
-                                {row.lacre}
+                                <span className="block min-w-0 max-w-full">
+                                  {row.lacre}
+                                </span>
                               </td>
                             ) : null}
                             {!mixed || firstOfGroup ? (
                               <td
                                 rowSpan={mixed ? row.groupSize : undefined}
-                                className={`${tdClass} ${
+                                className={`${tdDestinoBase} bg-card px-1 align-middle ${
                                   groupIsLast ? "" : "border-b border-border"
                                 }`}
                               >
@@ -493,6 +611,18 @@ export default function TransbordoViewDialog({
       manufactureDate={labelDialog?.manufactureDate || undefined}
       expiryDate={labelDialog?.expiryDate || undefined}
       resolvePublicToken={labelDialog?.resolvePublicToken}
+    />
+
+    <EntradaEtiquetaDialog
+      key={origemLabelDialog?.entrada?.id || "origem-label-closed"}
+      open={Boolean(origemLabelDialog?.entrada)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setOrigemLabelDialog(null);
+      }}
+      entrada={origemLabelDialog?.entrada || null}
+      entradaCodigo={origemLabelDialog?.entradaCodigo || ""}
+      initialLote={origemLabelDialog?.initialLote || ""}
+      embalagemOptions={EMBALAGEM_ORIGEM_GRANEL_OPTIONS}
     />
     </>
   );

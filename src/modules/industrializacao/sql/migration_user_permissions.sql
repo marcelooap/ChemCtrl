@@ -92,6 +92,7 @@ INSERT INTO permissoes (id, modulo, tela, acao, codigo, descricao) VALUES
   ('painel_operacional_ordem_transbordo.edit', 'painel', 'operacional_ordem_transbordo', 'edit', 'painel_operacional_ordem_transbordo.edit', 'Editar Ordem de Transbordo'),
   ('painel_operacional_ordem_transbordo.delete', 'painel', 'operacional_ordem_transbordo', 'delete', 'painel_operacional_ordem_transbordo.delete', 'Excluir Ordem de Transbordo'),
   ('painel_operacional_estoque.view', 'painel', 'operacional_estoque', 'view', 'painel_operacional_estoque.view', 'Visualizar Estoque Operacional'),
+  ('painel_operacional_quitacao_ot.view', 'painel', 'operacional_quitacao_ot', 'view', 'painel_operacional_quitacao_ot.view', 'Visualizar Quitação OT'),
 
   -- Industrialização (keys existentes)
   ('home.view', 'industrializacao', 'home', 'view', 'home.view', 'Visualizar Home'),

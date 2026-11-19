@@ -610,6 +610,7 @@
       "painelLogisticaCarregamentos": "Carregamentos",
       "painelLogisticaRecebimento": "Recebimento",
       "painelOrdemTransbordo": "Ordem de Transbordo",
+      "painelQuitacaoOt": "Quitação OT",
       "painelEstoque": "Estoque",
       "painelConfiguracao": "Configuração",
       "painelOperadores": "Operadores",
@@ -765,6 +766,7 @@
       "logisticaRecebimento": "Recebimento",
       "operacional": "Operacional",
       "ordemTransbordo": "Ordem de Transbordo",
+      "quitacaoOt": "Quitação OT",
       "estoque": "Estoque",
       "usersAndPermissions": "Usuários e Permissões",
       "users": "Usuários",
@@ -1142,6 +1144,8 @@
         "kpis": {
           "total": "Total de carregamentos",
           "totalHint": "Operações concluídas no período",
+          "agendados": "agendados",
+          "encaixes": "encaixe",
           "pontuais": "Carregamentos pontuais",
           "atrasados": "Carregamentos com atraso",
           "intertank": "Atrasos Intertank",
@@ -1156,11 +1160,16 @@
           "intertank": "Responsabilidade Intertank",
           "cliente": "Responsabilidade cliente",
           "horasAtraso": "Total de horas de atraso",
-          "mediaAtraso": "Média por carregamento atrasado: {{value}}"
+          "mediaAtraso": "Média por carregamento atrasado: {{value}}",
+          "indicadorLogistica": "Indicador Logística",
+          "indicadorLogisticaHint": "100% − (atrasos Intertank ÷ agendados, exclui encaixes)"
         },
         "charts": {
           "monthly": "Carregamentos por mês",
           "monthlyHint": "Evolução anual · dentro e fora do horário",
+          "indicadorLogistica": "Indicador Logística por mês",
+          "indicadorLogisticaHint": "Evolução anual · % do indicador (exclui encaixes)",
+          "atrasoIntk": "Atraso INTK",
           "total": "Total",
           "dentro": "Dentro do horário",
           "fora": "Fora do horário",
@@ -2210,11 +2219,60 @@
           "emptyTitle": "Ordem de Transbordo",
           "emptyDescription": "Registre transbordos com origem granel, tanka, vasilhame ou embalado."
         },
+        "quitacaoOt": {
+          "title": "Quitação OT",
+          "subtitle": "Histórico consolidado de transbordos e produções finalizadas",
+          "emptyTitle": "Quitação OT",
+          "emptyDescription": "Consulta unificada das operações de transbordo e produção."
+        },
         "estoque": {
           "title": "Estoque",
           "subtitle": "Estoque atual consolidado da Industrialização e do Transbordo",
           "emptyTitle": "Estoque",
           "emptyDescription": "Estrutura inicial preparada para o controle de estoque operacional."
+        }
+      },
+      "quitacaoOt": {
+        "tableTitle": "Operações",
+        "tableCount": "{{count}} registro(s)",
+        "empty": "Nenhuma operação encontrada para os filtros informados.",
+        "view": "Visualizar",
+        "sortByDate": "Ordenar por data",
+        "loadErrorTitle": "Erro ao carregar Quitação OT",
+        "loadErrorDescription": "Não foi possível carregar as operações.",
+        "detailNotFound": "Registro não encontrado.",
+        "detailErrorTitle": "Erro ao abrir detalhes",
+        "detailErrorDescription": "Não foi possível carregar os detalhes da operação.",
+        "filters": {
+          "searchPlaceholder": "Buscar por produto, lote ou tanque…",
+          "client": "Cliente",
+          "clientPlaceholder": "Todos os clientes",
+          "allClients": "Todos os clientes",
+          "dateFrom": "Data inicial",
+          "dateTo": "Data final",
+          "clear": "Limpar filtros"
+        },
+        "columns": {
+          "id": "ID",
+          "operacao": "Operação",
+          "date": "Data",
+          "product": "Produto",
+          "client": "Cliente",
+          "volume": "Volume",
+          "operators": "Operadores",
+          "dePara": "DE → PARA",
+          "actions": "Ações"
+        },
+        "operacao": {
+          "industrializacao": "Industrialização",
+          "filtracao": "Filtração",
+          "convencional": "Convencional"
+        },
+        "badges": {
+          "transbordo": "Transbordo",
+          "producao": "Produção",
+          "transbordoInd": "Transbordo Industrialização",
+          "unknown": "Operação"
         }
       },
       "ordemTransbordo": {

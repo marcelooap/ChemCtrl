@@ -447,20 +447,28 @@ function buildDestinoLinhas(destino, composicao, densidade, isMassa) {
   }));
 }
 
+function isOrigemGranel(origem, entradas = []) {
+  if (isOrigemEmbalado(origem, entradas)) return false;
+  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
+  return !tipo || tipo === "entrada" || tipo === "granel";
+}
+
 function buildOrigemRows(
   transbordo,
   { isotanques, entradas, vasilhames, produtoNome, densOperacao }
 ) {
   const dens = densOperacao > 0 ? densOperacao : parseDensidade(transbordo?.densidade);
   const rows = [];
-  for (const o of transbordo?.origens || []) {
+  (transbordo?.origens || []).forEach((o, origemIndex) => {
     const origem = labelOrigemLinha(o, isotanques, entradas, vasilhames);
     const lotes = (o.lotes_retirados || []).filter((l) => (l.volume_retirado || 0) > 0);
     const produto = origemProdutoNome(o, produtoNome);
     const origemEmMassa = origemVolumeEmMassa(o, dens);
+    const granel = isOrigemGranel(o, entradas);
+    const entradaId = o?.entrada_id || null;
 
     if (lotes.length > 1) {
-      for (const l of lotes) {
+      lotes.forEach((l, groupIndex) => {
         const vol = l.volume_retirado || 0;
         const massa = origemEmMassa
           ? massaEmbaladoCanonico(vol, l.massa_retirada ?? o.massa_retirada, dens)
@@ -471,11 +479,17 @@ function buildOrigemRows(
           origem,
           produto,
           lote: l.lote || "-",
+          loteKey: String(l.lote || "").trim(),
           volume: volumeLitrosDisplay(vol, dens, origemEmMassa),
           massa: formatMass(massa, { empty: "-" }),
+          isGranel: granel,
+          origemIndex,
+          entradaId,
+          groupIndex,
+          groupSize: lotes.length,
         });
-      }
-      continue;
+      });
+      return;
     }
 
     const vol = o.volume_retirado || 0;
@@ -488,10 +502,16 @@ function buildOrigemRows(
       origem,
       produto,
       lote: o.lote || "-",
+      loteKey: String(o.lote || "").trim(),
       volume: volumeLitrosDisplay(vol, dens, origemEmMassa),
       massa: formatMass(massa, { empty: "-" }),
+      isGranel: granel,
+      origemIndex,
+      entradaId,
+      groupIndex: 0,
+      groupSize: 1,
     });
-  }
+  });
   return rows;
 }
 

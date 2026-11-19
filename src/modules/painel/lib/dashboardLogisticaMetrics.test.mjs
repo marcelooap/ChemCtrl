@@ -204,6 +204,56 @@ run('percentual de pontualidade', () => {
   assert(s.pontualidadePct === 25, `esperado 25%, obtido ${s.pontualidadePct}`);
 });
 
+run('agendados vs encaixe e indicador logística', () => {
+  const withEncaixe = [
+    ...rows,
+    {
+      ...base,
+      id: 8,
+      horario: 'encaixe',
+      hora_carregamento: '14:00',
+      placa: 'FFF6F66',
+    },
+    {
+      ...base,
+      id: 9,
+      horario: 'encaixe',
+      hora_carregamento: '15:00',
+      data_carregamento: '2026-03-11',
+      justificativa_atraso_responsavel: 'intertank',
+      justificativa_atraso_motivo: 'EMPILHADEIRA',
+      placa: 'GGG7G77',
+    },
+  ];
+  const groups = groupConcluidos(withEncaixe);
+  let agendados = 0;
+  let encaixes = 0;
+  let atrasosIntertankAgendados = 0;
+  for (const g of groups) {
+    const isEncaixe = g.horario === 'encaixe';
+    if (isEncaixe) encaixes += 1;
+    else agendados += 1;
+    if (
+      !isEncaixe &&
+      g.pontualidade === 'fora' &&
+      g.responsavelKey === 'intertank'
+    ) {
+      atrasosIntertankAgendados += 1;
+    }
+  }
+  assert(agendados === 4, `agendados esperado 4, obtido ${agendados}`);
+  assert(encaixes === 2, `encaixes esperado 2, obtido ${encaixes}`);
+  // 1 intertank agendado ÷ 4 agendados = 25% → indicador = 100 − 25 = 75%
+  assert(
+    atrasosIntertankAgendados === 1,
+    `intertank agendados esperado 1, obtido ${atrasosIntertankAgendados}`
+  );
+  assert(
+    Math.round((100 - pct(atrasosIntertankAgendados, agendados)) * 10) / 10 === 75,
+    'indicador logística esperado 75%'
+  );
+});
+
 if (failed > 0) {
   console.error(`\n${failed} teste(s) falharam`);
   process.exit(1);

@@ -18,6 +18,7 @@ import {
   Settings,
   Container,
   ArrowLeftRight,
+  ClipboardCheck,
   Warehouse,
 } from 'lucide-react';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
@@ -124,6 +125,11 @@ export default function MainLayout() {
             icon: Warehouse,
           },
         ],
+      },
+      {
+        path: '/painel/quitacao-ot',
+        label: t('painel.nav.quitacaoOt'),
+        icon: ClipboardCheck,
       },
     ];
 

@@ -21,6 +21,7 @@ const LogisticaCarregamentos = lazy(() => import('@painel/pages/logistica/Carreg
 const LogisticaRecebimento = lazy(() => import('@painel/pages/logistica/Recebimento'));
 const OrdemTransbordo = lazy(() => import('@painel/pages/operacional/OrdemTransbordo'));
 const OrdemTransbordoRelatorio = lazy(() => import('@painel/pages/operacional/OrdemTransbordoRelatorio'));
+const QuitacaoOT = lazy(() => import('@painel/pages/operacional/QuitacaoOT'));
 const OperacionalEstoque = lazy(() => import('@painel/pages/operacional/Estoque'));
 const ReservarMaterial = lazy(() => import('@painel/pages/comercial/ReservarMaterial'));
 const SolicitacoesSaida = lazy(() => import('@painel/pages/comercial/SolicitacoesSaida'));
@@ -97,6 +98,11 @@ export default function PainelRoutes() {
             <Route path="logistica/recebimento" element={<LogisticaRecebimento />} />
             <Route path="operacional/ordem-transbordo" element={<OrdemTransbordo />} />
             <Route path="operacional/estoque" element={<OperacionalEstoque />} />
+            <Route
+              path="operacional/quitacao-ot"
+              element={<Navigate to="/painel/quitacao-ot" replace />}
+            />
+            <Route path="quitacao-ot" element={<QuitacaoOT />} />
           </Route>
 
           <Route element={<AdminRoute />}>

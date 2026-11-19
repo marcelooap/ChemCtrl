@@ -17,6 +17,8 @@ import {
   Cell,
   LabelList,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -45,9 +47,21 @@ const COLORS = {
   cliente: '#2563eb',
   naoInformado: '#94a3b8',
   total: '#1d4ed8',
+  indicador: '#d97706',
 };
 
-function KpiCard({ title, value, subtitle, icon: Icon, color, tint, ring }) {
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  percent,
+  percentLabel,
+  breakdown,
+  icon: Icon,
+  color,
+  tint,
+  ring,
+}) {
   return (
     <div
       className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm"
@@ -66,11 +80,43 @@ function KpiCard({ title, value, subtitle, icon: Icon, color, tint, ring }) {
             <Icon style={{ color, width: 18, height: 18 }} />
           </div>
         </div>
-        <p className="text-[1.65rem] font-bold tracking-tight tabular-nums leading-none">
-          {value}
-        </p>
+        <div className="flex items-end gap-2.5 flex-wrap">
+          <p className="text-[1.65rem] font-bold tracking-tight tabular-nums leading-none">
+            {value}
+          </p>
+          {percent != null ? (
+            <span
+              className="inline-flex items-center rounded-lg px-2 py-1 text-sm font-bold tabular-nums leading-none"
+              style={{
+                color,
+                background: tint,
+                boxShadow: `inset 0 0 0 1px ${ring}`,
+              }}
+            >
+              {percent}
+            </span>
+          ) : null}
+        </div>
+        {percentLabel ? (
+          <p className="text-[11px] font-medium text-muted-foreground -mt-1.5">
+            {percentLabel}
+          </p>
+        ) : null}
+        {breakdown ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            {breakdown.map((item) => (
+              <span key={item.label} className="tabular-nums text-muted-foreground">
+                <span className="font-semibold text-foreground">{item.value}</span>
+                {' '}
+                {item.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {subtitle ? (
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <p className={`text-muted-foreground ${percent || breakdown ? 'text-[11px]' : 'text-xs'}`}>
+            {subtitle}
+          </p>
         ) : null}
       </div>
     </div>
@@ -116,7 +162,7 @@ function ChartTooltipBox({ title, rows }) {
   );
 }
 
-function MetricPill({ label, value, tone }) {
+function MetricPill({ label, value, tone, hint }) {
   const tones = {
     green: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     red: 'bg-red-50 text-red-800 border-red-200',
@@ -128,6 +174,9 @@ function MetricPill({ label, value, tone }) {
     <div className={`rounded-xl border px-4 py-3 ${tones[tone] || tones.slate}`}>
       <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{label}</p>
       <p className="text-xl font-bold tabular-nums mt-1">{value}</p>
+      {hint ? (
+        <p className="text-[11px] mt-1.5 opacity-70 leading-snug">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -158,10 +207,13 @@ export default function DashboardLogisticaView({ data, loading, error }) {
     atrasosIntertank: 0,
     atrasosCliente: 0,
     atrasosNaoInformado: 0,
+    agendados: 0,
+    encaixes: 0,
     pontualidadePct: 0,
     atrasoPct: 0,
     intertankPctOfAtrasos: 0,
     clientePctOfAtrasos: 0,
+    indicadorLogisticaPct: 0,
     horasAtrasoTotal: 0,
     mediaMinutosAtraso: 0,
   };
@@ -215,6 +267,9 @@ export default function DashboardLogisticaView({ data, loading, error }) {
   const motivosChartHeight = Math.max(220, motivosChartData.length * 42 + 48);
 
   const hasMonthly = (data?.monthly || []).some((m) => (m.total || 0) > 0);
+  const hasIndicadorMensal = (data?.monthlyIndicadorLogistica || []).some(
+    (m) => m.indicadorLogisticaPct != null
+  );
   const hasAtrasosMensais = (data?.monthlyAtrasos || []).some((m) => (m.total || 0) > 0);
 
   if (loading) {
@@ -243,6 +298,16 @@ export default function DashboardLogisticaView({ data, loading, error }) {
           title={t('painel.dashboard.logistics.kpis.total')}
           value={formatNum(totals.total, 0)}
           subtitle={t('painel.dashboard.logistics.kpis.totalHint')}
+          breakdown={[
+            {
+              value: formatNum(totals.agendados, 0),
+              label: t('painel.dashboard.logistics.kpis.agendados'),
+            },
+            {
+              value: formatNum(totals.encaixes, 0),
+              label: t('painel.dashboard.logistics.kpis.encaixes'),
+            },
+          ]}
           icon={Truck}
           color={COLORS.total}
           tint="rgba(29, 78, 216, 0.08)"
@@ -251,7 +316,8 @@ export default function DashboardLogisticaView({ data, loading, error }) {
         <KpiCard
           title={t('painel.dashboard.logistics.kpis.pontuais')}
           value={formatNum(totals.pontuais, 0)}
-          subtitle={`${formatPercent(totals.pontualidadePct)}% ${t('painel.dashboard.logistics.kpis.ofTotal')}`}
+          percent={`${formatPercent(totals.pontualidadePct)}%`}
+          percentLabel={t('painel.dashboard.logistics.kpis.ofTotal')}
           icon={CheckCircle2}
           color={COLORS.pontual}
           tint="rgba(5, 150, 105, 0.10)"
@@ -260,7 +326,8 @@ export default function DashboardLogisticaView({ data, loading, error }) {
         <KpiCard
           title={t('painel.dashboard.logistics.kpis.atrasados')}
           value={formatNum(totals.atrasados, 0)}
-          subtitle={`${formatPercent(totals.atrasoPct)}% ${t('painel.dashboard.logistics.kpis.ofTotal')}`}
+          percent={`${formatPercent(totals.atrasoPct)}%`}
+          percentLabel={t('painel.dashboard.logistics.kpis.ofTotal')}
           icon={AlertTriangle}
           color={COLORS.atraso}
           tint="rgba(220, 38, 38, 0.08)"
@@ -269,7 +336,8 @@ export default function DashboardLogisticaView({ data, loading, error }) {
         <KpiCard
           title={t('painel.dashboard.logistics.kpis.intertank')}
           value={formatNum(totals.atrasosIntertank, 0)}
-          subtitle={`${formatPercent(totals.intertankPctOfAtrasos)}% ${t('painel.dashboard.logistics.kpis.ofLate')}`}
+          percent={`${formatPercent(totals.intertankPctOfAtrasos)}%`}
+          percentLabel={t('painel.dashboard.logistics.kpis.ofLate')}
           icon={Building2}
           color={COLORS.intertank}
           tint="rgba(245, 158, 11, 0.10)"
@@ -278,7 +346,8 @@ export default function DashboardLogisticaView({ data, loading, error }) {
         <KpiCard
           title={t('painel.dashboard.logistics.kpis.cliente')}
           value={formatNum(totals.atrasosCliente, 0)}
-          subtitle={`${formatPercent(totals.clientePctOfAtrasos)}% ${t('painel.dashboard.logistics.kpis.ofLate')}`}
+          percent={`${formatPercent(totals.clientePctOfAtrasos)}%`}
+          percentLabel={t('painel.dashboard.logistics.kpis.ofLate')}
           icon={UserRound}
           color={COLORS.cliente}
           tint="rgba(37, 99, 235, 0.09)"
@@ -286,40 +355,100 @@ export default function DashboardLogisticaView({ data, loading, error }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-        <MetricPill
-          label={t('painel.dashboard.logistics.perf.pontualidade')}
-          value={`${formatPercent(totals.pontualidadePct)}%`}
-          tone="green"
-        />
-        <MetricPill
-          label={t('painel.dashboard.logistics.perf.atrasos')}
-          value={`${formatPercent(totals.atrasoPct)}%`}
-          tone="red"
-        />
-        <MetricPill
-          label={t('painel.dashboard.logistics.perf.intertank')}
-          value={`${formatPercent(totals.intertankPctOfAtrasos)}%`}
-          tone="amber"
-        />
-        <MetricPill
-          label={t('painel.dashboard.logistics.perf.cliente')}
-          value={`${formatPercent(totals.clientePctOfAtrasos)}%`}
-          tone="blue"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <MetricPill
           label={t('painel.dashboard.logistics.perf.horasAtraso')}
           value={`${formatNum(totals.horasAtrasoTotal, 1)} h`}
           tone="slate"
+          hint={
+            totals.atrasados > 0
+              ? t('painel.dashboard.logistics.perf.mediaAtraso', {
+                  value: formatAtrasoDuration(totals.mediaMinutosAtraso),
+                })
+              : null
+          }
+        />
+        <MetricPill
+          label={t('painel.dashboard.logistics.perf.indicadorLogistica')}
+          value={`${formatPercent(totals.indicadorLogisticaPct)}%`}
+          tone="amber"
+          hint={t('painel.dashboard.logistics.perf.indicadorLogisticaHint')}
         />
       </div>
-      {totals.atrasados > 0 ? (
-        <p className="text-xs text-muted-foreground -mt-3">
-          {t('painel.dashboard.logistics.perf.mediaAtraso', {
-            value: formatAtrasoDuration(totals.mediaMinutosAtraso),
-          })}
-        </p>
-      ) : null}
+
+      <ChartCard
+        title={t('painel.dashboard.logistics.charts.indicadorLogistica')}
+        subtitle={t('painel.dashboard.logistics.charts.indicadorLogisticaHint')}
+      >
+        {!hasIndicadorMensal ? (
+          <p className="text-sm text-muted-foreground text-center py-16">
+            {t('painel.dashboard.logistics.emptyYear')}
+          </p>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart
+              data={data.monthlyIndicadorLogistica}
+              margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid vertical={false} strokeDasharray="4 6" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="monthLabel"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+              />
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                unit="%"
+                axisLine={false}
+                tickLine={false}
+                width={48}
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+              />
+              <Tooltip
+                cursor={{ stroke: 'rgba(148,163,184,0.35)', strokeWidth: 1 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload;
+                  if (row?.indicadorLogisticaPct == null) return null;
+                  return (
+                    <ChartTooltipBox
+                      title={label}
+                      rows={[
+                        {
+                          label: t('painel.dashboard.logistics.perf.indicadorLogistica'),
+                          value: `${formatPercent(row.indicadorLogisticaPct)}%`,
+                          color: COLORS.indicador,
+                        },
+                        {
+                          label: t('painel.dashboard.logistics.kpis.agendados'),
+                          value: row.agendados,
+                        },
+                        {
+                          label: t('painel.dashboard.logistics.charts.atrasoIntk'),
+                          value: row.atrasosIntertankAgendados ?? 0,
+                          color: COLORS.intertank,
+                        },
+                      ]}
+                    />
+                  );
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="indicadorLogisticaPct"
+                name={t('painel.dashboard.logistics.perf.indicadorLogistica')}
+                stroke={COLORS.indicador}
+                strokeWidth={2.5}
+                dot={{ r: 4, fill: COLORS.indicador, strokeWidth: 0 }}
+                activeDot={{ r: 6 }}
+                connectNulls={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </ChartCard>
 
       <ChartCard
         title={t('painel.dashboard.logistics.charts.monthly')}

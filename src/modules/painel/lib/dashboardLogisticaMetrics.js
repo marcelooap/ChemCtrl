@@ -100,9 +100,13 @@ function emptyMonthBuckets() {
     fora: 0,
     total: 0,
     pontualidadePct: 0,
+    agendados: 0,
+    encaixes: 0,
     atrasosIntertank: 0,
+    atrasosIntertankAgendados: 0,
     atrasosCliente: 0,
     atrasosNaoInformado: 0,
+    indicadorLogisticaPct: null,
   }));
 }
 
@@ -141,18 +145,30 @@ function buildPeriodTotals(groups) {
   let atrasosIntertank = 0;
   let atrasosCliente = 0;
   let atrasosNaoInformado = 0;
+  let agendados = 0;
+  let encaixes = 0;
+  let atrasosIntertankAgendados = 0;
   let minutosAtraso = 0;
   let atrasosComTempo = 0;
 
   for (const g of groups) {
+    const isEncaixe = g.horario === ENCAIXE_HORARIO;
+    if (isEncaixe) encaixes += 1;
+    else agendados += 1;
+
     if (g.pontualidade === 'dentro') {
       pontuais += 1;
       continue;
     }
     atrasados += 1;
-    if (g.responsavel === 'intertank') atrasosIntertank += 1;
-    else if (g.responsavel === 'cliente') atrasosCliente += 1;
-    else atrasosNaoInformado += 1;
+    if (g.responsavel === 'intertank') {
+      atrasosIntertank += 1;
+      if (!isEncaixe) atrasosIntertankAgendados += 1;
+    } else if (g.responsavel === 'cliente') {
+      atrasosCliente += 1;
+    } else {
+      atrasosNaoInformado += 1;
+    }
 
     if (g.atrasoMinutos > 0) {
       minutosAtraso += g.atrasoMinutos;
@@ -168,11 +184,18 @@ function buildPeriodTotals(groups) {
     atrasosIntertank,
     atrasosCliente,
     atrasosNaoInformado,
+    agendados,
+    encaixes,
     pontualidadePct: pct(pontuais, total),
     atrasoPct: pct(atrasados, total),
     intertankPctOfAtrasos: pct(atrasosIntertank, atrasados),
     clientePctOfAtrasos: pct(atrasosCliente, atrasados),
     naoInformadoPctOfAtrasos: pct(atrasosNaoInformado, atrasados),
+    // 100% − (atrasos Intertank agendados ÷ total agendados, exclui encaixes)
+    indicadorLogisticaPct:
+      agendados > 0
+        ? Math.round((100 - pct(atrasosIntertankAgendados, agendados)) * 10) / 10
+        : 0,
     minutosAtrasoTotal: minutosAtraso,
     horasAtrasoTotal: Math.round((minutosAtraso / 60) * 10) / 10,
     mediaMinutosAtraso:
@@ -189,18 +212,31 @@ function buildMonthlySeries(groups, year) {
     if (!parts || parts.year !== year) continue;
     const b = buckets[parts.month];
     if (!b) continue;
+    const isEncaixe = g.horario === ENCAIXE_HORARIO;
     b.total += 1;
+    if (isEncaixe) b.encaixes += 1;
+    else b.agendados += 1;
+
     if (g.pontualidade === 'dentro') b.dentro += 1;
     else {
       b.fora += 1;
-      if (g.responsavel === 'intertank') b.atrasosIntertank += 1;
-      else if (g.responsavel === 'cliente') b.atrasosCliente += 1;
-      else b.atrasosNaoInformado += 1;
+      if (g.responsavel === 'intertank') {
+        b.atrasosIntertank += 1;
+        if (!isEncaixe) b.atrasosIntertankAgendados += 1;
+      } else if (g.responsavel === 'cliente') {
+        b.atrasosCliente += 1;
+      } else {
+        b.atrasosNaoInformado += 1;
+      }
     }
   }
   return buckets.map((b) => ({
     ...b,
     pontualidadePct: pct(b.dentro, b.total),
+    indicadorLogisticaPct:
+      b.agendados > 0
+        ? Math.round((100 - pct(b.atrasosIntertankAgendados, b.agendados)) * 10) / 10
+        : null,
   }));
 }
 
@@ -381,6 +417,13 @@ export function computePainelLogisticaDashboard(
     totals,
     previousComparison,
     monthly,
+    monthlyIndicadorLogistica: monthly.map((m) => ({
+      monthIndex: m.monthIndex,
+      monthLabel: m.monthLabel,
+      indicadorLogisticaPct: m.indicadorLogisticaPct,
+      agendados: m.agendados,
+      atrasosIntertankAgendados: m.atrasosIntertankAgendados,
+    })),
     monthlyAtrasos: monthly.map((m) => ({
       monthIndex: m.monthIndex,
       monthLabel: m.monthLabel,

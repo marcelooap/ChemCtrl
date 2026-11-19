@@ -610,6 +610,7 @@
       "painelLogisticaCarregamentos": "Loadings",
       "painelLogisticaRecebimento": "Receiving",
       "painelOrdemTransbordo": "Transshipment Order",
+      "painelQuitacaoOt": "OT Clearance",
       "painelEstoque": "Inventory",
       "painelConfiguracao": "Settings",
       "painelOperadores": "Operators",
@@ -765,6 +766,7 @@
       "logisticaRecebimento": "Receiving",
       "operacional": "Operations",
       "ordemTransbordo": "Transshipment Order",
+      "quitacaoOt": "OT Clearance",
       "estoque": "Inventory",
       "usersAndPermissions": "Users and Permissions",
       "users": "Users",
@@ -1142,6 +1144,8 @@
         "kpis": {
           "total": "Total loadings",
           "totalHint": "Completed operations in the period",
+          "agendados": "scheduled",
+          "encaixes": "fit-in",
           "pontuais": "On-time loadings",
           "atrasados": "Delayed loadings",
           "intertank": "Intertank delays",
@@ -1156,11 +1160,16 @@
           "intertank": "Intertank responsibility",
           "cliente": "Customer responsibility",
           "horasAtraso": "Total delay hours",
-          "mediaAtraso": "Average per delayed loading: {{value}}"
+          "mediaAtraso": "Average per delayed loading: {{value}}",
+          "indicadorLogistica": "Logistics Indicator",
+          "indicadorLogisticaHint": "100% − (Intertank delays ÷ scheduled, excludes fit-ins)"
         },
         "charts": {
           "monthly": "Loadings by month",
           "monthlyHint": "Annual trend · on time and late",
+          "indicadorLogistica": "Logistics Indicator by month",
+          "indicadorLogisticaHint": "Annual trend · indicator % (excludes fit-ins)",
+          "atrasoIntk": "INTK delay",
           "total": "Total",
           "dentro": "On time",
           "fora": "Late",
@@ -2210,11 +2219,60 @@
           "emptyTitle": "Transshipment Order",
           "emptyDescription": "Register transshipments from bulk, tank, IBC or packed origin."
         },
+        "quitacaoOt": {
+          "title": "OT Clearance",
+          "subtitle": "Consolidated history of transfers and finished productions",
+          "emptyTitle": "OT Clearance",
+          "emptyDescription": "Unified lookup of transfer and production operations."
+        },
         "estoque": {
           "title": "Inventory",
           "subtitle": "Operational inventory overview",
           "emptyTitle": "Inventory",
           "emptyDescription": "Initial structure prepared for operational inventory control."
+        }
+      },
+      "quitacaoOt": {
+        "tableTitle": "Operations",
+        "tableCount": "{{count}} record(s)",
+        "empty": "No operations found for the selected filters.",
+        "view": "View",
+        "sortByDate": "Sort by date",
+        "loadErrorTitle": "Failed to load OT Clearance",
+        "loadErrorDescription": "Could not load operations.",
+        "detailNotFound": "Record not found.",
+        "detailErrorTitle": "Failed to open details",
+        "detailErrorDescription": "Could not load operation details.",
+        "filters": {
+          "searchPlaceholder": "Search by product, lot or tank…",
+          "client": "Client",
+          "clientPlaceholder": "All clients",
+          "allClients": "All clients",
+          "dateFrom": "Start date",
+          "dateTo": "End date",
+          "clear": "Clear filters"
+        },
+        "columns": {
+          "id": "ID",
+          "operacao": "Operation",
+          "date": "Date",
+          "product": "Product",
+          "client": "Client",
+          "volume": "Volume",
+          "operators": "Operators",
+          "dePara": "FROM → TO",
+          "actions": "Actions"
+        },
+        "operacao": {
+          "industrializacao": "Industrialization",
+          "filtracao": "Filtration",
+          "convencional": "Conventional"
+        },
+        "badges": {
+          "transbordo": "Transfer",
+          "producao": "Production",
+          "transbordoInd": "Industrialization Transfer",
+          "unknown": "Operation"
         }
       },
       "ordemTransbordo": {

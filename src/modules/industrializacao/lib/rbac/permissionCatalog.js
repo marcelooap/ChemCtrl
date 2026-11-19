@@ -683,6 +683,18 @@ export const permissionModules = [
         actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
       },
       {
+        id: 'painel_operacional_quitacao_ot',
+        labelKey: 'rbac.resources.painelQuitacaoOt',
+        icon: 'ClipboardCheck',
+        route: '/painel/quitacao-ot',
+        routePrefixes: ['/painel/quitacao-ot', '/painel/operacional/quitacao-ot'],
+        nav: {
+          showInSidebar: true,
+          order: 7,
+        },
+        actions: [{ key: 'view', labelKey: 'rbac.actions.view' }],
+      },
+      {
         id: 'painel_configuracao',
         labelKey: 'rbac.resources.painelConfiguracao',
         icon: 'Settings',
@@ -1277,6 +1289,7 @@ function mapResourceToSidebarLabel(resourceId) {
     painel_logistica_carregamentos: 'painel.nav.logisticaCarregamentos',
     painel_logistica_recebimento: 'painel.nav.logisticaRecebimento',
     painel_operacional_ordem_transbordo: 'painel.nav.ordemTransbordo',
+    painel_operacional_quitacao_ot: 'painel.nav.quitacaoOt',
     painel_operacional_estoque: 'painel.nav.estoque',
     painel_configuracao: 'painel.nav.configuracao',
     painel_config_operadores: 'painel.nav.operadores',

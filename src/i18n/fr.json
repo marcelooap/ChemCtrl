@@ -558,6 +558,7 @@
       "painelLogisticaCarregamentos": "Chargements",
       "painelLogisticaRecebimento": "Réception",
       "painelOrdemTransbordo": "Ordre de transbordement",
+      "painelQuitacaoOt": "Quittance OT",
       "painelEstoque": "Stock",
       "painelConfiguracao": "Configuration",
       "painelOperadores": "Opérateurs",
@@ -710,6 +711,7 @@
       "logisticaRecebimento": "Réception",
       "operacional": "Opérationnel",
       "ordemTransbordo": "Ordre de transbordement",
+      "quitacaoOt": "Quittance OT",
       "estoque": "Stock",
       "usersAndPermissions": "Utilisateurs et Permissions",
       "users": "Utilisateurs",
@@ -1624,11 +1626,60 @@
           "emptyTitle": "Ordre de transbordement",
           "emptyDescription": "Enregistrez des transbordements depuis vrac, cuve, conteneur ou emballé."
         },
+        "quitacaoOt": {
+          "title": "Quittance OT",
+          "subtitle": "Historique consolidé des transbordements et productions terminées",
+          "emptyTitle": "Quittance OT",
+          "emptyDescription": "Consultation unifiée des opérations de transbordement et de production."
+        },
         "estoque": {
           "title": "Stock",
           "subtitle": "Vue du stock opérationnel",
           "emptyTitle": "Stock",
           "emptyDescription": "Structure initiale préparée pour le contrôle du stock opérationnel."
+        }
+      },
+      "quitacaoOt": {
+        "tableTitle": "Opérations",
+        "tableCount": "{{count}} enregistrement(s)",
+        "empty": "Aucune opération trouvée pour les filtres sélectionnés.",
+        "view": "Afficher",
+        "sortByDate": "Trier par date",
+        "loadErrorTitle": "Erreur de chargement Quittance OT",
+        "loadErrorDescription": "Impossible de charger les opérations.",
+        "detailNotFound": "Enregistrement introuvable.",
+        "detailErrorTitle": "Erreur d'ouverture des détails",
+        "detailErrorDescription": "Impossible de charger les détails de l'opération.",
+        "filters": {
+          "searchPlaceholder": "Rechercher par produit, lot ou cuve…",
+          "client": "Client",
+          "clientPlaceholder": "Tous les clients",
+          "allClients": "Tous les clients",
+          "dateFrom": "Date de début",
+          "dateTo": "Date de fin",
+          "clear": "Effacer les filtres"
+        },
+        "columns": {
+          "id": "ID",
+          "operacao": "Opération",
+          "date": "Date",
+          "product": "Produit",
+          "client": "Client",
+          "volume": "Volume",
+          "operators": "Opérateurs",
+          "dePara": "DE → VERS",
+          "actions": "Actions"
+        },
+        "operacao": {
+          "industrializacao": "Industrialisation",
+          "filtracao": "Filtration",
+          "convencional": "Conventionnel"
+        },
+        "badges": {
+          "transbordo": "Transbordement",
+          "producao": "Production",
+          "transbordoInd": "Transbordement Industrialisation",
+          "unknown": "Opération"
         }
       },
       "ordemTransbordo": {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -16,9 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@shared/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@shared/components/ui/radio-group";
 import { useToast } from "@shared/components/ui/use-toast";
 import EtiquetaPreview from "@painel/components/configuracao/EtiquetaPreview";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+import { fmtNumber } from "@/i18n/formatters";
 import {
   resolveEtiquetaPrintConfig,
   resolveResponsavelTecnico,
@@ -32,14 +34,54 @@ import {
   withEntradaEtiquetaCampos,
 } from "@transbordo/lib/entradaEtiqueta";
 
-export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, entradaCodigo }) {
+/** Opções de embalagem para etiqueta de origem granel no transbordo. */
+export const EMBALAGEM_ORIGEM_GRANEL_OPTIONS = [
+  "ORIGEM SUPERIOR",
+  "ORIGEM INFERIOR",
+];
+
+function resolveInitialLoteIndex(lotes, initialLote) {
+  const key = String(initialLote || "").trim().toLowerCase();
+  if (!key || !lotes.length) return 0;
+  const found = lotes.findIndex(
+    (item) => String(item?.lote || "").trim().toLowerCase() === key
+  );
+  return found >= 0 ? found : 0;
+}
+
+export default function EntradaEtiquetaDialog({
+  open,
+  onOpenChange,
+  entrada,
+  entradaCodigo,
+  /** Pré-seleciona o lote (ex.: lote da origem do transbordo). */
+  initialLote = "",
+  /**
+   * Quando informado, substitui o campo embalagem da etiqueta por um select
+   * (ex.: ORIGEM SUPERIOR / ORIGEM INFERIOR no print de granel no OP).
+   */
+  embalagemOptions = null,
+}) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const lotes = entrada ? getEntradaLotes(entrada) : [];
-  const sessionKey = open && entrada ? String(entrada.id || "") : "";
+  const hasEmbalagemChoices =
+    Array.isArray(embalagemOptions) && embalagemOptions.length > 0;
+  const embalagemChoices = hasEmbalagemChoices
+    ? embalagemOptions.map((opt) => String(opt || "").trim()).filter(Boolean)
+    : [];
+  const sessionKey =
+    open && entrada
+      ? `${entrada.id || ""}|${String(initialLote || "").trim()}|${embalagemChoices.join(",")}`
+      : "";
+
   const [formSession, setFormSession] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [qty, setQty] = useState(1);
+  const [volumeOverride, setVolumeOverride] = useState(null);
+  const [embalagemChoice, setEmbalagemChoice] = useState(
+    embalagemChoices[0] || ""
+  );
   const [printing, setPrinting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [printConfig, setPrintConfig] = useState(null);
@@ -49,8 +91,10 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
 
   if (sessionKey !== formSession) {
     setFormSession(sessionKey);
-    setSelectedIndex(0);
+    setSelectedIndex(resolveInitialLoteIndex(lotes, initialLote));
     setQty(1);
+    setVolumeOverride(null);
+    setEmbalagemChoice(embalagemChoices[0] || "");
     setPrintConfig(null);
     setPublicToken("");
     setResponsavelTecnico("");
@@ -63,8 +107,30 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
   const multiple = lotes.length > 1;
   const qtyOk = Number.isFinite(Number(qty)) && Number(qty) >= 1;
 
-  const model = lote
-    ? buildEntradaEtiquetaModel(entrada, lote, { entradaCodigo })
+  const baseModel = useMemo(
+    () =>
+      lote
+        ? buildEntradaEtiquetaModel(entrada, lote, { entradaCodigo })
+        : null,
+    [entrada, lote, entradaCodigo]
+  );
+
+  const seedVolume =
+    baseModel?.volumeLitros != null && Number(baseModel.volumeLitros) > 0
+      ? Math.round(Number(baseModel.volumeLitros))
+      : "";
+  const volume = volumeOverride !== null ? volumeOverride : seedVolume;
+  const volumeOk = Number(volume) > 0;
+  const embalagemOk = !hasEmbalagemChoices || Boolean(String(embalagemChoice || "").trim());
+
+  const model = baseModel
+    ? {
+        ...baseModel,
+        volumeLitros: volumeOk ? Number(volume) : baseModel.volumeLitros,
+        embalagem: hasEmbalagemChoices
+          ? String(embalagemChoice || "").trim() || "—"
+          : baseModel.embalagem,
+      }
     : null;
 
   const etiquetaCampos = printConfig?.campos
@@ -115,7 +181,15 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
   }, [open, entrada?.id, entrada?.cliente_id, entrada?.cliente_nome, entrada?.public_token, t]);
 
   const handlePrint = async () => {
-    if (!model || !qtyOk || !publicToken) return;
+    if (!model || !qtyOk || !publicToken || !embalagemOk) return;
+    if (hasEmbalagemChoices && !volumeOk) {
+      toast({
+        title: t("containers.vasilhames.validationTitle"),
+        description: t("containers.vasilhames.printLabelVolumeRequired"),
+        variant: "destructive",
+      });
+      return;
+    }
     setPrinting(true);
     try {
       await printEntradaEtiqueta(model, {
@@ -158,6 +232,15 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
       }
     : null;
 
+  const canPrint =
+    !printing &&
+    !loading &&
+    qtyOk &&
+    !!model &&
+    !!publicToken &&
+    embalagemOk &&
+    (!hasEmbalagemChoices || volumeOk);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-[760px] flex-col overflow-hidden">
@@ -166,7 +249,7 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
         </DialogHeader>
 
         {model && (
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
             {loading && !printConfig ? (
               <div className="flex items-center justify-center h-[220px] text-muted-foreground">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -206,7 +289,10 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
                 </label>
                 <Select
                   value={String(loteIndex)}
-                  onValueChange={(value) => setSelectedIndex(Number(value))}
+                  onValueChange={(value) => {
+                    setSelectedIndex(Number(value));
+                    setVolumeOverride(null);
+                  }}
                 >
                   <SelectTrigger id="entrada-etiqueta-lote" className="bg-white">
                     <SelectValue />
@@ -225,25 +311,122 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
               </div>
             )}
 
-            <div className="max-w-xs">
-              <label
-                htmlFor="entrada-etiqueta-qty"
-                className="text-xs font-medium text-muted-foreground mb-1 block"
-              >
-                {t("containers.vasilhames.printLabelQty")} *
-              </label>
-              <NumberInputBr
-                id="entrada-etiqueta-qty"
-                value={qty}
-                onChange={(value) =>
-                  setQty(value === "" ? "" : Math.max(1, Math.round(Number(value) || 1)))
-                }
-                decimals={0}
-                min={1}
-                placeholder="1"
-                aria-label={t("containers.vasilhames.printLabelQty")}
-              />
+            <div
+              className={`grid grid-cols-1 gap-4 ${
+                hasEmbalagemChoices ? "sm:grid-cols-2" : ""
+              }`}
+            >
+              {hasEmbalagemChoices ? (
+                <div>
+                  <label
+                    htmlFor="entrada-etiqueta-volume"
+                    className="text-xs font-medium text-muted-foreground mb-1 block"
+                  >
+                    {t("containers.fields.volume")} (L) *
+                  </label>
+                  <NumberInputBr
+                    id="entrada-etiqueta-volume"
+                    key={`vol-${sessionKey}-${seedVolume || "empty"}`}
+                    value={volume}
+                    onChange={setVolumeOverride}
+                    decimals={0}
+                    min={0}
+                    placeholder="0"
+                    aria-label={t("containers.fields.volume")}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("containers.vasilhames.printLabelVolumeHintTank")}
+                  </p>
+                </div>
+              ) : null}
+              <div className={hasEmbalagemChoices ? "" : "max-w-xs"}>
+                <label
+                  htmlFor="entrada-etiqueta-qty"
+                  className="text-xs font-medium text-muted-foreground mb-1 block"
+                >
+                  {t("containers.vasilhames.printLabelQty")} *
+                </label>
+                <NumberInputBr
+                  id="entrada-etiqueta-qty"
+                  value={qty}
+                  onChange={(value) =>
+                    setQty(value === "" ? "" : Math.max(1, Math.round(Number(value) || 1)))
+                  }
+                  decimals={0}
+                  min={1}
+                  placeholder="1"
+                  aria-label={t("containers.vasilhames.printLabelQty")}
+                />
+              </div>
             </div>
+
+            {hasEmbalagemChoices ? (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">
+                    {t("containers.fields.netWeight")}
+                  </p>
+                  <p className="font-semibold text-green-700">
+                    {model.netWeight != null
+                      ? `${fmtNumber(
+                          Math.round(Number(model.netWeight)),
+                          { minimumFractionDigits: 0, maximumFractionDigits: 0 },
+                          i18n.language
+                        )} kg`
+                      : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">
+                    {t("containers.fields.grossWeight")}
+                  </p>
+                  <p className="font-semibold">
+                    {model.grossWeight != null
+                      ? `${fmtNumber(
+                          Math.round(Number(model.grossWeight)),
+                          { minimumFractionDigits: 0, maximumFractionDigits: 0 },
+                          i18n.language
+                        )} kg`
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {hasEmbalagemChoices ? (
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-3">
+                <div className="text-xs font-medium text-muted-foreground mb-2">
+                  {t("containers.vasilhames.printLabelEmbalagem")} *
+                </div>
+                <RadioGroup
+                  value={embalagemChoice || embalagemChoices[0] || ""}
+                  onValueChange={setEmbalagemChoice}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                >
+                  {embalagemChoices.map((opt) => {
+                    const selected = embalagemChoice === opt;
+                    const id = `entrada-etiqueta-embalagem-${opt.replace(/\s+/g, "-").toLowerCase()}`;
+                    return (
+                      <label
+                        key={opt}
+                        htmlFor={id}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "border-border bg-card hover:bg-muted/40"
+                        }`}
+                      >
+                        <RadioGroupItem value={opt} id={id} />
+                        <span className="text-sm font-medium">{opt}</span>
+                      </label>
+                    );
+                  })}
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Informação impressa no campo embalagem da etiqueta.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -253,7 +436,7 @@ export default function EntradaEtiquetaDialog({ open, onOpenChange, entrada, ent
           </Button>
           <Button
             onClick={handlePrint}
-            disabled={printing || loading || !qtyOk || !model || !publicToken}
+            disabled={!canPrint}
             className="text-white"
             style={{ background: "#2575D1" }}
           >

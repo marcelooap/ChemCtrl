@@ -558,6 +558,7 @@
       "painelLogisticaCarregamentos": "Cargamentos",
       "painelLogisticaRecebimento": "Recepción",
       "painelOrdemTransbordo": "Orden de Transbordo",
+      "painelQuitacaoOt": "Liquidación OT",
       "painelEstoque": "Stock",
       "painelConfiguracao": "Configuración",
       "painelOperadores": "Operadores",
@@ -710,6 +711,7 @@
       "logisticaRecebimento": "Recepción",
       "operacional": "Operacional",
       "ordemTransbordo": "Orden de Transbordo",
+      "quitacaoOt": "Liquidación OT",
       "estoque": "Stock",
       "usersAndPermissions": "Usuarios y Permisos",
       "users": "Usuarios",
@@ -1624,11 +1626,60 @@
           "emptyTitle": "Orden de Transbordo",
           "emptyDescription": "Registre transbordos con origen granel, tanque, envase o embalado."
         },
+        "quitacaoOt": {
+          "title": "Liquidación OT",
+          "subtitle": "Historial consolidado de transbordos y producciones finalizadas",
+          "emptyTitle": "Liquidación OT",
+          "emptyDescription": "Consulta unificada de operaciones de transbordo y producción."
+        },
         "estoque": {
           "title": "Stock",
           "subtitle": "Visión del stock operacional",
           "emptyTitle": "Stock",
           "emptyDescription": "Estructura inicial preparada para el control de stock operacional."
+        }
+      },
+      "quitacaoOt": {
+        "tableTitle": "Operaciones",
+        "tableCount": "{{count}} registro(s)",
+        "empty": "No se encontraron operaciones para los filtros informados.",
+        "view": "Visualizar",
+        "sortByDate": "Ordenar por fecha",
+        "loadErrorTitle": "Error al cargar Liquidación OT",
+        "loadErrorDescription": "No fue posible cargar las operaciones.",
+        "detailNotFound": "Registro no encontrado.",
+        "detailErrorTitle": "Error al abrir detalles",
+        "detailErrorDescription": "No fue posible cargar los detalles de la operación.",
+        "filters": {
+          "searchPlaceholder": "Buscar por producto, lote o tanque…",
+          "client": "Cliente",
+          "clientPlaceholder": "Todos los clientes",
+          "allClients": "Todos los clientes",
+          "dateFrom": "Fecha inicial",
+          "dateTo": "Fecha final",
+          "clear": "Limpiar filtros"
+        },
+        "columns": {
+          "id": "ID",
+          "operacao": "Operación",
+          "date": "Fecha",
+          "product": "Producto",
+          "client": "Cliente",
+          "volume": "Volumen",
+          "operators": "Operadores",
+          "dePara": "DE → PARA",
+          "actions": "Acciones"
+        },
+        "operacao": {
+          "industrializacao": "Industrialización",
+          "filtracao": "Filtración",
+          "convencional": "Convencional"
+        },
+        "badges": {
+          "transbordo": "Transbordo",
+          "producao": "Producción",
+          "transbordoInd": "Transbordo Industrialización",
+          "unknown": "Operación"
         }
       },
       "ordemTransbordo": {
