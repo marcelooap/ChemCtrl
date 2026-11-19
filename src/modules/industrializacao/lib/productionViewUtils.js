@@ -1,6 +1,15 @@
 import { getLatestRecipeForProduct } from '@industrializacao/lib/recipeRevisions';
-import { formatOriginalAggregatedLabel, isUnitPackagingLike } from '@industrializacao/lib/packagingTypes';
-import { originsOfContainer, originMergeKey, recordBelongsToProduction } from '@industrializacao/lib/containerOrigins';
+import {
+  formatOriginalAggregatedLabel,
+  isUnitPackagingLike,
+  PACKAGING_TYPES,
+} from '@industrializacao/lib/packagingTypes';
+import {
+  originsOfContainer,
+  originMergeKey,
+  packagingRowsForProduction,
+  recordBelongsToProduction,
+} from '@industrializacao/lib/containerOrigins';
 
 export const parseArr = (val) => {
   if (!val) return [];
@@ -161,6 +170,94 @@ export const uniqueContainersFromPackagingRows = (rows) => {
   }
   return list;
 };
+
+/** True when the value is only a packaging type name (e.g. "Contentor"), not a plate. */
+export function isBarePackagingTypeName(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (!v) return true;
+  if (PACKAGING_TYPES.some((pt) => pt.toLowerCase() === v)) return true;
+  return v === 'contentores' || v === 'contenedores' || v === 'containers' || v === 'conteneurs';
+}
+
+/**
+ * Vasilhames físicos envasados na OP (exclui destinos de transbordo TB*).
+ * Preferência: origens → lote → production_id / op_number / complemento.
+ */
+export function resolveProductionEnvaseContainers(containers, origins, production) {
+  if (!production) return [];
+
+  const notTransferDest = (c) => !isTransferDestinationContainer(c);
+
+  const fromRows = uniqueContainersFromPackagingRows(
+    packagingRowsForProduction(containers, origins, production),
+  ).filter(notTransferDest);
+  if (fromRows.length > 0) return fromRows;
+
+  const fromLot = containersOfProductionLot(containers, production).filter(notTransferDest);
+  if (fromLot.length > 0) return fromLot;
+
+  const list = [];
+  const seen = new Set();
+  for (const c of containers || []) {
+    if (!c?.id || seen.has(c.id) || !notTransferDest(c)) continue;
+    const byId = production.id && c.production_id === production.id;
+    const byOp = production.op_number && c.op_number === production.op_number;
+    const byComplement = production.complement_container_id && c.id === production.complement_container_id;
+    if (!byId && !byOp && !byComplement) continue;
+    seen.add(c.id);
+    list.push(c);
+  }
+  return list;
+}
+
+function formatMultiTankPackagingLabel(opContainers, t) {
+  const count = String(opContainers.length).padStart(2, '0');
+  const types = [...new Set(opContainers.map((c) => String(c.type || '').trim()).filter(Boolean))];
+  if (types.length === 1 && types[0] === 'Contentor') {
+    return t('production.packaging.countContentors', { count });
+  }
+  if (types.length === 1 && types[0] === 'Tankagem') {
+    return t('production.packaging.countTanks', { count });
+  }
+  return t('production.packaging.loadUnits', { count });
+}
+
+/**
+ * Coluna Embalagem da lista de Produções:
+ * - 1 tanque (Contentor/Tankagem) → número da embalagem (placa)
+ * - N tanques → "03 x contentores" (ou equivalente)
+ * - IBC/Tambor agregado → rótulo original ("05 x IBC…")
+ */
+export function formatProductionListPackagingLabel(production, containers, origins, t) {
+  const na = typeof t === 'function' ? t('common.notAvailable') : '—';
+  const opContainers = resolveProductionEnvaseContainers(containers, origins, production);
+
+  if (opContainers.length === 0) {
+    const fallback = production?.packaging_info || production?.packaging_type || '';
+    return fallback || na;
+  }
+
+  if (opContainers.length === 1) {
+    const c = opContainers[0];
+    if (isUnitPackagingLike(c.type, c.container_number)) {
+      return formatContainerPackagingForProduction(c, production, origins) || c.container_number || na;
+    }
+
+    // Contentor/Tankagem: número da embalagem (barril) tem prioridade sobre a placa ISO.
+    const barril = String(c.barril_number || '').trim();
+    if (barril && !/^[-–—]+$/.test(barril) && !isBarePackagingTypeName(barril)) return barril;
+
+    const plate = String(c.container_number || '').trim();
+    if (plate && !isBarePackagingTypeName(plate)) return plate;
+
+    const info = String(production?.packaging_info || '').trim();
+    if (info && !isBarePackagingTypeName(info)) return info;
+
+    return plate || na;
+  }
+
+  return formatMultiTankPackagingLabel(opContainers, t);
+}
 
 /**
  * Vasilhames vinculados ao lote da OP (inclui destinos de transbordo).

@@ -2714,6 +2714,8 @@
     "packaging": {
       "title": "Packaged Containers",
       "loadUnits": "{{count}} x Load Units",
+      "countContentors": "{{count}} x containers",
+      "countTanks": "{{count}} x tanks",
       "containerNumber": "Container No.",
       "volume": "Volume (L)",
       "netWeight": "Net Weight (kg)",

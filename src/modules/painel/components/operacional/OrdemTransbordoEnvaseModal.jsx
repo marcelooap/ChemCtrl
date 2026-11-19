@@ -160,6 +160,13 @@ export default function OrdemTransbordoEnvaseModal({
   const qtyRaw = Number(quantidade) || 0;
   const tipoOrigem = origemTipoOperacional || "entrada";
 
+  // Pesagem fora da margem: massa operacional = peso líquido informado (exato),
+  // sem reconstituir via L × densidade (evita 19.000 → 23.990 L → 19.000,08 kg).
+  const massaPesagemForaMargemKg =
+    granelPayload?.granel_margem === "fora"
+      ? Number(granelPayload.granel_peso_liquido) || 0
+      : 0;
+
   const qtyConverted = useMemo(() => {
     if (!(dens > 0) || !(qtyRaw > 0)) return null;
     if (unitNorm === "kg") {
@@ -171,7 +178,10 @@ export default function OrdemTransbordoEnvaseModal({
     }
     if (unitNorm === "L") {
       return {
-        value: roundMass(qtyRaw * dens),
+        value:
+          massaPesagemForaMargemKg > 0
+            ? roundMass(massaPesagemForaMargemKg)
+            : roundMass(qtyRaw * dens),
         unit: "kg",
         labelKey: "painel.operacional.ordemTransbordo.envaseModal.convertedToKg",
       };
@@ -195,13 +205,16 @@ export default function OrdemTransbordoEnvaseModal({
         densidade: dens,
       });
       return {
-        value: roundMass(litros * dens),
+        value:
+          massaPesagemForaMargemKg > 0
+            ? roundMass(massaPesagemForaMargemKg)
+            : roundMass(litros * dens),
         unit: "kg",
         labelKey: "painel.operacional.ordemTransbordo.envaseModal.convertedToKg",
       };
     }
     return null;
-  }, [dens, qtyRaw, unitNorm]);
+  }, [dens, qtyRaw, unitNorm, massaPesagemForaMargemKg]);
 
   /** Origens com tanka+lote (exibição/edição), inclusive qty zerada. */
   const tankaOrigensExibidas = useMemo(
@@ -595,7 +608,12 @@ export default function OrdemTransbordoEnvaseModal({
           lote: loteEfetivo,
           unidade_medida: umEstoque,
           volume_retirado: volumeRegistradoL,
-          massa_retirada: dens > 0 ? roundMass(volumeRegistradoL * dens) : 0,
+          massa_retirada:
+            massaPesagemForaMargemKg > 0
+              ? roundMass(massaPesagemForaMargemKg)
+              : dens > 0
+                ? roundMass(volumeRegistradoL * dens)
+                : 0,
           saldo_restante: 0,
           saldo_disponivel: volumeRegistradoL,
           embalado: isEmbalado,
@@ -711,7 +729,9 @@ export default function OrdemTransbordoEnvaseModal({
           ? roundMass(
               origensNorm.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0)
             )
-          : roundMass(volumeRegistradoL * dens)
+          : massaPesagemForaMargemKg > 0
+            ? roundMass(massaPesagemForaMargemKg)
+            : roundMass(volumeRegistradoL * dens)
         : 0;
 
     return {
@@ -860,8 +880,8 @@ export default function OrdemTransbordoEnvaseModal({
                 ) : (
                   <p className="text-sm font-semibold tabular-nums text-foreground py-2">
                     {unitNorm === "L"
-                      ? `${formatVolume(volumeRegistradoL || qtyRaw)} L`
-                      : `${formatNum(volumeRegistradoL || qtyRaw)} ${unidade || ""}`}
+                      ? `${formatVolume(qtyRaw || volumeRegistradoL)} L`
+                      : `${formatNum(qtyRaw)} ${unidade || ""}`}
                   </p>
                 )}
               </div>

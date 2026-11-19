@@ -27,10 +27,11 @@ export const LIST_PROJECTIONS = {
   // raw_materials_used é necessário na lista: visualizar e cancelar OP usam o
   // registro da listagem; sem ele as MPs somem e o estoque não é devolvido.
   // volume_apontado/volume_pendente: necessários para isComplementPending (badge + ícone PackagePlus).
-  Production: 'id,created_date,updated_date,op_number,product,client,lot,status,volume,density,mass,order_id,client_order,recipe_id,recipe_revision,end_time,invoiced,fractional_supply,complement_status,volume_apontado,volume_pendente,packaging_type,packaging_info,unit_price,total_value,raw_materials_used,public_token',
+  Production: 'id,created_date,updated_date,op_number,product,client,lot,status,volume,density,mass,order_id,client_order,recipe_id,recipe_revision,end_time,invoiced,fractional_supply,complement_status,complement_packaging,complement_container_id,volume_apontado,volume_pendente,packaging_type,packaging_info,unit_price,total_value,raw_materials_used,public_token',
   RawMaterialStock: 'id,created_date,updated_date,entry_id,mp_code,mp_name,client,lot,current_stock,unit,status_wms,expiry_date',
-  // type/tare/registration_id: necessários na visualização da OP (envase + relatório fiscal por tanque).
-  Container: 'id,created_date,op_number,production_id,container_number,product,volume,status,packaging_type,lot,net_weight,mass,type,tare,registration_id',
+  // Colunas reais de ind_lista_vasilhames (sem packaging_type/mass — não existem e geram HTTP 400).
+  // barril_number: número da embalagem quando a placa é ISO/longa (ex.: OEGU… + barril 807514-0).
+  Container: 'id,created_date,op_number,production_id,container_number,barril_number,product,volume,status,lot,net_weight,type,tare,registration_id',
   Recipe: 'id,created_date,product_name,revision_number,client,status,price,density',
   Order: 'id,created_date,order_number,client,client_id,status,client_order,volume,priority',
   // ChemFlow / Transbordo

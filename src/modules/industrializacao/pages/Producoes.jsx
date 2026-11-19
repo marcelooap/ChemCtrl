@@ -22,7 +22,13 @@ import QrCodeDialog from '@industrializacao/components/productions/QrCodeDialog'
 import ProductionViewDialog from '@industrializacao/components/production/ProductionViewDialog';
 import FractionalBadge from '@industrializacao/components/production/FractionalBadge';
 import { isComplementPending } from '@industrializacao/lib/fractionalSupply';
-import { parseArr, containersOfProductionLot, formatContainerPackagingForProduction, uniqueContainersFromPackagingRows } from '@industrializacao/lib/productionViewUtils';
+import {
+  parseArr,
+  containersOfProductionLot,
+  formatContainerPackagingForProduction,
+  formatProductionListPackagingLabel,
+  resolveProductionEnvaseContainers,
+} from '@industrializacao/lib/productionViewUtils';
 import { packagingRowsForProduction } from '@industrializacao/lib/containerOrigins';
 import { fmtDate, fmtNumber, fmtCurrency } from '@/i18n/formatters';
 import { translateProductionStatus } from '@/i18n/domainMaps';
@@ -155,25 +161,15 @@ export default function Producoes() {
 
   const filtered = useMemo(() => productions.filter(p => {
     const q = debouncedSearch.toLowerCase();
-    const rows = packagingRowsForProduction(containers, containerOrigins, p);
-    const opContainersOf = () => {
-      const seen = new Set();
-      const list = [];
-      for (const r of rows) {
-        if (r.container?.id && !seen.has(r.container.id)) {
-          seen.add(r.container.id);
-          list.push(r.container);
-        }
-      }
-      return list.length ? list : containersOfProductionLot(containers, p);
-    };
+    const opContainersOf = () => resolveProductionEnvaseContainers(containers, containerOrigins, p);
     const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
       || opContainersOf().some((c) => {
         const original = formatContainerPackagingForProduction(c, p, containerOrigins);
         return (c.container_number || '').toLowerCase().includes(q)
           || (original || '').toLowerCase().includes(q);
       })
-      || (p.packaging_type || '').toLowerCase().includes(q);
+      || (p.packaging_type || '').toLowerCase().includes(q)
+      || formatProductionListPackagingLabel(p, containers, containerOrigins, t).toLowerCase().includes(q);
     const fabRaw = p.end_time || p.updated_date || null;
     const fabDate = fabRaw ? moment(fabRaw) : null;
     const matchFrom = !dateFrom || (fabDate && !fabDate.isBefore(moment(dateFrom, 'YYYY-MM-DD'), 'day'));
@@ -185,7 +181,7 @@ export default function Producoes() {
         ? isComplementPending(p)
         : p.status === statusFilter;
     return matchSearch && matchFrom && matchTo && matchesClient && matchStatus;
-  }), [productions, containers, containerOrigins, debouncedSearch, dateFrom, dateTo, clientFilter, statusFilter]);
+  }), [productions, containers, containerOrigins, debouncedSearch, dateFrom, dateTo, clientFilter, statusFilter, t]);
 
   useEffect(() => {
     setPage(1);
@@ -634,29 +630,7 @@ export default function Producoes() {
                     <td className="px-4 py-2.5 text-sm">{p.lot}</td>
                     <td className="px-4 py-2.5 text-right font-medium text-sm">{fmt(p.volume)}</td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                      {(() => {
-                        const rows = packagingRowsForProduction(containers, containerOrigins, p);
-                        const opContainers = uniqueContainersFromPackagingRows(rows);
-                        const na = t('common.notAvailable');
-                        const labelOf = (c) => formatContainerPackagingForProduction(c, p, containerOrigins) || c?.container_number || p.packaging_type || na;
-                        if (opContainers.length === 0) {
-                          const legacy = containersOfProductionLot(containers, p);
-                          if (legacy.length > 0) {
-                            if (legacy.length > 1) {
-                              return t('production.packaging.loadUnits', { count: String(legacy.length).padStart(2, '0') });
-                            }
-                            return labelOf(legacy[0]);
-                          }
-                          return p.packaging_info || p.packaging_type || na;
-                        }
-                        if (rows.length > 1 && opContainers.length === 1) {
-                          return `${labelOf(opContainers[0])} (${rows.length} ${t('production.opNumber').toLowerCase()})`;
-                        }
-                        if (opContainers.length > 1) {
-                          return t('production.packaging.loadUnits', { count: String(opContainers.length).padStart(2, '0') });
-                        }
-                        return labelOf(opContainers[0]);
-                      })()}
+                      {formatProductionListPackagingLabel(p, containers, containerOrigins, t)}
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">

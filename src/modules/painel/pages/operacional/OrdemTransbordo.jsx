@@ -33,6 +33,7 @@ import ValidacaoViewDialog, {
 import {
   applyPesoLiquidoForaMargem,
   getLoteQuantidadeDeclarada,
+  kgToLoteUnidade,
   loteToKg,
   loteToLitros,
 } from "@transbordo/lib/conversao";
@@ -489,6 +490,13 @@ export default function OrdemTransbordo() {
   const pesoMaximo = qtdKgDeclarada + erroAdmissivel;
   const dentroMargem = gPl > 0 && gPl >= pesoMinimo && gPl <= pesoMaximo;
   const foraMargem = gPl > 0 && !dentroMargem;
+
+  // Fora da margem: modal/envase usa peso líquido na UOM do recebimento
+  // (kg→L/gal quando necessário). A quantidade da NF permanece em granel.quantidade.
+  const quantidadeEnvase =
+    origemTipo === "granel" && foraMargem && gPl > 0
+      ? kgToLoteUnidade(gPl, granel.unidade, headerDensidade)
+      : granel.quantidade;
 
   const handleClienteChange = (_label, item) => {
     setClienteId(item?.id || "");
@@ -2444,7 +2452,7 @@ export default function OrdemTransbordo() {
         produtoCodigo={produtoCodigo}
         observacoes={observacao}
         lote={granel.lote}
-        quantidade={granel.quantidade}
+        quantidade={quantidadeEnvase}
         unidade={granel.unidade}
         densidade={headerDensidade}
         dataOp={dataOp}
@@ -2497,9 +2505,12 @@ export default function OrdemTransbordo() {
             : null
         }
         quantidadeEditable={
-          (origemTipo !== "tanka" &&
-            origemTipo !== "vasilhame" &&
-            origemTipo !== "embalado") ||
+          // Granel fora da margem: quantidade operacional = peso líquido (somente leitura).
+          (origemTipo === "granel"
+            ? !foraMargem
+            : origemTipo !== "tanka" &&
+              origemTipo !== "vasilhame" &&
+              origemTipo !== "embalado") ||
           (origemTipo === "tanka" && tankaItens.length === 1) ||
           (origemTipo === "vasilhame" && vasilhameItens.length === 1) ||
           (origemTipo === "embalado" && Boolean(embaladoEntradaId))

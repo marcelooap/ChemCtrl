@@ -2099,6 +2099,8 @@
     "packaging": {
       "title": "Embalagens Envasadas",
       "loadUnits": "{{count}} x Unidades de Carga",
+      "countContentors": "{{count}} x contenedores",
+      "countTanks": "{{count}} x tanques",
       "containerNumber": "Nº Contentor",
       "volume": "Volume (L)",
       "netWeight": "Peso Líquido (kg)",
