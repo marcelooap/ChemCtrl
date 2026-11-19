@@ -111,6 +111,11 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
     return listReservasForChave(reservas, row.chave, {
       clienteId: row.clienteId,
       clienteNome: row.clienteNome,
+      produtoId: row.produtoId,
+      produtoCodigo: row.codigo,
+      produtoNome: row.produto,
+      lote: row.lote,
+      unidade: row.unidade,
     });
   }, [row, reservas]);
 

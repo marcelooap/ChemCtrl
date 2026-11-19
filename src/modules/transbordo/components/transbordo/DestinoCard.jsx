@@ -324,10 +324,28 @@ export default function DestinoCard({
     });
   const tankaCapacidade = roundVolume(selectedTanka?.capacidade || 0);
   const tankaSaldoAtual = roundVolume(selectedTanka?.saldo_atual || 0);
-  const tankaVolumeDisponivel =
+  const tankaVolumeDisponivelBruto =
     selectedTanka?.volume_disponivel != null
       ? roundVolume(selectedTanka.volume_disponivel)
       : Math.max(0, tankaCapacidade - tankaSaldoAtual);
+  // Reserva o espaço já apontado em outras linhas deste envase para o mesmo tanka.
+  const volumeOutrosDestinosMesmoTanka = (todosDestinos || []).reduce(
+    (sum, other, i) => {
+      if (i === index) return sum;
+      if (other?.tipo_embalagem !== "Tankagem") return sum;
+      const mesmoTanka =
+        (destino.tanka_id && other.tanka_id === destino.tanka_id) ||
+        (destino.tanka_codigo &&
+          other.tanka_codigo === destino.tanka_codigo);
+      if (!mesmoTanka) return sum;
+      return sum + roundVolume(other.volume_total || other.volume || 0);
+    },
+    0
+  );
+  const tankaVolumeDisponivel = Math.max(
+    0,
+    roundVolume(tankaVolumeDisponivelBruto - volumeOutrosDestinosMesmoTanka)
+  );
 
   const volumeExcedido =
     tipo === "Tankagem" &&

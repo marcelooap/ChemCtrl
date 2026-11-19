@@ -2325,6 +2325,7 @@
           "editOrdemTitle": "Edit order data",
           "volumeRegistered": "Registered volume",
           "volumePacked": "Packaged volume",
+          "volumeRemaining": "Remaining",
           "conferenceOk": "Reconciliation ok",
           "conferenceExceeded": "Packaged volume exceeds registered volume",
           "conferencePending": "Adjust items until reconciliation closes",
@@ -2332,7 +2333,8 @@
             "density": "Density is required for packaging.",
             "items": "Fill in all packaging items.",
             "mismatch": "Packaged volume must equal registered volume.",
-            "operators": "Select at least one Transshipment-sector operator."
+            "operators": "Select at least one Transshipment-sector operator.",
+            "tankaCapacity": "One or more destinations exceed the available tank space."
           }
         },
         "submitValidation": "Send for validation",
@@ -2488,6 +2490,7 @@
             "volume": "Quantity",
             "placa": "Plate",
             "barril": "Barrel",
+            "placaBarril": "Plate",
             "quantidadeEmbalagens": "Pkg. qty",
             "pesoLiquido": "Net weight",
             "eslinga": "Sling",

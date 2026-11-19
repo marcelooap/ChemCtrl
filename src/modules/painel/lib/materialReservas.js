@@ -171,6 +171,11 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       reservaMatchesChave(sample, row.chave, {
         clienteId: row.clienteId,
         clienteNome: row.clienteNome,
+        produtoId: row.produtoId,
+        produtoCodigo: row.codigo,
+        produtoNome: row.produto,
+        lote: row.lote,
+        unidade: row.unidade,
       })
     );
     if (covered) continue;
@@ -196,14 +201,19 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
 
   return [...map.values()]
     .map((row) => {
-      const clienteCtx = {
+      const matchCtx = {
         clienteId: row.clienteId,
         clienteNome: row.clienteNome,
+        produtoId: row.produtoId,
+        produtoCodigo: row.codigo,
+        produtoNome: row.produto,
+        lote: row.lote,
+        unidade: row.unidade,
       };
       const saldoReservado = Math.round(
         (reservas || []).reduce((sum, r) => {
           if (!r || r.status !== 'ativa') return sum;
-          if (!reservaMatchesChave(r, row.chave, clienteCtx)) return sum;
+          if (!reservaMatchesChave(r, row.chave, matchCtx)) return sum;
           return sum + (Number(r.quantidade) || 0);
         }, 0)
       );
@@ -211,7 +221,10 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
       const bloqueioPendente = sumBloqueioPendenteChave(
         saidas,
         row.chave,
-        clienteCtx
+        {
+          clienteId: row.clienteId,
+          clienteNome: row.clienteNome,
+        }
       );
       const saldoFinal = Math.max(0, saldoAtual - saldoReservado - bloqueioPendente);
       const entradaCodigos = [...(row.entradaCodigos || [])].sort((a, b) =>
@@ -252,9 +265,9 @@ export function aggregateEstoqueByLote(estoqueRows = [], reservas = [], saidas =
     });
 }
 
-export function sumReservasAtivas(reservas = [], chave, clienteCtx = {}) {
+export function sumReservasAtivas(reservas = [], chave, matchCtx = {}) {
   return (reservas || [])
-    .filter((r) => r.status === 'ativa' && reservaMatchesChave(r, chave, clienteCtx))
+    .filter((r) => r.status === 'ativa' && reservaMatchesChave(r, chave, matchCtx))
     .reduce((s, r) => s + (Number(r.quantidade) || 0), 0);
 }
 
@@ -303,9 +316,9 @@ export function sumReservadoForProdutoCliente(
   }, 0);
 }
 
-export function listReservasForChave(reservas = [], chave, clienteCtx = {}) {
+export function listReservasForChave(reservas = [], chave, matchCtx = {}) {
   return (reservas || [])
-    .filter((r) => reservaMatchesChave(r, chave, clienteCtx))
+    .filter((r) => reservaMatchesChave(r, chave, matchCtx))
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 

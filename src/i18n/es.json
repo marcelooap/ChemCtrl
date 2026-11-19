@@ -1728,6 +1728,7 @@
           "operatorsEmpty": "Ningún operador del sector Transbordo registrado.",
           "volumeRegistered": "Volumen registrado",
           "volumePacked": "Volumen envasado",
+          "volumeRemaining": "Restante",
           "conferenceOk": "Conferencia ok",
           "conferenceExceeded": "El volumen envasado excede el registrado",
           "conferencePending": "Ajuste los ítems hasta cerrar la conferencia",
@@ -1735,7 +1736,8 @@
             "density": "La densidad es obligatoria para el envasado.",
             "items": "Complete todos los ítems de envasado.",
             "mismatch": "El volumen envasado debe ser igual al volumen registrado.",
-            "operators": "Seleccione al menos un operador del sector Transbordo."
+            "operators": "Seleccione al menos un operador del sector Transbordo.",
+            "tankaCapacity": "Uno o más destinos exceden el espacio disponible del tanka."
           }
         },
         "submitValidation": "Enviar a validación",
@@ -1868,6 +1870,7 @@
             "volume": "Cantidad",
             "placa": "Matrícula",
             "barril": "Barril",
+            "placaBarril": "Matrícula",
             "quantidadeEmbalagens": "Cant. env.",
             "pesoLiquido": "Peso neto",
             "eslinga": "Eslinga",

@@ -49,10 +49,42 @@ function sameClienteReserva(reservaAsCliente, ctxId, ctxNome) {
 }
 
 /**
+ * Identidade de produto no soft-match de reservas embaladas.
+ * Códigos distintos = produtos distintos (ex.: BB 20 L vs BB 200 L no mesmo lote).
+ */
+function sameProdutoReserva(
+  reserva,
+  have,
+  want,
+  { produtoId = null, produtoCodigo = '', produtoNome = '' } = {}
+) {
+  const wantCod = norm(produtoCodigo) || want?.produtoCodigo || '';
+  const haveCod = norm(reserva?.produto_codigo) || have?.produtoCodigo || '';
+  if (wantCod && haveCod) return wantCod === haveCod;
+
+  if (
+    produtoId &&
+    reserva?.produto_id &&
+    String(produtoId) === String(reserva.produto_id)
+  ) {
+    return true;
+  }
+
+  const wantNome = norm(produtoNome);
+  const haveNome = norm(reserva?.produto_nome);
+  if (wantNome && haveNome) return wantNome === haveNome;
+
+  // Sem código/id/nome claros nos dois lados: não soft-matcheia
+  // (chave exata já cobriu o caso ideal).
+  return false;
+}
+
+/**
  * Match de reserva à chave/lote do item embalado.
- * Prioridade: chave exata → lote+unidade (+ cliente soft) → lote na chave.
- * Não exige produto_codigo idêntico (variantes BB / códigos divergentes).
- * Reservas de vasilhame só batem por chave exata (não entram no soft-match de embalados).
+ * Prioridade: chave exata → mesmo produto+lote+unidade (+ cliente soft).
+ * Soft-match cobre cliente duplicado (UUID vs nome); não mistura SKUs
+ * diferentes que compartilham o mesmo número de lote.
+ * Reservas de vasilhame só batem por chave exata.
  */
 export function reservaMatchesChave(
   reserva,
@@ -61,6 +93,7 @@ export function reservaMatchesChave(
     clienteId = null,
     clienteNome = '',
     produtoId = null,
+    produtoCodigo = '',
     produtoNome = '',
     lote = '',
     unidade = '',
@@ -81,6 +114,16 @@ export function reservaMatchesChave(
   const rUni = normUnidade(reserva.unidade_medida || have?.unidade);
   if (rUni !== wantUni) return false;
 
+  if (
+    !sameProdutoReserva(reserva, have, want, {
+      produtoId,
+      produtoCodigo,
+      produtoNome,
+    })
+  ) {
+    return false;
+  }
+
   const chaveIsUuid = Boolean(want && UUID_RE.test(want.clientePart));
   const ctxId = clienteId || (chaveIsUuid ? want.clientePart : null);
   const ctxNome =
@@ -98,30 +141,13 @@ export function reservaMatchesChave(
       '',
   };
 
-  // Sem cliente na reserva: basta lote+unidade (legado).
+  // Sem cliente na reserva: produto+lote+unidade já conferidos (legado).
   if (!reservaAsCliente.cliente_id && !String(reservaAsCliente.cliente_nome || '').trim()) {
     return true;
   }
   if (!ctxId && !String(ctxNome || '').trim()) return true;
 
-  if (sameClienteReserva(reservaAsCliente, ctxId, ctxNome)) return true;
-
-  // Último recurso: mesmo produto_id/nome + mesmo lote (cliente só na chave).
-  if (
-    produtoId &&
-    reserva.produto_id &&
-    String(produtoId) === String(reserva.produto_id)
-  ) {
-    return true;
-  }
-  if (
-    produtoNome &&
-    reserva.produto_nome &&
-    norm(produtoNome) === norm(reserva.produto_nome)
-  ) {
-    return true;
-  }
-  return false;
+  return sameClienteReserva(reservaAsCliente, ctxId, ctxNome);
 }
 
 export function isVolumeUnit(unidade) {
@@ -257,6 +283,7 @@ export function opcoesReservaEmbalado({
   clienteId = null,
   clienteNome = '',
   produtoId = null,
+  produtoCodigo = '',
   produtoNome = '',
 }) {
   const options = [
@@ -273,6 +300,7 @@ export function opcoesReservaEmbalado({
     clienteId,
     clienteNome,
     produtoId,
+    produtoCodigo,
     produtoNome,
     lote: lote || parseReservaChave(chave)?.lote || '',
     unidade,
@@ -314,6 +342,7 @@ export function reservadoAtivoChave(
     clienteId = null,
     clienteNome = '',
     produtoId = null,
+    produtoCodigo = '',
     produtoNome = '',
     lote = '',
     unidade = '',
@@ -323,6 +352,7 @@ export function reservadoAtivoChave(
     clienteId,
     clienteNome,
     produtoId,
+    produtoCodigo,
     produtoNome,
     lote: lote || parseReservaChave(chave)?.lote || '',
     unidade,
@@ -421,9 +451,15 @@ export function validarItensEmbalado({
         return sum + (Number(e.saldo_atual) || 0);
       }, 0)
     );
+    const parsedChave = parseReservaChave(chave);
     const reservado = reservadoAtivoChave(reservas, chave, {
       clienteId,
       clienteNome,
+      produtoCodigo: parsedChave?.produtoCodigo || item?.produto_codigo || '',
+      produtoNome: item?.produto_nome || '',
+      produtoId: item?.produto_id || null,
+      lote: item?.lote || parsedChave?.lote || '',
+      unidade: item?.unidade || unidade || parsedChave?.unidade || '',
     });
     const bloqueio = sumBloqueioPendenteChave(saidas, chave, {
       excludeSaidaId,

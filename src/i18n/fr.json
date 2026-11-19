@@ -1728,6 +1728,7 @@
           "operatorsEmpty": "Aucun opérateur du secteur Transbordement enregistré.",
           "volumeRegistered": "Volume enregistré",
           "volumePacked": "Volume conditionné",
+          "volumeRemaining": "Restant",
           "conferenceOk": "Contrôle ok",
           "conferenceExceeded": "Le volume conditionné dépasse le volume enregistré",
           "conferencePending": "Ajustez les lignes jusqu'à fermer le contrôle",
@@ -1735,7 +1736,8 @@
             "density": "La densité est obligatoire pour le conditionnement.",
             "items": "Renseignez toutes les lignes de conditionnement.",
             "mismatch": "Le volume conditionné doit être égal au volume enregistré.",
-            "operators": "Sélectionnez au moins un opérateur du secteur Transbordement."
+            "operators": "Sélectionnez au moins un opérateur du secteur Transbordement.",
+            "tankaCapacity": "Une ou plusieurs destinations dépassent l'espace disponible du tanka."
           }
         },
         "submitValidation": "Envoyer à la validation",
@@ -1868,6 +1870,7 @@
             "volume": "Quantité",
             "placa": "Plaque",
             "barril": "Fût",
+            "placaBarril": "Plaque",
             "quantidadeEmbalagens": "Qté cond.",
             "pesoLiquido": "Poids net",
             "eslinga": "Élingue",

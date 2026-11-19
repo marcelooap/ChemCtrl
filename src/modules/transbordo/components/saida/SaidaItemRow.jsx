@@ -580,6 +580,8 @@ export default function SaidaItemRow({
     clienteId: selectedEntrada?.cliente_id ?? clienteId,
     clienteNome: selectedEntrada?.cliente_nome ?? clienteNome,
     produtoId: selectedEntrada?.produto_id || item.produto_id || null,
+    produtoCodigo:
+      selectedEntrada?.produto_codigo || item.produto_codigo || "",
     produtoNome: selectedEntrada?.produto_nome || item.produto_nome || "",
     lote: item.lote || selectedEntrada?.lote || "",
     unidade: unidadeEmbalado,

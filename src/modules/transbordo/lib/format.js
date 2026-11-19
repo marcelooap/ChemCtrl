@@ -99,6 +99,68 @@ export function distributeByWeights(total, weights = []) {
   return result;
 }
 
+/** Residual típico de volume×densidade; acima disso não é só arredondamento. */
+export const TOLERANCIA_ALINHAMENTO_MASSA_KG = 1;
+
+/**
+ * Ajusta `massa` dos itens para somar exatamente `quantidadeKg`.
+ * Só age quando a diferença é residual de arredondamento (vol × dens).
+ * O último item com massa absorve o residual (preserva as demais linhas).
+ */
+export function alignDestinosMassaToQuantidade(destinos = [], quantidadeKg) {
+  const target = roundMass(quantidadeKg);
+  if (!(target > 0) || !Array.isArray(destinos) || destinos.length === 0) {
+    return destinos;
+  }
+
+  const sum = roundMass(
+    destinos.reduce((s, d) => s + (Number(d.massa) || 0), 0)
+  );
+  if (!(sum > 0)) return destinos;
+
+  const delta = roundMass(sum - target);
+  if (Math.abs(delta) > TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9) {
+    return destinos;
+  }
+  if (Math.abs(delta) <= 1e-9) return destinos;
+
+  let lastIdx = destinos.length - 1;
+  for (let i = destinos.length - 1; i >= 0; i -= 1) {
+    if ((Number(destinos[i].massa) || 0) > 0) {
+      lastIdx = i;
+      break;
+    }
+  }
+
+  return destinos.map((d, i) => {
+    if (i !== lastIdx) return d;
+    return { ...d, massa: roundMass((Number(d.massa) || 0) - delta) };
+  });
+}
+
+/**
+ * Preserva massa operacional informada (ex.: peso líquido fora da margem)
+ * quando o desvio vs L×densidade é só residual de arredondamento.
+ */
+export function resolveMassaOperacionalKg({
+  volumeL = 0,
+  densidade,
+  massaInformada = 0,
+} = {}) {
+  const dens = parseDensidade(densidade);
+  const fromVol = dens > 0 ? roundMass(Number(volumeL) * dens) : 0;
+  const provided = roundMass(massaInformada);
+  if (
+    provided > 0 &&
+    dens > 0 &&
+    Math.abs(fromVol - provided) <= TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
+  ) {
+    return provided;
+  }
+  if (dens > 0 && fromVol > 0) return fromVol;
+  return provided;
+}
+
 /**
  * Formata número no padrão PT-BR.
  * @param {number|string} v

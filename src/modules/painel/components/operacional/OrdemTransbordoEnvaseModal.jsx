@@ -13,6 +13,7 @@ import { Label } from "@shared/components/ui/label";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import DestinoCard from "@transbordo/components/transbordo/DestinoCard";
 import {
+  alignDestinosMassaToQuantidade,
   formatMass,
   formatNum,
   formatVolume,
@@ -26,6 +27,7 @@ import { loteToLitros, loteToKg } from "@transbordo/lib/conversao";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
 import { computeTankaSaldo } from "@transbordo/lib/tankaVolume";
+import { matchesProdutoOperacional } from "@transbordo/lib/produtoMatch";
 import {
   listOperadoresAtivosNomes,
   mergeOperadoresDropdown,
@@ -308,25 +310,79 @@ export default function OrdemTransbordoEnvaseModal({
     Math.abs(volumeRegistradoL - volumeEnvasadoL) === 0;
   const volumeExceeded =
     volumeRegistradoL > 0 && volumeEnvasadoL > volumeRegistradoL;
+  const volumeRestanteL = roundVolume(
+    Math.max(0, volumeRegistradoL - volumeEnvasadoL)
+  );
+
+  /** Destino tankagem: só tankas cadastrados com o produto da ordem. */
+  const produtoCtxTankaDestino = useMemo(
+    () => ({
+      produtoId,
+      produtoNome,
+      produtoCodigo,
+    }),
+    [produtoId, produtoNome, produtoCodigo]
+  );
 
   const filteredIsotanques = useMemo(
     () =>
-      (isotanques || []).map((i) => {
-        const saldo = computeTankaSaldo({
-          isotanqueId: i.id,
-          tankaCodigo: i.nome || i.tanka || i.codigo_itku || "",
-          transbordos,
-        });
-        const cap = roundVolume(i.capacidade || 26000);
-        const volumeDisponivel = Math.max(0, cap - saldo);
-        return {
-          ...i,
-          saldo_atual: saldo,
-          volume_disponivel: volumeDisponivel,
-          display_label: `${i.nome || i.tanka || i.codigo_itku || ""} · ${formatVolume(volumeDisponivel)} L disp.`,
-        };
+      (isotanques || [])
+        .filter((i) => matchesProdutoOperacional(i, produtoCtxTankaDestino))
+        .map((i) => {
+          const tankaCodigo = i.nome || i.tanka || i.codigo_itku || "";
+          const saldo = computeTankaSaldo({
+            isotanqueId: i.id,
+            tankaCodigo,
+            transbordos,
+          });
+          const cap = roundVolume(i.capacidade || 26000);
+          const volumeDisponivel = Math.max(0, cap - saldo);
+          return {
+            ...i,
+            capacidade: cap,
+            saldo_atual: saldo,
+            volume_disponivel: volumeDisponivel,
+            display_label: `${tankaCodigo} · ${formatVolume(volumeDisponivel)} L disp.`,
+          };
+        }),
+    [isotanques, transbordos, produtoCtxTankaDestino]
+  );
+
+  /** Soma dos volumes destinando ao mesmo tanka não pode exceder o espaço vago. */
+  const tankaExcedido = useMemo(
+    () =>
+      destinos.some((d) => {
+        if (d.tipo_embalagem !== "Tankagem" || !d.tanka_id) return false;
+        const tanka =
+          filteredIsotanques.find((i) => i.id === d.tanka_id) ||
+          (isotanques || []).find((i) => i.id === d.tanka_id);
+        if (!tanka) return false;
+        const cap = roundVolume(tanka.capacidade || 26000);
+        const saldo =
+          tanka.saldo_atual != null
+            ? roundVolume(tanka.saldo_atual)
+            : computeTankaSaldo({
+                isotanqueId: tanka.id,
+                tankaCodigo:
+                  tanka.nome || tanka.tanka || tanka.codigo_itku || "",
+                transbordos,
+              });
+        const disp = Math.max(0, cap - saldo);
+        const totalDestinoTanka = destinos
+          .filter(
+            (other) =>
+              other.tipo_embalagem === "Tankagem" &&
+              (other.tanka_id === d.tanka_id ||
+                (d.tanka_codigo && other.tanka_codigo === d.tanka_codigo))
+          )
+          .reduce(
+            (sum, other) =>
+              sum + roundVolume(other.volume_total || other.volume || 0),
+            0
+          );
+        return roundVolume(totalDestinoTanka) > disp;
       }),
-    [isotanques, transbordos]
+    [destinos, filteredIsotanques, isotanques, transbordos]
   );
 
   useEffect(() => {
@@ -422,6 +478,7 @@ export default function OrdemTransbordoEnvaseModal({
     allDestinosOk &&
     volumesMatch &&
     !volumeExceeded &&
+    !tankaExcedido &&
     operadores.length > 0 &&
     !saving;
 
@@ -740,6 +797,30 @@ export default function OrdemTransbordoEnvaseModal({
             : roundMass(volumeRegistradoL * dens)
         : 0;
 
+    // Envase não pode exceder a massa operacional (peso líquido fora da margem).
+    if (massaTotal > 0 && destinosNorm.length > 0 && !origemEmbaladoMassa) {
+      const aligned = alignDestinosMassaToQuantidade(
+        destinosNorm.map((d) => ({
+          ...d,
+          massa: Number(d.peso_liquido) || 0,
+          volume: Number(d.volume_total || d.volume) || 0,
+        })),
+        massaTotal
+      );
+      destinosNorm = aligned.map((d) => {
+        const { massa, ...rest } = d;
+        const peso = roundMass(massa);
+        return {
+          ...rest,
+          peso_liquido: peso,
+          peso_bruto: roundMass((Number(rest.tara) || 0) + peso),
+        };
+      });
+      origensNorm = origensNorm.map((o, i) =>
+        i === 0 ? { ...o, massa_retirada: roundMass(massaTotal) } : o
+      );
+    }
+
     return {
       id: null,
       data: dataOp || granelPayload?.data || new Date().toISOString().slice(0, 10),
@@ -771,6 +852,12 @@ export default function OrdemTransbordoEnvaseModal({
     }
     if (!allDestinosOk) {
       setError(t("painel.operacional.ordemTransbordo.envaseModal.errors.items"));
+      return;
+    }
+    if (tankaExcedido) {
+      setError(
+        t("painel.operacional.ordemTransbordo.envaseModal.errors.tankaCapacity")
+      );
       return;
     }
     if (!volumesMatch) {
@@ -1029,58 +1116,6 @@ export default function OrdemTransbordoEnvaseModal({
             </div>
           </div>
 
-          <div
-            className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3 text-sm ${
-              volumeExceeded
-                ? "border-red-200 bg-red-50 text-red-700"
-                : volumesMatch
-                  ? "border-green-200 bg-green-50 text-green-800"
-                  : "border-border bg-muted/30 text-foreground"
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span>
-                {t(
-                  "painel.operacional.ordemTransbordo.envaseModal.volumeRegistered"
-                )}
-                :{" "}
-                <strong className="tabular-nums">
-                  {formatVolume(volumeRegistradoL)} L
-                </strong>
-              </span>
-              <span>
-                {t(
-                  "painel.operacional.ordemTransbordo.envaseModal.volumePacked"
-                )}
-                :{" "}
-                <strong className="tabular-nums">
-                  {formatVolume(volumeEnvasadoL)} L
-                </strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              {volumesMatch ? (
-                <>
-                  <CheckCircle className="h-4 w-4" />
-                  {t(
-                    "painel.operacional.ordemTransbordo.envaseModal.conferenceOk"
-                  )}
-                </>
-              ) : volumeExceeded ? (
-                <>
-                  <AlertCircle className="h-4 w-4" />
-                  {t(
-                    "painel.operacional.ordemTransbordo.envaseModal.conferenceExceeded"
-                  )}
-                </>
-              ) : (
-                t(
-                  "painel.operacional.ordemTransbordo.envaseModal.conferencePending"
-                )
-              )}
-            </div>
-          </div>
-
           <div className="space-y-1.5">
             <Label>
               {t("painel.operacional.ordemTransbordo.envaseModal.operators")} *
@@ -1162,6 +1197,74 @@ export default function OrdemTransbordoEnvaseModal({
                 ))}
               </div>
             ) : null}
+          </div>
+
+          <div
+            className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3 text-sm ${
+              volumeExceeded || tankaExcedido
+                ? "border-red-200 bg-red-50 text-red-700"
+                : volumesMatch
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : "border-border bg-muted/30 text-foreground"
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span>
+                {t(
+                  "painel.operacional.ordemTransbordo.envaseModal.volumeRegistered"
+                )}
+                :{" "}
+                <strong className="tabular-nums">
+                  {formatVolume(volumeRegistradoL)} L
+                </strong>
+              </span>
+              <span>
+                {t(
+                  "painel.operacional.ordemTransbordo.envaseModal.volumePacked"
+                )}
+                :{" "}
+                <strong className="tabular-nums">
+                  {formatVolume(volumeEnvasadoL)} L
+                </strong>
+              </span>
+              <span>
+                {t(
+                  "painel.operacional.ordemTransbordo.envaseModal.volumeRemaining"
+                )}
+                :{" "}
+                <strong className="tabular-nums">
+                  {formatVolume(volumeRestanteL)} L
+                </strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {tankaExcedido ? (
+                <>
+                  <AlertCircle className="h-4 w-4" />
+                  {t(
+                    "painel.operacional.ordemTransbordo.envaseModal.errors.tankaCapacity"
+                  )}
+                </>
+              ) : volumesMatch ? (
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  {t(
+                    "painel.operacional.ordemTransbordo.envaseModal.conferenceOk"
+                  )}
+                </>
+              ) : volumeExceeded ? (
+                <>
+                  <AlertCircle className="h-4 w-4" />
+                  {t(
+                    "painel.operacional.ordemTransbordo.envaseModal.conferenceExceeded"
+                  )}
+                </>
+              ) : (
+                t(
+                  "painel.operacional.ordemTransbordo.envaseModal.conferencePending"
+                )
+              )}
+            </div>
           </div>
         </div>
 

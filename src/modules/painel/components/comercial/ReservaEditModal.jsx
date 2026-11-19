@@ -51,8 +51,23 @@ export default function ReservaEditModal({
     return listReservasForChave(reservas, row.chave, {
       clienteId: row.clienteId,
       clienteNome: row.clienteNome,
+      produtoId: row.produtoId,
+      produtoCodigo: row.codigo,
+      produtoNome: row.produto,
+      lote: row.lote,
+      unidade: row.unidade,
     }).filter((r) => r.status === 'ativa');
-  }, [reservas, row?.chave, row?.clienteId, row?.clienteNome]);
+  }, [
+    reservas,
+    row?.chave,
+    row?.clienteId,
+    row?.clienteNome,
+    row?.produtoId,
+    row?.codigo,
+    row?.produto,
+    row?.lote,
+    row?.unidade,
+  ]);
 
   const editing = ativas.find((r) => r.id === editingId) || null;
 

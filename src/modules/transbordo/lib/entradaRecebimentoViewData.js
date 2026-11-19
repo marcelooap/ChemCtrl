@@ -5,6 +5,8 @@ import {
   formatNum,
   formatQuantidade,
   roundMass,
+  alignDestinosMassaToQuantidade,
+  TOLERANCIA_ALINHAMENTO_MASSA_KG,
 } from "@transbordo/lib/format";
 import { origemPertenceAEntrada } from "@transbordo/lib/entradaCodigo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
@@ -15,8 +17,7 @@ import {
 } from "@transbordo/lib/conversao";
 import { formatEtiquetaEmbalagemPlaca } from "@transbordo/lib/etiquetaConfig";
 
-/** Residual típico de volume×densidade; acima disso trata-se de OP parcial. */
-const TOLERANCIA_ALINHAMENTO_MASSA_KG = 1;
+export { alignDestinosMassaToQuantidade } from "@transbordo/lib/format";
 
 export function formatDateEntrada(dateStr) {
   if (!dateStr) return "-";
@@ -128,46 +129,6 @@ function resolveQuantidadeInformadaKg(entrada, lotes, lotesCount) {
       return sum + loteToKg({ ...l, quantidade: q });
     }, 0)
   );
-}
-
-/**
- * Redistribui massas dos destinos para somar exatamente a quantidade informada.
- * Só age quando a diferença é residual de arredondamento (vol × dens).
- */
-export function alignDestinosMassaToQuantidade(destinos = [], quantidadeKg) {
-  const target = roundMass(quantidadeKg);
-  if (!(target > 0) || !Array.isArray(destinos) || destinos.length === 0) {
-    return destinos;
-  }
-
-  const sum = roundMass(
-    destinos.reduce((s, d) => s + (Number(d.massa) || 0), 0)
-  );
-  if (!(sum > 0)) return destinos;
-
-  const diff = Math.abs(sum - target);
-  if (diff > TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9) {
-    return destinos;
-  }
-  if (diff <= 1e-9) return destinos;
-
-  const weights = destinos.map((d) => {
-    const m = Number(d.massa) || 0;
-    if (m > 0) return m;
-    return Number(d.volume) || 0;
-  });
-  const sumW = weights.reduce((a, b) => a + b, 0);
-  if (!(sumW > 0)) return destinos;
-
-  let allocated = 0;
-  return destinos.map((d, i) => {
-    if (i === destinos.length - 1) {
-      return { ...d, massa: roundMass(target - allocated) };
-    }
-    const m = roundMass((weights[i] / sumW) * target);
-    allocated = roundMass(allocated + m);
-    return { ...d, massa: m };
-  });
 }
 
 function buildProdutosById(produtos) {
@@ -364,33 +325,6 @@ export function buildEntradaRecebimentoViewModel({
     lotes,
     lotesCount
   );
-  const destinosList = alignDestinosMassaToQuantidade(
-    buildDestinosList({
-      entrada,
-      entradaId,
-      transbordos,
-      origemIds,
-      destinosInformados,
-    }),
-    quantidadeInformadaKg
-  );
-
-  const transbordoTotais = destinosList.reduce(
-    (acc, d) => ({
-      volume: acc.volume + (d.volume || 0),
-      massa: acc.massa + (d.massa || 0),
-    }),
-    { volume: 0, massa: 0 }
-  );
-  // Garante total de massa idêntico à quantidade informada quando houve alinhamento.
-  if (
-    quantidadeInformadaKg > 0 &&
-    destinosList.length > 0 &&
-    Math.abs(transbordoTotais.massa - quantidadeInformadaKg) <=
-      TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
-  ) {
-    transbordoTotais.massa = quantidadeInformadaKg;
-  }
 
   const hasPesagem =
     Boolean(entrada.granel_pesagem) ||
@@ -410,6 +344,40 @@ export function buildEntradaRecebimentoViewModel({
       : null;
   const dentroMargem = entrada.granel_margem === "dentro";
   const foraMargem = entrada.granel_margem === "fora";
+
+  // Fora da margem: quantidade operacional = peso líquido (não a NF).
+  const quantidadeAlvoKg =
+    foraMargem && Number.isFinite(pesoLiquido) && pesoLiquido > 0
+      ? roundMass(pesoLiquido)
+      : quantidadeInformadaKg;
+
+  const destinosList = alignDestinosMassaToQuantidade(
+    buildDestinosList({
+      entrada,
+      entradaId,
+      transbordos,
+      origemIds,
+      destinosInformados,
+    }),
+    quantidadeAlvoKg
+  );
+
+  const transbordoTotais = destinosList.reduce(
+    (acc, d) => ({
+      volume: acc.volume + (d.volume || 0),
+      massa: acc.massa + (d.massa || 0),
+    }),
+    { volume: 0, massa: 0 }
+  );
+  // Garante total de massa idêntico à quantidade operacional quando houve alinhamento.
+  if (
+    quantidadeAlvoKg > 0 &&
+    destinosList.length > 0 &&
+    Math.abs(transbordoTotais.massa - quantidadeAlvoKg) <=
+      TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
+  ) {
+    transbordoTotais.massa = quantidadeAlvoKg;
+  }
 
   const dadosDiferencaPesagem = buildDadosDiferencaPesagem({
     entrada,

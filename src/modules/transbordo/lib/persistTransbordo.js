@@ -7,6 +7,8 @@ import {
   parseDensidade,
   litrosFromMassaKg,
   qtdEmbalagensFromVolume,
+  resolveMassaOperacionalKg,
+  alignDestinosMassaToQuantidade,
 } from '@transbordo/lib/format';
 import { calculateFIFOAllocation, expandOrigensForFifo } from '@transbordo/lib/fifo';
 import {
@@ -558,15 +560,18 @@ export async function persistTransbordo({
           volume_retirado,
           unidade_medida: um,
           embalado: embaladoOrigem,
+          // Fora da margem: preserva peso líquido informado (não L×dens residual).
           massa_retirada: embaladoOrigem
             ? massaEmbaladoMassa
-            : dens > 0
-              ? roundMass(volume_retirado * dens)
-              : roundMass(o.massa_retirada || 0),
+            : resolveMassaOperacionalKg({
+                volumeL: volume_retirado,
+                densidade: dens,
+                massaInformada: o.massa_retirada,
+              }),
           ...(lotesRet.length > 0 ? { lotes_retirados: lotesRet } : {}),
         };
       });
-      const destinos = (data.destinos || []).map((d) => {
+      let destinos = (data.destinos || []).map((d) => {
         const volume_total = roundVolume(d.volume_total || d.volume || 0);
         const origemLinked = origens.find((o) => o._uid && o._uid === d.origem_uid);
         const embaladoMass =
@@ -588,7 +593,7 @@ export async function persistTransbordo({
             ? qtdEmbalagensFromVolume(volume_total, roundVolume(d.volume_por_embalagem || 0))
             : roundVolume(d.quantidade_embalagens || 0),
           tara: roundMass(d.tara || 0),
-          // Granel: sempre L × densidade (evita kg inteiro residual no destino).
+          // Granel: L × densidade; residual vs massa operacional é alinhado abaixo.
           peso_liquido: embaladoMass
             ? roundMass(d.peso_liquido || pesoAuto)
             : dens > 0
@@ -624,10 +629,38 @@ export async function persistTransbordo({
       }
 
       const volume_total = origens.reduce((s, o) => s + o.volume_retirado, 0);
-      const massa_total = roundMass(
+      const massaFromOrigens = roundMass(
         origens.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0) ||
           volume_total * dens
       );
+      // Payload pode trazer massa operacional (peso líquido); respeita se residual.
+      const massaPayload = roundMass(data.massa_total || 0);
+      const massa_total =
+        massaPayload > 0 &&
+        Math.abs(massaPayload - massaFromOrigens) <= 1 + 1e-9
+          ? massaPayload
+          : massaFromOrigens;
+
+      // Alinha peso_liquido dos destinos para não ultrapassar a massa operacional.
+      if (massa_total > 0 && destinos.length > 0) {
+        const aligned = alignDestinosMassaToQuantidade(
+          destinos.map((d) => ({
+            ...d,
+            massa: Number(d.peso_liquido) || 0,
+            volume: Number(d.volume_total || d.volume) || 0,
+          })),
+          massa_total
+        );
+        destinos = aligned.map((d) => {
+          const { massa, ...rest } = d;
+          const peso = roundMass(massa);
+          return {
+            ...rest,
+            peso_liquido: peso,
+            peso_bruto: roundMass((Number(rest.tara) || 0) + peso),
+          };
+        });
+      }
       // `id` fica fora do payload: no insert ele deve ser gerado pelo banco
       // (id: null violaria a constraint) e no update o alvo já é o editingId.
       const { id: _formId, ...dataSemId } = data;

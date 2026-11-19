@@ -2325,6 +2325,7 @@
           "editOrdemTitle": "Editar dados da ordem",
           "volumeRegistered": "Volume registrado",
           "volumePacked": "Volume envasado",
+          "volumeRemaining": "Restante",
           "conferenceOk": "Conferência ok",
           "conferenceExceeded": "Volume envasado excede o registrado",
           "conferencePending": "Ajuste os itens até fechar a conferência",
@@ -2332,7 +2333,8 @@
             "density": "Densidade é obrigatória para o envase.",
             "items": "Preencha todos os itens de envase.",
             "mismatch": "O volume envasado deve ser igual ao volume registrado.",
-            "operators": "Selecione ao menos um operador do setor Transbordo."
+            "operators": "Selecione ao menos um operador do setor Transbordo.",
+            "tankaCapacity": "Um ou mais destinos excedem o espaço vago do tanka."
           }
         },
         "submitValidation": "Enviar para validação",
@@ -2488,6 +2490,7 @@
             "volume": "Quantidade",
             "placa": "Placa",
             "barril": "Barril",
+            "placaBarril": "Placa",
             "quantidadeEmbalagens": "Qtd. emb.",
             "pesoLiquido": "Peso líquido",
             "eslinga": "Eslinga",

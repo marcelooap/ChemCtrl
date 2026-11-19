@@ -134,6 +134,16 @@ function formatLacres(value) {
   return orDash(value);
 }
 
+/** Placa e barril em uma célula: "PLACA (BARRIL)", ou só o que existir. */
+function formatPlacaBarril(placa, barril) {
+  const p = String(placa || "").trim();
+  const b = String(barril || "").trim();
+  if (p && b) return `${p} (${b})`;
+  if (p) return p;
+  if (b) return b;
+  return DASH;
+}
+
 function firstLoteGranel(granel) {
   if (Array.isArray(granel?.lotes) && granel.lotes.length > 0) {
     return granel.lotes[0];
@@ -209,22 +219,19 @@ function columnsForDestinoKind(kind, t) {
     return [
       colItem(t),
       {
-        key: "placa",
-        label: t("painel.operacional.ordemTransbordo.relatorio.columns.placa"),
-        width: "16%",
-        nowrap: true,
-      },
-      {
-        key: "barril",
-        label: t("painel.operacional.ordemTransbordo.relatorio.columns.barril"),
-        width: "14%",
+        key: "placaBarril",
+        label: t(
+          "painel.operacional.ordemTransbordo.relatorio.columns.placaBarril"
+        ),
+        width: "22%",
         nowrap: true,
       },
       {
         key: "volume",
         label: t("painel.operacional.ordemTransbordo.relatorio.columns.volume"),
         align: "right",
-        width: "18%",
+        width: "16%",
+        nowrap: true,
       },
       {
         key: "peso",
@@ -232,18 +239,20 @@ function columnsForDestinoKind(kind, t) {
           "painel.operacional.ordemTransbordo.relatorio.columns.pesoLiquido"
         ),
         align: "right",
-        width: "15%",
+        width: "14%",
         nowrap: true,
       },
       {
         key: "eslinga",
         label: t("painel.operacional.ordemTransbordo.relatorio.columns.eslinga"),
-        width: "15%",
+        width: "14%",
+        nowrap: true,
       },
       {
         key: "lacres",
         label: t("painel.operacional.ordemTransbordo.relatorio.columns.lacres"),
-        width: "15%",
+        width: "27%",
+        nowrap: true,
       },
     ];
   }
@@ -316,8 +325,7 @@ function buildDestinoRow(item, index, kind, t) {
     __key: `${item?.origem_uid || "destino"}-${index}`,
     item: String(index + 1).padStart(2, "0"),
     identificacao: orDash(item?.tanka_codigo),
-    placa: orDash(item?.placa),
-    barril: orDash(item?.barril),
+    placaBarril: formatPlacaBarril(item?.placa, item?.barril),
     quantidade:
       Number(item?.quantidade_embalagens) > 0
         ? formatNum(Number(item.quantidade_embalagens))
@@ -668,7 +676,7 @@ export default function OrdemTransbordoRelatorio() {
       <A4Sheet>
         <ReportHeader
           organization={t("painel.operacional.ordemTransbordo.relatorio.organization")}
-          title={`${t("painel.operacional.ordemTransbordo.relatorio.title")} - ${documentId}`}
+          title={t("painel.operacional.ordemTransbordo.relatorio.title")}
           subtitle={t("painel.operacional.ordemTransbordo.relatorio.subtitle", {
             data: fmtDateTime(emissao),
           })}
