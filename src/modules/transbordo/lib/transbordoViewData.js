@@ -15,6 +15,7 @@ import {
   isUnidadeMassaEntrada,
   isUnidadeVolumeEntrada,
   isEstoqueEmbalado,
+  resolveEstoqueIdFromOrigemTransbordo,
 } from "@transbordo/lib/estoqueSaldo";
 import { isDestinoEstoqueEmbalado } from "@transbordo/lib/tiposEmbalagem";
 import {
@@ -465,7 +466,7 @@ function buildOrigemRows(
     const produto = origemProdutoNome(o, produtoNome);
     const origemEmMassa = origemVolumeEmMassa(o, dens);
     const granel = isOrigemGranel(o, entradas);
-    const entradaId = o?.entrada_id || null;
+    const entradaId = resolveEstoqueIdFromOrigemTransbordo(o) || o?.entrada_id || null;
 
     if (lotes.length > 1) {
       lotes.forEach((l, groupIndex) => {

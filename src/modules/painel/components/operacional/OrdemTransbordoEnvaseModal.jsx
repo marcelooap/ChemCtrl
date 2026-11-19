@@ -37,6 +37,8 @@ import {
 } from "@transbordo/lib/vasilhameComposicao";
 
 const INPUT_EDITABLE = "bg-white";
+/** Espelha validacaoTransbordo — trocado pelo id real do estoque na efetivação. */
+const PENDING_GRANEL_PREFIX = "__PENDING_GRANEL__";
 
 function createClientUid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -590,7 +592,11 @@ export default function OrdemTransbordoEnvaseModal({
       const prevEntradaId =
         embaladoOrigem?.entrada_id ||
         prevOrigem.entrada_id ||
-        (tipoOrigem === "entrada" ? granelPayload?.id || null : null);
+        (tipoOrigem === "entrada"
+          ? granelPayload?.id ||
+            granelPayload?.savedEstoques?.[0]?.id ||
+            `${PENDING_GRANEL_PREFIX}::0`
+          : null);
       const loteEfetivo =
         loteOrigem ||
         embaladoOrigem?.lote ||

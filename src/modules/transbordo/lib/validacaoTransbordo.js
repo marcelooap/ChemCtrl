@@ -500,22 +500,32 @@ export async function excluirValidacao(id) {
   return entities.transbordoValidacoes.delete(id);
 }
 
+function isOrigemGranelPendente(origem) {
+  const tipo = String(origem?.tipo_origem || "").trim().toLowerCase();
+  if (tipo && tipo !== "entrada" && tipo !== "granel") return false;
+  const id = String(origem?.entrada_id || "").trim();
+  return !id || id.startsWith(PLACEHOLDER_PREFIX);
+}
+
 /**
- * Substitui placeholders `__PENDING_GRANEL__::N` pelos IDs reais de
- * `t_estoque` gerados por createGranelEntrada.
+ * Substitui placeholders `__PENDING_GRANEL__::N` (e origens granel sem id)
+ * pelos IDs reais de estoque gerados por createGranelEntrada.
  */
 function swapGranelPlaceholders(transbordoPayload, savedEstoques, entradaCodigo) {
-  const origens = (transbordoPayload.origens || []).map((o) => {
+  const origens = (transbordoPayload.origens || []).map((o, index) => {
+    if (!isOrigemGranelPendente(o)) return o;
     const id = String(o.entrada_id || "");
-    if (!id.startsWith(PLACEHOLDER_PREFIX)) return o;
-    const idx = parseInt(id.split("::")[1] || "0", 10);
+    const idx = id.startsWith(PLACEHOLDER_PREFIX)
+      ? parseInt(id.split("::")[1] || "0", 10)
+      : index;
     const est = savedEstoques[idx] || savedEstoques[0];
-    if (!est) return o;
+    if (!est?.id) return o;
     const produtoNome = est.produto_nome || o.produto_nome || "";
     const loteLabel = o.lote ? ` — Lote ${o.lote}` : "";
     return {
       ...o,
       entrada_id: est.id,
+      estoque_id: est.id,
       entrada_codigo: `${entradaCodigo} - ${produtoNome}${loteLabel}`.trim(),
     };
   });

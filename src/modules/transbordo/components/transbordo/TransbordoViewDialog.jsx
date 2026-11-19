@@ -21,8 +21,8 @@ import PrintContainerLabelDialog from "@industrializacao/components/vasilhames/P
 import EntradaEtiquetaDialog, {
   EMBALAGEM_ORIGEM_GRANEL_OPTIONS,
 } from "@transbordo/components/entrada/EntradaEtiquetaDialog";
-import { entities } from "@transbordo/services/entities";
 import { buildEstoqueDisplayCodigoMap } from "@transbordo/lib/entradaCodigo";
+import { resolveOrigemGranelRecebimento } from "@transbordo/lib/origemGranelRecebimento";
 import { buildTransbordoViewModel } from "@transbordo/lib/transbordoViewData";
 import { loadConvencionalLabelContext } from "@transbordo/lib/printSaidaAgendamento";
 import { TIPO_CONVENCIONAL } from "@transbordo/lib/saidaOrigem";
@@ -188,48 +188,23 @@ export default function TransbordoViewDialog({
     }
   };
 
-  const resolveEntradaRecebimento = async (origemRow) => {
-    const estoqueId = origemRow?.entradaId;
-    if (!estoqueId) {
-      throw new Error("Origem granel sem vínculo com o recebimento.");
-    }
-    const estoque =
-      (entradas || []).find((e) => String(e?.id) === String(estoqueId)) || null;
-    const parentId = estoque?.entrada_id || null;
-
-    let entrada = null;
-    if (parentId) {
-      entrada = await entities.entradas.get(parentId).catch(() => null);
-    }
-    if (!entrada?.id) {
-      entrada = await entities.entradas.get(estoqueId).catch(() => null);
-    }
-    if (!entrada?.id && estoque?.id) {
-      entrada = estoque;
-    }
-    if (!entrada?.id) {
-      throw new Error("Não foi possível carregar o recebimento desta origem.");
-    }
-
-    const entradaCodigo =
-      String(entrada.id_entrada || "").trim() ||
-      (estoqueId ? estoqueCodigoMap[estoqueId] : "") ||
-      estoqueCodigoMap[entrada.id] ||
-      String(estoque?.entrada_codigo || "").trim() ||
-      "";
-    return { entrada, entradaCodigo };
-  };
-
   const handlePrintOrigemEtiqueta = async (origemRow) => {
     if (!origemRow?.isGranel || origemLabelLoadingKey != null) return;
     const loadingKey = `${origemRow.origemIndex}-${origemRow.groupIndex}`;
     setOrigemLabelLoadingKey(loadingKey);
     try {
-      const { entrada, entradaCodigo } = await resolveEntradaRecebimento(origemRow);
+      const origem =
+        (transbordo?.origens || [])[origemRow.origemIndex] || null;
+      const { entrada, entradaCodigo } = await resolveOrigemGranelRecebimento({
+        origem,
+        transbordo,
+        estoqueList: entradas,
+        estoqueCodigoMap,
+      });
       setOrigemLabelDialog({
         entrada,
         entradaCodigo,
-        initialLote: origemRow.loteKey || "",
+        initialLote: origemRow.loteKey || origem?.lote || "",
       });
     } catch (err) {
       toast({
