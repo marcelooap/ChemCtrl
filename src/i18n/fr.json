@@ -1429,7 +1429,15 @@
             "remover": "Retirer la réservation",
             "generateBoleta": "Générer la Boleta"
           },
+          "selectAll": "Tout sélectionner",
+          "selectItem": "Sélectionner {{label}}",
+          "selected": "Sélectionnés : {{count}}",
+          "generateBoletas": "Générer les Boletas ({{count}})",
+          "generatingBoletas": "Génération...",
+          "boletasGenerated": "Boletas générées",
+          "boletasExported": "{{count}} boleta(s) exportée(s) dans un PDF.",
           "boletaError": "Impossible de générer la boleta.",
+          "multiLotHint": "Plusieurs lots — voir le détail",
           "fracionado": "Fractionné"
         },
         "editTitle": "Modifier le solde réservé",
@@ -1785,6 +1793,16 @@
             "dentro": "Dans",
             "fora": "Hors"
           },
+          "fracionado": "Fractionné",
+          "destinoTipos": {
+            "vasilhame": "Conteneurs",
+            "tankagem": "Cuve de stockage",
+            "embalado": "Emballé"
+          },
+          "fields": {
+            "qtdNota": "Qté facture",
+            "diferenca": "Différence"
+          },
           "sections": {
             "geral": "1. Informations générales",
             "granel": "2. Réception en vrac",
@@ -1800,7 +1818,9 @@
             "placa": "Plaque",
             "barril": "Fût",
             "quantidadeEmbalagens": "Qté cond.",
-            "pesoLiquido": "Poids net"
+            "pesoLiquido": "Poids net",
+            "eslinga": "Élingue",
+            "lacres": "Plombs"
           },
           "signatures": {
             "emitente": "Émetteur"

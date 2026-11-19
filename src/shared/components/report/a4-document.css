@@ -215,7 +215,53 @@
   text-align: center;
 }
 
+.a4-diff {
+  font-variant-numeric: tabular-nums;
+}
+
+.a4-diff--neg {
+  color: #b91c1c;
+}
+
+.a4-diff--pos {
+  color: #047857;
+}
+
+/* Células vazias completam a última linha incompleta para manter as bordas. */
+.a4-grid__cell--empty {
+  min-height: 100%;
+}
+
+/* Volume + badge (ex.: Fracionado) na mesma célula da tabela. */
+.a4-cell-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: 0.8mm;
+  max-width: 100%;
+}
+
+.a4-align-right .a4-cell-stack {
+  align-items: flex-end;
+}
+
+.a4-align-center .a4-cell-stack {
+  align-items: center;
+}
+
 /* ---------- Tabelas ---------- */
+
+.a4-table-group + .a4-table-group {
+  margin-top: 4mm;
+}
+
+.a4-table-caption {
+  margin: 0 0 2mm;
+  font-size: 8.5pt;
+  font-weight: 700;
+  color: #1c355b;
+  letter-spacing: 0.02em;
+}
 
 .a4-table {
   width: 100%;

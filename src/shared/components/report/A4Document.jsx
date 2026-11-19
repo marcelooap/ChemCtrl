@@ -76,6 +76,15 @@ export function ReportInfoGrid({ items, columns = 3, centered = false }) {
   const visible = (items || []).filter(Boolean);
   if (visible.length === 0) return null;
 
+  // Completa a última linha com células vazias para as bordas internas
+  // continuarem até a borda direita (ex.: 9 itens em 6 colunas).
+  const remainder = visible.length % columns;
+  const padCount = remainder === 0 ? 0 : columns - remainder;
+  const cells = [
+    ...visible.map((item) => ({ kind: "item", item })),
+    ...Array.from({ length: padCount }, () => ({ kind: "empty" })),
+  ];
+
   return (
     <div
       className={[
@@ -87,22 +96,32 @@ export function ReportInfoGrid({ items, columns = 3, centered = false }) {
         .join(" ")}
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
-      {visible.map((item, index) => {
+      {cells.map((cell, index) => {
         const isFirstCol = index % columns === 0;
         const isFirstRow = index < columns;
+        const className = [
+          "a4-grid__cell",
+          isFirstCol ? "a4-grid__cell--first-col" : "",
+          isFirstRow ? "a4-grid__cell--first-row" : "",
+          cell.kind === "empty" ? "a4-grid__cell--empty" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        if (cell.kind === "empty") {
+          return (
+            <div
+              key={`empty-${index}`}
+              className={className}
+              aria-hidden="true"
+            />
+          );
+        }
+
         return (
-          <div
-            key={`${item.label}-${index}`}
-            className={[
-              "a4-grid__cell",
-              isFirstCol ? "a4-grid__cell--first-col" : "",
-              isFirstRow ? "a4-grid__cell--first-row" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            <div className="a4-grid__label">{item.label}</div>
-            <div className="a4-grid__value">{item.value ?? "-"}</div>
+          <div key={`${cell.item.label}-${index}`} className={className}>
+            <div className="a4-grid__label">{cell.item.label}</div>
+            <div className="a4-grid__value">{cell.item.value ?? "-"}</div>
           </div>
         );
       })}

@@ -1947,7 +1947,15 @@
             "remover": "Remove reservation",
             "generateBoleta": "Generate Slip"
           },
+          "selectAll": "Select all",
+          "selectItem": "Select {{label}}",
+          "selected": "Selected: {{count}}",
+          "generateBoletas": "Generate Slips ({{count}})",
+          "generatingBoletas": "Generating...",
+          "boletasGenerated": "Slips generated",
+          "boletasExported": "{{count}} slip(s) exported in one PDF.",
           "boletaError": "Could not generate the slip.",
+          "multiLotHint": "Multiple lots — see details",
           "fracionado": "Fractional"
         },
         "editTitle": "Edit reserved balance",
@@ -2398,6 +2406,16 @@
             "dentro": "Within",
             "fora": "Outside"
           },
+          "fracionado": "Fractional",
+          "destinoTipos": {
+            "vasilhame": "IBCs / tanks",
+            "tankagem": "Storage tank",
+            "embalado": "Packaged"
+          },
+          "fields": {
+            "qtdNota": "Invoice qty",
+            "diferenca": "Difference"
+          },
           "sections": {
             "geral": "1. General information",
             "granel": "2. Bulk receipt",
@@ -2413,7 +2431,9 @@
             "placa": "Plate",
             "barril": "Barrel",
             "quantidadeEmbalagens": "Pkg. qty",
-            "pesoLiquido": "Net weight"
+            "pesoLiquido": "Net weight",
+            "eslinga": "Sling",
+            "lacres": "Seals"
           },
           "signatures": {
             "emitente": "Issued by"

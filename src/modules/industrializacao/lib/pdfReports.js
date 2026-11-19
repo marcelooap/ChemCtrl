@@ -1543,10 +1543,14 @@ export async function generateCOAPDF(result, production, containers, recipe, opt
   }
 }
 
-export function generateBoletaPDF(container, productions = [], recipes = []) {
+/**
+ * Desenha uma boleta de envase (A4 paisagem, duas vias) na página atual do doc.
+ */
+export function drawBoletaPage(doc, container, productions = [], recipes = []) {
+  if (!doc || !container) return;
+
   const { lang, t } = getPdfLabels();
   const { fmtDate, fmtNum } = makePdfFormatters(lang);
-  const doc = new jsPDF({ orientation: 'landscape' });
   const PH_L = 210;
   const HALF = 297 / 2;
   const displayVolume = containerDisplayVolume(container, productions);
@@ -1617,9 +1621,27 @@ export function generateBoletaPDF(container, productions = [], recipes = []) {
     doc.rect(bM, y, bW, s4H); doc.line(bM + bW * 0.38, y, bM + bW * 0.38, y + s4H);
     doc.setFontSize(7); doc.setFont('helvetica', 'bold'); setColor(doc, GRAY_LABEL);
     doc.text(t('pdf.boleta.responsible'), bM + 2, y + 5);
-    setFill(doc, [245, 245, 245]); doc.rect(bM + 2, y + 8, bW * 0.38 - 4, 22, 'F');
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); setColor(doc, BLACK);
-    doc.text(String(container.operator || '-'), bM + bW * 0.19, y + 22, { align: 'center' });
+    const respBoxX = bM + 2;
+    const respBoxY = y + 8;
+    const respBoxW = bW * 0.38 - 4;
+    const respBoxH = 22;
+    setFill(doc, [245, 245, 245]); doc.rect(respBoxX, respBoxY, respBoxW, respBoxH, 'F');
+    const respNames = String(container.operator || '-')
+      .split(',')
+      .map(function(name) { return name.trim(); })
+      .filter(Boolean);
+    const respLines = respNames.length > 0 ? respNames : ['-'];
+    const respFontSize = respLines.length > 3 ? 6.5 : respLines.length > 2 ? 7.5 : 9;
+    const respLineH = respFontSize * 0.95;
+    const respBlockH = respLines.length * respLineH;
+    var respStartY = respBoxY + Math.max(2.5, (respBoxH - respBlockH) / 2) + respLineH * 0.75;
+    doc.setFontSize(respFontSize); doc.setFont('helvetica', 'bold'); setColor(doc, BLACK);
+    const respCX = respBoxX + respBoxW / 2;
+    respLines.forEach(function(name, idx) {
+      const lineY = respStartY + idx * respLineH;
+      if (lineY > respBoxY + respBoxH - 1) return;
+      doc.text(name, respCX, lineY, { align: 'center', maxWidth: respBoxW - 2 });
+    });
     const wCellX = bM + bW * 0.38; const wCellW = bW * 0.62; const wCX = wCellX + wCellW / 2; const wRowH = s4H / 3;
     const weightRows = [
       { label: t('pdf.boleta.tare'), value: fmtNum(container.tare, 0) + ' kg' },
@@ -1647,6 +1669,12 @@ export function generateBoletaPDF(container, productions = [], recipes = []) {
 
   drawSide(0);
   drawSide(HALF);
+}
+
+export function generateBoletaPDF(container, productions = [], recipes = []) {
+  const { t } = getPdfLabels();
+  const doc = new jsPDF({ orientation: 'landscape' });
+  drawBoletaPage(doc, container, productions, recipes);
   doc.save((container.container_number || container.registration_id || 'vasilhame') + ' - ' + t('pdf.boleta.filename') + '.pdf');
 }
 

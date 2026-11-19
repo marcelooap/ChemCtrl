@@ -20,6 +20,17 @@ import { base44 } from "@industrializacao/api/base44Client";
 import { resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
 import { toValidacaoViewModel } from "@industrializacao/lib/validacaoIndustrializacao";
 import { formatDensidade, formatMass, formatNum } from "@transbordo/lib/format";
+import {
+  getLoteQuantidadeDeclarada,
+  getQuantidadeNotaFiscal,
+  kgToLoteUnidade,
+  loteToKg,
+} from "@transbordo/lib/conversao";
+import {
+  isDestinoEstoqueEmbalado,
+  isVasilhameLegadoEmbalado,
+  labelTipoEmbalagem,
+} from "@transbordo/lib/tiposEmbalagem";
 
 const BASE_PATH = "/painel/operacional/ordem-transbordo";
 const LOGO_SRC = "/icons/chemctrl-logo.svg";
@@ -74,8 +85,7 @@ const GRANEL_TIPOS = new Set(["entrada", "granel"]);
 
 /**
  * Identificação da origem.
- * Para granel o `entrada_codigo` traz produto e lote concatenados — dados já
- * exibidos em colunas próprias —, então basta a nota fiscal.
+ * Para granel o tipo já aparece na coluna ao lado — basta a NF-e.
  */
 function origemIdentificacao(origem, granel) {
   const codigo = String(origem?.entrada_codigo || "").trim();
@@ -84,7 +94,7 @@ function origemIdentificacao(origem, granel) {
     const nf =
       String(granel?.nota_fiscal || "").trim() ||
       (codigo.match(/NF-?e?\s*[:nº]*\s*([\w./-]+)/i)?.[1] ?? "");
-    return nf ? `GRANEL (NF-e ${nf})` : "GRANEL";
+    return nf ? `NF-e ${nf}` : DASH;
   }
 
   // Rótulos de tanka/vasilhame vêm como "TANKA 34 - PRODUTO (20.805 L)";
@@ -92,6 +102,278 @@ function origemIdentificacao(origem, granel) {
   const semVolume = codigo.replace(/\s*\([^)]*\)\s*$/, "").trim();
   const sep = semVolume.indexOf(" - ");
   return orDash(sep > 0 ? semVolume.slice(0, sep).trim() : semVolume);
+}
+
+/** Classifica o destino para escolher o layout de colunas da tabela. */
+function classifyDestinoKind(destino) {
+  const tipo = String(destino?.tipo_embalagem || "");
+  const tipoLower = tipo.toLowerCase();
+
+  if (tipoLower === "vasilhame") return "vasilhame";
+  if (tipoLower === "tankagem") return "tankagem";
+  if (isDestinoEstoqueEmbalado(tipo) || isVasilhameLegadoEmbalado(tipo)) {
+    return "embalado";
+  }
+  if (destino?.tanka_id || destino?.tanka_codigo) return "tankagem";
+  // Fallback: envase em tanque (placa/barril) sem tanka.
+  if (destino?.placa || destino?.barril) return "vasilhame";
+  return "vasilhame";
+}
+
+function destinoGroupKey(destino) {
+  const tipo = String(destino?.tipo_embalagem || "").trim();
+  if (tipo) return tipo;
+  return classifyDestinoKind(destino);
+}
+
+function formatLacres(value) {
+  if (Array.isArray(value)) {
+    const list = value.map((v) => String(v || "").trim()).filter(Boolean);
+    return list.length > 0 ? list.join(", ") : DASH;
+  }
+  return orDash(value);
+}
+
+function firstLoteGranel(granel) {
+  if (Array.isArray(granel?.lotes) && granel.lotes.length > 0) {
+    return granel.lotes[0];
+  }
+  return granel || null;
+}
+
+/** Quantidade da NF informada na Nova Ordem (não o peso líquido ajustado). */
+function qtdNotaFromGranel(granel) {
+  if (!granel) return null;
+  const lote = firstLoteGranel(granel);
+  const lotesCount = Array.isArray(granel.lotes) ? granel.lotes.length : 1;
+  const quantidade =
+    Number(getLoteQuantidadeDeclarada(lote)) ||
+    Number(getQuantidadeNotaFiscal(lote, granel, { lotesCount })) ||
+    0;
+  // UOM do lote (formulário); o header do payload granel é sempre kg.
+  const unidade = String(lote?.unidade_medida || "").trim() || "kg";
+  if (!(quantidade > 0)) return null;
+  return { quantidade, unidade };
+}
+
+/**
+ * Diferença pesagem × NF quando fora da margem.
+ * Positivo = peso líquido maior que a NF; negativo = menor.
+ */
+function diferencaPesagemGranel(granel) {
+  if (!granel || granel.granel_margem !== "fora") return null;
+
+  const pesoLiquido = Number(granel.granel_peso_liquido) || 0;
+  if (!(pesoLiquido > 0)) return null;
+
+  const lote = firstLoteGranel(granel);
+  const qtdNota = qtdNotaFromGranel(granel);
+  if (!qtdNota) return null;
+
+  const densidade = lote?.densidade || granel.densidade || "";
+  const unidade = qtdNota.unidade || "kg";
+  const qtdNotaKg = loteToKg({
+    quantidade: qtdNota.quantidade,
+    unidade_medida: unidade,
+    densidade,
+    tipo_recebimento: "granel",
+  });
+  const difKg = pesoLiquido - qtdNotaKg;
+  if (!Number.isFinite(difKg) || Math.abs(difKg) < 0.5) return null;
+
+  const qtdRealUnidade = kgToLoteUnidade(pesoLiquido, unidade, densidade);
+  const difUnidade = qtdRealUnidade - qtdNota.quantidade;
+  const sign = difKg > 0 ? "+" : "";
+  const um = String(unidade).toLowerCase();
+
+  const texto =
+    um === "kg" || um === "kgs"
+      ? `${sign}${formatMass(difKg)} kg`
+      : `${sign}${formatNum(difUnidade, 2)} ${unidade} (${sign}${formatMass(difKg)} kg)`;
+
+  return { difKg, difUnidade, texto };
+}
+
+function colItem(t) {
+  return {
+    key: "item",
+    label: t("painel.operacional.ordemTransbordo.relatorio.columns.item"),
+    align: "center",
+    width: "7%",
+    nowrap: true,
+  };
+}
+
+function columnsForDestinoKind(kind, t) {
+  if (kind === "vasilhame") {
+    return [
+      colItem(t),
+      {
+        key: "placa",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.placa"),
+        width: "16%",
+        nowrap: true,
+      },
+      {
+        key: "barril",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.barril"),
+        width: "14%",
+        nowrap: true,
+      },
+      {
+        key: "volume",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.volume"),
+        align: "right",
+        width: "18%",
+      },
+      {
+        key: "peso",
+        label: t(
+          "painel.operacional.ordemTransbordo.relatorio.columns.pesoLiquido"
+        ),
+        align: "right",
+        width: "15%",
+        nowrap: true,
+      },
+      {
+        key: "eslinga",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.eslinga"),
+        width: "15%",
+      },
+      {
+        key: "lacres",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.lacres"),
+        width: "15%",
+      },
+    ];
+  }
+
+  if (kind === "tankagem") {
+    return [
+      colItem(t),
+      {
+        key: "identificacao",
+        label: t(
+          "painel.operacional.ordemTransbordo.relatorio.columns.identificacao"
+        ),
+        width: "40%",
+      },
+      {
+        key: "volume",
+        label: t("painel.operacional.ordemTransbordo.relatorio.columns.volume"),
+        align: "right",
+        width: "26%",
+        nowrap: true,
+      },
+      {
+        key: "peso",
+        label: t(
+          "painel.operacional.ordemTransbordo.relatorio.columns.pesoLiquido"
+        ),
+        align: "right",
+        width: "27%",
+        nowrap: true,
+      },
+    ];
+  }
+
+  // IBC / Bombona / Tambor / demais embalados unitários
+  return [
+    colItem(t),
+    {
+      key: "quantidade",
+      label: t(
+        "painel.operacional.ordemTransbordo.relatorio.columns.quantidadeEmbalagens"
+      ),
+      align: "right",
+      width: "22%",
+      nowrap: true,
+    },
+    {
+      key: "volume",
+      label: t("painel.operacional.ordemTransbordo.relatorio.columns.volume"),
+      align: "right",
+      width: "35%",
+      nowrap: true,
+    },
+    {
+      key: "peso",
+      label: t(
+        "painel.operacional.ordemTransbordo.relatorio.columns.pesoLiquido"
+      ),
+      align: "right",
+      width: "36%",
+      nowrap: true,
+    },
+  ];
+}
+
+function buildDestinoRow(item, index, kind, t) {
+  const volumeText = volumeOrDash(item?.volume_total ?? item?.volume);
+  const fracionado = kind === "vasilhame" && item?.fracionado === true;
+
+  return {
+    __key: `${item?.origem_uid || "destino"}-${index}`,
+    item: String(index + 1).padStart(2, "0"),
+    identificacao: orDash(item?.tanka_codigo),
+    placa: orDash(item?.placa),
+    barril: orDash(item?.barril),
+    quantidade:
+      Number(item?.quantidade_embalagens) > 0
+        ? formatNum(Number(item.quantidade_embalagens))
+        : DASH,
+    volume: fracionado ? (
+      <div className="a4-cell-stack">
+        <span>{volumeText}</span>
+        <ReportBadge variant="neutral">
+          {t("painel.operacional.ordemTransbordo.relatorio.fracionado")}
+        </ReportBadge>
+      </div>
+    ) : (
+      volumeText
+    ),
+    peso: massaOrDash(item?.peso_liquido),
+    eslinga: orDash(item?.eslinga),
+    lacres: formatLacres(item?.lacres),
+  };
+}
+
+/**
+ * Agrupa destinos por tipo de embalagem, preservando a ordem de aparição.
+ * Cada grupo vira uma tabela com colunas adequadas ao tipo.
+ */
+function groupDestinosByTipo(destinos, t) {
+  const groups = [];
+  const indexByKey = new Map();
+
+  destinos.forEach((destino) => {
+    const key = destinoGroupKey(destino);
+    const kind = classifyDestinoKind(destino);
+    let group = indexByKey.has(key) ? groups[indexByKey.get(key)] : null;
+
+    if (!group) {
+      const tipo = String(destino?.tipo_embalagem || "").trim();
+      const label =
+        labelTipoEmbalagem(tipo) ||
+        t(`painel.operacional.ordemTransbordo.relatorio.destinoTipos.${kind}`);
+
+      group = {
+        key,
+        kind,
+        label,
+        columns: columnsForDestinoKind(kind, t),
+        rows: [],
+      };
+      indexByKey.set(key, groups.length);
+      groups.push(group);
+    }
+
+    group.rows.push(
+      buildDestinoRow(destino, group.rows.length, group.kind, t)
+    );
+  });
+
+  return groups;
 }
 
 /** Lotes envolvidos na operação, sem repetição, na ordem em que aparecem. */
@@ -225,6 +507,16 @@ export default function OrdemTransbordoRelatorio() {
   const documentId = buildDocumentId(validacao);
   const densidade = transbordo?.densidade || granel?.densidade || "";
   const lotes = coletarLotes(validacao, origens);
+  const qtdNota = qtdNotaFromGranel(granel);
+  const diferencaGranel = diferencaPesagemGranel(granel);
+
+  const quantidadeGeral = granel
+    ? qtdNota && qtdNota.quantidade > 0
+      ? `${formatNum(qtdNota.quantidade, 2)} ${qtdNota.unidade || ""}`.trim()
+      : DASH
+    : resumo && resumo.quantidade > 0
+      ? `${formatNum(resumo.quantidade, 2)} ${resumo.unidade_medida || ""}`.trim()
+      : DASH;
 
   const infoItems = [
     {
@@ -247,11 +539,10 @@ export default function OrdemTransbordoRelatorio() {
       value: lotes.length > 0 ? lotes.join(" - ") : DASH,
     },
     {
-      label: t("painel.operacional.ordemTransbordo.fields.qty"),
-      value:
-        resumo && resumo.quantidade > 0
-          ? `${formatNum(resumo.quantidade, 2)} ${resumo.unidade_medida || ""}`.trim()
-          : DASH,
+      label: granel
+        ? t("painel.operacional.ordemTransbordo.relatorio.fields.qtdNota")
+        : t("painel.operacional.ordemTransbordo.fields.qty"),
+      value: quantidadeGeral,
     },
     {
       label: t("painel.operacional.ordemTransbordo.fields.density"),
@@ -311,6 +602,26 @@ export default function OrdemTransbordoRelatorio() {
             DASH
           ),
         },
+        ...(diferencaGranel
+          ? [
+              {
+                label: t(
+                  "painel.operacional.ordemTransbordo.relatorio.fields.diferenca"
+                ),
+                value: (
+                  <span
+                    className={
+                      diferencaGranel.difKg < 0
+                        ? "a4-diff a4-diff--neg"
+                        : "a4-diff a4-diff--pos"
+                    }
+                  >
+                    {diferencaGranel.texto}
+                  </span>
+                ),
+              },
+            ]
+          : []),
       ]
     : [];
 
@@ -332,19 +643,7 @@ export default function OrdemTransbordoRelatorio() {
     };
   });
 
-  const destinoRows = destinos.map((item, index) => ({
-    __key: `${item?.origem_uid || "destino"}-${index}`,
-    item: String(index + 1).padStart(2, "0"),
-    identificacao: orDash(item?.tanka_codigo),
-    placa: orDash(item?.placa),
-    barril: orDash(item?.barril),
-    quantidade:
-      Number(item?.quantidade_embalagens) > 0
-        ? formatNum(Number(item.quantidade_embalagens))
-        : DASH,
-    volume: volumeOrDash(item?.volume_total ?? item?.volume),
-    peso: massaOrDash(item?.peso_liquido),
-  }));
+  const destinoGroups = groupDestinosByTipo(destinos, t);
 
   const observacoes = String(transbordo?.observacoes || "").trim();
 
@@ -440,66 +739,18 @@ export default function OrdemTransbordoRelatorio() {
           </ReportSection>
         )}
 
-        {destinoRows.length > 0 && (
+        {destinoGroups.length > 0 && (
           <ReportSection
             title={t("painel.operacional.ordemTransbordo.relatorio.sections.destinos")}
           >
-            <ReportTable
-              columns={[
-                {
-                  key: "item",
-                  label: t("painel.operacional.ordemTransbordo.relatorio.columns.item"),
-                  align: "center",
-                  width: "7%",
-                  nowrap: true,
-                },
-                {
-                  key: "identificacao",
-                  label: t(
-                    "painel.operacional.ordemTransbordo.relatorio.columns.identificacao"
-                  ),
-                  width: "23%",
-                },
-                {
-                  key: "placa",
-                  label: t("painel.operacional.ordemTransbordo.relatorio.columns.placa"),
-                  width: "14%",
-                  nowrap: true,
-                },
-                {
-                  key: "barril",
-                  label: t("painel.operacional.ordemTransbordo.relatorio.columns.barril"),
-                  width: "14%",
-                  nowrap: true,
-                },
-                {
-                  key: "quantidade",
-                  label: t(
-                    "painel.operacional.ordemTransbordo.relatorio.columns.quantidadeEmbalagens"
-                  ),
-                  align: "right",
-                  width: "12%",
-                  nowrap: true,
-                },
-                {
-                  key: "volume",
-                  label: t("painel.operacional.ordemTransbordo.relatorio.columns.volume"),
-                  align: "right",
-                  width: "15%",
-                  nowrap: true,
-                },
-                {
-                  key: "peso",
-                  label: t(
-                    "painel.operacional.ordemTransbordo.relatorio.columns.pesoLiquido"
-                  ),
-                  align: "right",
-                  width: "15%",
-                  nowrap: true,
-                },
-              ]}
-              rows={destinoRows}
-            />
+            {destinoGroups.map((group) => (
+              <div key={group.key} className="a4-table-group">
+                {destinoGroups.length > 1 ? (
+                  <h3 className="a4-table-caption">{group.label}</h3>
+                ) : null}
+                <ReportTable columns={group.columns} rows={group.rows} />
+              </div>
+            ))}
           </ReportSection>
         )}
 

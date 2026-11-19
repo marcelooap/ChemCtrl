@@ -35,13 +35,12 @@ function fmtVolume(n) {
 }
 
 /**
- * Gera boleta de envase em PDF (A4 paisagem, duas vias idênticas).
+ * Desenha uma boleta de envase (A4 paisagem, duas vias) na página atual do doc.
  * Layout idêntico ao relatório de boleta do ChemCtrl (`generateBoletaPDF`).
  */
-export function generateBoletaPDF(vasilhame) {
-  if (!vasilhame) return;
+export function drawBoletaPage(doc, vasilhame) {
+  if (!doc || !vasilhame) return;
 
-  const doc = new jsPDF({ orientation: "landscape" });
   const PH_L = 210;
   const HALF = 297 / 2;
 
@@ -182,13 +181,33 @@ export function generateBoletaPDF(vasilhame) {
     doc.setFont("helvetica", "bold");
     setColor(doc, GRAY_LABEL);
     doc.text("RESPONSÁVEL", bM + 2, y + 5);
+    const respBoxX = bM + 2;
+    const respBoxY = y + 8;
+    const respBoxW = bW * 0.38 - 4;
+    const respBoxH = 22;
     setFill(doc, [245, 245, 245]);
-    doc.rect(bM + 2, y + 8, bW * 0.38 - 4, 22, "F");
-    doc.setFontSize(9);
+    doc.rect(respBoxX, respBoxY, respBoxW, respBoxH, "F");
+    const respNames = String(vasilhame.responsavel || "-")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const respLines = respNames.length > 0 ? respNames : ["-"];
+    const respFontSize = respLines.length > 3 ? 6.5 : respLines.length > 2 ? 7.5 : 9;
+    const respLineH = respFontSize * 0.95;
+    const respBlockH = respLines.length * respLineH;
+    const respStartY =
+      respBoxY + Math.max(2.5, (respBoxH - respBlockH) / 2) + respLineH * 0.75;
+    doc.setFontSize(respFontSize);
     doc.setFont("helvetica", "bold");
     setColor(doc, BLACK);
-    doc.text(String(vasilhame.responsavel || "-"), bM + bW * 0.19, y + 22, {
-      align: "center",
+    const respCX = respBoxX + respBoxW / 2;
+    respLines.forEach((name, idx) => {
+      const lineY = respStartY + idx * respLineH;
+      if (lineY > respBoxY + respBoxH - 1) return;
+      doc.text(name, respCX, lineY, {
+        align: "center",
+        maxWidth: respBoxW - 2,
+      });
     });
     const wCellX = bM + bW * 0.38;
     const wCellW = bW * 0.62;
@@ -244,6 +263,16 @@ export function generateBoletaPDF(vasilhame) {
 
   drawSide(0);
   drawSide(HALF);
+}
+
+/**
+ * Gera boleta de envase em PDF (A4 paisagem, duas vias idênticas).
+ */
+export function generateBoletaPDF(vasilhame) {
+  if (!vasilhame) return;
+
+  const doc = new jsPDF({ orientation: "landscape" });
+  drawBoletaPage(doc, vasilhame);
 
   const fileBase =
     vasilhame.placa || vasilhame.codigo || vasilhame.id || "vasilhame";

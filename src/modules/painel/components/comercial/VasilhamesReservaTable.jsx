@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, BookmarkMinus, BookmarkPlus, Eye } from 'lucide-react';
+import { AlertCircle, BookmarkMinus, BookmarkPlus, Eye, FileText, Loader2 } from 'lucide-react';
 import ConfirmDialog from '@shared/components/ConfirmDialog';
 import { Button } from '@shared/components/ui/button';
+import { Checkbox } from '@shared/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -16,10 +17,11 @@ import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { formatVolume } from '@transbordo/lib/format';
 import { useToast } from '@shared/components/ui/use-toast';
+import { useSubmitGuard } from '@shared/hooks/useSubmitGuard';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import {
   ORIGEM_INDUSTRIALIZACAO,
-  ORIGEM_TRANSBORDO,
+  generateVasilhameBoletas,
   liberarVasilhame,
   reservarVasilhame,
 } from '@painel/lib/vasilhameReservas';
@@ -45,14 +47,67 @@ export default function VasilhamesReservaTable({
 }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const boletasGuard = useSubmitGuard();
   const [viewRow, setViewRow] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [solicitante, setSolicitante] = useState('');
   const [reserveError, setReserveError] = useState('');
   const [reserving, setReserving] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
 
   const isLiberar = pendingAction?.type === 'liberar';
   const reserveRow = pendingAction?.type === 'reservar' ? pendingAction.row : null;
+
+  const selectedRows = useMemo(
+    () => rows.filter((row) => selected.has(row.id)),
+    [rows, selected]
+  );
+  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
+
+  const toggleSelect = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        rows.forEach((row) => next.delete(row.id));
+        return next;
+      });
+      return;
+    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      rows.forEach((row) => next.add(row.id));
+      return next;
+    });
+  };
+
+  const handleGenerateBoletas = () =>
+    boletasGuard.run(async () => {
+      try {
+        await generateVasilhameBoletas(selectedRows);
+        toast({
+          title: t('painel.comercial.reservarMaterial.vasilhames.boletasGenerated'),
+          description: t('painel.comercial.reservarMaterial.vasilhames.boletasExported', {
+            count: selectedRows.length,
+          }),
+        });
+      } catch (err) {
+        console.error('[VasilhamesReservaTable] boletas:', err);
+        toast({
+          variant: 'destructive',
+          title: t('painel.comercial.reservarMaterial.vasilhames.boletaError'),
+          description: err?.message,
+        });
+      }
+    });
 
   const openReserve = (row) => {
     setSolicitante('');
@@ -109,14 +164,45 @@ export default function VasilhamesReservaTable({
     <>
       <div className="h-full bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
         <div className="shrink-0 px-5 py-4 border-b border-border flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
-            {showDataSaida
-              ? t('painel.comercial.reservarMaterial.vasilhames.tableTitleAll')
-              : t('painel.comercial.reservarMaterial.vasilhames.tableTitle')}
-          </h3>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-            {rows.length}
-          </span>
+          <div className="flex items-center gap-3 min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">
+              {showDataSaida
+                ? t('painel.comercial.reservarMaterial.vasilhames.tableTitleAll')
+                : t('painel.comercial.reservarMaterial.vasilhames.tableTitle')}
+            </h3>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {rows.length}
+            </span>
+            {selectedRows.length > 0 ? (
+              <span className="text-xs font-semibold text-primary">
+                {t('painel.comercial.reservarMaterial.vasilhames.selected', {
+                  count: selectedRows.length,
+                })}
+              </span>
+            ) : null}
+          </div>
+          {selectedRows.length > 0 ? (
+            <Button
+              type="button"
+              onClick={handleGenerateBoletas}
+              disabled={boletasGuard.busy}
+              className="shrink-0 gap-2"
+            >
+              {boletasGuard.busy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t('painel.comercial.reservarMaterial.vasilhames.generatingBoletas')}
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  {t('painel.comercial.reservarMaterial.vasilhames.generateBoletas', {
+                    count: selectedRows.length,
+                  })}
+                </>
+              )}
+            </Button>
+          ) : null}
         </div>
 
         {rows.length === 0 ? (
@@ -130,6 +216,13 @@ export default function VasilhamesReservaTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border bg-muted/40 uppercase sticky top-0 z-10">
+                  <th className="px-3 py-3 text-center w-10 bg-muted/40">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label={t('painel.comercial.reservarMaterial.vasilhames.selectAll')}
+                    />
+                  </th>
                   <th className="px-4 py-3 font-medium bg-muted/40">
                     {t('painel.comercial.reservarMaterial.vasilhames.columns.id')}
                   </th>
@@ -179,8 +272,19 @@ export default function VasilhamesReservaTable({
                     key={row.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${
                       i % 2 === 1 ? 'bg-muted/20' : ''
-                    } ${row.emPatio === false ? 'text-muted-foreground' : ''}`}
+                    } ${selected.has(row.id) ? 'bg-primary/5' : ''} ${
+                      row.emPatio === false ? 'text-muted-foreground' : ''
+                    }`}
                   >
+                    <td className="px-3 py-3 text-center">
+                      <Checkbox
+                        checked={selected.has(row.id)}
+                        onCheckedChange={() => toggleSelect(row.id)}
+                        aria-label={t('painel.comercial.reservarMaterial.vasilhames.selectItem', {
+                          label: row.displayId || row.id,
+                        })}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono font-bold text-primary">
                       {row.displayId}
                     </td>
@@ -196,7 +300,19 @@ export default function VasilhamesReservaTable({
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                       {row.barril}
                     </td>
-                    <td className="px-4 py-3 font-mono">{row.lote}</td>
+                    <td className="px-4 py-3 font-mono">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{row.lote}</span>
+                        {row.lotesExtras > 0 ? (
+                          <span
+                            className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                            title={t('painel.comercial.reservarMaterial.vasilhames.multiLotHint')}
+                          >
+                            +{row.lotesExtras}
+                          </span>
+                        ) : null}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span className="inline-flex items-center justify-end whitespace-nowrap">
                         {row.fracionado ? <FracionadoBadge /> : null}

@@ -1429,7 +1429,15 @@
             "remover": "Quitar reserva",
             "generateBoleta": "Generar Boleta"
           },
+          "selectAll": "Seleccionar todos",
+          "selectItem": "Seleccionar {{label}}",
+          "selected": "Seleccionados: {{count}}",
+          "generateBoletas": "Generar Boletas ({{count}})",
+          "generatingBoletas": "Generando...",
+          "boletasGenerated": "Boletas generadas",
+          "boletasExported": "{{count}} boleta(s) exportada(s) en un PDF.",
           "boletaError": "No se pudo generar la boleta.",
+          "multiLotHint": "Varios lotes — vea el detalle",
           "fracionado": "Fraccionado"
         },
         "editTitle": "Editar saldo reservado",
@@ -1785,6 +1793,16 @@
             "dentro": "Dentro",
             "fora": "Fuera"
           },
+          "fracionado": "Fraccionado",
+          "destinoTipos": {
+            "vasilhame": "Contenedores",
+            "tankagem": "Tanque de almacenamiento",
+            "embalado": "Envasado"
+          },
+          "fields": {
+            "qtdNota": "Cant. factura",
+            "diferenca": "Diferencia"
+          },
           "sections": {
             "geral": "1. Información general",
             "granel": "2. Recepción a granel",
@@ -1800,7 +1818,9 @@
             "placa": "Matrícula",
             "barril": "Barril",
             "quantidadeEmbalagens": "Cant. env.",
-            "pesoLiquido": "Peso neto"
+            "pesoLiquido": "Peso neto",
+            "eslinga": "Eslinga",
+            "lacres": "Precintos"
           },
           "signatures": {
             "emitente": "Emisor"

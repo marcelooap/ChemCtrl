@@ -15,6 +15,7 @@ import {
 import { toDateInputValue } from '@/i18n/formatters';
 import {
   getDominantLote,
+  LOTE_APORTE_ANTERIOR,
   resolveVasilhameLoteDatas,
 } from '@transbordo/lib/vasilhameComposicao';
 import { resolveVasilhameExpedidoDisplay } from '@transbordo/lib/vasilhamePatio';
@@ -53,6 +54,16 @@ function padRegId(value) {
 /** Mesma regra da tela Transbordo → Vasilhames: o flag do tanque, mesmo com vários lotes. */
 function isTransbordoFracionado(vasilhame) {
   return vasilhame?.fracionado === true;
+}
+
+/** Quantidade de lotes adicionais (ex.: +1), mesma regra da tabela Transbordo → Vasilhames. */
+function countLotesExtras(composicao) {
+  const uniqueLotes = new Set(
+    (composicao || [])
+      .map((c) => String(c?.lote || '').trim())
+      .filter((lote) => lote && lote !== LOTE_APORTE_ANTERIOR)
+  ).size;
+  return uniqueLotes > 1 ? uniqueLotes - 1 : 0;
 }
 
 /** True quando a reserva comercial é de um vasilhame (não de estoque embalado). */
@@ -216,6 +227,7 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
     massa: Number(display.peso_liquido) || 0,
     tara: Number(vasilhame.tara) || 0,
     lote: dash(getDominantLote(vasilhame.composicao) || vasilhame.lote),
+    lotesExtras: countLotesExtras(vasilhame.composicao),
     dataFabricacao: loteDatas.data_fabricacao || null,
     dataValidade: loteDatas.data_validade || null,
     lacres: String(vasilhame.lacres || '').trim() || null,
@@ -382,6 +394,49 @@ export async function generateVasilhameBoleta(row) {
 
   const { generateBoletaPDF } = await import('@transbordo/lib/pdfBoleta');
   generateBoletaPDF(source);
+}
+
+/**
+ * Gera um único PDF com uma boleta por página para os vasilhames selecionados.
+ * Mantém o layout de cada origem (industrialização / convencional).
+ */
+export async function generateVasilhameBoletas(rows = []) {
+  const list = (rows || []).filter((row) => row?.source);
+  if (list.length === 0) throw new Error('Nenhum vasilhame selecionado.');
+
+  if (list.length === 1) {
+    await generateVasilhameBoleta(list[0]);
+    return;
+  }
+
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'landscape' });
+
+  let drawInd = null;
+  let drawTrans = null;
+
+  for (let i = 0; i < list.length; i += 1) {
+    const row = list[i];
+    if (i > 0) doc.addPage('a4', 'landscape');
+
+    const source = sourceForBoleta(row);
+    if (row.origem === ORIGEM_INDUSTRIALIZACAO) {
+      if (!drawInd) {
+        const mod = await import('@industrializacao/lib/pdfReports');
+        drawInd = mod.drawBoletaPage;
+      }
+      const { productions = [], recipes = [] } = row.boletaContext || {};
+      drawInd(doc, source, productions, recipes);
+    } else {
+      if (!drawTrans) {
+        const mod = await import('@transbordo/lib/pdfBoleta');
+        drawTrans = mod.drawBoletaPage;
+      }
+      drawTrans(doc, source);
+    }
+  }
+
+  doc.save(`Boletas (${list.length}).pdf`);
 }
 
 export function buildVasilhameReservaRows({
