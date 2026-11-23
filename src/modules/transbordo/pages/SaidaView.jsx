@@ -38,6 +38,7 @@ import {
   descricaoCarregamentoGenerico,
   resolveItemOrigem,
   origemLabel,
+  isSaidaCancelada,
 } from "@transbordo/lib/saidaOrigem";
 import {
   applyEstoqueStatusWmsPatch,
@@ -416,14 +417,18 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             value={
               <span
                 className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                  saida.status === "enviado_fiscal"
-                    ? "bg-primary/10 text-primary"
-                    : "bg-amber-100 text-amber-700"
+                  isSaidaCancelada(saida)
+                    ? "bg-slate-100 text-slate-600"
+                    : saida.status === "enviado_fiscal"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-amber-100 text-amber-700"
                 }`}
               >
-                {saida.status === "enviado_fiscal"
-                  ? "Validado"
-                  : "Pendente"}
+                {isSaidaCancelada(saida)
+                  ? "Cancelado"
+                  : saida.status === "enviado_fiscal"
+                    ? "Validado"
+                    : "Pendente"}
               </span>
             }
           />
@@ -445,6 +450,29 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             </p>
           </div>
         )}
+        {isSaidaCancelada(saida) ? (
+          <div className="mt-4 pt-4 border-t border-border space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Cancelamento do carregamento
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <InfoItem
+                label="Cancelado por"
+                value={saida.cancelamento_usuario || EMPTY}
+              />
+              <InfoItem
+                label="Data e horário"
+                value={formatDateTime(saida.cancelamento_data)}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Justificativa</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {saida.cancelamento_justificativa || EMPTY}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {hasWmsNok ? (

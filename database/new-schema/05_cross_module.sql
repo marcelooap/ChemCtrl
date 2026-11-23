@@ -20,11 +20,14 @@ CREATE TABLE IF NOT EXISTS saidas (
     OR modulo_origem IN ('chemflow', 'painel', 'industrializacao')
   ),
   status text NOT NULL DEFAULT 'aguardando'
-    CHECK (status IN ('aguardando', 'enviado_fiscal')),
+    CHECK (status IN ('aguardando', 'enviado_fiscal', 'cancelado')),
   enviado_ao_fiscal boolean NOT NULL DEFAULT false,
   enviado_fiscal_usuario text,
   enviado_fiscal_data timestamptz,
   validacao_modulos jsonb NOT NULL DEFAULT '{}'::jsonb,
+  cancelamento_justificativa text,
+  cancelamento_usuario text,
+  cancelamento_data timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

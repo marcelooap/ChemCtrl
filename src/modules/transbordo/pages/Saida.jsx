@@ -25,7 +25,12 @@ import {
 import { useToast } from "@shared/components/ui/use-toast";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import SaidaViewDialog from "@transbordo/components/saida/SaidaViewDialog";
+import SaidaRemoverModal from "@transbordo/components/saida/SaidaRemoverModal";
 import AgendamentoTransporteModal from "@painel/components/comercial/AgendamentoTransporteModal";
+import {
+  assertPodeExcluirSaidaDefinitivamente,
+  cancelarCarregamentoSaida,
+} from "@transbordo/lib/saidaCancelamento";
 import { formatMass } from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
@@ -35,10 +40,6 @@ import {
   applySaidaFiscalToggle,
   reconcileValidatedSaidaEmbalagens,
 } from "@transbordo/lib/saidaFiscal";
-import {
-  syncEstoqueSaldos,
-  resolveEstoqueIdsFromSaidaConvencional,
-} from "@transbordo/lib/estoqueSaldo";
 import {
   applyEstoqueStatusWmsPatch,
   ESTOQUE_STATUS_WMS_EVENT,
@@ -52,6 +53,7 @@ import {
   isSaidaModuloPainel,
   canExcluirSaidaNoModuloOperacional,
   isSaidaValidadaNoModulo,
+  isSaidaCancelada,
   saidaTemItemPendenteNoModulo,
   calcSaidaQuantidadeTotal,
   isSaidaCargaVazia,
@@ -62,8 +64,6 @@ import {
   resolveSaidaItemLote,
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
-  TIPO_EMBALADO,
-  TIPO_CONVENCIONAL,
 } from "@transbordo/lib/saidaOrigem";
 import {
   isSaidaExpedida,
@@ -92,12 +92,14 @@ const STATUS_OPTIONS_VALIDACAO = [
   { value: "all", label: "Todos" },
   { value: "aguardando", label: "Pendente" },
   { value: "enviado_fiscal", label: "Validado" },
+  { value: "cancelado", label: "Cancelado" },
 ];
 
 const STATUS_OPTIONS_EXPEDICAO = [
   { value: "all", label: "Todos" },
   { value: "aguardando", label: "Aguardando" },
   { value: "expedido", label: "Expedido" },
+  { value: "cancelado", label: "Cancelado" },
 ];
 
 const STATUS_OPTIONS_AGENDAMENTO = [
@@ -478,13 +480,20 @@ export default function Saida({
     });
   }, [saidasRevision, lastSaidaChange, applySaidaVisibility]);
 
-  const getExpedicaoStatus = (saida) =>
-    isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
+  const getExpedicaoStatus = (saida) => {
+    if (isSaidaCancelada(saida)) return "cancelado";
+    return isSaidaExpedida(saida?.id, expedidasIds) ? "expedido" : "aguardando";
+  };
 
   /** Mesma regra da coluna Validação — não usar só `saida.status`. */
   const isSaidaValidadaNaLista = (saida) =>
+    !isSaidaCancelada(saida) &&
     isSaidaValidadaNoModulo(saida, operationalModule) &&
     !saidaTemItemPendenteNoModulo(saida, operationalModule);
+
+  const deleteTarget = deleteId
+    ? saidas.find((s) => s.id === deleteId) || null
+    : null;
 
   const vasilhamesById = useMemo(() => {
     const map = new Map();
@@ -520,10 +529,14 @@ export default function Saida({
             statusFilter === "Aguardando" || statusFilter === "aguardando";
           const wantExpedido =
             statusFilter === "Expedido" || statusFilter === "expedido";
+          const wantCancelado =
+            statusFilter === "Cancelado" || statusFilter === "cancelado";
           matchStatus =
             (wantAguardando && status === "aguardando") ||
-            (wantExpedido && status === "expedido");
+            (wantExpedido && status === "expedido") ||
+            (wantCancelado && status === "cancelado");
         } else {
+          const cancelada = isSaidaCancelada(s);
           const isValidated = isSaidaValidadaNaLista(s);
           const wantPendente =
             statusFilter === "Pendente" ||
@@ -534,8 +547,12 @@ export default function Saida({
             statusFilter === "Enviado" ||
             statusFilter === "Enviado ao Fiscal" ||
             statusFilter === "enviado_fiscal";
+          const wantCancelado =
+            statusFilter === "Cancelado" || statusFilter === "cancelado";
           matchStatus =
-            (wantPendente && !isValidated) || (wantValidado && isValidated);
+            (wantPendente && !cancelada && !isValidated) ||
+            (wantValidado && isValidated) ||
+            (wantCancelado && cancelada);
         }
       }
 
@@ -767,82 +784,109 @@ export default function Saida({
     requestAnimationFrame(apply);
   };
 
-  const handleDelete = () => runSubmit(async () => {
-    const id = deleteId;
-    const saida = saidas.find((s) => s.id === id);
-    if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
-      setDeleteId(null);
-      return;
-    }
-    if (isExpedicao && isSaidaExpedida(id, expedidasIds)) {
-      setDeleteId(null);
-      return;
-    }
-    if (saida?.enviado_ao_fiscal) {
-      // Restaurar estoque / vasilhames via mesma lógica de reverter fiscal
+  const handleCancelarCarregamento = (justificativa) =>
+    runSubmit(async () => {
+      const id = deleteId;
+      const saida = saidas.find((s) => s.id === id);
+      if (!saida) {
+        setDeleteId(null);
+        return;
+      }
+      if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
+        setDeleteId(null);
+        return;
+      }
+      if (isExpedicao && isSaidaExpedida(id, expedidasIds)) {
+        toast({
+          title: "Não é possível cancelar",
+          description: "Esta saída já foi expedida.",
+          variant: "destructive",
+        });
+        setDeleteId(null);
+        return;
+      }
+
       try {
-        await applySaidaFiscalToggle(saida, false, {
-          userNome: user?.nome || "",
+        const updated = await cancelarCarregamentoSaida({
+          saida,
+          justificativa,
+          userNome: user?.nome || user?.full_name || "",
           estoque: entradas,
           vasilhames,
         });
-      } catch {
-        // segue para exclusão; sync Transbordo abaixo tenta recuperar saldo
-      }
-    }
-
-    try {
-      await entities.saidas.delete(id);
-      const snap = rememberScroll();
-      setRemovingId(id);
-      setDeleteId(null);
-      restoreScroll(snap);
-      await new Promise((resolve) => setTimeout(resolve, 160));
-      setSaidas((prev) => prev.filter((s) => s.id !== id));
-      setRemovingId(null);
-      restoreScroll(snap);
-
-      // Garante saldo Transbordo (embalado + convencional) após exclusão.
-      // Industrialização não é recalculada aqui.
-      if (saida?.enviado_ao_fiscal) {
-        const itens = saida.itens || [];
-        const embaladoIds = itens
-          .filter(
-            (i) =>
-              (i.tipo === TIPO_EMBALADO || i.tipo === "embalado") &&
-              i.entrada_id
+        setSaidas((prev) =>
+          prev.map((row) =>
+            row.id === id ? { ...row, ...updated } : row
           )
-          .map((i) => i.entrada_id);
-        let convencionalIds = [];
-        try {
-          const transbordos = await entities.transbordos.list();
-          convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
-            itens.filter(
-              (i) =>
-                i.tipo === TIPO_CONVENCIONAL || i.tipo === "convencional"
-            ),
-            vasilhames,
-            transbordos,
-            entradas
-          );
-        } catch {
-          convencionalIds = [];
+        );
+        if (viewSaida?.id === id) {
+          setViewSaida((prev) => (prev ? { ...prev, ...updated } : prev));
         }
-        const estoqueIds = [
-          ...new Set([...embaladoIds, ...convencionalIds].filter(Boolean)),
-        ];
-        if (estoqueIds.length > 0) {
-          await syncEstoqueSaldos(estoqueIds);
-        }
+        setDeleteId(null);
+        toast({
+          title: "Carregamento cancelado",
+          description: "A saída permanece no histórico com status Cancelado.",
+        });
+        await loadData({ silent: true });
+      } catch (err) {
+        toast({
+          title: "Não foi possível cancelar",
+          description: err?.message || "Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    });
+
+  const handleDelete = () =>
+    runSubmit(async () => {
+      const id = deleteId;
+      const saida = saidas.find((s) => s.id === id);
+      if (isModuloOperacional && !canExcluirSaidaNoModuloOperacional(saida)) {
+        setDeleteId(null);
+        return;
+      }
+      if (isExpedicao && isSaidaExpedida(id, expedidasIds)) {
+        setDeleteId(null);
+        return;
       }
 
-      await loadData({ silent: true });
-      restoreScroll(snap);
-    } catch {
-      setRemovingId(null);
-    }
-    setDeleteId(null);
-  });
+      try {
+        assertPodeExcluirSaidaDefinitivamente(saida);
+      } catch (err) {
+        toast({
+          title: "Exclusão bloqueada",
+          description: err?.message || "Desvalide a saída antes de excluir.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        await entities.saidas.delete(id);
+        const snap = rememberScroll();
+        setRemovingId(id);
+        setDeleteId(null);
+        restoreScroll(snap);
+        await new Promise((resolve) => setTimeout(resolve, 160));
+        setSaidas((prev) => prev.filter((s) => s.id !== id));
+        setRemovingId(null);
+        restoreScroll(snap);
+        toast({
+          title: "Saída excluída",
+          description: "A solicitação foi removida definitivamente.",
+        });
+        await loadData({ silent: true });
+        restoreScroll(snap);
+      } catch {
+        setRemovingId(null);
+        toast({
+          title: "Não foi possível excluir",
+          description: "Tente novamente.",
+          variant: "destructive",
+        });
+      }
+      setDeleteId(null);
+    });
 
   const requestFiscalToggle = (saida) => {
     if (fiscalBusyId) return;
@@ -1061,12 +1105,15 @@ export default function Saida({
                     : null;
                   const transporteRegistrado =
                     isExpedicao && hasTransporte(agendamento);
+                  const cancelada = isSaidaCancelada(s);
                   const isValidated = isExpedicao
                     ? false
                     : isSaidaValidadaNaLista(s);
-                  const hideDias = isExpedicao
-                    ? expedicaoStatus === "expedido"
-                    : isValidated;
+                  const hideDias =
+                    cancelada ||
+                    (isExpedicao
+                      ? expedicaoStatus === "expedido"
+                      : isValidated);
                   const isNova = trackNewFromPainel && isNew(s.id);
                   const wmsNok = saidaTemItemWmsNok(s, wmsCtx);
                   const next = pagedFiltered[i + 1];
@@ -1195,7 +1242,11 @@ export default function Saida({
                       </>
                     )}
                     <td className="px-5 py-3">
-                      {isExpedicao ? (
+                      {cancelada ? (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-300">
+                          Cancelado
+                        </span>
+                      ) : isExpedicao ? (
                         <span
                           className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${
                             expedicaoStatus === "expedido"
@@ -1249,7 +1300,8 @@ export default function Saida({
                         >
                           <Eye />
                         </RowActionButton>
-                        {!(isExpedicao && expedicaoStatus === "expedido") ? (
+                        {!cancelada &&
+                        !(isExpedicao && expedicaoStatus === "expedido") ? (
                           <RowActionButton
                             onClick={() => navigate(`${basePath}/editar/${s.id}`)}
                             title="Editar"
@@ -1263,7 +1315,11 @@ export default function Saida({
                           <RowActionButton
                             tone="danger"
                             onClick={() => setDeleteId(s.id)}
-                            title="Excluir"
+                            title={
+                              cancelada
+                                ? "Excluir definitivamente"
+                                : "Cancelar ou excluir"
+                            }
                           >
                             <Trash2 />
                           </RowActionButton>
@@ -1405,30 +1461,14 @@ export default function Saida({
         </AlertDialog>
       )}
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
-        <AlertDialogContent
-          onCloseAutoFocus={(event) => event.preventDefault()}
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir esta saída? O estoque será
-              restaurado. Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={submitBusy}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <SaidaRemoverModal
+        open={!!deleteId}
+        saida={deleteTarget}
+        busy={submitBusy}
+        onClose={() => setDeleteId(null)}
+        onCancelarCarregamento={handleCancelarCarregamento}
+        onExcluirDefinitivamente={handleDelete}
+      />
     </div>
   );
 }

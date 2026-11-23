@@ -162,6 +162,8 @@ export function formatQtyReserva(value, unidade) {
 
 /** Saída ainda não baixada no Transbordo (estoque físico intacto). */
 export function isSaidaPendenteBaixa(saida) {
+  if (String(saida?.status || '').toLowerCase() === 'cancelado') return false;
+  if (saida?.cancelamento_data) return false;
   return !isSaidaValidadaNoModulo(saida, ORIGEM_TRANSBORDO);
 }
 

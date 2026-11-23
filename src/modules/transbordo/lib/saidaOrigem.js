@@ -43,6 +43,39 @@ export function canExcluirSaidaNoModuloOperacional(saida) {
   return canExcluirSaidaNoTransbordo(saida);
 }
 
+export const STATUS_SAIDA_AGUARDANDO = "aguardando";
+export const STATUS_SAIDA_ENVIADO_FISCAL = "enviado_fiscal";
+export const STATUS_SAIDA_CANCELADO = "cancelado";
+
+/** Carregamento cancelado — permanece no histórico de solicitações. */
+export function isSaidaCancelada(saida) {
+  return (
+    String(saida?.status || "").toLowerCase() === STATUS_SAIDA_CANCELADO ||
+    Boolean(saida?.cancelamento_data)
+  );
+}
+
+/**
+ * Há validação ativa (módulo, flag global ou item).
+ * Exclusão definitiva só é permitida sem validação.
+ */
+export function isSaidaComValidacao(saida) {
+  if (!saida) return false;
+  if (saida.enviado_ao_fiscal) return true;
+  if (String(saida.status || "").toLowerCase() === STATUS_SAIDA_ENVIADO_FISCAL) {
+    return true;
+  }
+  const mods = saida.validacao_modulos;
+  if (mods && typeof mods === "object" && !Array.isArray(mods)) {
+    if (Object.values(mods).some((entry) => entry?.validado === true)) {
+      return true;
+    }
+  }
+  return (saida.itens || []).some(
+    (item) => item && !isItemSaidaVazio(item) && item.validado === true
+  );
+}
+
 export const TIPO_EMBALADO = "embalado";
 export const TIPO_CONVENCIONAL = "convencional";
 export const TIPO_IND_VASILHAME = "ind_vasilhame";

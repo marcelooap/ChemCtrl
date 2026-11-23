@@ -63,6 +63,7 @@ import {
   formatSaidaItemEmbalagem,
   resolveItemOrigem,
   isSaidaValidadaNoModulo,
+  isSaidaCancelada,
   isItemValidadoParaExibicao,
   itemFoiBaixado,
   saidaTemItemPendenteNoModulo,
@@ -95,6 +96,13 @@ const formatDate = (d) => {
   if (!d) return "—";
   const date = new Date(d + "T00:00:00");
   return date.toLocaleDateString("pt-BR");
+};
+
+const formatDateTime = (d) => {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("pt-BR");
 };
 
 function InfoItem({ label, value }) {
@@ -540,17 +548,20 @@ export default function SaidaViewDialog({
     selectableIndexes.every((index) => selected.has(index));
   const someSelected =
     selectableIndexes.some((index) => selected.has(index)) && !allSelected;
-  const statusLabel = highlightModule
-    ? saidaTemItemPendenteNoModulo(saida, highlightModule)
-      ? "Pendente"
-      : isSaidaValidadaNoModulo(saida, highlightModule)
-        ? "Validado"
-        : "Pendente"
-    : (saida.itens || []).some((item) => item?.validado === false)
-      ? "Pendente"
-      : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
-        ? "Validado"
-        : "Pendente";
+  const cancelada = isSaidaCancelada(saida);
+  const statusLabel = cancelada
+    ? "Cancelado"
+    : highlightModule
+      ? saidaTemItemPendenteNoModulo(saida, highlightModule)
+        ? "Pendente"
+        : isSaidaValidadaNoModulo(saida, highlightModule)
+          ? "Validado"
+          : "Pendente"
+      : (saida.itens || []).some((item) => item?.validado === false)
+        ? "Pendente"
+        : saida.status === "enviado_fiscal" || saida.enviado_ao_fiscal
+          ? "Validado"
+          : "Pendente";
   const showRelatorio = isAgendamento ? showRelatorioSaida : showRelatorioFiscal;
 
   const toggleItem = (index) => {
@@ -1144,6 +1155,30 @@ export default function SaidaViewDialog({
         </div>
 
         <SaidaAgendamentoResumo agendamento={agendamento} t={t} />
+
+        {cancelada ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-950/40 px-3 py-3 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+              Cancelamento do carregamento
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <InfoItem
+                label="Cancelado por"
+                value={saida.cancelamento_usuario || "—"}
+              />
+              <InfoItem
+                label="Data e horário"
+                value={formatDateTime(saida.cancelamento_data)}
+              />
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs text-muted-foreground">Justificativa</p>
+              <p className="text-sm font-medium text-foreground whitespace-pre-wrap">
+                {saida.cancelamento_justificativa || "—"}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {canSelectFiscal ? (
           <p className="text-xs text-muted-foreground -mt-1">
