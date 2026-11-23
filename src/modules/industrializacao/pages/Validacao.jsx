@@ -635,6 +635,7 @@ export default function ValidacaoIndustrializacao() {
           isotanques={isotanques}
           vasilhames={vasilhames}
           transbordos={transbordos}
+          entradas={entradas}
           externalError={editSaveError}
         />
       )}

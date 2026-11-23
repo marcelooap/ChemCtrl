@@ -323,6 +323,13 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
   const origemTipoOperacional =
     origemTipoRaw === "granel" ? "entrada" : origemTipoRaw || "entrada";
 
+  const densidade =
+    tp.densidade ||
+    granel?.densidade ||
+    granel?.lotes?.[0]?.densidade ||
+    "";
+  const dens = parseDensidade(densidade);
+
   const tankaOrigens =
     origemTipoOperacional === "tanka"
       ? origens.map((o) => {
@@ -332,14 +339,12 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
               .split("—")[0]
               .trim() ||
             "Tanka";
+          const qtyL = volumeOrigemParaLitros(o, dens);
           return {
             tankaId: o.tanka_id || o.entrada_id || "",
             tankaCodigo: codigo,
             lote: o.lote || "",
-            quantidade:
-              o.volume_retirado === "" || o.volume_retirado == null
-                ? ""
-                : Number(o.volume_retirado) || 0,
+            quantidade: qtyL > 0 ? qtyL : "",
           };
         })
       : [];
@@ -364,26 +369,33 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
                   .filter(Boolean)
                   .join(" / ")
               : o.lote || lotesRet[0]?.lote || "";
+          const qtyL = volumeOrigemParaLitros(o, dens);
           return {
             vasilhameId: o.entrada_id || "",
             codigo,
             lote: loteLabel,
-            quantidade:
-              o.volume_retirado === "" || o.volume_retirado == null
-                ? ""
-                : Number(o.volume_retirado) || 0,
+            quantidade: qtyL > 0 ? qtyL : "",
             lotes_retirados: lotesRet,
             lotes_disponiveis: lotesDisp,
           };
         })
       : [];
 
-  const densidade =
-    tp.densidade ||
-    granel?.densidade ||
-    granel?.lotes?.[0]?.densidade ||
-    "";
-  const dens = parseDensidade(densidade);
+  const embaladoOrigens =
+    origemTipoOperacional === "embalado"
+      ? origens.map((o) => {
+          const qtyL = volumeOrigemParaLitros(o, dens);
+          return {
+            entrada_id: o.entrada_id || null,
+            lote: o.lote || "",
+            unidade_medida: o.unidade_medida || "kg",
+            saldo_atual: Number(o.saldo_disponivel) || 0,
+            volume_l: qtyL,
+            quantidade: qtyL > 0 ? qtyL : "",
+          };
+        })
+      : [];
+
   // Formulário/modal de envase opera em L; embalado kg/lb precisa converter.
   const totalFromOrigens = origens.reduce(
     (s, o) => s + volumeOrigemParaLitros(o, dens),
@@ -439,6 +451,15 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
     .filter(Boolean)
     .join(" - ");
 
+  const multiOrigensCount =
+    origemTipoOperacional === "tanka"
+      ? tankaOrigens.length
+      : origemTipoOperacional === "vasilhame"
+        ? vasilhameOrigens.length
+        : origemTipoOperacional === "embalado"
+          ? embaladoOrigens.length
+          : 0;
+
   return {
     productLabel,
     produtoId: tp.produto_id || validacao.produto_id || "",
@@ -455,17 +476,12 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
     origemTipoOperacional,
     tankaOrigens,
     vasilhameOrigens,
-    quantidadeEditable:
-      origemTipoOperacional === "tanka"
-        ? tankaOrigens.length <= 1
-        : origemTipoOperacional === "vasilhame"
-          ? vasilhameOrigens.length <= 1
-          : true,
+    embaladoOrigens,
+    quantidadeEditable: multiOrigensCount <= 1,
     granelPayload: isGranel && granel ? granel : null,
     initialPayload: tp,
   };
 }
-
 /**
  * Validação do Transbordo/Armazenagem: exclui produtos cadastrados só na
  * Industrialização (matéria-prima Ind). Esses ficam em /validacao (Ind).

@@ -2635,6 +2635,7 @@ export default function OrdemTransbordo() {
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
+        entradas={entradas}
         externalError={editViewError}
       />
 

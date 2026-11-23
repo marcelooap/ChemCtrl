@@ -19,13 +19,23 @@ import { entities } from "@transbordo/services/entities";
 import { base44 } from "@industrializacao/api/base44Client";
 import { resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
 import { toValidacaoViewModel } from "@industrializacao/lib/validacaoIndustrializacao";
-import { formatDensidade, formatMass, formatNum } from "@transbordo/lib/format";
+import {
+  formatDensidade,
+  formatMass,
+  formatNum,
+  litrosFromMassaKg,
+  parseDensidade,
+  roundMass,
+  roundVolume,
+} from "@transbordo/lib/format";
 import {
   getLoteQuantidadeDeclarada,
   getQuantidadeNotaFiscal,
   kgToLoteUnidade,
   loteToKg,
 } from "@transbordo/lib/conversao";
+import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
+import { isOrigemEmbaladoMassa } from "@transbordo/lib/vasilhameComposicao";
 import {
   isDestinoEstoqueEmbalado,
   isVasilhameLegadoEmbalado,
@@ -52,6 +62,19 @@ const ORIGEM_TIPO_LABEL_KEYS = {
 };
 
 const DASH = "-";
+
+function asPayloadObject(v) {
+  if (v == null) return null;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return typeof parsed === "object" && parsed != null ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof v === "object" ? v : null;
+}
 
 function fmtDate(value) {
   if (!value) return DASH;
@@ -87,6 +110,49 @@ function volumeOrDash(value) {
 function massaOrDash(value, unidade = "kg") {
   const n = Number(value) || 0;
   return n > 0 ? `${formatMass(n)} ${unidade}` : DASH;
+}
+
+/**
+ * Destino com origem embalada em kg/lb persiste volume_* na UOM de massa.
+ * Ex.: volume_total=6125 + peso_liquido=6125 + dens=1,25 → 4.900 L.
+ */
+function destinoVolumeOperacionalL(destino, origens = [], dens) {
+  const raw = Number(destino?.volume_total ?? destino?.volume) || 0;
+  if (!(raw > 0)) return 0;
+
+  const densN = parseDensidade(dens);
+  const massa = Number(destino?.peso_liquido) || 0;
+  const list = Array.isArray(origens) ? origens : [];
+  const origemLinked = list.find(
+    (o) => o?._uid && o._uid === destino?.origem_uid
+  );
+  const origemEmbaladoMassa =
+    (origemLinked && isOrigemEmbaladoMassa(origemLinked)) ||
+    list.some(isOrigemEmbaladoMassa);
+
+  let volumeEmMassa = origemEmbaladoMassa;
+  if (!volumeEmMassa && densN > 0 && massa > 0) {
+    const tol = Math.max(1, Math.abs(massa) * 0.02);
+    const asLitros = Math.abs(raw * densN - massa) <= tol;
+    const asMassa = Math.abs(raw - massa) <= tol;
+    volumeEmMassa = asMassa && !asLitros;
+  }
+
+  if (!volumeEmMassa || !(densN > 0)) {
+    return roundVolume(raw);
+  }
+
+  if (massa > 0) {
+    return roundVolume(litrosFromMassaKg(massa, densN));
+  }
+
+  const um = normalizeUnidadeEntrada(
+    origemLinked?.unidade_medida ||
+      list.find(isOrigemEmbaladoMassa)?.unidade_medida ||
+      "kg"
+  );
+  const kg = um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+  return roundVolume(litrosFromMassaKg(kg, densN));
 }
 
 const GRANEL_TIPOS = new Set(["entrada", "granel"]);
@@ -325,8 +391,9 @@ function columnsForDestinoKind(kind, t) {
   ];
 }
 
-function buildDestinoRow(item, index, kind, t) {
-  const volumeText = volumeOrDash(item?.volume_total ?? item?.volume);
+function buildDestinoRow(item, index, kind, t, { origens = [], densidade } = {}) {
+  const volL = destinoVolumeOperacionalL(item, origens, densidade);
+  const volumeText = volumeOrDash(volL);
   const fracionado = kind === "vasilhame" && item?.fracionado === true;
 
   return {
@@ -358,7 +425,7 @@ function buildDestinoRow(item, index, kind, t) {
  * Agrupa destinos por tipo de embalagem, preservando a ordem de aparição.
  * Cada grupo vira uma tabela com colunas adequadas ao tipo.
  */
-function groupDestinosByTipo(destinos, t) {
+function groupDestinosByTipo(destinos, t, { origens = [], densidade } = {}) {
   const groups = [];
   const indexByKey = new Map();
 
@@ -385,7 +452,10 @@ function groupDestinosByTipo(destinos, t) {
     }
 
     group.rows.push(
-      buildDestinoRow(destino, group.rows.length, group.kind, t)
+      buildDestinoRow(destino, group.rows.length, group.kind, t, {
+        origens,
+        densidade,
+      })
     );
   });
 
@@ -479,8 +549,15 @@ export default function OrdemTransbordoRelatorio() {
   const handleBack = useCallback(() => navigate(backPath), [backPath, navigate]);
   const handlePrint = useCallback(() => window.print(), []);
 
-  const transbordo = validacao?.transbordo_payload || null;
-  const granel = validacao?.granel_payload || null;
+  const transbordo =
+    asPayloadObject(validacao?.transbordo_payload) ||
+    validacao?.transbordo_payload ||
+    null;
+  const granel =
+    asPayloadObject(validacao?.granel_payload) ||
+    asPayloadObject(validacao?.entrada_payload) ||
+    validacao?.granel_payload ||
+    null;
 
   const origens = useMemo(
     () => (Array.isArray(transbordo?.origens) ? transbordo.origens : []),
@@ -668,7 +745,15 @@ export default function OrdemTransbordoRelatorio() {
     };
   });
 
-  const destinoGroups = groupDestinosByTipo(destinos, t);
+  const destinoGroups = groupDestinosByTipo(destinos, t, {
+    origens,
+    densidade:
+      transbordo?.densidade ||
+      granel?.densidade ||
+      granel?.lotes?.[0]?.densidade ||
+      densidade ||
+      "",
+  });
 
   const observacoes = String(transbordo?.observacoes || "").trim();
 

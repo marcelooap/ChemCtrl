@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, CheckCircle, ChevronDown, Plus, X } from "lucide-react";
+import { AlertCircle, CheckCircle, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import {
   Dialog,
@@ -9,8 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@shared/components/ui/dialog";
+import { Input } from "@shared/components/ui/input";
 import { Label } from "@shared/components/ui/label";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
+import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DestinoCard from "@transbordo/components/transbordo/DestinoCard";
 import {
   alignDestinosMassaToQuantidade,
@@ -190,7 +192,15 @@ export default function OrdemTransbordoEnvaseModal({
   onClose,
   onSave,
   onQuantidadeChange,
+  onLoteChange,
   onTankaOrigemQuantidadeChange,
+  onOrigemLoteChange,
+  /** (index) => opções { id, lote, display_label, ... } do estoque. */
+  getOrigemLoteOptions = null,
+  onAddOrigem,
+  onRemoveOrigem,
+  /** Validação: permite editar/adicionar/remover lotes de origem. */
+  lotesEditable = false,
   productLabel = "",
   produtoId = "",
   produtoNome = "",
@@ -311,9 +321,10 @@ export default function OrdemTransbordoEnvaseModal({
         .map((o, index) => ({ ...o, _index: index }))
         .filter(
           (o) =>
-            String(o?.tankaId || "").trim() && String(o?.lote || "").trim()
+            lotesEditable ||
+            (String(o?.tankaId || "").trim() && String(o?.lote || "").trim())
         ),
-    [tankaOrigens]
+    [tankaOrigens, lotesEditable]
   );
 
   const tankaOrigensValidas = useMemo(
@@ -327,8 +338,8 @@ export default function OrdemTransbordoEnvaseModal({
     () =>
       (vasilhameOrigens || [])
         .map((o, index) => ({ ...o, _index: index }))
-        .filter((o) => String(o?.vasilhameId || "").trim()),
-    [vasilhameOrigens]
+        .filter((o) => lotesEditable || String(o?.vasilhameId || "").trim()),
+    [vasilhameOrigens, lotesEditable]
   );
 
   const vasilhameOrigensValidas = useMemo(
@@ -341,13 +352,15 @@ export default function OrdemTransbordoEnvaseModal({
   const embaladoOrigensExibidas = useMemo(() => {
     const fromList = (embaladoOrigens || [])
       .map((o, index) => ({ ...o, _index: index }))
-      .filter((o) => String(o?.entrada_id || "").trim());
+      .filter((o) =>
+        lotesEditable ? true : Boolean(String(o?.entrada_id || "").trim())
+      );
     if (fromList.length > 0) return fromList;
-    if (embaladoOrigem?.entrada_id) {
+    if (embaladoOrigem?.entrada_id || (lotesEditable && embaladoOrigem)) {
       return [{ ...embaladoOrigem, _index: 0 }];
     }
     return [];
-  }, [embaladoOrigens, embaladoOrigem]);
+  }, [embaladoOrigens, embaladoOrigem, lotesEditable]);
 
   const embaladoOrigensValidas = useMemo(
     () =>
@@ -1093,18 +1106,86 @@ export default function OrdemTransbordoEnvaseModal({
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <Label
+                  htmlFor="ordem-envase-lote"
+                  className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
                   {t("painel.operacional.ordemTransbordo.fields.lot")}
-                </p>
-                <p className="text-sm font-medium text-foreground">
-                  {multiOrigensExibidas.length > 1
-                    ? lote ||
-                      t(
-                        "painel.operacional.ordemTransbordo.envaseModal.multipleLots",
-                        { count: multiOrigensExibidas.length }
-                      )
-                    : lote || multiOrigensExibidas[0]?.lote || "—"}
-                </p>
+                </Label>
+                {lotesEditable && multiOrigensExibidas.length <= 1 ? (
+                  typeof getOrigemLoteOptions === "function" &&
+                  onOrigemLoteChange ? (
+                    (() => {
+                      const idx = multiOrigensExibidas[0]?._index ?? 0;
+                      const loteOpts = getOrigemLoteOptions(idx) || [];
+                      const current = multiOrigensExibidas[0];
+                      const selected =
+                        loteOpts.find(
+                          (opt) =>
+                            String(opt.id) ===
+                              String(
+                                current?.entrada_id ||
+                                  current?.vasilhameId ||
+                                  current?.tankaId ||
+                                  ""
+                              ) ||
+                            String(opt.lote || "") ===
+                              String(current?.lote || lote || "")
+                        ) || null;
+                      return (
+                        <SearchableSelect
+                          value={
+                            selected?.display_label ||
+                            lote ||
+                            current?.lote ||
+                            ""
+                          }
+                          onChange={(label, row) =>
+                            onOrigemLoteChange(idx, label, row)
+                          }
+                          options={loteOpts}
+                          getOptionLabel={(opt) =>
+                            opt.display_label || opt.lote || ""
+                          }
+                          getOptionValue={(opt) => opt.id}
+                          placeholder={t(
+                            "painel.operacional.ordemTransbordo.placeholders.lotStock",
+                            {
+                              defaultValue: "Selecione lote / saldo",
+                            }
+                          )}
+                          typeToSearch
+                          inputClassName={`${INPUT_EDITABLE} h-9 text-sm font-medium`}
+                        />
+                      );
+                    })()
+                  ) : onLoteChange ? (
+                    <Input
+                      id="ordem-envase-lote"
+                      value={lote || multiOrigensExibidas[0]?.lote || ""}
+                      onChange={(e) => onLoteChange(e.target.value)}
+                      placeholder={t(
+                        "painel.operacional.ordemTransbordo.envaseModal.lotPlaceholder",
+                        { defaultValue: "Informe o lote" }
+                      )}
+                      className={`${INPUT_EDITABLE} h-9 text-sm font-medium`}
+                    />
+                  ) : (
+                    <p className="text-sm font-medium text-foreground py-2">
+                      {lote || multiOrigensExibidas[0]?.lote || "—"}
+                    </p>
+                  )
+                ) : (
+                  <p className="text-sm font-medium text-foreground py-2">
+                    {multiOrigensExibidas.length > 1
+                      ? lote ||
+                        t(
+                          "painel.operacional.ordemTransbordo.envaseModal.multipleLots",
+                          { count: multiOrigensExibidas.length }
+                        )
+                      : lote || multiOrigensExibidas[0]?.lote || "—"}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label
@@ -1135,15 +1216,38 @@ export default function OrdemTransbordoEnvaseModal({
                   </p>
                 )}
               </div>
-              {multiOrigensExibidas.length > 0 ? (
+              {multiOrigensExibidas.length > 0 ||
+              (lotesEditable && tipoOrigem === "embalado") ? (
                 <div className="sm:col-span-2 lg:col-span-4 space-y-2 border-t border-border pt-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {t(
-                      "painel.operacional.ordemTransbordo.envaseModal.originsFifo"
-                    )}
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t(
+                        "painel.operacional.ordemTransbordo.envaseModal.originsFifo"
+                      )}
+                    </p>
+                    {lotesEditable &&
+                    onAddOrigem &&
+                    ["embalado", "tanka", "vasilhame"].includes(tipoOrigem) ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={onAddOrigem}
+                      >
+                        <Plus className="h-3 w-3" />
+                        {t(
+                          "painel.operacional.ordemTransbordo.envaseModal.addLot",
+                          { defaultValue: "Adicionar lote" }
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
                   <div className="space-y-2">
-                    {multiOrigensExibidas.map((o, i) => {
+                    {(multiOrigensExibidas.length > 0
+                      ? multiOrigensExibidas
+                      : []
+                    ).map((o, i) => {
                       const isVas = tipoOrigem === "vasilhame";
                       const isEmb = tipoOrigem === "embalado";
                       const codigo = isEmb
@@ -1152,10 +1256,10 @@ export default function OrdemTransbordoEnvaseModal({
                           ? o.codigo || "Vasilhame"
                           : o.tankaCodigo || "Tanka";
                       const key = isEmb
-                        ? `${o.entrada_id}-${o.lote}-${o._index}`
+                        ? `emb-${o.entrada_id || "new"}-${o._index}`
                         : isVas
-                          ? `${o.vasilhameId}-${o._index}`
-                          : `${o.tankaId}-${o.lote}-${o._index}`;
+                          ? `vas-${o.vasilhameId || "new"}-${o._index}`
+                          : `tanka-${o.tankaId || "new"}-${o.lote}-${o._index}`;
                       return (
                         <div
                           key={key}
@@ -1164,9 +1268,89 @@ export default function OrdemTransbordoEnvaseModal({
                           <span className="font-bold text-primary shrink-0">
                             {String(i + 1).padStart(2, "0")}.
                           </span>
-                          <span className="min-w-0 flex-1 truncate">
-                            {codigo} · {o.lote || "—"}
-                          </span>
+                          {lotesEditable && onOrigemLoteChange ? (
+                            <>
+                              <span className="text-muted-foreground shrink-0">
+                                {codigo} ·
+                              </span>
+                              {typeof getOrigemLoteOptions === "function" ? (
+                                (() => {
+                                  const loteOpts =
+                                    getOrigemLoteOptions(o._index) || [];
+                                  const selected =
+                                    loteOpts.find(
+                                      (opt) =>
+                                        (isEmb &&
+                                          String(opt.id) ===
+                                            String(o.entrada_id || "")) ||
+                                        (isVas &&
+                                          String(opt.id) ===
+                                            String(o.vasilhameId || "")) ||
+                                        (!isEmb &&
+                                          !isVas &&
+                                          String(opt.id) ===
+                                            String(o.tankaId || ""))
+                                    ) ||
+                                    loteOpts.find(
+                                      (opt) =>
+                                        String(opt.lote || "") ===
+                                        String(o.lote || "")
+                                    );
+                                  return (
+                                    <div className="min-w-[12rem] flex-1">
+                                      <SearchableSelect
+                                        value={
+                                          selected?.display_label ||
+                                          o.lote ||
+                                          ""
+                                        }
+                                        onChange={(label, row) =>
+                                          onOrigemLoteChange(
+                                            o._index,
+                                            label,
+                                            row
+                                          )
+                                        }
+                                        options={loteOpts}
+                                        getOptionLabel={(opt) =>
+                                          opt.display_label || opt.lote || ""
+                                        }
+                                        getOptionValue={(opt) => opt.id}
+                                        placeholder={t(
+                                          "painel.operacional.ordemTransbordo.placeholders.lotStock",
+                                          {
+                                            defaultValue:
+                                              "Selecione lote / saldo",
+                                          }
+                                        )}
+                                        typeToSearch
+                                        inputClassName={`${INPUT_EDITABLE} h-8 text-xs font-medium`}
+                                      />
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <Input
+                                  value={o.lote || ""}
+                                  onChange={(e) =>
+                                    onOrigemLoteChange(
+                                      o._index,
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder={t(
+                                    "painel.operacional.ordemTransbordo.envaseModal.lotPlaceholder",
+                                    { defaultValue: "Lote" }
+                                  )}
+                                  className={`${INPUT_EDITABLE} h-8 min-w-[8rem] flex-1 text-xs font-medium`}
+                                />
+                              )}
+                            </>
+                          ) : (
+                            <span className="min-w-0 flex-1 truncate">
+                              {codigo} · {o.lote || "—"}
+                            </span>
+                          )}
                           <div className="flex items-center gap-1.5 shrink-0">
                             <NumberInputBr
                               decimals={3}
@@ -1186,10 +1370,40 @@ export default function OrdemTransbordoEnvaseModal({
                               className={`${INPUT_EDITABLE} h-8 w-[7.5rem] text-right font-semibold tabular-nums`}
                             />
                             <span className="text-muted-foreground">L</span>
+                            {lotesEditable &&
+                            onRemoveOrigem &&
+                            multiOrigensExibidas.length > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() => onRemoveOrigem(o._index)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                                title={t("common.remove", {
+                                  defaultValue: "Remover",
+                                })}
+                                aria-label={t("common.remove", {
+                                  defaultValue: "Remover",
+                                })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       );
                     })}
+                    {lotesEditable &&
+                    multiOrigensExibidas.length === 0 &&
+                    onAddOrigem ? (
+                      <p className="text-xs text-muted-foreground py-1">
+                        {t(
+                          "painel.operacional.ordemTransbordo.envaseModal.noLotsHint",
+                          {
+                            defaultValue:
+                              "Nenhum lote informado. Clique em Adicionar lote.",
+                          }
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

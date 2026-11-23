@@ -6,7 +6,19 @@ import {
   buildEnvaseEditModelFromValidacao,
   buildGranelPrefillFromPayload,
 } from "@transbordo/lib/validacaoTransbordo";
-import { roundVolume } from "@transbordo/lib/format";
+import {
+  formatQuantidade,
+  parseDensidade,
+  roundVolume,
+} from "@transbordo/lib/format";
+import { loteToLitros } from "@transbordo/lib/conversao";
+import { matchesProdutoOperacional } from "@transbordo/lib/produtoMatch";
+import {
+  computeEstoqueQuantidadesPorLocal,
+  getEstoqueUnidadeEntrada,
+  isEstoqueEmbalado,
+  isUnidadeVolumeEntrada,
+} from "@transbordo/lib/estoqueSaldo";
 import { Button } from "@shared/components/ui/button";
 import {
   Dialog,
@@ -21,6 +33,17 @@ import NumberInputBr from "@transbordo/components/NumberInputBr";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import { UNIDADES } from "@transbordo/components/entrada/LoteBlock";
+
+/** Saldo do estoque embalado (UOM de entrada) → litros operacionais. */
+function embaladoSaldoToLitros(saldo, unidade, dens) {
+  return roundVolume(
+    loteToLitros({
+      quantidade: saldo,
+      unidade_medida: unidade || "kg",
+      densidade: dens,
+    })
+  );
+}
 
 const INPUT_EDITABLE = "bg-white";
 
@@ -117,6 +140,7 @@ export default function ValidacaoOrdemEnvaseEditor({
   isotanques = [],
   vasilhames = [],
   transbordos = [],
+  entradas = [],
   externalError = "",
 }) {
   const { t } = useTranslation();
@@ -129,6 +153,7 @@ export default function ValidacaoOrdemEnvaseEditor({
   const [densidade, setDensidade] = useState("");
   const [tankaOrigens, setTankaOrigens] = useState([]);
   const [vasilhameOrigens, setVasilhameOrigens] = useState([]);
+  const [embaladoOrigens, setEmbaladoOrigens] = useState([]);
   const [lote, setLote] = useState("");
   const [granelPayload, setGranelPayload] = useState(null);
   const [granelOpen, setGranelOpen] = useState(false);
@@ -144,28 +169,26 @@ export default function ValidacaoOrdemEnvaseEditor({
     setDensidade(baseModel.densidade || "");
     setTankaOrigens(baseModel.tankaOrigens || []);
     setVasilhameOrigens(baseModel.vasilhameOrigens || []);
+    setEmbaladoOrigens(baseModel.embaladoOrigens || []);
     setLote(baseModel.lote || "");
     setGranelPayload(baseModel.granelPayload || null);
     setGranelDraft(granelToDraft(baseModel.granelPayload));
     setGranelOpen(false);
   }, [open, baseModel]);
 
-  const syncLoteFromOrigens = useCallback((tankaList, vasilhameList, tipo) => {
-    if (tipo === "tanka") {
-      const label = (tankaList || [])
-        .map((o) => String(o.lote || "").trim())
-        .filter(Boolean)
-        .join(" / ");
-      if (label) setLote(label);
-      return;
-    }
-    if (tipo === "vasilhame") {
-      const label = (vasilhameList || [])
-        .map((o) => String(o.lote || "").trim())
-        .filter(Boolean)
-        .join(" / ");
-      if (label) setLote(label);
-    }
+  const syncLoteFromOrigens = useCallback((list) => {
+    const label = (list || [])
+      .map((o) => String(o.lote || "").trim())
+      .filter(Boolean)
+      .join(" / ");
+    setLote(label || "");
+  }, []);
+
+  const syncTotalFromOrigens = useCallback((list) => {
+    const total = roundVolume(
+      (list || []).reduce((s, o) => s + (Number(o.quantidade) || 0), 0)
+    );
+    setQuantidade(total > 0 ? total : "");
   }, []);
 
   const handleQuantidadeChange = (value) => {
@@ -179,6 +202,40 @@ export default function ValidacaoOrdemEnvaseEditor({
       setVasilhameOrigens((prev) =>
         prev.map((o, i) => (i === 0 ? { ...o, quantidade: value } : o))
       );
+    } else if (tipo === "embalado" && embaladoOrigens.length === 1) {
+      setEmbaladoOrigens((prev) =>
+        prev.map((o, i) => (i === 0 ? { ...o, quantidade: value } : o))
+      );
+    }
+  };
+
+  const handleLoteChange = (value) => {
+    setLote(value);
+    const tipo = baseModel?.origemTipoOperacional;
+    if (tipo === "tanka" && tankaOrigens.length === 1) {
+      setTankaOrigens((prev) =>
+        prev.map((o, i) => (i === 0 ? { ...o, lote: value } : o))
+      );
+    } else if (tipo === "vasilhame" && vasilhameOrigens.length === 1) {
+      setVasilhameOrigens((prev) =>
+        prev.map((o, i) => (i === 0 ? { ...o, lote: value } : o))
+      );
+    } else if (tipo === "embalado" && embaladoOrigens.length <= 1) {
+      setEmbaladoOrigens((prev) => {
+        if (prev.length === 0) {
+          return [
+            {
+              entrada_id: null,
+              lote: value,
+              unidade_medida: "kg",
+              saldo_atual: 0,
+              volume_l: 0,
+              quantidade: quantidade === "" ? "" : quantidade,
+            },
+          ];
+        }
+        return prev.map((o, i) => (i === 0 ? { ...o, lote: value } : o));
+      });
     }
   };
 
@@ -189,11 +246,8 @@ export default function ValidacaoOrdemEnvaseEditor({
         const next = prev.map((o, i) =>
           i === index ? { ...o, quantidade: value } : o
         );
-        const total = roundVolume(
-          next.reduce((s, o) => s + (Number(o.quantidade) || 0), 0)
-        );
-        setQuantidade(total > 0 ? total : "");
-        syncLoteFromOrigens(next, null, "tanka");
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
         return next;
       });
       return;
@@ -203,11 +257,344 @@ export default function ValidacaoOrdemEnvaseEditor({
         const next = prev.map((o, i) =>
           i === index ? { ...o, quantidade: value } : o
         );
-        const total = roundVolume(
-          next.reduce((s, o) => s + (Number(o.quantidade) || 0), 0)
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "embalado") {
+      setEmbaladoOrigens((prev) => {
+        const next = prev.map((o, i) =>
+          i === index ? { ...o, quantidade: value } : o
         );
-        setQuantidade(total > 0 ? total : "");
-        syncLoteFromOrigens(null, next, "vasilhame");
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
+        return next;
+      });
+    }
+  };
+
+  const densOperacional = useMemo(
+    () =>
+      parseDensidade(densidade || baseModel?.densidade || "") ||
+      parseDensidade(granelPayload?.densidade) ||
+      0,
+    [densidade, baseModel?.densidade, granelPayload?.densidade]
+  );
+
+  /** Estoque embalado no pátio do produto — mesma regra da Nova Ordem. */
+  const embaladosComSaldo = useMemo(() => {
+    if (baseModel?.origemTipoOperacional !== "embalado") return [];
+    if (!baseModel?.produtoId && !baseModel?.produtoCodigo) return [];
+    const produtoCtx = {
+      produtoId: baseModel.produtoId,
+      produtoNome: baseModel.produtoNome,
+      produtoCodigo: baseModel.produtoCodigo,
+      clienteId: baseModel.clienteId,
+      clienteNome: baseModel.clienteNome,
+    };
+    return (entradas || [])
+      .filter(
+        (e) => isEstoqueEmbalado(e) && matchesProdutoOperacional(e, produtoCtx)
+      )
+      .map((e) => {
+        const locais = computeEstoqueQuantidadesPorLocal(e, {
+          transbordos,
+          vasilhames,
+          saldo: e.saldo_atual,
+        });
+        const saldoPatio = Number(locais?.patio) || 0;
+        if (!(saldoPatio > 0)) return null;
+        const um = getEstoqueUnidadeEntrada(e) || locais.unidade || "kg";
+        const loteLabel =
+          String(e.lote || e.lotes?.[0]?.lote || "").trim() || "—";
+        return {
+          ...e,
+          embalado: true,
+          unidade_medida: um,
+          saldo_atual: saldoPatio,
+          lote: loteLabel,
+          display_label: `${loteLabel} - ${formatQuantidade(saldoPatio)} ${um}`,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) =>
+        String(a.lote).localeCompare(String(b.lote), "pt-BR", {
+          sensitivity: "base",
+        })
+      );
+  }, [
+    baseModel?.origemTipoOperacional,
+    baseModel?.produtoId,
+    baseModel?.produtoNome,
+    baseModel?.produtoCodigo,
+    baseModel?.clienteId,
+    baseModel?.clienteNome,
+    entradas,
+    transbordos,
+    vasilhames,
+  ]);
+
+  const getOrigemLoteOptions = useCallback(
+    (index) => {
+      const tipo = baseModel?.origemTipoOperacional;
+      if (tipo === "embalado") {
+        const selectedIds = new Set(
+          embaladoOrigens
+            .map((it, i) => (i === index ? null : it.entrada_id))
+            .filter(Boolean)
+            .map(String)
+        );
+        const current = embaladoOrigens[index];
+        let opts = embaladosComSaldo.filter(
+          (e) =>
+            String(e.id) === String(current?.entrada_id || "") ||
+            !selectedIds.has(String(e.id))
+        );
+        if (
+          current?.entrada_id &&
+          !opts.some((e) => String(e.id) === String(current.entrada_id))
+        ) {
+          const um = current.unidade_medida || "kg";
+          const saldo = Number(current.saldo_atual) || 0;
+          opts = [
+            {
+              id: current.entrada_id,
+              lote: current.lote || "",
+              unidade_medida: um,
+              saldo_atual: saldo,
+              display_label: `${current.lote || "—"} - ${formatQuantidade(saldo)} ${um}`,
+            },
+            ...opts,
+          ];
+        }
+        return opts;
+      }
+      if (tipo === "tanka") {
+        const produtoCtx = {
+          produtoId: baseModel?.produtoId,
+          produtoNome: baseModel?.produtoNome,
+          produtoCodigo: baseModel?.produtoCodigo,
+        };
+        return (isotanques || [])
+          .filter((i) => matchesProdutoOperacional(i, produtoCtx))
+          .map((i) => {
+            const codigo = i.nome || i.tanka || i.codigo_itku || "";
+            return {
+              id: i.id,
+              tankaId: i.id,
+              tankaCodigo: codigo,
+              lote: codigo,
+              display_label: codigo,
+            };
+          });
+      }
+      if (tipo === "vasilhame") {
+        const produtoCtx = {
+          produtoId: baseModel?.produtoId,
+          produtoNome: baseModel?.produtoNome,
+          produtoCodigo: baseModel?.produtoCodigo,
+        };
+        return (vasilhames || [])
+          .filter((v) => matchesProdutoOperacional(v, produtoCtx))
+          .map((v) => {
+            const codigo =
+              [v.placa, v.barril].filter(Boolean).join(" - ") ||
+              v.codigo ||
+              "Vasilhame";
+            const loteLabel = String(v.lote || "").trim();
+            return {
+              id: v.id,
+              vasilhameId: v.id,
+              codigo,
+              lote: loteLabel,
+              display_label: loteLabel
+                ? `${codigo} · ${loteLabel}`
+                : codigo,
+            };
+          });
+      }
+      return [];
+    },
+    [
+      baseModel?.origemTipoOperacional,
+      baseModel?.produtoId,
+      baseModel?.produtoNome,
+      baseModel?.produtoCodigo,
+      embaladoOrigens,
+      embaladosComSaldo,
+      isotanques,
+      vasilhames,
+    ]
+  );
+
+  const handleOrigemLoteChange = (index, value, row = null) => {
+    const tipo = baseModel?.origemTipoOperacional;
+    if (tipo === "tanka") {
+      setTankaOrigens((prev) => {
+        const next = prev.map((o, i) =>
+          i === index
+            ? {
+                ...o,
+                tankaId: row?.tankaId || row?.id || o.tankaId || "",
+                tankaCodigo:
+                  row?.tankaCodigo || row?.display_label || o.tankaCodigo || "",
+                lote: row?.lote || value || o.lote || "",
+              }
+            : o
+        );
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "vasilhame") {
+      setVasilhameOrigens((prev) => {
+        const next = prev.map((o, i) =>
+          i === index
+            ? {
+                ...o,
+                vasilhameId: row?.vasilhameId || row?.id || o.vasilhameId || "",
+                codigo: row?.codigo || o.codigo || "Vasilhame",
+                lote: row?.lote || value || o.lote || "",
+              }
+            : o
+        );
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "embalado") {
+      setEmbaladoOrigens((prev) => {
+        const patchFromRow = (o) => {
+          if (!row) {
+            return { ...o, lote: value || "" };
+          }
+          const um =
+            row.unidade_medida || getEstoqueUnidadeEntrada(row) || "kg";
+          const saldo = Number(row.saldo_atual) || 0;
+          const dens =
+            densOperacional ||
+            parseDensidade(row.densidade) ||
+            parseDensidade(row.lotes?.[0]?.densidade) ||
+            0;
+          const volumeL =
+            dens > 0 || isUnidadeVolumeEntrada(um)
+              ? embaladoSaldoToLitros(saldo, um, dens)
+              : 0;
+          return {
+            ...o,
+            entrada_id: row.id || null,
+            lote: row.lote || value || "",
+            unidade_medida: um,
+            saldo_atual: saldo,
+            volume_l: volumeL,
+            quantidade: volumeL > 0 ? volumeL : "",
+          };
+        };
+        let next;
+        if (prev.length === 0) {
+          next = [
+            patchFromRow({
+              entrada_id: null,
+              lote: "",
+              unidade_medida: "kg",
+              saldo_atual: 0,
+              volume_l: 0,
+              quantidade: "",
+            }),
+          ];
+        } else {
+          next = prev.map((o, i) => (i === index ? patchFromRow(o) : o));
+        }
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
+        return next;
+      });
+    }
+  };
+
+  const handleAddOrigem = () => {
+    const tipo = baseModel?.origemTipoOperacional;
+    if (tipo === "tanka") {
+      setTankaOrigens((prev) => {
+        const next = [
+          ...prev,
+          { tankaId: "", tankaCodigo: "", lote: "", quantidade: "" },
+        ];
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "vasilhame") {
+      setVasilhameOrigens((prev) => {
+        const next = [
+          ...prev,
+          {
+            vasilhameId: "",
+            codigo: "Vasilhame",
+            lote: "",
+            quantidade: "",
+            lotes_retirados: [],
+            lotes_disponiveis: [],
+          },
+        ];
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "embalado") {
+      setEmbaladoOrigens((prev) => {
+        const um = prev[0]?.unidade_medida || "kg";
+        const next = [
+          ...prev,
+          {
+            entrada_id: null,
+            lote: "",
+            unidade_medida: um,
+            saldo_atual: 0,
+            volume_l: 0,
+            quantidade: "",
+          },
+        ];
+        syncLoteFromOrigens(next);
+        return next;
+      });
+    }
+  };
+
+  const handleRemoveOrigem = (index) => {
+    const tipo = baseModel?.origemTipoOperacional;
+    if (tipo === "tanka") {
+      setTankaOrigens((prev) => {
+        if (prev.length <= 1) return prev;
+        const next = prev.filter((_, i) => i !== index);
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "vasilhame") {
+      setVasilhameOrigens((prev) => {
+        if (prev.length <= 1) return prev;
+        const next = prev.filter((_, i) => i !== index);
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
+        return next;
+      });
+      return;
+    }
+    if (tipo === "embalado") {
+      setEmbaladoOrigens((prev) => {
+        if (prev.length <= 1) return prev;
+        const next = prev.filter((_, i) => i !== index);
+        syncTotalFromOrigens(next);
+        syncLoteFromOrigens(next);
         return next;
       });
     }
@@ -273,7 +660,13 @@ export default function ValidacaoOrdemEnvaseEditor({
         onClose={onClose}
         onSave={handleSaveEnvase}
         onQuantidadeChange={handleQuantidadeChange}
+        onLoteChange={handleLoteChange}
         onTankaOrigemQuantidadeChange={handleOrigemQuantidadeChange}
+        onOrigemLoteChange={handleOrigemLoteChange}
+        getOrigemLoteOptions={getOrigemLoteOptions}
+        onAddOrigem={handleAddOrigem}
+        onRemoveOrigem={handleRemoveOrigem}
+        lotesEditable
         productLabel={baseModel.productLabel}
         produtoId={baseModel.produtoId}
         produtoNome={baseModel.produtoNome}
@@ -288,7 +681,16 @@ export default function ValidacaoOrdemEnvaseEditor({
         origemTipoOperacional={baseModel.origemTipoOperacional}
         tankaOrigens={tankaOrigens}
         vasilhameOrigens={vasilhameOrigens}
-        quantidadeEditable={baseModel.quantidadeEditable}
+        embaladoOrigens={embaladoOrigens}
+        quantidadeEditable={
+          baseModel.origemTipoOperacional === "embalado"
+            ? embaladoOrigens.length <= 1
+            : baseModel.origemTipoOperacional === "tanka"
+              ? tankaOrigens.length <= 1
+              : baseModel.origemTipoOperacional === "vasilhame"
+                ? vasilhameOrigens.length <= 1
+                : baseModel.quantidadeEditable
+        }
         granelPayload={granelPrefill || granelPayload}
         initialPayload={baseModel.initialPayload}
         isotanques={isotanques}
