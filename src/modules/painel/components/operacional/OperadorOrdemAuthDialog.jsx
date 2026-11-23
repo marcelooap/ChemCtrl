@@ -146,7 +146,7 @@ export default function OperadorOrdemAuthDialog({ open, onOpenChange, onAuthenti
               }
               disabled={submitting}
               openOnFocus={false}
-              inputClassName="bg-white"
+              inputClassName="bg-card"
             />
             {!loadingUsers && users.length === 0 && !errorMessage && (
               <p className="text-xs text-muted-foreground">
@@ -170,7 +170,7 @@ export default function OperadorOrdemAuthDialog({ open, onOpenChange, onAuthenti
               }}
               placeholder={t("painel.operacional.ordemTransbordo.operatorAuth.passwordPlaceholder")}
               disabled={submitting}
-              className="bg-white"
+              className="bg-card"
             />
           </div>
 

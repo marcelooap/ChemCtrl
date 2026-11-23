@@ -93,7 +93,7 @@ function toItemForm(rows = []) {
 }
 
 const TIPO_TAB_TRIGGER_CLASS =
-  'gap-2 px-4 py-2 text-sm font-semibold bg-white text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
+  'gap-2 px-4 py-2 text-sm font-semibold bg-card text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
 
 export default function ChecklistExpedicao() {
   const { t } = useTranslation();
@@ -540,7 +540,7 @@ export default function ChecklistExpedicao() {
             <Button
               type="button"
               variant="outline"
-              className="shrink-0 bg-white gap-2"
+              className="shrink-0 bg-card gap-2"
               onClick={() => handleCopySql(banner.sql)}
             >
               <Copy className="w-4 h-4" />

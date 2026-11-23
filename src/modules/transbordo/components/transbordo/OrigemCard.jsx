@@ -429,7 +429,7 @@ export default function OrigemCard({
                   onChange={(v) => handleLoteVolumeChange(i, v)}
                   placeholder="0"
                   disabled={origemLocked || faltaDensidadeEmbalado}
-                  className="bg-white"
+                  className="bg-card"
                 />
                 {excedeu && (
                   <p className="text-xs text-red-600">
@@ -621,7 +621,7 @@ export default function OrigemCard({
           value={origem.volume_retirado ?? ""}
           onChange={(v) => handleVolumeChange(v)}
           disabled={origemLocked || faltaDensidadeEmbalado}
-          className="bg-white font-medium text-primary"
+          className="bg-card font-medium text-primary"
         />
       </div>
       <div className="space-y-1.5">
@@ -676,7 +676,7 @@ export default function OrigemCard({
             getOptionValue={(t) => t.value}
             placeholder="Selecionar tipo"
             disabled={origemTipoLocked}
-            inputClassName="bg-white"
+            inputClassName="bg-card"
           />
         </div>
         <div className="space-y-1.5">
@@ -689,7 +689,7 @@ export default function OrigemCard({
             getOptionValue={(s) => s.id}
             placeholder={placeholderOrigemSource}
             disabled={origemLocked || !tipoOrigem}
-            inputClassName="bg-white"
+            inputClassName="bg-card"
           />
         </div>
 
@@ -711,7 +711,7 @@ export default function OrigemCard({
                 onChange={(v) => handleVolumeChange(v)}
                 placeholder="0"
                 disabled={origemLocked || faltaDensidadeEmbalado}
-                className="bg-white"
+                className="bg-card"
               />
               {(excedeuSaldo || excedeuLote) && (
                 <p className="text-xs text-red-600">

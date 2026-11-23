@@ -1,9 +1,9 @@
 import { cn } from '@shared/lib/utils';
 
 const TONES = {
-  default: 'text-muted-foreground hover:bg-muted',
-  danger: 'text-red-500 hover:bg-red-50',
-  success: 'text-green-600 hover:bg-muted',
+  default: 'text-muted-foreground hover:text-foreground hover:bg-muted',
+  danger: 'text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40',
+  success: 'text-green-600 dark:text-green-400 hover:bg-muted',
 };
 
 /** Ícone da coluna Ações, no padrão visual do módulo Industrialização. */

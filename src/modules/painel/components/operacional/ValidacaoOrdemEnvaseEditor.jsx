@@ -45,7 +45,7 @@ function embaladoSaldoToLitros(saldo, unidade, dens) {
   );
 }
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 function emptyGranelDraft() {
   return {

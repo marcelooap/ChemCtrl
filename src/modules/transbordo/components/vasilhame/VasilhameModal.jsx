@@ -28,8 +28,8 @@ import {
 
 const emptyToNull = (v) => (v === "" || v == null ? null : v);
 
-const INPUT_EDITABLE = "bg-white";
-const DATE_INPUT_EDITABLE = "[&>input:first-child]:bg-white";
+const INPUT_EDITABLE = "bg-card";
+const DATE_INPUT_EDITABLE = "[&>input:first-child]:bg-card";
 const INPUT_LOCKED = "bg-muted/40 font-medium";
 
 const TIPOS = ["Contentor", "Vasilhame", "Tambor", "Bombona", "IBC", "One Way"];

@@ -163,7 +163,7 @@ export default function FiltracaoEditModal({
               value={sae}
               onChange={(v) => setSae(v === "" ? "" : v)}
               placeholder="Ex.: 1, 2, 3..."
-              className="bg-white"
+              className="bg-card"
             />
           </div>
 
@@ -190,7 +190,7 @@ export default function FiltracaoEditModal({
                       setParticulas((prev) => ({ ...prev, [key]: v === "" ? "" : v }))
                     }
                     placeholder="0"
-                    className="bg-white"
+                    className="bg-card"
                   />
                 </div>
               ))}

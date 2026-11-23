@@ -1864,7 +1864,7 @@ export default function Vasilhames() {
                     setSaidaQtdEmbalagens(v === "" ? "" : String(v))
                   }
                   placeholder="0"
-                  className="bg-white"
+                  className="bg-card"
                 />
                 <p className="text-xs text-muted-foreground">
                   Disponível:{" "}

@@ -59,13 +59,13 @@
     --secondary: 230 20% 16%;
     --secondary-foreground: 220 14% 96%;
     --muted: 230 20% 16%;
-    --muted-foreground: 215 14% 65%;
+    --muted-foreground: 215 14% 72%;
     --accent: 230 20% 18%;
     --accent-foreground: 220 14% 96%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 230 20% 20%;
-    --input: 230 20% 20%;
+    --border: 230 18% 26%;
+    --input: 230 18% 26%;
     --ring: 212 70% 48%;
     --chart-1: 212 70% 55%;
     --chart-2: 38 92% 55%;
@@ -78,7 +78,7 @@
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 230 20% 18%;
     --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 230 20% 20%;
+    --sidebar-border: 230 18% 26%;
     --sidebar-ring: 212 70% 48%;
   }
 }
@@ -164,44 +164,144 @@ table tbody tr:hover {
 }
 
 /* Dark mode status pills — keep semantics, improve contrast */
-.dark .bg-green-100 { background-color: hsl(142 50% 18%); }
-.dark .text-green-700 { color: hsl(142 60% 65%); }
-.dark .bg-red-100 { background-color: hsl(0 50% 18%); }
-.dark .text-red-700 { color: hsl(0 70% 68%); }
-.dark .bg-amber-100 { background-color: hsl(38 50% 18%); }
-.dark .text-amber-700 { color: hsl(38 80% 65%); }
-.dark .bg-blue-100 { background-color: hsl(212 50% 20%); }
-.dark .text-blue-700 { color: hsl(212 70% 70%); }
-.dark .bg-purple-100 { background-color: hsl(262 40% 22%); }
-.dark .text-purple-700 { color: hsl(262 60% 72%); }
-.dark .bg-indigo-100 { background-color: hsl(239 40% 22%); }
-.dark .text-indigo-700 { color: hsl(239 70% 75%); }
-.dark .bg-gray-200 { background-color: hsl(230 15% 28%); }
 .dark .bg-green-50 { background-color: hsl(142 40% 15%); }
-.dark .bg-amber-50 { background-color: hsl(38 40% 15%); }
+.dark .bg-green-50\/40 { background-color: hsl(142 40% 15% / 0.4); }
+.dark .bg-green-50\/60 { background-color: hsl(142 40% 15% / 0.6); }
+.dark .bg-green-50\/80 { background-color: hsl(142 40% 15% / 0.8); }
+.dark .bg-green-100 { background-color: hsl(142 50% 18%); }
+.dark .text-green-600 { color: hsl(142 60% 58%); }
+.dark .text-green-700 { color: hsl(142 60% 65%); }
+.dark .text-green-800 { color: hsl(142 55% 70%); }
+.dark .text-green-900 { color: hsl(142 50% 78%); }
+
 .dark .bg-red-50 { background-color: hsl(0 40% 15%); }
-.dark .bg-purple-50 { background-color: hsl(262 35% 16%); }
-.dark .bg-indigo-50 { background-color: hsl(239 35% 16%); }
-.dark .bg-slate-50 { background-color: hsl(230 20% 14%); }
-.dark .bg-gray-50 { background-color: hsl(230 20% 14%); }
-.dark .bg-gray-100 { background-color: hsl(230 15% 18%); }
-.dark .bg-slate-100 { background-color: hsl(230 15% 18%); }
+.dark .bg-red-50\/40 { background-color: hsl(0 40% 15% / 0.4); }
+.dark .bg-red-50\/60 { background-color: hsl(0 40% 15% / 0.6); }
+.dark .bg-red-100 { background-color: hsl(0 50% 18%); }
+.dark .text-red-600 { color: hsl(0 70% 62%); }
+.dark .text-red-700 { color: hsl(0 70% 68%); }
+.dark .text-red-800 { color: hsl(0 65% 72%); }
+.dark .text-red-900 { color: hsl(0 60% 78%); }
+
+.dark .bg-amber-50 { background-color: hsl(38 40% 15%); }
+.dark .bg-amber-50\/40 { background-color: hsl(38 40% 15% / 0.4); }
+.dark .bg-amber-50\/60 { background-color: hsl(38 40% 15% / 0.6); }
+.dark .bg-amber-50\/70 { background-color: hsl(38 40% 15% / 0.7); }
+.dark .bg-amber-100 { background-color: hsl(38 50% 18%); }
+.dark .text-amber-600 { color: hsl(38 80% 58%); }
+.dark .text-amber-700 { color: hsl(38 80% 65%); }
+.dark .text-amber-800 { color: hsl(38 75% 70%); }
+.dark .text-amber-900 { color: hsl(38 70% 78%); }
+.dark .text-amber-100 { color: hsl(38 80% 85%); }
+.dark .text-amber-200 { color: hsl(38 70% 80%); }
+
+.dark .bg-yellow-50 { background-color: hsl(48 40% 15%); }
+.dark .bg-yellow-100 { background-color: hsl(48 50% 18%); }
+.dark .text-yellow-700 { color: hsl(48 80% 65%); }
+.dark .text-yellow-800 { color: hsl(48 75% 70%); }
+.dark .text-yellow-900 { color: hsl(48 70% 78%); }
+
+.dark .bg-orange-50 { background-color: hsl(27 40% 15%); }
+.dark .bg-orange-50\/40 { background-color: hsl(27 40% 15% / 0.4); }
+.dark .bg-orange-100 { background-color: hsl(27 50% 18%); }
+.dark .text-orange-600 { color: hsl(27 80% 58%); }
+.dark .text-orange-700 { color: hsl(27 80% 65%); }
+.dark .text-orange-800 { color: hsl(27 75% 70%); }
+.dark .text-orange-900 { color: hsl(27 70% 78%); }
+.dark .text-orange-50 { color: hsl(27 80% 88%); }
+.dark .text-orange-100 { color: hsl(27 75% 82%); }
+.dark .text-orange-200 { color: hsl(27 70% 78%); }
+.dark .text-orange-300 { color: hsl(27 65% 72%); }
+
 .dark .bg-blue-50 { background-color: hsl(212 40% 18%); }
 .dark .bg-blue-50\/40 { background-color: hsl(212 40% 18% / 0.4); }
 .dark .bg-blue-50\/50 { background-color: hsl(212 40% 18% / 0.5); }
 .dark .bg-blue-50\/60 { background-color: hsl(212 40% 18% / 0.6); }
-.dark .ring-blue-50 { --tw-ring-color: hsl(212 40% 25%); }
-.dark .border-green-300 { border-color: hsl(142 40% 35%); }
-.dark .border-amber-200 { border-color: hsl(38 40% 30%); }
-.dark .border-gray-300 { border-color: hsl(var(--border)); }
-.dark .border-gray-50 { border-color: hsl(var(--border)); }
-.dark .text-gray-600 { color: hsl(var(--muted-foreground)); }
-.dark .text-gray-800 { color: hsl(var(--card-foreground)); }
+.dark .bg-blue-100 { background-color: hsl(212 50% 20%); }
+.dark .text-blue-600 { color: hsl(212 70% 65%); }
+.dark .text-blue-700 { color: hsl(212 70% 70%); }
+.dark .text-blue-800 { color: hsl(212 65% 75%); }
+.dark .text-blue-900 { color: hsl(212 60% 80%); }
+
+.dark .bg-sky-50 { background-color: hsl(199 40% 16%); }
+.dark .bg-sky-100 { background-color: hsl(199 50% 18%); }
+.dark .text-sky-700 { color: hsl(199 70% 68%); }
+.dark .text-sky-800 { color: hsl(199 65% 72%); }
+.dark .text-sky-200 { color: hsl(199 70% 80%); }
+
+.dark .bg-cyan-50 { background-color: hsl(187 35% 15%); }
 .dark .bg-cyan-100 { background-color: hsl(187 40% 18%); }
 .dark .text-cyan-700 { color: hsl(187 70% 65%); }
-.dark .bg-orange-100 { background-color: hsl(27 50% 18%); }
-.dark .text-orange-700 { color: hsl(27 80% 65%); }
+.dark .text-cyan-800 { color: hsl(187 65% 70%); }
+
+.dark .bg-emerald-50 { background-color: hsl(160 40% 15%); }
+.dark .bg-emerald-50\/80 { background-color: hsl(160 40% 15% / 0.8); }
+.dark .bg-emerald-100 { background-color: hsl(160 45% 18%); }
+.dark .text-emerald-700 { color: hsl(160 60% 65%); }
+.dark .text-emerald-800 { color: hsl(160 55% 70%); }
+.dark .text-emerald-200 { color: hsl(160 55% 78%); }
+
+.dark .bg-purple-50 { background-color: hsl(262 35% 16%); }
+.dark .bg-purple-100 { background-color: hsl(262 40% 22%); }
+.dark .text-purple-700 { color: hsl(262 60% 72%); }
+.dark .text-purple-800 { color: hsl(262 55% 76%); }
+
+.dark .bg-violet-50 { background-color: hsl(258 35% 16%); }
+.dark .bg-violet-100 { background-color: hsl(258 40% 22%); }
+.dark .text-violet-700 { color: hsl(258 60% 72%); }
+.dark .text-violet-800 { color: hsl(258 55% 76%); }
+.dark .text-violet-200 { color: hsl(258 55% 80%); }
+
+.dark .bg-indigo-50 { background-color: hsl(239 35% 16%); }
+.dark .bg-indigo-100 { background-color: hsl(239 40% 22%); }
+.dark .text-indigo-700 { color: hsl(239 70% 75%); }
+.dark .text-indigo-800 { color: hsl(239 65% 78%); }
+
+.dark .bg-slate-50 { background-color: hsl(230 20% 14%); }
+.dark .bg-slate-100 { background-color: hsl(230 15% 18%); }
+.dark .bg-gray-50 { background-color: hsl(230 20% 14%); }
+.dark .bg-gray-100 { background-color: hsl(230 15% 18%); }
+.dark .bg-gray-200 { background-color: hsl(230 15% 28%); }
+.dark .text-slate-600 { color: hsl(var(--muted-foreground)); }
+.dark .text-slate-700 { color: hsl(215 16% 72%); }
+.dark .text-slate-800 { color: hsl(var(--card-foreground)); }
+.dark .text-slate-300 { color: hsl(215 16% 78%); }
+.dark .text-gray-400 { color: hsl(var(--muted-foreground)); }
+.dark .text-gray-500 { color: hsl(var(--muted-foreground)); }
+.dark .text-gray-600 { color: hsl(var(--muted-foreground)); }
+.dark .text-gray-700 { color: hsl(215 16% 75%); }
+.dark .text-gray-800 { color: hsl(var(--card-foreground)); }
+.dark .text-gray-900 { color: hsl(var(--card-foreground)); }
+
+.dark .ring-blue-50 { --tw-ring-color: hsl(212 40% 25%); }
+.dark .border-green-200 { border-color: hsl(142 40% 30%); }
+.dark .border-green-300 { border-color: hsl(142 40% 35%); }
+.dark .border-amber-200 { border-color: hsl(38 40% 30%); }
+.dark .border-amber-900 { border-color: hsl(38 40% 32%); }
+.dark .border-orange-200 { border-color: hsl(27 40% 30%); }
+.dark .border-orange-800 { border-color: hsl(27 40% 35%); }
+.dark .border-red-200 { border-color: hsl(0 40% 30%); }
+.dark .border-sky-200 { border-color: hsl(199 40% 30%); }
+.dark .border-sky-800 { border-color: hsl(199 40% 35%); }
+.dark .border-emerald-200 { border-color: hsl(160 40% 30%); }
+.dark .border-blue-200 { border-color: hsl(212 40% 30%); }
+.dark .border-slate-200 { border-color: hsl(var(--border)); }
+.dark .border-slate-800 { border-color: hsl(var(--border)); }
+.dark .border-gray-200 { border-color: hsl(var(--border)); }
+.dark .border-gray-300 { border-color: hsl(var(--border)); }
+.dark .border-gray-50 { border-color: hsl(var(--border)); }
+
 .dark .hover\:bg-red-50:hover { background-color: hsl(0 40% 15%); }
 .dark .hover\:bg-amber-50:hover { background-color: hsl(38 40% 15%); }
 .dark .hover\:bg-blue-50:hover { background-color: hsl(212 40% 18%); }
 .dark .hover\:bg-green-50:hover { background-color: hsl(142 40% 15%); }
+.dark .hover\:bg-orange-50:hover { background-color: hsl(27 40% 15%); }
+.dark .hover\:bg-sky-50:hover { background-color: hsl(199 40% 16%); }
+.dark .hover\:bg-emerald-50:hover { background-color: hsl(160 40% 15%); }
+.dark .hover\:bg-slate-50:hover { background-color: hsl(230 20% 16%); }
+.dark .hover\:bg-gray-50:hover { background-color: hsl(230 20% 16%); }
+
+/* Primary tint surfaces — readable on dark cards */
+.dark .bg-primary\/10 { background-color: hsl(212 70% 48% / 0.22); }
+.dark .bg-primary\/5 { background-color: hsl(212 70% 48% / 0.14); }
+.dark .hover\:bg-primary\/5:hover { background-color: hsl(212 70% 48% / 0.14); }

@@ -206,7 +206,7 @@ export default function IsotanquesTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por código ITKU, tanka, produto ou cliente..."
-            className="pl-10 bg-white h-9"
+            className="pl-10 bg-card h-9"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">

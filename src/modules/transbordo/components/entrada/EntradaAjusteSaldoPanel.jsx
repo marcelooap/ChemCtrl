@@ -213,7 +213,7 @@ export default function EntradaAjusteSaldoPanel({
                     }
                     decimals={3}
                     disabled={readOnly}
-                    className="h-8 bg-white"
+                    className="h-8 bg-card"
                     min={0}
                     max={item.capacidade || undefined}
                   />

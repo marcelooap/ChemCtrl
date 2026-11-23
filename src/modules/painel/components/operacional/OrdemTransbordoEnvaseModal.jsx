@@ -40,7 +40,7 @@ import {
   isOrigemEmbaladoMassa,
 } from "@transbordo/lib/vasilhameComposicao";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 /** Espelha validacaoTransbordo — trocado pelo id real do estoque na efetivação. */
 const PENDING_GRANEL_PREFIX = "__PENDING_GRANEL__";
 
@@ -169,6 +169,12 @@ function isDestinoPreenchido(destino) {
     return (
       Boolean(destino.tanka_id || destino.tanka_codigo) &&
       roundVolume(destino.volume_total || destino.volume || 0) > 0
+    );
+  }
+  if (tipo === "Vasilhame") {
+    return (
+      roundVolume(destino.volume_total || destino.volume || 0) > 0 &&
+      Number(destino.tara) > 0
     );
   }
   return roundVolume(destino.volume_total || destino.volume || 0) > 0;
@@ -1020,6 +1026,15 @@ export default function OrdemTransbordoEnvaseModal({
       setError(t("painel.operacional.ordemTransbordo.envaseModal.errors.density"));
       return;
     }
+    if (
+      destinos.some(
+        (d) =>
+          d.tipo_embalagem === "Vasilhame" && !(Number(d.tara) > 0)
+      )
+    ) {
+      setError(t("painel.operacional.ordemTransbordo.envaseModal.errors.tara"));
+      return;
+    }
     if (!allDestinosOk) {
       setError(t("painel.operacional.ordemTransbordo.envaseModal.errors.items"));
       return;
@@ -1500,7 +1515,7 @@ export default function OrdemTransbordoEnvaseModal({
               <button
                 type="button"
                 onClick={() => setOperadoresOpen((v) => !v)}
-                className="flex w-full items-center justify-between rounded-md border border-border bg-white px-3 py-2 text-sm hover:border-slate-400 transition-colors"
+                className="flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm hover:border-slate-400 transition-colors"
               >
                 <span
                   className={

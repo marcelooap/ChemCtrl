@@ -67,7 +67,7 @@ import {
   mergeOperadoresDropdown,
 } from "@transbordo/lib/operadoresCadastro";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 /** Nº placa (nº barril), ou só o que estiver cadastrado. */
 function formatVasilhameOrigemLabel(vasilhame) {
@@ -1533,6 +1533,15 @@ export default function TransbordoModal({
       return;
     }
     if (
+      destinos.some(
+        (d) =>
+          d.tipo_embalagem === "Vasilhame" && !(Number(d.tara) > 0)
+      )
+    ) {
+      setError("Informe a tara (kg) em todos os destinos Vasilhame.");
+      return;
+    }
+    if (
       destinos.some((d) =>
         destinoLancaTanqueDuplicado(d, vasilhames, {
           excludeTransbordoId: editingIdForSaldo,
@@ -1864,7 +1873,7 @@ export default function TransbordoModal({
                     !readOnly && setOperadoresOpen(!operadoresOpen)
                   }
                   disabled={readOnly}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-white text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-border bg-card text-sm hover:border-slate-400 transition-colors disabled:bg-muted/40 disabled:cursor-not-allowed"
                 >
                   <span
                     className={

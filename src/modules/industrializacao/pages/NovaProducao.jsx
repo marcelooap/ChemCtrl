@@ -802,7 +802,7 @@ export default function NovaProducao() {
         const maxKg = maxKgByMp ? (mp.deficit_kg ?? null) : null;
         return (
           <div key={mp.mp_code || idx} className="border rounded-lg overflow-hidden bg-card">
-            <div className="px-4 py-2 flex items-center gap-3 border-b bg-muted/50/50 flex-wrap">
+            <div className="px-4 py-2 flex items-center gap-3 border-b border-border bg-muted/50 flex-wrap">
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">{mp.mp_code}</span>
               <span className="text-sm font-semibold">{mp.mp_name}</span>
               {mp.deficit_kg != null && (
@@ -1053,7 +1053,12 @@ export default function NovaProducao() {
         {!isComplementMode && (
           <div className="mb-6">
             <label className="text-xs font-medium text-muted-foreground">{t('common.notes')}</label>
-            <textarea className="w-full border rounded-md px-3 py-2 text-sm mt-1" rows={2} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
+            <textarea
+              className="w-full mt-1 min-h-[60px] rounded-md border border-input bg-transparent dark:bg-background px-3 py-2 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={2}
+              value={form.observations}
+              onChange={e => setForm({ ...form, observations: e.target.value })}
+            />
           </div>
         )}
 

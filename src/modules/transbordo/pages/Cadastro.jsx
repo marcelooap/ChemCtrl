@@ -4,7 +4,7 @@ import ProdutosTab from "@transbordo/components/cadastro/ProdutosTab";
 import IsotanquesTab from "@transbordo/components/cadastro/IsotanquesTab";
 
 const TAB_TRIGGER_CLASS =
-  "gap-1.5 px-4 py-2 text-sm font-semibold bg-white text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
+  "gap-1.5 px-4 py-2 text-sm font-semibold bg-card text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md";
 
 export default function Cadastro() {
   return (

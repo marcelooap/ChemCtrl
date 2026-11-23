@@ -194,7 +194,7 @@ function ChecklistPhotoPreview({ urls = [], index, onClose, onChangeIndex, t }) 
 
 function InfoChip({ label, value, className, valueClassName }) {
   return (
-    <div className={cn('rounded-md border border-border bg-white px-2.5 py-1.5 shadow-sm', className)}>
+    <div className={cn('rounded-md border border-border bg-card px-2.5 py-1.5 shadow-sm', className)}>
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={cn('text-sm font-medium text-foreground break-words', valueClassName)}>
         {value || '—'}
@@ -249,7 +249,7 @@ function CheckAnswerRow({
       className={cn(
         'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between',
         !bare && 'rounded-lg border px-3 py-2.5 shadow-sm',
-        !bare && (isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white')
+        !bare && (isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-card')
       )}
     >
       <p className="text-sm leading-snug sm:flex-1">
@@ -347,7 +347,7 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
               key={def.key}
               className={cn(
                 'space-y-3 rounded-lg border p-3 shadow-sm',
-                isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+                isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-card'
               )}
             >
               <p className="text-sm font-semibold text-foreground">
@@ -440,7 +440,7 @@ function EslingaColorSection({ colorCod, number, value, disabled, onChange, t })
       <div
         className={cn(
           'space-y-3 rounded-lg border p-3 shadow-sm',
-          isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-white'
+          isRejected ? 'border-red-200 bg-red-50' : 'border-border bg-card'
         )}
       >
         <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
@@ -987,7 +987,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                         ? 'border-red-200 bg-red-50 hover:bg-red-100/60'
                         : it.status === CHECKLIST_STATUS.APROVADO
                           ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100/60'
-                          : 'border-border bg-white hover:bg-slate-50'
+                          : 'border-border bg-card hover:bg-slate-50'
                     )}
                   >
                     <div
@@ -1137,7 +1137,7 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
 
               {showLacresBlock ? (
-                <div className="space-y-3 rounded-lg border border-border bg-white p-3 shadow-sm">
+                <div className="space-y-3 rounded-lg border border-border bg-card p-3 shadow-sm">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {t('painel.comercial.agendamentos.checklist.sections.lacres')}
@@ -1186,7 +1186,7 @@ export default function AgendamentoCarregamentoChecklistModal({
               ) : null}
 
               {active.kind === CHECKLIST_KIND.CONVENCIONAL && hasCustomChecks && active.lacres?.length > 0 ? (
-                <div className="space-y-2 rounded-lg border border-border bg-white p-3 shadow-sm">
+                <div className="space-y-2 rounded-lg border border-border bg-card p-3 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {t('painel.comercial.agendamentos.checklist.sections.lacres')}
                   </p>
@@ -1299,7 +1299,7 @@ export default function AgendamentoCarregamentoChecklistModal({
                             event.stopPropagation();
                             removePhoto(url);
                           }}
-                          className="absolute -right-1 -top-1 rounded-full border bg-white p-0.5 text-red-500 opacity-0 group-hover:opacity-100"
+                          className="absolute -right-1 -top-1 rounded-full border bg-card p-0.5 text-red-500 opacity-0 group-hover:opacity-100"
                           title={t('buttons.delete')}
                         >
                           <Trash2 className="h-3 w-3" />

@@ -422,7 +422,7 @@ export default function ProdutoModal({
                 }}
                 disabled={readOnly}
               >
-                <SelectTrigger className="h-10 bg-white">
+                <SelectTrigger className="h-10 bg-card">
                   <SelectValue placeholder="Selecione o órgão" />
                 </SelectTrigger>
                 <SelectContent>

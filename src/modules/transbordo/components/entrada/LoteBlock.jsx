@@ -29,7 +29,7 @@ import {
 import { applyTipoRecebimento } from "@transbordo/lib/entradaForm";
 
 const UNIDADES = ["kg", "L", "lb", "gal", "unid."];
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 const emptyLote = () => ({
   produto_id: "",

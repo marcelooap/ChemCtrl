@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@industrializacao/api/base44Client';
 import { useRealtimeEntity } from '@industrializacao/hooks/useRealtimeEntity';
@@ -442,7 +442,7 @@ export default function Tankagem() {
             placeholder={t('containers.tankagePage.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-white"
+            className="pl-9 bg-card"
           />
         </div>
       )}
@@ -537,7 +537,7 @@ export default function Tankagem() {
                   {t('containers.tankagePage.form.itkuLabel')}
                 </Label>
                 <Input
-                  className="bg-white"
+                  className="bg-card"
                   value={form.codigo_itku}
                   onChange={(e) => setFormField('codigo_itku', e.target.value)}
                   placeholder={t('containers.tankagePage.form.itkuPlaceholder')}
@@ -548,7 +548,7 @@ export default function Tankagem() {
                   {t('containers.tankagePage.form.nameLabel')}
                 </Label>
                 <Input
-                  className="bg-white"
+                  className="bg-card"
                   value={form.name}
                   onChange={(e) => setFormField('name', e.target.value)}
                   placeholder={t('containers.tankagePage.form.namePlaceholder')}
@@ -564,7 +564,7 @@ export default function Tankagem() {
                 value={form.client}
                 onValueChange={handleClientChange}
               >
-                <SelectTrigger className="bg-white">
+                <SelectTrigger className="bg-card">
                   <SelectValue
                     placeholder={t('containers.tankagePage.form.clientPlaceholder')}
                   />
@@ -605,7 +605,7 @@ export default function Tankagem() {
                     : t('containers.tankagePage.form.productSelectClientFirst')
                 }
                 disabled={!form.client}
-                inputClassName="bg-white"
+                inputClassName="bg-card"
               />
             </div>
 
@@ -619,7 +619,7 @@ export default function Tankagem() {
                   value={form.capacidade}
                   onChange={(v) => setFormField('capacidade', v === '' ? '' : v)}
                   placeholder="26000"
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
               <div className="space-y-1.5">
@@ -628,7 +628,7 @@ export default function Tankagem() {
                 </Label>
                 <Input
                   type="date"
-                  className="bg-white"
+                  className="bg-card"
                   value={form.inicio_locacao}
                   onChange={(e) => setFormField('inicio_locacao', e.target.value)}
                 />
@@ -641,7 +641,7 @@ export default function Tankagem() {
               </Label>
               <Textarea
                 rows={2}
-                className="bg-white"
+                className="bg-card"
                 value={form.observacao}
                 onChange={(e) => setFormField('observacao', e.target.value)}
                 placeholder={t('containers.tankagePage.form.notesPlaceholder')}

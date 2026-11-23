@@ -100,7 +100,7 @@ function RegistrarDescontaminacaoDialog({ open, onClose, onSave, isotanques }) {
               onChange={(label) => setTanka(label || "")}
               placeholder="Digite ou selecione o tanka"
               disabled={saving || tankaOptions.length === 0}
-              inputClassName="bg-white"
+              inputClassName="bg-card"
             />
           </div>
 
@@ -204,7 +204,7 @@ export default function DescontaminacaoModal({
                 <DateInputBr
                   value={de}
                   onChange={setDe}
-                  className="w-[11.5rem] [&_input]:bg-white"
+                  className="w-[11.5rem] [&_input]:bg-card"
                 />
               </div>
               <div className="space-y-1">
@@ -212,7 +212,7 @@ export default function DescontaminacaoModal({
                 <DateInputBr
                   value={ate}
                   onChange={setAte}
-                  className="w-[11.5rem] [&_input]:bg-white"
+                  className="w-[11.5rem] [&_input]:bg-card"
                 />
               </div>
             </div>

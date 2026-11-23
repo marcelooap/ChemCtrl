@@ -102,7 +102,7 @@ function mapLoteFromEntrada(l, entrada = {}) {
   };
 }
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 const todayISO = () => {
   const d = new Date();

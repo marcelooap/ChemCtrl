@@ -28,7 +28,7 @@ import {
   volumeAcumuladoDoTanque,
 } from "@transbordo/lib/vasilhameComposicao";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 function findVasilhameCadastro(placa, vasilhames = []) {
   if (!placa) return null;
@@ -46,6 +46,7 @@ function findVasilhameCadastro(placa, vasilhames = []) {
  * Critérios alinhados à validação por destino em TransbordoModal.handleSubmit:
  * - tipo obrigatório
  * - IBC/Bombona/Tambor: volume total e volume por embalagem > 0 (qtd editável)
+ * - Vasilhame: volume > 0 e tara > 0
  * - demais: volume_total > 0 (necessário para a conferência fechar)
  */
 function isDestinoPreenchido(destino, volumeExcedido) {
@@ -57,6 +58,12 @@ function isDestinoPreenchido(destino, volumeExcedido) {
       roundVolume(destino.volume_total || destino.volume || 0) > 0 &&
       roundVolume(destino.volume_por_embalagem || 0) > 0 &&
       Number(destino.quantidade_embalagens) > 0
+    );
+  }
+  if (tipo === "Vasilhame") {
+    return (
+      roundVolume(destino.volume_total || destino.volume || 0) > 0 &&
+      Number(destino.tara) > 0
     );
   }
   return roundVolume(destino.volume_total || destino.volume || 0) > 0;
@@ -616,7 +623,7 @@ export default function DestinoCard({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <IntegerField
-              label="Tara (kg)"
+              label="Tara (kg) *"
               value={destino.tara}
               onChange={(v) => updateField("tara", v)}
               readOnly={readOnly}

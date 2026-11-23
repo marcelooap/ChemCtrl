@@ -2342,6 +2342,7 @@
           "errors": {
             "density": "Density is required for packaging.",
             "items": "Fill in all packaging items.",
+            "tara": "Enter the tare weight (kg) for all Vasilhame destinations.",
             "mismatch": "Packaged volume must equal registered volume.",
             "operators": "Select at least one Transshipment-sector operator.",
             "tankaCapacity": "One or more destinations exceed the available tank space."

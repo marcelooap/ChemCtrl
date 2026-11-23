@@ -1735,6 +1735,7 @@
           "errors": {
             "density": "La densité est obligatoire pour le conditionnement.",
             "items": "Renseignez toutes les lignes de conditionnement.",
+            "tara": "Saisissez la tare (kg) pour toutes les destinations Vasilhame.",
             "mismatch": "Le volume conditionné doit être égal au volume enregistré.",
             "operators": "Sélectionnez au moins un opérateur du secteur Transbordement.",
             "tankaCapacity": "Une ou plusieurs destinations dépassent l'espace disponible du tanka."

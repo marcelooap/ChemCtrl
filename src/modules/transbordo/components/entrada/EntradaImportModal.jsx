@@ -658,7 +658,7 @@ export default function EntradaImportModal({
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
                   placeholder="Cole aqui as linhas copiadas da planilha..."
-                  className="w-full min-h-[280px] rounded-md border border-input bg-white px-3 py-2 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full min-h-[280px] rounded-md border border-input bg-card px-3 py-2 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               {parseError && (
@@ -713,7 +713,7 @@ export default function EntradaImportModal({
                         <tr
                           key={row.lineNumber}
                           className={`border-t border-border align-top ${
-                            row.valid ? "bg-white" : "bg-red-50/60"
+                            row.valid ? "bg-card" : "bg-red-50/60"
                           }`}
                         >
                           <td className="px-3 py-2 text-muted-foreground">

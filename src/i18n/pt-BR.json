@@ -2342,6 +2342,7 @@
           "errors": {
             "density": "Densidade é obrigatória para o envase.",
             "items": "Preencha todos os itens de envase.",
+            "tara": "Informe a tara (kg) em todos os destinos Vasilhame.",
             "mismatch": "O volume envasado deve ser igual ao volume registrado.",
             "operators": "Selecione ao menos um operador do setor Transbordo.",
             "tankaCapacity": "Um ou mais destinos excedem o espaço vago do tanka."

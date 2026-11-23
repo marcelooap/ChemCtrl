@@ -347,16 +347,30 @@ function preferProdutoOption(a, b) {
 /**
  * Um produto por cliente + código/nome (e opcionalmente fonte).
  * Evita o mesmo item repetido no select da Ordem de Transbordo.
+ *
+ * Cliente: prioriza nome normalizado (UUIDs duplicados do mesmo nome — ex.
+ * ARKEMA COATEX — não geram linhas repetidas). Sem nome, cai no cliente_id.
+ * Com `byCliente: false`, deduplica só por código/nome (+ fonte), útil depois
+ * que a lista já foi filtrada para um cliente.
  */
-export function uniqueProdutosByIdentity(produtos, { byFonte = false } = {}) {
+export function uniqueProdutosByIdentity(
+  produtos,
+  { byFonte = false, byCliente = true } = {}
+) {
   const map = new Map();
   for (const p of produtos || []) {
     const codigo = String(p?.codigo || "").trim();
     const nome = String(p?.produto || p?.nome || "").trim();
     if (!codigo && !nome) continue;
-    const clienteKey = p?.cliente_id
-      ? `id:${String(p.cliente_id)}`
-      : `nome:${normProdutoKey(p?.cliente_nome)}`;
+    let clienteKey = "";
+    if (byCliente) {
+      const clienteNomeKey = normProdutoKey(p?.cliente_nome);
+      clienteKey = clienteNomeKey
+        ? `nome:${clienteNomeKey}`
+        : p?.cliente_id
+          ? `id:${String(p.cliente_id)}`
+          : "nome:";
+    }
     const ident = produtoIdentityKey(codigo, nome);
     const fonte = byFonte ? String(p?.fonte || "") : "";
     const key = `${clienteKey}|${ident}|${fonte}`;

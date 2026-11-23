@@ -46,7 +46,7 @@ import { formatMass, formatNum } from "@transbordo/lib/format";
 import { loteToKg } from "@transbordo/lib/conversao";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 const PERM = "painel_logistica_recebimento";
 const RELATORIO_BASE = "/painel/logistica/recebimento/relatorio";
 

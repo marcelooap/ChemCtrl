@@ -34,7 +34,7 @@ function todayISODate() {
 }
 
 const labelClass = "text-xs font-medium text-muted-foreground";
-const fieldClass = "bg-white";
+const fieldClass = "bg-card";
 
 export default function IsotanqueModal({
   open,

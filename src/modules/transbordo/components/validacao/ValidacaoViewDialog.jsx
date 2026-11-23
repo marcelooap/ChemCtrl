@@ -49,7 +49,7 @@ import {
   stripAggregatedQtyPrefix,
 } from "@industrializacao/lib/packagingTypes";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 
 function asObject(v) {
   if (v == null) return null;

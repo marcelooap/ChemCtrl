@@ -181,7 +181,7 @@ export default function JustificativasAtraso() {
           <Button
             type="button"
             variant="outline"
-            className="shrink-0 bg-white gap-2"
+            className="shrink-0 bg-card gap-2"
             onClick={handleCopySql}
           >
             <Copy className="w-4 h-4" />

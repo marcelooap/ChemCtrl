@@ -425,7 +425,7 @@ export default function ProdutosTab() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por ID, código, produto, cliente, densidade ou filtrado..."
-              className="pl-10 bg-white h-9"
+              className="pl-10 bg-card h-9"
               aria-label="Buscar produtos"
             />
           </div>
@@ -438,7 +438,7 @@ export default function ProdutosTab() {
               getOptionValue={(c) => c.id}
               placeholder="Todos os clientes"
               ariaLabel="Filtrar por cliente"
-              inputClassName="h-9 py-0 bg-white"
+              inputClassName="h-9 py-0 bg-card"
             />
           </div>
         </div>
@@ -535,7 +535,7 @@ export default function ProdutosTab() {
                           Sim
                         </span>
                       ) : (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
                           Não
                         </span>
                       )}

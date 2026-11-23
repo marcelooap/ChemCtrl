@@ -57,6 +57,7 @@ import {
   mergeClientesByNome,
   resolveDestinoValidacaoOrdem,
   uniqueClientesByNome,
+  uniqueProdutosByIdentity,
 } from "@painel/lib/recebimentoCatalog";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
@@ -77,7 +78,7 @@ import {
   seedComposicaoFromVasilhame,
 } from "@transbordo/lib/vasilhameComposicao";
 
-const INPUT_EDITABLE = "bg-white";
+const INPUT_EDITABLE = "bg-card";
 const PERM = "painel_operacional_ordem_transbordo";
 
 const ORIGEM_VALUES = [
@@ -419,17 +420,22 @@ export default function OrdemTransbordo() {
       );
     });
 
-    return filterProdutosByOrigem({
-      produtos: baseList,
-      origemTipo,
-      clienteId,
-      clienteNome,
-      vasilhames,
-      estoque: entradas,
-      isotanques,
-      transbordos,
-      containers,
-    });
+    // Já filtrado pelo cliente: um item por código/nome (+ fonte no granel).
+    // Evita repetir o mesmo SKU quando há UUIDs duplicados de cliente/produto.
+    return uniqueProdutosByIdentity(
+      filterProdutosByOrigem({
+        produtos: baseList,
+        origemTipo,
+        clienteId,
+        clienteNome,
+        vasilhames,
+        estoque: entradas,
+        isotanques,
+        transbordos,
+        containers,
+      }),
+      { byFonte: origemTipo === "granel", byCliente: false }
+    );
   }, [
     catalogProdutos,
     clienteId,

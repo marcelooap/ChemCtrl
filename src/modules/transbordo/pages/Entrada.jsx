@@ -675,7 +675,7 @@ export default function Entrada() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por produto, cliente, lote ou NF..."
-              className="pl-10 bg-white"
+              className="pl-10 bg-card"
             />
           </div>
           <div className="w-56">
@@ -687,7 +687,7 @@ export default function Entrada() {
               getOptionValue={(c) => c.id}
               placeholder="Cliente"
               ariaLabel="Filtrar por cliente"
-              inputClassName="h-9 bg-white text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
+              inputClassName="h-9 bg-card text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
             />
           </div>
           <div className="w-52">
@@ -698,7 +698,7 @@ export default function Entrada() {
               getOptionLabel={(o) => o.label}
               getOptionValue={(o) => o.value}
               placeholder="Origem"
-              inputClassName="h-9 bg-white text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
+              inputClassName="h-9 bg-card text-base font-normal text-foreground shadow-sm placeholder:text-muted-foreground md:text-sm"
             />
           </div>
         </div>
