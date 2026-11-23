@@ -18,6 +18,12 @@ import {
 } from '@industrializacao/api/supabaseClient';
 
 import { getSessionId } from '@industrializacao/api/rpcClient';
+import { normalizeMateriaPrimaRealtimePayload } from '@transbordo/services/estoqueProdutos';
+
+/** Normalizadores por entidade — raw postgres_changes → shape da API da tela. */
+const ENTITY_REALTIME_NORMALIZERS = {
+  RawMaterialStock: normalizeMateriaPrimaRealtimePayload,
+};
 
 
 // ─────────────────────────────────────────────
@@ -444,11 +450,20 @@ export function subscribeToTable(
   let cancelled = false;
   let activeTableName = null;
 
+  const normalize = ENTITY_REALTIME_NORMALIZERS[entityName];
+  const entityCallback = normalize
+    ? (payload) => {
+        const next = normalize(payload);
+        if (!next) return;
+        callback(next);
+      }
+    : callback;
+
   const detach = (tableName) => {
     if (!tableName) return;
     const callbacks = tableCallbacks.get(tableName);
     if (!callbacks) return;
-    callbacks.delete(callback);
+    callbacks.delete(entityCallback);
     if (callbacks.size === 0) {
       tableCallbacks.delete(tableName);
       const channel = tableChannels.get(tableName);
@@ -467,30 +482,23 @@ export function subscribeToTable(
     }
   };
 
+  const attach = (tableName) => {
+    if (cancelled || !tableName) return;
+    activeTableName = tableName;
+    if (!tableCallbacks.has(tableName)) {
+      tableCallbacks.set(tableName, new Set());
+    }
+    tableCallbacks.get(tableName).add(entityCallback);
+    if (!tableChannels.has(tableName)) {
+      createChannel(tableName);
+    }
+  };
+
   getEntityTableName(entityName)
-    .then((tableName) => {
-      if (cancelled || !tableName) return;
-      activeTableName = tableName;
-      if (!tableCallbacks.has(tableName)) {
-        tableCallbacks.set(tableName, new Set());
-      }
-      tableCallbacks.get(tableName).add(callback);
-      if (!tableChannels.has(tableName)) {
-        createChannel(tableName);
-      }
-    })
+    .then(attach)
     .catch(() => {
       // Fallback síncrono ao mapa lógico se a resolução falhar.
-      const tableName = entityTableMap[entityName];
-      if (cancelled || !tableName) return;
-      activeTableName = tableName;
-      if (!tableCallbacks.has(tableName)) {
-        tableCallbacks.set(tableName, new Set());
-      }
-      tableCallbacks.get(tableName).add(callback);
-      if (!tableChannels.has(tableName)) {
-        createChannel(tableName);
-      }
+      attach(entityTableMap[entityName]);
     });
 
   return () => {

@@ -978,6 +978,55 @@ function toMateriaPrima(row) {
   };
 }
 
+/**
+ * Converte payload realtime (linha crua de estoque_produtos) ou evento local
+ * (já no formato API) para o shape de RawMaterialStock.
+ * Espelhos de entrada (sem legacy_mp_id_text) e outras origens retornam null —
+ * senão a tela de MP cria "linhas fantasma" ao sincronizar status_wms.
+ */
+export function normalizeMateriaPrimaRealtimeRecord(row) {
+  if (!row) return null;
+
+  // Eventos locais (entityEvents) já vêm no formato da API MP.
+  const isApiShape =
+    Object.prototype.hasOwnProperty.call(row, 'mp_name')
+    || Object.prototype.hasOwnProperty.call(row, 'entry_id')
+    || Object.prototype.hasOwnProperty.call(row, 'mp_code');
+  if (isApiShape && row.legacy_mp_id_text == null && row.produto_nome == null) {
+    return row.id ? row : null;
+  }
+
+  if (!row.legacy_mp_id_text) return null;
+  if (row.origem != null && origemCanon(row.origem) !== 'MATERIA_PRIMA') return null;
+  return toMateriaPrima(row);
+}
+
+/** Normaliza INSERT/UPDATE/DELETE de RawMaterialStock; null = ignorar o evento. */
+export function normalizeMateriaPrimaRealtimePayload(payload) {
+  if (!payload || payload.eventType === 'REFRESH') return payload;
+
+  if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+    const record = normalizeMateriaPrimaRealtimeRecord(payload.new);
+    if (!record?.id) return null;
+    return { ...payload, new: record };
+  }
+
+  if (payload.eventType === 'DELETE') {
+    const old = payload.old;
+    if (!old) return null;
+    if (old.legacy_mp_id_text) {
+      return { ...payload, old: { ...old, id: old.legacy_mp_id_text } };
+    }
+    const isApiShape =
+      Object.prototype.hasOwnProperty.call(old, 'mp_name')
+      || Object.prototype.hasOwnProperty.call(old, 'entry_id');
+    if (isApiShape && old.id) return payload;
+    return null;
+  }
+
+  return payload;
+}
+
 function rowFromMp(payload, ids) {
   const nome = payload.mp_name || payload.produto_nome || 'Matéria-prima sem nome';
   return {

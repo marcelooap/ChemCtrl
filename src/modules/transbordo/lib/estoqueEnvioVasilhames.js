@@ -100,8 +100,9 @@ export function buildPlacaCapacidadeStats(vasilhames = []) {
 }
 
 /**
- * Quantidade do tanque clássico na UOM de entrada pela capacidade nominal
- * (ex.: 33 × 5.000 L). Sem capacidade resolvida, cai no volume atual.
+ * Quantidade pela capacidade nominal do tanque (ex.: 5.000 L × densidade).
+ * Uso: resumo/faturamento por capacidade. NÃO usar em saldo de produto —
+ * tanque fracionado/parcial deve usar `resolveQuantidadeFisicaVasilhame`.
  */
 export function resolveQuantidadeTanquePorCapacidade(
   v,

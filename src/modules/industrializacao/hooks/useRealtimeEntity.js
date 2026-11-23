@@ -84,6 +84,8 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
         case 'INSERT': {
           if (!newRecord?.id) return prev;
           const record = transformRef.current(newRecord);
+          // Após transform: ignora payload inválido (ex.: espelho sem id lógico de MP).
+          if (!record?.id) return prev;
           if (prev.some((item) => item.id === record.id)) {
             return prev.map((item) => (item.id === record.id ? { ...item, ...record } : item));
           }
@@ -92,8 +94,10 @@ export function useRealtimeEntity(entityName, fetchFn, deps = [], transform = (x
         case 'UPDATE': {
           if (!newRecord?.id) return prev;
           const record = transformRef.current(newRecord);
+          if (!record?.id) return prev;
           const idx = prev.findIndex((item) => item.id === record.id);
-          if (idx === -1) return [record, ...prev];
+          // Não inventa linha a partir de UPDATE desconhecido — evita fantasmas na tabela.
+          if (idx === -1) return prev;
           const updated = [...prev];
           updated[idx] = { ...updated[idx], ...record };
           return updated;

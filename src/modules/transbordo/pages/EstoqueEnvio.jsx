@@ -65,7 +65,6 @@ import {
   mapIndContainersForEstoqueEnvio,
   matchesCapacidadePadrao,
   resolveQuantidadeFisicaVasilhame,
-  resolveQuantidadeTanquePorCapacidade,
   resolveVasilhameCapacidade,
 } from "@transbordo/lib/estoqueEnvioVasilhames";
 import { listAllAjustesManuais } from "@transbordo/lib/estoqueAjusteManual";
@@ -722,15 +721,14 @@ export default function EstoqueEnvio() {
   /**
    * Enriquece produtosAgregados com o saldo em vasilhames (Tanque) e tankas (TANKA).
    *
-   * Tanque = soma das capacidades nominais dos tanques clássicos no pátio
-   * (alinhado ao resumo 5.000 L / 1.500 L). Embalado unitário e TANKA usam
-   * quantidade física atual. Com colunasLivro, Embalado/Tanka do livro
-   * permanecem; Tanque físico por capacidade prevalece quando houver pátio.
+   * Estoque de produtos usa conteúdo real (volume/composição × densidade),
+   * igual à tela de Estoque — nunca a capacidade nominal do tanque.
+   * Capacidade (5.000 L / 1.500 L) fica só no resumo de vasilhames.
+   * Com colunasLivro, Embalado/Tanque/Tanka/Saldo seguem o livro.
    */
   const produtosComBreakdown = useMemo(() => {
     const densidadeByCode = new Map();
     const densidadeByNome = new Map();
-    const placaStats = buildPlacaCapacidadeStats(vasilhamesConsolidados);
 
     const rememberDens = (cod, nome, raw) => {
       const den = parseDensidade(raw);
@@ -873,7 +871,7 @@ export default function EstoqueEnvio() {
     };
 
     // ── Acumuladores já na UOM de entrada por produto+cliente ──────────────
-    // Tanque = capacidade nominal do vasilhame clássico; Embalado = bombona/tambor/IBC.
+    // Tanque e embalado unitário: quantidade física atual (nunca capacidade nominal).
     const orphanByKey = new Map();
     const vasilhameByCode = new Map();
     const vasilhameByNome = new Map();
@@ -886,13 +884,7 @@ export default function EstoqueEnvio() {
       const unidadeV = resolveUnidadeProduto(codigoKey, normProdutoKey(v.produto_nome || ""), clienteKey);
       const dens = getDensidade(codigoKey, normProdutoKey(v.produto_nome || "")) || parseDensidade(v.densidade);
       const isUnitario = isEstoqueEnvioEmbaladoUnitario(v);
-      const resolved = isUnitario
-        ? resolveQuantidadeFisicaVasilhame(v, unidadeV, dens)
-        : resolveQuantidadeTanquePorCapacidade(v, {
-            unidadePreferida: unidadeV,
-            densidadeKgPorL: dens,
-            placaStats,
-          });
+      const resolved = resolveQuantidadeFisicaVasilhame(v, unidadeV, dens);
       const vol = resolved.quantidade;
       const unidadeFisica = resolved.unidade;
       if (vol <= 0) continue;
@@ -1040,25 +1032,19 @@ export default function EstoqueEnvio() {
       const unidadeRow = unidadeFisica || p.unidade;
       const hasTanqueFisico = vasilhameQtd > 0;
 
-      // Livro do Transbordo: Embalado/Tanka seguem a tela de Estoque.
-      // Tanque físico por capacidade prevalece quando há tanques no pátio.
+      // Livro do Transbordo: mesmas colunas da tela de Estoque.
+      // Não substituir Tanque/Saldo por capacidade nominal nem por volume do pátio.
       if (p.colunasLivro && !isOrphan) {
         const saldoEmbalado = roundVolume(p.saldoEmbalado || 0);
         const saldoTanka = roundVolume(p.saldoTanka || 0);
-        const saldoTanque = hasTanqueFisico
-          ? roundVolume(vasilhameQtd)
-          : roundVolume(p.saldoTanque || 0);
+        const saldoTanque = roundVolume(p.saldoTanque || 0);
         const saldoReservado = p.saldoReservado || 0;
-        const saldoAtual = hasTanqueFisico
-          ? roundVolume(saldoEmbalado + saldoTanque + saldoTanka)
-          : roundVolume(p.saldo || 0);
-        const saldoFinal = hasTanqueFisico
-          ? Math.max(0, roundVolume(saldoAtual - saldoReservado))
-          : p.saldoFinal;
+        const saldoAtual = roundVolume(p.saldo || 0);
+        const saldoFinal = p.saldoFinal;
 
         return {
           ...p,
-          unidade: unidadeRow,
+          unidade: p.unidade || unidadeRow,
           saldo: saldoAtual,
           saldoTanque,
           saldoTanka,
@@ -1076,13 +1062,10 @@ export default function EstoqueEnvio() {
         ? roundVolume(saldoTanque + saldoTanka + saldoEmbaladoFisico)
         : p.saldo;
 
-      // Físico (tanque + tanka + unitário) não pode exceder o saldo de livro
-      // quando o Tanque ainda vem de volume/órfão sem override por capacidade.
-      // Com Tanque por capacidade, o pátio é a fonte da verdade e não escala.
+      // Físico (tanque + tanka + unitário) não pode exceder o saldo de livro.
       const totalFisico = saldoTanque + saldoTanka + saldoEmbaladoFisico;
       if (
         !isOrphan &&
-        !hasTanqueFisico &&
         totalFisico > saldoAtual + 0.001 &&
         totalFisico > 0
       ) {
@@ -1138,7 +1121,6 @@ export default function EstoqueEnvio() {
     produtosAgregados,
     filteredVasilhames,
     filteredTankas,
-    vasilhamesConsolidados,
     estoque,
     indStock,
     indRecipes,

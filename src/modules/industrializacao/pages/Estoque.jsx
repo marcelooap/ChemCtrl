@@ -48,6 +48,7 @@ import {
   normalizeTankaRow,
 } from '@transbordo/lib/cadastroTankaCentral';
 import { invalidateTransbordoWorkspaceCache } from '@transbordo/services/transbordoWorkspace';
+import ConciliacaoEstoqueSection from '@transbordo/components/estoque/ConciliacaoEstoqueSection';
 
 const VIEW_TAB_CLASS =
   'gap-2 px-5 py-2.5 text-sm font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md';
@@ -517,6 +518,17 @@ export default function Estoque() {
           </TabsList>
         </Tabs>
       </div>
+
+      {!isFiscalView ? (
+        <div className="shrink-0 mb-3">
+          <ConciliacaoEstoqueSection
+            estoqueItems={[]}
+            industrializacaoStocks={items}
+            skipIndustrializacaoFetch
+            description="Compare os saldos do Proteus com o estoque de matérias-primas da Industrialização (consolidado por lote, com cliente). Somente leitura — nenhum dado é alterado."
+          />
+        </div>
+      ) : null}
 
       {/* Card: fixed search, scrollable table, fixed footer */}
       <div className="bg-card rounded-xl shadow-sm border border-border flex-1 min-h-0 flex flex-col overflow-hidden">

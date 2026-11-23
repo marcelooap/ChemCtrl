@@ -9,13 +9,14 @@ import {
 
 
 const HEADER_FILL = {
-  base: "FF5B9BD5", // Código / Produto / Lote
+  base: "FF5B9BD5", // Código / Produto / Cliente / Lote
   chemCtrl: "FF2F5496", // Saldo ChemCtrl (azul mais forte)
   proteus: "FFED7D31", // Saldo Proteus (laranja)
   diff: "FF808080", // Diferença (cinza)
 };
 
 const HEADER_COLORS = [
+  HEADER_FILL.base,
   HEADER_FILL.base,
   HEADER_FILL.base,
   HEADER_FILL.base,
@@ -73,6 +74,7 @@ export async function exportConciliacaoEstoqueExcel(rows = [], options = {}) {
   const headers = [
     "Código",
     "Produto",
+    "Cliente",
     "Lote",
     "Saldo ChemCtrl",
     "Saldo Proteus",
@@ -82,7 +84,7 @@ export async function exportConciliacaoEstoqueExcel(rows = [], options = {}) {
   const headerRow = ws.addRow(headers);
   headerRow.height = 22;
 
-  // Pinta somente as 6 colunas com informação (não a linha inteira)
+  // Pinta somente as colunas com informação (não a linha inteira)
   for (let col = 1; col <= headers.length; col++) {
     const cell = headerRow.getCell(col);
     cell.value = headers[col - 1];
@@ -113,6 +115,7 @@ export async function exportConciliacaoEstoqueExcel(rows = [], options = {}) {
     const row = ws.addRow([
       String(item.codigo ?? ""),
       item.produto ?? "",
+      item.cliente ?? "",
       item.lote ?? "",
       saldoChem,
       saldoProt,
@@ -130,13 +133,14 @@ export async function exportConciliacaoEstoqueExcel(rows = [], options = {}) {
         cell.numFmt = "@";
       }
 
-      if (col >= 4) {
+      // Saldo ChemCtrl / Saldo Proteus / Diferença
+      if (col >= 5) {
         cell.value = Number(cell.value) || 0;
         cell.numFmt = NUM_FMT_PT_BR;
       }
     }
 
-    applyDifferenceStyle(row.getCell(6), diff);
+    applyDifferenceStyle(row.getCell(7), diff);
   }
 
   ws.autoFilter = {
@@ -146,10 +150,11 @@ export async function exportConciliacaoEstoqueExcel(rows = [], options = {}) {
 
   ws.getColumn(1).width = 16;
   ws.getColumn(2).width = 36;
-  ws.getColumn(3).width = 18;
-  ws.getColumn(4).width = 16;
+  ws.getColumn(3).width = 28;
+  ws.getColumn(4).width = 18;
   ws.getColumn(5).width = 16;
-  ws.getColumn(6).width = 14;
+  ws.getColumn(6).width = 16;
+  ws.getColumn(7).width = 14;
 
   const fileName = options.fileName || formatConsolidadoFileName();
 

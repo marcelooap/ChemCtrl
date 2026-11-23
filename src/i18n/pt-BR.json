@@ -2414,6 +2414,8 @@
         "densityFromEntrada": "Densidade da entrada",
         "addTankaItem": "Adicionar tanka",
         "addVasilhameItem": "Adicionar tanque",
+        "addEmbaladoItem": "Adicionar lote",
+        "loteVolumeHint": "Volume do lote: {{volume}} L",
         "tankaItemLabel": "Origem {{n}}",
         "tankaTotalVolume": "Volume total das origens",
         "granel": {

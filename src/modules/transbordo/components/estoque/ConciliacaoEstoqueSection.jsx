@@ -63,7 +63,19 @@ function ColumnSelect({ id, label, value, onChange, headers, required }) {
   );
 }
 
-export default function ConciliacaoEstoqueSection({ estoqueItems = [] }) {
+/**
+ * @param {object} props
+ * @param {Array} [props.estoqueItems] Estoque Transbordo (ChemCtrl).
+ * @param {Array} [props.industrializacaoStocks] Saldos Ind já carregados (MP/PA).
+ * @param {boolean} [props.skipIndustrializacaoFetch] Usa só os stocks passados (sem refetch).
+ * @param {string} [props.description] Texto de ajuda sob o título.
+ */
+export default function ConciliacaoEstoqueSection({
+  estoqueItems = [],
+  industrializacaoStocks: industrializacaoStocksProp,
+  skipIndustrializacaoFetch = false,
+  description,
+}) {
   const { toast } = useToast();
   const fileInputRef = useRef(null);
 
@@ -82,6 +94,10 @@ export default function ConciliacaoEstoqueSection({ estoqueItems = [] }) {
   const [downloading, setDownloading] = useState(false);
   const [resultRows, setResultRows] = useState(null);
   const [summary, setSummary] = useState(null);
+
+  const helpText =
+    description ||
+    "Compare os saldos do Proteus com o estoque do ChemCtrl (Transbordo + matérias-primas da Industrialização por lote). Somente leitura — nenhum dado é alterado.";
 
   const mappingComplete = useMemo(
     () =>
@@ -208,12 +224,18 @@ export default function ConciliacaoEstoqueSection({ estoqueItems = [] }) {
       }
 
       let industrializacaoStocks = [];
-      try {
-        industrializacaoStocks =
-          await fetchIndustrializacaoStocksForConciliacao();
-      } catch (indErr) {
-        console.warn("[Conciliação] Industrialização:", indErr);
-        industrializacaoStocks = [];
+      if (skipIndustrializacaoFetch) {
+        industrializacaoStocks = Array.isArray(industrializacaoStocksProp)
+          ? industrializacaoStocksProp
+          : [];
+      } else {
+        try {
+          industrializacaoStocks =
+            await fetchIndustrializacaoStocksForConciliacao();
+        } catch (indErr) {
+          console.warn("[Conciliação] Industrialização:", indErr);
+          industrializacaoStocks = [];
+        }
       }
 
       const { rows, summary: nextSummary } = reconcileEstoque(
@@ -280,10 +302,7 @@ export default function ConciliacaoEstoqueSection({ estoqueItems = [] }) {
             <FileSpreadsheet className="w-4 h-4 text-muted-foreground shrink-0" />
             Conciliação de Estoque
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Compare os saldos do Proteus com o estoque atual do ChemCtrl. Somente
-            leitura — nenhum dado é alterado.
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">{helpText}</p>
         </div>
       </div>
 

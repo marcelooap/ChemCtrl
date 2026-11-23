@@ -9,7 +9,6 @@ import { roundQuantidade } from "@transbordo/lib/format";
 import {
   CONCILIACAO_IND_PRODUCTS,
   getConciliacaoIndProductMeta,
-  isConciliacaoIndMpProduct,
   normalizeProductCode,
 } from "@transbordo/lib/conciliacaoEstoque";
 
@@ -37,48 +36,23 @@ async function listAll(entityName, pageSize = 1000, maxRows = 20000) {
 }
 
 /**
- * MP (ácido acético): RawMaterialStock filtrado pelos códigos canônicos.
+ * Todas as matérias-primas da Industrialização (RawMaterialStock),
+ * convertidas para kg e com cliente do cadastro quando disponível.
  */
 async function fetchMpStocksAsLines() {
-  const mpProducts = CONCILIACAO_IND_PRODUCTS.filter((p) => p.source === "mp");
-  const codesToTry = new Set();
-  for (const p of mpProducts) {
-    codesToTry.add(p.code);
-    const stripped = normalizeProductCode(p.code);
-    if (stripped) {
-      codesToTry.add(stripped);
-      codesToTry.add(stripped.padStart(8, "0"));
-    }
-  }
-
   const byId = new Map();
-  for (const code of codesToTry) {
-    try {
-      const rows = await base44.entities.RawMaterialStock.filter({
-        mp_code: code,
-      });
-      for (const row of Array.isArray(rows) ? rows : []) {
-        if (!isConciliacaoIndMpProduct(row?.mp_code)) continue;
-        const id = row?.id != null ? String(row.id) : "";
-        if (id) byId.set(id, row);
-        else byId.set(`${row?.mp_code}|${row?.lot}|${byId.size}`, row);
-      }
-    } catch (err) {
-      console.warn("[Conciliação] RawMaterialStock.filter", code, err);
-    }
-  }
 
-  if (byId.size === 0) {
-    try {
-      const all = await listAll("RawMaterialStock");
-      for (const row of all) {
-        if (!isConciliacaoIndMpProduct(row?.mp_code)) continue;
-        const id = row?.id != null ? String(row.id) : "";
-        if (id) byId.set(id, row);
-      }
-    } catch (err) {
-      console.warn("[Conciliação] RawMaterialStock.list fallback", err);
+  try {
+    const all = await listAll("RawMaterialStock");
+    for (const row of all) {
+      const code = String(row?.mp_code ?? "").trim();
+      if (!normalizeProductCode(code)) continue;
+      const id = row?.id != null ? String(row.id) : "";
+      if (id) byId.set(id, row);
+      else byId.set(`${row?.mp_code}|${row?.lot}|${byId.size}`, row);
     }
+  } catch (err) {
+    console.warn("[Conciliação] RawMaterialStock.list", err);
   }
 
   const lines = [];
@@ -91,6 +65,7 @@ async function fetchMpStocksAsLines() {
       id: row.id,
       mp_code: meta?.code || row.mp_code,
       mp_name: row.mp_name || meta?.name || "",
+      client: String(row.client || row.cliente_nome || "").trim(),
       lot: row.lot || "",
       current_stock: roundQuantidade(convertToKg(qty, unit, density)),
       unit: "kg",
@@ -123,13 +98,20 @@ async function fetchPaContainersAsLines() {
     return [];
   }
 
-  // Nome da receita → meta do produto de conciliação
+  // Nome da receita → meta do produto + cliente cadastrado na receita
   const metaByProductKey = new Map();
+  const clientByProductKey = new Map();
   for (const recipe of recipes) {
     const meta = getConciliacaoIndProductMeta(recipe?.code);
     if (!meta || meta.source !== "pa") continue;
     const key = normalizeProductMatchKey(recipe?.product_name);
-    if (key) metaByProductKey.set(key, meta);
+    if (key) {
+      metaByProductKey.set(key, meta);
+      const recipeClient = String(recipe?.client || "").trim();
+      if (recipeClient && !clientByProductKey.has(key)) {
+        clientByProductKey.set(key, recipeClient);
+      }
+    }
   }
 
   // Fallback: casar pelo nome cadastrado (SISBRAX ACE 75 / variantes)
@@ -162,10 +144,16 @@ async function fetchPaContainersAsLines() {
     const saldoKg = roundQuantidade(convertToKg(volumeL, "L", density));
     if (!(saldoKg > 0) && saldoKg !== 0) continue;
 
+    const client =
+      String(container.client || container.cliente_nome || "").trim() ||
+      clientByProductKey.get(productKey) ||
+      "";
+
     lines.push({
       id: container.id,
       mp_code: meta.code,
       mp_name: meta.name,
+      client,
       lot: container.lot || "",
       current_stock: saldoKg,
       unit: "kg",
@@ -178,7 +166,7 @@ async function fetchPaContainersAsLines() {
 }
 
 /**
- * Carrega saldos da Industrialização para a conciliação (MP + PA), já em kg.
+ * Carrega saldos da Industrialização para a conciliação (todas as MPs + PA), já em kg.
  * Formato compatível com buildIndustrializacaoKgIndex.
  */
 export async function fetchIndustrializacaoStocksForConciliacao() {

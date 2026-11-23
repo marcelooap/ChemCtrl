@@ -491,6 +491,7 @@ export function parseProteusRows(rows, mapping) {
 /**
  * Agrupa por código+lote normalizados e soma saldos se a unidade for compatível.
  * Conflito de unidade → ambiguous: true, saldo: null.
+ * Cliente: primeiro valor não vazio encontrado no grupo.
  */
 export function consolidateByProductLot(items, accessors) {
   const {
@@ -501,6 +502,7 @@ export function consolidateByProductLot(items, accessors) {
     getDisplayCode,
     getDisplayName,
     getDisplayLot,
+    getDisplayClient,
   } = accessors;
 
   const groups = new Map();
@@ -514,6 +516,7 @@ export function consolidateByProductLot(items, accessors) {
     const unitRaw = getUnit?.(item) ?? "";
     const unit = unitRaw ? normalizeUnidade(unitRaw) : "";
     const balance = roundQuantidade(getBalance(item));
+    const cliente = String(getDisplayClient?.(item) ?? "").trim();
 
     let group = groups.get(key);
     if (!group) {
@@ -524,6 +527,7 @@ export function consolidateByProductLot(items, accessors) {
         codigoExibicao: getDisplayCode?.(item) ?? String(code ?? ""),
         produtoNome: getDisplayName?.(item) ?? "",
         loteExibicao: getDisplayLot?.(item) ?? String(lot ?? ""),
+        cliente,
         unidade: unit,
         saldo: balance,
         ambiguous: false,
@@ -540,6 +544,9 @@ export function consolidateByProductLot(items, accessors) {
     }
     if (!group.codigoExibicao && getDisplayCode?.(item)) {
       group.codigoExibicao = getDisplayCode(item);
+    }
+    if (!group.cliente && cliente) {
+      group.cliente = cliente;
     }
 
     if (group.ambiguous) continue;
@@ -583,6 +590,7 @@ export function buildChemCtrlIndex(estoqueItems = []) {
     getDisplayName: (r) => r.item?.produto_nome ?? "",
     getDisplayLot: (r) =>
       r.item?.lote || r.item?.lotes?.[0]?.lote || r.lote,
+    getDisplayClient: (r) => r.item?.cliente_nome ?? "",
   });
 }
 
@@ -595,18 +603,19 @@ export function buildProteusIndex(proteusRows = []) {
     getDisplayCode: (r) => r.codigoOriginal,
     getDisplayName: () => "",
     getDisplayLot: (r) => r.loteOriginal,
+    getDisplayClient: () => "",
   });
 }
 
 /**
- * Índice Industrialização em kg (MP + PA), só para os códigos de override.
+ * Índice Industrialização em kg (todas as MPs + PA de override), consolidado por lote.
  * Linhas já podem vir em kg do fetch; se não, converte L/gal/lb → kg.
  */
 export function buildIndustrializacaoKgIndex(mpRows = []) {
   const lines = [];
   for (const row of mpRows || []) {
     const codeRaw = row?.mp_code ?? row?.produto_codigo ?? "";
-    if (!isConciliacaoIndProduct(codeRaw)) continue;
+    if (!normalizeProductCode(codeRaw)) continue;
     const meta = getConciliacaoIndProductMeta(codeRaw);
     const qty = Number(row?.current_stock ?? row?.saldo_final) || 0;
     const unit = row?.unit ?? row?.unidade_medida ?? "kg";
@@ -618,6 +627,11 @@ export function buildIndustrializacaoKgIndex(mpRows = []) {
       saldo: saldoKg,
       unidade: "kg",
       nome: meta?.name || row?.mp_name || row?.produto_nome || "",
+      cliente:
+        row?.client ??
+        row?.cliente_nome ??
+        row?.cliente ??
+        "",
     });
   }
 
@@ -629,11 +643,12 @@ export function buildIndustrializacaoKgIndex(mpRows = []) {
     getDisplayCode: (r) => r.codigo,
     getDisplayName: (r) => r.nome,
     getDisplayLot: (r) => r.lote,
+    getDisplayClient: (r) => r.cliente,
   });
 }
 
 /**
- * Mapa código normalizado → nome/código de exibição a partir de todos os
+ * Mapa código normalizado → nome/código/cliente de exibição a partir de todos os
  * registros ChemCtrl (não depende da primeira linha do agrupamento por lote).
  */
 export function buildChemCtrlProductCatalog(estoqueItems = []) {
@@ -643,15 +658,17 @@ export function buildChemCtrlProductCatalog(estoqueItems = []) {
     if (!norm) continue;
     const nome = String(item?.produto_nome || "").trim();
     const codigoExibicao = String(item?.produto_codigo || "").trim();
+    const cliente = String(item?.cliente_nome || "").trim();
     const current = catalog.get(norm);
     if (!current) {
-      catalog.set(norm, { nome, codigoExibicao });
+      catalog.set(norm, { nome, codigoExibicao, cliente });
       continue;
     }
     if (!current.nome && nome) current.nome = nome;
     if (!current.codigoExibicao && codigoExibicao) {
       current.codigoExibicao = codigoExibicao;
     }
+    if (!current.cliente && cliente) current.cliente = cliente;
   }
   return catalog;
 }
@@ -731,6 +748,7 @@ export function mergeDuplicateLotRows(rows = []) {
       codigoNormalizado: codeNorm,
       loteNormalizado: lotNorm,
       produto: prev.produto || row.produto || "",
+      cliente: prev.cliente || row.cliente || "",
       lote,
       saldoChemCtrl,
       saldoProteus,
@@ -787,7 +805,7 @@ export function sortConciliacaoRows(rows = []) {
  * Compara índices consolidados (situações A–D).
  * Diferença = ChemCtrl − Proteus.
  * Células de saldo/diferença sem valor saem como 0,000.
- * Para 01023021 e 01023175, Saldo ChemCtrl vem da Industrialização (kg).
+ * Saldo ChemCtrl da Industrialização: todas as MPs (por lote) + PA whitelist (kg).
  */
 export function reconcileEstoque(
   proteusRows,
@@ -807,6 +825,7 @@ export function reconcileEstoque(
       productCatalog.set(norm, {
         nome: meta.name,
         codigoExibicao: meta.code,
+        cliente: "",
       });
     } else {
       if (!current.nome) current.nome = meta.name;
@@ -819,15 +838,20 @@ export function reconcileEstoque(
     const meta = getConciliacaoIndProductMeta(norm);
     const preferredCode = meta?.code || group.codigoExibicao || "";
     const preferredName = meta?.name || group.produtoNome || "";
+    const preferredClient = String(group.cliente || "").trim();
     const current = productCatalog.get(norm);
     if (!current) {
       productCatalog.set(norm, {
         nome: preferredName,
         codigoExibicao: preferredCode,
+        cliente: preferredClient,
       });
     } else {
       if (preferredName) current.nome = preferredName;
       if (preferredCode) current.codigoExibicao = preferredCode;
+      if (!current.cliente && preferredClient) {
+        current.cliente = preferredClient;
+      }
     }
   }
 
@@ -854,7 +878,9 @@ export function reconcileEstoque(
       proteus?.codigoNormalizado ||
       normalizeProductCode(codigoHint);
 
-    const useInd = isConciliacaoIndProduct(codigoNormalizado);
+    // Ind quando há saldo Ind no lote, ou produto PA/MP de override histórico
+    const useInd =
+      Boolean(chemInd) || isConciliacaoIndProduct(codigoNormalizado);
     const chem = useInd ? chemInd : chemTransbordo;
 
     const ambiguous = Boolean(chem?.ambiguous || proteus?.ambiguous);
@@ -872,7 +898,18 @@ export function reconcileEstoque(
       chem?.codigoExibicao ||
       proteus?.codigoExibicao ||
       "";
-    const produto = catalogEntry?.nome || "";
+    const produto =
+      catalogEntry?.nome ||
+      chem?.produtoNome ||
+      chemTransbordo?.produtoNome ||
+      chemInd?.produtoNome ||
+      "";
+    const cliente =
+      chem?.cliente ||
+      chemTransbordo?.cliente ||
+      chemInd?.cliente ||
+      catalogEntry?.cliente ||
+      "";
     const loteChem =
       chem?.loteExibicao || chemTransbordo?.loteExibicao || "";
     const loteProt = proteus?.loteExibicao || "";
@@ -890,6 +927,7 @@ export function reconcileEstoque(
       codigo,
       codigoNormalizado,
       produto,
+      cliente,
       lote,
       loteNormalizado,
       saldoChemCtrl: saldoChemRaw,

@@ -129,10 +129,12 @@ export default function OrdemTransbordoEnvaseModal({
   /** Origens vasilhame (tanques No Pátio) na ordem de registro (FIFO no envase). */
   vasilhameOrigens = [],
   /**
-   * Origem embalada selecionada na Nova ordem.
+   * Origem embalada selecionada na Nova ordem (compat. 1 lote).
    * UI opera em L; persistência usa unidade_medida do estoque (kg/lb).
    */
   embaladoOrigem = null,
+  /** Múltiplos lotes embalados na ordem de registro (FIFO no envase). */
+  embaladoOrigens = [],
   quantidadeEditable = true,
   granelPayload = null,
   /** Payload já salvo (edição na Validação) — hidrata destinos/operadores. */
@@ -253,12 +255,32 @@ export default function OrdemTransbordoEnvaseModal({
     [vasilhameOrigensExibidas]
   );
 
+  /** Origens embaladas (IBC/Bombona/Tambor) — ordem de registro = FIFO. */
+  const embaladoOrigensExibidas = useMemo(() => {
+    const fromList = (embaladoOrigens || [])
+      .map((o, index) => ({ ...o, _index: index }))
+      .filter((o) => String(o?.entrada_id || "").trim());
+    if (fromList.length > 0) return fromList;
+    if (embaladoOrigem?.entrada_id) {
+      return [{ ...embaladoOrigem, _index: 0 }];
+    }
+    return [];
+  }, [embaladoOrigens, embaladoOrigem]);
+
+  const embaladoOrigensValidas = useMemo(
+    () =>
+      embaladoOrigensExibidas.filter((o) => Number(o?.quantidade) > 0),
+    [embaladoOrigensExibidas]
+  );
+
   const multiOrigensExibidas =
     tipoOrigem === "tanka"
       ? tankaOrigensExibidas
       : tipoOrigem === "vasilhame"
         ? vasilhameOrigensExibidas
-        : [];
+        : tipoOrigem === "embalado"
+          ? embaladoOrigensExibidas
+          : [];
 
   /** Volume operacional (L) — total das origens multi ou quantidade do formulário. */
   const volumeRegistradoL = useMemo(() => {
@@ -278,6 +300,14 @@ export default function OrdemTransbordoEnvaseModal({
         )
       );
     }
+    if (tipoOrigem === "embalado" && embaladoOrigensExibidas.length > 0) {
+      return roundVolume(
+        embaladoOrigensExibidas.reduce(
+          (s, o) => s + (Number(o.quantidade) || 0),
+          0
+        )
+      );
+    }
     return roundVolume(
       loteToLitros({
         quantidade: qtyRaw,
@@ -289,6 +319,7 @@ export default function OrdemTransbordoEnvaseModal({
     tipoOrigem,
     tankaOrigensExibidas,
     vasilhameOrigensExibidas,
+    embaladoOrigensExibidas,
     dens,
     qtyRaw,
     unidade,
@@ -636,6 +667,28 @@ export default function OrdemTransbordoEnvaseModal({
               : {}),
         };
       });
+    } else if (tipoOrigem === "embalado" && embaladoOrigensValidas.length > 0) {
+      // Ordem de registro das origens = ordem FIFO no envase (paridade tanka).
+      origensNorm = embaladoOrigensValidas.map((item) => {
+        const uid = createClientUid();
+        const vol = roundVolume(item.quantidade);
+        const um = item.unidade_medida || "kg";
+        const loteEfetivo = String(item.lote || "").trim();
+        return {
+          _uid: uid,
+          tipo_origem: "embalado",
+          entrada_id: item.entrada_id || null,
+          entrada_codigo: `EMBALADO — Lote ${loteEfetivo || "—"}`,
+          lote: loteEfetivo,
+          // FIFO opera em L; conversão massa ocorre depois.
+          unidade_medida: um,
+          volume_retirado: vol,
+          massa_retirada: dens > 0 ? roundMass(vol * dens) : 0,
+          saldo_restante: 0,
+          saldo_disponivel: vol,
+          embalado: true,
+        };
+      });
     } else {
       const prevOrigem = (initialPayload?.origens || [])[0] || {};
       const isEmbalado =
@@ -733,11 +786,15 @@ export default function OrdemTransbordoEnvaseModal({
 
     // Embalado em massa: formulário em L → persiste volume na UOM do estoque (kg/lb).
     const origem0 = origensNorm[0];
-    const origemEmbaladoMassa = isOrigemEmbaladoMassa(origem0);
+    const origemEmbaladoMassa = origensNorm.some(isOrigemEmbaladoMassa);
     if (origemEmbaladoMassa && dens > 0) {
-      const um = origem0.unidade_medida || "kg";
-      const toPersist = (qtyL) => embaladoLitrosToMassa(qtyL, um, dens);
+      const umDestino = origem0?.unidade_medida || "kg";
+      const toPersistDestino = (qtyL) =>
+        embaladoLitrosToMassa(qtyL, umDestino, dens);
       origensNorm = origensNorm.map((o) => {
+        if (!isOrigemEmbaladoMassa(o)) return o;
+        const um = o.unidade_medida || "kg";
+        const toPersist = (qtyL) => embaladoLitrosToMassa(qtyL, um, dens);
         const volL = roundVolume(o.volume_retirado || 0);
         const volumePersistido = toPersist(volL);
         const massaKg =
@@ -759,10 +816,10 @@ export default function OrdemTransbordoEnvaseModal({
       destinosNorm = destinosNorm.map((d) => {
         const volumeFormL = roundVolume(d.volume_total || d.volume || 0);
         const volumePorFormL = roundVolume(d.volume_por_embalagem || 0);
-        const volume_total = toPersist(volumeFormL);
-        const volume_por_embalagem = toPersist(volumePorFormL);
+        const volume_total = toPersistDestino(volumeFormL);
+        const volume_por_embalagem = toPersistDestino(volumePorFormL);
         const massaDestino =
-          normalizeUnidadeEntrada(um) === "lb"
+          normalizeUnidadeEntrada(umDestino) === "lb"
             ? roundMass(volume_total * 0.453592)
             : roundMass(volume_total);
         return {
@@ -988,12 +1045,17 @@ export default function OrdemTransbordoEnvaseModal({
                   <div className="space-y-2">
                     {multiOrigensExibidas.map((o, i) => {
                       const isVas = tipoOrigem === "vasilhame";
-                      const codigo = isVas
-                        ? o.codigo || "Vasilhame"
-                        : o.tankaCodigo || "Tanka";
-                      const key = isVas
-                        ? `${o.vasilhameId}-${o._index}`
-                        : `${o.tankaId}-${o.lote}-${o._index}`;
+                      const isEmb = tipoOrigem === "embalado";
+                      const codigo = isEmb
+                        ? "Embalado"
+                        : isVas
+                          ? o.codigo || "Vasilhame"
+                          : o.tankaCodigo || "Tanka";
+                      const key = isEmb
+                        ? `${o.entrada_id}-${o.lote}-${o._index}`
+                        : isVas
+                          ? `${o.vasilhameId}-${o._index}`
+                          : `${o.tankaId}-${o.lote}-${o._index}`;
                       return (
                         <div
                           key={key}

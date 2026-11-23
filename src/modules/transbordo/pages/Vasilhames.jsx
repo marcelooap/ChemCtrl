@@ -765,6 +765,7 @@ export default function Vasilhames() {
         matchesSearchText(v.codigo, q) ||
         matchesSearchText(v.placa, q) ||
         matchesSearchText(v.barril, q) ||
+        matchesSearchText(v.produto_codigo, q) ||
         matchesSearchText(v.produto_nome, q) ||
         matchesSearchText(v.cliente_nome, q) ||
         matchesSearchText(v.lote, q);
@@ -1508,12 +1509,15 @@ export default function Vasilhames() {
     { value: "Expedido", label: "Expedido" },
   ];
 
-  const noPatio = vasilhames.filter(
-    (v) =>
-      (v.tipo || "") !== "Tankagem" &&
-      (v.status || "No Pátio") === "No Pátio"
+  // Totais do rodapé seguem os filtros da grade (busca, cliente, status, estoque).
+  const noPatio = useMemo(
+    () => filtered.filter((v) => (v.status || "No Pátio") === "No Pátio"),
+    [filtered]
   );
-  const volumePatio = noPatio.reduce((sum, v) => sum + (v.volume || 0), 0);
+  const volumePatio = useMemo(
+    () => noPatio.reduce((sum, v) => sum + (Number(v.volume) || 0), 0),
+    [noPatio]
+  );
   const estoqueEntradas = useMemo(() => [...estoqueById.values()], [estoqueById]);
 
   return (
@@ -1569,7 +1573,7 @@ export default function Vasilhames() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produto, nº placa, nº barril, cliente..."
+              placeholder="Buscar código, produto, nº placa, nº barril, cliente..."
               className="pl-10 bg-card"
             />
           </div>
