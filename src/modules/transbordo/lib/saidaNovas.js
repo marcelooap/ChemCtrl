@@ -44,7 +44,10 @@ function saidaHasItensDoModulo(saida, modulo) {
   return saidaHasTransbordoItems(saida);
 }
 
-/** Candidata a badge Novo / contador da Sidebar naquele módulo. */
+/**
+ * Candidata a badge Novo / contador da Sidebar naquele módulo.
+ * Exige itens preenchidos do módulo (placeholders vazios não contam).
+ */
 export function isSaidaNovaCandidata(saida, { onlyIndustrializacao = false, modulo } = {}) {
   const m = normalizeSaidaModulo(
     modulo || (onlyIndustrializacao ? ORIGEM_INDUSTRIALIZACAO : ORIGEM_TRANSBORDO)

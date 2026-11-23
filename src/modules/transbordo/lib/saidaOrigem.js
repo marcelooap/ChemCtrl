@@ -184,14 +184,26 @@ export function isTransbordoItem(item) {
   return resolveItemOrigem(item) === ORIGEM_TRANSBORDO;
 }
 
-/** Saída com pelo menos um item da Industrialização. */
+/**
+ * Saída com pelo menos um item preenchido da Industrialização.
+ * Placeholders ("Aguardando Informações") não contam — alinhado à
+ * listagem (`saidaVisivelNoTransbordo`) e ao badge de novas.
+ */
 export function saidaHasIndustrializacaoItems(saida) {
-  return (saida?.itens || []).some(isIndustrializacaoItem);
+  return (saida?.itens || []).some(
+    (item) => !isItemSaidaVazio(item) && isIndustrializacaoItem(item)
+  );
 }
 
-/** Saída com pelo menos um item do Transbordo. */
+/**
+ * Saída com pelo menos um item preenchido do Transbordo.
+ * Placeholders vazios defaultam origem Transbordo e não devem acionar
+ * badge/listagem operacional.
+ */
 export function saidaHasTransbordoItems(saida) {
-  return (saida?.itens || []).some(isTransbordoItem);
+  return (saida?.itens || []).some(
+    (item) => !isItemSaidaVazio(item) && isTransbordoItem(item)
+  );
 }
 
 /**

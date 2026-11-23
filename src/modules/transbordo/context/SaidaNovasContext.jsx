@@ -101,7 +101,8 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
         }
 
         if (eventType === 'INSERT') {
-          if (modulo === ORIGEM_INDUSTRIALIZACAO && !Array.isArray(row.itens)) {
+          // Payload realtime pode omitir JSONB `itens` — recalcula no servidor.
+          if (!Array.isArray(row.itens)) {
             refreshUnread();
             return;
           }
@@ -130,21 +131,18 @@ export function SaidaNovasProvider({ children, onlyIndustrializacao = false }) {
             refreshUnread();
             return;
           }
-          if (isSaidaNovaCandidata(row, { modulo })) {
+          if (!isSaidaNovaCandidata(row, { modulo })) {
             setUnreadIds((prev) => {
-              if (prev.has(row.id)) return prev;
+              if (!prev.has(row.id)) return prev;
               const next = new Set(prev);
-              next.add(row.id);
-              return next;
+              next.delete(row.id);
+              return next.size ? next : EMPTY_SET;
             });
             return;
           }
-          setUnreadIds((prev) => {
-            if (!prev.has(row.id)) return prev;
-            const next = new Set(prev);
-            next.delete(row.id);
-            return next.size ? next : EMPTY_SET;
-          });
+          // Ainda candidata: não reabre badge às cegas (ignoraria "já lida").
+          // Item novo após clearSaidaLeituras → refresh consulta leituras.
+          refreshUnread();
         }
       },
       { channelKey }
