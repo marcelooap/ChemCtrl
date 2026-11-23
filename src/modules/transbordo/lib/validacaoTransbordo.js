@@ -12,6 +12,14 @@ import {
   ORIGEM_INDUSTRIALIZACAO,
   produtoIdentityKey,
 } from "@transbordo/lib/cadastroProdutosCentral";
+import {
+  litrosFromMassaKg,
+  parseDensidade,
+  roundMass,
+  roundVolume,
+} from "@transbordo/lib/format";
+import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
+import { isOrigemEmbaladoMassa } from "@transbordo/lib/vasilhameComposicao";
 
 /**
  * Validação de operações vindas da Ordem de Transbordo.
@@ -111,12 +119,34 @@ function densidadeLoteGranel(lote, granelPayload) {
 }
 
 /**
+ * Origem embalada em kg/lb persiste `volume_retirado` na UOM de massa.
+ * Para exibição/operacional da Ordem, o resumo é sempre em litros.
+ */
+function volumeOrigemParaLitros(origem, dens) {
+  const raw = Number(origem?.volume_retirado) || 0;
+  if (!(raw > 0)) return 0;
+  if (!isOrigemEmbaladoMassa(origem) || !(dens > 0)) {
+    return roundVolume(raw);
+  }
+
+  const massaInformada = Number(origem?.massa_retirada) || 0;
+  if (massaInformada > 0) {
+    return roundVolume(litrosFromMassaKg(massaInformada, dens));
+  }
+
+  const um = normalizeUnidadeEntrada(origem?.unidade_medida || "kg");
+  const kg = um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+  return roundVolume(litrosFromMassaKg(kg, dens));
+}
+
+/**
  * Quantidade/unidade para exibição e resumo da validação.
  *
  * Granel: unidade e quantidade informadas no recebimento. Se a pesagem
  * ficou fora da margem, usa o peso líquido — convertido para a UOM
  * original quando ela não é kg.
- * Demais transbordos: sempre volume em L.
+ * Demais transbordos: sempre volume em L (origem embalada em kg/lb
+ * é convertida via densidade — nunca exibir massa rotulada como L).
  */
 export function resumoQuantidadeValidacao(validacao) {
   const granel = validacao?.granel_payload;
@@ -173,13 +203,47 @@ export function resumoQuantidadeValidacao(validacao) {
   }
 
   const origens = transbordo?.origens || [];
+  const dens = parseDensidade(
+    transbordo?.densidade ||
+      granel?.densidade ||
+      validacao?.densidade ||
+      ""
+  );
   const totalVol = origens.reduce(
-    (s, o) => s + (Number(o.volume_retirado) || 0),
+    (s, o) => s + volumeOrigemParaLitros(o, dens),
     0
   );
-  return { quantidade: totalVol, unidade_medida: "L" };
-}
+  if (totalVol > 0) {
+    return { quantidade: totalVol, unidade_medida: "L" };
+  }
 
+  // Fallback: volume_total de embalado em massa também está em kg/lb.
+  const volumeTotal = Number(transbordo?.volume_total) || 0;
+  if (
+    volumeTotal > 0 &&
+    dens > 0 &&
+    origens.some(isOrigemEmbaladoMassa)
+  ) {
+    const massaTotal = Number(transbordo?.massa_total) || 0;
+    const kg =
+      massaTotal > 0
+        ? roundMass(massaTotal)
+        : (() => {
+            const um = normalizeUnidadeEntrada(
+              origens.find(isOrigemEmbaladoMassa)?.unidade_medida || "kg"
+            );
+            return um === "lb"
+              ? roundMass(volumeTotal * 0.453592)
+              : roundMass(volumeTotal);
+          })();
+    return {
+      quantidade: roundVolume(litrosFromMassaKg(kg, dens)),
+      unidade_medida: "L",
+    };
+  }
+
+  return { quantidade: roundVolume(volumeTotal), unidade_medida: "L" };
+}
 /** Junta lotes das origens (e lotes_retirados) para o resumo da validação. */
 export function lotesLabelFromOrigens(origens = []) {
   const names = [];
@@ -314,29 +378,55 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
         })
       : [];
 
-  const totalFromOrigens = origens.reduce(
-    (s, o) => s + (Number(o.volume_retirado) || 0),
-    0
-  );
-  const isGranel =
-    validacao.tipo === "granel_transbordo" || origemTipoRaw === "granel";
-  const quantidade = isGranel
-    ? granel?.quantidade ??
-      granel?.lotes?.[0]?.quantidade ??
-      totalFromOrigens
-    : totalFromOrigens > 0
-      ? totalFromOrigens
-      : tp.volume_total || 0;
-  const unidade = isGranel
-    ? granel?.unidade_medida ||
-      granel?.lotes?.[0]?.unidade_medida ||
-      "kg"
-    : "L";
   const densidade =
     tp.densidade ||
     granel?.densidade ||
     granel?.lotes?.[0]?.densidade ||
     "";
+  const dens = parseDensidade(densidade);
+  // Formulário/modal de envase opera em L; embalado kg/lb precisa converter.
+  const totalFromOrigens = origens.reduce(
+    (s, o) => s + volumeOrigemParaLitros(o, dens),
+    0
+  );
+  const isGranel =
+    validacao.tipo === "granel_transbordo" || origemTipoRaw === "granel";
+  let quantidade = isGranel
+    ? granel?.quantidade ??
+      granel?.lotes?.[0]?.quantidade ??
+      totalFromOrigens
+    : totalFromOrigens > 0
+      ? totalFromOrigens
+      : 0;
+  if (!isGranel && !(quantidade > 0)) {
+    const volumeTotal = Number(tp.volume_total) || 0;
+    if (
+      volumeTotal > 0 &&
+      dens > 0 &&
+      origens.some(isOrigemEmbaladoMassa)
+    ) {
+      const massaTotal = Number(tp.massa_total) || 0;
+      const kg =
+        massaTotal > 0
+          ? roundMass(massaTotal)
+          : (() => {
+              const um = normalizeUnidadeEntrada(
+                origens.find(isOrigemEmbaladoMassa)?.unidade_medida || "kg"
+              );
+              return um === "lb"
+                ? roundMass(volumeTotal * 0.453592)
+                : roundMass(volumeTotal);
+            })();
+      quantidade = roundVolume(litrosFromMassaKg(kg, dens));
+    } else {
+      quantidade = volumeTotal;
+    }
+  }
+  const unidade = isGranel
+    ? granel?.unidade_medida ||
+      granel?.lotes?.[0]?.unidade_medida ||
+      "kg"
+    : "L";
   const lote =
     lotesLabelFromOrigens(origens) ||
     (isGranel

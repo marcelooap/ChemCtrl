@@ -29,6 +29,7 @@ import {
   formatMass,
   formatNum,
   formatVolume,
+  litrosFromMassaKg,
   parseDensidade,
   roundMass,
   roundVolume,
@@ -38,6 +39,9 @@ import {
   getLoteQuantidadeDeclarada,
   loteToKg,
 } from "@transbordo/lib/conversao";
+import { normalizeUnidadeEntrada } from "@transbordo/lib/estoqueSaldo";
+import { isOrigemEmbaladoMassa } from "@transbordo/lib/vasilhameComposicao";
+import { resumoQuantidadeValidacao } from "@transbordo/lib/validacaoTransbordo";
 import { resolveProdutoPublicToken } from "@transbordo/lib/ensureProdutoPublicToken";
 import {
   labelRequiresManualVolume,
@@ -104,6 +108,52 @@ const ORIGEM_TIPO_LABELS = {
   embalado: "transbordo.validacao.origemTipo.embalado",
 };
 
+/**
+ * Destino de origem embalada em kg/lb persiste volume_* na UOM de massa.
+ * Converte para litros operacionais para exibição/etiqueta.
+ */
+function destinoVolumeOperacionalL(destino, transbordo) {
+  const raw = Number(destino?.volume_total || destino?.volume) || 0;
+  const dens = parseDensidade(transbordo?.densidade);
+  const origens = Array.isArray(transbordo?.origens) ? transbordo.origens : [];
+  const origemLinked = origens.find(
+    (o) => o?._uid && o._uid === destino?.origem_uid
+  );
+  const origemEmbalado =
+    origemLinked && isOrigemEmbaladoMassa(origemLinked)
+      ? origemLinked
+      : origens.find(isOrigemEmbaladoMassa) || null;
+
+  if (!(raw > 0)) return 0;
+  if (!origemEmbalado || !(dens > 0)) return roundVolume(raw);
+
+  const massa = Number(destino?.peso_liquido) || 0;
+  if (massa > 0) {
+    return roundVolume(litrosFromMassaKg(massa, dens));
+  }
+  const um = normalizeUnidadeEntrada(origemEmbalado.unidade_medida || "kg");
+  const kg = um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+  return roundVolume(litrosFromMassaKg(kg, dens));
+}
+
+function destinoVolumePorEmbalagemL(destino, transbordo) {
+  const raw = Number(destino?.volume_por_embalagem) || 0;
+  if (!(raw > 0)) return 0;
+  const dens = parseDensidade(transbordo?.densidade);
+  const origens = Array.isArray(transbordo?.origens) ? transbordo.origens : [];
+  const origemLinked = origens.find(
+    (o) => o?._uid && o._uid === destino?.origem_uid
+  );
+  const origemEmbalado =
+    origemLinked && isOrigemEmbaladoMassa(origemLinked)
+      ? origemLinked
+      : origens.find(isOrigemEmbaladoMassa) || null;
+  if (!origemEmbalado || !(dens > 0)) return roundVolume(raw);
+  const um = normalizeUnidadeEntrada(origemEmbalado.unidade_medida || "kg");
+  const kg = um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+  return roundVolume(litrosFromMassaKg(kg, dens));
+}
+
 function describeDestino(destino) {
   const tipo = destino?.tipo_embalagem || "—";
   const placa = String(destino?.placa || "").trim();
@@ -128,12 +178,13 @@ function destinoPodeImprimirEtiqueta(destino) {
 }
 
 function buildLabelContainerFromDestino(destino, validacao) {
-  const vol = roundVolume(destino?.volume_total || destino?.volume || 0);
+  const transbordo = validacao?.transbordo_payload || null;
   const dens = parseDensidade(
-    validacao?.transbordo_payload?.densidade ||
+    transbordo?.densidade ||
       validacao?.granel_payload?.densidade ||
       destino?.densidade
   );
+  const vol = destinoVolumeOperacionalL(destino, transbordo);
   const tara = roundMass(destino?.tara || 0);
   const net =
     roundMass(destino?.peso_liquido || 0) ||
@@ -148,7 +199,7 @@ function buildLabelContainerFromDestino(destino, validacao) {
   const placa = String(destino?.placa || "").trim();
   const barril = String(destino?.barril || "").trim();
   const tipo = String(destino?.tipo_embalagem || "").trim();
-  const volEmb = roundVolume(destino?.volume_por_embalagem || 0);
+  const volEmb = destinoVolumePorEmbalagemL(destino, transbordo);
   const unitHint = labelRequiresManualVolume({
     type: tipo,
     tipo,
@@ -345,20 +396,32 @@ function resolveGranelDensidade(granel, transbordo) {
 }
 
 function buildResumoDraft(view, granel, transbordo) {
+  const resumo = resumoQuantidadeValidacao({
+    ...view,
+    granel_payload: granel,
+    transbordo_payload: transbordo,
+  });
+  const isGranel =
+    view?.tipo === "granel_transbordo" ||
+    view?.tipo === "entrada" ||
+    view?.origem_tipo === "granel";
   return {
     data: view?.data || "",
     cliente_nome: view?.cliente_nome || "",
     lote: view?.lote || granel?.lote || granel?.lotes?.[0]?.lote || "",
     quantidade:
-      view?.quantidade ??
-      granel?.quantidade ??
-      granel?.lotes?.[0]?.quantidade ??
-      "",
-    unidade_medida:
-      view?.unidade_medida ||
-      granel?.unidade_medida ||
-      granel?.lotes?.[0]?.unidade_medida ||
-      "kg",
+      resumo?.quantidade > 0
+        ? resumo.quantidade
+        : view?.quantidade ??
+          granel?.quantidade ??
+          granel?.lotes?.[0]?.quantidade ??
+          "",
+    unidade_medida: isGranel
+      ? granel?.unidade_medida ||
+        granel?.lotes?.[0]?.unidade_medida ||
+        view?.unidade_medida ||
+        "kg"
+      : resumo?.unidade_medida || "L",
     densidade:
       granel?.densidade ||
       granel?.lotes?.[0]?.densidade ||
@@ -676,13 +739,21 @@ export default function ValidacaoViewDialog({
     return key ? t(key) : raw ? String(raw).toUpperCase() : "—";
   })();
 
-  const qtdHeader =
-    view?.quantidade != null && Number(view.quantidade) > 0
-      ? `${formatNum(Number(view.quantidade), 2)} ${view.unidade_medida || ""}`.trim()
-      : resolveGranelQty(granel) ||
-        (transbordo?.volume_total
-          ? `${formatVolume(transbordo.volume_total)} L`
-          : "—");
+  const qtdHeader = (() => {
+    if (!view) return "—";
+    const resumo = resumoQuantidadeValidacao(view);
+    if (resumo?.quantidade > 0) {
+      return `${formatNum(Number(resumo.quantidade), 2)} ${
+        resumo.unidade_medida || ""
+      }`.trim();
+    }
+    return (
+      resolveGranelQty(granel) ||
+      (transbordo?.volume_total
+        ? `${formatVolume(transbordo.volume_total)} L`
+        : "—")
+    );
+  })();
 
   const startEditResumo = () => {
     setSaveError("");
@@ -1289,9 +1360,10 @@ export default function ValidacaoViewDialog({
                       {destinos.map((d, i) => {
                         const { primary, secondary } = describeDestino(d);
                         const canPrint = destinoPodeImprimirEtiqueta(d);
+                        const volL = destinoVolumeOperacionalL(d, transbordo);
                         const qty =
-                          Number(d.volume_total || d.volume) > 0
-                            ? `${formatVolume(d.volume_total || d.volume)} L`
+                          volL > 0
+                            ? `${formatVolume(volL)} L`
                             : Number(d.peso_liquido) > 0
                               ? `${formatMass(d.peso_liquido)} kg`
                               : "—";

@@ -71,6 +71,88 @@ function embaladoLitrosToMassa(qtyL, unidade, dens) {
   return um === "lb" ? roundMass(kg / 0.453592) : kg;
 }
 
+/** kg/lb persistido → litros do formulário (paridade TransbordoModal). */
+function embaladoMassaToLitros(qty, unidade, dens) {
+  const raw = Number(qty) || 0;
+  if (!(raw > 0) || !(dens > 0)) return 0;
+  const um = normalizeUnidadeEntrada(unidade);
+  const kg = um === "lb" ? roundMass(raw * 0.453592) : roundMass(raw);
+  return roundVolume(litrosFromMassaKg(kg, dens));
+}
+
+/**
+ * Payload salvo em kg/lb entra no formulário em L.
+ * Evita exibir 6.125 kg como 6.125 L e regravar massa × densidade de novo.
+ */
+function hydrateEmbaladoFormVolumes(origens = [], destinos = [], dens) {
+  if (!(dens > 0)) {
+    return { origens, destinos };
+  }
+
+  const nextOrigens = (origens || []).map((o) => {
+    if (!isOrigemEmbaladoMassa(o)) return o;
+    const um = o.unidade_medida || "kg";
+    const toL = (q) => embaladoMassaToLitros(q, um, dens);
+    const volL = toL(o.volume_retirado);
+    const massaKg =
+      Number(o.massa_retirada) > 0
+        ? roundMass(o.massa_retirada)
+        : normalizeUnidadeEntrada(um) === "lb"
+          ? roundMass((Number(o.volume_retirado) || 0) * 0.453592)
+          : roundMass(o.volume_retirado || 0);
+    return {
+      ...o,
+      volume_retirado: volL,
+      massa_retirada: massaKg > 0 ? massaKg : roundMass(volL * dens),
+      saldo_disponivel: toL(o.saldo_disponivel),
+      saldo_restante: toL(o.saldo_restante),
+      lotes_retirados: (o.lotes_retirados || []).map((l) => ({
+        ...l,
+        volume_retirado: toL(l.volume_retirado),
+        saldo_disponivel: toL(l.saldo_disponivel),
+      })),
+      lotes_disponiveis: (o.lotes_disponiveis || []).map((l) => ({
+        ...l,
+        quantidade_l: toL(l.quantidade_l),
+      })),
+    };
+  });
+
+  const origemByUid = new Map(
+    nextOrigens.filter((o) => o._uid).map((o) => [o._uid, o])
+  );
+  const nextDestinos = (destinos || []).map((d) => {
+    const origem =
+      origemByUid.get(d.origem_uid) ||
+      nextOrigens.find(isOrigemEmbaladoMassa) ||
+      null;
+    if (!origem || !isOrigemEmbaladoMassa(origem)) return d;
+    const um = origem.unidade_medida || "kg";
+    const toL = (q) => embaladoMassaToLitros(q, um, dens);
+    const volume_total = toL(d.volume_total || d.volume || 0);
+    const volume_por_embalagem = toL(d.volume_por_embalagem || 0);
+    const peso =
+      d.peso_liquido != null && d.peso_liquido !== ""
+        ? roundMass(d.peso_liquido)
+        : roundMass(volume_total * dens);
+    return {
+      ...d,
+      volume: volume_total,
+      volume_total,
+      volume_por_embalagem,
+      peso_liquido: peso,
+      peso_bruto: roundMass((d.tara || 0) + peso),
+      quantidade_embalagens: isDestinoEstoqueEmbalado(d.tipo_embalagem)
+        ? qtdEmbalagensFromVolume(volume_total, volume_por_embalagem) ||
+          Number(d.quantidade_embalagens) ||
+          0
+        : d.quantidade_embalagens,
+    };
+  });
+
+  return { origens: nextOrigens, destinos: nextDestinos };
+}
+
 function isDestinoPreenchido(destino) {
   const tipo = destino.tipo_embalagem || "";
   if (!tipo) return false;
@@ -418,12 +500,30 @@ export default function OrdemTransbordoEnvaseModal({
 
   useEffect(() => {
     if (!open) return;
-    const savedOrigens = Array.isArray(initialPayload?.origens)
+    const densHydrate = parseDensidade(
+      densidade ||
+        initialPayload?.densidade ||
+        granelPayload?.densidade ||
+        ""
+    );
+    let savedOrigens = Array.isArray(initialPayload?.origens)
       ? initialPayload.origens
       : [];
-    const savedDestinos = Array.isArray(initialPayload?.destinos)
+    let savedDestinos = Array.isArray(initialPayload?.destinos)
       ? initialPayload.destinos
       : [];
+    if (
+      densHydrate > 0 &&
+      savedOrigens.some(isOrigemEmbaladoMassa)
+    ) {
+      const hydrated = hydrateEmbaladoFormVolumes(
+        savedOrigens,
+        savedDestinos,
+        densHydrate
+      );
+      savedOrigens = hydrated.origens;
+      savedDestinos = hydrated.destinos;
+    }
     const uid =
       savedOrigens[0]?._uid ||
       savedDestinos[0]?.origem_uid ||
