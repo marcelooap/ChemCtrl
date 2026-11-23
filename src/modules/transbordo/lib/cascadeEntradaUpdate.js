@@ -3,7 +3,9 @@ import { syncEstoqueSaldos } from "@transbordo/lib/estoqueSaldo";
 import {
   alignSaidaItemVolumeToVasilhame,
   getDominantLote,
+  loteExibidoDoVasilhame,
   refreshSaidaItemMassaFromVasilhame,
+  sameTanqueIdentity,
 } from "@transbordo/lib/vasilhameComposicao";
 import { parseDensidade } from "@transbordo/lib/format";
 import {
@@ -22,6 +24,7 @@ import {
   parseStoredChecklist,
   patchChecklistItemFromSaidaLinha,
 } from "@painel/lib/carregamentoChecklistConfig";
+import { resolveVasilhameDaSaida } from "@transbordo/lib/vasilhameSaidaLink";
 
 /**
  * Mantém a entrada como fonte mandatória de identidade (lote, NF, produto, etc.).
@@ -555,8 +558,65 @@ function patchVasilhameLote(vasilhame, transbordos, index, forceIds) {
 }
 
 function isSaidaVasilhameItem(item) {
-  if (!item?.vasilhame_id) return false;
-  return item.tipo !== "embalado" && item.tipo !== "ind_retorno_mp";
+  if (item?.tipo === "embalado" || item?.tipo === "ind_retorno_mp") return false;
+  return Boolean(
+    item?.vasilhame_id || item?.vasilhame_placa || item?.vasilhame_barril
+  );
+}
+
+function vasilhamePlaca(vasilhame) {
+  return vasilhame?.placa || vasilhame?.container_number || "";
+}
+
+function vasilhameBarril(vasilhame) {
+  return vasilhame?.barril ?? vasilhame?.barril_number ?? "";
+}
+
+/** Lote exibido do tanque (edição manual prevalece sobre a composição). */
+function loteAtualDoVasilhame(vasilhame) {
+  return normCode(loteExibidoDoVasilhame(vasilhame) || vasilhame?.lote);
+}
+
+/**
+ * Item da saída ligado ao tanque por id ou placa/barril.
+ * `force` = tanque inteiro renomeado (um lote): atualiza qualquer snapshot.
+ */
+function itemMatchesVasilhameForLote(
+  item,
+  vasilhameId,
+  vasilhame,
+  { oldLote, force = false } = {}
+) {
+  if (!isSaidaVasilhameItem(item)) return false;
+  const byId =
+    Boolean(vasilhameId) &&
+    String(item?.vasilhame_id || "") === String(vasilhameId);
+  const byIdentity =
+    Boolean(vasilhame) &&
+    sameTanqueIdentity(
+      vasilhamePlaca(vasilhame),
+      vasilhameBarril(vasilhame),
+      item?.vasilhame_placa,
+      item?.vasilhame_barril
+    );
+  if (!byId && !byIdentity) return false;
+  if (force) return true;
+  const current = normCode(item?.lote);
+  if (!current || isLoteNaoInformado(current)) return true;
+  return sameText(current, oldLote);
+}
+
+function withSaidaItemLote(item, nextLote, vasilhame) {
+  const lote = normCode(nextLote);
+  const next = { ...item, lote };
+  if (vasilhame?.id && String(item?.vasilhame_id || "") !== String(vasilhame.id)) {
+    next.vasilhame_id = vasilhame.id;
+  }
+  const placa = normCode(vasilhamePlaca(vasilhame));
+  const barril = normCode(vasilhameBarril(vasilhame));
+  if (placa) next.vasilhame_placa = placa;
+  if (barril) next.vasilhame_barril = barril;
+  return next;
 }
 
 function patchSaidasLote(saidas, index, vasilhamePatches, vasilhamesAtuais = []) {
@@ -564,6 +624,7 @@ function patchSaidasLote(saidas, index, vasilhamePatches, vasilhamesAtuais = [])
   const vasilhameById = new Map(
     (vasilhamesAtuais || []).map((vasilhame) => [String(vasilhame.id), vasilhame])
   );
+  const list = vasilhamesAtuais || [];
   const updates = [];
 
   for (const saida of saidas || []) {
@@ -579,14 +640,30 @@ function patchSaidasLote(saidas, index, vasilhamePatches, vasilhamesAtuais = [])
 
       if (!isSaidaVasilhameItem(item)) return item;
       const current = normCode(item.lote);
-      const patch = patchById.get(String(item.vasilhame_id));
+      const resolved =
+        (item.vasilhame_id && vasilhameById.get(String(item.vasilhame_id))) ||
+        resolveVasilhameDaSaida(item, list);
+      const patch = resolved
+        ? patchById.get(String(resolved.id))
+        : patchById.get(String(item.vasilhame_id));
+
       if (!patch) {
-        // Vasilhame já alinhado antes: só completa lote ausente/"Não informado".
-        const atual = normCode(vasilhameById.get(String(item.vasilhame_id))?.lote);
-        if (!isLoteNaoInformado(current) || isLoteNaoInformado(atual)) return item;
+        // Tanque já alinhado (ou lote manual): a saída copia o lote atual do vasilhame.
+        const atual = loteAtualDoVasilhame(resolved);
+        if (isLoteNaoInformado(atual) || sameText(current, atual)) {
+          if (
+            resolved?.id &&
+            String(item.vasilhame_id || "") !== String(resolved.id)
+          ) {
+            changed = true;
+            return withSaidaItemLote(item, current || atual, resolved);
+          }
+          return item;
+        }
         changed = true;
-        return { ...item, lote: atual };
+        return withSaidaItemLote(item, atual, resolved);
       }
+
       const nextLote =
         patch.replacements.get(current) ||
         ((patch.beforeLotes.size <= 1 || isLoteNaoInformado(current)) &&
@@ -596,7 +673,7 @@ function patchSaidasLote(saidas, index, vasilhamePatches, vasilhamesAtuais = [])
       if (isLoteNaoInformado(nextLote)) return item;
       if (!nextLote || sameText(current, nextLote)) return item;
       changed = true;
-      return { ...item, lote: nextLote };
+      return withSaidaItemLote(item, nextLote, resolved || vasilhameById.get(String(patch.id)));
     });
     if (changed) updates.push({ id: saida.id, itens });
   }
@@ -696,23 +773,55 @@ export function planLinkedLoteSync({
   };
 }
 
-/** Copia o lote editado no vasilhame para as saídas já registradas desse tanque. */
-export async function syncSaidaLoteDoVasilhame(vasilhameId, oldLote, newLote) {
+/**
+ * Copia o lote editado no vasilhame para as saídas já registradas desse tanque.
+ * Casa por `vasilhame_id` ou placa/barril (id obsoleto após regravação do OP).
+ * `force: true` (padrão) atualiza todo item ligado ao tanque — lote único renomeado.
+ * `force: false` só troca o snapshot que ainda tem o lote antigo (multi-lote).
+ */
+export async function syncSaidaLoteDoVasilhame(
+  vasilhameId,
+  oldLote,
+  newLote,
+  { vasilhame = null, force = true } = {}
+) {
   if (!vasilhameId || sameText(oldLote, newLote)) return;
+  const nextLote = normCode(newLote);
+  if (!nextLote) return;
+
   const saidas = await entities.saidas.list();
   const updates = [];
   for (const saida of saidas || []) {
+    if (saida?.enviado_ao_fiscal || saida?.status === "enviado_fiscal") continue;
     let changed = false;
     const itens = (saida.itens || []).map((item) => {
-      if (String(item?.vasilhame_id || "") !== String(vasilhameId)) return item;
-      if (!isSaidaVasilhameItem(item)) return item;
-      if (normCode(item.lote) && !sameText(item.lote, oldLote)) return item;
+      if (
+        !itemMatchesVasilhameForLote(item, vasilhameId, vasilhame, {
+          oldLote,
+          force,
+        })
+      ) {
+        return item;
+      }
+      if (sameText(item.lote, nextLote) && String(item.vasilhame_id || "") === String(vasilhameId)) {
+        return item;
+      }
       changed = true;
-      return { ...item, lote: normCode(newLote) };
+      return withSaidaItemLote(item, nextLote, vasilhame || { id: vasilhameId });
     });
     if (changed) updates.push({ id: saida.id, itens });
   }
-  if (updates.length > 0) await entities.saidas.bulkUpdate(updates);
+  if (updates.length === 0) return;
+  await entities.saidas.bulkUpdate(updates);
+  if (!vasilhame) return;
+  try {
+    await syncChecklistMetricsForSaidaUpdates(updates, vasilhame);
+  } catch (err) {
+    console.error(
+      "[Transbordo] Falha ao sincronizar checklist após ajuste de lote:",
+      err
+    );
+  }
 }
 
 /**
@@ -806,6 +915,7 @@ async function syncChecklistMetricsForSaidaUpdates(saidaUpdates, vasilhame) {
         Number(next.peso_liquido) !== Number(it.peso_liquido) ||
         Number(next.volume_solicitado) !== Number(it.volume_solicitado) ||
         Number(next.peso_bruto) !== Number(it.peso_bruto) ||
+        !sameText(next.lote, it.lote) ||
         !sameText(next.vasilhame_placa, it.vasilhame_placa) ||
         !sameText(next.vasilhame_barril, it.vasilhame_barril) ||
         next.label !== it.label

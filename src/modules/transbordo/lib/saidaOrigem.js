@@ -689,8 +689,12 @@ export function isLoteNaoInformado(lote) {
 /**
  * Resolve o lote do item (direto, vasilhame ou composição).
  * Lote gravado como "Não informado" não bloqueia o lote atual do vasilhame.
+ *
+ * Por padrão o vasilhame é a fonte (tela de Vasilhames); a saída guarda só uma
+ * cópia. Use `preferVasilhame: false` para ler apenas o snapshot da linha
+ * (ex.: histórico fiscal já congelado).
  */
-export function resolveSaidaItemLote(item, { vasilhame, preferVasilhame = false } = {}) {
+export function resolveSaidaItemLote(item, { vasilhame, preferVasilhame = true } = {}) {
   const loteFromComp = () => {
     const comp = Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : [];
     let best = "";
@@ -725,7 +729,7 @@ export function resolveSaidaItemLote(item, { vasilhame, preferVasilhame = false 
 /**
  * Coluna Lote na visualização de saída.
  */
-export function formatSaidaItemLote(item, { vasilhame, preferVasilhame = false } = {}) {
+export function formatSaidaItemLote(item, { vasilhame, preferVasilhame = true } = {}) {
   if (isTanqueVazioItem(item)) return "—";
   return resolveSaidaItemLote(item, { vasilhame, preferVasilhame }) || "—";
 }

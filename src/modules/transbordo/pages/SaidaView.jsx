@@ -39,7 +39,9 @@ import {
   resolveItemOrigem,
   origemLabel,
   isSaidaCancelada,
+  formatSaidaItemLote,
 } from "@transbordo/lib/saidaOrigem";
+import { resolveVasilhameDaSaida } from "@transbordo/lib/vasilhameSaidaLink";
 import {
   applyEstoqueStatusWmsPatch,
   ESTOQUE_STATUS_WMS_EVENT,
@@ -522,6 +524,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
               ) : (
                 saida.itens.map((item, i) => {
                   const wmsNok = isSaidaItemWmsNok(item, wmsCtx);
+                  const vasilhame = resolveVasilhameDaSaida(item, vasilhames);
                   return (
                   <tr
                     key={i}
@@ -618,7 +621,10 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
                           : "—"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {isTanqueVazioItem(item) ? "—" : item.lote || "—"}
+                      {formatSaidaItemLote(item, {
+                        vasilhame,
+                        preferVasilhame: true,
+                      })}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {isTanqueVazioItem(item)

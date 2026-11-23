@@ -74,6 +74,7 @@ import {
   aggregateUnitarioSaidaItens,
   isSaidaModuloPainel,
 } from "@transbordo/lib/saidaOrigem";
+import { resolveVasilhameDaSaida } from "@transbordo/lib/vasilhameSaidaLink";
 import {
   isSaidaItemWmsNok,
   WMS_ALERT_TITLE,
@@ -334,23 +335,10 @@ function SaidaAgendamentoResumo({ agendamento, t }) {
   );
 }
 
-function findById(list, id) {
-  if (!id) return null;
-  const key = String(id);
-  return (list || []).find((row) => String(row?.id) === key) || null;
-}
-
 /** Vasilhame do Transbordo ou container da Industrialização ligado à linha. */
 function resolveEmbalagemSource(item, vasilhames, containersById) {
-  const vasilhame = findById(vasilhames, item?.vasilhame_id);
+  const vasilhame = resolveVasilhameDaSaida(item, vasilhames);
   if (vasilhame) return vasilhame;
-  const placa = String(item?.vasilhame_placa || "").trim().toUpperCase();
-  if (placa) {
-    const byPlaca = (vasilhames || []).find(
-      (row) => String(row?.placa || "").trim().toUpperCase() === placa
-    );
-    if (byPlaca) return byPlaca;
-  }
   if (!item?.container_id) return null;
   return containersById.get(String(item.container_id)) || null;
 }
@@ -1004,7 +992,10 @@ export default function SaidaViewDialog({
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-muted-foreground whitespace-nowrap">
-                      {formatSaidaItemLote(item, { vasilhame })}
+                      {formatSaidaItemLote(item, {
+                        vasilhame,
+                        preferVasilhame: true,
+                      })}
                     </td>
                     <td className="px-2 py-2.5 text-muted-foreground whitespace-nowrap">
                       {formatSaidaItemEmbalagem(item, { vasilhame })}

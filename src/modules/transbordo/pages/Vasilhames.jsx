@@ -1254,7 +1254,8 @@ export default function Vasilhames() {
             await syncSaidaLoteDoVasilhame(
               editingVasilhame.id,
               String(item.lote_original || "").trim(),
-              String(item.lote || "").trim()
+              String(item.lote || "").trim(),
+              { vasilhame: saved, force: false }
             );
           } catch (err) {
             console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
@@ -1262,7 +1263,10 @@ export default function Vasilhames() {
         }
       } else if (newLote !== oldLote) {
         try {
-          await syncSaidaLoteDoVasilhame(editingVasilhame.id, oldLote, newLote);
+          await syncSaidaLoteDoVasilhame(editingVasilhame.id, oldLote, newLote, {
+            vasilhame: saved,
+            force: true,
+          });
         } catch (err) {
           console.error("[Transbordo] Falha ao atualizar lote nas saídas:", err);
         }

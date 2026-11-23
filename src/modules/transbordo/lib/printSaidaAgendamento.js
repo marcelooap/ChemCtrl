@@ -413,7 +413,7 @@ export async function printSaidaAgendamento(
         )}</td>
         <td class="tipo">${escapeHtml(tipoItemLabelRelatorio(item, embalagemSource))}</td>
         <td class="info">${escapeHtml(formatRelatorioInformacoes(item, embalagemSource))}</td>
-        <td class="lote">${escapeHtml(formatSaidaItemLote(item, { vasilhame: embalagemSource }))}</td>
+        <td class="lote">${escapeHtml(formatSaidaItemLote(item, { vasilhame: embalagemSource, preferVasilhame: true }))}</td>
         <td class="date">${escapeHtml(formatDate(datas.data_fabricacao))}</td>
         <td class="date">${escapeHtml(
           formatValidadeRelatorio(datas.data_validade, {

@@ -356,6 +356,11 @@ export function patchChecklistItemFromSaidaLinha(item, linha, vasilhame) {
     { ...item, ...linha },
     vasilhame
   );
+  const lote =
+    formatSaidaItemLote(linha, { vasilhame, preferVasilhame: true }) ||
+    linha.lote ||
+    item.lote ||
+    '';
   return withChecklistTanqueIdentificacao(
     {
       ...item,
@@ -367,6 +372,7 @@ export function patchChecklistItemFromSaidaLinha(item, linha, vasilhame) {
       peso_liquido,
       peso_bruto: linha.peso_bruto ?? vasilhame?.peso_bruto ?? item.peso_bruto,
       volume_solicitado,
+      lote,
     },
     placa,
     barril
