@@ -5,6 +5,7 @@ import {
   productionOfContainer,
 } from "@industrializacao/lib/fractionalSupply";
 import { isUnidadeVolumeEntrada } from "@transbordo/lib/estoqueSaldo";
+import { parseNumero } from "@transbordo/lib/format";
 import {
   getUnitPackagingCapacity,
   isUnitPackagingLike,
@@ -21,6 +22,125 @@ function normName(value) {
     .trim()
     .replace(/\s+/g, " ")
     .toUpperCase();
+}
+
+function normPlacaKey(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * Capacidade em litros. Trata milhar BR ("5.000", "1.500") que o parseNumero
+ * interpretaria como decimal (5 / 1.5).
+ */
+export function parseCapacidadeLitros(value) {
+  if (value == null || value === "") return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const s = String(value).trim();
+  if (!s || s === "-") return 0;
+  // 5.000 | 1.500 | 12.000 → milhar BR sem casas decimais
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    const n = parseFloat(s.replace(/\./g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return parseNumero(s);
+}
+
+export function matchesCapacidadePadrao(cap, target) {
+  if (cap == null) return false;
+  const n = parseCapacidadeLitros(cap);
+  if (n <= 0) return false;
+  const tol = Math.max(5, target * 0.02);
+  return Math.abs(n - target) <= tol;
+}
+
+/** Capacidade real do vasilhame: campo próprio → cadastro pela placa → inferência. */
+export function resolveVasilhameCapacidade(v, placaStats) {
+  const snapPadrao = (n) => {
+    if (n == null || n <= 0) return null;
+    for (const std of [5000, 1500]) {
+      const tol = Math.max(5, std * 0.02);
+      if (Math.abs(n - std) <= tol) return std;
+    }
+    return null;
+  };
+
+  const own = parseCapacidadeLitros(v?.capacidade);
+  if (own > 0) return snapPadrao(own) || own;
+
+  const placa = normPlacaKey(v?.placa);
+  const stats = placa && placaStats ? placaStats.get(placa) : null;
+  if (stats?.maxCap > 0) return snapPadrao(stats.maxCap) || stats.maxCap;
+
+  const vol = parseCapacidadeLitros(v?.volume);
+  const maxVol = Math.max(vol, stats?.maxVol || 0);
+  const snapped = snapPadrao(maxVol);
+  if (snapped) return snapped;
+
+  // Frota típica: volume atual/histórico acima de ~1.500 L ⇒ tanque 5.000 L
+  // (cobre tanques 5.000 parcialmente cheios sem capacidade cadastrada)
+  if (maxVol > 1600) return 5000;
+
+  return null;
+}
+
+/** Estatísticas por placa (capacidade cadastrada + maior volume histórico). */
+export function buildPlacaCapacidadeStats(vasilhames = []) {
+  const placaStats = new Map();
+  for (const v of vasilhames || []) {
+    const placa = normPlacaKey(v?.placa);
+    if (!placa) continue;
+    const prev = placaStats.get(placa) || { maxCap: 0, maxVol: 0 };
+    prev.maxCap = Math.max(prev.maxCap, parseCapacidadeLitros(v?.capacidade));
+    prev.maxVol = Math.max(prev.maxVol, parseCapacidadeLitros(v?.volume));
+    placaStats.set(placa, prev);
+  }
+  return placaStats;
+}
+
+/**
+ * Quantidade do tanque clássico na UOM de entrada pela capacidade nominal
+ * (ex.: 33 × 5.000 L). Sem capacidade resolvida, cai no volume atual.
+ */
+export function resolveQuantidadeTanquePorCapacidade(
+  v,
+  {
+    unidadePreferida = "kg",
+    densidadeKgPorL = 0,
+    placaStats = null,
+  } = {}
+) {
+  const unidade = String(unidadePreferida || "kg").toLowerCase();
+  const dens = densidadeKgPorL > 0 ? densidadeKgPorL : 0;
+  const cap = resolveVasilhameCapacidade(v, placaStats);
+  const litros =
+    cap != null && cap > 0
+      ? cap
+      : parseCapacidadeLitros(v?.volume) || Number(v?.volume) || 0;
+
+  if (!(litros > 0)) {
+    return { quantidade: 0, unidade: unidadePreferida || "kg", litros: 0 };
+  }
+
+  if (isUnidadeVolumeEntrada(unidade)) {
+    return {
+      quantidade: litros,
+      unidade: unidadePreferida || "L",
+      litros,
+    };
+  }
+
+  if (dens > 0) {
+    return {
+      quantidade: litros * dens,
+      unidade: unidadePreferida || "kg",
+      litros,
+    };
+  }
+
+  // Sem densidade: não inventar kg a partir de litros de capacidade.
+  return { quantidade: litros, unidade: "L", litros };
 }
 
 function isTankType(container) {
