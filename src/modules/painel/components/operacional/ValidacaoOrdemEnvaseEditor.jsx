@@ -359,7 +359,7 @@ export default function ValidacaoOrdemEnvaseEditor({
                   {t("painel.operacional.ordemTransbordo.fields.qty")} *
                 </Label>
                 <NumberInputBr
-                  decimals={0}
+                  decimals={3}
                   min={0}
                   value={granelDraft.quantidade}
                   onChange={(v) =>

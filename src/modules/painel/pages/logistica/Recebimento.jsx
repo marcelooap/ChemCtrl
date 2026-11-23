@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, ArrowRight, Clock, Plus } from "lucide-react";
+import { AlertCircle, ArrowRight, Clock, Plus, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/components/ui/card";
 import { Label } from "@shared/components/ui/label";
@@ -13,6 +14,7 @@ import {
 } from "@shared/components/ui/dialog";
 import { useToast } from "@shared/components/ui/use-toast";
 import { Can } from "@industrializacao/lib/rbac/Can";
+import { RowActionButton } from "@shared/components/ui/RowActionButton";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import LoteBlock, { emptyLote } from "@transbordo/components/entrada/LoteBlock";
@@ -32,9 +34,11 @@ import {
 import {
   buildMpProdutos,
   buildPaProdutos,
-  catalogProdutosByDestino,
+  catalogProdutosRecebimento,
   clientsFromProdutos,
   filterProdutosArmazenagem,
+  mergeClientesByNome,
+  resolveDestinoValidacaoOrdem,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
@@ -44,15 +48,11 @@ import { useInternalAuth } from "@/lib/InternalAuthContext";
 
 const INPUT_EDITABLE = "bg-white";
 const PERM = "painel_logistica_recebimento";
+const RELATORIO_BASE = "/painel/logistica/recebimento/relatorio";
 
 const TIPO_VALUES = [
   { value: "embalado" },
   { value: "vasilhame" },
-];
-
-const DESTINO_VALUES = [
-  { value: "convencional" },
-  { value: "industrializacao" },
 ];
 
 function seedLote({ tipo, produtoId, produtoNome, produtoCodigo, densidade }) {
@@ -71,6 +71,7 @@ function seedLote({ tipo, produtoId, produtoNome, produtoCodigo, densidade }) {
 
 export default function LogisticaRecebimento() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useInternalAuth();
 
@@ -82,19 +83,19 @@ export default function LogisticaRecebimento() {
   const [produtosMp, setProdutosMp] = useState([]);
   const [produtosPa, setProdutosPa] = useState([]);
 
-  const [dataOp, setDataOp] = useState(todayISO);
+  const [dataOp, setDataOp] = useState(() => todayISO());
   const [clienteId, setClienteId] = useState("");
   const [clienteNome, setClienteNome] = useState("");
   const [produtoId, setProdutoId] = useState("");
   const [produtoNome, setProdutoNome] = useState("");
   const [produtoCodigo, setProdutoCodigo] = useState("");
+  const [produtoFonte, setProdutoFonte] = useState("");
   const [tipoRecebimento, setTipoRecebimento] = useState("");
-  const [destino, setDestino] = useState("");
   const [lotes, setLotes] = useState([]);
   const [formError, setFormError] = useState("");
   const [pendentes, setPendentes] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const lastTrioKey = useRef("");
+  const lastHeaderKey = useRef("");
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -140,35 +141,24 @@ export default function LogisticaRecebimento() {
     [t]
   );
 
-  const destinoOptions = useMemo(
-    () =>
-      DESTINO_VALUES.map((o) => ({
-        ...o,
-        label: t(`painel.logistica.recebimento.destino.${o.value}`),
-      })),
-    [t]
-  );
-
-  const isIndustrializacao = destino === "industrializacao";
   const catalogProdutos = useMemo(
     () =>
-      catalogProdutosByDestino({
-        destino,
-        tipoOrOrigem: tipoRecebimento,
+      catalogProdutosRecebimento({
         produtosTb,
         produtosMp,
         produtosPa,
       }),
-    [destino, tipoRecebimento, produtosMp, produtosPa, produtosTb]
+    [produtosMp, produtosPa, produtosTb]
   );
 
-  const clientes = useMemo(() => {
-    if (destino === "industrializacao") {
-      return clientsFromProdutos(catalogProdutos);
-    }
-    if (destino === "convencional") return uniqueClientesByNome(clientesTb);
-    return [];
-  }, [destino, catalogProdutos, clientesTb]);
+  const clientes = useMemo(
+    () =>
+      mergeClientesByNome(
+        uniqueClientesByNome(clientesTb),
+        clientsFromProdutos(catalogProdutos)
+      ),
+    [catalogProdutos, clientesTb]
+  );
 
   const produtosDoCliente = useMemo(() => {
     if (!clienteNome && !clienteId) return [];
@@ -182,73 +172,111 @@ export default function LogisticaRecebimento() {
   }, [catalogProdutos, clienteId, clienteNome]);
 
   const produtoSelecionado = useMemo(
-    () => catalogProdutos.find((p) => p.id === produtoId) || null,
-    [catalogProdutos, produtoId]
+    () =>
+      catalogProdutos.find(
+        (p) =>
+          p.id === produtoId &&
+          (!produtoFonte || p.fonte === produtoFonte)
+      ) ||
+      catalogProdutos.find((p) => p.id === produtoId) ||
+      null,
+    [catalogProdutos, produtoFonte, produtoId]
   );
 
-  const produtoDisplay = produtoCodigo
-    ? `${produtoCodigo} - ${produtoNome}`
-    : produtoNome;
+  const destino = useMemo(() => {
+    if (!produtoSelecionado && !produtoId) return "";
+    return resolveDestinoValidacaoOrdem({
+      produtoId,
+      produtoFonte: produtoFonte || produtoSelecionado?.fonte,
+      produtoOrigem: produtoSelecionado?.origem,
+    });
+  }, [produtoFonte, produtoId, produtoSelecionado]);
 
-  const trioReady = Boolean(dataOp && destino && tipoRecebimento);
-  const detailsReady = Boolean(trioReady && clienteNome && produtoId);
+  const isIndustrializacao = destino === "industrializacao";
+
+  const produtoOptionLabel = (p) => {
+    const nome = p?.produto || p?.nome || "";
+    const base = p?.codigo ? `${p.codigo} - ${nome}` : nome;
+    if (!p?.fonte) return base;
+    const source = t(
+      p.fonte === "industrializacao"
+        ? "painel.logistica.recebimento.productSource.industrializacao"
+        : "painel.logistica.recebimento.productSource.transbordo"
+    );
+    return `${base} · ${source}`;
+  };
+
+  const produtoDisplay = produtoSelecionado
+    ? produtoOptionLabel(produtoSelecionado)
+    : produtoCodigo
+      ? `${produtoCodigo} - ${produtoNome}`
+      : produtoNome;
+
+  const headerReady = Boolean(
+    dataOp && tipoRecebimento && clienteNome && produtoId
+  );
+  const detailsReady = headerReady;
 
   useEffect(() => {
-    const key = trioReady ? `${dataOp}|${destino}|${tipoRecebimento}` : "";
-    if (!trioReady) {
-      lastTrioKey.current = "";
+    const key = headerReady
+      ? `${dataOp}|${tipoRecebimento}|${clienteId || clienteNome}|${produtoId}|${produtoFonte}`
+      : "";
+    if (!headerReady) {
+      lastHeaderKey.current = "";
       setModalOpen(false);
       return;
     }
-    if (lastTrioKey.current !== key) {
-      lastTrioKey.current = key;
+    if (lastHeaderKey.current !== key) {
+      lastHeaderKey.current = key;
+      const dens = produtoSelecionado?.densidade_tabelada
+        ? produtoSelecionado.densidade
+        : "";
       setLotes((prev) =>
         prev.length
-          ? prev.map((l) => applyTipoRecebimento(l, tipoRecebimento))
+          ? prev.map((l) => {
+              let next = applyTipoRecebimento(l, tipoRecebimento);
+              next = {
+                ...next,
+                produto_id: produtoId || next.produto_id || "",
+                produto_nome: produtoNome || next.produto_nome || "",
+                produto_codigo: produtoCodigo || next.produto_codigo || "",
+              };
+              if (tipoRecebimento === "vasilhame" && dens && !next.densidade) {
+                next.densidade = dens;
+              }
+              return next;
+            })
           : [
               seedLote({
                 tipo: tipoRecebimento,
                 produtoId,
                 produtoNome,
                 produtoCodigo,
+                densidade: dens,
               }),
             ]
       );
       setModalOpen(true);
     }
-  }, [trioReady, dataOp, destino, tipoRecebimento]);
+  }, [
+    headerReady,
+    dataOp,
+    tipoRecebimento,
+    clienteId,
+    clienteNome,
+    produtoId,
+    produtoFonte,
+    produtoNome,
+    produtoCodigo,
+    produtoSelecionado,
+  ]);
 
-  const clientEnabled = Boolean(trioReady);
-  const productEnabled = Boolean(clientEnabled && clienteNome);
-
-  const clientPlaceholder = !destino
-    ? t("painel.logistica.recebimento.placeholders.destFirst")
-    : isIndustrializacao && !tipoRecebimento
-      ? t("painel.logistica.recebimento.placeholders.typeFirst")
-      : t("painel.logistica.recebimento.placeholders.client");
-
+  const productEnabled = Boolean(clienteNome);
   const productPlaceholder = !productEnabled
-    ? !destino
-      ? t("painel.logistica.recebimento.placeholders.destFirst")
-      : isIndustrializacao && !tipoRecebimento
-        ? t("painel.logistica.recebimento.placeholders.typeFirst")
-        : t("painel.logistica.recebimento.placeholders.productDisabled")
-    : isIndustrializacao && tipoRecebimento === "embalado"
-      ? t("painel.logistica.recebimento.placeholders.productMp")
-      : isIndustrializacao && tipoRecebimento === "vasilhame"
-        ? t("painel.logistica.recebimento.placeholders.productPa")
-        : t("painel.logistica.recebimento.placeholders.product");
+    ? t("painel.logistica.recebimento.placeholders.productDisabled")
+    : t("painel.logistica.recebimento.placeholders.product");
 
   const qtdKg = lotes.reduce((sum, l) => sum + loteToKg(l), 0);
-
-  const clearClienteProduto = () => {
-    setClienteId("");
-    setClienteNome("");
-    setProdutoId("");
-    setProdutoNome("");
-    setProdutoCodigo("");
-    setLotes([]);
-  };
 
   const syncLotesFromHeader = ({
     nextTipo = tipoRecebimento,
@@ -298,14 +326,10 @@ export default function LogisticaRecebimento() {
     setProdutoId("");
     setProdutoNome("");
     setProdutoCodigo("");
-    setLotes((prev) =>
-      prev.map((l) => ({
-        ...l,
-        produto_id: "",
-        produto_nome: "",
-        produto_codigo: "",
-      }))
-    );
+    setProdutoFonte("");
+    setLotes([]);
+    setModalOpen(false);
+    lastHeaderKey.current = "";
     setFormError("");
   };
 
@@ -313,9 +337,11 @@ export default function LogisticaRecebimento() {
     const nextId = item?.id || "";
     const nextNome = item?.produto || item?.nome || "";
     const nextCodigo = item?.codigo || "";
+    const nextFonte = item?.fonte || "";
     setProdutoId(nextId);
     setProdutoNome(nextNome);
     setProdutoCodigo(nextCodigo);
+    setProdutoFonte(nextFonte);
     setFormError("");
     if (tipoRecebimento && nextId) {
       syncLotesFromHeader({
@@ -331,17 +357,11 @@ export default function LogisticaRecebimento() {
     const nextTipo = item?.value || "";
     setTipoRecebimento(nextTipo);
     setFormError("");
-    if (destino === "industrializacao") {
-      clearClienteProduto();
-      return;
+    if (produtoId) {
+      syncLotesFromHeader({ nextTipo });
+    } else {
+      setLotes([]);
     }
-    syncLotesFromHeader({ nextTipo });
-  };
-
-  const handleDestinoChange = (_label, item) => {
-    setDestino(item?.value || "");
-    setFormError("");
-    clearClienteProduto();
   };
 
   const addLote = () => {
@@ -366,8 +386,8 @@ export default function LogisticaRecebimento() {
     setProdutoId("");
     setProdutoNome("");
     setProdutoCodigo("");
+    setProdutoFonte("");
     setTipoRecebimento("");
-    setDestino("");
     setLotes([]);
     setFormError("");
   };
@@ -375,6 +395,10 @@ export default function LogisticaRecebimento() {
   const handleSubmit = async () => {
     if (!detailsReady) {
       setFormError(t("painel.logistica.recebimento.errors.details"));
+      return;
+    }
+    if (!destino) {
+      setFormError(t("painel.logistica.recebimento.errors.destino"));
       return;
     }
     const loteErr = validateEntradaLotes(lotes, catalogProdutos);
@@ -386,7 +410,7 @@ export default function LogisticaRecebimento() {
     setSaving(true);
     setFormError("");
     try {
-      const origem = destino === "industrializacao" ? "industrializacao" : "convencional";
+      const origem = isIndustrializacao ? "industrializacao" : "convencional";
       const payload = buildEntradaPayload({
         dataEntrada: dataOp,
         clienteId,
@@ -407,7 +431,7 @@ export default function LogisticaRecebimento() {
         produto_codigo: produtoCodigo,
       };
 
-      if (destino === "industrializacao") {
+      if (isIndustrializacao) {
         await criarValidacaoIndustrializacao({
           header,
           origemTipo: tipoRecebimento,
@@ -434,7 +458,7 @@ export default function LogisticaRecebimento() {
       }
       resetForm();
       setModalOpen(false);
-      lastTrioKey.current = "";
+      lastHeaderKey.current = "";
       await loadData({ silent: true });
     } catch (err) {
       console.error("[LogisticaRecebimento] save:", err);
@@ -473,27 +497,13 @@ export default function LogisticaRecebimento() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label>{t("painel.logistica.recebimento.fields.date")} *</Label>
                 <DateInputBr
                   value={dataOp}
                   onChange={setDataOp}
                   className={INPUT_EDITABLE}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t("painel.logistica.recebimento.fields.destino")} *</Label>
-                <SearchableSelect
-                  value={
-                    destinoOptions.find((o) => o.value === destino)?.label || ""
-                  }
-                  onChange={handleDestinoChange}
-                  options={destinoOptions}
-                  getOptionLabel={(o) => o.label}
-                  getOptionValue={(o) => o.value}
-                  placeholder={t("painel.logistica.recebimento.placeholders.destino")}
-                  inputClassName={INPUT_EDITABLE}
                 />
               </div>
               <div className="space-y-1.5">
@@ -510,13 +520,55 @@ export default function LogisticaRecebimento() {
                   inputClassName={INPUT_EDITABLE}
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>{t("painel.logistica.recebimento.fields.client")} *</Label>
+                <SearchableSelect
+                  value={clienteNome}
+                  onChange={handleClienteChange}
+                  options={clientes}
+                  getOptionLabel={(c) => c.nome}
+                  getOptionValue={(c) => c.id}
+                  placeholder={t("painel.logistica.recebimento.placeholders.client")}
+                  inputClassName={INPUT_EDITABLE}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("painel.logistica.recebimento.fields.product")} *</Label>
+                <SearchableSelect
+                  value={produtoDisplay}
+                  onChange={handleProdutoChange}
+                  options={produtosDoCliente}
+                  getOptionLabel={produtoOptionLabel}
+                  getOptionValue={(p) =>
+                    p.fonte ? `${p.id}|${p.fonte}` : p.id
+                  }
+                  placeholder={productPlaceholder}
+                  disabled={!productEnabled}
+                  inputClassName={INPUT_EDITABLE}
+                />
+              </div>
             </div>
+
+            {destino && produtoId ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{t("painel.logistica.recebimento.fields.destino")}:</span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                    isIndustrializacao
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-slate-50 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {t(`painel.logistica.recebimento.destino.${destino}`)}
+                </span>
+              </div>
+            ) : null}
 
             <div className="flex justify-end">
               <Button
                 type="button"
                 onClick={() => setModalOpen(true)}
-                disabled={!trioReady}
+                disabled={!headerReady}
                 className="gap-2"
               >
                 {t("painel.logistica.recebimento.openDetails")}
@@ -526,7 +578,14 @@ export default function LogisticaRecebimento() {
           </CardContent>
         </Card>
 
-        <PendentesCard pendentes={pendentes} t={t} />
+        <PendentesCard
+          pendentes={pendentes}
+          t={t}
+          onPrint={(v) => {
+            if (!v?.validacaoId || !v?.destino) return;
+            navigate(`${RELATORIO_BASE}/${v.destino}/${v.validacaoId}`);
+          }}
+        />
       </div>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
@@ -543,36 +602,32 @@ export default function LogisticaRecebimento() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>{t("painel.logistica.recebimento.fields.client")} *</Label>
-                <SearchableSelect
-                  value={clienteNome}
-                  onChange={handleClienteChange}
-                  options={clientes}
-                  getOptionLabel={(c) => c.nome}
-                  getOptionValue={(c) => c.id}
-                  placeholder={clientPlaceholder}
-                  disabled={!clientEnabled}
-                  inputClassName={INPUT_EDITABLE}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t("painel.logistica.recebimento.fields.product")} *</Label>
-                <SearchableSelect
-                  value={produtoDisplay}
-                  onChange={handleProdutoChange}
-                  options={produtosDoCliente}
-                  getOptionLabel={(p) =>
-                    p.codigo
-                      ? `${p.codigo} - ${p.produto || p.nome || ""}`
-                      : p.produto || p.nome || ""
-                  }
-                  getOptionValue={(p) => p.id}
-                  placeholder={productPlaceholder}
-                  disabled={!productEnabled}
-                  inputClassName={INPUT_EDITABLE}
-                />
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm space-y-1">
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>
+                  <span className="text-muted-foreground">
+                    {t("painel.logistica.recebimento.fields.client")}:{" "}
+                  </span>
+                  <span className="font-medium text-foreground">{clienteNome || "-"}</span>
+                </span>
+                <span>
+                  <span className="text-muted-foreground">
+                    {t("painel.logistica.recebimento.fields.product")}:{" "}
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {produtoDisplay || "-"}
+                  </span>
+                </span>
+                {destino ? (
+                  <span>
+                    <span className="text-muted-foreground">
+                      {t("painel.logistica.recebimento.fields.destino")}:{" "}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {t(`painel.logistica.recebimento.destino.${destino}`)}
+                    </span>
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -660,6 +715,7 @@ function mergeRecebimentoPendentes(valsTb, valsInd) {
       const qtd = resumoQuantidadeValidacao(v);
       return {
         id: `tb-${v.id}`,
+        validacaoId: v.id,
         numero: v.numero,
         data: v.data,
         destino: "convencional",
@@ -681,6 +737,7 @@ function mergeRecebimentoPendentes(valsTb, valsInd) {
       const qtd = resumoQuantidadeValidacaoInd(v);
       return {
         id: `ind-${v.id}`,
+        validacaoId: v.id,
         numero: v.numero,
         data: v.data,
         destino: "industrializacao",
@@ -703,7 +760,11 @@ function mergeRecebimentoPendentes(valsTb, valsInd) {
   });
 }
 
-function PendentesCard({ pendentes, t }) {
+function PendentesCard({ pendentes, t, onPrint }) {
+  const printLabel = t("painel.logistica.recebimento.pendentes.print", {
+    defaultValue: "Imprimir relatório",
+  });
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-3">
@@ -752,13 +813,18 @@ function PendentesCard({ pendentes, t }) {
                 <th className="px-4 py-2 font-medium">
                   {t("painel.logistica.recebimento.pendentes.columns.operador")}
                 </th>
+                <th className="px-4 py-2 font-medium text-right">
+                  {t("painel.logistica.recebimento.pendentes.columns.acoes", {
+                    defaultValue: "Ações",
+                  })}
+                </th>
               </tr>
             </thead>
             <tbody>
               {pendentes.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-8 text-center text-muted-foreground"
                   >
                     {t("painel.logistica.recebimento.pendentes.empty")}
@@ -812,6 +878,19 @@ function PendentesCard({ pendentes, t }) {
                     </td>
                     <td className="px-4 py-2 text-foreground/80">
                       {v.criado_por_nome || "-"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                        <Can permission={`${PERM}.view`}>
+                          <RowActionButton
+                            onClick={() => onPrint?.(v)}
+                            title={printLabel}
+                            aria-label={printLabel}
+                          >
+                            <Printer />
+                          </RowActionButton>
+                        </Can>
+                      </div>
                     </td>
                   </tr>
                 ))

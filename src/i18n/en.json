@@ -2137,7 +2137,7 @@
         }
       },
       "recebimento": {
-        "subtitle": "Enter date, destination and type. Client, product and lot are filled in next.",
+        "subtitle": "Enter date, type, client and product. Destination is identified automatically from the product.",
         "formTitle": "Receipt details",
         "detailsTitle": "Lot information",
         "openDetails": "Lot information",
@@ -2156,6 +2156,10 @@
         },
         "destino": {
           "convencional": "Conventional",
+          "industrializacao": "Industrialization"
+        },
+        "productSource": {
+          "transbordo": "Transshipment",
           "industrializacao": "Industrialization"
         },
         "fields": {
@@ -2177,13 +2181,15 @@
           "typeFirst": "Select the type first"
         },
         "errors": {
-          "header": "Fill in date, destination and type.",
-          "details": "Fill in client, product and lot details.",
+          "header": "Fill in date, type, client and product.",
+          "details": "Fill in the lot details.",
+          "destino": "Could not identify the destination from the selected product.",
           "save": "Unable to submit the receipt."
         },
         "pendentes": {
           "title": "Pending validation",
           "empty": "No receipts waiting for validation.",
+          "print": "Print report",
           "columns": {
             "id": "#",
             "data": "Date",
@@ -2194,7 +2200,8 @@
             "lote": "Lot",
             "quantidade": "Qty",
             "unidade": "UoM",
-            "operador": "Operator"
+            "operador": "Operator",
+            "acoes": "Actions"
           }
         }
       },

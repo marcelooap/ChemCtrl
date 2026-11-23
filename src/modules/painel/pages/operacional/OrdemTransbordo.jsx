@@ -2389,7 +2389,7 @@ export default function OrdemTransbordo() {
                   <div className="space-y-1.5">
                     <Label>{t("painel.operacional.ordemTransbordo.fields.qty")} *</Label>
                     <NumberInputBr
-                      decimals={0}
+                      decimals={3}
                       min={0}
                       value={granel.quantidade}
                       onChange={(v) => patchGranel("quantidade", v === "" ? "" : v)}
@@ -2528,7 +2528,7 @@ export default function OrdemTransbordo() {
                         {t("painel.operacional.ordemTransbordo.weighing.expected")}
                         {granel.unidade && granel.unidade !== "kg"
                           ? ` — ${t("painel.operacional.ordemTransbordo.weighing.convertedFrom", {
-                              qty: formatNum(Number(granel.quantidade) || 0, 0),
+                              qty: formatNum(Number(granel.quantidade) || 0, 3),
                               unit: granel.unidade,
                             })}`
                           : ""}

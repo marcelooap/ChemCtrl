@@ -121,6 +121,14 @@ export default function PainelRoutes() {
               </PageSuspense>
             }
           />
+          <Route
+            path="logistica/recebimento/relatorio/:destino/:id"
+            element={
+              <PageSuspense>
+                <OrdemTransbordoRelatorio />
+              </PageSuspense>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/painel/home" replace />} />

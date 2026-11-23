@@ -2137,7 +2137,7 @@
         }
       },
       "recebimento": {
-        "subtitle": "Informe data, destino e tipo. Cliente, produto e lote são preenchidos em seguida.",
+        "subtitle": "Informe data, tipo, cliente e produto. O destino é identificado automaticamente pelo produto.",
         "formTitle": "Dados do recebimento",
         "detailsTitle": "Informações do lote",
         "openDetails": "Informações do lote",
@@ -2156,6 +2156,10 @@
         },
         "destino": {
           "convencional": "Convencional",
+          "industrializacao": "Industrialização"
+        },
+        "productSource": {
+          "transbordo": "Transbordo",
           "industrializacao": "Industrialização"
         },
         "fields": {
@@ -2177,13 +2181,15 @@
           "typeFirst": "Selecione o tipo primeiro"
         },
         "errors": {
-          "header": "Preencha data, destino e tipo.",
-          "details": "Preencha cliente, produto e os dados do lote.",
+          "header": "Preencha data, tipo, cliente e produto.",
+          "details": "Preencha os dados do lote.",
+          "destino": "Não foi possível identificar o destino pelo produto selecionado.",
           "save": "Não foi possível enviar o recebimento."
         },
         "pendentes": {
           "title": "Pendentes de validação",
           "empty": "Nenhum recebimento aguardando validação.",
+          "print": "Imprimir relatório",
           "columns": {
             "id": "#",
             "data": "Data",
@@ -2194,7 +2200,8 @@
             "lote": "Lote",
             "quantidade": "Qtd",
             "unidade": "Un.",
-            "operador": "Operador"
+            "operador": "Operador",
+            "acoes": "Ações"
           }
         }
       },

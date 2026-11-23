@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@shared/components/ui/button";
@@ -32,8 +32,16 @@ import {
   labelTipoEmbalagem,
 } from "@transbordo/lib/tiposEmbalagem";
 
-const BASE_PATH = "/painel/operacional/ordem-transbordo";
+const OT_BASE_PATH = "/painel/operacional/ordem-transbordo";
+const RECEBIMENTO_BASE_PATH = "/painel/logistica/recebimento";
 const LOGO_SRC = "/icons/chemctrl-logo.svg";
+
+function resolveBackPath(pathname) {
+  if (String(pathname || "").includes("/logistica/recebimento")) {
+    return RECEBIMENTO_BASE_PATH;
+  }
+  return OT_BASE_PATH;
+}
 
 const ORIGEM_TIPO_LABEL_KEYS = {
   entrada: "transbordo.validacao.origemTipo.granel",
@@ -385,7 +393,7 @@ function groupDestinosByTipo(destinos, t) {
 }
 
 /** Lotes envolvidos na operação, sem repetição, na ordem em que aparecem. */
-function coletarLotes(validacao, origens) {
+function coletarLotes(validacao, origens, granel = null) {
   const lotes = [];
   const push = (value) => {
     const lote = String(value || "").trim();
@@ -403,6 +411,10 @@ function coletarLotes(validacao, origens) {
     }
     push(origem?.lote);
   });
+
+  const granelLotes = Array.isArray(granel?.lotes) ? granel.lotes : [];
+  granelLotes.forEach((lote) => push(lote?.lote));
+  push(granel?.lote);
   push(validacao?.lote);
 
   return lotes;
@@ -417,7 +429,12 @@ function buildDocumentId(validacao) {
 export default function OrdemTransbordoRelatorio() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { destino, id } = useParams();
+  const backPath = useMemo(
+    () => resolveBackPath(location.pathname),
+    [location.pathname]
+  );
 
   const [validacao, setValidacao] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -459,7 +476,7 @@ export default function OrdemTransbordoRelatorio() {
     };
   }, [destino, id, t]);
 
-  const handleBack = useCallback(() => navigate(BASE_PATH), [navigate]);
+  const handleBack = useCallback(() => navigate(backPath), [backPath, navigate]);
   const handlePrint = useCallback(() => window.print(), []);
 
   const transbordo = validacao?.transbordo_payload || null;
@@ -514,7 +531,7 @@ export default function OrdemTransbordoRelatorio() {
 
   const documentId = buildDocumentId(validacao);
   const densidade = transbordo?.densidade || granel?.densidade || "";
-  const lotes = coletarLotes(validacao, origens);
+  const lotes = coletarLotes(validacao, origens, granel);
   const qtdNota = qtdNotaFromGranel(granel);
   const diferencaGranel = diferencaPesagemGranel(granel);
 

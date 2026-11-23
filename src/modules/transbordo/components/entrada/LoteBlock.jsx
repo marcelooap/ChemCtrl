@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@shared/components/ui/select";
 import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
+import DateInputBr from "@transbordo/components/cadastro/DateInputBr";
 import NumberInputBr from "@transbordo/components/NumberInputBr";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import {
@@ -517,17 +518,16 @@ export default function LoteBlock({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Data de Fabricação</Label>
-          <Input
-            type="date"
+          <DateInputBr
             value={lote.data_fabricacao || ""}
-            onChange={(e) => update("data_fabricacao", e.target.value)}
+            onChange={(v) => update("data_fabricacao", v)}
             disabled={readOnly}
             className={INPUT_EDITABLE}
           />
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2 min-h-5">
-            <Label htmlFor={`data-validade-${index}`}>Data de Validade</Label>
+            <Label>Data de Validade</Label>
             <label
               htmlFor={`validade-indeterminada-${index}`}
               className="flex items-center gap-1.5 cursor-pointer select-none"
@@ -550,14 +550,12 @@ export default function LoteBlock({
               </span>
             </label>
           </div>
-          <Input
-            id={`data-validade-${index}`}
-            type="date"
+          <DateInputBr
             value={lote.validade_indeterminada ? "" : lote.data_validade || ""}
-            onChange={(e) =>
+            onChange={(v) =>
               onChange({
                 ...lote,
-                data_validade: e.target.value,
+                data_validade: v,
                 validade_indeterminada: false,
               })
             }

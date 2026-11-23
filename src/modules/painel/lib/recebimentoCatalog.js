@@ -472,6 +472,25 @@ export function catalogProdutosByDestino({
   return [];
 }
 
+/**
+ * Catálogo unificado do Recebimento: Transbordo + MP + PA.
+ * Mantém opções distintas por fonte para o destino ser resolvido pelo produto.
+ */
+export function catalogProdutosRecebimento({
+  produtosTb,
+  produtosMp,
+  produtosPa,
+}) {
+  return uniqueProdutosByIdentity(
+    [
+      ...(produtosTb || []).map((p) => ({ ...p, fonte: "transbordo" })),
+      ...(produtosMp || []).map((p) => ({ ...p, fonte: "industrializacao" })),
+      ...(produtosPa || []).map((p) => ({ ...p, fonte: "industrializacao" })),
+    ],
+    { byFonte: true }
+  );
+}
+
 function norm(val) {
   return String(val ?? "").trim().toLowerCase();
 }
