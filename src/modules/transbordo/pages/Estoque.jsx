@@ -26,16 +26,12 @@ import { listAllAjustesManuais } from "@transbordo/lib/estoqueAjusteManual";
 import { buildEntradaCodigoById } from "@transbordo/lib/entradaCodigo";
 import { formatEstoqueCodigo } from "@transbordo/lib/estoqueCodigo";
 import { formatVolume, formatCurrency, formatQuantidade } from "@transbordo/lib/format";
-import {
-  applyDeclaredVolumeDecimals,
-  persistDeclaredVolumeDecimals,
-} from "@transbordo/lib/declaredVolume";
+import { persistDeclaredVolumeDecimals } from "@transbordo/lib/declaredVolume";
 import {
   computeEstoqueSaldo,
   computeEstoqueQuantidadesPorLocal,
   createEstoqueSaldoContext,
   getEstoqueQuantidade,
-  getEstoqueUnidade,
   getEstoqueUnidadeEntrada,
   valorNaUnidadeEntrada,
   isUnidadeVolumeEntrada,
@@ -48,7 +44,6 @@ import {
   patchTransbordoWorkspaceEstoque,
   peekTransbordoWorkspaceLists,
 } from "@transbordo/services/transbordoWorkspace";
-import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
 import {
   entradaByIdMap,
   isMateriaPrimaIndustrializacao,
@@ -56,6 +51,7 @@ import {
 import { reconcileVasilhamesFromEntradas } from "@transbordo/lib/syncVasilhamesFromEntrada";
 import { uniqueClientesByNome } from "@painel/lib/recebimentoCatalog";
 import { ESTOQUE_STATUS_WMS_EVENT } from "@transbordo/lib/saidaStatusWms";
+import { buildEstoqueView } from "@transbordo/lib/estoqueView";
 import { useSubmitGuard } from "@/shared/hooks/useSubmitGuard";
 import { peekScrollAnchor, scheduleScrollRestore } from "@shared/lib/preserveScroll";
 
@@ -90,94 +86,6 @@ function formatValorNaUnidadeEntrada(estoqueItem, valorEntrada) {
     return formatVolume(valor, { empty: "-" });
   }
   return formatQuantidade(valor, { empty: "-" });
-}
-
-const ESTOQUE_BUILD_CHUNK = 40;
-
-/**
- * Monta as linhas da tela a partir do workspace: reaplica casas decimais
- * declaradas, remove embalagens unitárias / MP da Industrialização e calcula
- * saldo + breakdown por local numa única passagem (contexto compartilhado).
- *
- * Processa em chunks com yield para não congelar a UI em ~400 registros.
- */
-async function buildEstoqueView(
-  workspace,
-  entradas = [],
-  { isCurrent, ajustes = [] } = {}
-) {
-  const volumes = applyDeclaredVolumeDecimals({
-    estoque: workspace.estoque,
-    entradas,
-    transbordos: workspace.transbordos,
-    vasilhames: workspace.vasilhames,
-  });
-  const saidas = workspace.saidas || [];
-  const entradasPorId = entradaByIdMap(entradas);
-  const saldoCtx = createEstoqueSaldoContext(
-    volumes.transbordos,
-    saidas,
-    volumes.vasilhames,
-    ajustes
-  );
-
-  // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado
-  // Bombonas/tambores/IBC de OP ficam só em Vasilhames.
-  // Matéria-prima da Industrialização fica só no módulo Industrialização.
-  const baseRows = volumes.estoque
-    .filter((e) => !isEstoqueEmbalagemUnitaria(e))
-    .filter(
-      (e) =>
-        !isMateriaPrimaIndustrializacao(
-          e,
-          entradasPorId.get(String(e?.entrada_id))
-        )
-    );
-
-  const estoque = [];
-  for (let i = 0; i < baseRows.length; i += 1) {
-    if (i > 0 && i % ESTOQUE_BUILD_CHUNK === 0) {
-      await yieldToPaint();
-      if (typeof isCurrent === "function" && !isCurrent()) {
-        return null;
-      }
-    }
-    const e = baseRows[i];
-    const hydrated = hydrateEstoqueFiscal(e);
-    const quantidade = getEstoqueQuantidade(hydrated);
-    const unidade_medida = getEstoqueUnidade(hydrated);
-    const itemOp = { ...hydrated, quantidade, unidade_medida };
-    const saldo_final = computeEstoqueSaldo(
-      itemOp,
-      volumes.transbordos,
-      saidas,
-      volumes.vasilhames,
-      saldoCtx
-    );
-    const locaisSaldo = computeEstoqueQuantidadesPorLocal(itemOp, {
-      transbordos: volumes.transbordos,
-      vasilhames: volumes.vasilhames,
-      saidas,
-      saldo: saldo_final,
-      saldoCtx,
-    });
-    estoque.push({
-      ...itemOp,
-      saldo_inicial: quantidade,
-      saldo_final,
-      saldo_atual: saldo_final,
-      expedido: Math.max(0, quantidade - saldo_final),
-      locaisSaldo,
-    });
-  }
-
-  return {
-    estoque,
-    transbordos: volumes.transbordos,
-    saidas,
-    vasilhames: volumes.vasilhames,
-    volumes,
-  };
 }
 
 const SKELETON_ROWS = 6;

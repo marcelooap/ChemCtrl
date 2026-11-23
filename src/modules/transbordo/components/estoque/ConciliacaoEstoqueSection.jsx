@@ -16,6 +16,7 @@ import {
   reconcileEstoque,
 } from "@transbordo/lib/conciliacaoEstoque";
 import { fetchIndustrializacaoStocksForConciliacao } from "@transbordo/lib/conciliacaoEstoqueIndFetch";
+import { fetchTransbordoStocksForConciliacao } from "@transbordo/lib/conciliacaoEstoqueTransbordoFetch";
 import { exportConciliacaoEstoqueExcel } from "@transbordo/lib/exportConciliacaoEstoqueExcel";
 
 const ACCEPT = ".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
@@ -65,15 +66,17 @@ function ColumnSelect({ id, label, value, onChange, headers, required }) {
 
 /**
  * @param {object} props
- * @param {Array} [props.estoqueItems] Estoque Transbordo (ChemCtrl).
+ * @param {Array} [props.estoqueItems] Estoque Transbordo (ChemCtrl). Se vazio, busca ao processar.
  * @param {Array} [props.industrializacaoStocks] Saldos Ind já carregados (MP/PA).
  * @param {boolean} [props.skipIndustrializacaoFetch] Usa só os stocks passados (sem refetch).
+ * @param {boolean} [props.skipTransbordoFetch] Usa só estoqueItems (sem buscar Transbordo).
  * @param {string} [props.description] Texto de ajuda sob o título.
  */
 export default function ConciliacaoEstoqueSection({
   estoqueItems = [],
   industrializacaoStocks: industrializacaoStocksProp,
   skipIndustrializacaoFetch = false,
+  skipTransbordoFetch = false,
   description,
 }) {
   const { toast } = useToast();
@@ -238,9 +241,21 @@ export default function ConciliacaoEstoqueSection({
         }
       }
 
+      let estoqueTransbordo = Array.isArray(estoqueItems) ? estoqueItems : [];
+      const shouldFetchTransbordo =
+        !skipTransbordoFetch && estoqueTransbordo.length === 0;
+      if (shouldFetchTransbordo) {
+        try {
+          estoqueTransbordo = await fetchTransbordoStocksForConciliacao();
+        } catch (tbErr) {
+          console.warn("[Conciliação] Transbordo:", tbErr);
+          estoqueTransbordo = [];
+        }
+      }
+
       const { rows, summary: nextSummary } = reconcileEstoque(
         proteusRows,
-        estoqueItems,
+        estoqueTransbordo,
         { industrializacaoStocks }
       );
 

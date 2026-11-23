@@ -566,7 +566,10 @@ export default function Saida({
       let matchTransporte = true;
       let matchCarregamentosHoje = true;
       if (isExpedicao) {
-        const agendamento = findAgendamentoDisplayBySaida(agendamentos, s.id);
+        const cancelada = isSaidaCancelada(s);
+        const agendamento = cancelada
+          ? null
+          : findAgendamentoDisplayBySaida(agendamentos, s.id);
 
         if (
           agendamentoFilter &&
@@ -579,9 +582,11 @@ export default function Saida({
           const wantAgendado =
             agendamentoFilter === "Agendado" ||
             agendamentoFilter === "agendado";
+          // Canceladas não entram em Pendente/Agendado — o status visual é Cancelado.
           matchAgendamento =
-            (wantPendente && !agendamento) ||
-            (wantAgendado && Boolean(agendamento));
+            !cancelada &&
+            ((wantPendente && !agendamento) ||
+              (wantAgendado && Boolean(agendamento)));
         }
 
         if (
@@ -597,8 +602,9 @@ export default function Saida({
             transporteFilter === "Registrado" ||
             transporteFilter === "registrado";
           matchTransporte =
-            (wantPendente && !registrado) ||
-            (wantRegistrado && registrado);
+            !cancelada &&
+            ((wantPendente && !registrado) ||
+              (wantRegistrado && registrado));
         }
 
         // Data programada = hoje (calcDias === 0), independente de já ter sido carregada.
@@ -1188,7 +1194,11 @@ export default function Saida({
                     {isExpedicao && (
                       <>
                         <td className="px-5 py-3">
-                          {agendamento ? (
+                          {cancelada ? (
+                            <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap bg-red-50 text-red-700 border-red-300">
+                              Cancelado
+                            </span>
+                          ) : agendamento ? (
                             <span
                               className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap ${
                                 agendamento.tipo === 'encaixe' || agendamento.horario === 'encaixe'
@@ -1206,7 +1216,11 @@ export default function Saida({
                         </td>
                         <td className="px-5 py-3">
                           <span className="inline-flex items-center gap-1.5">
-                            {transporteRegistrado ? (
+                            {cancelada ? (
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-red-50 text-red-700 border-red-300">
+                                Cancelado
+                              </span>
+                            ) : transporteRegistrado ? (
                               <button
                                 type="button"
                                 onClick={() => setTransporteBooking(agendamento)}
@@ -1222,7 +1236,7 @@ export default function Saida({
                                 Pendente
                               </span>
                             )}
-                            {agendamento && !transporteRegistrado ? (
+                            {!cancelada && agendamento && !transporteRegistrado ? (
                               <button
                                 type="button"
                                 onClick={() => setTransporteBooking(agendamento)}
@@ -1243,7 +1257,7 @@ export default function Saida({
                     )}
                     <td className="px-5 py-3">
                       {cancelada ? (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-300">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-red-50 text-red-700 border-red-300">
                           Cancelado
                         </span>
                       ) : isExpedicao ? (

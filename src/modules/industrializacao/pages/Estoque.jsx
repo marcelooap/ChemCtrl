@@ -525,7 +525,7 @@ export default function Estoque() {
             estoqueItems={[]}
             industrializacaoStocks={items}
             skipIndustrializacaoFetch
-            description="Compare os saldos do Proteus com o estoque de matérias-primas da Industrialização (consolidado por lote, com cliente). Somente leitura — nenhum dado é alterado."
+            description="Compare os saldos do Proteus com o estoque ChemCtrl: matérias-primas da Industrialização e produtos do Transbordo (consolidado por lote, com cliente). Somente leitura — nenhum dado é alterado."
           />
         </div>
       ) : null}
