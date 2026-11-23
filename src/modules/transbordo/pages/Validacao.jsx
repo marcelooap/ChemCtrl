@@ -24,7 +24,10 @@ import { useToast } from "@shared/components/ui/use-toast";
 import { Can } from "@industrializacao/lib/rbac/Can";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { entities } from "@transbordo/services/entities";
-import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
+import {
+  ORIGEM_INDUSTRIALIZACAO,
+  listProdutos,
+} from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
@@ -33,6 +36,7 @@ import {
   atualizarValidacaoTransbordoPayload,
   efetivarValidacao,
   excluirValidacao,
+  filterValidacoesTransbordo,
   resumoQuantidadeValidacao,
 } from "@transbordo/lib/validacaoTransbordo";
 import { formatNum } from "@transbordo/lib/format";
@@ -191,14 +195,19 @@ export default function Validacao() {
       const { loadTransbordoWorkspaceLists } = await import(
         "@transbordo/services/transbordoWorkspace"
       );
-      const [vals, cliens, prods, isos, workspace] = await Promise.all([
+      const [vals, cliens, prods, prodsInd, isos, workspace] = await Promise.all([
         entities.transbordoValidacoes.list("-created_at"),
         entities.clientes.list("nome", { select: "id,nome,created_at" }),
         listProdutos({ modulo: "ARMAZENAGEM" }),
+        listProdutos({ origem: ORIGEM_INDUSTRIALIZACAO }),
         listTankas(),
         loadTransbordoWorkspaceLists(),
       ]);
-      setValidacoes(vals || []);
+      setValidacoes(
+        filterValidacoesTransbordo(vals || [], {
+          produtosIndustrializacaoOnly: prodsInd || [],
+        })
+      );
       setClientes(cliens || []);
       setProdutos(prods || []);
       setEntradas(workspace.estoque || []);

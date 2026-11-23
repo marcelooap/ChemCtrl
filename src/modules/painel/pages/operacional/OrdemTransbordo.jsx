@@ -55,6 +55,7 @@ import {
   filterProdutosByOrigem,
   isProdutoIndustrializacao,
   mergeClientesByNome,
+  resolveDestinoValidacaoOrdem,
   uniqueClientesByNome,
 } from "@painel/lib/recebimentoCatalog";
 import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
@@ -449,6 +450,7 @@ export default function OrdemTransbordo() {
   const produtoIndustrializacao = isProdutoIndustrializacao({
     id: produtoId,
     fonte: produtoFonte || produtoSelecionado?.fonte,
+    origem: produtoSelecionado?.origem,
   });
   const destinoEfetivo = produtoIndustrializacao
     ? "industrializacao"
@@ -558,6 +560,7 @@ export default function OrdemTransbordo() {
     moduloValidacaoRef.current = isProdutoIndustrializacao({
       id: nextId,
       fonte: nextFonte,
+      origem: item?.origem,
     })
       ? "industrializacao"
       : "convencional";
@@ -1257,9 +1260,11 @@ export default function OrdemTransbordo() {
       return;
     }
 
-    moduloValidacaoRef.current = produtoIndustrializacao
-      ? "industrializacao"
-      : "convencional";
+    moduloValidacaoRef.current = resolveDestinoValidacaoOrdem({
+      produtoId,
+      produtoFonte: produtoFonte || produtoSelecionado?.fonte,
+      produtoOrigem: produtoSelecionado?.origem,
+    });
 
     if (origemTipo === "granel") {
       const granelErr = validateGranel();
@@ -1339,14 +1344,15 @@ export default function OrdemTransbordo() {
       criadoPor,
     };
 
-    const destinoSave =
-      moduloValidacaoRef.current === "industrializacao" ||
-      produtoIndustrializacao ||
-      granelPayload?.origem === "industrializacao" ||
-      granelPayload?.origem === "MATERIA_PRIMA" ||
-      String(produtoId).startsWith("ind-")
-        ? "industrializacao"
-        : "convencional";
+    // Decide só pelo produto/payload atuais — evita ref sticky e produtos
+    // ARMAZENAGEM indo para ind_validacoes (Validação da Industrialização).
+    const destinoSave = resolveDestinoValidacaoOrdem({
+      produtoId,
+      produtoFonte: produtoFonte || produtoSelecionado?.fonte,
+      produtoOrigem: produtoSelecionado?.origem,
+      granelPayload,
+    });
+    moduloValidacaoRef.current = destinoSave;
     if (destinoSave === "industrializacao") {
       await criarValidacaoIndustrializacao(payload);
     } else {

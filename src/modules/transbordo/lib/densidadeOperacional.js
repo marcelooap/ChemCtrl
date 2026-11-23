@@ -7,7 +7,10 @@
  */
 
 import {
+  alignDestinosMassaToQuantidade,
   parseDensidade,
+  resolveMassaOperacionalKg,
+  resolvePesoLiquidoForaMargemDasOrigens,
   roundMass,
   roundVolume,
 } from "@transbordo/lib/format";
@@ -208,6 +211,10 @@ function massaFromEmbaladoVolumePersistido(qty, unidade) {
  *
  * Embalado em kg/lb: `volume_*` já é a massa persistida — nunca fazer
  * volume × densidade de novo (gera 1.500 L → 1.665 kg → 1.848 kg).
+ *
+ * Granel fora da margem: preserva o peso líquido da entrada quando o
+ * desvio vs L×dens é residual; alinha peso_liquido dos destinos para a
+ * soma fechar exatamente nessa massa operacional.
  */
 export function healTransbordoDensidadeMassaPatch(
   transbordo,
@@ -231,8 +238,20 @@ export function healTransbordoDensidadeMassaPatch(
   const massaAtual = roundMass(transbordo.massa_total || 0);
   const embaladoMassa = (transbordo.origens || []).some(isOrigemEmbaladoMassa);
 
-  const origens = (transbordo.origens || []).map((o) => {
+  const massaFromEntrada = embaladoMassa
+    ? 0
+    : resolvePesoLiquidoForaMargemDasOrigens(transbordo.origens, entradas);
+  const massaAlvo = embaladoMassa
+    ? null
+    : resolveMassaOperacionalKg({
+        volumeL: vol,
+        densidade: dens,
+        massaInformada: massaFromEntrada > 0 ? massaFromEntrada : massaAtual,
+      });
+
+  let origens = (transbordo.origens || []).map((o) => {
     const oVol = roundVolume(o.volume_retirado || 0);
+    // Granel: parte de L×dens; residual vs peso líquido é alinhado abaixo.
     const massa = isOrigemEmbaladoMassa(o)
       ? oVol > 0
         ? massaFromEmbaladoVolumePersistido(oVol, o.unidade_medida)
@@ -258,7 +277,7 @@ export function healTransbordoDensidadeMassaPatch(
     return { ...o, massa_retirada: massa, ...(lotes_retirados ? { lotes_retirados } : {}) };
   });
 
-  const destinos = (transbordo.destinos || []).map((d) => {
+  let destinos = (transbordo.destinos || []).map((d) => {
     const dVol = roundVolume(d.volume_total || d.volume || 0);
     const origemLinked = (origens || []).find(
       (o) => o?._uid && o._uid === d?.origem_uid
@@ -283,18 +302,58 @@ export function healTransbordoDensidadeMassaPatch(
     };
   });
 
-  const massaAlvo = embaladoMassa
+  const massaAlvoFinal = embaladoMassa
     ? roundMass(
         origens.reduce((s, o) => s + (Number(o.massa_retirada) || 0), 0) ||
           (vol > 0 ? massaFromEmbaladoVolumePersistido(vol, "kg") : massaAtual)
       )
-    : vol > 0
-      ? roundMass(vol * dens)
+    : massaAlvo > 0
+      ? massaAlvo
       : massaAtual;
+
+  // Granel: alinha residual L×dens → massa operacional (fora da margem).
+  if (!embaladoMassa && massaAlvoFinal > 0 && destinos.length > 0) {
+    const aligned = alignDestinosMassaToQuantidade(
+      destinos.map((d) => ({
+        ...d,
+        massa: Number(d.peso_liquido) || 0,
+      })),
+      massaAlvoFinal
+    );
+    destinos = aligned.map((d) => {
+      const { massa, ...rest } = d;
+      const peso = roundMass(massa);
+      return {
+        ...rest,
+        peso_liquido: peso,
+        peso_bruto: roundMass((Number(rest.tara) || 0) + peso),
+      };
+    });
+  }
+
+  // Origem única granel: massa_retirada = massa operacional do OP.
+  if (!embaladoMassa && massaAlvoFinal > 0 && origens.length === 1) {
+    origens = origens.map((o) => ({
+      ...o,
+      massa_retirada: massaAlvoFinal,
+    }));
+  } else if (!embaladoMassa && massaAlvoFinal > 0 && origens.length > 1) {
+    const alignedOrig = alignDestinosMassaToQuantidade(
+      origens.map((o) => ({
+        ...o,
+        massa: Number(o.massa_retirada) || 0,
+      })),
+      massaAlvoFinal
+    );
+    origens = alignedOrig.map(({ massa, ...rest }) => ({
+      ...rest,
+      massa_retirada: roundMass(massa),
+    }));
+  }
 
   const needsDens = densChanged(densAtual, dens) || !(densAtual > 0);
   const needsMassa =
-    Math.abs(massaAtual - massaAlvo) > 0.001 ||
+    Math.abs(massaAtual - massaAlvoFinal) > 0.001 ||
     !(massaAtual > 0) ||
     origens.some(
       (o, i) =>
@@ -315,7 +374,7 @@ export function healTransbordoDensidadeMassaPatch(
 
   return {
     densidade: String(dens),
-    massa_total: massaAlvo,
+    massa_total: massaAlvoFinal,
     origens,
     destinos,
   };

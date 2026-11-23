@@ -531,7 +531,7 @@ export async function persistTransbordo({
 
       // Normaliza volumes (até 3 casas) mantendo soma destino = soma origem
       const dens = parseDensidade(data.densidade);
-      const origens = (data.origens || []).map((o) => {
+      let origens = (data.origens || []).map((o) => {
         const lotesRet = (o.lotes_retirados || [])
           .map((l) => ({
             lote: l.lote || "",
@@ -641,7 +641,27 @@ export async function persistTransbordo({
           ? massaPayload
           : massaFromOrigens;
 
-      // Alinha peso_liquido dos destinos para não ultrapassar a massa operacional.
+      // Alinha massas das origens e destinos à massa operacional (fora da margem).
+      if (massa_total > 0 && origens.length > 0) {
+        if (origens.length === 1) {
+          origens[0] = {
+            ...origens[0],
+            massa_retirada: massa_total,
+          };
+        } else {
+          const alignedOrig = alignDestinosMassaToQuantidade(
+            origens.map((o) => ({
+              ...o,
+              massa: Number(o.massa_retirada) || 0,
+            })),
+            massa_total
+          );
+          origens = alignedOrig.map(({ massa, ...rest }) => ({
+            ...rest,
+            massa_retirada: roundMass(massa),
+          }));
+        }
+      }
       if (massa_total > 0 && destinos.length > 0) {
         const aligned = alignDestinosMassaToQuantidade(
           destinos.map((d) => ({

@@ -27,6 +27,8 @@ import {
   formatMass,
   parseDensidade,
   roundMass,
+  resolveMassaOperacionalKg,
+  resolvePesoLiquidoForaMargemDasOrigens,
   resolveVolumeMassaOperacional,
 } from "@transbordo/lib/format";
 import {
@@ -201,10 +203,25 @@ function resolveTransbordoVolumeMassaNumeros(
   }
 
   const densOk = parseDensidade(densidade) > 0;
+  const massaFromEntrada = resolvePesoLiquidoForaMargemDasOrigens(
+    transbordo?.origens,
+    entradas
+  );
+  // Preserva massa operacional (peso líquido fora da margem / residual L×dens).
+  // Só força L×dens quando não há massa informada coerente.
+  const massaOperacional = resolveMassaOperacionalKg({
+    volumeL: vol,
+    densidade,
+    massaInformada: massaFromEntrada > 0 ? massaFromEntrada : mass,
+  });
   const resolved = resolveVolumeMassaOperacional({
     volume: vol,
-    // Recalcula pela dens da entrada quando o OP ficou sem massa ou dens errada.
-    massa: densOk ? 0 : mass,
+    massa:
+      massaOperacional > 0
+        ? massaOperacional
+        : densOk
+          ? 0
+          : mass,
     densidade,
   });
   return { volumeL: resolved.volume, massaKg: resolved.massa };

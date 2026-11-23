@@ -8,6 +8,10 @@ import {
   kgToLoteUnidade,
 } from "@transbordo/lib/conversao";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
+import {
+  ORIGEM_INDUSTRIALIZACAO,
+  produtoIdentityKey,
+} from "@transbordo/lib/cadastroProdutosCentral";
 
 /**
  * Validação de operações vindas da Ordem de Transbordo.
@@ -370,6 +374,31 @@ export function buildEnvaseEditModelFromValidacao(validacao) {
     granelPayload: isGranel && granel ? granel : null,
     initialPayload: tp,
   };
+}
+
+/**
+ * Validação do Transbordo/Armazenagem: exclui produtos cadastrados só na
+ * Industrialização (matéria-prima Ind). Esses ficam em /validacao (Ind).
+ */
+export function filterValidacoesTransbordo(
+  validacoes,
+  { produtosIndustrializacaoOnly = [] } = {}
+) {
+  const blocked = new Set(
+    (produtosIndustrializacaoOnly || [])
+      .filter(
+        (p) =>
+          String(p?.origem || "").toUpperCase() === ORIGEM_INDUSTRIALIZACAO
+      )
+      .map((p) => produtoIdentityKey(p.codigo, p.produto))
+      .filter((k) => k !== "|")
+  );
+  if (!blocked.size) return validacoes || [];
+  return (validacoes || []).filter((v) => {
+    const key = produtoIdentityKey(v?.produto_codigo, v?.produto_nome);
+    if (key === "|") return true;
+    return !blocked.has(key);
+  });
 }
 
 /**

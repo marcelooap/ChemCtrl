@@ -162,6 +162,55 @@ export function resolveMassaOperacionalKg({
 }
 
 /**
+ * Peso líquido de entradas granel fora da margem ligadas às origens.
+ * Deduplica pela entrada-pai (multi-lote não soma o mesmo ticket N vezes).
+ */
+export function resolvePesoLiquidoForaMargemDasOrigens(
+  origens = [],
+  entradas = []
+) {
+  if (!Array.isArray(origens) || origens.length === 0) return 0;
+  if (!Array.isArray(entradas) || entradas.length === 0) return 0;
+
+  const byId = new Map();
+  for (const e of entradas) {
+    if (e?.id != null && e.id !== "") byId.set(String(e.id), e);
+  }
+
+  const seenParent = new Set();
+  let total = 0;
+  let found = false;
+
+  for (const o of origens) {
+    const oid = o?.entrada_id != null ? String(o.entrada_id) : "";
+    if (!oid) continue;
+
+    let ent = byId.get(oid) || null;
+    if (!ent) {
+      ent =
+        entradas.find(
+          (e) => e?.entrada_id != null && String(e.entrada_id) === oid
+        ) || null;
+    }
+    if (!ent) continue;
+    if (String(ent.granel_margem || "").trim().toLowerCase() !== "fora") {
+      continue;
+    }
+
+    const parentKey = String(ent.entrada_id || ent.id || oid);
+    if (seenParent.has(parentKey)) continue;
+    seenParent.add(parentKey);
+
+    const pl = Number(ent.granel_peso_liquido);
+    if (!(Number.isFinite(pl) && pl > 0)) continue;
+    total = roundMass(total + pl);
+    found = true;
+  }
+
+  return found ? total : 0;
+}
+
+/**
  * Formata número no padrão PT-BR.
  * @param {number|string} v
  * @param {number} decimals — casas decimais (0 = inteiro com milhar)

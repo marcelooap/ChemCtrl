@@ -118,7 +118,9 @@ function catalogByIdentity(produtosCatalog) {
 
 function isOrigemInd(origem) {
   const o = String(origem || "").toUpperCase();
-  return o === ORIGEM_INDUSTRIALIZACAO || o === ORIGEM_AMBOS || !o;
+  // Origem vazia/nula NÃO é Industrialização — evita MP falsa e roteamento
+  // errado para ind_validacoes de produtos só de Armazenagem/Transbordo.
+  return o === ORIGEM_INDUSTRIALIZACAO || o === ORIGEM_AMBOS;
 }
 
 /**
@@ -384,14 +386,55 @@ export function filterProdutosArmazenagem(produtosCatalog = []) {
 /**
  * Matéria-prima (ou produto acabado) vinda do cadastro da Industrialização.
  * Esses itens devem ir para a validação da Industrialização, nunca do Transbordo.
+ *
+ * Regras:
+ * - fonte "transbordo" ou origem ARMAZENAGEM → nunca Ind
+ * - fonte "industrializacao" (opção MP no granel) → Ind, salvo ARMAZENAGEM pura
+ * - id sintético ind-* → Ind
+ * - origem INDUSTRIALIZACAO (cadastro) → Ind
+ * - AMBOS só conta como Ind quando a opção foi marcada como MP (fonte)
  */
 export function isProdutoIndustrializacao(produto) {
   if (!produto) return false;
-  if (produto.fonte === "industrializacao") return true;
+  const fonte = String(produto.fonte || "").toLowerCase();
+  const o = String(produto.origem || "").toUpperCase();
+  if (fonte === "transbordo" || o === ORIGEM_ARMAZENAGEM) return false;
+  if (fonte === "industrializacao") return true;
   const id = String(produto.id || produto.produto_id || "");
   if (id.startsWith("ind-")) return true;
-  const o = String(produto.origem || "").toUpperCase();
   return o === ORIGEM_INDUSTRIALIZACAO;
+}
+
+/**
+ * Destino da validação na Ordem de Transbordo / fluxos operacionais.
+ * Não usa ref sticky: decide só pelo produto selecionado e marcadores do payload.
+ */
+export function resolveDestinoValidacaoOrdem({
+  produtoId,
+  produtoFonte,
+  produtoOrigem,
+  granelPayload = null,
+} = {}) {
+  const origem = String(produtoOrigem || "").toUpperCase();
+  if (origem === ORIGEM_ARMAZENAGEM) return "convencional";
+
+  const produto = {
+    id: produtoId,
+    fonte: produtoFonte,
+    origem: produtoOrigem,
+  };
+  if (isProdutoIndustrializacao(produto)) return "industrializacao";
+
+  const payloadOrigem = String(granelPayload?.origem || "").toLowerCase();
+  if (
+    payloadOrigem === "industrializacao" ||
+    payloadOrigem === "materia_prima"
+  ) {
+    return "industrializacao";
+  }
+
+  if (String(produtoId || "").startsWith("ind-")) return "industrializacao";
+  return "convencional";
 }
 
 /**

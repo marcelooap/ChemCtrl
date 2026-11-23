@@ -13,6 +13,10 @@ import {
   granelPesagemFields,
   linkExistingEntradaToMp,
 } from "@industrializacao/lib/syncMpEntradaTransbordo";
+import {
+  ORIGEM_INDUSTRIALIZACAO,
+  produtoIdentityKey,
+} from "@transbordo/lib/cadastroProdutosCentral";
 
 const nullIfEmpty = (v) => (v === "" || v === undefined ? null : v);
 
@@ -46,6 +50,59 @@ function resumoFromPayload(payload) {
 
 export function parseEntradaPayload(payload) {
   return asObject(payload) || payload || null;
+}
+
+/**
+ * Validação da Industrialização: só matéria-prima / produtos do módulo Ind.
+ * Produtos cadastrados apenas em Armazenagem (Transbordo) ficam de fora —
+ * devem aparecer só em /chemflow/validacao.
+ */
+export function belongsToValidacaoIndustrializacao(
+  validacao,
+  { produtosInd = [], produtosArmazenagemOnly = [] } = {}
+) {
+  if (!validacao) return false;
+  const key = produtoIdentityKey(
+    validacao.produto_codigo,
+    validacao.produto_nome
+  );
+
+  const armOnly = new Set(
+    (produtosArmazenagemOnly || [])
+      .map((p) => produtoIdentityKey(p.codigo, p.produto))
+      .filter((k) => k !== "|")
+  );
+  if (key !== "|" && armOnly.has(key)) return false;
+
+  // Cadastro puro de Industrialização (matéria-prima / PA Ind).
+  const indKeys = new Set(
+    (produtosInd || [])
+      .filter(
+        (p) => String(p?.origem || "").toUpperCase() === ORIGEM_INDUSTRIALIZACAO
+      )
+      .map((p) => produtoIdentityKey(p.codigo, p.produto))
+      .filter((k) => k !== "|")
+  );
+  if (key !== "|" && indKeys.has(key)) return true;
+
+  // AMBOS / legado: só entra se o payload marcar destino Industrialização/MP.
+  const payload = parseEntradaPayload(validacao.entrada_payload);
+  const payloadOrigem = String(payload?.origem || "").toLowerCase();
+  return (
+    payloadOrigem === "industrializacao" || payloadOrigem === "materia_prima"
+  );
+}
+
+export function filterValidacoesIndustrializacao(
+  validacoes,
+  { produtosInd = [], produtosArmazenagemOnly = [] } = {}
+) {
+  return (validacoes || []).filter((v) =>
+    belongsToValidacaoIndustrializacao(v, {
+      produtosInd,
+      produtosArmazenagemOnly,
+    })
+  );
 }
 
 export function isValidacaoIndEntrada(validacao) {

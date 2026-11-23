@@ -24,6 +24,7 @@ import SearchableSelect from "@transbordo/components/cadastro/SearchableSelect";
 import OrigemCard from "./OrigemCard";
 import DestinoCard from "./DestinoCard";
 import {
+  distributeByWeights,
   formatVolume,
   formatMass,
   parseDensidade,
@@ -32,6 +33,7 @@ import {
   kgLotesToLitrosInteiros,
   qtdEmbalagensFromVolume,
   litrosFromMassaKg,
+  resolveMassaOperacionalKg,
 } from "@transbordo/lib/format";
 import { loteToKg, loteToLitros, saldoKgToLitros, applyPesoLiquidoForaMargem } from "@transbordo/lib/conversao";
 import {
@@ -484,10 +486,27 @@ export default function TransbordoModal({
         return fromKg[i] || 0;
       });
 
+      // Fora da margem: rateia o peso líquido entre lotes (soma === ticket).
+      const porcoesMassaForaMargem =
+        prefillEntrada.granel_margem === "fora" && pesoLiqPesagem > 0
+          ? distributeByWeights(
+              roundMass(pesoLiqPesagem),
+              lotesKg.map((item) => item.quantidade_kg || 0)
+            )
+          : null;
+
       nextOrigens = ensureOrigemUids(
         lotesKg.map((item, i) => {
           const volumeL = litrosPorLote[i] || 0;
           const lDens = item.densidade || dens;
+          const massaOperacional =
+            porcoesMassaForaMargem != null
+              ? roundMass(porcoesMassaForaMargem[i] || 0)
+              : resolveMassaOperacionalKg({
+                  volumeL,
+                  densidade: lDens,
+                  massaInformada: item.quantidade_kg,
+                });
           return {
             tipo_origem: "entrada",
             entrada_id: item.estoqueRow?.id || prefillEntrada.id,
@@ -496,7 +515,10 @@ export default function TransbordoModal({
             // Entrada kg ou L: formulário já normaliza para litros.
             unidade_medida: "L",
             volume_retirado: volumeL,
-            massa_retirada: roundMass(volumeL * lDens),
+            massa_retirada:
+              massaOperacional > 0
+                ? massaOperacional
+                : roundMass(volumeL * lDens),
             saldo_restante: 0,
             saldo_disponivel: volumeL,
           };
@@ -946,19 +968,41 @@ export default function TransbordoModal({
       .filter(Boolean);
   };
 
-  // Formulário operacional sempre em L; massa = L × densidade.
+  // Formulário operacional sempre em L; massa operacional preserva residual
+  // (peso líquido fora da margem) quando coerente com L×densidade.
   const volumeOrigens = roundVolume(
     origens.reduce((sum, o) => sum + (o.volume_retirado || 0), 0)
   );
   const volumeDestinos = roundVolume(
     destinos.reduce((sum, d) => sum + (d.volume_total || d.volume || 0), 0)
   );
-  const massaTotal = roundMass(
+  const massaFromOrigens = roundMass(
     origens.reduce((sum, o) => {
       const vol = Number(o.volume_retirado) || 0;
-      return sum + (densidade > 0 ? vol * densidade : 0);
+      const fromVol = densidade > 0 ? roundMass(vol * densidade) : 0;
+      const informed = roundMass(o.massa_retirada || 0);
+      return (
+        sum +
+        resolveMassaOperacionalKg({
+          volumeL: vol,
+          densidade,
+          massaInformada: informed > 0 ? informed : fromVol,
+        })
+      );
     }, 0)
   );
+  const massaFromPrefill =
+    prefillEntrada?.granel_margem === "fora"
+      ? roundMass(prefillEntrada.granel_peso_liquido || 0)
+      : editingTransbordo?.massa_total
+        ? roundMass(editingTransbordo.massa_total)
+        : 0;
+  const massaTotal = resolveMassaOperacionalKg({
+    volumeL: volumeOrigens,
+    densidade,
+    massaInformada:
+      massaFromPrefill > 0 ? massaFromPrefill : massaFromOrigens,
+  });
   const embaladoSemDensidade = origens.some(
     (o) =>
       (o?.tipo_origem === "embalado" || o?.embalado) && !(densidade > 0)
@@ -1276,7 +1320,11 @@ export default function TransbordoModal({
         ? normalizeUnidadeEntrada(um) === "lb"
           ? roundMass(volumePersistido * 0.453592)
           : roundMass(volumePersistido)
-        : roundMass(volumeFormL * densidade);
+        : resolveMassaOperacionalKg({
+            volumeL: volumeFormL,
+            densidade,
+            massaInformada: o.massa_retirada,
+          });
 
       const firstLote =
         lotesComVolume[0]?.lote || o.lote || "";

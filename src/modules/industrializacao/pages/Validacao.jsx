@@ -17,7 +17,10 @@ import { Can } from "@industrializacao/lib/rbac/Can";
 import { useInternalAuth } from "@/lib/InternalAuthContext";
 import { base44 } from "@industrializacao/api/base44Client";
 import { entities } from "@transbordo/services/entities";
-import { listProdutos } from "@transbordo/lib/cadastroProdutosCentral";
+import {
+  ORIGEM_ARMAZENAGEM,
+  listProdutos,
+} from "@transbordo/lib/cadastroProdutosCentral";
 import { listTankas } from "@transbordo/lib/cadastroTankaCentral";
 import EntradaModal from "@transbordo/components/entrada/EntradaModal";
 import ValidacaoViewDialog from "@transbordo/components/validacao/ValidacaoViewDialog";
@@ -26,6 +29,7 @@ import {
   atualizarValidacaoIndustrializacao,
   efetivarValidacaoIndustrializacao,
   excluirValidacaoIndustrializacao,
+  filterValidacoesIndustrializacao,
   isValidacaoIndEntrada,
   parseEntradaPayload,
   resumoQuantidadeValidacaoInd,
@@ -97,16 +101,27 @@ export default function ValidacaoIndustrializacao() {
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [vals, cliens, prods, ents, isos, vascs, trans] = await Promise.all([
-        base44.entities.IndValidacao.list("-created_date"),
-        entities.clientes.list(),
-        listProdutos({ modulo: "INDUSTRIALIZACAO" }),
-        entities.estoque.list(),
-        listTankas(),
-        entities.vasilhames.list(),
-        entities.transbordos.list("-created_at"),
-      ]);
-      setValidacoes(vals || []);
+      const [vals, cliens, prods, prodsArm, ents, isos, vascs, trans] =
+        await Promise.all([
+          base44.entities.IndValidacao.list("-created_date"),
+          entities.clientes.list(),
+          listProdutos({ modulo: "INDUSTRIALIZACAO" }),
+          listProdutos({ origem: ORIGEM_ARMAZENAGEM }),
+          entities.estoque.list(),
+          listTankas(),
+          entities.vasilhames.list(),
+          entities.transbordos.list("-created_at"),
+        ]);
+      // Só MP / produtos Ind — oculta itens de Armazenagem gravados por engano.
+      const armOnly = (prodsArm || []).filter(
+        (p) => String(p?.origem || "").toUpperCase() === ORIGEM_ARMAZENAGEM
+      );
+      setValidacoes(
+        filterValidacoesIndustrializacao(vals || [], {
+          produtosInd: prods || [],
+          produtosArmazenagemOnly: armOnly,
+        })
+      );
       setClientes(cliens || []);
       setProdutos(prods || []);
       setEntradas(ents || []);
