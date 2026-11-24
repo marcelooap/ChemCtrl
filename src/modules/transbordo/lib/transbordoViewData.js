@@ -707,6 +707,45 @@ export function transbordoPdfFileName(codigo) {
   return `${safe || "Transbordo"}.pdf`;
 }
 
+/**
+ * Volume operacional do transbordo em litros (mesma regra do modal de visualização).
+ * Embalado em kg/lb persiste volume_* em massa — converte ÷ densidade → L.
+ */
+export function resolveTransbordoVolumeLitros(
+  transbordo,
+  { produtos = [], entradas = [] } = {}
+) {
+  if (!transbordo) return 0;
+
+  const unidade = resolveUnidadeTransbordo(transbordo, produtos, entradas);
+  const densOperacao = resolveDensOperacao(transbordo, produtos, entradas);
+  const dens = densOperacao || parseDensidade(transbordo.densidade);
+  const volRaw = Number(transbordo.volume_total ?? transbordo.volume) || 0;
+
+  if (isUnidadeVolumeEntrada(unidade)) {
+    return roundVolume(volRaw);
+  }
+
+  if (isUnidadeMassaEntrada(unidade)) {
+    if (!(volRaw > 0)) return 0;
+    // Sem densidade não dá para converter kg→L; mantém o persistido.
+    if (!(dens > 0)) return roundVolume(volRaw);
+    const massa = massaEmbaladoCanonico(
+      volRaw,
+      transbordo.massa_total,
+      dens
+    );
+    return roundVolume(litrosFromMassaKg(massa, dens));
+  }
+
+  const totais = resolveVolumeMassaOperacional({
+    volume: 0,
+    massa: Number(transbordo.massa_total) || volRaw || 0,
+    densidade: dens,
+  });
+  return totais.volume > 0 ? totais.volume : roundVolume(volRaw);
+}
+
 /** Mesmos dados e formatação do modal de visualização do transbordo. */
 export function buildTransbordoViewModel({
   transbordo,
@@ -786,22 +825,16 @@ export function buildTransbordoViewModel({
       densOperacao,
       massaOperacionalKg: isVolume ? massaTotalKg : 0,
     }),
-    // Granel: volume_total já é L. Embalado em massa: volume_* é kg.
-    volumeTotal: isVolume
-      ? `${formatVolume(transbordo.volume_total, { empty: "-" })} L`
-      : isMassa
-        ? volumeLitrosDisplay(
-            massaEmbaladoCanonico(
-              transbordo.volume_total,
-              transbordo.massa_total,
-              densOperacao || transbordo.densidade
-            ),
-            densOperacao || transbordo.densidade,
-            true
-          )
-        : totaisResolvidos.volume > 0
-          ? `${formatVolume(totaisResolvidos.volume, { empty: "-" })} L`
-          : "-",
+    // Granel: volume_total já é L. Embalado em massa: volume_* é kg → L.
+    volumeTotal: (() => {
+      const litros = resolveTransbordoVolumeLitros(transbordo, {
+        produtos,
+        entradas,
+      });
+      return litros > 0
+        ? `${formatVolume(litros, { empty: "-" })} L`
+        : "-";
+    })(),
     massaCaption: isMassa ? "Quantidade Total" : "Massa Total",
     massaTotal: isMassa
       ? `${formatQtyOperacional(

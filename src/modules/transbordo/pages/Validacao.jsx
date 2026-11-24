@@ -548,8 +548,8 @@ export default function Validacao() {
             <colgroup>
               <col className="w-[72px]" />
               <col className="w-[12%]" />
-              <col className="w-[9%]" />
-              <col className="w-[18%]" />
+              <col className="w-[170px]" />
+              <col className="w-[16%]" />
               <col className="w-[14%]" />
               <col className="w-[9%]" />
               <col className="w-[11%]" />
@@ -618,7 +618,7 @@ export default function Validacao() {
                     >
                       <td className="px-3 py-3 align-middle font-semibold text-primary whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
-                          #{formatNumero(v.numero)}
+                          {formatNumero(v.numero)}
                           {isNew(v.id) ? (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none bg-primary/10 text-primary">
                               Novo
@@ -634,13 +634,13 @@ export default function Validacao() {
                           {v.criado_por_nome || "-"}
                         </span>
                       </td>
-                      <td className="px-3 py-3 align-middle">
+                      <td className="px-3 py-3 align-middle whitespace-nowrap">
                         {origemBadges.length > 0 ? (
-                          <div className="flex flex-wrap items-center gap-1">
+                          <div className="flex flex-nowrap items-center gap-1">
                             {origemBadges.map((b) => (
                               <span
                                 key={b.key}
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${b.badgeClass}`}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${b.badgeClass}`}
                               >
                                 {b.label}
                               </span>

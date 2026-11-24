@@ -41,6 +41,12 @@ import {
   isVasilhameLegadoEmbalado,
   labelTipoEmbalagem,
 } from "@transbordo/lib/tiposEmbalagem";
+import {
+  OPERACAO,
+  OPERACAO_LABEL_KEY,
+  ORIGEM_FLUXO,
+  resolveOperacao,
+} from "@painel/lib/quitacaoOt";
 
 const OT_BASE_PATH = "/painel/operacional/ordem-transbordo";
 const RECEBIMENTO_BASE_PATH = "/painel/logistica/recebimento";
@@ -496,6 +502,44 @@ function buildDocumentId(validacao) {
   return `OT-${numero || "0000"}`;
 }
 
+/**
+ * Flag `filtrado` do cadastro — mesma base usada na coluna Operação da Quitação OT
+ * para distinguir Filtração de Convencional.
+ */
+async function resolveProdutoFiltrado(record) {
+  const produtoId = record?.produto_id;
+  const produtoCodigo = String(record?.produto_codigo || "").trim();
+  try {
+    if (produtoId != null && produtoId !== "") {
+      const row = await entities.produtos.get(produtoId);
+      if (row) return Boolean(row.filtrado);
+    }
+    if (produtoCodigo) {
+      const rows = await entities.produtos.filter({ codigo: produtoCodigo });
+      if (Array.isArray(rows) && rows[0]) return Boolean(rows[0].filtrado);
+    }
+  } catch {
+    /* cadastro indisponível: assume não filtrado (Convencional) */
+  }
+  return false;
+}
+
+/**
+ * Classifica a OT com a mesma regra da Quitação OT (coluna Operação).
+ * Convencional (ChemFlow) → transbordo; Industrialização (Ind) → transbordo_ind.
+ */
+function resolveOperacaoRelatorio({ destino, origens, produtoFiltrado }) {
+  const origemFluxo =
+    destino === "industrializacao"
+      ? ORIGEM_FLUXO.TRANSBORDO_IND
+      : ORIGEM_FLUXO.TRANSBORDO;
+  return resolveOperacao({
+    origem_fluxo: origemFluxo,
+    origens,
+    produto_filtrado: Boolean(produtoFiltrado),
+  });
+}
+
 export default function OrdemTransbordoRelatorio() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -507,6 +551,7 @@ export default function OrdemTransbordoRelatorio() {
   );
 
   const [validacao, setValidacao] = useState(null);
+  const [produtoFiltrado, setProdutoFiltrado] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [emissao] = useState(() => new Date());
@@ -517,6 +562,7 @@ export default function OrdemTransbordoRelatorio() {
     async function load() {
       setLoading(true);
       setError("");
+      setProdutoFiltrado(false);
       try {
         const record =
           destino === "industrializacao"
@@ -529,11 +575,17 @@ export default function OrdemTransbordoRelatorio() {
           return;
         }
         setValidacao(record);
+        // Filtração só se aplica a OTs ChemFlow (Quitação OT / resolveOperacao).
+        if (destino !== "industrializacao") {
+          const filtrado = await resolveProdutoFiltrado(record);
+          if (active) setProdutoFiltrado(filtrado);
+        }
       } catch (err) {
         console.error("[OrdemTransbordoRelatorio] load:", err);
         if (active) {
           setError(t("painel.operacional.ordemTransbordo.relatorio.loadError"));
           setValidacao(null);
+          setProdutoFiltrado(false);
         }
       } finally {
         if (active) setLoading(false);
@@ -757,6 +809,18 @@ export default function OrdemTransbordoRelatorio() {
 
   const observacoes = String(transbordo?.observacoes || "").trim();
 
+  const operacao = resolveOperacaoRelatorio({
+    destino,
+    origens,
+    produtoFiltrado,
+  });
+  const operacaoLabel = t(
+    OPERACAO_LABEL_KEY[operacao] || OPERACAO_LABEL_KEY[OPERACAO.CONVENCIONAL]
+  );
+  const reportTitle = `${t(
+    "painel.operacional.ordemTransbordo.relatorio.title"
+  )} — ${operacaoLabel}`;
+
   return (
     <A4Viewer
       toolbar={
@@ -778,7 +842,7 @@ export default function OrdemTransbordoRelatorio() {
       <A4Sheet>
         <ReportHeader
           organization={t("painel.operacional.ordemTransbordo.relatorio.organization")}
-          title={t("painel.operacional.ordemTransbordo.relatorio.title")}
+          title={reportTitle}
           subtitle={t("painel.operacional.ordemTransbordo.relatorio.subtitle", {
             data: fmtDateTime(emissao),
           })}

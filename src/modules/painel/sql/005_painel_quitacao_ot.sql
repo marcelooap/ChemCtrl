@@ -41,6 +41,69 @@ BEGIN
 END;
 $$;
 
+-- Volume do transbordo ChemFlow em litros.
+-- Embalado (ou legado) em kg/lb persiste volume_* em massa → ÷ densidade.
+CREATE OR REPLACE FUNCTION painel_quitacao_ot_volume_litros(
+  p_volume_total numeric,
+  p_massa_total numeric,
+  p_densidade text,
+  p_origens jsonb
+)
+RETURNS numeric
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_origens jsonb := painel_quitacao_ot_as_array(p_origens);
+  v_elem jsonb;
+  v_tipo text;
+  v_um text;
+  v_embalado boolean;
+  v_em_massa boolean := false;
+  v_dens numeric := 0;
+  v_vol numeric := COALESCE(p_volume_total, 0);
+  v_massa numeric := COALESCE(NULLIF(p_massa_total, 0), v_vol);
+  v_dens_txt text;
+BEGIN
+  IF v_vol <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  v_dens_txt := NULLIF(btrim(COALESCE(p_densidade, '')), '');
+  IF v_dens_txt IS NOT NULL THEN
+    BEGIN
+      v_dens := replace(v_dens_txt, ',', '.')::numeric;
+    EXCEPTION WHEN others THEN
+      v_dens := 0;
+    END;
+  END IF;
+
+  FOR v_elem IN SELECT value FROM jsonb_array_elements(v_origens)
+  LOOP
+    v_tipo := lower(NULLIF(btrim(COALESCE(v_elem->>'tipo_origem', v_elem->>'tipo')), ''));
+    v_um := lower(NULLIF(btrim(COALESCE(v_elem->>'unidade_medida', '')), ''));
+    v_embalado :=
+      v_tipo IN ('embalado', 'ibc', 'bombona', 'tambor')
+      OR COALESCE((v_elem->>'embalado')::boolean, false);
+
+    -- Só embalado em massa (kg/lb; default kg). Granel já persiste volume em L.
+    IF v_embalado THEN
+      IF v_um IS NULL OR v_um = ''
+         OR v_um IN ('kg', 'kgs', 'quilo', 'quilos', 'lb', 'lbs', 'libra', 'libras') THEN
+        v_em_massa := true;
+        EXIT;
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF v_em_massa AND v_dens > 0 THEN
+    RETURN ROUND(v_massa / v_dens);
+  END IF;
+
+  RETURN v_vol;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION painel_quitacao_ot_list(
   p_search text DEFAULT NULL,
   p_cliente text DEFAULT NULL,
@@ -72,6 +135,11 @@ DECLARE
   END;
   v_total bigint := 0;
   v_rows jsonb := '[]'::jsonb;
+  v_totals jsonb := jsonb_build_object(
+    'industrializacao', 0,
+    'filtracao', 0,
+    'convencional', 0
+  );
 BEGIN
   v_offset := (v_page - 1) * v_size;
 
@@ -85,7 +153,16 @@ BEGIN
       COALESCE(NULLIF(btrim(t.produto_codigo), ''), '') AS produto_codigo,
       COALESCE(NULLIF(btrim(t.produto_nome), ''), '') AS produto_nome,
       COALESCE(NULLIF(btrim(t.cliente_nome), ''), '') AS cliente,
-      COALESCE(t.volume_total, 0)::numeric AS volume,
+      -- Embalado em kg/lb: volume_total é massa — converte para L (cards + tabela).
+      painel_quitacao_ot_volume_litros(
+        t.volume_total,
+        t.massa_total,
+        t.densidade::text,
+        t.origens
+      ) AS volume,
+      COALESCE(t.volume_total, 0)::numeric AS volume_total,
+      t.massa_total::numeric AS massa_total,
+      NULLIF(btrim(COALESCE(t.densidade::text, '')), '') AS densidade,
       painel_quitacao_ot_as_array(t.operadores) AS operadores,
       painel_quitacao_ot_as_array(t.origens) AS origens_json,
       painel_quitacao_ot_as_array(t.destinos) AS destinos_json,
@@ -159,6 +236,9 @@ BEGIN
         THEN p.volume_apontado::numeric
         ELSE COALESCE(p.volume, 0)::numeric
       END AS volume,
+      NULL::numeric AS volume_total,
+      NULL::numeric AS massa_total,
+      NULL::text AS densidade,
       CASE
         WHEN NULLIF(btrim(p.operator), '') IS NULL THEN '[]'::jsonb
         ELSE jsonb_build_array(btrim(p.operator))
@@ -231,6 +311,9 @@ BEGIN
           FROM jsonb_array_elements(painel_quitacao_ot_as_array(tr.origins)) o(elem)
         ), 0)
       END AS volume,
+      NULL::numeric AS volume_total,
+      NULL::numeric AS massa_total,
+      NULL::text AS densidade,
       CASE
         WHEN NULLIF(btrim(tr.operator), '') IS NULL THEN '[]'::jsonb
         ELSE jsonb_build_array(btrim(tr.operator))
@@ -362,6 +445,9 @@ BEGIN
             'produto_nome', p.produto_nome,
             'cliente', p.cliente,
             'volume', p.volume,
+            'volume_total', p.volume_total,
+            'massa_total', p.massa_total,
+            'densidade', p.densidade,
             'operadores', p.operadores,
             'lote', p.lote_text,
             'origens', p.origens_json,
@@ -384,15 +470,23 @@ BEGIN
         FROM page p
       ),
       '[]'::jsonb
+    ),
+    COALESCE(
+      (SELECT payload FROM totals),
+      jsonb_build_object(
+        'industrializacao', 0,
+        'filtracao', 0,
+        'convencional', 0
+      )
     )
-  INTO v_total, v_rows;
+  INTO v_total, v_rows, v_totals;
 
   RETURN jsonb_build_object(
     'rows', v_rows,
     'total', v_total,
     'page', v_page,
     'page_size', v_size,
-    'totals', COALESCE((SELECT payload FROM totals), jsonb_build_object(
+    'totals', COALESCE(v_totals, jsonb_build_object(
       'industrializacao', 0,
       'filtracao', 0,
       'convencional', 0
@@ -402,6 +496,8 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION painel_quitacao_ot_as_array(jsonb) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION painel_quitacao_ot_volume_litros(numeric, numeric, text, jsonb)
+  TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION painel_quitacao_ot_list(text, text, date, date, integer, integer, text)
   TO anon, authenticated;
 

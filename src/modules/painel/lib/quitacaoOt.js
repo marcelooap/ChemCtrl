@@ -9,6 +9,7 @@ import {
   CHEMFLOW_CONFIG_ERROR,
 } from '@/services/supabase/chemflow';
 import { DEFAULT_PAGE_SIZE, clampPageSize } from '@shared/lib/pagination';
+import { resolveTransbordoVolumeLitros } from '@transbordo/lib/transbordoViewData';
 
 export const ORIGEM_FLUXO = Object.freeze({
   TRANSBORDO: 'transbordo',
@@ -170,6 +171,17 @@ export function resolveVolumeQuitacao(raw) {
       }
       if (hasQty && sum > 0) return sum;
     }
+  }
+
+  // ChemFlow: volume_* embalado em kg/lb → litros (igual ao modal de visualização).
+  if (origem === ORIGEM_FLUXO.TRANSBORDO) {
+    return resolveTransbordoVolumeLitros({
+      volume_total: raw?.volume_total ?? raw?.volume,
+      volume: raw?.volume,
+      massa_total: raw?.massa_total,
+      densidade: raw?.densidade,
+      origens: raw?.origens ?? raw?.origins,
+    });
   }
 
   // Transbordo Ind (ex.: Expedição): header.volume pode ficar 0 — soma destinos/origens.
@@ -508,7 +520,7 @@ async function listQuitacaoOtFallback({
         let b = chemflowSupabase
           .from('t_transbordos')
           .select(
-            'id,codigo_transbordo,data,produto_id,produto_codigo,produto_nome,cliente_nome,volume_total,operadores,origens,destinos'
+            'id,codigo_transbordo,data,produto_id,produto_codigo,produto_nome,cliente_nome,volume_total,massa_total,densidade,operadores,origens,destinos'
           )
           .order('data', { ascending: false });
         if (dateFrom) b = b.gte('data', dateFrom);
@@ -622,6 +634,9 @@ async function listQuitacaoOtFallback({
         produto_filtrado: filtrado,
         cliente: t.cliente_nome,
         volume: t.volume_total,
+        volume_total: t.volume_total,
+        massa_total: t.massa_total,
+        densidade: t.densidade,
         operadores: t.operadores,
         origens: t.origens,
         destinos: t.destinos,
