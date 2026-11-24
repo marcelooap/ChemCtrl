@@ -69,7 +69,17 @@ export async function buildEstoqueView(
           e,
           entradasPorId.get(String(e?.entrada_id))
         )
-    );
+    )
+    // Ordem estável: entradas antigas reivindicam o tanque primeiro no
+    // claimedLitersByVasilhameId (evita Saldo Tanque fantasma no agregado).
+    .sort((a, b) => {
+      const ca = Number(a?.codigo_estoque) || 0;
+      const cb = Number(b?.codigo_estoque) || 0;
+      if (ca !== cb) return ca - cb;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    });
+
+  saldoCtx.claimedLitersByVasilhameId.clear();
 
   const estoque = [];
   for (let i = 0; i < baseRows.length; i += 1) {

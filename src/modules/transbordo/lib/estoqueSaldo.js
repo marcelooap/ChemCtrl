@@ -1470,6 +1470,13 @@ export function createEstoqueSaldoContext(
     chainByEstoqueId: new Map(),
     /** @type {Map<string, Set<string>>} */
     tankaIdsByVasilhameId: new Map(),
+    /**
+     * Litros já atribuídos a cada vasilhame No Pátio neste ctx.
+     * Evita que entradas irmãs (mesmo produto/cliente) somem o tanque
+     * inteiro mais de uma vez no consolidado de Saldo Tanque.
+     * @type {Map<string, number>}
+     */
+    claimedLitersByVasilhameId: new Map(),
   };
 }
 
@@ -2640,6 +2647,54 @@ function resolveQuantidadeEstoqueNoVasilhame(
 }
 
 /**
+ * Limita a fatia operacional ao restante físico do tanque neste ctx.
+ * Converte para litros no mapa compartilhado para entradas L e kg coexistirem.
+ */
+function claimVasilhameQtyAgainstPatio(
+  estoqueItem,
+  vasilhame,
+  qtdOp,
+  transbordos,
+  saldoCtx
+) {
+  const qty = Number(qtdOp) || 0;
+  if (!(qty > 0) || !vasilhame?.id || !saldoCtx?.claimedLitersByVasilhameId) {
+    return qty;
+  }
+
+  const volCapL = resolveVolumeVasilhameParaBaixa(vasilhame, transbordos);
+  if (!(volCapL > 0)) return qty;
+
+  const dens = resolveDensidadeParaMassa(estoqueItem, {
+    vasilhame,
+    transbordos,
+  });
+  let qtyL;
+  if (estoqueOperaEmLitros(estoqueItem)) {
+    qtyL = qty;
+  } else if (dens > 0) {
+    qtyL = qty / dens;
+  } else {
+    // Sem densidade não dá para conciliar massa×volume entre entradas.
+    return qty;
+  }
+
+  const already = Number(saldoCtx.claimedLitersByVasilhameId.get(vasilhame.id)) || 0;
+  const remainingL = Math.max(0, volCapL - already);
+  if (!(remainingL > 0)) return 0;
+
+  const takeL = Math.min(qtyL, remainingL);
+  if (!(takeL > 0)) return 0;
+
+  saldoCtx.claimedLitersByVasilhameId.set(vasilhame.id, already + takeL);
+
+  if (estoqueOperaEmLitros(estoqueItem)) {
+    return roundOp(estoqueItem, takeL);
+  }
+  return roundOp(estoqueItem, takeL * dens);
+}
+
+/**
  * Quantidades ainda no pátio, por tipo de armazenamento, na UOM da entrada.
  * Todo vínculo é lastreado pelo id do registro de estoque (FIFO + cadeia + composicao.estoque_id).
  *
@@ -2758,12 +2813,19 @@ export function computeEstoqueQuantidadesPorLocal(
     if (!v || isVasilhameExpedido(v)) continue;
     if ((v.status || "No Pátio") !== "No Pátio") continue;
 
-    const qtd = resolveQuantidadeEstoqueNoVasilhame(
+    const qtdRaw = resolveQuantidadeEstoqueNoVasilhame(
       estoqueItem,
       v,
       transbordos,
       trackedKeys,
       fatias
+    );
+    const qtd = claimVasilhameQtyAgainstPatio(
+      estoqueItem,
+      v,
+      qtdRaw,
+      transbordos,
+      saldoCtx
     );
     if (qtd <= 0) continue;
 
@@ -2813,7 +2875,14 @@ export function computeEstoqueQuantidadesPorLocal(
       continue;
     }
 
-    const qtdFifo = quantidadeFifoOperacional(row, estoqueItem);
+    const qtdFifoRaw = quantidadeFifoOperacional(row, estoqueItem);
+    const qtdFifo = claimVasilhameQtyAgainstPatio(
+      estoqueItem,
+      v,
+      qtdFifoRaw,
+      transbordos,
+      saldoCtx
+    );
     if (qtdFifo <= 0) continue;
 
     vasilhamesContados.add(v.id);

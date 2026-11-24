@@ -16,6 +16,7 @@ import {
   getEstoqueUnidade,
   hydrateEstoqueFiscal,
   isUnidadeVolumeEntrada,
+  normalizeUnidadeEntrada,
 } from "@transbordo/lib/estoqueSaldo";
 import { applyDeclaredVolumeDecimals } from "@transbordo/lib/declaredVolume";
 import { isEstoqueEmbalagemUnitaria } from "@transbordo/lib/transbordoEmbalado";
@@ -395,11 +396,22 @@ export default function EstoqueEnvio() {
       volumes.vasilhames,
       ajustesManuais
     );
+    // Cada recalculo começa sem reivindicações (ctx pode ser reusado em hot path).
+    saldoCtx.claimedLitersByVasilhameId.clear();
     const corrigidoPorId = new Map(
       (volumes.estoque || []).map((row) => [String(row.id), row])
     );
 
-    return (estoque || []).map((item) => {
+    // Entradas mais antigas (menor codigo_estoque) reivindicam o tanque primeiro,
+    // para o mapa claimedLiters não favorecer linhas soltas sem composição.
+    const ordered = [...(estoque || [])].sort((a, b) => {
+      const ca = Number(a?.codigo_estoque) || 0;
+      const cb = Number(b?.codigo_estoque) || 0;
+      if (ca !== cb) return ca - cb;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    });
+
+    return ordered.map((item) => {
       const base = corrigidoPorId.get(String(item?.id)) || item;
       const merged = {
         ...item,
@@ -722,9 +734,10 @@ export default function EstoqueEnvio() {
    * Enriquece produtosAgregados com o saldo em vasilhames (Tanque) e tankas (TANKA).
    *
    * Estoque de produtos usa conteúdo real (volume/composição × densidade),
-   * igual à tela de Estoque — nunca a capacidade nominal do tanque.
+   * nunca a capacidade nominal do tanque.
    * Capacidade (5.000 L / 1.500 L) fica só no resumo de vasilhames.
-   * Com colunasLivro, Embalado/Tanque/Tanka/Saldo seguem o livro.
+   * Com colunasLivro, Embalado/Tanka seguem o livro; Tanque é tetado pelo
+   * conteúdo físico no pátio (evita fantasma ao agregar várias entradas).
    */
   const produtosComBreakdown = useMemo(() => {
     const densidadeByCode = new Map();
@@ -1032,19 +1045,66 @@ export default function EstoqueEnvio() {
       const unidadeRow = unidadeFisica || p.unidade;
       const hasTanqueFisico = vasilhameQtd > 0;
 
-      // Livro do Transbordo: mesmas colunas da tela de Estoque.
-      // Não substituir Tanque/Saldo por capacidade nominal nem por volume do pátio.
+      // Livro do Transbordo: Embalado/Tanka partem do livro.
+      // Tanque: se há tanque clássico no pátio na mesma UOM, o físico manda —
+      // o livro agregado pode reivindicar a mesma placa em várias entradas
+      // (REPCLEAN 21×5.000 → 105.000 no pátio vs 113.746 fantasma no livro).
+      // Nunca usar capacidade nominal (quebra tanque parcial / fracionado).
       if (p.colunasLivro && !isOrphan) {
-        const saldoEmbalado = roundVolume(p.saldoEmbalado || 0);
-        const saldoTanka = roundVolume(p.saldoTanka || 0);
-        const saldoTanque = roundVolume(p.saldoTanque || 0);
+        let saldoEmbalado = roundVolume(p.saldoEmbalado || 0);
+        let saldoTanka = roundVolume(p.saldoTanka || 0);
+        let saldoTanque = roundVolume(p.saldoTanque || 0);
         const saldoReservado = p.saldoReservado || 0;
-        const saldoAtual = roundVolume(p.saldo || 0);
-        const saldoFinal = p.saldoFinal;
+        const bookSaldo = roundVolume(p.saldo || 0);
+        const unidadeLivro = p.unidade || unidadeRow;
+        const unitsCompatible =
+          !unidadeFisica ||
+          normalizeUnidadeEntrada(unidadeFisica) ===
+            normalizeUnidadeEntrada(unidadeLivro) ||
+          (isUnidadeVolumeEntrada(unidadeFisica) &&
+            isUnidadeVolumeEntrada(unidadeLivro));
+
+        if (hasTanqueFisico && unitsCompatible) {
+          const fisicoTanque = roundVolume(vasilhameQtd);
+          // Teto pelo pátio: livro inflado não pode exceder o conteúdo real.
+          // Se o livro estiver abaixo, mantém o livro (não inventa saldo).
+          if (saldoTanque > fisicoTanque + 0.001) {
+            saldoTanque = fisicoTanque;
+          }
+        }
+        if (tankaQtd > 0 && unitsCompatible) {
+          const fisicoTanka = roundVolume(tankaQtd);
+          if (saldoTanka > fisicoTanka + 0.001) {
+            saldoTanka = fisicoTanka;
+          }
+        }
+
+        let saldoAtual = roundVolume(
+          saldoEmbalado + saldoTanque + saldoTanka
+        );
+        // Sem tanque físico comparável: mantém o Saldo Atual do livro.
+        // Com teto de pátio: Saldo Atual = soma das colunas (não o livro cru).
+        if (!(hasTanqueFisico && unitsCompatible)) {
+          saldoAtual = bookSaldo;
+        } else if (bookSaldo > 0 && saldoAtual > bookSaldo + 0.001) {
+          // Não inventar saldo acima do livro (expedição limitada ao contábil).
+          const scale = bookSaldo / saldoAtual;
+          saldoEmbalado = roundVolume(saldoEmbalado * scale);
+          saldoTanque = roundVolume(saldoTanque * scale);
+          saldoTanka = roundVolume(saldoTanka * scale);
+          saldoAtual = roundVolume(
+            saldoEmbalado + saldoTanque + saldoTanka
+          );
+        }
+
+        const saldoFinal = Math.max(
+          0,
+          roundVolume(saldoAtual - saldoReservado)
+        );
 
         return {
           ...p,
-          unidade: p.unidade || unidadeRow,
+          unidade: unidadeLivro,
           saldo: saldoAtual,
           saldoTanque,
           saldoTanka,

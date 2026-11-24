@@ -361,31 +361,33 @@ export default function Estoque() {
    * (`locaisSaldo`). Só recalcula linhas que perderam o campo (ex.: patch WMS
    * legado) — filtrar/buscar não dispara o cálculo pesado de novo.
    */
-  const locaisCacheRef = useRef({ deps: null, byRow: new WeakMap() });
   const locaisMap = useMemo(() => {
-    const store = locaisCacheRef.current;
-    const deps = [transbordos, vasilhames, saidas];
-    if (!store.deps || store.deps.some((d, i) => d !== deps[i])) {
-      store.deps = deps;
-      store.byRow = new WeakMap();
-    }
     const map = new Map();
-    for (const e of estoque) {
-      if (e?.locaisSaldo) {
-        map.set(e.id, e.locaisSaldo);
-        continue;
-      }
-      let locais = store.byRow.get(e);
-      if (!locais) {
-        locais = computeEstoqueQuantidadesPorLocal(e, {
-          transbordos,
-          vasilhames,
-          saidas,
-          saldo: e.saldo_atual,
-          saldoCtx,
-        });
-        store.byRow.set(e, locais);
-      }
+    const ordered = [...(estoque || [])].sort((a, b) => {
+      const ca = Number(a?.codigo_estoque) || 0;
+      const cb = Number(b?.codigo_estoque) || 0;
+      if (ca !== cb) return ca - cb;
+      return String(a?.id || "").localeCompare(String(b?.id || ""));
+    });
+
+    // Se todas as linhas já vieram de buildEstoqueView com o mesmo claim pass,
+    // reutiliza. Misturar locaisSaldo com recálculo parcial quebraria o teto.
+    const allHaveLocais =
+      ordered.length > 0 && ordered.every((e) => e?.locaisSaldo != null);
+    if (allHaveLocais) {
+      for (const e of ordered) map.set(e.id, e.locaisSaldo);
+      return map;
+    }
+
+    saldoCtx?.claimedLitersByVasilhameId?.clear();
+    for (const e of ordered) {
+      const locais = computeEstoqueQuantidadesPorLocal(e, {
+        transbordos,
+        vasilhames,
+        saidas,
+        saldo: e.saldo_atual,
+        saldoCtx,
+      });
       map.set(e.id, locais);
     }
     return map;
