@@ -306,6 +306,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
 
   const handleFiscalToggle = async (checked) => {
     if (!saida?.id) return;
+    if (isSaidaCancelada(saida)) return;
     setUpdatingFiscal(true);
     try {
       const updated = await applySaidaFiscalToggle(saida, checked, {
@@ -385,6 +386,7 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
               onCheckedChange={handleFiscalToggle}
               disabled={
                 updatingFiscal ||
+                isSaidaCancelada(saida) ||
                 (!saida.enviado_ao_fiscal && (saida.itens || []).length === 0)
               }
             />
@@ -419,21 +421,27 @@ export default function SaidaView({ basePath = DEFAULT_BASE_PATH } = {}) {
             value={
               <span
                 className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                  isSaidaCancelada(saida)
-                    ? "bg-slate-100 text-slate-600"
-                    : saida.status === "enviado_fiscal"
-                      ? "bg-primary/10 text-primary"
-                      : "bg-amber-100 text-amber-700"
+                  saida.enviado_ao_fiscal || saida.status === "enviado_fiscal"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-amber-100 text-amber-700"
                 }`}
               >
-                {isSaidaCancelada(saida)
-                  ? "Cancelado"
-                  : saida.status === "enviado_fiscal"
-                    ? "Validado"
-                    : "Pendente"}
+                {saida.enviado_ao_fiscal || saida.status === "enviado_fiscal"
+                  ? "Validado"
+                  : "Pendente"}
               </span>
             }
           />
+          {isSaidaCancelada(saida) ? (
+            <InfoItem
+              label="Carregamento"
+              value={
+                <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                  Cancelado
+                </span>
+              }
+            />
+          ) : null}
           <InfoItem label="Quantidade Total" value={`${formatMass(saida.quantidade_total, { empty: EMPTY })} kg`} highlight="text-green-600 font-bold" />
           <InfoItem label="Usuário Criador" value={saida.usuario_criador} />
           <InfoItem label="Usuário Responsável" value={saida.usuario_responsavel} />

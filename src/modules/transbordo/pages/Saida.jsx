@@ -28,6 +28,7 @@ import SaidaViewDialog from "@transbordo/components/saida/SaidaViewDialog";
 import SaidaRemoverModal from "@transbordo/components/saida/SaidaRemoverModal";
 import AgendamentoTransporteModal from "@painel/components/comercial/AgendamentoTransporteModal";
 import {
+  assertPodeCancelarCarregamentoSaida,
   assertPodeExcluirSaidaDefinitivamente,
   cancelarCarregamentoSaida,
 } from "@transbordo/lib/saidaCancelamento";
@@ -813,12 +814,21 @@ export default function Saida({
       }
 
       try {
+        assertPodeCancelarCarregamentoSaida(saida);
+      } catch (err) {
+        toast({
+          title: "Cancelamento bloqueado",
+          description: err?.message || "Valide a carga antes de cancelar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
         const updated = await cancelarCarregamentoSaida({
           saida,
           justificativa,
           userNome: user?.nome || user?.full_name || "",
-          estoque: entradas,
-          vasilhames,
         });
         setSaidas((prev) =>
           prev.map((row) =>
@@ -831,7 +841,8 @@ export default function Saida({
         setDeleteId(null);
         toast({
           title: "Carregamento cancelado",
-          description: "A saída permanece no histórico com status Cancelado.",
+          description:
+            "A saída permanece no histórico. Validação, data de saída e baixa de saldo foram mantidas.",
         });
         await loadData({ silent: true });
       } catch (err) {
@@ -896,6 +907,15 @@ export default function Saida({
 
   const requestFiscalToggle = (saida) => {
     if (fiscalBusyId) return;
+    if (isSaidaCancelada(saida)) {
+      toast({
+        title: "Validação bloqueada",
+        description:
+          "Carregamento cancelado: a validação e a baixa de saldo permanecem registradas.",
+        variant: "destructive",
+      });
+      return;
+    }
     const temPendente = saidaTemItemPendenteNoModulo(saida, operationalModule);
     const enviar = temPendente || !isSaidaValidadaNoModulo(saida, operationalModule);
     const painel = isSaidaModuloPainel(saida);
@@ -1323,17 +1343,14 @@ export default function Saida({
                             <Pencil />
                           </RowActionButton>
                         ) : null}
-                        {(!isModuloOperacional ||
+                        {!cancelada &&
+                        (!isModuloOperacional ||
                           canExcluirSaidaNoModuloOperacional(s)) &&
                         !(isExpedicao && expedicaoStatus === "expedido") ? (
                           <RowActionButton
                             tone="danger"
                             onClick={() => setDeleteId(s.id)}
-                            title={
-                              cancelada
-                                ? "Excluir definitivamente"
-                                : "Cancelar ou excluir"
-                            }
+                            title="Cancelar ou excluir"
                           >
                             <Trash2 />
                           </RowActionButton>

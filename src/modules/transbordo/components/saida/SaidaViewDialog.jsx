@@ -523,8 +523,10 @@ export default function SaidaViewDialog({
     )
     .filter((index) => index >= 0);
   const selectableSet = new Set(selectableIndexes);
-  const canSelectFiscal = showRelatorioFiscal && !isAgendamento;
-  const canDevalidarItem = canSelectFiscal && Boolean(highlightModule || !isAgendamento);
+  const cancelada = isSaidaCancelada(saida);
+  const canSelectFiscal = showRelatorioFiscal && !isAgendamento && !cancelada;
+  const canDevalidarItem =
+    canSelectFiscal && Boolean(highlightModule || !isAgendamento);
   const useValidadeLacre = showValidadeLacreColumns && !isAgendamento;
   const colCount =
     (isAgendamento ? 8 : useValidadeLacre ? 8 : 7) +
@@ -536,7 +538,6 @@ export default function SaidaViewDialog({
     selectableIndexes.every((index) => selected.has(index));
   const someSelected =
     selectableIndexes.some((index) => selected.has(index)) && !allSelected;
-  const cancelada = isSaidaCancelada(saida);
   const statusLabel = cancelada
     ? "Cancelado"
     : highlightModule

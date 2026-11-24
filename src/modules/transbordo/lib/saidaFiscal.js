@@ -31,6 +31,7 @@ import {
   saidaItemChave,
   applyItemValidacaoFlags,
   resolveItemOrigem,
+  isSaidaCancelada,
 } from "@transbordo/lib/saidaOrigem";
 import { buildContainerYardRestorePatch } from "@transbordo/lib/saidaIndContainer";
 import { deductStock, restoreStock } from "@industrializacao/lib/stockRpc";
@@ -220,6 +221,12 @@ export async function applySaidaFiscalToggle(
   } = {}
 ) {
   if (!saida?.id) throw new Error("Saída inválida");
+
+  if (isSaidaCancelada(saida)) {
+    throw new Error(
+      "Não é possível alterar a validação de uma saída com carregamento cancelado. A baixa de saldo e a data de saída permanecem registradas."
+    );
+  }
 
   const rawItens = saida.itens || [];
   if (checked && rawItens.length === 0) {
@@ -569,34 +576,66 @@ export async function applySaidaFiscalToggle(
       const volTaken = volByVasilhame[vid] || 0;
       const volAdj = volTaken * (checked ? -1 : 1);
       const currentVol = Number(v?.volume) || 0;
-      const newVol = Math.max(0, roundVolume(currentVol + volAdj));
+      const currentPeso = Number(v?.peso_liquido) || 0;
+      const computedVol = Math.max(0, roundVolume(currentVol + volAdj));
       const dens = resolveDensidade(v, item);
-      const newPesoLiq =
+      const computedPesoLiq =
         dens > 0
-          ? roundMass(newVol * dens)
+          ? roundMass(computedVol * dens)
           : Math.max(
               0,
               roundMass(
-                (Number(v?.peso_liquido) || 0) +
+                currentPeso +
                   (checked
                     ? -(item?.peso_liquido || 0)
                     : item?.peso_liquido || 0)
               )
             );
 
+      const wasExpedido =
+        String(v?.status || "") === "Expedido" ||
+        (v?.data_saida != null && String(v.data_saida).trim() !== "");
       const expedir =
-        checked && isVolumeEsgotado(newVol, volTaken, currentVol);
+        checked && isVolumeEsgotado(computedVol, volTaken, currentVol);
 
-      const patch = {
-        id: String(v.id),
-        volume: newVol,
-        peso_liquido: newPesoLiq,
-        peso_bruto: roundMass((Number(v?.tara) || 0) + newPesoLiq),
-        status: expedir ? "Expedido" : "No Pátio",
-        data_saida: expedir ? dataSaida || null : null,
-      };
+      // Saída total: mantém volume/peso no cadastro (edição/auditoria).
+      // Baixa de estoque e exclusão do pátio usam status Expedido + data_saida.
+      // Saída parcial (ainda No Pátio): continua abatendo volume/peso.
+      let patch;
+      if (expedir) {
+        patch = {
+          id: String(v.id),
+          status: "Expedido",
+          data_saida: dataSaida || null,
+        };
+        if (currentVol <= 0 && Number(item?.volume_disponivel) > 0) {
+          const restoredVol = roundVolume(Number(item.volume_disponivel));
+          const restoredPeso =
+            dens > 0
+              ? roundMass(restoredVol * dens)
+              : Number(item?.peso_liquido) || currentPeso;
+          patch.volume = restoredVol;
+          patch.peso_liquido = restoredPeso;
+          patch.peso_bruto = roundMass((Number(v?.tara) || 0) + restoredPeso);
+        }
+      } else if (!checked && wasExpedido && currentVol > 0) {
+        patch = {
+          id: String(v.id),
+          status: "No Pátio",
+          data_saida: null,
+        };
+      } else {
+        patch = {
+          id: String(v.id),
+          volume: computedVol,
+          peso_liquido: computedPesoLiq,
+          peso_bruto: roundMass((Number(v?.tara) || 0) + computedPesoLiq),
+          status: "No Pátio",
+          data_saida: null,
+        };
+      }
 
-      if (isDestinoEmbalagemUnitaria(v?.tipo)) {
+      if (isDestinoEmbalagemUnitaria(v?.tipo) && !expedir) {
         const qtdAtual = getQuantidadeEmbalagensFromVasilhame(v);
         const volPorEmb =
           getVolumePorEmbalagemFromVasilhame(v) ||
@@ -612,14 +651,16 @@ export async function applySaidaFiscalToggle(
           0,
           qtdAtual + (checked ? -qtdSaida : qtdSaida)
         );
+        const patchVol = Number(patch.volume ?? computedVol) || 0;
+        const patchPeso = Number(patch.peso_liquido ?? computedPesoLiq) || 0;
         patch.placa = buildPlacaEmbalagens(qtdNova, v.tipo);
         patch.composicao = (v.composicao || []).map((c, i) =>
           i === 0
             ? {
                 ...c,
                 quantidade_embalagens: qtdNova,
-                quantidade_l: newVol,
-                quantidade_kg: newPesoLiq,
+                quantidade_l: patchVol,
+                quantidade_kg: patchPeso,
                 volume_por_embalagem: volPorEmb || c.volume_por_embalagem,
               }
             : c
@@ -977,16 +1018,35 @@ export async function resyncTransbordoStockAfterSaidaEdit(
           : Math.max(0, roundMass((Number(v.peso_liquido) || 0) + pesoAdj));
 
       const expedir = newVolTaken > 0 && roundVolume(nextVol) <= 0;
-      const patch = {
-        id: v.id,
-        volume: nextVol,
-        peso_liquido: newPesoLiq,
-        peso_bruto: roundMass((Number(v.tara) || 0) + newPesoLiq),
-        status: expedir ? "Expedido" : "No Pátio",
-        data_saida: expedir ? dataSaidaRegistro || null : null,
-      };
+      const wasExpedido =
+        String(v.status || "") === "Expedido" ||
+        (v.data_saida != null && String(v.data_saida).trim() !== "");
+      // Saída total: não zera volume/peso — só Expedido + data_saida.
+      let patch;
+      if (expedir) {
+        patch = {
+          id: v.id,
+          status: "Expedido",
+          data_saida: dataSaidaRegistro || null,
+        };
+      } else if (wasExpedido && newVolTaken <= 0 && currentVol > 0) {
+        patch = {
+          id: v.id,
+          status: "No Pátio",
+          data_saida: null,
+        };
+      } else {
+        patch = {
+          id: v.id,
+          volume: nextVol,
+          peso_liquido: newPesoLiq,
+          peso_bruto: roundMass((Number(v.tara) || 0) + newPesoLiq),
+          status: "No Pátio",
+          data_saida: null,
+        };
+      }
 
-      if (isDestinoEmbalagemUnitaria(v?.tipo)) {
+      if (isDestinoEmbalagemUnitaria(v?.tipo) && !expedir) {
         const qtdAtual = getQuantidadeEmbalagensFromVasilhame(v);
         const volPorEmb =
           getVolumePorEmbalagemFromVasilhame(v) ||

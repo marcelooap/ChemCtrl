@@ -1,5 +1,6 @@
 -- Cancelamento de carregamento em solicitações de saída.
 -- Status `cancelado` permanece no histórico; agendamento ativo é liberado no app.
+-- Cancelamento exige carga validada e NÃO reverte baixa/validação/data de saída.
 -- Idempotente: pode rodar mais de uma vez com segurança.
 
 alter table t_saidas

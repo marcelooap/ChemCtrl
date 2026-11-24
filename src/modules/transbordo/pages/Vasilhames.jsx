@@ -1411,17 +1411,11 @@ export default function Vasilhames() {
         const restante = Math.max(0, (qtdAtual || qtdSaida) - qtdSaida);
 
         if (restante <= 0) {
+          // Saída total: mantém volume/peso/placa no cadastro.
+          // Baixa de estoque e exclusão do pátio usam Expedido + data_saida.
           const patch = {
             data_saida: saidaData,
             status: "Expedido",
-            volume: 0,
-            peso_liquido: 0,
-            peso_bruto: roundMass(saidaVasilhame.tara || 0),
-            placa: buildPlacaEmbalagens(0, saidaVasilhame.tipo),
-            // Mantém quantidade_l/kg na composição para baixa de estoque / auditoria
-            composicao: (saidaVasilhame.composicao || []).map((c, i) =>
-              i === 0 ? { ...c, quantidade_embalagens: 0 } : c
-            ),
           };
           await entities.vasilhames.update(saidaVasilhame.id, patch);
           updatedVasilhame = { ...saidaVasilhame, ...patch };

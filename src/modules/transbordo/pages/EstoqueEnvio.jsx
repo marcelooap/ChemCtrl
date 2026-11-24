@@ -736,8 +736,9 @@ export default function EstoqueEnvio() {
    * Estoque de produtos usa conteúdo real (volume/composição × densidade),
    * nunca a capacidade nominal do tanque.
    * Capacidade (5.000 L / 1.500 L) fica só no resumo de vasilhames.
-   * Com colunasLivro, Embalado/Tanka seguem o livro; Tanque é tetado pelo
-   * conteúdo físico no pátio (evita fantasma ao agregar várias entradas).
+   * Com colunasLivro, Embalado/Tanka seguem o livro; Tanque segue o conteúdo
+   * físico no pátio (evita fantasma no agregado e buraco quando o livro
+   * não lastreia tanques No Pátio — ex.: METANOL Vibra).
    */
   const produtosComBreakdown = useMemo(() => {
     const densidadeByCode = new Map();
@@ -1065,12 +1066,10 @@ export default function EstoqueEnvio() {
             isUnidadeVolumeEntrada(unidadeLivro));
 
         if (hasTanqueFisico && unitsCompatible) {
-          const fisicoTanque = roundVolume(vasilhameQtd);
-          // Teto pelo pátio: livro inflado não pode exceder o conteúdo real.
-          // Se o livro estiver abaixo, mantém o livro (não inventa saldo).
-          if (saldoTanque > fisicoTanque + 0.001) {
-            saldoTanque = fisicoTanque;
-          }
+          // Conteúdo real do pátio manda na coluna Tanque (teto e piso).
+          // Livro inflado (REPCLEAN) era tetado; livro zerado com tanques
+          // No Pátio (METANOL Vibra) passa a refletir o físico.
+          saldoTanque = roundVolume(vasilhameQtd);
         }
         if (tankaQtd > 0 && unitsCompatible) {
           const fisicoTanka = roundVolume(tankaQtd);
@@ -1083,7 +1082,7 @@ export default function EstoqueEnvio() {
           saldoEmbalado + saldoTanque + saldoTanka
         );
         // Sem tanque físico comparável: mantém o Saldo Atual do livro.
-        // Com teto de pátio: Saldo Atual = soma das colunas (não o livro cru).
+        // Com pátio: Saldo Atual = soma das colunas (não o livro cru).
         if (!(hasTanqueFisico && unitsCompatible)) {
           saldoAtual = bookSaldo;
         } else if (bookSaldo > 0 && saldoAtual > bookSaldo + 0.001) {

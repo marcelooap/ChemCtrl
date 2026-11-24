@@ -487,10 +487,48 @@ function compositionStampsAreOnlyTankaIds(vasilhame, transbordos = []) {
 }
 
 /**
+ * Produto+cliente do tanque vs registro de estoque (código ou nome).
+ * Usado no fallback de tanque com stamp só de tanka / sem stamp.
+ */
+function vasilhameMatchesEstoqueProdutoCliente(vasilhame, estoqueItem) {
+  if (!vasilhame || !estoqueItem) return false;
+
+  const clienteV = String(vasilhame.cliente_nome || "")
+    .trim()
+    .toLowerCase();
+  const clienteE = String(estoqueItem.cliente_nome || "")
+    .trim()
+    .toLowerCase();
+  if (!clienteV || !clienteE || clienteV !== clienteE) return false;
+
+  const codV = String(vasilhame.produto_codigo || "").trim();
+  const codE = String(estoqueItem.produto_codigo || "").trim();
+  if (codV && codE && codV === codE) return true;
+
+  const nomeV = String(vasilhame.produto_nome || "")
+    .trim()
+    .toLowerCase();
+  const nomeE = String(estoqueItem.produto_nome || "")
+    .trim()
+    .toLowerCase();
+  return Boolean(nomeV && nomeE && nomeV === nomeE);
+}
+
+/** Lote do cabeçalho ou de qualquer fatia da composição. */
+function vasilhameMatchesEstoqueLote(vasilhame, loteEstoque) {
+  if (!loteEstoque) return false;
+  if (normLoteKey(vasilhame?.lote) === loteEstoque) return true;
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
+  return composicao.some((c) => normLoteKey(c?.lote) === loteEstoque);
+}
+
+/**
  * Tanque misto: há stamp de estoque real além de stamp de tanka/vazio.
- * Só nesse caso o fallback por lote é seguro (ex.: BACTIREP 700,2 + 799,8).
+ * Só nesse caso o fallback por lote é seguro sem claim (ex.: BACTIREP).
  * Em tanque só com stamp de tanka, lote compartilhado entre entradas
- * (ex.: METANOL Vibra E508+E514) duplicaria o Saldo Tanque.
+ * (ex.: METANOL Vibra E508+E514) exige claimVasilhameQtyAgainstPatio.
  */
 function compositionHasMixedEstoqueAndTankaStamps(vasilhame, transbordos = []) {
   const composicao = Array.isArray(vasilhame?.composicao)
@@ -2505,13 +2543,17 @@ function indexFatiasEstoquePorVasilhame(
  * Prioridade: composicao.estoque_id → fatia FIFO/cadeia → vínculo OP/produto.
  * A fatia da cadeia prevalece sobre o volume cheio do tanque quando o
  * vasilhame mistura outros lotes.
+ *
+ * @param {object} [saldoCtx] Com claimedLitersByVasilhameId, libera fallback
+ *   por lote em tanque só com stamp de tanka (anti double-count entre irmãs).
  */
 function resolveQuantidadeEstoqueNoVasilhame(
   estoqueItem,
   vasilhame,
   transbordos,
   trackedKeys,
-  fatiaPorVasilhame = null
+  fatiaPorVasilhame = null,
+  saldoCtx = null
 ) {
   if (!estoqueItem?.id || !vasilhame) return 0;
 
@@ -2562,10 +2604,11 @@ function resolveQuantidadeEstoqueNoVasilhame(
   // Tanque misto (ex.: 700,2 L stamp tanka OF-1428 + 799,8 L stamp estoque OF-1393):
   // a fatia com stamp de tanka/sem lastro ainda pertence a este lote e deve
   // entrar no Saldo Tanque. Sem isso, só a fatia lastreada aparece (799,8 de 1500).
-  // NÃO usar este atalho em tanque homogêneo só com stamp de tanka: duas
-  // entradas com o mesmo lote (METANOL Vibra E508+E514) reivindicariam o
-  // pátio inteiro e o Saldo Tanque dobraria (~31.680 → ~63.360).
-  const tankaIds = collectTankaIdsForVasilhame(vasilhame, transbordos);
+  const tankaIds = collectTankaIdsForVasilhame(
+    vasilhame,
+    transbordos,
+    saldoCtx
+  );
   const loteEstoque = normLoteKey(
     estoqueItem.lote || estoqueItem.lotes?.[0]?.lote
   );
@@ -2596,9 +2639,9 @@ function resolveQuantidadeEstoqueNoVasilhame(
   const fatia = Number(fatiaPorVasilhame?.get(vasilhame.id)) || 0;
   if (fatia > 0) return capToTankPhysical(fatia);
 
-  // Tanque só com stamp de tanka: a propriedade exclusiva vem da fatia
-  // FIFO/cadeia acima. Fallback por lote aqui reabriria o double-count
-  // entre entradas irmãs com o mesmo lote.
+  // Fallback por lote/produto fica no residual pós-tanka em
+  // computeEstoqueQuantidadesPorLocal (evita E508 saldo 0 / E514
+  // reivindicarem o pátio inteiro antes do dono real — METANOL Vibra).
 
   const vKeys = collectVasilhameKeys(vasilhame);
   const linkedByTrack = [...vKeys].some((k) => trackedKeys.has(k));
@@ -2809,27 +2852,45 @@ export function computeEstoqueQuantidadesPorLocal(
       ? candidateVas.values()
       : saldoCtx?.vasilhamesNoPatio || vasilhames || [];
 
+  // Orçamento do saldo operacional: não reivindicar litros além do que
+  // esta entrada ainda pode carregar (evita E508 saldo 0 esgotar o pátio).
+  const saldoOpBudget = Number.isFinite(saldo)
+    ? Number(saldo)
+    : computeEstoqueSaldo(
+        estoqueItem,
+        transbordos,
+        saidas,
+        vasilhames,
+        saldoCtx
+      );
+  let roomOp = Math.max(0, Number(saldoOpBudget) || 0);
+
   for (const v of patioList) {
     if (!v || isVasilhameExpedido(v)) continue;
     if ((v.status || "No Pátio") !== "No Pátio") continue;
+    if (!(roomOp > 0)) break;
 
     const qtdRaw = resolveQuantidadeEstoqueNoVasilhame(
       estoqueItem,
       v,
       transbordos,
       trackedKeys,
-      fatias
+      fatias,
+      saldoCtx
     );
+    if (!(qtdRaw > 0)) continue;
+    const qtdLimited = Math.min(qtdRaw, roomOp);
     const qtd = claimVasilhameQtyAgainstPatio(
       estoqueItem,
       v,
-      qtdRaw,
+      qtdLimited,
       transbordos,
       saldoCtx
     );
     if (qtd <= 0) continue;
 
     vasilhamesContados.add(v.id);
+    roomOp = Math.max(0, roundOp(estoqueItem, roomOp - qtd));
     const tipo = v.tipo || "";
     if (tipo === "Tankagem") {
       qtyTankasOp += qtd;
@@ -2875,17 +2936,21 @@ export function computeEstoqueQuantidadesPorLocal(
       continue;
     }
 
+    if (!(roomOp > 0)) break;
     const qtdFifoRaw = quantidadeFifoOperacional(row, estoqueItem);
+    if (!(qtdFifoRaw > 0)) continue;
+    const qtdFifoLimited = Math.min(qtdFifoRaw, roomOp);
     const qtdFifo = claimVasilhameQtyAgainstPatio(
       estoqueItem,
       v,
-      qtdFifoRaw,
+      qtdFifoLimited,
       transbordos,
       saldoCtx
     );
     if (qtdFifo <= 0) continue;
 
     vasilhamesContados.add(v.id);
+    roomOp = Math.max(0, roundOp(estoqueItem, roomOp - qtdFifo));
     if (isVasilhameLegadoEmbalado(d.tipo_embalagem || v.tipo || "")) {
       qtyPatioOp += qtdFifo;
     } else {
@@ -2912,6 +2977,7 @@ export function computeEstoqueQuantidadesPorLocal(
   );
   for (const [key, { id, codigo, enviado }] of tankaKeys) {
     if (tankasContadasViaVasilhame.has(key)) continue;
+    if (!(roomOp > 0)) break;
 
     // Preferir residual lastreado pelo id deste estoque (FIFO por origem).
     // Matching só por lote reivindicava refill de entrada irmã (E632) no
@@ -2943,12 +3009,66 @@ export function computeEstoqueQuantidadesPorLocal(
     }
 
     if (enviado > 0) litros = Math.min(litros, enviado);
-    qtyTankasOp += litrosParaQuantidadeOperacional(estoqueItem, litros);
+    const qtdTankaRaw = litrosParaQuantidadeOperacional(estoqueItem, litros);
+    if (!(qtdTankaRaw > 0)) continue;
+    const qtdTanka = Math.min(qtdTankaRaw, roomOp);
+    qtyTankasOp += qtdTanka;
+    roomOp = Math.max(0, roundOp(estoqueItem, roomOp - qtdTanka));
   }
 
-  const saldoOp = Number.isFinite(saldo)
-    ? saldo
-    : computeEstoqueSaldo(estoqueItem, transbordos, saidas, vasilhames, saldoCtx);
+  // Residual do saldo ainda sem local: tanques No Pátio do mesmo
+  // produto/cliente/lote sem stamp de outro estoque (METANOL Vibra T465/T424
+  // com composição sem estoque_id). Só após tanka — assim E632 fica com o
+  // pátio e entradas irmãs com saldo só em tanka não roubam os litros.
+  // Ignora residual de arredondamento (ex.: E514 1,7 kg após tanka) para
+  // não fragmentar tanques inteiros do dono real.
+  const residualMinOp = estoqueOperaEmLitros(estoqueItem) ? 1 : 10;
+  if (
+    roomOp >= residualMinOp &&
+    loteEstoque &&
+    saldoCtx?.claimedLitersByVasilhameId
+  ) {
+    for (const v of saldoCtx.vasilhamesNoPatio || []) {
+      if (!(roomOp > 0)) break;
+      if (!v?.id || vasilhamesContados.has(v.id)) continue;
+      if (isVasilhameExpedido(v)) continue;
+      if ((v.status || "No Pátio") !== "No Pátio") continue;
+      if ((v.tipo || "") === "Tankagem") continue;
+      if (isVasilhameLegadoEmbalado(v.tipo)) continue;
+      if (!vasilhameMatchesEstoqueProdutoCliente(v, estoqueItem)) continue;
+      if (!vasilhameMatchesEstoqueLote(v, loteEstoque)) continue;
+      const stamps = collectComposicaoEstoqueStamps(v.composicao);
+      if (
+        stamps.size > 0 &&
+        !compositionStampsAreOnlyTankaIds(v, transbordos) &&
+        ![...stamps].some((s) => idsEqual(s, estoqueItem.id))
+      ) {
+        continue;
+      }
+
+      const qtdRaw = resolveQuantidadeVasilhameParaBaixa(
+        estoqueItem,
+        v,
+        transbordos
+      );
+      if (!(qtdRaw > 0)) continue;
+      const qtdLimited = Math.min(qtdRaw, roomOp);
+      const qtd = claimVasilhameQtyAgainstPatio(
+        estoqueItem,
+        v,
+        qtdLimited,
+        transbordos,
+        saldoCtx
+      );
+      if (qtd <= 0) continue;
+
+      vasilhamesContados.add(v.id);
+      qtyVasilhamesOp += qtd;
+      roomOp = Math.max(0, roundOp(estoqueItem, roomOp - qtd));
+    }
+  }
+
+  const saldoOp = saldoOpBudget;
 
   // Volume do tanque em litros não pode aparecer como kg. Quando a quantidade
   // rastreada passa do saldo (ex.: 4.000 L de uma entrada de 3.320 kg), converte

@@ -143,7 +143,19 @@ export default function VasilhameModal({
           : editingVasilhame.densidade || ""
       );
       setLote(editingVasilhame.lote || "");
-      setVolume(editingVasilhame.volume ?? "");
+      // Saída total pode ter zerado o header no legado; recupera da composição.
+      const volHeader = Number(editingVasilhame.volume) || 0;
+      const volComp = (editingVasilhame.composicao || []).reduce(
+        (s, c) => s + (Number(c?.quantidade_l) || 0),
+        0
+      );
+      setVolume(
+        volHeader > 0
+          ? editingVasilhame.volume
+          : volComp > 0
+            ? volComp
+            : editingVasilhame.volume ?? ""
+      );
       const linhas = lotesEditaveisFromVasilhame(editingVasilhame);
       setLotesForm(linhas.length > 1 ? linhas : []);
       setTara(editingVasilhame.tara ?? "");
@@ -325,11 +337,18 @@ export default function VasilhameModal({
       setError("Produto é obrigatório.");
       return;
     }
+    const jaExpedido =
+      Boolean(dataSaida) ||
+      String(editingVasilhame?.status || "") === "Expedido";
     if (isMultiLote && lotesForm.some((l) => !(parseFloat(l.volume) > 0))) {
-      setError("Informe o volume de cada lote.");
-      return;
+      if (!jaExpedido) {
+        setError("Informe o volume de cada lote.");
+        return;
+      }
     }
-    if (!vol || vol <= 0) {
+    // Tanque expedido pode editar placa/dados sem exigir volume > 0
+    // (legado zerava o volume na saída; a baixa já ficou no estoque).
+    if ((!vol || vol <= 0) && !jaExpedido) {
       setError("Volume deve ser maior que zero.");
       return;
     }
