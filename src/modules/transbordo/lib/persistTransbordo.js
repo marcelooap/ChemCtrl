@@ -10,7 +10,7 @@ import {
   qtdEmbalagensFromVolume,
   resolveMassaOperacionalKg,
   alignDestinosMassaToQuantidade,
-} from '@transbordo/lib/format';
+} from "@transbordo/lib/format";
 import { calculateFIFOAllocation, expandOrigensForFifo } from '@transbordo/lib/fifo';
 import {
   findTanquePatioParaComplemento,
@@ -404,8 +404,8 @@ function buildVasilhameBase(
     d.peso_liquido != null && d.peso_liquido !== ""
       ? roundMass(d.peso_liquido)
       : dens > 0 && volume > 0
-      ? roundMass(volume * dens)
-      : 0;
+        ? massaKgFromLitrosOperacionais(volume, dens)
+        : 0;
   if (volume <= 0 && dens > 0 && pesoLiquido > 0) {
     volume = roundVolume(litrosFromMassaKg(pesoLiquido, dens));
   }
@@ -442,7 +442,7 @@ function buildVasilhameBase(
       ? alignComposicaoKgToDensidade(composicaoRaw, dens, volume)
       : composicaoRaw;
   if (!isUnitario && dens > 0 && volume > 0) {
-    pesoLiquido = roundMass(volume * dens);
+    pesoLiquido = massaKgFromLitrosOperacionais(volume, dens, pesoLiquido);
   }
   const lote = getDominantLote(composicao);
 
@@ -842,12 +842,18 @@ export async function persistTransbordo({
             delete c.entrada_id;
           }
           // FIFO já opera em litros (origensFifo / destinosOperacionais).
-          // Embalado: quantidade_kg = L × dens (não copiar o litro como kg).
+          // Embalado: recupera massa do saldo (917 L → 1.000 kg, não 999,53).
           const origemEmbaladoMassa =
             (o?.tipo_origem === "embalado" || o?.embalado) &&
             isUnidadeMassaEntrada(o?.unidade_medida || "kg");
           if (origemEmbaladoMassa && dens > 0) {
-            c.quantidade_kg = roundMass((Number(c.quantidade_l) || 0) * dens);
+            const preferida =
+              Number(o?.massa_retirada) || Number(o?.saldo_atual) || 0;
+            c.quantidade_kg = massaKgFromLitrosOperacionais(
+              Number(c.quantidade_l) || 0,
+              dens,
+              preferida
+            );
           }
         }
       }

@@ -6,6 +6,7 @@ import {
   roundVolume,
   roundMass,
   roundQuantidade,
+  massaKgFromLitrosOperacionais,
 } from "@transbordo/lib/format";
 import {
   aggregateComposicaoByLote,
@@ -365,21 +366,34 @@ function addTable(doc, y, headers, rows, colWidths, totalsRow, opts = {}) {
 }
 
 function buildComposicaoRows(vasilhame) {
+  const dens = parseDensidade(vasilhame?.densidade);
   const seeded = seedComposicaoFromVasilhame(vasilhame);
   const agg = aggregateComposicaoByLote(seeded);
   if (agg.length > 0) {
-    return agg.map((c) => ({
-      lote: c.lote || "-",
-      volume: roundVolume(c.quantidade_l || 0),
-      massa: roundMass(c.quantidade_kg || 0),
-      data: getLoteEnvaseDate(c),
-    }));
+    return agg.map((c) => {
+      const volume = roundVolume(c.quantidade_l || 0);
+      const massaStored = roundMass(c.quantidade_kg || 0);
+      return {
+        lote: c.lote || "-",
+        volume,
+        massa:
+          dens > 0 && volume > 0
+            ? massaKgFromLitrosOperacionais(volume, dens, massaStored)
+            : massaStored,
+        data: getLoteEnvaseDate(c),
+      };
+    });
   }
+  const volume = roundVolume(vasilhame.volume || 0);
+  const massaStored = roundMass(vasilhame.peso_liquido || 0);
   return [
     {
       lote: vasilhame.lote || "-",
-      volume: roundVolume(vasilhame.volume || 0),
-      massa: roundMass(vasilhame.peso_liquido || 0),
+      volume,
+      massa:
+        dens > 0 && volume > 0
+          ? massaKgFromLitrosOperacionais(volume, dens, massaStored)
+          : massaStored,
       data: vasilhame.created_at || vasilhame.created_date || null,
     },
   ];
@@ -503,15 +517,14 @@ function resolveDensidadeFiscal(item, vasilhame) {
 }
 
 /**
- * Massa fiscal canônica: volume envasado × densidade declarada.
- * Evita o +1 kg quando lotes misturados foram convertidos L→kg com Math.round
- * individualmente (ex.: 1.165×1,3→1.515 + 335×1,3→436 = 1.951, em vez de 1.950).
+ * Massa fiscal canônica a partir dos litros operacionais.
+ * Recupera 1.000 kg de 917 L @ 1,09 (não 999,53 do L×dens residual).
  */
-function massaPorVolumeDensidade(volumeL, densidade) {
+function massaPorVolumeDensidade(volumeL, densidade, massaPreferida = 0) {
   const vol = roundVolume(volumeL);
   const dens = parseDensidade(densidade);
   if (!(vol > 0) || !(dens > 0)) return null;
-  return roundMass(vol * dens);
+  return massaKgFromLitrosOperacionais(vol, dens, massaPreferida);
 }
 
 /**
@@ -621,11 +634,37 @@ function buildSaidaConvencionalLoteRows(item, vasilhame) {
       ? volumeAlvo / totalVol
       : 1;
 
+  const dens = resolveDensidadeFiscal(item, vasilhame || source);
   const volumes = composicao.map((c) => roundVolume((c.volume || 0) * scale));
-  const massas = distributeKgByVolume(
-    resolveMassaFiscal(item, vasilhame || source, composicao, scale, volumeAlvo),
-    volumes
+  // Por lote: recupera massa do IBC (917 L → 1.000 kg); total fecha no canônico.
+  const massaAlvo = resolveMassaFiscal(
+    item,
+    vasilhame || source,
+    composicao,
+    scale,
+    volumeAlvo
   );
+  let massas = volumes.map((vol, i) =>
+    massaKgFromLitrosOperacionais(vol, dens, composicao[i]?.massa || 0)
+  );
+  const soma = roundMass(massas.reduce((s, m) => s + m, 0));
+  const diff = roundMass(massaAlvo - soma);
+  if (Math.abs(diff) > 1e-9 && massas.length > 0) {
+    // Residual em linha fracionária — preserva 1.000 kg inteiro do IBC.
+    let idx = -1;
+    for (let i = massas.length - 1; i >= 0; i -= 1) {
+      if (Math.abs(massas[i] - Math.round(massas[i])) > 1e-6) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx < 0) idx = massas.length - 1;
+    massas = massas.map((m, i) =>
+      i === idx ? Math.max(0, roundMass(m + diff)) : m
+    );
+  } else if (!(dens > 0)) {
+    massas = distributeKgByVolume(massaAlvo, volumes);
+  }
 
   return composicao.map((c, i) => {
     const lote = c.lote || item.lote || "-";

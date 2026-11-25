@@ -334,21 +334,20 @@ export function massaKgFromLitrosOperacionais(
   const preferida = roundMass(massaPreferida);
   if (preferida > 0) {
     const maxL = roundVolume(litrosFromMassaKg(preferida, dens));
-    if (maxL > 0 && vol === maxL) {
+    // Tolerância de 0,5 L: residual L×dens pode divergir 1 ml do litro operacional.
+    if (maxL > 0 && Math.abs(vol - maxL) <= 0.5) {
       // Saque integral do saldo: preserva a massa informada (IBC 1.000 kg).
       if (isMassaInteira(preferida)) return Math.round(preferida);
       // Preferida já é residual L×dens (ex.: 999,53): recupera inteiro canônico.
-      const recoveredFull = findMassaInteiraParaLitros(vol, dens);
-      if (
-        recoveredFull > 0 &&
-        Math.abs(recoveredFull - preferida) <=
-          TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
-      ) {
+      // Só aceita quando Math.round(residual) === massa inteira (999,53→1000),
+      // evitando promover parciais (364,06↛365).
+      const recoveredFull = findMassaInteiraParaLitros(Math.round(vol), dens);
+      if (recoveredFull > 0 && recoveredFull === Math.round(preferida)) {
         return recoveredFull;
       }
       return preferida;
     }
-    if (maxL > 0 && vol < maxL) {
+    if (maxL > 0 && vol < maxL - 0.5) {
       // Saque parcial: proporcional ao saldo (partes somam o saldo).
       return roundMass((vol / maxL) * preferida);
     }
@@ -357,8 +356,11 @@ export function massaKgFromLitrosOperacionais(
   const naive = roundMass(vol * dens);
   if (Math.abs(vol - Math.round(vol)) < 1e-9) {
     const recovered = findMassaInteiraParaLitros(Math.round(vol), dens);
+    // Somente o subshoot clássico: L×dens arredonda para a massa inteira de origem.
+    // 917 L → 999,53 → 1.000 kg; 334 L → 364,06 permanece (não vira 365).
     if (
       recovered > 0 &&
+      recovered === Math.round(naive) &&
       Math.abs(recovered - naive) <= TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
     ) {
       return recovered;
@@ -403,7 +405,10 @@ export function resolveVolumeMassaOperacional({
     if (vol <= 0 && kg > 0) {
       vol = roundVolume(litrosFromMassaKg(kg, dens));
     } else if (kg <= 0 && vol > 0) {
-      kg = roundMass(vol * dens);
+      kg = massaKgFromLitrosOperacionais(vol, dens);
+    } else if (vol > 0 && kg > 0) {
+      // Recupera residual L×dens (999,53→1.000) quando o par veio corrompido.
+      kg = massaKgFromLitrosOperacionais(vol, dens, kg);
     }
   }
   return { volume: vol, massa: kg };

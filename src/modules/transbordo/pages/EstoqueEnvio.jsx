@@ -1169,6 +1169,7 @@ export default function EstoqueEnvio() {
             capacidade: tank.capacidade || tank.isotanque.capacidade,
           },
           transbordos,
+          ajustes: ajustesManuais,
         })
       );
     } else {
@@ -1205,6 +1206,8 @@ export default function EstoqueEnvio() {
             isotanqueId: tank.isotanque.id,
             tankaCodigo: tank.tankaCodigo,
             transbordos,
+            ajustes: ajustesManuais,
+            reconcileToVolume: tank.volumeAtual,
           });
           return { ...tank, lotes, fillColor };
         }

@@ -83,7 +83,13 @@ function subtractLote(map, lote, volume) {
   if (vol <= 0) return;
   const key = (lote || "").trim() || "—";
   if (map.has(key)) {
-    map.set(key, roundVolume((map.get(key) || 0) - vol));
+    const available = Math.max(0, roundVolume(map.get(key) || 0));
+    const take = Math.min(available, vol);
+    map.set(key, roundVolume(available - take));
+    const leftover = roundVolume(vol - take);
+    // Residual além do lote informado continua em FIFO (evita saldo
+    // de composição maior que o volume líquido da tanka).
+    if (leftover > 0) subtractFifo(map, leftover);
     return;
   }
   // Lote não encontrado → baixa FIFO nos lotes existentes
@@ -95,9 +101,83 @@ function subtractFifo(map, volume) {
   if (remaining <= 0) return;
   for (const [key, qty] of map) {
     if (remaining <= 0) break;
-    const take = Math.min(roundVolume(qty), remaining);
-    map.set(key, roundVolume(qty - take));
-    remaining -= take;
+    const available = Math.max(0, roundVolume(qty));
+    const take = Math.min(available, remaining);
+    map.set(key, roundVolume(available - take));
+    remaining = roundVolume(remaining - take);
+  }
+}
+
+/** Aplica o ledger de ajustes manuais ao mapa de lotes da tanka. */
+function applyTankaAjustesToLotes(map, ajustes, isotanqueId, tankaCodigo) {
+  const codigoNorm = normPlaca(tankaCodigo);
+  const sorted = [...(ajustes || [])].sort((a, b) => {
+    const ta = new Date(a?.created_at || 0).getTime();
+    const tb = new Date(b?.created_at || 0).getTime();
+    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+  });
+
+  for (const a of sorted) {
+    if ((a?.tipo_local || "") !== "tanka") continue;
+    const matchId =
+      isotanqueId &&
+      (String(a.tanka_id || "") === String(isotanqueId) ||
+        String(a.vasilhame_id || "") === String(isotanqueId));
+    const matchCodigo =
+      codigoNorm &&
+      (normPlaca(a.tanka_codigo) === codigoNorm ||
+        normPlaca(a.vasilhame_placa) === codigoNorm);
+    if (!matchId && !matchCodigo) continue;
+
+    const volSigned = Number(a.volume_l);
+    const signed = Number.isFinite(volSigned)
+      ? roundVolume(volSigned)
+      : roundVolume(Number(a.quantidade_signed) || 0);
+    if (signed === 0) continue;
+
+    const lote = (a.lote || "").trim();
+    if (signed > 0) {
+      addLote(map, lote, signed);
+    } else if (lote) {
+      subtractLote(map, lote, -signed);
+    } else {
+      subtractFifo(map, -signed);
+    }
+  }
+}
+
+/**
+ * Garante que Σ lotes = volume alvo (FIFO na baixa; residual na alta).
+ * Cobre divergências legadas além do ledger de ajustes.
+ */
+function reconcileLotesMapToVolume(map, targetVolume) {
+  const target = roundVolume(Math.max(0, targetVolume || 0));
+  for (const [key, qty] of map) {
+    if (qty < 0) map.set(key, 0);
+  }
+  let sum = roundVolume(
+    [...map.values()].reduce((s, v) => s + Math.max(0, roundVolume(v)), 0)
+  );
+  if (sum === target) return;
+  if (sum > target) {
+    subtractFifo(map, roundVolume(sum - target));
+    return;
+  }
+  const missing = roundVolume(target - sum);
+  if (!(missing > 0)) return;
+  let dominantKey = null;
+  let dominantVol = -1;
+  for (const [key, qty] of map) {
+    const v = roundVolume(qty);
+    if (v > dominantVol) {
+      dominantVol = v;
+      dominantKey = key;
+    }
+  }
+  if (dominantKey != null) {
+    map.set(dominantKey, roundVolume((map.get(dominantKey) || 0) + missing));
+  } else {
+    addLote(map, "", missing);
   }
 }
 
@@ -636,6 +716,9 @@ export function computeTankaRemainingByEstoqueId({
 
 /**
  * Saldo por lote na tanka (ordem cronológica de entrada — FIFO).
+ * Inclui ajustes manuais do ledger (mesmo critério de `computeTankaSaldo`).
+ * Quando `reconcileToVolume` é informado, a Σ dos lotes é forçada a esse
+ * volume (baixa FIFO / alta no lote dominante) para não divergir do silo.
  * @returns {{ lote: string, quantidade_l: number }[]}
  */
 export function computeTankaLotesDisponiveis({
@@ -645,6 +728,8 @@ export function computeTankaLotesDisponiveis({
   excludeTransbordoId = null,
   extraOrigens = [],
   extraDestinos = [],
+  ajustes = [],
+  reconcileToVolume = null,
 }) {
   const map = new Map();
 
@@ -678,6 +763,12 @@ export function computeTankaLotesDisponiveis({
     ) {
       applyOrigemSaida(map, o);
     }
+  }
+
+  applyTankaAjustesToLotes(map, ajustes, isotanqueId, tankaCodigo);
+
+  if (reconcileToVolume != null) {
+    reconcileLotesMapToVolume(map, reconcileToVolume);
   }
 
   return [...map.entries()]
@@ -784,6 +875,8 @@ export function buildTankaDetalhe({
     isotanqueId,
     tankaCodigo,
     transbordos,
+    ajustes,
+    reconcileToVolume: volumeAtual,
   });
 
   const loteMeta = collectLoteEnvaseMeta(transbordos, isotanqueId, tankaCodigo);

@@ -36,6 +36,7 @@ import {
   roundVolume,
   roundMass,
   resolveVolumeMassaOperacional,
+  massaKgFromLitrosOperacionais,
 } from "@transbordo/lib/format";
 import {
   applyDeclaredVolumeDecimals,
@@ -235,10 +236,42 @@ function renderVolumeQuantidadeCells(
     densidade: densOperacional || vasilhame?.densidade,
   });
   const dens = densOperacional || operacional.densidade || vasilhame?.densidade;
-  const volOp = Number(operacional.volume) || 0;
+  const densN = parseDensidade(dens);
+  const storedVol = roundVolume(vasilhame?.volume || 0);
+  let volOp = Number(operacional.volume) || 0;
+  // Off-by-one (1.501 vs 1.500): prefere a soma da composição / volume envasado.
+  const compSum = roundVolume(
+    (Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : []).reduce(
+      (s, c) => s + (Number(c.quantidade_l) || 0),
+      0
+    )
+  );
+  if (volOp > 0 && compSum > 0 && Math.abs(volOp - compSum) > 0.01) {
+    if (Math.abs(volOp - compSum) <= 1.001) {
+      volOp = compSum;
+    } else if (
+      storedVol > 0 &&
+      Math.abs(storedVol - compSum) <= 0.5 &&
+      Math.abs(volOp - storedVol) <= 1.001
+    ) {
+      volOp = storedVol;
+    }
+  } else if (
+    storedVol > 0 &&
+    volOp > 0 &&
+    Math.abs(volOp - storedVol) > 0.01 &&
+    Math.abs(volOp - storedVol) <= 1.001 &&
+    (compSum <= 0 || Math.abs(compSum - storedVol) <= 0.5)
+  ) {
+    volOp = storedVol;
+  }
   const massaOp =
-    parseDensidade(dens) > 0 && volOp > 0
-      ? roundMass(volOp * parseDensidade(dens))
+    densN > 0 && volOp > 0
+      ? massaKgFromLitrosOperacionais(
+          volOp,
+          densN,
+          Number(operacional.massa) || Number(vasilhame?.peso_liquido) || 0
+        )
       : Number(operacional.massa) || 0;
   const vDisplay = {
     ...vasilhame,
@@ -268,7 +301,11 @@ function renderVolumeQuantidadeCells(
     const densN = parseDensidade(densidade);
     const massKg =
       densN > 0 && volL > 0
-        ? roundMass(volL * densN)
+        ? massaKgFromLitrosOperacionais(
+            volL,
+            densN,
+            Number(vDisplay.peso_liquido) || 0
+          )
         : Number(vDisplay.peso_liquido) > 0
           ? Number(vDisplay.peso_liquido)
           : 0;

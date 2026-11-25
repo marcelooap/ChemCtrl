@@ -7,6 +7,7 @@ import {
   roundVolume,
   roundMass,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
   distributeByWeights,
 } from "@transbordo/lib/format";
 import {
@@ -221,9 +222,9 @@ function composicaoSignature(list = []) {
 }
 
 /**
- * Recalcula quantidade_kg por entrada com L × densidade e alinha o residual
- * para a soma fechar exatamente roundMass(volume × densidade).
- * Evita drift tipo 3.959,793 kg quando o total operacional é 3.960 kg.
+ * Recalcula quantidade_kg por entrada a partir dos litros operacionais.
+ * Usa massaKgFromLitrosOperacionais (917 L → 1.000 kg, não 999,53) e alinha
+ * o residual para a soma fechar com a massa canônica do volume total.
  */
 export function alignComposicaoKgToDensidade(
   composicao = [],
@@ -236,10 +237,12 @@ export function alignComposicaoKgToDensidade(
 
   const next = base.map((c) => {
     const qL = roundVolume(c.quantidade_l || 0);
+    const preferida = roundMass(c.quantidade_kg || 0);
     return {
       ...c,
       quantidade_l: qL,
-      quantidade_kg: qL > 0 ? roundMass(qL * dens) : 0,
+      quantidade_kg:
+        qL > 0 ? massaKgFromLitrosOperacionais(qL, dens, preferida) : 0,
     };
   });
 
@@ -252,17 +255,23 @@ export function alignComposicaoKgToDensidade(
       : volSum;
   if (!(targetVol > 0)) return next;
 
-  const kgAlvo = roundMass(targetVol * dens);
+  const kgAlvo = massaKgFromLitrosOperacionais(targetVol, dens);
   const kgAtual = roundMass(
     next.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
   );
   const diffKg = roundMass(kgAlvo - kgAtual);
   if (diffKg === 0 || next.length === 0) return next;
 
-  let idx = 0;
-  next.forEach((c, i) => {
-    if ((c.quantidade_kg || 0) > (next[idx].quantidade_kg || 0)) idx = i;
-  });
+  // Absorve residual em linha fracionária (parcial); nunca desfaz 1.000 kg inteiro.
+  let idx = -1;
+  for (let i = next.length - 1; i >= 0; i -= 1) {
+    const kg = Number(next[i].quantidade_kg) || 0;
+    if (kg > 0 && Math.abs(kg - Math.round(kg)) > 1e-6) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx < 0) idx = next.length - 1;
   next[idx] = {
     ...next[idx],
     quantidade_kg: Math.max(
@@ -274,8 +283,8 @@ export function alignComposicaoKgToDensidade(
 }
 
 /**
- * Corrige composição/peso líquido divergentes da densidade cadastrada,
- * sem alterar volumes. Idempotente.
+ * Corrige composição/peso líquido divergentes da densidade cadastrada.
+ * Também corrige volume off-by-one (1.501 vs 1.500 da composição). Idempotente.
  */
 export function repairComposicaoKgFromDensidadePatch(vasilhame) {
   if (!vasilhame?.id) return null;
@@ -291,27 +300,41 @@ export function repairComposicaoKgFromDensidadePatch(vasilhame) {
   const composicao = Array.isArray(vasilhame.composicao)
     ? vasilhame.composicao
     : [];
-  const volume = roundVolume(
-    vasilhame.volume ||
-      composicao.reduce((s, c) => s + (c.quantidade_l || 0), 0)
+  const compSum = roundVolume(
+    composicao.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
   );
+  const storedVol = roundVolume(vasilhame.volume || 0);
+  // 1.501 L gravado com composição 1.500 L → usa a soma envasada.
+  let volume = storedVol;
+  if (
+    compSum > 0 &&
+    storedVol > 0 &&
+    Math.abs(storedVol - compSum) > 0.01 &&
+    Math.abs(storedVol - compSum) <= 1.001
+  ) {
+    volume = compSum;
+  } else if (!(volume > 0)) {
+    volume = compSum;
+  }
   if (!(volume > 0)) return null;
 
   const aligned =
     composicao.length > 0
       ? alignComposicaoKgToDensidade(composicao, dens, volume)
       : composicao;
-  const pesoAlvo = roundMass(volume * dens);
+  const pesoAlvo = massaKgFromLitrosOperacionais(volume, dens);
   const pesoAtual = roundMass(vasilhame.peso_liquido || 0);
   const tara = roundMass(vasilhame.tara || 0);
   const sameComp =
     composicao.length === 0 ||
     composicaoSignature(composicao) === composicaoSignature(aligned);
   const sameKg = Math.abs(pesoAtual - pesoAlvo) < 1e-9;
-  if (sameComp && sameKg) return null;
+  const sameVol = Math.abs(storedVol - volume) < 0.01;
+  if (sameComp && sameKg && sameVol) return null;
 
   return {
     ...(composicao.length > 0 ? { composicao: aligned } : {}),
+    ...(!sameVol ? { volume } : {}),
     peso_liquido: pesoAlvo,
     peso_bruto: roundMass(tara + pesoAlvo),
   };
@@ -357,7 +380,7 @@ export function rebuildComposicaoFromTransbordos(
         quantidade_l: volDest,
         quantidade_kg:
           dens > 0
-            ? roundMass(volDest * dens)
+            ? massaKgFromLitrosOperacionais(volDest, dens, kgDest)
             : kgDest > 0
               ? kgDest
               : 0,
@@ -1026,7 +1049,11 @@ export function composicaoFifoNaPlaca(transbordo, placa, barril) {
         // que faz a soma da composição divergir de volume × densidade.
         quantidade_kg:
           dens > 0
-            ? roundMass(qL * dens)
+            ? massaKgFromLitrosOperacionais(
+                qL,
+                dens,
+                kgFromDestino || c.quantidade_kg || 0
+              )
             : kgFromDestino > 0
               ? kgFromDestino
               : roundMass(c.quantidade_kg || 0),
@@ -1112,7 +1139,13 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
   const composicaoRaw = entries.map((e) => ({
     ...e,
     quantidade_kg:
-      dens > 0 ? roundMass(e.quantidade_l * dens) : e.quantidade_kg,
+      dens > 0
+        ? massaKgFromLitrosOperacionais(
+            e.quantidade_l,
+            dens,
+            e.quantidade_kg || 0
+          )
+        : e.quantidade_kg,
   }));
   const composicao =
     dens > 0
@@ -1120,7 +1153,11 @@ export function collapsedPlacaHealPatch(vasilhame, transbordos = []) {
       : composicaoRaw;
   const peso =
     dens > 0
-      ? roundMass(fifoVol * dens)
+      ? massaKgFromLitrosOperacionais(
+          fifoVol,
+          dens,
+          composicao.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
+        )
       : roundMass(composicao.reduce((s, c) => s + (c.quantidade_kg || 0), 0));
   const tara = roundMass(vasilhame.tara || 0);
 
@@ -1274,10 +1311,10 @@ export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
       const massaFromComp = roundMass(
         history.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
       );
-      // Volume × densidade é a fonte da verdade operacional (fecha 5.000 L = 3.960 kg).
+      // Massa canônica dos litros operacionais (917 L → 1.000 kg, não 999,53).
       const massa =
         dens > 0
-          ? roundMass(volume * dens)
+          ? massaKgFromLitrosOperacionais(volume, dens, massaFromComp)
           : massaFromComp > 0
             ? massaFromComp
             : 0;
@@ -1306,7 +1343,11 @@ export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
   volume = roundVolume(volume);
   massa = roundMass(massa);
   if (!(volume > 0)) return null;
-  if (!(massa > 0) && dens > 0) massa = roundMass(volume * dens);
+  if (!(massa > 0) && dens > 0) {
+    massa = massaKgFromLitrosOperacionais(volume, dens);
+  } else if (massa > 0 && dens > 0) {
+    massa = massaKgFromLitrosOperacionais(volume, dens, massa);
+  }
   return { volume, massa, densidade: dens };
 }
 
@@ -1438,7 +1479,7 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   );
   const peso =
     dens > 0
-      ? roundMass(volume * dens)
+      ? massaKgFromLitrosOperacionais(volume, dens, pesoFromComp)
       : expected?.massa > 0
         ? expected.massa
         : pesoFromComp > 0
