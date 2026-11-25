@@ -379,6 +379,7 @@
       },
       "actions": {
         "view": "Visualizar",
+        "print": "Imprimir informe",
         "edit": "Editar",
         "delete": "Eliminar",
         "validate": "Validar"
@@ -1840,6 +1841,7 @@
           "footerDoc": "Documento {{numero}} • Registrado el {{data}}",
           "print": "Imprimir",
           "back": "Volver a Órdenes de Trasvase",
+          "backToValidacao": "Volver a Validación",
           "viewerHint": "Vista de solo lectura — formato A4",
           "notFound": "Orden de trasvase no encontrada.",
           "loadError": "No se pudo cargar la orden de trasvase.",
@@ -2391,7 +2393,7 @@
     "list": {
       "subtitle": "{{count}} producción(es) registrada(s)",
       "subtitleFiltered": "{{filtered}} de {{total}} producción(es)",
-      "searchPlaceholder": "Buscar por OP, producto, lote, cliente...",
+      "searchPlaceholder": "Buscar por OP, producto, lote, lote de MP, cliente...",
       "allClients": "Todos los clientes",
       "finishDateFrom": "Fecha finaliz. de",
       "finishDateUntil": "hasta",

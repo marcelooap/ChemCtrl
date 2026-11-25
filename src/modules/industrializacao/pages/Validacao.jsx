@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, Eye, Pencil, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, Eye, Pencil, Printer, Search, Trash2 } from "lucide-react";
 import { Input } from "@shared/components/ui/input";
 import {
   AlertDialog,
@@ -37,6 +38,10 @@ import {
 } from "@industrializacao/lib/validacaoIndustrializacao";
 import { formatNum } from "@transbordo/lib/format";
 import { useValidacaoNovas } from "@transbordo/context/ValidacaoNovasContext";
+import {
+  RELATORIO_FROM,
+  buildRelatorioUrl,
+} from "@painel/lib/ordemTransbordoRelatorioNav";
 
 const PERM = "ind_validacao";
 
@@ -70,6 +75,7 @@ function StatusPill({ status, t }) {
 
 export default function ValidacaoIndustrializacao() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useInternalAuth();
   const { isNew, markAsRead, validacoesRevision } = useValidacaoNovas();
@@ -153,6 +159,15 @@ export default function ValidacaoIndustrializacao() {
 
   const acknowledgeNew = (id) => {
     if (id && isNew(id)) markAsRead(id);
+  };
+
+  const handlePrintRelatorio = (validacao) => {
+    if (!validacao?.id) return;
+    acknowledgeNew(validacao.id);
+    const from = RELATORIO_FROM.IND_VALIDACAO;
+    navigate(buildRelatorioUrl("industrializacao", validacao.id, from), {
+      state: { from },
+    });
   };
 
   const filtered = useMemo(() => {
@@ -518,6 +533,19 @@ export default function ValidacaoIndustrializacao() {
                               title={t("industrializacao.validacao.actions.view")}
                             >
                               <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePrintRelatorio(v)}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              title={t("industrializacao.validacao.actions.print", {
+                                defaultValue: "Imprimir relatório",
+                              })}
+                              aria-label={t("industrializacao.validacao.actions.print", {
+                                defaultValue: "Imprimir relatório",
+                              })}
+                            >
+                              <Printer className="w-4 h-4" />
                             </button>
                           </Can>
                           {isPendente && (

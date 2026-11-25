@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   CheckCircle2,
   Eye,
   Pencil,
+  Printer,
   Search,
   Trash2,
 } from "lucide-react";
@@ -41,6 +43,11 @@ import {
 } from "@transbordo/lib/validacaoTransbordo";
 import { formatNum } from "@transbordo/lib/format";
 import { useValidacaoNovas } from "@transbordo/context/ValidacaoNovasContext";
+
+import {
+  RELATORIO_FROM,
+  buildRelatorioUrl,
+} from "@painel/lib/ordemTransbordoRelatorioNav";
 
 const PERM = "tb_validacao";
 
@@ -161,6 +168,7 @@ function resolveOrigemBadge(v, t) {
 
 export default function Validacao() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useInternalAuth();
   const { isNew, markAsRead, validacoesRevision, lastValidacaoChange } = useValidacaoNovas();
@@ -294,6 +302,15 @@ export default function Validacao() {
     acknowledgeNew(v?.id);
     setViewValidacao(v);
     setViewOpen(true);
+  };
+
+  const handlePrintRelatorio = (validacao) => {
+    if (!validacao?.id) return;
+    acknowledgeNew(validacao.id);
+    const from = RELATORIO_FROM.CHEMFLOW_VALIDACAO;
+    navigate(buildRelatorioUrl("convencional", validacao.id, from), {
+      state: { from },
+    });
   };
 
   const handleEdit = (v) => {
@@ -687,6 +704,17 @@ export default function Validacao() {
                               title={t("transbordo.validacao.actions.view")}
                             >
                               <Eye />
+                            </RowActionButton>
+                            <RowActionButton
+                              onClick={() => handlePrintRelatorio(v)}
+                              title={t("transbordo.validacao.actions.print", {
+                                defaultValue: "Imprimir relatório",
+                              })}
+                              aria-label={t("transbordo.validacao.actions.print", {
+                                defaultValue: "Imprimir relatório",
+                              })}
+                            >
+                              <Printer />
                             </RowActionButton>
                           </Can>
                           {isPendente && (

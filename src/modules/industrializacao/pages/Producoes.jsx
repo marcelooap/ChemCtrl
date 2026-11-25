@@ -163,6 +163,7 @@ export default function Producoes() {
     const q = debouncedSearch.toLowerCase();
     const opContainersOf = () => resolveProductionEnvaseContainers(containers, containerOrigins, p);
     const matchSearch = !q || [p.op_number, p.product, p.client, p.lot, p.client_order].some(v => (v || '').toLowerCase().includes(q))
+      || parseArr(p.raw_materials_used).some((m) => (m.lot || '').toLowerCase().includes(q))
       || opContainersOf().some((c) => {
         const original = formatContainerPackagingForProduction(c, p, containerOrigins);
         return (c.container_number || '').toLowerCase().includes(q)

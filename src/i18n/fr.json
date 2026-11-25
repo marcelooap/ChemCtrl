@@ -379,6 +379,7 @@
       },
       "actions": {
         "view": "Voir",
+        "print": "Imprimer le rapport",
         "edit": "Modifier",
         "delete": "Supprimer",
         "validate": "Valider"
@@ -1840,6 +1841,7 @@
           "footerDoc": "Document {{numero}} • Enregistré le {{data}}",
           "print": "Imprimer",
           "back": "Retour aux Ordres de Transbordement",
+          "backToValidacao": "Retour à la Validation",
           "viewerHint": "Aperçu en lecture seule — format A4",
           "notFound": "Ordre de transbordement introuvable.",
           "loadError": "Impossible de charger l'ordre de transbordement.",
@@ -2391,7 +2393,7 @@
     "list": {
       "subtitle": "{{count}} production(s) enregistrée(s)",
       "subtitleFiltered": "{{filtered}} sur {{total}} production(s)",
-      "searchPlaceholder": "Rechercher par OP, produit, lot, client...",
+      "searchPlaceholder": "Rechercher par OP, produit, lot, lot MP, client...",
       "allClients": "Tous les clients",
       "finishDateFrom": "Date fin. de",
       "finishDateUntil": "à",

@@ -380,6 +380,7 @@
       },
       "actions": {
         "view": "View",
+        "print": "Print report",
         "edit": "Edit",
         "delete": "Delete",
         "validate": "Validate"
@@ -470,6 +471,7 @@
       "summary": { "total": "Total" },
       "actions": {
         "view": "View",
+        "print": "Print report",
         "edit": "Edit",
         "delete": "Delete",
         "validate": "Validate"
@@ -2472,6 +2474,7 @@
           "footerDoc": "Document {{numero}} • Created on {{data}}",
           "print": "Print",
           "back": "Back to Transshipment Orders",
+          "backToValidacao": "Back to Validation",
           "viewerHint": "Read-only preview — A4 format",
           "notFound": "Transshipment order not found.",
           "loadError": "Could not load the transshipment order.",
@@ -3025,7 +3028,7 @@
     "list": {
       "subtitle": "{{count}} production(s) recorded",
       "subtitleFiltered": "{{filtered}} of {{total}} production(s)",
-      "searchPlaceholder": "Search by PO, product, lot, client...",
+      "searchPlaceholder": "Search by PO, product, lot, RM lot, client...",
       "allClients": "All clients",
       "finishDateFrom": "Finish date from",
       "finishDateUntil": "to",

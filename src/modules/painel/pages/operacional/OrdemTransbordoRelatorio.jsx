@@ -47,17 +47,9 @@ import {
   ORIGEM_FLUXO,
   resolveOperacao,
 } from "@painel/lib/quitacaoOt";
+import { resolveBackNav } from "@painel/lib/ordemTransbordoRelatorioNav";
 
-const OT_BASE_PATH = "/painel/operacional/ordem-transbordo";
-const RECEBIMENTO_BASE_PATH = "/painel/logistica/recebimento";
 const LOGO_SRC = "/icons/chemctrl-logo.svg";
-
-function resolveBackPath(pathname) {
-  if (String(pathname || "").includes("/logistica/recebimento")) {
-    return RECEBIMENTO_BASE_PATH;
-  }
-  return OT_BASE_PATH;
-}
 
 const ORIGEM_TIPO_LABEL_KEYS = {
   entrada: "transbordo.validacao.origemTipo.granel",
@@ -545,10 +537,7 @@ export default function OrdemTransbordoRelatorio() {
   const navigate = useNavigate();
   const location = useLocation();
   const { destino, id } = useParams();
-  const backPath = useMemo(
-    () => resolveBackPath(location.pathname),
-    [location.pathname]
-  );
+  const backNav = useMemo(() => resolveBackNav(location), [location]);
 
   const [validacao, setValidacao] = useState(null);
   const [produtoFiltrado, setProdutoFiltrado] = useState(false);
@@ -598,7 +587,11 @@ export default function OrdemTransbordoRelatorio() {
     };
   }, [destino, id, t]);
 
-  const handleBack = useCallback(() => navigate(backPath), [backPath, navigate]);
+  const handleBack = useCallback(
+    () => navigate(backNav.path),
+    [backNav.path, navigate]
+  );
+  const backLabel = t(backNav.labelKey);
   const handlePrint = useCallback(() => window.print(), []);
 
   const transbordo =
@@ -652,7 +645,7 @@ export default function OrdemTransbordoRelatorio() {
         </div>
         <Button variant="outline" onClick={handleBack} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
-          {t("painel.operacional.ordemTransbordo.relatorio.back")}
+          {backLabel}
         </Button>
       </div>
     );
@@ -663,6 +656,14 @@ export default function OrdemTransbordoRelatorio() {
   const lotes = coletarLotes(validacao, origens, granel);
   const qtdNota = qtdNotaFromGranel(granel);
   const diferencaGranel = diferencaPesagemGranel(granel);
+  const observacoes = String(transbordo?.observacoes || "").trim();
+
+  // Granel mantém Lote; tanka / IBC / bombona / tambor (e vasilhame) → Observação.
+  const temOrigemGranel =
+    Boolean(granel) ||
+    origens.some((o) =>
+      GRANEL_TIPOS.has(String(o?.tipo_origem || "").toLowerCase())
+    );
 
   const quantidadeGeral = granel
     ? qtdNota && qtdNota.quantidade > 0
@@ -688,10 +689,15 @@ export default function OrdemTransbordoRelatorio() {
       label: t("painel.operacional.ordemTransbordo.fields.client"),
       value: orDash(validacao.cliente_nome),
     },
-    {
-      label: t("painel.operacional.ordemTransbordo.fields.lot"),
-      value: lotes.length > 0 ? lotes.join(" - ") : DASH,
-    },
+    temOrigemGranel
+      ? {
+          label: t("painel.operacional.ordemTransbordo.fields.lot"),
+          value: lotes.length > 0 ? lotes.join(" - ") : DASH,
+        }
+      : {
+          label: t("painel.operacional.ordemTransbordo.fields.observation"),
+          value: observacoes || DASH,
+        },
     {
       label: granel
         ? t("painel.operacional.ordemTransbordo.relatorio.fields.qtdNota")
@@ -807,8 +813,6 @@ export default function OrdemTransbordoRelatorio() {
       "",
   });
 
-  const observacoes = String(transbordo?.observacoes || "").trim();
-
   const operacao = resolveOperacaoRelatorio({
     destino,
     origens,
@@ -827,7 +831,7 @@ export default function OrdemTransbordoRelatorio() {
         <>
           <Button variant="outline" onClick={handleBack} className="gap-2">
             <ArrowLeft className="w-4 h-4" />
-            {t("painel.operacional.ordemTransbordo.relatorio.back")}
+            {backLabel}
           </Button>
           <span className="text-sm text-muted-foreground">
             {t("painel.operacional.ordemTransbordo.relatorio.viewerHint")}
@@ -928,7 +932,8 @@ export default function OrdemTransbordoRelatorio() {
           </ReportSection>
         )}
 
-        {observacoes && (
+        {/* Em tanka/embalado a observação já aparece em Informações gerais. */}
+        {observacoes && temOrigemGranel && (
           <ReportSection
             title={t("painel.operacional.ordemTransbordo.relatorio.sections.observacoes")}
           >

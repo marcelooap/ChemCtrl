@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileText, QrCode, ArrowUpRight, Pencil, Loader2 } from 'lucide-react';
+import { FileText, QrCode, ArrowUpRight, Pencil, Loader2, Truck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/components/ui/dialog';
 import { Button } from '@shared/components/ui/button';
 import { Checkbox } from '@shared/components/ui/checkbox';
@@ -568,6 +568,13 @@ export default function ProductionViewDialog({
                           <span className="inline-flex items-center gap-1">
                             <span className="text-muted-foreground tabular-nums">{seq}-</span>
                             {formatContainerPackagingForProduction(c, viewProduction, origins) || c?.container_number || t('common.notAvailable')}
+                            {(c?.status === 'Expedido' || Boolean(c?.departure_date)) && (
+                              <Truck
+                                className="w-3.5 h-3.5 shrink-0 text-muted-foreground"
+                                aria-label={t('containers.status.shipped')}
+                                title={t('containers.status.shipped')}
+                              />
+                            )}
                             {fromTransfer && (
                               <ArrowUpRight
                                 className="w-3.5 h-3.5 shrink-0"

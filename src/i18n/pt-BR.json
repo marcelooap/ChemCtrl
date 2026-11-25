@@ -380,6 +380,7 @@
       },
       "actions": {
         "view": "Visualizar",
+        "print": "Imprimir relatório",
         "edit": "Editar",
         "delete": "Excluir",
         "validate": "Validar"
@@ -470,6 +471,7 @@
       "summary": { "total": "Total" },
       "actions": {
         "view": "Visualizar",
+        "print": "Imprimir relatório",
         "edit": "Editar",
         "delete": "Excluir",
         "validate": "Validar"
@@ -2472,6 +2474,7 @@
           "footerDoc": "Documento {{numero}} • Lançado em {{data}}",
           "print": "Imprimir",
           "back": "Voltar para Ordens de Transbordo",
+          "backToValidacao": "Voltar para Validação",
           "viewerHint": "Visualização somente leitura — formato A4",
           "notFound": "Ordem de transbordo não encontrada.",
           "loadError": "Não foi possível carregar a ordem de transbordo.",
@@ -3025,7 +3028,7 @@
     "list": {
       "subtitle": "{{count}} produção(ões) registrada(s)",
       "subtitleFiltered": "{{filtered}} de {{total}} produção(ões)",
-      "searchPlaceholder": "Buscar por OP, produto, lote, cliente...",
+      "searchPlaceholder": "Buscar por OP, produto, lote, lote de MP, cliente...",
       "allClients": "Todos os clientes",
       "finishDateFrom": "Data finaliz. de",
       "finishDateUntil": "até",
