@@ -6,6 +6,7 @@ import {
   roundMass,
   parseDensidade,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
   qtdEmbalagensFromVolume,
   resolveMassaOperacionalKg,
   alignDestinosMassaToQuantidade,
@@ -546,18 +547,45 @@ export async function persistTransbordo({
         const embaladoOrigem =
           o.tipo_origem === "embalado" || Boolean(o.embalado);
         const um = o.unidade_medida || (embaladoOrigem ? "kg" : "L");
-        const massaEmbaladoMassa = isUnidadeMassaEntrada(um)
+        let massaEmbaladoMassa = isUnidadeMassaEntrada(um)
           ? String(um).toLowerCase() === "lb"
             ? roundMass(volume_retirado * 0.453592)
             : roundMass(volume_retirado)
           : dens > 0
             ? roundMass(volume_retirado * dens)
             : roundMass(o.massa_retirada || 0);
+        // Recupera saldo inteiro perdido no round-trip kg→L→kg (999,53 → 1.000).
+        if (
+          embaladoOrigem &&
+          isUnidadeMassaEntrada(um) &&
+          dens > 0 &&
+          massaEmbaladoMassa > 0
+        ) {
+          const preferida =
+            Number(o.saldo_atual) ||
+            Number(o.massa_retirada) ||
+            massaEmbaladoMassa;
+          const litrosOp = litrosFromMassaKg(massaEmbaladoMassa, dens);
+          const recovered = massaKgFromLitrosOperacionais(
+            litrosOp,
+            dens,
+            preferida
+          );
+          if (recovered > 0) {
+            massaEmbaladoMassa = recovered;
+          }
+        }
+        const volumeEmbaladoPersistido =
+          embaladoOrigem && isUnidadeMassaEntrada(um)
+            ? String(um).toLowerCase() === "lb"
+              ? roundMass(massaEmbaladoMassa / 0.453592)
+              : roundMass(massaEmbaladoMassa)
+            : volume_retirado;
         return {
           ...o,
           lote:
             lotesRet.find((l) => l.volume_retirado > 0)?.lote || o.lote || "",
-          volume_retirado,
+          volume_retirado: volumeEmbaladoPersistido,
           unidade_medida: um,
           embalado: embaladoOrigem,
           // Fora da margem: preserva peso líquido informado (não L×dens residual).

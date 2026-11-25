@@ -33,6 +33,7 @@ import {
   kgLotesToLitrosInteiros,
   qtdEmbalagensFromVolume,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
   resolveMassaOperacionalKg,
 } from "@transbordo/lib/format";
 import { loteToKg, loteToLitros, saldoKgToLitros, applyPesoLiquidoForaMargem } from "@transbordo/lib/conversao";
@@ -138,11 +139,15 @@ function embaladoMassaToLitros(qty, unidade, dens) {
 }
 
 /** litros do formulário → kg/lb persistido no estoque embalado. */
-function embaladoLitrosToMassa(qtyL, unidade, dens) {
+function embaladoLitrosToMassa(qtyL, unidade, dens, massaPreferida = 0) {
   const vol = Number(qtyL) || 0;
   if (!(vol > 0) || !(dens > 0)) return 0;
-  const kg = roundMass(vol * dens);
   const um = normalizeUnidadeEntrada(unidade);
+  const preferidaKg =
+    um === "lb"
+      ? roundMass((Number(massaPreferida) || 0) * 0.453592)
+      : roundMass(massaPreferida);
+  const kg = massaKgFromLitrosOperacionais(vol, dens, preferidaKg);
   return um === "lb" ? roundMass(kg / 0.453592) : kg;
 }
 
@@ -1292,9 +1297,12 @@ export default function TransbordoModal({
         embalado,
         unidade_medida: um,
       });
+      // saldo_atual (kg do IBC) tem prioridade sobre massa já convertida.
+      const massaPreferida =
+        Number(o.saldo_atual) || Number(o.massa_retirada) || 0;
       const toPersist = (qtyL) =>
         origemEmbaladoMassa && densidade > 0
-          ? embaladoLitrosToMassa(qtyL, um, densidade)
+          ? embaladoLitrosToMassa(qtyL, um, densidade, massaPreferida)
           : roundVolume(qtyL);
 
       const isMulti = (o.lotes_retirados || []).length > 1;
@@ -1371,9 +1379,11 @@ export default function TransbordoModal({
         embalado: origemEmbalado,
         unidade_medida: um,
       });
+      const massaPreferida =
+        Number(origem?.saldo_atual) || Number(origem?.massa_retirada) || 0;
       const toPersist = (qtyL) =>
         origemEmbaladoMassa && densidade > 0
-          ? embaladoLitrosToMassa(qtyL, um, densidade)
+          ? embaladoLitrosToMassa(qtyL, um, densidade, massaPreferida)
           : roundVolume(qtyL);
 
       const volumeFormL = roundVolume(d.volume_total || d.volume || 0);

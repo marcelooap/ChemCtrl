@@ -20,6 +20,7 @@ import {
   formatNum,
   formatVolume,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
   parseDensidade,
   qtdEmbalagensFromVolume,
   roundMass,
@@ -65,11 +66,15 @@ function normalizeUnit(unidade) {
 }
 
 /** litros do formulário → kg/lb persistido no estoque embalado (paridade TransbordoModal). */
-function embaladoLitrosToMassa(qtyL, unidade, dens) {
+function embaladoLitrosToMassa(qtyL, unidade, dens, massaPreferida = 0) {
   const vol = Number(qtyL) || 0;
   if (!(vol > 0) || !(dens > 0)) return 0;
-  const kg = roundMass(vol * dens);
   const um = normalizeUnidadeEntrada(unidade);
+  const preferidaKg =
+    um === "lb"
+      ? roundMass((Number(massaPreferida) || 0) * 0.453592)
+      : roundMass(massaPreferida);
+  const kg = massaKgFromLitrosOperacionais(vol, dens, preferidaKg);
   return um === "lb" ? roundMass(kg / 0.453592) : kg;
 }
 
@@ -793,6 +798,12 @@ export default function OrdemTransbordoEnvaseModal({
         const vol = roundVolume(item.quantidade);
         const um = item.unidade_medida || "kg";
         const loteEfetivo = String(item.lote || "").trim();
+        const saldoAtual = Number(item.saldo_atual) || 0;
+        // Massa do saldo (não L×dens): 1.000 kg @ 1,09 → 917 L → 1.000 kg.
+        const massaOrigem =
+          dens > 0
+            ? embaladoLitrosToMassa(vol, um, dens, saldoAtual)
+            : roundMass(saldoAtual);
         return {
           _uid: uid,
           tipo_origem: "embalado",
@@ -802,7 +813,8 @@ export default function OrdemTransbordoEnvaseModal({
           // FIFO opera em L; conversão massa ocorre depois.
           unidade_medida: um,
           volume_retirado: vol,
-          massa_retirada: dens > 0 ? roundMass(vol * dens) : 0,
+          massa_retirada: massaOrigem,
+          saldo_atual: saldoAtual,
           saldo_restante: 0,
           saldo_disponivel: vol,
           embalado: true,
@@ -831,6 +843,23 @@ export default function OrdemTransbordoEnvaseModal({
         embaladoOrigem?.lote ||
         prevOrigem.lote ||
         "";
+      const saldoAtual =
+        Number(embaladoOrigem?.saldo_atual) ||
+        Number(prevOrigem.saldo_atual) ||
+        0;
+      const massaEmbalado =
+        massaPesagemForaMargemKg > 0
+          ? roundMass(massaPesagemForaMargemKg)
+          : isEmbalado && dens > 0
+            ? embaladoLitrosToMassa(
+                volumeRegistradoL,
+                umEstoque,
+                dens,
+                saldoAtual || Number(prevOrigem.massa_retirada) || 0
+              )
+            : dens > 0
+              ? roundMass(volumeRegistradoL * dens)
+              : 0;
       // FIFO sempre em L; conversão massa ocorre depois (paridade TransbordoModal).
       origensNorm = [
         {
@@ -843,12 +872,8 @@ export default function OrdemTransbordoEnvaseModal({
           lote: loteEfetivo,
           unidade_medida: umEstoque,
           volume_retirado: volumeRegistradoL,
-          massa_retirada:
-            massaPesagemForaMargemKg > 0
-              ? roundMass(massaPesagemForaMargemKg)
-              : dens > 0
-                ? roundMass(volumeRegistradoL * dens)
-                : 0,
+          massa_retirada: massaEmbalado,
+          saldo_atual: saldoAtual,
           saldo_restante: 0,
           saldo_disponivel: volumeRegistradoL,
           embalado: isEmbalado,
@@ -908,12 +933,20 @@ export default function OrdemTransbordoEnvaseModal({
     const origemEmbaladoMassa = origensNorm.some(isOrigemEmbaladoMassa);
     if (origemEmbaladoMassa && dens > 0) {
       const umDestino = origem0?.unidade_medida || "kg";
+      const preferidaDestino =
+        Number(origem0?.saldo_atual) ||
+        Number(origem0?.massa_retirada) ||
+        0;
       const toPersistDestino = (qtyL) =>
-        embaladoLitrosToMassa(qtyL, umDestino, dens);
+        embaladoLitrosToMassa(qtyL, umDestino, dens, preferidaDestino);
       origensNorm = origensNorm.map((o) => {
         if (!isOrigemEmbaladoMassa(o)) return o;
         const um = o.unidade_medida || "kg";
-        const toPersist = (qtyL) => embaladoLitrosToMassa(qtyL, um, dens);
+        // saldo_atual (kg do IBC) tem prioridade sobre massa já convertida.
+        const preferida =
+          Number(o.saldo_atual) || Number(o.massa_retirada) || 0;
+        const toPersist = (qtyL) =>
+          embaladoLitrosToMassa(qtyL, um, dens, preferida);
         const volL = roundVolume(o.volume_retirado || 0);
         const volumePersistido = toPersist(volL);
         const massaKg =

@@ -24,6 +24,7 @@ import {
   formatMass,
   formatNum,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
   parseDensidade,
   roundMass,
   roundVolume,
@@ -108,6 +109,20 @@ function volumeOrDash(value) {
 function massaOrDash(value, unidade = "kg") {
   const n = Number(value) || 0;
   return n > 0 ? `${formatMass(n)} ${unidade}` : DASH;
+}
+
+/**
+ * Massa exibida na origem embalada: recupera o saldo inteiro perdido no
+ * round-trip kg→L→kg (1.000 kg @ 1,09 → 917 L → 999,53 kg).
+ */
+function origemMassaExibida(origem, dens) {
+  const raw =
+    Number(origem?.massa_retirada) || Number(origem?.volume_retirado) || 0;
+  if (!(raw > 0)) return 0;
+  const densN = parseDensidade(dens);
+  if (!(densN > 0)) return raw;
+  const litros = litrosFromMassaKg(raw, densN);
+  return massaKgFromLitrosOperacionais(litros, densN, raw);
 }
 
 /**
@@ -798,7 +813,10 @@ export default function OrdemTransbordoRelatorio() {
       lote: orDash(origem?.lote),
       volume:
         embalado && isMassaUnidade(unidade)
-          ? massaOrDash(origem?.massa_retirada, String(unidade).toLowerCase())
+          ? massaOrDash(
+              origemMassaExibida(origem, densidade),
+              String(unidade).toLowerCase()
+            )
           : volumeOrDash(origem?.volume_retirado),
     };
   });

@@ -313,6 +313,82 @@ export function litrosFromMassaKg(kg, densidade) {
 }
 
 /**
+ * Inverso operacional de litrosFromMassaKg.
+ * Recupera a massa do saldo (ex.: 1.000 kg @ 1,09 → 917 L → 1.000 kg)
+ * em vez do residual L×densidade (999,53 kg).
+ *
+ * @param {number} litros
+ * @param {number|string} densidade
+ * @param {number} [massaPreferida] — saldo/massa de origem, quando conhecida
+ */
+export function massaKgFromLitrosOperacionais(
+  litros,
+  densidade,
+  massaPreferida = 0
+) {
+  const vol = roundVolume(litros);
+  const dens = parseDensidade(densidade);
+  if (!(vol > 0)) return 0;
+  if (!(dens > 0)) return roundMass(vol);
+
+  const preferida = roundMass(massaPreferida);
+  if (preferida > 0) {
+    const maxL = roundVolume(litrosFromMassaKg(preferida, dens));
+    if (maxL > 0 && vol === maxL) {
+      // Saque integral do saldo: preserva a massa informada (IBC 1.000 kg).
+      if (isMassaInteira(preferida)) return Math.round(preferida);
+      // Preferida já é residual L×dens (ex.: 999,53): recupera inteiro canônico.
+      const recoveredFull = findMassaInteiraParaLitros(vol, dens);
+      if (
+        recoveredFull > 0 &&
+        Math.abs(recoveredFull - preferida) <=
+          TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
+      ) {
+        return recoveredFull;
+      }
+      return preferida;
+    }
+    if (maxL > 0 && vol < maxL) {
+      // Saque parcial: proporcional ao saldo (partes somam o saldo).
+      return roundMass((vol / maxL) * preferida);
+    }
+  }
+
+  const naive = roundMass(vol * dens);
+  if (Math.abs(vol - Math.round(vol)) < 1e-9) {
+    const recovered = findMassaInteiraParaLitros(Math.round(vol), dens);
+    if (
+      recovered > 0 &&
+      Math.abs(recovered - naive) <= TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9
+    ) {
+      return recovered;
+    }
+  }
+  return naive;
+}
+
+/** Massa inteira M tal que litrosFromMassaKg(M, dens) === litrosInt. */
+function findMassaInteiraParaLitros(litrosInt, dens) {
+  const L = Math.round(Number(litrosInt) || 0);
+  if (!(L > 0) || !(dens > 0)) return 0;
+  const approx = L * dens;
+  const start = Math.max(1, Math.floor(approx) - 1);
+  const end = Math.ceil(approx) + 2;
+  let best = 0;
+  for (let m = start; m <= end; m += 1) {
+    if (litrosFromMassaKg(m, dens) !== L) continue;
+    if (
+      !best ||
+      Math.abs(m - approx) < Math.abs(best - approx) ||
+      (Math.abs(m - approx) === Math.abs(best - approx) && m > best)
+    ) {
+      best = m;
+    }
+  }
+  return best;
+}
+
+/**
  * Par volume (L) e massa (kg) operacionais, derivando o faltante pela densidade.
  */
 export function resolveVolumeMassaOperacional({
