@@ -1,0 +1,2685 @@
+{
+  "patioVol": 125000,
+  "withGap": [
+    {
+      "placa": "29275-5",
+      "lote": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoVol": 0,
+      "fifoOwners": [],
+      "stamps": [
+        {
+          "estoque_id": "e1451644-9f2f-4f5e-a98e-6db169be8616",
+          "lote": "OF-1436-26",
+          "qL": 5000
+        }
+      ],
+      "gap": 5000
+    },
+    {
+      "placa": "29438-2",
+      "lote": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoVol": 0,
+      "fifoOwners": [],
+      "stamps": [
+        {
+          "estoque_id": "e1451644-9f2f-4f5e-a98e-6db169be8616",
+          "lote": "OF-1436-26",
+          "qL": 5000
+        }
+      ],
+      "gap": 5000
+    },
+    {
+      "placa": "29446-4",
+      "lote": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoVol": 0,
+      "fifoOwners": [],
+      "stamps": [
+        {
+          "estoque_id": "e1451644-9f2f-4f5e-a98e-6db169be8616",
+          "lote": "OF-1436-26",
+          "qL": 5000
+        }
+      ],
+      "gap": 5000
+    },
+    {
+      "placa": "30119-3",
+      "lote": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoVol": 0,
+      "fifoOwners": [],
+      "stamps": [
+        {
+          "estoque_id": "e1451644-9f2f-4f5e-a98e-6db169be8616",
+          "lote": "OF-1436-26",
+          "qL": 5000
+        }
+      ],
+      "gap": 5000
+    }
+  ],
+  "expectedLocais": [
+    {
+      "codigo": 475,
+      "lote": "OF-1472-26",
+      "saldo_ini": 29887.85,
+      "saldo_fin_db": 10000,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 549,
+      "lote": "OF-1495-26",
+      "saldo_ini": 30108,
+      "saldo_fin_db": 30108,
+      "tanqueFifo": 30108,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 30108
+    },
+    {
+      "codigo": 129,
+      "lote": "OF-1417-26",
+      "saldo_ini": 1410,
+      "saldo_fin_db": 112.15,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 421,
+      "lote": "OF-1466-26",
+      "saldo_ini": 30187,
+      "saldo_fin_db": 187,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 522,
+      "lote": "OF-1487-26",
+      "saldo_ini": 29738,
+      "saldo_fin_db": 29738,
+      "tanqueFifo": 4233.409,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 4233.409
+    },
+    {
+      "codigo": 250,
+      "lote": "OF-1445-26",
+      "saldo_ini": 30000,
+      "saldo_fin_db": 2561.786,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 514,
+      "lote": "OF-1481-26",
+      "saldo_ini": 29794.392,
+      "saldo_fin_db": 29794.392,
+      "tanqueFifo": 5000,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 5000
+    },
+    {
+      "codigo": 194,
+      "lote": "OF-1436-26",
+      "saldo_ini": 30299,
+      "saldo_fin_db": 20000,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 20000,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 531,
+      "lote": "OF-1493-26",
+      "saldo_ini": 29290,
+      "saldo_fin_db": 29290,
+      "tanqueFifo": 29290,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 29290
+    },
+    {
+      "codigo": 434,
+      "lote": "OF-1468-26",
+      "saldo_ini": 29831.775,
+      "saldo_fin_db": 9813,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 249,
+      "lote": "OF-1442-26",
+      "saldo_ini": 30000,
+      "saldo_fin_db": 2438.214,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 209,
+      "lote": "OF-1440-26",
+      "saldo_ini": 29458,
+      "saldo_fin_db": 3317.636,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    },
+    {
+      "codigo": 625,
+      "lote": "OF-1504-26",
+      "saldo_ini": 31094,
+      "saldo_fin_db": 31094,
+      "tanqueFifo": 4999.591,
+      "tanqueLegadoLote": 0,
+      "tanka": 26094.409,
+      "totalFifo": 31094
+    },
+    {
+      "codigo": 578,
+      "lote": "OF-1502-26",
+      "saldo_ini": 31369,
+      "saldo_fin_db": 31369,
+      "tanqueFifo": 31369,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 31369
+    },
+    {
+      "codigo": 504,
+      "lote": "OF-1480-26",
+      "saldo_ini": 29794.392,
+      "saldo_fin_db": 9701.017,
+      "tanqueFifo": 0,
+      "tanqueLegadoLote": 0,
+      "tanka": 0,
+      "totalFifo": 0
+    }
+  ],
+  "sumTanqueFifo": 105000,
+  "sumLegado": 20000,
+  "unresolved": [
+    {
+      "destinoKey": "4ba0ac0d-7c3f-4aab-915d-7e76f8b39b12||12661-4|",
+      "placa": "12661-4",
+      "op": "T036",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4ba0ac0d-7c3f-4aab-915d-7e76f8b39b12||15399-3|",
+      "placa": "15399-3",
+      "op": "T036",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4ba0ac0d-7c3f-4aab-915d-7e76f8b39b12||14044-0|",
+      "placa": "14044-0",
+      "op": "T036",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4ba0ac0d-7c3f-4aab-915d-7e76f8b39b12||13976-1|",
+      "placa": "13976-1",
+      "op": "T036",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ee3809ba-2607-4e2c-9008-17222be0e746||29953-5|",
+      "placa": "29953-5",
+      "op": "T037",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ee3809ba-2607-4e2c-9008-17222be0e746||29503-9|",
+      "placa": "29503-9",
+      "op": "T037",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ee3809ba-2607-4e2c-9008-17222be0e746||29545-1|",
+      "placa": "29545-1",
+      "op": "T037",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ee3809ba-2607-4e2c-9008-17222be0e746||29434-1|",
+      "placa": "29434-1",
+      "op": "T037",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9c29bd06-6d9c-456b-ba67-6a1faf9e6d22||14914-1|",
+      "placa": "14914-1",
+      "op": "T039",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "534039a5-0db1-4877-9868-bac91fa00268|207a50e2-8bd9-4847-86f6-14d2bd4f9ab3||801001-3",
+      "placa": "",
+      "op": "T070",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "534039a5-0db1-4877-9868-bac91fa00268||800805-1|",
+      "placa": "800805-1",
+      "op": "T070",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "534039a5-0db1-4877-9868-bac91fa00268||806384-2|",
+      "placa": "806384-2",
+      "op": "T070",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "91383733-c855-420d-9837-719aa0c88383||1310902001|806671-0",
+      "placa": "1310902001",
+      "op": "T072",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "91383733-c855-420d-9837-719aa0c88383||085680503|800043-3",
+      "placa": "085680503",
+      "op": "T072",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "91383733-c855-420d-9837-719aa0c88383||107550505|801008-0",
+      "placa": "107550505",
+      "op": "T072",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9a93314d-66d6-45aa-9a71-c74e70a49fb3||08120-6|",
+      "placa": "08120-6",
+      "op": "T085",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9a93314d-66d6-45aa-9a71-c74e70a49fb3||14021-4|",
+      "placa": "14021-4",
+      "op": "T085",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9a93314d-66d6-45aa-9a71-c74e70a49fb3||28308-3|",
+      "placa": "28308-3",
+      "op": "T085",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9a93314d-66d6-45aa-9a71-c74e70a49fb3||25453-8|",
+      "placa": "25453-8",
+      "op": "T085",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06c88e62-e410-4236-a9d7-cf0ae8f7a0c8||13993-1|",
+      "placa": "13993-1",
+      "op": "T086",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "854bd157-884e-483b-b084-e8e1e2031d94||30128-2|",
+      "placa": "30128-2",
+      "op": "T092",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d2eb518a-a746-4d12-9758-642bec90ef2d||085610502|800007-7",
+      "placa": "085610502",
+      "op": "T093",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d2eb518a-a746-4d12-9758-642bec90ef2d||096970505|800483-8",
+      "placa": "096970505",
+      "op": "T093",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "597a7f6a-f726-440f-8575-d391f1f983be|e015e8f0-b05c-4fcf-961c-a0c601896be0|096970505|800483-8",
+      "placa": "096970505",
+      "op": "T094",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "597a7f6a-f726-440f-8575-d391f1f983be||1311152018|806898-4",
+      "placa": "1311152018",
+      "op": "T094",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0a0c69b1-d1c4-46ff-9ad8-86a76a50dc49||31307-6|",
+      "placa": "31307-6",
+      "op": "T098",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7684b6ad-0a9a-4ad3-b6eb-b9a7f8b90bf9||107560503|801003-0",
+      "placa": "107560503",
+      "op": "T099",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7684b6ad-0a9a-4ad3-b6eb-b9a7f8b90bf9||097080505|800640-7",
+      "placa": "097080505",
+      "op": "T099",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d|071ac6c3-23c4-4eb3-9c6e-2261aabb93ad|30130-7|",
+      "placa": "30130-7",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29099-8|",
+      "placa": "29099-8",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29365-4|",
+      "placa": "29365-4",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29301-2|",
+      "placa": "29301-2",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29336-1|",
+      "placa": "29336-1",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29103-7|",
+      "placa": "29103-7",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "97314500-8710-4ad6-9a73-4ced3f5eb62d||29080-1|",
+      "placa": "29080-1",
+      "op": "T100",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cf92d105-d428-4855-8f54-bc9d81b3c753|9b35b77f-15f0-4f42-b890-7063b4958223|28323-6|",
+      "placa": "28323-6",
+      "op": "T109",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cf92d105-d428-4855-8f54-bc9d81b3c753||31279-4|",
+      "placa": "31279-4",
+      "op": "T109",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cf92d105-d428-4855-8f54-bc9d81b3c753||31308-4|",
+      "placa": "31308-4",
+      "op": "T109",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cf92d105-d428-4855-8f54-bc9d81b3c753||31300-3|",
+      "placa": "31300-3",
+      "op": "T109",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||31301-0|",
+      "placa": "31301-0",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||31298-9|",
+      "placa": "31298-9",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||31269-7|",
+      "placa": "31269-7",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||31362-8|",
+      "placa": "31362-8",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||26396-8|",
+      "placa": "26396-8",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3eda549e-5f93-4c2f-a586-a4773594953e||31361-0|",
+      "placa": "31361-0",
+      "op": "T110",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a2a85949-9176-491d-8b80-0807eadbe8b0|6dd5f5a3-55dc-4250-a7bb-31bbd822ad85|31361-0|",
+      "placa": "31361-0",
+      "op": "T111",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06caa71c-7a13-4e61-b71e-5193097b810e||25541-2|",
+      "placa": "25541-2",
+      "op": "T117",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06caa71c-7a13-4e61-b71e-5193097b810e||28008-5|",
+      "placa": "28008-5",
+      "op": "T117",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06caa71c-7a13-4e61-b71e-5193097b810e||28324-4|",
+      "placa": "28324-4",
+      "op": "T117",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06caa71c-7a13-4e61-b71e-5193097b810e||30318-6|",
+      "placa": "30318-6",
+      "op": "T117",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "06caa71c-7a13-4e61-b71e-5193097b810e||31265-5|",
+      "placa": "31265-5",
+      "op": "T117",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "30cab193-c2f7-4619-97b0-8cbebb32ed1e||31277-8|",
+      "placa": "31277-8",
+      "op": "T118",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "30cab193-c2f7-4619-97b0-8cbebb32ed1e||31267-2|",
+      "placa": "31267-2",
+      "op": "T118",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "30cab193-c2f7-4619-97b0-8cbebb32ed1e||31372-4|",
+      "placa": "31372-4",
+      "op": "T118",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "30cab193-c2f7-4619-97b0-8cbebb32ed1e||31273-6|",
+      "placa": "31273-6",
+      "op": "T118",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "30cab193-c2f7-4619-97b0-8cbebb32ed1e|2ab3afa2-c4b5-4395-92ab-a49e0850d642|31265-5|",
+      "placa": "31265-5",
+      "op": "T118",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a462ca30-adf6-414f-846a-ca2862c76817|1f5c9b3f-b488-481e-b717-fd4026a7ad3b|31273-6|",
+      "placa": "31273-6",
+      "op": "T119",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a462ca30-adf6-414f-846a-ca2862c76817||28014-1|",
+      "placa": "28014-1",
+      "op": "T119",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5504144c-db8b-49eb-b6c2-055d157a5169||29439-0|",
+      "placa": "29439-0",
+      "op": "T121",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5504144c-db8b-49eb-b6c2-055d157a5169||30120-0|",
+      "placa": "30120-0",
+      "op": "T121",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5504144c-db8b-49eb-b6c2-055d157a5169||29958-3|",
+      "placa": "29958-3",
+      "op": "T121",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5504144c-db8b-49eb-b6c2-055d157a5169||29515-2|",
+      "placa": "29515-2",
+      "op": "T121",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5504144c-db8b-49eb-b6c2-055d157a5169||29437-5|",
+      "placa": "29437-5",
+      "op": "T121",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e21b26cb-39d1-4085-a030-83ebb71eb696|79ecf01a-db4b-463d-9fc6-9f7be70ac109|29099-8|",
+      "placa": "29099-8",
+      "op": "T122",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e21b26cb-39d1-4085-a030-83ebb71eb696||29265-8|",
+      "placa": "29265-8",
+      "op": "T122",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cc0412b7-63b5-4f21-b02e-de9445204889||097300502|800973-2",
+      "placa": "097300502",
+      "op": "T127",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cc0412b7-63b5-4f21-b02e-de9445204889||13870-8|",
+      "placa": "13870-8",
+      "op": "T127",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cc0412b7-63b5-4f21-b02e-de9445204889||31296-4|",
+      "placa": "31296-4",
+      "op": "T127",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "cc0412b7-63b5-4f21-b02e-de9445204889||1310922010|806830-5",
+      "placa": "1310922010",
+      "op": "T127",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "25e63e9f-4287-4270-bd5f-df1a756b5459|9c2b7f52-798d-4cdd-92f4-50beab07cd58|02/28978-2|",
+      "placa": "02/28978-2",
+      "op": "T128",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "25e63e9f-4287-4270-bd5f-df1a756b5459||29287-7|",
+      "placa": "29287-7",
+      "op": "T128",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "25e63e9f-4287-4270-bd5f-df1a756b5459||29378-3|",
+      "placa": "29378-3",
+      "op": "T128",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "25e63e9f-4287-4270-bd5f-df1a756b5459||02/28956-3|",
+      "placa": "02/28956-3",
+      "op": "T128",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "25e63e9f-4287-4270-bd5f-df1a756b5459||28890-8|",
+      "placa": "28890-8",
+      "op": "T128",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2e31c78b-5f8f-4f81-905c-361c7860ad5e||31299-7|",
+      "placa": "31299-7",
+      "op": "T129",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6a58dc95-e37d-471f-b6b3-cb688644fb3d|ebe73f70-92f0-4000-b193-5fbdca91fecd|28414-3|",
+      "placa": "28414-3",
+      "op": "T138",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "db97d4bb-cba3-4b6e-8b77-a96513d616f6||29250-2|",
+      "placa": "29250-2",
+      "op": "T139",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d87f4753-45c0-403e-95f7-1fa8b8d5b483||29521-6|",
+      "placa": "29521-6",
+      "op": "T141",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "674397c0-0e54-47a2-9e1a-39c8cd81e236|9cdc1b2c-d466-413c-a78c-c722cab5f391|29521-6|",
+      "placa": "29521-6",
+      "op": "T142",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "674397c0-0e54-47a2-9e1a-39c8cd81e236||29563-9|",
+      "placa": "29563-9",
+      "op": "T142",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "674397c0-0e54-47a2-9e1a-39c8cd81e236||29445-6|",
+      "placa": "29445-6",
+      "op": "T142",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "674397c0-0e54-47a2-9e1a-39c8cd81e236||29361-3|",
+      "placa": "29361-3",
+      "op": "T142",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "674397c0-0e54-47a2-9e1a-39c8cd81e236||29235-8|",
+      "placa": "29235-8",
+      "op": "T142",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "71c8fb6b-e80b-41bc-a177-9356fa5f1c15||17322-1|",
+      "placa": "17322-1",
+      "op": "T146",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "71c8fb6b-e80b-41bc-a177-9356fa5f1c15||14093-5|",
+      "placa": "14093-5",
+      "op": "T146",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "71c8fb6b-e80b-41bc-a177-9356fa5f1c15||11657-0|",
+      "placa": "11657-0",
+      "op": "T146",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "71c8fb6b-e80b-41bc-a177-9356fa5f1c15||15647-1|",
+      "placa": "15647-1",
+      "op": "T146",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7b8485d-bdb6-4ab4-95c0-26c1225ed01d||129392003|801598-8",
+      "placa": "129392003",
+      "op": "T147",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7b8485d-bdb6-4ab4-95c0-26c1225ed01d||1311152016|806896-8",
+      "placa": "1311152016",
+      "op": "T147",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6851e328-0d5a-478b-b3a2-335ef1c61e68||086371009|800706-3",
+      "placa": "086371009",
+      "op": "T148",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e95c2602-ede3-4789-95dd-4302c4d8f04c||OCTO 507005-5|",
+      "placa": "OCTO 507005-5",
+      "op": "T170",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e95c2602-ede3-4789-95dd-4302c4d8f04c||32700502|",
+      "placa": "32700502",
+      "op": "T170",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e95c2602-ede3-4789-95dd-4302c4d8f04c||0500000003-3|",
+      "placa": "0500000003-3",
+      "op": "T170",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e95c2602-ede3-4789-95dd-4302c4d8f04c||10758-9|",
+      "placa": "10758-9",
+      "op": "T170",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e95c2602-ede3-4789-95dd-4302c4d8f04c||021940404|",
+      "placa": "021940404",
+      "op": "T170",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||17181-2|",
+      "placa": "17181-2",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||16964-2|",
+      "placa": "16964-2",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||129502008|",
+      "placa": "129502008",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||10781-4|",
+      "placa": "10781-4",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||17179-8|",
+      "placa": "17179-8",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d7068134-7ff6-4e56-b7a5-ff216dabf6c6||10693-2|",
+      "placa": "10693-2",
+      "op": "T171",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08||05243-4|",
+      "placa": "05243-4",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08|5be5d78d-68a5-44b6-a193-692adc383698|021940404|",
+      "placa": "021940404",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08||17184-6|",
+      "placa": "17184-6",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08||17345-8|",
+      "placa": "17345-8",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08||17344-1|",
+      "placa": "17344-1",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "948e68a2-d626-4645-afb0-2be6acffed08|84ab8eea-4e8a-46e4-acf1-4353615109ce|17181-2|",
+      "placa": "17181-2",
+      "op": "T172",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a2e004b7-dd07-4918-8490-d7d3c46a941f||085640502|800022-0",
+      "placa": "085640502",
+      "op": "T173",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e4d75b97-f9c1-47bc-b02e-20aeaac2ad93||15170-9|",
+      "placa": "15170-9",
+      "op": "T181",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "822801bc-a894-44cd-95f3-75287af1ec23|e5c4899f-cfb8-450a-b2f7-be8a14d0cc39|085640502|800022-0",
+      "placa": "085640502",
+      "op": "T184",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "822801bc-a894-44cd-95f3-75287af1ec23||13111152017|806897-6",
+      "placa": "13111152017",
+      "op": "T184",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "822801bc-a894-44cd-95f3-75287af1ec23||11850501|802737-4",
+      "placa": "11850501",
+      "op": "T184",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "822801bc-a894-44cd-95f3-75287af1ec23||129342005|801540-6",
+      "placa": "129342005",
+      "op": "T184",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3f5b38ec-6082-4bd8-898c-6c773cdc4f41||29441-4|",
+      "placa": "29441-4",
+      "op": "T191",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3f5b38ec-6082-4bd8-898c-6c773cdc4f41||29068-0|",
+      "placa": "29068-0",
+      "op": "T191",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3f5b38ec-6082-4bd8-898c-6c773cdc4f41||29075-4|",
+      "placa": "29075-4",
+      "op": "T191",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3f5b38ec-6082-4bd8-898c-6c773cdc4f41||29107-7|",
+      "placa": "29107-7",
+      "op": "T191",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3f5b38ec-6082-4bd8-898c-6c773cdc4f41||29116-6|",
+      "placa": "29116-6",
+      "op": "T191",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "aecd6419-228f-4867-9dac-9d1d57b9a0cc||29334-6|",
+      "placa": "29334-6",
+      "op": "T192",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "aecd6419-228f-4867-9dac-9d1d57b9a0cc||29290-9|",
+      "placa": "29290-9",
+      "op": "T192",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "15ce32e7-940a-45d9-b3b7-75d732cba0bd||18466-9|",
+      "placa": "18466-9",
+      "op": "T195",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "15ce32e7-940a-45d9-b3b7-75d732cba0bd||31294-8|",
+      "placa": "31294-8",
+      "op": "T195",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "15ce32e7-940a-45d9-b3b7-75d732cba0bd||31293-1|",
+      "placa": "31293-1",
+      "op": "T195",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "15ce32e7-940a-45d9-b3b7-75d732cba0bd||25706-6|",
+      "placa": "25706-6",
+      "op": "T195",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b0ab69bf-6194-43e9-91bc-aff8cc044108||10749-0|",
+      "placa": "10749-0",
+      "op": "T196",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b0ab69bf-6194-43e9-91bc-aff8cc044108||10811050-3|",
+      "placa": "10811050-3",
+      "op": "T196",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b0ab69bf-6194-43e9-91bc-aff8cc044108||10744-1|",
+      "placa": "10744-1",
+      "op": "T196",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b0ab69bf-6194-43e9-91bc-aff8cc044108||12009-3|",
+      "placa": "12009-3",
+      "op": "T196",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e875eae4-0dd5-42bf-bd99-794d2e02c380||32238-4|",
+      "placa": "32238-4",
+      "op": "T199",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e875eae4-0dd5-42bf-bd99-794d2e02c380||15447-0|",
+      "placa": "15447-0",
+      "op": "T199",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e875eae4-0dd5-42bf-bd99-794d2e02c380||17939-5|",
+      "placa": "17939-5",
+      "op": "T199",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e875eae4-0dd5-42bf-bd99-794d2e02c380||10964-6|",
+      "placa": "10964-6",
+      "op": "T199",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5053ac24-79af-4d5d-a5c2-03fbe1fd7fb3||20992-4|",
+      "placa": "20992-4",
+      "op": "T208",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce1f3f02-8001-499d-889d-f1ef91b6bd2c||29571-0|",
+      "placa": "29571-0",
+      "op": "T210",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce1f3f02-8001-499d-889d-f1ef91b6bd2c||29539-6|",
+      "placa": "29539-6",
+      "op": "T210",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "681bc60b-44a9-4a2c-b674-e04f63de6cbd|9c9703e3-b96e-4879-a3fe-2e2f3b595b36|29539-6|",
+      "placa": "29539-6",
+      "op": "T211",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "681bc60b-44a9-4a2c-b674-e04f63de6cbd||29955-0|",
+      "placa": "29955-0",
+      "op": "T211",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ca3d0e12-60c8-4b95-ace3-68b60324d2fa||30082-0|",
+      "placa": "30082-0",
+      "op": "T212",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ca3d0e12-60c8-4b95-ace3-68b60324d2fa||30078-0|",
+      "placa": "30078-0",
+      "op": "T212",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ca3d0e12-60c8-4b95-ace3-68b60324d2fa||29304-5|",
+      "placa": "29304-5",
+      "op": "T212",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ca3d0e12-60c8-4b95-ace3-68b60324d2fa||29332-0|",
+      "placa": "29332-0",
+      "op": "T212",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ca3d0e12-60c8-4b95-ace3-68b60324d2fa||29533-9|",
+      "placa": "29533-9",
+      "op": "T212",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3a38e6d4-5d66-4f7a-9705-f1913580df39||096670502|800803-5",
+      "placa": "096670502",
+      "op": "T214",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3a38e6d4-5d66-4f7a-9705-f1913580df39||107580502|801069-2",
+      "placa": "107580502",
+      "op": "T214",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3a38e6d4-5d66-4f7a-9705-f1913580df39||129342008|801543-0",
+      "placa": "129342008",
+      "op": "T214",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3a38e6d4-5d66-4f7a-9705-f1913580df39||1310692015|806327-3",
+      "placa": "1310692015",
+      "op": "T214",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3a38e6d4-5d66-4f7a-9705-f1913580df39||1310362003|806249-8",
+      "placa": "1310362003",
+      "op": "T214",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e3aa5c-999d-4bab-920c-d5cab1df6aa9|0e404823-bf71-4cd3-974d-a385be2019e8|1310362003|806249-8",
+      "placa": "1310362003",
+      "op": "T215",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e3aa5c-999d-4bab-920c-d5cab1df6aa9||1311442009|809248-6",
+      "placa": "1311442009",
+      "op": "T215",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e3aa5c-999d-4bab-920c-d5cab1df6aa9||1513011006|807714-2",
+      "placa": "1513011006",
+      "op": "T215",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e3aa5c-999d-4bab-920c-d5cab1df6aa9||085670504|800039-5",
+      "placa": "085670504",
+      "op": "T215",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b2b824a9-5cfa-4cd9-aed5-d812462f71b9|9e73a15f-ef91-4794-8747-5ba9998708d1|25451-3|",
+      "placa": "25451-3",
+      "op": "T217",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0787d34e-f9a1-4d57-9a41-9a1a41bed32a||21255-5|",
+      "placa": "21255-5",
+      "op": "T220",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0787d34e-f9a1-4d57-9a41-9a1a41bed32a||17757-2|",
+      "placa": "17757-2",
+      "op": "T220",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0787d34e-f9a1-4d57-9a41-9a1a41bed32a||14216-6|",
+      "placa": "14216-6",
+      "op": "T220",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0787d34e-f9a1-4d57-9a41-9a1a41bed32a||17748-3|",
+      "placa": "17748-3",
+      "op": "T220",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "fe312a72-ee51-410b-ad5d-21933e3d258a||32236-7|",
+      "placa": "32236-7",
+      "op": "T222",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "59cd4118-dca2-4577-9e42-67f3a3a553bb||30315-3|",
+      "placa": "30315-3",
+      "op": "T225",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "59cd4118-dca2-4577-9e42-67f3a3a553bb||1310352016|806219-6",
+      "placa": "1310352016",
+      "op": "T225",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "59cd4118-dca2-4577-9e42-67f3a3a553bb||096680501|800815-9",
+      "placa": "096680501",
+      "op": "T225",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "59cd4118-dca2-4577-9e42-67f3a3a553bb||085640503|800023-9",
+      "placa": "085640503",
+      "op": "T225",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "59cd4118-dca2-4577-9e42-67f3a3a553bb||20174-1|",
+      "placa": "20174-1",
+      "op": "T225",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d3354bf9-6b0a-4bdd-ba5c-1b63b76965b1||13894-3|",
+      "placa": "13894-3",
+      "op": "T226",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4c50d8e8-2396-4386-9420-7e0e129ba5a5||1412222014|807239-6",
+      "placa": "1412222014",
+      "op": "T230",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "02180f99-8729-48c6-8112-e2d51d2de416||14549-7|",
+      "placa": "14549-7",
+      "op": "T231",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c1abaaf5-7c40-487c-9983-981ccd1e735a||29119-0|",
+      "placa": "29119-0",
+      "op": "T232",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "62e7a37d-6539-4973-b153-d235e3b522a3||29523-3|",
+      "placa": "29523-3",
+      "op": "T235",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "62e7a37d-6539-4973-b153-d235e3b522a3||29296-6|",
+      "placa": "29296-6",
+      "op": "T235",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "62e7a37d-6539-4973-b153-d235e3b522a3||29264-0|",
+      "placa": "29264-0",
+      "op": "T235",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "62e7a37d-6539-4973-b153-d235e3b522a3||29295-8|",
+      "placa": "29295-8",
+      "op": "T235",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "63596db7-0d32-433d-a9f5-f431c12044f7|00a290ac-ae24-4ef5-a905-3fb5424f6535|29295-8|",
+      "placa": "29295-8",
+      "op": "T236",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "63596db7-0d32-433d-a9f5-f431c12044f7||29322-3|",
+      "placa": "29322-3",
+      "op": "T236",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "63596db7-0d32-433d-a9f5-f431c12044f7||29528-1|",
+      "placa": "29528-1",
+      "op": "T236",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "63596db7-0d32-433d-a9f5-f431c12044f7||29963-1|",
+      "placa": "29963-1",
+      "op": "T236",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "63596db7-0d32-433d-a9f5-f431c12044f7||28313-0|",
+      "placa": "28313-0",
+      "op": "T236",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b6b979f5-8536-46c6-9f0e-c27b915d36c4||15636-7|",
+      "placa": "15636-7",
+      "op": "T242",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b6b979f5-8536-46c6-9f0e-c27b915d36c4||16756-0|",
+      "placa": "16756-0",
+      "op": "T242",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b6b979f5-8536-46c6-9f0e-c27b915d36c4||15645-6|",
+      "placa": "15645-6",
+      "op": "T242",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e02ae13a-3289-4886-8220-835a01389472|0718a21f-7b13-4c79-a59e-d0c437f5cdf2|15645-6|",
+      "placa": "15645-6",
+      "op": "T243",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e02ae13a-3289-4886-8220-835a01389472||21430-5|",
+      "placa": "21430-5",
+      "op": "T243",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e02ae13a-3289-4886-8220-835a01389472||13990-8|",
+      "placa": "13990-8",
+      "op": "T243",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c271a422-60f1-470a-a4bb-9639d450fdee|6cef49f8-36fa-49f6-94b5-1c3028540ce1|31276-0|",
+      "placa": "31276-0",
+      "op": "T245",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "176bd211-0fb6-41d1-b3f4-14142c174562|0d4c2e28-d61e-4d3a-9b96-2acb4d77e084|25453-8|",
+      "placa": "25453-8",
+      "op": "T247",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "176bd211-0fb6-41d1-b3f4-14142c174562||31291-4|",
+      "placa": "31291-4",
+      "op": "T247",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "176bd211-0fb6-41d1-b3f4-14142c174562||30316-1|",
+      "placa": "30316-1",
+      "op": "T247",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "176bd211-0fb6-41d1-b3f4-14142c174562||18015-5|",
+      "placa": "18015-5",
+      "op": "T247",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4cb5ad9-95de-43a4-ae0a-d69706cb1060|3e5a6e39-10a3-4690-8686-ee2d249e0e50|29523-3|",
+      "placa": "29523-3",
+      "op": "T249",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0a2799ce-48ce-4cb7-ba3c-68ceaaa25cae||30209-2|",
+      "placa": "30209-2",
+      "op": "T251",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0a2799ce-48ce-4cb7-ba3c-68ceaaa25cae||29501-3|",
+      "placa": "29501-3",
+      "op": "T251",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e7338e43-1012-41c8-ac5a-a2890bf90eb5|01eee32e-e947-4a1f-9128-c67d784971e1|29501-3|",
+      "placa": "29501-3",
+      "op": "T252",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e7338e43-1012-41c8-ac5a-a2890bf90eb5||30210-9|",
+      "placa": "30210-9",
+      "op": "T252",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "65987e8d-95ec-4073-a681-a6550a8274b4||1310802017|806349-4",
+      "placa": "1310802017",
+      "op": "T255",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "65987e8d-95ec-4073-a681-a6550a8274b4||129482002|801721-2",
+      "placa": "129482002",
+      "op": "T255",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f30e24ce-589d-46ed-be1c-be12fdcf8879||1312081507|809418-7",
+      "placa": "1312081507",
+      "op": "T260",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f30e24ce-589d-46ed-be1c-be12fdcf8879||28350-3|",
+      "placa": "28350-3",
+      "op": "T260",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f30e24ce-589d-46ed-be1c-be12fdcf8879||096920501|8000891-4",
+      "placa": "096920501",
+      "op": "T260",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f30e24ce-589d-46ed-be1c-be12fdcf8879||1310812016|806368-0",
+      "placa": "1310812016",
+      "op": "T260",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e1d1e416-2dda-48f1-897e-40812d7813c6|b2ed57e4-2259-4a93-a52c-9c34de0e9ccc|1310812016|806368-0",
+      "placa": "1310812016",
+      "op": "T261",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e1d1e416-2dda-48f1-897e-40812d7813c6||25430-2|",
+      "placa": "25430-2",
+      "op": "T261",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e1d1e416-2dda-48f1-897e-40812d7813c6||20849-9|",
+      "placa": "20849-9",
+      "op": "T261",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e29ca9-ce15-458e-93ac-8637354ae6de|1566f4c3-1657-4f01-8afd-2973a6bbb880|20849-9|",
+      "placa": "20849-9",
+      "op": "T262",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e29ca9-ce15-458e-93ac-8637354ae6de||13857-0|",
+      "placa": "13857-0",
+      "op": "T262",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "19e29ca9-ce15-458e-93ac-8637354ae6de||15262-3|",
+      "placa": "15262-3",
+      "op": "T262",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8c5d910c-48e1-46d8-8ef1-870bd413e949||1310812001|806353-2",
+      "placa": "1310812001",
+      "op": "T266",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||17720-8|",
+      "placa": "17720-8",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||17931-4|",
+      "placa": "17931-4",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||16783-7|",
+      "placa": "16783-7",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||21411-9|",
+      "placa": "21411-9",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||14098-5|",
+      "placa": "14098-5",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||17758-0|",
+      "placa": "17758-0",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||17678-8|",
+      "placa": "17678-8",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||14033-6|",
+      "placa": "14033-6",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||1311252020|",
+      "placa": "1311252020",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||17365-1|",
+      "placa": "17365-1",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "85f0bf99-8904-42b8-99ad-0481c2dc0af2||512008-8|",
+      "placa": "512008-8",
+      "op": "T293",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4bbc7003-02cb-4529-bd8c-8a98be2c795b|20424675-afd3-4305-b31a-8ae757524d9c|512008-8|",
+      "placa": "512008-8",
+      "op": "T296",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4bbc7003-02cb-4529-bd8c-8a98be2c795b||0326905002|",
+      "placa": "0326905002",
+      "op": "T296",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "31f3d200-b6fc-494a-b21d-d5988603af31||31274-4|",
+      "placa": "31274-4",
+      "op": "T302",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "31f3d200-b6fc-494a-b21d-d5988603af31||25441-6|",
+      "placa": "25441-6",
+      "op": "T302",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "31f3d200-b6fc-494a-b21d-d5988603af31||11695-1|",
+      "placa": "11695-1",
+      "op": "T302",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ffc403f1-00be-4cd2-a24b-c6126a4739d4||086371010|800712-8",
+      "placa": "086371010",
+      "op": "T304",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ffc403f1-00be-4cd2-a24b-c6126a4739d4||1311232001|806794-5",
+      "placa": "1311232001",
+      "op": "T304",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ffc403f1-00be-4cd2-a24b-c6126a4739d4||097020501|800666-0",
+      "placa": "097020501",
+      "op": "T304",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "e9bbb4a3-87d4-4057-a70b-eca063129017||1311522509|809234-6",
+      "placa": "1311522509",
+      "op": "T307",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "84efa0d0-e6a6-4dec-af05-20a0b0ceee18||1311102003|806714-7",
+      "placa": "1311102003",
+      "op": "T311",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "84efa0d0-e6a6-4dec-af05-20a0b0ceee18||107840501|801962-2",
+      "placa": "107840501",
+      "op": "T311",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2289cc10-4a47-48ae-a11d-c31b7c75f450|e12b247c-e09e-48f1-a422-0fb920d1aec6|107840501|801962-2",
+      "placa": "107840501",
+      "op": "T312",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2289cc10-4a47-48ae-a11d-c31b7c75f450||096930502|800475-7",
+      "placa": "096930502",
+      "op": "T312",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f851c0bf-30c1-4c37-9756-466acbbae2a5||29087-6|",
+      "placa": "29087-6",
+      "op": "T314",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f851c0bf-30c1-4c37-9756-466acbbae2a5||29094-9|",
+      "placa": "29094-9",
+      "op": "T314",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f851c0bf-30c1-4c37-9756-466acbbae2a5||30211-7|",
+      "placa": "30211-7",
+      "op": "T314",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f851c0bf-30c1-4c37-9756-466acbbae2a5||29289-2|",
+      "placa": "29289-2",
+      "op": "T314",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f851c0bf-30c1-4c37-9756-466acbbae2a5||29350-7|",
+      "placa": "29350-7",
+      "op": "T314",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7cdcf071-4ab2-4a0d-a743-12e473f5ad73||097090504|800643-1",
+      "placa": "097090504",
+      "op": "T322",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7cdcf071-4ab2-4a0d-a743-12e473f5ad73||097020502|800665-2",
+      "placa": "097020502",
+      "op": "T322",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7cdcf071-4ab2-4a0d-a743-12e473f5ad73||1311092019|806880-1",
+      "placa": "1311092019",
+      "op": "T322",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7cdcf071-4ab2-4a0d-a743-12e473f5ad73||107850502|801969-0",
+      "placa": "107850502",
+      "op": "T322",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2bd68576-0f0f-4882-a23c-900fd9840eb1||30122-6|",
+      "placa": "30122-6",
+      "op": "T327",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2bd68576-0f0f-4882-a23c-900fd9840eb1||29560-6|",
+      "placa": "29560-6",
+      "op": "T327",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2bd68576-0f0f-4882-a23c-900fd9840eb1||29954-2|",
+      "placa": "29954-2",
+      "op": "T327",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3c95cf12-b023-4b6e-952b-ca897bc23eaf||30132-2|",
+      "placa": "30132-2",
+      "op": "T328",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3c95cf12-b023-4b6e-952b-ca897bc23eaf||15019-3|",
+      "placa": "15019-3",
+      "op": "T328",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3c95cf12-b023-4b6e-952b-ca897bc23eaf||29073-8|",
+      "placa": "29073-8",
+      "op": "T328",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3c95cf12-b023-4b6e-952b-ca897bc23eaf||25922-8|",
+      "placa": "25922-8",
+      "op": "T328",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "3c95cf12-b023-4b6e-952b-ca897bc23eaf||29337-9|",
+      "placa": "29337-9",
+      "op": "T328",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "47039459-a762-429d-b3f3-1adc07a32bfa|15339aa3-2397-4ccc-ac19-7ec141fd6787|107850502|801969-0",
+      "placa": "107850502",
+      "op": "T329",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "47039459-a762-429d-b3f3-1adc07a32bfa||28302-5|",
+      "placa": "28302-5",
+      "op": "T329",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "47039459-a762-429d-b3f3-1adc07a32bfa||08126-2|",
+      "placa": "08126-2",
+      "op": "T329",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "47039459-a762-429d-b3f3-1adc07a32bfa||09273-3|",
+      "placa": "09273-3",
+      "op": "T329",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "75797999-c033-432e-b751-1ff57c194d20|eaabea2a-2785-4f51-8ee3-ebe4f6b39e58|12009-3|",
+      "placa": "12009-3",
+      "op": "T330",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "75797999-c033-432e-b751-1ff57c194d20||17542-5|",
+      "placa": "17542-5",
+      "op": "T330",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "75797999-c033-432e-b751-1ff57c194d20||16826-6|",
+      "placa": "16826-6",
+      "op": "T330",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "75797999-c033-432e-b751-1ff57c194d20||10789-7|",
+      "placa": "10789-7",
+      "op": "T330",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7b13e084-f63e-4e2a-9b59-e0e7dad5d51b|36377310-d7d1-4f4d-87af-24833d99dffd|10789-7|",
+      "placa": "10789-7",
+      "op": "T331",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7b13e084-f63e-4e2a-9b59-e0e7dad5d51b||118900504|",
+      "placa": "118900504",
+      "op": "T331",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7b13e084-f63e-4e2a-9b59-e0e7dad5d51b||01592-8|",
+      "placa": "01592-8",
+      "op": "T331",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "7b13e084-f63e-4e2a-9b59-e0e7dad5d51b||11322-5|",
+      "placa": "11322-5",
+      "op": "T331",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9aa065bd-e8dc-47ff-8013-8dd32599eaef|901b3f50-726e-46ec-b508-5909a46c10d3|32238-4|",
+      "placa": "32238-4",
+      "op": "T333",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9aa065bd-e8dc-47ff-8013-8dd32599eaef||26513-2|",
+      "placa": "26513-2",
+      "op": "T333",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9aa065bd-e8dc-47ff-8013-8dd32599eaef||11747-9|",
+      "placa": "11747-9",
+      "op": "T333",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6448d262-20a6-4799-a6e8-06ddeb44c93a||29572-8|",
+      "placa": "29572-8",
+      "op": "T335",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6448d262-20a6-4799-a6e8-06ddeb44c93a||29109-4|",
+      "placa": "29109-4",
+      "op": "T335",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6448d262-20a6-4799-a6e8-06ddeb44c93a||29234-1|",
+      "placa": "29234-1",
+      "op": "T335",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6448d262-20a6-4799-a6e8-06ddeb44c93a||29311-9|",
+      "placa": "29311-9",
+      "op": "T335",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6448d262-20a6-4799-a6e8-06ddeb44c93a||29268-1|",
+      "placa": "29268-1",
+      "op": "T335",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "210e0a70-500c-49ef-90fd-563ccfb764f8||29309-5|",
+      "placa": "29309-5",
+      "op": "T336",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9636f7e7-6bcc-4b7c-9802-51685a336166|48ea5515-2831-49d2-a857-2b9678ff9928|31367-7|",
+      "placa": "31367-7",
+      "op": "T338",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2ffa4348-c87c-425e-aa6c-f83746507672|2227ff74-5d2c-4549-bb58-c20c86aa5911|14407-9|",
+      "placa": "14407-9",
+      "op": "T339",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ab8d5dd1-f077-4ef4-9c84-a92ba2db4521||31295-6|",
+      "placa": "31295-6",
+      "op": "T340",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ab8d5dd1-f077-4ef4-9c84-a92ba2db4521||26398-3|",
+      "placa": "26398-3",
+      "op": "T340",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bebabfc7-0720-41ad-927a-ca9f25989e91|75058a24-3236-4f34-8233-78323ef1c1b0|29309-5|",
+      "placa": "29309-5",
+      "op": "T347",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "43e615b4-32e4-43e3-bec5-f616aefaba58||086361006|800152-9",
+      "placa": "086361006",
+      "op": "T351",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "87d4e4b2-38a0-4cc0-bc9a-9c6711754a93||29553-3|",
+      "placa": "29553-3",
+      "op": "T353",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "87d4e4b2-38a0-4cc0-bc9a-9c6711754a93||30134-8|",
+      "placa": "30134-8",
+      "op": "T353",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "87d4e4b2-38a0-4cc0-bc9a-9c6711754a93||29435-9|",
+      "placa": "29435-9",
+      "op": "T353",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "87d4e4b2-38a0-4cc0-bc9a-9c6711754a93||29443-0|",
+      "placa": "29443-0",
+      "op": "T353",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "87d4e4b2-38a0-4cc0-bc9a-9c6711754a93||29331-2|",
+      "placa": "29331-2",
+      "op": "T353",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a691de01-1304-4c2f-8f1a-b8496b59fe1c||29102-9|",
+      "placa": "29102-9",
+      "op": "T354",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a691de01-1304-4c2f-8f1a-b8496b59fe1c||OEGU921164|",
+      "placa": "OEGU921164",
+      "op": "T354",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a691de01-1304-4c2f-8f1a-b8496b59fe1c||OEGU921138|",
+      "placa": "OEGU921138",
+      "op": "T354",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a691de01-1304-4c2f-8f1a-b8496b59fe1c||OEGU921179|",
+      "placa": "OEGU921179",
+      "op": "T354",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a691de01-1304-4c2f-8f1a-b8496b59fe1c||29518-5|",
+      "placa": "29518-5",
+      "op": "T354",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "fcfeb80f-9b27-4529-8234-5913a0f22ff3||129392019|801534-1",
+      "placa": "129392019",
+      "op": "T355",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "fcfeb80f-9b27-4529-8234-5913a0f22ff3||107560501|801007-2",
+      "placa": "107560501",
+      "op": "T355",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "fcfeb80f-9b27-4529-8234-5913a0f22ff3||1210162014|",
+      "placa": "1210162014",
+      "op": "T355",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a7233387-74c7-4ca2-87b7-fcfe937c873c||21296-0|",
+      "placa": "21296-0",
+      "op": "T360",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a7233387-74c7-4ca2-87b7-fcfe937c873c||25702-4|",
+      "placa": "25702-4",
+      "op": "T360",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a7233387-74c7-4ca2-87b7-fcfe937c873c||25681-5|",
+      "placa": "25681-5",
+      "op": "T360",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0c15501e-9332-4c03-af20-da2c0713ea01||097002505|800829-9",
+      "placa": "097002505",
+      "op": "T361",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0c15501e-9332-4c03-af20-da2c0713ea01||107952525|802026-4",
+      "placa": "107952525",
+      "op": "T361",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0c15501e-9332-4c03-af20-da2c0713ea01||096611005|",
+      "placa": "096611005",
+      "op": "T361",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0c15501e-9332-4c03-af20-da2c0713ea01||108332525|",
+      "placa": "108332525",
+      "op": "T361",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4b15e3f0-25da-4e76-8e03-c11292b719b9||29323-1|",
+      "placa": "29323-1",
+      "op": "T366",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4b15e3f0-25da-4e76-8e03-c11292b719b9||29526-6|",
+      "placa": "29526-6",
+      "op": "T366",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4b15e3f0-25da-4e76-8e03-c11292b719b9||29248-8|",
+      "placa": "29248-8",
+      "op": "T366",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4b15e3f0-25da-4e76-8e03-c11292b719b9||29283-6|",
+      "placa": "29283-6",
+      "op": "T366",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "70b3e8b1-61f8-4750-8473-b8ac8234c4ca||1513401001|807930-7",
+      "placa": "1513401001",
+      "op": "T372",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "70b3e8b1-61f8-4750-8473-b8ac8234c4ca||129342001|",
+      "placa": "129342001",
+      "op": "T372",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "70b3e8b1-61f8-4750-8473-b8ac8234c4ca||096950503|800897-3",
+      "placa": "096950503",
+      "op": "T372",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a00c9bb3-caa2-4c14-9bb1-206c95d446fd|51af0945-9b1c-4aca-b53a-1c9ebb680689|25706-6|",
+      "placa": "25706-6",
+      "op": "T376",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9394aff4-0c7a-4335-8d0e-140378235d27||28415-2|",
+      "placa": "28415-2",
+      "op": "T381",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9394aff4-0c7a-4335-8d0e-140378235d27||26018-3|",
+      "placa": "26018-3",
+      "op": "T381",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9394aff4-0c7a-4335-8d0e-140378235d27||26180-3|",
+      "placa": "26180-3",
+      "op": "T381",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "9394aff4-0c7a-4335-8d0e-140378235d27||13998-0|",
+      "placa": "13998-0",
+      "op": "T381",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "77e7b971-3e0f-4487-80c7-d9815ab336c5||14012-5|",
+      "placa": "14012-5",
+      "op": "T384",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "77e7b971-3e0f-4487-80c7-d9815ab336c5||31376-6|",
+      "placa": "31376-6",
+      "op": "T384",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "77e7b971-3e0f-4487-80c7-d9815ab336c5||31379-9|",
+      "placa": "31379-9",
+      "op": "T384",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4a6fc4e3-71e5-4f28-8f7e-cbd460dc175e||129332001|801512-0",
+      "placa": "129332001",
+      "op": "T388",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4a6fc4e3-71e5-4f28-8f7e-cbd460dc175e||107850505|801968-1",
+      "placa": "107850505",
+      "op": "T388",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6bc7af35-e96c-4e80-b94f-22e7b5b8fbcb||OEGU921162|",
+      "placa": "OEGU921162",
+      "op": "T390",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6bc7af35-e96c-4e80-b94f-22e7b5b8fbcb||OEGU921161|",
+      "placa": "OEGU921161",
+      "op": "T390",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6bc7af35-e96c-4e80-b94f-22e7b5b8fbcb||OEGU921172|",
+      "placa": "OEGU921172",
+      "op": "T390",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6bc7af35-e96c-4e80-b94f-22e7b5b8fbcb||OEGU921156|",
+      "placa": "OEGU921156",
+      "op": "T390",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "6bc7af35-e96c-4e80-b94f-22e7b5b8fbcb||OEGU921170|",
+      "placa": "OEGU921170",
+      "op": "T390",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f6333589-95a9-4d53-8396-c10fa2002a02||LC 170316023|",
+      "placa": "LC 170316023",
+      "op": "T391",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f6333589-95a9-4d53-8396-c10fa2002a02||14404-5|",
+      "placa": "14404-5",
+      "op": "T391",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f6333589-95a9-4d53-8396-c10fa2002a02||11410-8|",
+      "placa": "11410-8",
+      "op": "T391",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602|5503a503-b714-4efc-8891-20f94d8d044c|11410-8|",
+      "placa": "11410-8",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602||LC 170316050|",
+      "placa": "LC 170316050",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602||118900501|",
+      "placa": "118900501",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602||LC 170316022|",
+      "placa": "LC 170316022",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602||096860504|",
+      "placa": "096860504",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5939811d-c853-41e6-87f4-6a814b992602||LC 170316051|",
+      "placa": "LC 170316051",
+      "op": "T392",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f50f652d-9ff4-4994-9fc5-ba0b8b431e8c||10959-8|",
+      "placa": "10959-8",
+      "op": "T396",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f50f652d-9ff4-4994-9fc5-ba0b8b431e8c||12314-8|",
+      "placa": "12314-8",
+      "op": "T396",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f50f652d-9ff4-4994-9fc5-ba0b8b431e8c||11742-0|",
+      "placa": "11742-0",
+      "op": "T396",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f50f652d-9ff4-4994-9fc5-ba0b8b431e8c||06895-1|",
+      "placa": "06895-1",
+      "op": "T396",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a994e74f-8baf-489f-9b2b-28bff4e56476|0d7d0af7-6a66-4699-bc99-6caa03f6591d|06895-1|",
+      "placa": "06895-1",
+      "op": "T397",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a994e74f-8baf-489f-9b2b-28bff4e56476||10709-4|",
+      "placa": "10709-4",
+      "op": "T397",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c219fb1c-01f8-4936-bea8-9b9f79e19395||118930505|803430-3",
+      "placa": "118930505",
+      "op": "T402",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c219fb1c-01f8-4936-bea8-9b9f79e19395||097310503|800968-6",
+      "placa": "097310503",
+      "op": "T402",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "dd3ee545-abbe-4e6b-ad82-75da5e105e95||086361007|800160-0",
+      "placa": "086361007",
+      "op": "T403",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "dd3ee545-abbe-4e6b-ad82-75da5e105e95||107540501|800997-0",
+      "placa": "107540501",
+      "op": "T403",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "dd3ee545-abbe-4e6b-ad82-75da5e105e95||096940505|800895-7",
+      "placa": "096940505",
+      "op": "T403",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bee61db5-359d-486d-ad5c-fe769a299b42||15669-0|",
+      "placa": "15669-0",
+      "op": "T412",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bee61db5-359d-486d-ad5c-fe769a299b42||15634-2|",
+      "placa": "15634-2",
+      "op": "T412",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bee61db5-359d-486d-ad5c-fe769a299b42||13916-2|",
+      "placa": "13916-2",
+      "op": "T412",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bee61db5-359d-486d-ad5c-fe769a299b42||32239-2|",
+      "placa": "32239-2",
+      "op": "T412",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "bee61db5-359d-486d-ad5c-fe769a299b42||32240-8|",
+      "placa": "32240-8",
+      "op": "T412",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0bc3ee60-d351-4c91-9f35-6e204dfbc31b||29232-4|",
+      "placa": "29232-4",
+      "op": "T414",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "0bc3ee60-d351-4c91-9f35-6e204dfbc31b||29121-4|",
+      "placa": "29121-4",
+      "op": "T414",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2caddaeb-45a9-43bd-aabb-4ffc25f163c2||1412272509|809043-2",
+      "placa": "1412272509",
+      "op": "T416",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2caddaeb-45a9-43bd-aabb-4ffc25f163c2||086042525|800135-9",
+      "placa": "086042525",
+      "op": "T416",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2caddaeb-45a9-43bd-aabb-4ffc25f163c2||086381509|800184-7",
+      "placa": "086381509",
+      "op": "T416",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "2caddaeb-45a9-43bd-aabb-4ffc25f163c2||1311532507|809482-9",
+      "placa": "1311532507",
+      "op": "T416",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b52a094a-09fc-4949-9706-91e780a47dfe||1513312514|807883-1",
+      "placa": "1513312514",
+      "op": "T418",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "d2f39fff-a7a6-47a7-8f05-7bae5761559f||RETORNO IND.|",
+      "placa": "RETORNO IND.",
+      "op": "T421",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||10763-6|",
+      "placa": "10763-6",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||11637-7|",
+      "placa": "11637-7",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||13189-7|",
+      "placa": "13189-7",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||17984-0|",
+      "placa": "17984-0",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||17989-8|",
+      "placa": "17989-8",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||1411552505|",
+      "placa": "1411552505",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||LC170316052|",
+      "placa": "LC170316052",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "efda0744-6852-4db6-b783-03c5197b8171||LC170316042|",
+      "placa": "LC170316042",
+      "op": "T424",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "136f0e6b-ddcf-40e0-9bbb-a318720fdae5||10800-9|",
+      "placa": "10800-9",
+      "op": "T425",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "136f0e6b-ddcf-40e0-9bbb-a318720fdae5||108150502|",
+      "placa": "108150502",
+      "op": "T425",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "136f0e6b-ddcf-40e0-9bbb-a318720fdae5||1210142010|",
+      "placa": "1210142010",
+      "op": "T425",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "136f0e6b-ddcf-40e0-9bbb-a318720fdae5||13215-4|",
+      "placa": "13215-4",
+      "op": "T425",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "136f0e6b-ddcf-40e0-9bbb-a318720fdae5||17656-9|",
+      "placa": "17656-9",
+      "op": "T425",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cab195a-6816-45ad-8c6f-1f15a4039c38||29238-1|",
+      "placa": "29238-1",
+      "op": "T426",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cab195a-6816-45ad-8c6f-1f15a4039c38||29233-2|",
+      "placa": "29233-2",
+      "op": "T426",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5359f917-d296-44cc-ade7-1651e9b12b68|57cb3f36-9ad8-42a3-9403-80325d960a69|11148-3|",
+      "placa": "11148-3",
+      "op": "T432",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b5b2c20a-1c2f-4518-b88e-563acb75cf93||29547-7|",
+      "placa": "29547-7",
+      "op": "T434",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "b5b2c20a-1c2f-4518-b88e-563acb75cf93||29519-2|",
+      "placa": "29519-2",
+      "op": "T434",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "34dfad7f-0365-4400-9142-4f291bffc0c2||085690501|800046-8",
+      "placa": "085690501",
+      "op": "T438",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "34dfad7f-0365-4400-9142-4f291bffc0c2||1310912004|806804-6",
+      "placa": "1310912004",
+      "op": "T438",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "34dfad7f-0365-4400-9142-4f291bffc0c2||1311242009|809357-1",
+      "placa": "1311242009",
+      "op": "T438",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||1311242009|809357-1",
+      "placa": "1311242009",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||085670505|800040-9",
+      "placa": "085670505",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||085650503|800028-0",
+      "placa": "085650503",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||1311102008|806719-8",
+      "placa": "1311102008",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||1311442012|809251-6",
+      "placa": "1311442012",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "ce32034f-7fbf-48a0-82df-23bc8b470ce7||1412362005|806930-1",
+      "placa": "1412362005",
+      "op": "T439",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c08908e2-89fc-44af-8969-09543db21264||08007-1|",
+      "placa": "08007-1",
+      "op": "T440",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "c08908e2-89fc-44af-8969-09543db21264||09259-6|",
+      "placa": "09259-6",
+      "op": "T440",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "a53178f4-bb6c-4aa5-a22f-541770bd1c29|e03707c4-371c-4975-a6dc-53eb8d83b7d2|29519-2|",
+      "placa": "29519-2",
+      "op": "T443",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "263a2bd0-51c9-4dea-ae6a-e48c9041773e||18457-0|",
+      "placa": "18457-0",
+      "op": "T450",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "263a2bd0-51c9-4dea-ae6a-e48c9041773e||31278-6|",
+      "placa": "31278-6",
+      "op": "T450",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "263a2bd0-51c9-4dea-ae6a-e48c9041773e||31366-9|",
+      "placa": "31366-9",
+      "op": "T450",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "263a2bd0-51c9-4dea-ae6a-e48c9041773e||31373-2|",
+      "placa": "31373-2",
+      "op": "T450",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8541eb75-466c-4098-929a-5ce68272ffdd||29329-8|",
+      "placa": "29329-8",
+      "op": "T454",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8541eb75-466c-4098-929a-5ce68272ffdd||29565-5|",
+      "placa": "29565-5",
+      "op": "T454",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8541eb75-466c-4098-929a-5ce68272ffdd||29517-7|",
+      "placa": "29517-7",
+      "op": "T454",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8541eb75-466c-4098-929a-5ce68272ffdd||29321-5|",
+      "placa": "29321-5",
+      "op": "T454",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "69e24d71-177b-4f96-a5ce-abaf7672e64e||28314-7|",
+      "placa": "28314-7",
+      "op": "T462",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8da15c3d-7561-4438-83b0-f3bc9a378069||1210132016|",
+      "placa": "1210132016",
+      "op": "T465",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8da15c3d-7561-4438-83b0-f3bc9a378069||OCTO 512006-6|",
+      "placa": "OCTO 512006-6",
+      "op": "T465",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8da15c3d-7561-4438-83b0-f3bc9a378069||032640503|",
+      "placa": "032640503",
+      "op": "T465",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "84adce95-051f-400e-94dd-2ec97a955525||29952-7|",
+      "placa": "29952-7",
+      "op": "T466",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "84adce95-051f-400e-94dd-2ec97a955525||29263-3|",
+      "placa": "29263-3",
+      "op": "T466",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "84adce95-051f-400e-94dd-2ec97a955525||29579-2|",
+      "placa": "29579-2",
+      "op": "T466",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "5f77cb3d-476e-4a5c-99e7-b410176112fe||INDUSTRIALIZAÇÃO|",
+      "placa": "INDUSTRIALIZAÇÃO",
+      "op": "T469",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||118930503|803428-1",
+      "placa": "118930503",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||1412362006|806931-0",
+      "placa": "1412362006",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||1210152012|801797-2",
+      "placa": "1210152012",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||118650502|803412-5",
+      "placa": "118650502",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||1311232009|809325-3",
+      "placa": "1311232009",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "8cb7282f-5f35-474a-9da3-5980bd9d8be4||096660504|800771-3",
+      "placa": "096660504",
+      "op": "T470",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "1c629bd8-942e-499f-be02-3608bd779e28|8d847723-1e58-49fc-9278-4e4885c269ad|096660504|800771-3",
+      "placa": "096660504",
+      "op": "T475",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "1c629bd8-942e-499f-be02-3608bd779e28||097080505|800640-7",
+      "placa": "097080505",
+      "op": "T475",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "1c629bd8-942e-499f-be02-3608bd779e28||097060504|800909-9",
+      "placa": "097060504",
+      "op": "T475",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4b3e153-c37a-42a4-95b5-6b2804b5cd43||14326-9|",
+      "placa": "14326-9",
+      "op": "T478",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4b3e153-c37a-42a4-95b5-6b2804b5cd43||15686-0|",
+      "placa": "15686-0",
+      "op": "T478",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4b3e153-c37a-42a4-95b5-6b2804b5cd43||14372-1|",
+      "placa": "14372-1",
+      "op": "T478",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4b3e153-c37a-42a4-95b5-6b2804b5cd43||16916-5|",
+      "placa": "16916-5",
+      "op": "T478",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "f4b3e153-c37a-42a4-95b5-6b2804b5cd43||05152-8|",
+      "placa": "05152-8",
+      "op": "T478",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4a55000d-3e7e-4ffc-b951-35cb0cdc9f17|6450c175-8c73-4ad2-8d84-2fbede57cd39|13543-5|",
+      "placa": "13543-5",
+      "op": "T481",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4a55000d-3e7e-4ffc-b951-35cb0cdc9f17||05209-4|",
+      "placa": "05209-4",
+      "op": "T481",
+      "reason": "no-vas"
+    },
+    {
+      "destinoKey": "4a55000d-3e7e-4ffc-b951-35cb0cdc9f17||09409-4|",
+      "placa": "09409-4",
+      "op": "T481",
+      "reason": "no-vas"
+    }
+  ]
+}

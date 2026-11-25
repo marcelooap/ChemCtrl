@@ -831,7 +831,8 @@ export function countItemsMissingPhotos(items = []) {
  * Checklist apto para liberar a expedição: todos os itens aprovados e,
  * quando `requirePhotos`, cada item que exige foto com ao menos uma.
  * Tanque vazio libera sem foto. Tanque vazio sem checklist cadastrado
- * também libera. Aceita itens do modal ou do payload persistido.
+ * também libera. Callers podem passar `requirePhotos: false` (ex.: admin).
+ * Aceita itens do modal ou do payload persistido.
  */
 export function areAllItemsReleasable(items = [], { requirePhotos = true } = {}) {
   if (!areAllItemsApproved(items)) return false;

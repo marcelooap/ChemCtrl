@@ -28,6 +28,7 @@ import {
 import { Button } from '@shared/components/ui/button';
 import { useToast } from '@shared/components/ui/use-toast';
 import { Can } from '@industrializacao/lib/rbac/Can';
+import { isAdminUser } from '@industrializacao/lib/permissions';
 import { cn } from '@shared/lib/utils';
 import { useInternalAuth } from '@/lib/InternalAuthContext';
 import { uploadFileToSupabase } from '@industrializacao/api/storage';
@@ -687,8 +688,11 @@ export default function AgendamentoCarregamentoChecklistModal({
     (it) => !itemHasNoConfiguredChecklist(it) && it.status === CHECKLIST_STATUS.APROVADO
   );
   // Foto obrigatória em tanque cheio e embalado. Tanque vazio libera sem foto.
-  // Liberações anteriores são preservadas.
-  const releaseOptions = { requirePhotos: !alreadyLiberated };
+  // Administrador pode liberar sem foto. Liberações anteriores são preservadas.
+  const isAdmin = isAdminUser(user);
+  const releaseOptions = {
+    requirePhotos: !alreadyLiberated && !isAdmin,
+  };
   const canRelease = areAllItemsReleasable(items, releaseOptions);
   const anyRejected = hasRejectedItem(items);
   const doneCount = items.filter(

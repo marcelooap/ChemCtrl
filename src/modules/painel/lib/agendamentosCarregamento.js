@@ -7,6 +7,7 @@ import {
   rpcAbaterReservasSaida,
   rpcEstornarReservasSaida,
 } from '@painel/lib/saidaReservas';
+import { isAdminUser } from '@industrializacao/lib/permissions';
 import { areAllItemsReleasable } from '@painel/lib/carregamentoChecklistConfig';
 import { entities } from '@transbordo/services/entities';
 import {
@@ -371,10 +372,12 @@ export async function saveCarregamentoChecklistProgress({
   }
 
   // Foto é obrigatória para validar tanque cheio e embalado.
-  // Tanque vazio libera sem foto. Checklists já liberados são preservados
-  // (edição posterior não pode invalidar uma liberação anterior).
+  // Tanque vazio libera sem foto. Administrador pode liberar sem foto.
+  // Checklists já liberados são preservados (edição posterior não pode
+  // invalidar uma liberação anterior).
   const alreadyValidated = list.every((row) => Boolean(row.checklist_validado_em));
-  const releasable = areAllItemsReleasable(payload.items, { requirePhotos: !alreadyValidated });
+  const requirePhotos = !alreadyValidated && !isAdminUser(user);
+  const releasable = areAllItemsReleasable(payload.items, { requirePhotos });
   const isLegacyPayload = payload.version !== 2;
 
   if (markValidated && !isLegacyPayload && !releasable) {

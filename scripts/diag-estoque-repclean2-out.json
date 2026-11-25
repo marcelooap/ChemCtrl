@@ -1,0 +1,196 @@
+{
+  "legacyByCode": {
+    "194": {
+      "legacy_estoque_id": "e1451644-9f2f-4f5e-a98e-6db169be8616",
+      "codigo_estoque": 194,
+      "lote": "OF-1436-26",
+      "saldo_inicial": 30299,
+      "saldo_final": 20000,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "a0835267-993a-4825-9bf6-524b546c34a3",
+      "id_entrada": "E290"
+    },
+    "514": {
+      "legacy_estoque_id": "6a6c18fa-ebaa-4f72-bb59-7eb57dc09886",
+      "codigo_estoque": 514,
+      "lote": "OF-1481-26",
+      "saldo_inicial": 29794.392,
+      "saldo_final": 29794.392,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "325775fd-8a9d-457b-9240-aca889f63a29",
+      "id_entrada": "E595"
+    },
+    "522": {
+      "legacy_estoque_id": "327ee701-ffd6-4521-9a06-818803e6be12",
+      "codigo_estoque": 522,
+      "lote": "OF-1487-26",
+      "saldo_inicial": 29738,
+      "saldo_final": 29738,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "6f76691e-a439-425a-a41d-89829d704fb7",
+      "id_entrada": "E603"
+    },
+    "531": {
+      "legacy_estoque_id": "9fd334a9-f418-4f8c-b710-b5ac118f2f5c",
+      "codigo_estoque": 531,
+      "lote": "OF-1493-26",
+      "saldo_inicial": 29290,
+      "saldo_final": 29290,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "cf9ae261-4497-4bfe-9b30-57fdf4a55a51",
+      "id_entrada": "E610"
+    },
+    "549": {
+      "legacy_estoque_id": "2587a789-67a7-406f-a8ad-8df08f404d7f",
+      "codigo_estoque": 549,
+      "lote": "OF-1495-26",
+      "saldo_inicial": 30108,
+      "saldo_final": 30108,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "176b8936-0dc5-443f-b2a1-6c87caaeaf87",
+      "id_entrada": "E627"
+    },
+    "578": {
+      "legacy_estoque_id": "e2ab057f-1e55-4a62-b883-675a7837e168",
+      "codigo_estoque": 578,
+      "lote": "OF-1502-26",
+      "saldo_inicial": 31369,
+      "saldo_final": 31369,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "3f542e6b-9e7a-4d4f-b6f4-810eccd1be7a",
+      "id_entrada": "E656"
+    },
+    "625": {
+      "legacy_estoque_id": "2ee7ca48-a5b7-456b-ba9f-ecef893c8e69",
+      "codigo_estoque": 625,
+      "lote": "OF-1504-26",
+      "saldo_inicial": 31094,
+      "saldo_final": 31094,
+      "unidade_medida": "L",
+      "densidade": 1.07,
+      "tipo_recebimento": "granel",
+      "legacy_entrada_id": "19756465-fef7-4ffc-bb96-d213930df52f",
+      "id_entrada": "E669"
+    }
+  },
+  "byLote": {
+    "OF-1502-26": {
+      "count": 5,
+      "vol": 25000,
+      "placas": [
+        "29259-2",
+        "30125-9",
+        "29066-5",
+        "29266-6",
+        "29074-6"
+      ]
+    },
+    "OF-1495-26": {
+      "count": 6,
+      "vol": 30000,
+      "placas": [
+        "30074-9",
+        "OEGU921169",
+        "OEGU921168",
+        "OEGU921158",
+        "OEGU 921160",
+        "OEGU 921167"
+      ]
+    },
+    "OF-1429-26": {
+      "count": 1,
+      "vol": 5000,
+      "placas": [
+        "OEGU921157"
+      ]
+    },
+    "OF-1436-26": {
+      "count": 4,
+      "vol": 20000,
+      "placas": [
+        "29275-5",
+        "29438-2",
+        "29446-4",
+        "30119-3"
+      ]
+    },
+    "OF-1433-26": {
+      "count": 1,
+      "vol": 5000,
+      "placas": [
+        "29299-9"
+      ]
+    },
+    "OF-1493-26": {
+      "count": 6,
+      "vol": 30000,
+      "placas": [
+        "29567-0",
+        "28893-1",
+        "26914-3",
+        "OEGU921155",
+        "OEGU921152",
+        "OEGU921181"
+      ]
+    },
+    "OF-1481-26": {
+      "count": 1,
+      "vol": 5000,
+      "placas": [
+        "02/28959-6"
+      ]
+    },
+    "OF-1487-26": {
+      "count": 1,
+      "vol": 5000,
+      "placas": [
+        "29276-2"
+      ]
+    }
+  },
+  "patioCount": 25,
+  "patioVol": 125000,
+  "tankas": [],
+  "for625": [
+    {
+      "codigo": "T449",
+      "data": "2026-11-19",
+      "origens": [
+        {
+          "tipo": "entrada",
+          "entrada_id": "2ee7ca48-a5b7-456b-ba9f-ecef893c8e69",
+          "lote": "OF-1504-26",
+          "vol": 31094
+        }
+      ],
+      "destinos": [
+        {
+          "tipo": "Tankagem",
+          "placa": "TANKA 34",
+          "vol": 25000,
+          "tanka_id": "f4663c05-19c8-47da-8099-544fcc35b6b7"
+        },
+        {
+          "tipo": "Tankagem",
+          "placa": "TANKA 32",
+          "vol": 6094,
+          "tanka_id": "23fec488-0726-4c02-8d8f-dbb2b069c0f6"
+        }
+      ]
+    }
+  ],
+  "relevantCount": 65,
+  "saidas625": []
+}

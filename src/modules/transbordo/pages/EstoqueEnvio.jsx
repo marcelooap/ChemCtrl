@@ -51,6 +51,7 @@ import { generateEstoqueEnvioPDF } from "@transbordo/lib/pdfEstoque";
 import {
   agregadoCoversPhysicalSlot,
   collectControleQualidadeLotes,
+  aggregateEstoqueEnvioProdutos,
   collectEstoqueEnvioFontes,
   estoqueEnvioGrupoKey,
 } from "@transbordo/lib/estoqueEnvioProdutos";
@@ -446,74 +447,21 @@ export default function EstoqueEnvio() {
   }, [estoque, entradas, transbordos, vasilhames, saidas, ajustesManuais]);
 
   const produtosAgregados = useMemo(() => {
-    const map = new Map();
     const fontes = collectEstoqueEnvioFontes({
       estoque: estoqueComLocais,
       entradas,
       indStock,
       clientes,
       indStockReady,
+    }).filter((e) => {
+      if (!matchesCliente(e, clienteFilter, clientes)) return false;
+      if (!q) return true;
+      const hay = `${e.codigo || ""} ${e.produto || ""} ${e.cliente_nome || ""}`.toLowerCase();
+      return hay.includes(q);
     });
 
-    for (const e of fontes) {
-      if (!matchesCliente(e, clienteFilter, clientes)) continue;
-
-      const saldo = Number(e.saldo) || 0;
-      if (saldo <= 0) continue;
-
-      const codigo = e.codigo || "—";
-      const produto = e.produto || "—";
-      const unidade = e.unidade || "kg";
-      const key = estoqueEnvioGrupoKey({
-        codigo,
-        produto,
-        cliente_id: e.cliente_id,
-        cliente_nome: e.cliente_nome,
-      });
-
-      if (q) {
-        const hay = `${codigo} ${produto} ${e.cliente_nome || ""}`.toLowerCase();
-        if (!hay.includes(q)) continue;
-      }
-
-      const prev = map.get(key);
-      if (prev) {
-        prev.saldo += saldo;
-        prev.saldoEmbalado = (prev.saldoEmbalado || 0) + (Number(e.saldoEmbalado) || 0);
-        prev.saldoTanque = (prev.saldoTanque || 0) + (Number(e.saldoTanque) || 0);
-        prev.saldoTanka = (prev.saldoTanka || 0) + (Number(e.saldoTanka) || 0);
-        if (e.colunasLivro) prev.colunasLivro = true;
-        if (!prev.clienteId && e.cliente_id) prev.clienteId = e.cliente_id;
-        // Mantém kg quando o grupo misturar UOM (após filtro de espelhos, raro)
-        if (
-          !isUnidadeVolumeEntrada(prev.unidade) &&
-          isUnidadeVolumeEntrada(unidade)
-        ) {
-          /* prev já em massa */
-        } else if (
-          isUnidadeVolumeEntrada(prev.unidade) &&
-          !isUnidadeVolumeEntrada(unidade)
-        ) {
-          prev.unidade = unidade;
-        }
-      } else {
-        map.set(key, {
-          id: key,
-          codigo,
-          produto,
-          unidade,
-          saldo,
-          saldoEmbalado: Number(e.saldoEmbalado) || 0,
-          saldoTanque: Number(e.saldoTanque) || 0,
-          saldoTanka: Number(e.saldoTanka) || 0,
-          colunasLivro: Boolean(e.colunasLivro),
-          cliente_nome: e.cliente_nome || "",
-          clienteId: e.cliente_id || null,
-        });
-      }
-    }
-
-    return [...map.values()]
+    // Agregação única (UOM canônica + conversão) — vale para qualquer produto.
+    return aggregateEstoqueEnvioProdutos(fontes)
       .map((row) => {
         const reservadoEmbalado = sumReservadoForProdutoCliente(reservas, {
           clienteId: row.clienteId,

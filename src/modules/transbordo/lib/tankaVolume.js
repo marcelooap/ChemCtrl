@@ -5,7 +5,12 @@
 
 import { roundVolume, roundMass, parseDensidade } from "@transbordo/lib/format";
 import { calculateFIFOAllocation, expandOrigensForFifo } from "@transbordo/lib/fifo";
-import { getDominantLote } from "@transbordo/lib/vasilhameComposicao";
+
+/** Lazy: evita puxar entities/base44 só para calcular saldo/FIFO. */
+async function dominantLoteOf(composicao) {
+  const { getDominantLote } = await import("@transbordo/lib/vasilhameComposicao");
+  return getDominantLote(composicao);
+}
 
 function normPlaca(v) {
   return String(v || "")
@@ -251,21 +256,238 @@ export function computeTankaSaldo({
 /**
  * Id de estoque da origem que encheu a tanka.
  * Origem tanka usa entrada_id = isotanque — não é estoque.
+ * Quando `estoque_id` foi gravado com o próprio id da tanka, ignora.
  */
 function estoqueIdFromTankaFillOrigem(origem) {
   if (!origem) return null;
-  if ((origem.tipo_origem || "") === "tanka") {
-    return origem.estoque_id != null && String(origem.estoque_id).trim() !== ""
-      ? String(origem.estoque_id)
-      : null;
+  const tipo = origem.tipo_origem || "";
+  const raw =
+    origem.estoque_id != null && String(origem.estoque_id).trim() !== ""
+      ? String(origem.estoque_id).trim()
+      : "";
+  if (tipo === "tanka") {
+    if (!raw) return null;
+    const tankaRef = String(origem.tanka_id || origem.entrada_id || "").trim();
+    if (tankaRef && raw === tankaRef) return null;
+    return raw;
   }
-  if (origem.estoque_id != null && String(origem.estoque_id).trim() !== "") {
-    return String(origem.estoque_id);
-  }
+  if (raw) return raw;
   if (origem.entrada_id != null && String(origem.entrada_id).trim() !== "") {
     return String(origem.entrada_id);
   }
   return null;
+}
+
+/** Chave estável de isotanque para o ledger FIFO de camadas. */
+function tankaLayerKey(isotanqueId, tankaCodigo) {
+  if (isotanqueId) return `id:${isotanqueId}`;
+  const codigo = normPlaca(tankaCodigo);
+  return codigo ? `codigo:${codigo}` : "";
+}
+
+function tankaLayerKeyFromRef(ref) {
+  if (!ref) return "";
+  return tankaLayerKey(
+    ref.tanka_id || (ref.tipo_origem === "tanka" ? ref.entrada_id : null),
+    ref.tanka_codigo || ref.placa || ref.entrada_codigo || ""
+  );
+}
+
+/**
+ * Drena camadas FIFO e devolve as fatias retiradas na ordem (estoque → L).
+ * @returns {{ estoqueId: string, volume: number }[]}
+ */
+function drainTankaLayersFifoRecording(layers, volume) {
+  const takes = [];
+  let remaining = roundVolume(volume);
+  if (!(remaining > 0)) return takes;
+  for (const layer of layers) {
+    if (remaining <= 0) break;
+    if (!(layer.volume > 0)) continue;
+    const take = Math.min(layer.volume, remaining);
+    layer.volume = roundVolume(layer.volume - take);
+    remaining = roundVolume(remaining - take);
+    if (take > 0) {
+      takes.push({ estoqueId: String(layer.estoqueId), volume: take });
+    }
+  }
+  return takes;
+}
+
+/** Chave de destino vasilhame para atribuição FIFO tanka→pátio. */
+export function tankaFifoDestinoShareKey(transbordoId, destino) {
+  if (!transbordoId || !destino) return "";
+  const placa = normPlaca(destino.placa || destino.tanka_codigo || "");
+  const barril = String(destino.barril || "").trim();
+  if (!placa && !destino.vasilhame_existente_id) return "";
+  return `${transbordoId}|${destino.vasilhame_existente_id || ""}|${placa}|${barril}`;
+}
+
+/** @type {WeakMap<Array, Map<string, Map<string, number>>>} */
+const tankaFifoVasilhameShareCache = new WeakMap();
+
+/**
+ * Atribui litros de cada destino Vasilhame/IBC ao estoque_id real da tanka (FIFO).
+ *
+ * Corrige o caso em que a origem declara lote A, mas a camada mais antiga na
+ * tanka é do estoque B: o residual da tanka debita B, e o pátio precisa
+ * creditá-lo no Saldo Tanque (ex.: REPCLEAN 625 / T477).
+ *
+ * @returns {Map<string, Map<string, number>>} destinoKey → (estoqueId → L)
+ */
+export function computeTankaFifoVasilhameShares(transbordos = []) {
+  if (Array.isArray(transbordos)) {
+    const cached = tankaFifoVasilhameShareCache.get(transbordos);
+    if (cached) return cached;
+  }
+
+  /** @type {Map<string, { estoqueId: string, volume: number }[]>} */
+  const layersByTanka = new Map();
+  /** @type {Map<string, Map<string, number>>} */
+  const shares = new Map();
+
+  const getLayers = (key) => {
+    if (!key) return null;
+    let layers = layersByTanka.get(key);
+    if (!layers) {
+      layers = [];
+      layersByTanka.set(key, layers);
+    }
+    return layers;
+  };
+
+  const addShare = (destinoKey, estoqueId, volume) => {
+    const vol = roundVolume(volume);
+    if (!destinoKey || !estoqueId || !(vol > 0)) return;
+    let byEst = shares.get(destinoKey);
+    if (!byEst) {
+      byEst = new Map();
+      shares.set(destinoKey, byEst);
+    }
+    byEst.set(estoqueId, roundVolume((byEst.get(estoqueId) || 0) + vol));
+  };
+
+  const sorted = sortedChronoReadOnly(transbordos);
+
+  for (const t of sorted) {
+    const destinos = t.destinos || [];
+    const dens = parseDensidade(t.densidade);
+    const origensFifo = expandOrigensForFifo(t.origens || [], dens);
+    const hasTankaOrigem = origensFifo.some(
+      (o) => (o.tipo_origem || "") === "tanka"
+    );
+
+    // 1) Drenos de tanka → fatias reais por estoque (antes dos fills do mesmo OP).
+    /** @type {{ volume_retirado: number, estoque_id: string|null, lote: string }[]} */
+    const virtualOrigens = [];
+    for (const o of origensFifo) {
+      if ((o.tipo_origem || "") !== "tanka") {
+        virtualOrigens.push({
+          volume_retirado: roundVolume(o.volume_retirado || 0),
+          estoque_id: estoqueIdFromTankaFillOrigem(o),
+          lote: o.lote || "",
+        });
+        continue;
+      }
+      const key = tankaLayerKeyFromRef(o);
+      const layers = getLayers(key);
+      const takes = layers
+        ? drainTankaLayersFifoRecording(layers, o.volume_retirado || 0)
+        : [];
+      if (takes.length === 0) {
+        virtualOrigens.push({
+          volume_retirado: roundVolume(o.volume_retirado || 0),
+          estoque_id: estoqueIdFromTankaFillOrigem(o),
+          lote: o.lote || "",
+        });
+        continue;
+      }
+      for (const take of takes) {
+        virtualOrigens.push({
+          volume_retirado: take.volume,
+          estoque_id: take.estoqueId,
+          lote: o.lote || "",
+        });
+      }
+    }
+
+    // 2) Destinos: tankagem recebe camadas; vasilhames recebem shares de pátio.
+    if (virtualOrigens.length > 0 && destinos.length > 0 && hasTankaOrigem) {
+      const { destinoCompositions } = calculateFIFOAllocation(
+        virtualOrigens,
+        destinos,
+        dens
+      );
+      destinos.forEach((d, idx) => {
+        if (!d) return;
+        if (d.tipo_embalagem === "Tankagem") {
+          const destKey = tankaLayerKey(d.tanka_id, d.tanka_codigo || d.placa);
+          const destLayers = getLayers(destKey);
+          if (!destLayers) return;
+          for (const c of destinoCompositions[idx] || []) {
+            const estId = virtualOrigens[c.origem_index]?.estoque_id || null;
+            const vol = roundVolume(c.quantidade_l || 0);
+            if (estId && vol > 0) {
+              destLayers.push({ estoqueId: String(estId), volume: vol });
+            }
+          }
+          return;
+        }
+        const destinoKey = tankaFifoDestinoShareKey(t.id, d);
+        if (!destinoKey) return;
+        for (const c of destinoCompositions[idx] || []) {
+          const estId = virtualOrigens[c.origem_index]?.estoque_id || null;
+          addShare(destinoKey, estId, c.quantidade_l);
+        }
+      });
+    }
+
+    // 3) Fills entrada/embalado → tankagem (sem origem tanka no OP).
+    if (!hasTankaOrigem) {
+      const filledTankas = new Set();
+      for (const d of destinos) {
+        if (d?.tipo_embalagem !== "Tankagem") continue;
+        const key = tankaLayerKey(d.tanka_id, d.tanka_codigo || d.placa);
+        if (!key || filledTankas.has(key)) continue;
+        filledTankas.add(key);
+        const layers = getLayers(key);
+        if (!layers) continue;
+        applyTankaFillLayersByEstoque(
+          layers,
+          t,
+          d.tanka_id || null,
+          d.tanka_codigo || d.placa || ""
+        );
+      }
+    }
+  }
+
+  if (Array.isArray(transbordos)) {
+    tankaFifoVasilhameShareCache.set(transbordos, shares);
+  }
+  return shares;
+}
+
+/**
+ * Litros deste estoque em um destino de OP, segundo o FIFO real da tanka.
+ */
+export function getTankaFifoShareForDestino(
+  shares,
+  transbordoId,
+  destino,
+  estoqueId
+) {
+  if (!shares || !transbordoId || !destino || !estoqueId) return 0;
+  const key = tankaFifoDestinoShareKey(transbordoId, destino);
+  if (!key) return 0;
+  const byEst = shares.get(key);
+  if (!byEst) return 0;
+  const direct = byEst.get(String(estoqueId));
+  if (direct > 0) return direct;
+  for (const [id, vol] of byEst) {
+    if (String(id) === String(estoqueId)) return vol;
+  }
+  return 0;
 }
 
 /**
@@ -745,7 +967,8 @@ export async function syncTankaVasilhamesAfterOrigem({
       quantidade_l: l.quantidade_l,
       quantidade_kg: dens > 0 ? roundMass(l.quantidade_l * dens) : 0,
     }));
-    const lote = getDominantLote(composicao) || lotesRestantes[0]?.lote || "";
+    const lote =
+      (await dominantLoteOf(composicao)) || lotesRestantes[0]?.lote || "";
     const peso =
       dens > 0
         ? roundMass(remaining * dens)
@@ -875,7 +1098,11 @@ export async function restoreTankaVasilhamesAfterExclude({
       quantidade_l: l.quantidade_l,
       quantidade_kg: dens > 0 ? roundMass(l.quantidade_l * dens) : 0,
     }));
-    const lote = getDominantLote(composicao) || lotesRestantes[0]?.lote || primary.lote || "";
+    const lote =
+      (await dominantLoteOf(composicao)) ||
+      lotesRestantes[0]?.lote ||
+      primary.lote ||
+      "";
     const peso =
       dens > 0 ? roundMass(remaining * dens) : roundMass(primary.peso_liquido || 0);
 

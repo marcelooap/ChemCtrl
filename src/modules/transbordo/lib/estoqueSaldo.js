@@ -15,10 +15,11 @@ import {
   calculateFIFOAllocation,
   expandOrigensForFifo,
 } from "@transbordo/lib/fifo";
-import { entities } from "@transbordo/services/entities";
 import {
   computeTankaLotesDisponiveis,
   computeTankaRemainingByEstoqueId,
+  computeTankaFifoVasilhameShares,
+  tankaFifoDestinoShareKey,
 } from "@transbordo/lib/tankaVolume";
 import {
   isSaidaValidadaNoModulo,
@@ -1035,13 +1036,43 @@ export function listHistoricoTransbordosEncadeados(
       })();
 
       const matchingOrigemIdx = new Set();
+      /** Volume FIFO real deste estoque por destino (tanka misturada). */
+      const fifoVolByDestinoIdx = new Map();
       origensFifo.forEach((o, idx) => {
         if (!origemMatchesEmbalagemKeys(o, trackedKeys, vasilhames)) return;
-        if (!origemCarregaLoteRastreado(o, trackedLotes)) return;
         if (
           (o.tipo_origem || "") === "tanka" &&
           !origemTankaAposFillDesteEstoque(o, opMs, tankaFillSince)
         ) {
+          return;
+        }
+        // Tanka: aceita lote rastreado OU fatia FIFO real (camada deste estoque).
+        if ((o.tipo_origem || "") === "tanka") {
+          const loteOk = origemCarregaLoteRastreado(o, trackedLotes);
+          let fifoHit = false;
+          if (saldoCtx?.tankaFifoSharesByDestinoKey) {
+            destinos.forEach((d, di) => {
+              if (!d || d.tipo_embalagem === "Tankagem") return;
+              const key = tankaFifoDestinoShareKey(t.id, d);
+              const byEst = key
+                ? saldoCtx.tankaFifoSharesByDestinoKey.get(key)
+                : null;
+              if (!byEst) return;
+              let vol = 0;
+              for (const [estId, v] of byEst) {
+                if (idsEqual(estId, id)) vol += Number(v) || 0;
+              }
+              if (vol > 0) {
+                fifoHit = true;
+                fifoVolByDestinoIdx.set(
+                  di,
+                  roundVolume((fifoVolByDestinoIdx.get(di) || 0) + vol)
+                );
+              }
+            });
+          }
+          if (!loteOk && !fifoHit) return;
+        } else if (!origemCarregaLoteRastreado(o, trackedLotes)) {
           return;
         }
         matchingOrigemIdx.add(idx);
@@ -1065,15 +1096,26 @@ export function listHistoricoTransbordosEncadeados(
       );
 
       destinos.forEach((d, idx) => {
+        // Preferir volume FIFO real da tanka quando disponível (lote declarado
+        // pode ser de outro estoque na mistura).
+        const fifoVol = fifoVolByDestinoIdx.get(idx);
+        let volume;
+        if (fifoVol != null && fifoVol > 0) {
+          volume = fifoVol;
+        } else {
+          const fromThis = (destinoCompositions[idx] || []).filter((c) =>
+            matchingOrigemIdx.has(c.origem_index)
+          );
+          if (fromThis.length === 0) return;
+          volume = roundVolume(
+            fromThis.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
+          );
+        }
+        if (volume <= 0) return;
+
         const fromThis = (destinoCompositions[idx] || []).filter((c) =>
           matchingOrigemIdx.has(c.origem_index)
         );
-        if (fromThis.length === 0) return;
-
-        const volume = roundVolume(
-          fromThis.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
-        );
-        if (volume <= 0) return;
 
         let pesoLiq = roundMass(
           fromThis.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0)
@@ -1479,6 +1521,53 @@ function buildVasilhamePatioBuckets(vasilhames = []) {
   return { noPatio, expedidos, byEstoqueStamp, tankagemByCodigo };
 }
 
+/**
+ * Indexa shares FIFO tanka→pátio por vasilhame_id (e por placa) para lookup O(1).
+ * @returns {{
+ *   byDestinoKey: Map<string, Map<string, number>>,
+ *   byVasilhameId: Map<string, Map<string, number>>,
+ * }}
+ */
+function indexTankaFifoVasilhameShares(transbordos = [], vasilhames = []) {
+  const byDestinoKey = computeTankaFifoVasilhameShares(transbordos);
+  /** @type {Map<string, Map<string, number>>} */
+  const byVasilhameId = new Map();
+  const transbordoById = getTransbordoIndex(transbordos).byId;
+
+  const mergeInto = (vasId, estMap) => {
+    if (!vasId || !estMap) return;
+    let target = byVasilhameId.get(vasId);
+    if (!target) {
+      target = new Map();
+      byVasilhameId.set(vasId, target);
+    }
+    for (const [estId, vol] of estMap) {
+      target.set(estId, roundVolume((target.get(estId) || 0) + (Number(vol) || 0)));
+    }
+  };
+
+  for (const [destinoKey, estMap] of byDestinoKey) {
+    const [transbordoId, vasExistenteId, placa] = String(destinoKey).split("|");
+    if (vasExistenteId) {
+      mergeInto(vasExistenteId, estMap);
+      continue;
+    }
+    const t = transbordoById.get(transbordoId);
+    if (!t) continue;
+    const destino = (t.destinos || []).find(
+      (d) => tankaFifoDestinoShareKey(t.id, d) === destinoKey
+    );
+    if (!destino) continue;
+    const v = resolveVasilhameFromDestino(destino, t, vasilhames);
+    if (v?.id) mergeInto(v.id, estMap);
+    else if (placa) {
+      // Mantém lookup por destinoKey; vasilhame pode ser resolvido depois.
+    }
+  }
+
+  return { byDestinoKey, byVasilhameId };
+}
+
 export function createEstoqueSaldoContext(
   transbordos = [],
   saidas = [],
@@ -1487,6 +1576,7 @@ export function createEstoqueSaldoContext(
 ) {
   const transbordoIndex = getTransbordoIndex(transbordos);
   const patioBuckets = buildVasilhamePatioBuckets(vasilhames);
+  const tankaFifoShares = indexTankaFifoVasilhameShares(transbordos, vasilhames);
   return {
     transbordos,
     saidas,
@@ -1502,6 +1592,8 @@ export function createEstoqueSaldoContext(
     vasilhamesExpedidos: patioBuckets.expedidos,
     vasilhamesByEstoqueStamp: patioBuckets.byEstoqueStamp,
     tankagemByCodigo: patioBuckets.tankagemByCodigo,
+    tankaFifoSharesByDestinoKey: tankaFifoShares.byDestinoKey,
+    tankaFifoSharesByVasilhameId: tankaFifoShares.byVasilhameId,
     /** @type {Map<string, Array>} */
     fifoByEstoqueId: new Map(),
     /** @type {Map<string, Array>} */
@@ -2547,6 +2639,38 @@ function indexFatiasEstoquePorVasilhame(
  * @param {object} [saldoCtx] Com claimedLitersByVasilhameId, libera fallback
  *   por lote em tanque só com stamp de tanka (anti double-count entre irmãs).
  */
+/**
+ * Fatia FIFO real tanka→pátio deste estoque neste vasilhame (litros/UOM op).
+ * Preferencial sobre rótulo de lote da OP quando a tanka estava misturada.
+ */
+function tankaFifoShareOperacional(estoqueItem, vasilhame, saldoCtx) {
+  if (!estoqueItem?.id || !vasilhame?.id || !saldoCtx?.tankaFifoSharesByVasilhameId) {
+    return 0;
+  }
+  const byEst = saldoCtx.tankaFifoSharesByVasilhameId.get(vasilhame.id);
+  if (!byEst || byEst.size === 0) return 0;
+  let litros = 0;
+  for (const [estId, vol] of byEst) {
+    if (idsEqual(estId, estoqueItem.id)) litros += Number(vol) || 0;
+  }
+  if (!(litros > 0)) return 0;
+  return litrosParaQuantidadeOperacional(estoqueItem, litros);
+}
+
+/**
+ * True se este vasilhame tem qualquer share FIFO de tanka (dono conhecido).
+ * Usado para bloquear fallback por lote que roubaria fatia de outro estoque.
+ */
+function vasilhameHasTankaFifoShares(vasilhame, saldoCtx) {
+  if (!vasilhame?.id || !saldoCtx?.tankaFifoSharesByVasilhameId) return false;
+  const byEst = saldoCtx.tankaFifoSharesByVasilhameId.get(vasilhame.id);
+  if (!byEst || byEst.size === 0) return false;
+  for (const vol of byEst.values()) {
+    if ((Number(vol) || 0) > 0) return true;
+  }
+  return false;
+}
+
 function resolveQuantidadeEstoqueNoVasilhame(
   estoqueItem,
   vasilhame,
@@ -2589,6 +2713,12 @@ function resolveQuantidadeEstoqueNoVasilhame(
     }
     return roundOp(estoqueItem, tankCap);
   };
+
+  // FIFO real da tanka prevalece sobre rótulo de lote / composição sem lastro.
+  const fifoShare = tankaFifoShareOperacional(estoqueItem, vasilhame, saldoCtx);
+  if (fifoShare > 0) return capToTankPhysical(fifoShare, fifoShare);
+  // Outro estoque é dono FIFO deste tanque → não cair no fallback por lote.
+  if (vasilhameHasTankaFifoShares(vasilhame, saldoCtx)) return 0;
 
   const estoqueStamps = collectComposicaoEstoqueStamps(composicao);
   const hasEstoqueStamps = estoqueStamps.size > 0;
@@ -2817,6 +2947,16 @@ export function computeEstoqueQuantidadesPorLocal(
   for (const vasId of fatias.keys()) {
     addCandidate(vasilhameById.get(vasId));
   }
+  // Shares FIFO tanka→pátio deste estoque (mesmo com lote declarado diferente).
+  if (saldoCtx?.tankaFifoSharesByVasilhameId) {
+    for (const [vasId, byEst] of saldoCtx.tankaFifoSharesByVasilhameId) {
+      let mine = 0;
+      for (const [estId, vol] of byEst) {
+        if (idsEqual(estId, estoqueItem.id)) mine += Number(vol) || 0;
+      }
+      if (mine > 0) addCandidate(vasilhameById.get(vasId));
+    }
+  }
   for (const v of saldoCtx?.vasilhamesByEstoqueStamp?.get(String(estoqueItem.id)) || []) {
     addCandidate(v);
   }
@@ -2863,7 +3003,47 @@ export function computeEstoqueQuantidadesPorLocal(
         vasilhames,
         saldoCtx
       );
-  let roomOp = Math.max(0, Number(saldoOpBudget) || 0);
+
+  // Pátio físico lastreado (FIFO tanka→vasilhame ou stamp de composição)
+  // prevalece sobre o saldo-livro quando o tanque ainda está No Pátio.
+  // Sem isso, entradas com saldo_final=0 (baixa fiscal precoce) “somem”
+  // da coluna Tanque enquanto o vasilhame continua no pátio — gap
+  // REPCLEAN 125.000 L vs ~120.585 L.
+  let physicalPatioMine = 0;
+  if (saldoCtx?.tankaFifoSharesByVasilhameId) {
+    for (const [vasId, byEst] of saldoCtx.tankaFifoSharesByVasilhameId) {
+      const v = vasilhameById.get(vasId);
+      if (!v || isVasilhameExpedido(v)) continue;
+      if ((v.status || "No Pátio") !== "No Pátio") continue;
+      for (const [estId, vol] of byEst) {
+        if (idsEqual(estId, estoqueItem.id)) {
+          physicalPatioMine += Number(vol) || 0;
+        }
+      }
+    }
+  }
+  for (const v of saldoCtx?.vasilhamesByEstoqueStamp?.get(String(estoqueItem.id)) || []) {
+    if (!v || isVasilhameExpedido(v)) continue;
+    if ((v.status || "No Pátio") !== "No Pátio") continue;
+    if ((v.tipo || "") === "Tankagem") continue;
+    // Já contado no bloco FIFO acima — não duplicar o teto.
+    if (tankaFifoShareOperacional(estoqueItem, v, saldoCtx) > 0) continue;
+    physicalPatioMine += resolveQuantidadeEstoqueNoVasilhame(
+      estoqueItem,
+      v,
+      transbordos,
+      trackedKeys,
+      fatias,
+      saldoCtx
+    );
+  }
+  physicalPatioMine = roundOp(estoqueItem, physicalPatioMine);
+
+  let roomOp = Math.max(
+    0,
+    Number(saldoOpBudget) || 0,
+    physicalPatioMine
+  );
 
   for (const v of patioList) {
     if (!v || isVasilhameExpedido(v)) continue;
@@ -3022,6 +3202,7 @@ export function computeEstoqueQuantidadesPorLocal(
   // pátio e entradas irmãs com saldo só em tanka não roubam os litros.
   // Ignora residual de arredondamento (ex.: E514 1,7 kg após tanka) para
   // não fragmentar tanques inteiros do dono real.
+  // Não reivindicar tanque cujo dono FIFO de tanka já é outro estoque.
   const residualMinOp = estoqueOperaEmLitros(estoqueItem) ? 1 : 10;
   if (
     roomOp >= residualMinOp &&
@@ -3035,6 +3216,24 @@ export function computeEstoqueQuantidadesPorLocal(
       if ((v.status || "No Pátio") !== "No Pátio") continue;
       if ((v.tipo || "") === "Tankagem") continue;
       if (isVasilhameLegadoEmbalado(v.tipo)) continue;
+      if (vasilhameHasTankaFifoShares(v, saldoCtx)) {
+        // Dono FIFO conhecido: só a fatia deste estoque (nunca o tanque cheio).
+        const mine = tankaFifoShareOperacional(estoqueItem, v, saldoCtx);
+        if (!(mine > 0)) continue;
+        const qtdLimited = Math.min(mine, roomOp);
+        const qtd = claimVasilhameQtyAgainstPatio(
+          estoqueItem,
+          v,
+          qtdLimited,
+          transbordos,
+          saldoCtx
+        );
+        if (qtd <= 0) continue;
+        vasilhamesContados.add(v.id);
+        qtyVasilhamesOp += qtd;
+        roomOp = Math.max(0, roundOp(estoqueItem, roomOp - qtd));
+        continue;
+      }
       if (!vasilhameMatchesEstoqueProdutoCliente(v, estoqueItem)) continue;
       if (!vasilhameMatchesEstoqueLote(v, loteEstoque)) continue;
       const stamps = collectComposicaoEstoqueStamps(v.composicao);
@@ -3278,6 +3477,7 @@ export function listTankaIdsLinkedToEstoque(
  * Se `estoqueIds` for omitido/vazio, recalcula todos.
  */
 export async function syncEstoqueSaldos(estoqueIds) {
+  const { entities } = await import("@transbordo/services/entities");
   const [allEstoque, allTransbordos, allSaidas, allVasilhames] =
     await Promise.all([
       entities.estoque.list(),

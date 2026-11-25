@@ -1,0 +1,514 @@
+{
+  "rows": [
+    {
+      "placa": "29259-2",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T441",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "30125-9",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T441",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "30074-9",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T442",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921169",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T442",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921168",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T442",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921158",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T442",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 3631.409
+        },
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 1368.591
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921157",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T442",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29275-5",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "29066-5",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T477",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29438-2",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "29446-4",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "30119-3",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "29266-6",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T477",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29074-6",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T477",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 0.409
+        },
+        {
+          "codigo": 625,
+          "loteEst": "OF-1504-26",
+          "saldoFin": 31094,
+          "vol": 4999.591
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29299-9",
+      "loteLabel": "OF-1502-26",
+      "vol": 5000,
+      "op": "T477",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 578,
+          "loteEst": "OF-1502-26",
+          "saldoFin": 31369,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU 921160",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T427",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU 921167",
+      "loteLabel": "OF-1495-26",
+      "vol": 5000,
+      "op": "T427",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29567-0",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T400",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "28893-1",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T400",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "26914-3",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T400",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921155",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T400",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921152",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T400",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "02/28959-6",
+      "loteLabel": "OF-1481-26",
+      "vol": 5000,
+      "op": "T366",
+      "fifoSum": 5000,
+      "stampSum": 5000,
+      "stampIds": [
+        "f4663c05-19c8-47da-8099-544fcc35b6b7"
+      ],
+      "owners": [
+        {
+          "codigo": 514,
+          "loteEst": "OF-1481-26",
+          "saldoFin": 29794.392,
+          "vol": 5000
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "29276-2",
+      "loteLabel": "OF-1487-26",
+      "vol": 5000,
+      "op": "T422",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 522,
+          "loteEst": "OF-1487-26",
+          "saldoFin": 29738,
+          "vol": 4233.409
+        },
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 766.591
+        }
+      ],
+      "uncovered": 0
+    },
+    {
+      "placa": "OEGU921181",
+      "loteLabel": "OF-1493-26",
+      "vol": 5000,
+      "op": "T422",
+      "fifoSum": 5000,
+      "stampSum": 0,
+      "stampIds": [],
+      "owners": [
+        {
+          "codigo": 531,
+          "loteEst": "OF-1493-26",
+          "saldoFin": 29290,
+          "vol": 3523.409
+        },
+        {
+          "codigo": 549,
+          "loteEst": "OF-1495-26",
+          "saldoFin": 30108,
+          "vol": 1476.591
+        }
+      ],
+      "uncovered": 0
+    }
+  ],
+  "uncovered": [
+    {
+      "placa": "29275-5",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "29438-2",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "29446-4",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    },
+    {
+      "placa": "30119-3",
+      "loteLabel": "OF-1436-26",
+      "vol": 5000,
+      "op": "T087",
+      "fifoSum": 0,
+      "stampSum": 5000,
+      "stampIds": [
+        194
+      ],
+      "owners": [],
+      "uncovered": 5000
+    }
+  ]
+}

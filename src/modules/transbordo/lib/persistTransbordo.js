@@ -784,15 +784,28 @@ export async function persistTransbordo({
         dens
       );
       // Lastreia cada fatia FIFO ao id do registro de estoque.
-      // Origem tanka: entrada_id é o isotanque — não gravar como estoque_id
-      // (isso zerava Saldo Tanque na tela de Estoque).
+      // Origem tanka: entrada_id / estoque_id podem ser o isotanque — não gravar
+      // como estoque_id (zerava Saldo Tanque). O lastro real da tanka misturada
+      // é resolvido em runtime por computeTankaFifoVasilhameShares.
       for (const comp of destinoCompositions) {
         for (const c of comp) {
           const o = origensFifo[c.origem_index];
-          const estoqueId =
-            o?.estoque_id ||
-            ((o?.tipo_origem || "") === "tanka" ? null : o?.entrada_id) ||
-            null;
+          const tipoOrigem = o?.tipo_origem || "";
+          let estoqueId = null;
+          if (tipoOrigem === "tanka") {
+            const raw =
+              o?.estoque_id != null && String(o.estoque_id).trim() !== ""
+                ? String(o.estoque_id).trim()
+                : "";
+            const tankaRef = String(o?.tanka_id || o?.entrada_id || "").trim();
+            // Só aceita estoque_id se NÃO for o próprio id da tanka.
+            if (raw && raw !== tankaRef) estoqueId = raw;
+          } else {
+            estoqueId =
+              o?.estoque_id ||
+              o?.entrada_id ||
+              null;
+          }
           if (estoqueId) {
             c.estoque_id = estoqueId;
             c.entrada_id = estoqueId;

@@ -6,6 +6,7 @@ import {
   normalizeUnidadeEntrada,
   somaLocaisEstoque,
 } from "@transbordo/lib/estoqueSaldo";
+import { parseDensidade, roundQuantidade } from "@transbordo/lib/format";
 import { asLoteList } from "@transbordo/lib/lotesList";
 import {
   entradaByIdMap,
@@ -64,24 +65,199 @@ export function estoqueEnvioGrupoKey(f) {
   ].join("||");
 }
 
+function normLoteKey(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
 /**
- * Remove espelhos de estoque em L por vasilhame quando o mesmo produto já
- * tem saldo em massa (kg): evita linha duplicada; o físico fica na coluna Tanque.
+ * Converte quantidade entre massa e volume usando densidade (kg/L).
+ * Sem densidade válida não inventa o outro eixo (retorna 0).
  */
-function suprimirEspelhosVasilhameEmLitros(fontes) {
-  const grupoTemMassa = new Map();
+export function converterQuantidadeEntreUom(qty, unidadeOrigem, unidadeAlvo, densidade) {
+  const q = Number(qty) || 0;
+  if (!(q > 0)) return 0;
+  const fromVol = isUnidadeVolumeEntrada(unidadeOrigem);
+  const toVol = isUnidadeVolumeEntrada(unidadeAlvo);
+  if (fromVol === toVol) return q;
+  const dens = parseDensidade(densidade);
+  if (!(dens > 0) || dens >= 20) return 0;
+  return toVol ? roundQuantidade(q / dens) : roundQuantidade(q * dens);
+}
+
+/**
+ * Unidade canônica do grupo produto+cliente.
+ * Se há qualquer fonte em volume, o consolidado é em L (pátio físico).
+ * Nunca promove o grupo para kg quando já existe L — isso rotulava mal
+ * e somava kg+L sem conversão.
+ */
+export function resolveUnidadeCanonicaGrupo(fontesDoGrupo) {
+  const list = fontesDoGrupo || [];
+  if (list.some((f) => isUnidadeVolumeEntrada(f?.unidade))) {
+    return "L";
+  }
+  const first = list.find((f) => f?.unidade != null && String(f.unidade).trim());
+  return normalizeUnidadeEntrada(first?.unidade) || "kg";
+}
+
+/**
+ * Reescreve uma fonte na unidade canônica do grupo (com densidade).
+ */
+export function converterFonteParaUnidade(fonte, unidadeAlvo) {
+  if (!fonte) return fonte;
+  const alvo = isUnidadeVolumeEntrada(unidadeAlvo)
+    ? "L"
+    : normalizeUnidadeEntrada(unidadeAlvo) || "kg";
+  const origem = fonte.unidade || "kg";
+  if (
+    isUnidadeVolumeEntrada(origem) === isUnidadeVolumeEntrada(alvo) &&
+    normalizeUnidadeEntrada(origem) === normalizeUnidadeEntrada(alvo)
+  ) {
+    return { ...fonte, unidade: alvo };
+  }
+  const dens = fonte.densidade;
+  const conv = (q) => converterQuantidadeEntreUom(q, origem, alvo, dens);
+  return {
+    ...fonte,
+    unidade: alvo,
+    saldo: conv(fonte.saldo),
+    saldoEmbalado: conv(fonte.saldoEmbalado),
+    saldoTanque: conv(fonte.saldoTanque),
+    saldoTanka: conv(fonte.saldoTanka),
+  };
+}
+
+/**
+ * Remove espelhos em L de entrada tipo vasilhame quando o MESMO lote já
+ * existe em massa (kg) no grupo: evita duplicar o físico na coluna Tanque.
+ *
+ * Não suprime entradas vasilhame de lote distinto — entradas reais
+ * (ex.: OS-1627 em L ao lado de OF-1489 em kg) devem permanecer.
+ */
+export function suprimirEspelhosVasilhameEmLitros(fontes) {
+  const lotesMassaPorGrupo = new Map();
   for (const f of fontes || []) {
-    if (!isUnidadeVolumeEntrada(f.unidade)) {
-      grupoTemMassa.set(estoqueEnvioGrupoKey(f), true);
+    if (isUnidadeVolumeEntrada(f.unidade)) continue;
+    const lote = normLoteKey(f.lote);
+    if (!lote) continue;
+    const key = estoqueEnvioGrupoKey(f);
+    let set = lotesMassaPorGrupo.get(key);
+    if (!set) {
+      set = new Set();
+      lotesMassaPorGrupo.set(key, set);
     }
+    set.add(lote);
   }
   return (fontes || []).filter((f) => {
     if (!isUnidadeVolumeEntrada(f.unidade)) return true;
-    if (f.tipo_recebimento === "vasilhame" && grupoTemMassa.get(estoqueEnvioGrupoKey(f))) {
-      return false;
-    }
+    if (f.tipo_recebimento !== "vasilhame") return true;
+    const massLotes = lotesMassaPorGrupo.get(estoqueEnvioGrupoKey(f));
+    if (!massLotes || massLotes.size === 0) return true;
+    const lote = normLoteKey(f.lote);
+    if (lote && massLotes.has(lote)) return false;
     return true;
   });
+}
+
+/**
+ * Quando o mesmo produto+cliente mistura L e kg, normaliza tudo para a
+ * unidade canônica (L se houver volume). Aplica a todo produto — não só SCAVEN.
+ */
+export function normalizarGruposComMisturaUom(fontes) {
+  const byKey = new Map();
+  for (const f of fontes || []) {
+    const key = estoqueEnvioGrupoKey(f);
+    let list = byKey.get(key);
+    if (!list) {
+      list = [];
+      byKey.set(key, list);
+    }
+    list.push(f);
+  }
+
+  const canonByKey = new Map();
+  for (const [key, list] of byKey) {
+    canonByKey.set(key, resolveUnidadeCanonicaGrupo(list));
+  }
+
+  return (fontes || []).map((f) => {
+    const canon = canonByKey.get(estoqueEnvioGrupoKey(f));
+    if (!canon) return f;
+    const sameAxis =
+      isUnidadeVolumeEntrada(f.unidade) === isUnidadeVolumeEntrada(canon);
+    if (sameAxis) {
+      return {
+        ...f,
+        unidade: isUnidadeVolumeEntrada(canon)
+          ? "L"
+          : normalizeUnidadeEntrada(f.unidade) || canon,
+      };
+    }
+    return converterFonteParaUnidade(f, canon);
+  });
+}
+
+/**
+ * Consolida fontes já filtradas em uma linha por produto+cliente.
+ * Sempre reconverte para a UOM canônica do grupo antes de somar — defesa
+ * em profundidade caso alguma fonte escape da normalização prévia.
+ */
+export function aggregateEstoqueEnvioProdutos(fontes) {
+  const buckets = new Map();
+  for (const raw of fontes || []) {
+    const saldo = Number(raw?.saldo) || 0;
+    if (saldo <= 0) continue;
+    const key = estoqueEnvioGrupoKey(raw);
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = { key, members: [] };
+      buckets.set(key, bucket);
+    }
+    bucket.members.push(raw);
+  }
+
+  const rows = [];
+  for (const { key, members } of buckets.values()) {
+    const unidade = resolveUnidadeCanonicaGrupo(members);
+    let saldo = 0;
+    let saldoEmbalado = 0;
+    let saldoTanque = 0;
+    let saldoTanka = 0;
+    let colunasLivro = false;
+    let clienteId = null;
+    let clienteNome = "";
+    let codigo = "—";
+    let produto = "—";
+
+    for (const raw of members) {
+      const e = converterFonteParaUnidade(raw, unidade);
+      saldo += Number(e.saldo) || 0;
+      saldoEmbalado += Number(e.saldoEmbalado) || 0;
+      saldoTanque += Number(e.saldoTanque) || 0;
+      saldoTanka += Number(e.saldoTanka) || 0;
+      if (e.colunasLivro) colunasLivro = true;
+      if (!clienteId && e.cliente_id) clienteId = e.cliente_id;
+      if (!clienteNome && e.cliente_nome) clienteNome = e.cliente_nome;
+      if (e.codigo && e.codigo !== "—") codigo = e.codigo;
+      if (e.produto && e.produto !== "—") produto = e.produto;
+    }
+
+    rows.push({
+      id: key,
+      codigo,
+      produto,
+      unidade,
+      saldo,
+      saldoEmbalado,
+      saldoTanque,
+      saldoTanka,
+      colunasLivro,
+      cliente_nome: clienteNome,
+      clienteId,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -142,6 +318,11 @@ export function collectEstoqueEnvioFontes({
       cliente_id: item?.cliente_id || null,
       embalado: tipoRecebimento === "embalado",
       tipo_recebimento: tipoRecebimento,
+      lote: item?.lote || item?.lotes?.[0]?.lote || "",
+      densidade:
+        item?.densidade ||
+        item?.lotes?.[0]?.densidade ||
+        null,
       // Mesmas colunas da tela de Estoque (pátio/embalado / tanque / tanka).
       // patio já inclui destinos unitários (bombona/tambor/IBC) do transbordo.
       saldoEmbalado: colunasLivro
@@ -158,7 +339,9 @@ export function collectEstoqueEnvioFontes({
     transbordoKeys.add(prodClienteKey(produto, clienteNome));
   }
 
-  let merged = suprimirEspelhosVasilhameEmLitros(fontes);
+  let merged = normalizarGruposComMisturaUom(
+    suprimirEspelhosVasilhameEmLitros(fontes)
+  );
 
   if (!indStockReady) return merged;
 
@@ -186,13 +369,7 @@ export function collectEstoqueEnvioFontes({
     });
   }
 
-  return merged;
-}
-
-function normLoteKey(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
+  return normalizarGruposComMisturaUom(merged);
 }
 
 function controleQualidadeKey({ codigo, produto, lote }) {
