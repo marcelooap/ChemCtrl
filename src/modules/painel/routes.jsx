@@ -4,6 +4,7 @@ import { PermissionProvider } from '@industrializacao/lib/rbac/PermissionProvide
 import AdminRoute from '@/components/AdminRoute';
 import MainLayout from '@painel/layouts/MainLayout';
 import ScreenAccessRoute from '@/components/ScreenAccessRoute';
+import OrdemTransbordoRelatorioRoute from '@/components/OrdemTransbordoRelatorioRoute';
 import PageSuspense from '@shared/components/layout/PageSuspense';
 
 const Home = lazy(() => import('@painel/pages/Home'));
@@ -112,7 +113,7 @@ export default function PainelRoutes() {
           </Route>
         </Route>
 
-        <Route element={<ScreenAccessRoute />}>
+        <Route element={<OrdemTransbordoRelatorioRoute />}>
           <Route
             path="operacional/ordem-transbordo/relatorio/:destino/:id"
             element={

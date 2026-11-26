@@ -1,7 +1,15 @@
+import { canAccessRoute, hasPermission } from "@industrializacao/lib/permissions";
+
 /** Origens do relatório de OT (query `?from=` ou `location.state.from`). */
 export const RELATORIO_FROM = {
   CHEMFLOW_VALIDACAO: "chemflow-validacao",
   IND_VALIDACAO: "ind-validacao",
+};
+
+/** Permissão da tela de Validação que originou a impressão. */
+const VALIDACAO_VIEW_BY_DESTINO = {
+  industrializacao: "ind_validacao.view",
+  convencional: "tb_validacao.view",
 };
 
 export const OT_RELATORIO_BASE = "/painel/operacional/ordem-transbordo/relatorio";
@@ -20,10 +28,7 @@ const BACK_LABEL_VALIDACAO =
  * Preferência: `?from=` → `location.state.from` → path do relatório.
  */
 export function resolveBackNav(location) {
-  const searchFrom = new URLSearchParams(location?.search || "").get("from");
-  const stateFrom =
-    typeof location?.state?.from === "string" ? location.state.from : null;
-  const from = searchFrom || stateFrom;
+  const from = readRelatorioFrom(location);
 
   if (from === RELATORIO_FROM.CHEMFLOW_VALIDACAO) {
     return { path: CHEMFLOW_VALIDACAO_PATH, labelKey: BACK_LABEL_VALIDACAO };
@@ -40,4 +45,42 @@ export function resolveBackNav(location) {
 export function buildRelatorioUrl(destino, id, from) {
   const base = `${OT_RELATORIO_BASE}/${destino}/${id}`;
   return from ? `${base}?from=${encodeURIComponent(from)}` : base;
+}
+
+export function readRelatorioFrom(location) {
+  const searchFrom = new URLSearchParams(location?.search || "").get("from");
+  if (searchFrom) return searchFrom;
+  return typeof location?.state?.from === "string" ? location.state.from : null;
+}
+
+/** Segmento `:destino` de `.../relatorio/:destino/:id`. */
+export function reportDestinoFromPath(pathname) {
+  const parts = String(pathname || "").split("/").filter(Boolean);
+  const idx = parts.indexOf("relatorio");
+  if (idx < 0) return null;
+  return parts[idx + 1] || null;
+}
+
+/**
+ * Quem pode abrir o preview de impressão.
+ * A rota fica em `/painel/...`, mas a Validação (Transbordo e Industrialização)
+ * também imprime. Exigir a tela Operacional devolvia quem só tem Validação
+ * para `/painel/home`, sem abrir o preview.
+ */
+export function canOpenOrdemTransbordoRelatorio(user, location) {
+  if (!user) return false;
+  const pathname = location?.pathname || "";
+  if (canAccessRoute(user, pathname)) return true;
+
+  const destino = reportDestinoFromPath(pathname);
+  const viewKey = VALIDACAO_VIEW_BY_DESTINO[destino];
+  return Boolean(viewKey && hasPermission(user, viewKey));
+}
+
+/** Destino quando o preview é negado — volta à Validação de origem. */
+export function resolveRelatorioDeniedPath(location) {
+  const from = readRelatorioFrom(location);
+  if (from === RELATORIO_FROM.CHEMFLOW_VALIDACAO) return CHEMFLOW_VALIDACAO_PATH;
+  if (from === RELATORIO_FROM.IND_VALIDACAO) return IND_VALIDACAO_PATH;
+  return null;
 }
