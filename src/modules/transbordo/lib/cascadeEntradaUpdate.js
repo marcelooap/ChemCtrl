@@ -29,7 +29,7 @@ import { resolveVasilhameDaSaida } from "@transbordo/lib/vasilhameSaidaLink";
 /**
  * Mantém a entrada como fonte mandatória de identidade (lote, NF, produto, etc.).
  * Atualiza estoque sem trocar IDs e propaga snapshots denormalizados
- * em transbordos, saídas, vasilhames e filtrações.
+ * em transbordos, saídas, vasilhames, filtrações e validações (ordem operacional).
  */
 
 function sameText(a, b) {
@@ -261,6 +261,406 @@ function replaceLoteInCodigo(entradaCodigo, oldLote, newLote) {
     new RegExp(`Lote\\s+${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
     `Lote ${to}`
   );
+}
+
+/** Substitui token de lote em rótulos compostos ("A / B"). */
+function replaceLoteToken(label, oldLote, newLote) {
+  const raw = String(label || "");
+  const from = normCode(oldLote);
+  const to = normCode(newLote);
+  if (!raw || !from || !to || sameText(from, to)) return raw;
+  if (sameText(raw, from)) return to;
+  const parts = raw.split(/\s*\/\s*/).map((p) => p.trim());
+  let changed = false;
+  const next = parts.map((part) => {
+    if (!sameText(part, from)) return part;
+    changed = true;
+    return to;
+  });
+  return changed ? next.filter(Boolean).join(" / ") : raw;
+}
+
+function patchLoteItemList(items, pair) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { items, changed: false };
+  }
+  let changed = false;
+  const next = items.map((item) => {
+    if (!sameText(item?.lote, pair.before.lote)) return item;
+    changed = true;
+    return { ...item, lote: pair.after.lote || item.lote };
+  });
+  return { items: next, changed };
+}
+
+function validacaoProdutoMatches(validacao, pair) {
+  const vId = validacao?.produto_id;
+  const beforeId = pair.before?.produto_id;
+  const afterId = pair.after?.produto_id;
+  if (vId && (beforeId || afterId)) {
+    return sameText(vId, beforeId) || sameText(vId, afterId);
+  }
+  const vCode = validacao?.produto_codigo;
+  const beforeCode = pair.before?.produto_codigo;
+  const afterCode = pair.after?.produto_codigo;
+  if (vCode && (beforeCode || afterCode)) {
+    return sameText(vCode, beforeCode) || sameText(vCode, afterCode);
+  }
+  return true;
+}
+
+function origemMatchesIdentityPair(origem, pair) {
+  if (!origem) return false;
+  if (
+    pair.estoqueId != null &&
+    normId(origem.entrada_id) &&
+    normId(origem.entrada_id) === normId(pair.estoqueId)
+  ) {
+    return true;
+  }
+  if (!pair.before?.lote) return false;
+  if (sameText(origem.lote, pair.before.lote)) return true;
+  const label = String(origem.lote || "");
+  if (
+    label.includes("/") &&
+    label
+      .split(/\s*\/\s*/)
+      .map((p) => p.trim())
+      .some((part) => sameText(part, pair.before.lote))
+  ) {
+    return true;
+  }
+  if (
+    (origem.lotes_retirados || []).some((l) =>
+      sameText(l?.lote, pair.before.lote)
+    )
+  ) {
+    return true;
+  }
+  if (
+    (origem.lotes_disponiveis || []).some((l) =>
+      sameText(l?.lote, pair.before.lote)
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function patchValidacaoOrigem(origem, pair) {
+  if (!origemMatchesIdentityPair(origem, pair)) {
+    return { origem, changed: false };
+  }
+
+  let next = { ...origem };
+  let changed = false;
+
+  if (
+    pair.estoqueId != null &&
+    normId(origem.entrada_id) === normId(pair.estoqueId)
+  ) {
+    const patched = patchOrigem(origem, pair);
+    next = patched.origem;
+    changed = patched.changed;
+  } else if (pair.before?.lote) {
+    const nextLote = replaceLoteToken(
+      origem.lote,
+      pair.before.lote,
+      pair.after.lote
+    );
+    const nextCodigo = replaceLoteInCodigo(
+      origem.entrada_codigo,
+      pair.before.lote,
+      pair.after.lote
+    );
+    if (!sameText(nextLote, origem.lote) || !sameText(nextCodigo, origem.entrada_codigo)) {
+      next = {
+        ...next,
+        lote: nextLote || next.lote,
+        entrada_codigo: nextCodigo,
+      };
+      changed = true;
+    }
+  }
+
+  const retirados = patchLoteItemList(next.lotes_retirados, pair);
+  if (retirados.changed) {
+    next = { ...next, lotes_retirados: retirados.items };
+    changed = true;
+  }
+  const disponiveis = patchLoteItemList(next.lotes_disponiveis, pair);
+  if (disponiveis.changed) {
+    next = { ...next, lotes_disponiveis: disponiveis.items };
+    changed = true;
+  }
+
+  return { origem: next, changed };
+}
+
+function patchGranelPayloadIdentity(payload, pair) {
+  if (!payload || typeof payload !== "object") {
+    return { payload, changed: false };
+  }
+  let next = payload;
+  let changed = false;
+
+  if (sameText(payload.lote, pair.before.lote)) {
+    next = { ...next, lote: pair.after.lote || payload.lote };
+    changed = true;
+  } else if (payload.lote && pair.before?.lote) {
+    const replaced = replaceLoteToken(
+      payload.lote,
+      pair.before.lote,
+      pair.after.lote
+    );
+    if (!sameText(replaced, payload.lote)) {
+      next = { ...next, lote: replaced };
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(payload.lotes) && payload.lotes.length > 0) {
+    let lotesChanged = false;
+    const lotes = payload.lotes.map((lote) => {
+      if (!sameText(lote?.lote, pair.before.lote)) return lote;
+      lotesChanged = true;
+      return {
+        ...lote,
+        lote: pair.after.lote || lote.lote,
+        nota_fiscal: pair.after.nota_fiscal || lote.nota_fiscal,
+        produto_id: pair.after.produto_id ?? lote.produto_id,
+        produto_nome: pair.after.produto_nome || lote.produto_nome,
+        produto_codigo: pair.after.produto_codigo || lote.produto_codigo,
+        cliente_id: pair.after.cliente_id ?? lote.cliente_id,
+        cliente_nome: pair.after.cliente_nome || lote.cliente_nome,
+        densidade: pair.after.densidade ?? lote.densidade,
+        data_fabricacao: pair.after.data_fabricacao || lote.data_fabricacao,
+        data_validade: pair.after.data_validade || lote.data_validade,
+      };
+    });
+    if (lotesChanged) {
+      next = { ...next, lotes };
+      changed = true;
+    }
+  }
+
+  return { payload: next, changed };
+}
+
+/** Espelha lotesLabelFromOrigens — evita acoplar cascade ↔ validacaoTransbordo. */
+function lotesLabelFromValidacaoOrigens(origens = []) {
+  const names = [];
+  for (const o of origens || []) {
+    const retirados = (o.lotes_retirados || [])
+      .filter((l) => Number(l.volume_retirado) > 0)
+      .map((l) => String(l.lote || "").trim())
+      .filter(Boolean);
+    if (retirados.length > 0) {
+      for (const n of retirados) {
+        if (!names.includes(n)) names.push(n);
+      }
+      continue;
+    }
+    const lote = String(o.lote || "").trim();
+    if (!lote) continue;
+    for (const part of lote.split(/\s*\/\s*/)) {
+      const p = part.trim();
+      if (p && !names.includes(p)) names.push(p);
+    }
+  }
+  return names.join(" / ");
+}
+
+function recomputeValidacaoLote(tipo, granelPayload, transbordoPayload, fallback = "") {
+  if (
+    (tipo === "granel_transbordo" || tipo === "entrada") &&
+    granelPayload
+  ) {
+    return (
+      granelPayload.lote ||
+      granelPayload.lotes?.[0]?.lote ||
+      fallback ||
+      ""
+    );
+  }
+  return (
+    lotesLabelFromValidacaoOrigens(transbordoPayload?.origens) ||
+    transbordoPayload?.origens?.[0]?.lote ||
+    fallback ||
+    ""
+  );
+}
+
+function asJsonObject(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === "object" && parsed != null ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return typeof value === "object" ? value : null;
+}
+
+/**
+ * Propaga identidade (lote/produto/cliente) para validações criadas pela
+ * Ordem de Transbordo Operacional — snapshots em t_transbordo_validacoes.
+ */
+export async function cascadeValidacoesIdentity(pairs = []) {
+  const changedPairs = pairs.filter((p) => identityChanged(p.before, p.after));
+  if (changedPairs.length === 0) return { validacoes: 0 };
+
+  const estoqueIds = new Set(
+    changedPairs.map((p) => normId(p.estoqueId)).filter(Boolean)
+  );
+  const oldLotes = new Set(
+    changedPairs.map((p) => normCode(p.before?.lote)).filter(Boolean)
+  );
+
+  let validacoes = [];
+  try {
+    validacoes = await entities.transbordoValidacoes.list("-created_at");
+  } catch (err) {
+    console.error(
+      "[Transbordo] Falha ao listar validações para cascade de lote:",
+      err
+    );
+    return { validacoes: 0 };
+  }
+
+  const updates = [];
+
+  for (const v of validacoes || []) {
+    const granel = asJsonObject(v.granel_payload) || v.granel_payload;
+    const transbordo =
+      asJsonObject(v.transbordo_payload) || v.transbordo_payload;
+
+    let nextGranel = granel;
+    let nextTransbordo = transbordo;
+    let payloadChanged = false;
+    let headerOnlyPair = null;
+    let primaryPair = null;
+
+    for (const pair of changedPairs) {
+      if (!validacaoProdutoMatches(v, pair)) continue;
+
+      const granelPatched = patchGranelPayloadIdentity(nextGranel, pair);
+      if (granelPatched.changed) {
+        nextGranel = granelPatched.payload;
+        payloadChanged = true;
+        primaryPair = pair;
+      }
+
+      const origens = nextTransbordo?.origens || [];
+      if (!Array.isArray(origens) || origens.length === 0) continue;
+
+      let origensChanged = false;
+      const nextOrigens = origens.map((origem) => {
+        const patched = patchValidacaoOrigem(origem, pair);
+        if (patched.changed) {
+          origensChanged = true;
+          primaryPair = pair;
+          return patched.origem;
+        }
+        return origem;
+      });
+
+      if (origensChanged) {
+        nextTransbordo = { ...(nextTransbordo || {}), origens: nextOrigens };
+        payloadChanged = true;
+      }
+    }
+
+    // Cabeçalho ainda com lote antigo (tanka/vasilhame sem entrada_id de estoque)
+    if (!payloadChanged && oldLotes.size > 0) {
+      for (const pair of changedPairs) {
+        if (!validacaoProdutoMatches(v, pair)) continue;
+        if (!pair.before?.lote) continue;
+        const headerHasOld =
+          sameText(v.lote, pair.before.lote) ||
+          String(v.lote || "")
+            .split(/\s*\/\s*/)
+            .map((p) => p.trim())
+            .some((part) => sameText(part, pair.before.lote));
+        if (!headerHasOld) continue;
+        const linkedByEstoque = (transbordo?.origens || []).some(
+          (o) =>
+            o?.entrada_id != null && estoqueIds.has(normId(o.entrada_id))
+        );
+        const linkedByLotePayload = (transbordo?.origens || []).some((o) =>
+          origemMatchesIdentityPair(o, pair)
+        );
+        // Sem vínculo no payload: só atualiza se o lote do cabeçalho for exatamente o antigo
+        // e o produto bater (já filtrado) — cobre ordens TANKA com lote denormalizado.
+        if (linkedByEstoque || linkedByLotePayload || headerHasOld) {
+          headerOnlyPair = pair;
+          primaryPair = pair;
+          break;
+        }
+      }
+    }
+
+    if (!payloadChanged && !headerOnlyPair) continue;
+
+    const nextLote = payloadChanged
+      ? recomputeValidacaoLote(
+          v.tipo,
+          nextGranel,
+          nextTransbordo,
+          primaryPair
+            ? replaceLoteToken(
+                v.lote,
+                primaryPair.before.lote,
+                primaryPair.after.lote
+              )
+            : v.lote
+        )
+      : replaceLoteToken(
+          v.lote,
+          headerOnlyPair.before.lote,
+          headerOnlyPair.after.lote
+        );
+
+    const patch = {
+      id: v.id,
+      lote: nextLote || v.lote || null,
+    };
+
+    if (payloadChanged && nextGranel !== granel) {
+      patch.granel_payload = nextGranel;
+    }
+    if (payloadChanged && nextTransbordo !== transbordo) {
+      patch.transbordo_payload = nextTransbordo;
+    }
+
+    if (primaryPair?.after) {
+      if (primaryPair.after.produto_id != null) {
+        patch.produto_id = primaryPair.after.produto_id;
+      }
+      if (primaryPair.after.produto_nome) {
+        patch.produto_nome = primaryPair.after.produto_nome;
+      }
+      if (primaryPair.after.produto_codigo) {
+        patch.produto_codigo = primaryPair.after.produto_codigo;
+      }
+      if (primaryPair.after.cliente_id != null) {
+        patch.cliente_id = primaryPair.after.cliente_id;
+      }
+      if (primaryPair.after.cliente_nome) {
+        patch.cliente_nome = primaryPair.after.cliente_nome;
+      }
+    }
+
+    updates.push(patch);
+  }
+
+  if (updates.length > 0) {
+    await entities.transbordoValidacoes.bulkUpdate(updates);
+  }
+
+  return { validacoes: updates.length };
 }
 
 function collectLotes(row) {
@@ -990,6 +1390,357 @@ export async function syncSaidaVolumeDoVasilhame(
   }
 }
 
+/** Lote que parece quantidade (ex.: "38.581,575") — snapshot corrompido. */
+function looksLikeQuantidadeAsLote(lote) {
+  const s = normCode(lote);
+  if (!s) return false;
+  // BR: 38.581,575 | 38581,575 | EN: 38581.575
+  return (
+    /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) ||
+    /^\d+,\d+$/.test(s) ||
+    /^\d+\.\d+$/.test(s)
+  );
+}
+
+function resolveLotePadraoTanka(origem, orderedTransbordos) {
+  const tankaId = origem?.entrada_id || origem?.tanka_id;
+  if (!tankaId) return "";
+  const all = computeTankaLotesDisponiveis({
+    isotanqueId: tankaId,
+    tankaCodigo: origem.tanka_codigo || "",
+    transbordos: orderedTransbordos,
+  }).map((item) => ({
+    lote: normCode(item.lote),
+    volume: Number(item.quantidade_l) || 0,
+  }));
+
+  // Ignora "lotes" que são quantidade numérica (snapshot corrompido).
+  const lotesDaTanka = all.filter(
+    (item) =>
+      item.lote &&
+      !isLoteNaoInformado(item.lote) &&
+      !looksLikeQuantidadeAsLote(item.lote)
+  );
+
+  if (lotesDaTanka.length === 0) return "";
+  if (lotesDaTanka.length === 1) return lotesDaTanka[0].lote;
+
+  const current = normCode(origem?.lote);
+  const currentIsBad =
+    !current ||
+    looksLikeQuantidadeAsLote(current) ||
+    !lotesDaTanka.some((item) => sameText(item.lote, current));
+
+  // Multi-lote legítimo: não sobrescreve lote ainda presente na tanka
+  if (!currentIsBad) return "";
+
+  lotesDaTanka.sort((a, b) => b.volume - a.volume);
+  return lotesDaTanka[0].lote;
+}
+
+function applyLoteReplacementOnOrigem(origem, nextLote) {
+  const from = normCode(origem?.lote);
+  const to = normCode(nextLote);
+  if (!to || sameText(from, to)) {
+    // Ainda assim pode precisar corrigir lotes_retirados órfãos
+    if (!Array.isArray(origem?.lotes_retirados) || origem.lotes_retirados.length === 0) {
+      return { origem, changed: false };
+    }
+  }
+
+  let next = {
+    ...origem,
+    lote: to || origem.lote,
+    entrada_codigo: replaceLoteInCodigo(
+      origem.entrada_codigo,
+      from || origem.lote,
+      to
+    ),
+  };
+  let changed = !sameText(from, to);
+
+  if (Array.isArray(origem.lotes_retirados) && origem.lotes_retirados.length > 0) {
+    const lotes_retirados = origem.lotes_retirados.map((item) => {
+      const itemLote = normCode(item?.lote);
+      if (
+        sameText(itemLote, to) ||
+        (!looksLikeQuantidadeAsLote(itemLote) &&
+          itemLote &&
+          !sameText(itemLote, from) &&
+          from)
+      ) {
+        // Mantém retirados de outros lotes legítimos em multi-lote
+        if (!from || sameText(itemLote, from) || looksLikeQuantidadeAsLote(itemLote)) {
+          if (sameText(itemLote, to)) return item;
+          changed = true;
+          return { ...item, lote: to };
+        }
+        return item;
+      }
+      if (
+        sameText(itemLote, from) ||
+        looksLikeQuantidadeAsLote(itemLote) ||
+        !itemLote
+      ) {
+        changed = true;
+        return { ...item, lote: to };
+      }
+      return item;
+    });
+    next = { ...next, lotes_retirados };
+  }
+
+  return { origem: next, changed };
+}
+
+/**
+ * Realinha lotes congelados em t_transbordo_validacoes a partir do estoque
+ * atual e dos OPs já healados (TANKA, embalado, lotes órfãos/numéricos).
+ */
+export async function healValidacoesLotes({
+  estoqueRows = [],
+  transbordos = [],
+  validacoes: validacoesInput = null,
+  loteReplacements = null,
+} = {}) {
+  let validacoes = validacoesInput;
+  if (!validacoes) {
+    try {
+      validacoes = await entities.transbordoValidacoes.list("-created_at");
+    } catch (err) {
+      console.error(
+        "[Transbordo] Falha ao listar validações para heal de lote:",
+        err
+      );
+      return { validacoes: 0 };
+    }
+  }
+  if (!validacoes?.length) return { validacoes: 0 };
+
+  const index = indexEstoqueRows(estoqueRows);
+  const ordered = sortTransbordosChrono(transbordos || []);
+  const replacements =
+    loteReplacements instanceof Map
+      ? loteReplacements
+      : new Map(
+          Object.entries(loteReplacements || {}).map(([k, v]) => [
+            normCode(k),
+            normCode(v),
+          ])
+        );
+
+  /** Lote legítimo mais comum por produto (irmão pendente/validado). */
+  const loteCountsPorProduto = new Map();
+  for (const row of validacoes) {
+    const lote = normCode(row?.lote);
+    if (!lote || looksLikeQuantidadeAsLote(lote) || isLoteNaoInformado(lote)) {
+      continue;
+    }
+    const key =
+      normId(row.produto_id) ||
+      normCode(row.produto_codigo) ||
+      normCode(row.produto_nome);
+    if (!key) continue;
+    if (!loteCountsPorProduto.has(key)) loteCountsPorProduto.set(key, new Map());
+    const byLote = loteCountsPorProduto.get(key);
+    byLote.set(lote, (byLote.get(lote) || 0) + 1);
+  }
+  const loteCanonicoPorProduto = new Map();
+  for (const [key, byLote] of loteCountsPorProduto) {
+    let best = null;
+    for (const [lote, count] of byLote) {
+      if (!best || count > best.count) best = { lote, count };
+    }
+    if (best) loteCanonicoPorProduto.set(key, best);
+  }
+
+  const updates = [];
+
+  for (const v of validacoes) {
+    const granel = asJsonObject(v.granel_payload) || v.granel_payload;
+    const transbordo =
+      asJsonObject(v.transbordo_payload) || v.transbordo_payload;
+    let nextGranel = granel;
+    let nextTransbordo = transbordo;
+    let changed = false;
+
+    if (Array.isArray(granel?.lotes) && granel.lotes.length > 0) {
+      let lotesChanged = false;
+      const lotes = granel.lotes.map((lote) => {
+        const estoque = index.byId.get(
+          normId(lote?.estoque_id || lote?.entrada_id)
+        );
+        let nextLote = normCode(estoque?.lote);
+        if (!nextLote && replacements.size > 0) {
+          nextLote = replacements.get(normCode(lote?.lote)) || "";
+        }
+        if (!nextLote || sameText(lote?.lote, nextLote)) return lote;
+        lotesChanged = true;
+        return { ...lote, lote: nextLote };
+      });
+      if (lotesChanged) {
+        nextGranel = {
+          ...granel,
+          lotes,
+          lote: lotes[0]?.lote || granel.lote,
+        };
+        changed = true;
+      }
+    } else if (granel && replacements.size > 0) {
+      const mapped = replacements.get(normCode(granel.lote));
+      if (mapped && !sameText(granel.lote, mapped)) {
+        nextGranel = { ...granel, lote: mapped };
+        changed = true;
+      }
+    }
+
+    const origens = nextTransbordo?.origens || [];
+    if (Array.isArray(origens) && origens.length > 0) {
+      let origensChanged = false;
+      const nextOrigens = origens.map((origem) => {
+        let next = origem;
+        let localChanged = false;
+
+        const estoque = resolveEstoqueForOrigem(origem, index);
+        const nextLoteEstoque = normCode(estoque?.lote);
+        if (estoque && nextLoteEstoque && !sameText(origem.lote, nextLoteEstoque)) {
+          const patched = applyLoteReplacementOnOrigem(origem, nextLoteEstoque);
+          next = patched.origem;
+          localChanged = patched.changed;
+        }
+
+        const isTanka =
+          origem?.tipo_origem === "tanka" ||
+          v.origem_tipo === "tanka" ||
+          Boolean(origem?.tanka_id || origem?.tanka_codigo);
+
+        if (isTanka) {
+          let lotePadrao = resolveLotePadraoTanka(next, ordered);
+          if (!lotePadrao && replacements.size > 0) {
+            lotePadrao =
+              replacements.get(normCode(next.lote)) ||
+              replacements.get(normCode(origem.lote)) ||
+              "";
+          }
+          // Cabeçalho numérico / órfão: força o lote canônico da tanka ou do replacement
+          if (
+            !lotePadrao &&
+            looksLikeQuantidadeAsLote(next.lote) &&
+            replacements.size === 1
+          ) {
+            lotePadrao = [...replacements.values()][0];
+          }
+          if (lotePadrao && !sameText(next.lote, lotePadrao)) {
+            const patched = applyLoteReplacementOnOrigem(next, lotePadrao);
+            next = patched.origem;
+            localChanged = localChanged || patched.changed;
+          } else if (
+            looksLikeQuantidadeAsLote(next.lote) &&
+            lotePadrao &&
+            sameText(next.lote, lotePadrao)
+          ) {
+            // no-op
+          }
+        } else if (replacements.size > 0) {
+          const mapped = replacements.get(normCode(next.lote));
+          if (mapped && !sameText(next.lote, mapped)) {
+            const patched = applyLoteReplacementOnOrigem(next, mapped);
+            next = patched.origem;
+            localChanged = localChanged || patched.changed;
+          }
+        }
+
+        if (localChanged) origensChanged = true;
+        return next;
+      });
+
+      if (origensChanged) {
+        nextTransbordo = { ...(nextTransbordo || {}), origens: nextOrigens };
+        changed = true;
+      }
+    }
+
+    // Cabeçalho ainda com quantidade-como-lote (ex.: item 70 → irmãos PA26)
+    if (!changed && looksLikeQuantidadeAsLote(v.lote)) {
+      const origemTanka = (transbordo?.origens || []).find(
+        (o) =>
+          o?.tipo_origem === "tanka" ||
+          o?.tanka_id ||
+          v.origem_tipo === "tanka"
+      );
+      let lotePadrao = origemTanka
+        ? resolveLotePadraoTanka(origemTanka, ordered)
+        : "";
+      if (!lotePadrao && replacements.size === 1) {
+        lotePadrao = [...replacements.values()][0];
+      }
+      if (!lotePadrao) {
+        const produtoKey =
+          normId(v.produto_id) ||
+          normCode(v.produto_codigo) ||
+          normCode(v.produto_nome);
+        lotePadrao = loteCanonicoPorProduto.get(produtoKey)?.lote || "";
+      }
+      if (lotePadrao && !sameText(v.lote, lotePadrao)) {
+        if (origemTanka && nextTransbordo?.origens) {
+          const nextOrigens = (nextTransbordo.origens || []).map((origem) => {
+            if (
+              !(
+                origem?.tipo_origem === "tanka" ||
+                origem?.tanka_id ||
+                v.origem_tipo === "tanka"
+              )
+            ) {
+              return origem;
+            }
+            const patched = applyLoteReplacementOnOrigem(origem, lotePadrao);
+            return patched.changed ? patched.origem : origem;
+          });
+          nextTransbordo = { ...(nextTransbordo || {}), origens: nextOrigens };
+        }
+        const patch = {
+          id: v.id,
+          lote: lotePadrao,
+        };
+        if (nextTransbordo !== transbordo) {
+          patch.transbordo_payload = nextTransbordo;
+        }
+        updates.push(patch);
+        continue;
+      }
+    }
+
+    if (!changed) {
+      // Só cabeçalho via replacement map
+      const mappedHeader = replacements.get(normCode(v.lote));
+      if (mappedHeader && !sameText(v.lote, mappedHeader)) {
+        updates.push({ id: v.id, lote: mappedHeader });
+      }
+      continue;
+    }
+
+    const nextLote = recomputeValidacaoLote(
+      v.tipo,
+      nextGranel,
+      nextTransbordo,
+      looksLikeQuantidadeAsLote(v.lote) ? "" : v.lote
+    );
+
+    const patch = {
+      id: v.id,
+      lote: nextLote || v.lote || null,
+    };
+    if (nextGranel !== granel) patch.granel_payload = nextGranel;
+    if (nextTransbordo !== transbordo) patch.transbordo_payload = nextTransbordo;
+    updates.push(patch);
+  }
+
+  if (updates.length > 0) {
+    await entities.transbordoValidacoes.bulkUpdate(updates);
+  }
+  return { validacoes: updates.length, updates };
+}
+
 export async function healLinkedLotes({
   estoqueRows,
   transbordos,
@@ -1027,9 +1778,22 @@ export async function healLinkedLotes({
     console.error("[Transbordo] Falha ao alinhar lote das filtrações:", err);
   }
 
+  const transbordosHealed = mergeById(transbordoRows, plan.transbordoUpdates);
+  let validacoesHealed = 0;
+  try {
+    const healed = await healValidacoesLotes({
+      estoqueRows: estoque,
+      transbordos: transbordosHealed,
+    });
+    validacoesHealed = healed?.validacoes || 0;
+  } catch (err) {
+    console.error("[Transbordo] Falha ao alinhar lote das validações:", err);
+  }
+
   return {
     ...plan,
-    transbordos: mergeById(transbordoRows, plan.transbordoUpdates),
+    validacoes: validacoesHealed,
+    transbordos: transbordosHealed,
     vasilhames: mergeById(vasilhameRows, plan.vasilhameUpdates),
     saidas: mergeById(saidaRows, plan.saidaUpdates),
   };
@@ -1041,7 +1805,13 @@ export async function healLinkedLotes({
 export async function cascadeEntradaIdentity(pairs = []) {
   const changedPairs = pairs.filter((p) => identityChanged(p.before, p.after));
   if (changedPairs.length === 0) {
-    return { transbordos: 0, saidas: 0, vasilhames: 0, filtracoes: 0 };
+    return {
+      transbordos: 0,
+      saidas: 0,
+      vasilhames: 0,
+      filtracoes: 0,
+      validacoes: 0,
+    };
   }
 
   const estoqueIds = new Set(changedPairs.map((p) => p.estoqueId));
@@ -1217,11 +1987,18 @@ export async function cascadeEntradaIdentity(pairs = []) {
     });
   }
 
-  await Promise.all([
+  const [, , , , validacaoCascade] = await Promise.all([
     entities.transbordos.bulkUpdate(transbordoUpdates),
     entities.saidas.bulkUpdate(saidaUpdates),
     entities.vasilhames.bulkUpdate(vasilhameUpdates),
     entities.filtracoes.bulkUpdate(filtracaoUpdates),
+    cascadeValidacoesIdentity(changedPairs).catch((err) => {
+      console.error(
+        "[Transbordo] Falha ao cascatear lote nas validações:",
+        err
+      );
+      return { validacoes: 0 };
+    }),
   ]);
 
   return {
@@ -1229,6 +2006,7 @@ export async function cascadeEntradaIdentity(pairs = []) {
     saidas: saidaUpdates.length,
     vasilhames: vasilhameUpdates.length,
     filtracoes: filtracaoUpdates.length,
+    validacoes: validacaoCascade?.validacoes || 0,
   };
 }
 

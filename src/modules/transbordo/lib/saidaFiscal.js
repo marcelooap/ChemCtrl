@@ -50,6 +50,38 @@ function parseDensidade(value) {
   return parseFloat(String(value || "0").replace(",", ".")) || 0;
 }
 
+/** Preserva flags de baixa de reserva após a RPC (evita snapshot desatualizado). */
+function mergeReservaAbatimentoFlags(targetItens = [], sourceItens = []) {
+  const byUid = new Map();
+  const byReserva = new Map();
+  for (const item of sourceItens || []) {
+    const uid = String(item?.item_uid || "").trim();
+    if (uid) byUid.set(uid, item);
+    const reservaId = String(item?.reserva_id || "").trim();
+    if (reservaId) byReserva.set(reservaId, item);
+  }
+  return (targetItens || []).map((item) => {
+    const uid = String(item?.item_uid || "").trim();
+    const reservaId = String(item?.reserva_id || "").trim();
+    const src =
+      (uid && byUid.get(uid)) ||
+      (reservaId && byReserva.get(reservaId)) ||
+      null;
+    if (!src) return item;
+    const next = { ...item };
+    if ("reserva_abatida" in src) next.reserva_abatida = src.reserva_abatida;
+    if ("quantidade_abatida" in src) next.quantidade_abatida = src.quantidade_abatida;
+    if ("quantidade_carregada" in src) {
+      next.quantidade_carregada = src.quantidade_carregada;
+    }
+    if ("abatimento_origem" in src) next.abatimento_origem = src.abatimento_origem;
+    if ("quantidade_carregada_origem" in src) {
+      next.quantidade_carregada_origem = src.quantidade_carregada_origem;
+    }
+    return next;
+  });
+}
+
 function itemsForModuleScope(itens, moduleScope) {
   if (!moduleScope || moduleScope === "all") return itens || [];
   if (moduleScope === ORIGEM_INDUSTRIALIZACAO) {
@@ -705,15 +737,6 @@ export async function applySaidaFiscalToggle(
     containerById.set(cid, { ...c, ...patch });
   }
 
-  // Status da saída só depois dos tanques/containers. Se a gravação falhar,
-  // a validação não fica marcada sem data de saída / Expedido.
-  const quantidade_total = calcSaidaQuantidadeTotal(updatedItens);
-  await entities.saidas.update(saida.id, {
-    ...updates,
-    itens: updatedItens,
-    quantidade_total,
-  });
-
   // Estoque Transbordo: embalado + convencional (após ajustar vasilhames)
   const embaladoIds = itens.flatMap((i) => estoqueIdsFromSaidaItem(i));
   const convencionalIds = resolveEstoqueIdsFromSaidaConvencional(
@@ -796,18 +819,32 @@ export async function applySaidaFiscalToggle(
     }
   }
 
+  // Reserva comercial: abate/estorna ANTES de gravar a validação.
+  // Evita marcar validado e depois falhar na RPC, e evita sobrescrever
+  // reserva_abatida=true com um snapshot desatualizado (ex.: S306).
+  let itensFinais = updatedItens;
   const controlaReserva = (updatedItens || []).some(
     (item) =>
       item?.tipo === "embalado" &&
       (item.reserva_id || item.sem_reserva === true || item.reserva_abatida)
   );
-  let itensFinais = updatedItens;
   if ((scope === "all" || scope === ORIGEM_TRANSBORDO) && controlaReserva) {
     if (checked) {
       await rpcAbaterReservasSaida(saida.id, null, "fiscal");
-      // RPC pode atualizar flags de reserva nos itens — recarrega se necessário.
+      try {
+        const fresh = await entities.saidas.get(saida.id);
+        itensFinais = mergeReservaAbatimentoFlags(updatedItens, fresh?.itens);
+      } catch {
+        // Flags já persistidas pela RPC.
+      }
     } else if (!chavesFiltro) {
       await rpcEstornarReservasSaida(saida.id, "fiscal");
+      try {
+        const fresh = await entities.saidas.get(saida.id);
+        itensFinais = mergeReservaAbatimentoFlags(updatedItens, fresh?.itens);
+      } catch {
+        // Flags já limpas pela RPC.
+      }
     } else {
       // Desvalidação individual: estorna só os itens movidos, preservando os demais.
       const chavesMovimento = new Set(
@@ -817,16 +854,26 @@ export async function applySaidaFiscalToggle(
         saida.id,
         updatedItens,
         chavesMovimento,
-        "fiscal"
+        "fiscal",
+        { persist: false }
       );
     }
   }
+
+  // Status da saída só depois dos tanques/containers e da reserva.
+  // Se a gravação falhar, a validação não fica marcada sem data de saída / Expedido.
+  const quantidade_total = calcSaidaQuantidadeTotal(itensFinais);
+  await entities.saidas.update(saida.id, {
+    ...updates,
+    itens: itensFinais,
+    quantidade_total,
+  });
 
   return {
     ...saida,
     ...updates,
     itens: itensFinais,
-    quantidade_total: calcSaidaQuantidadeTotal(itensFinais),
+    quantidade_total,
   };
 }
 
@@ -856,7 +903,8 @@ async function estornarReservasItensSelecionados(
   saidaId,
   itens,
   chavesMovimento,
-  origem = "fiscal"
+  origem = "fiscal",
+  { persist = true } = {}
 ) {
   let changed = false;
   const next = [];
@@ -876,6 +924,7 @@ async function estornarReservasItensSelecionados(
       item.reserva_id
     ) {
       const qtd = Math.round(Number(item.quantidade_abatida) || 0);
+      let restored = qtd <= 0;
       if (qtd > 0) {
         try {
           const reserva = await entities.materialReservas.get(item.reserva_id);
@@ -893,6 +942,7 @@ async function estornarReservasItensSelecionados(
               removido_por_nome: null,
               motivo_remocao: null,
             });
+            restored = true;
           }
         } catch (err) {
           console.error(
@@ -900,6 +950,11 @@ async function estornarReservasItensSelecionados(
             err
           );
         }
+      }
+      // Não limpa a flag se o estorno da reserva falhou (evita estado órfão).
+      if (!restored) {
+        next.push(item);
+        continue;
       }
       const cleared = { ...item, reserva_abatida: false, quantidade_abatida: null };
       delete cleared.abatimento_origem;
@@ -921,7 +976,7 @@ async function estornarReservasItensSelecionados(
     }
     next.push(item);
   }
-  if (changed) {
+  if (changed && persist) {
     await entities.saidas.update(saidaId, { itens: next });
   }
   return next;

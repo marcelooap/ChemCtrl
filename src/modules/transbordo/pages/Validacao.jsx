@@ -41,6 +41,7 @@ import {
   filterValidacoesTransbordo,
   resumoQuantidadeValidacao,
 } from "@transbordo/lib/validacaoTransbordo";
+import { healValidacoesLotes } from "@transbordo/lib/cascadeEntradaUpdate";
 import { formatNum } from "@transbordo/lib/format";
 import { useValidacaoNovas } from "@transbordo/context/ValidacaoNovasContext";
 
@@ -211,8 +212,25 @@ export default function Validacao() {
         listTankas(),
         loadTransbordoWorkspaceLists(),
       ]);
+
+      let valsHealed = vals || [];
+      try {
+        const heal = await healValidacoesLotes({
+          estoqueRows: workspace.estoque || [],
+          transbordos: workspace.transbordos || [],
+          validacoes: valsHealed,
+        });
+        if (heal?.validacoes > 0) {
+          valsHealed =
+            (await entities.transbordoValidacoes.list("-created_at")) ||
+            valsHealed;
+        }
+      } catch (healErr) {
+        console.error("[Validacao] heal lotes:", healErr);
+      }
+
       setValidacoes(
-        filterValidacoesTransbordo(vals || [], {
+        filterValidacoesTransbordo(valsHealed || [], {
           produtosIndustrializacaoOnly: prodsInd || [],
         })
       );

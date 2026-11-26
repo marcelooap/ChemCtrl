@@ -68,9 +68,26 @@ begin
       for update;
 
       if v_loaded > 0 then
-        if v_reserva.id is null or v_reserva.status <> 'ativa' then
+        if v_reserva.id is null then
           raise exception 'A reserva vinculada à saída não está mais ativa.';
         end if;
+
+        -- Idempotência: baixa já aplicada, só reconstrói as flags no item.
+        if v_reserva.status <> 'ativa' then
+          if v_reserva.status = 'removida'
+             and coalesce(v_reserva.motivo_remocao, '') = 'Baixa de carregamento' then
+            v_item := v_item || jsonb_build_object(
+              'quantidade_carregada', v_loaded,
+              'reserva_abatida', true,
+              'quantidade_abatida', v_loaded,
+              'abatimento_origem', coalesce(nullif(v_item->>'abatimento_origem', ''), v_origem)
+            );
+            v_itens := jsonb_set(v_itens, array[v_i::text], v_item, false);
+            continue;
+          end if;
+          raise exception 'A reserva vinculada à saída não está mais ativa.';
+        end if;
+
         if v_loaded > round(v_reserva.quantidade) then
           raise exception 'A quantidade carregada (%) excede o saldo da reserva (%).',
             v_loaded, round(v_reserva.quantidade);
