@@ -174,7 +174,7 @@ const ESLINGA_COLOR_CHECK_DEF = Object.freeze({
 /**
  * Um item de checklist por teste do destino.
  * Conferência antiga (prazo único, sem lista) continua com a verificação única.
- * Destino da solicitação fora do cadastro gera um item bloqueado.
+ * Destino sem testes cadastrados (não obrigatório) → nenhuma verificação extra.
  */
 export function validadeTesteDefs(validade) {
   if (!validade) return [];
@@ -186,10 +186,11 @@ export function validadeTesteDefs(validade) {
       label: teste.nome,
     }));
   }
+  // Snapshot legado: prazo único sem lista de testes.
   if (validade.dias != null && validade.configurado !== false && !testes) {
     return [VALIDADE_TESTES_CHECK_DEF];
   }
-  if (validade.encontrado === false) return [VALIDADE_TESTES_CHECK_DEF];
+  // Destino fora do cadastro / sem testes obrigatórios: não bloqueia a conferência.
   return [];
 }
 
@@ -828,14 +829,30 @@ export function countItemsMissingPhotos(items = []) {
 }
 
 /**
- * Checklist apto para liberar a expedição: todos os itens aprovados e,
- * quando `requirePhotos`, cada item que exige foto com ao menos uma.
- * Tanque vazio libera sem foto. Tanque vazio sem checklist cadastrado
- * também libera. Callers podem passar `requirePhotos: false` (ex.: admin).
- * Aceita itens do modal ou do payload persistido.
+ * Item apto para liberação: conferência encerrada (aprovado ou reprovado)
+ * ou tanque vazio sem checklist cadastrado. A reprovação fica registrada,
+ * mas não impede liberar/carregar.
+ */
+export function isItemReleasable(item) {
+  if (itemHasNoConfiguredChecklist(item)) return true;
+  return isChecklistItemRealizado(item);
+}
+
+export function areAllItemsInspected(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.every((it) => isItemReleasable(it));
+}
+
+/**
+ * Checklist apto para liberar a expedição: todos os itens conferidos
+ * (aprovados ou reprovados) e, quando `requirePhotos`, cada item que
+ * exige foto com ao menos uma. Tanque vazio libera sem foto. Tanque
+ * vazio sem checklist cadastrado também libera. Callers podem passar
+ * `requirePhotos: false` (ex.: admin). Aceita itens do modal ou do
+ * payload persistido.
  */
 export function areAllItemsReleasable(items = [], { requirePhotos = true } = {}) {
-  if (!areAllItemsApproved(items)) return false;
+  if (!areAllItemsInspected(items)) return false;
   return !requirePhotos || countItemsMissingPhotos(items) === 0;
 }
 
@@ -1042,12 +1059,7 @@ export function mergeChecklistItems(builtItems, storedItems) {
         }
       }
     }
-    const validadeInvalidada =
-      invalidatedTesteKeys.size > 0 ||
-      Boolean(
-        validade_testes?.encontrado === false &&
-          normalizeCheckValue(saved.checks?.[VALIDADE_TESTES_CHECK_KEY])
-      );
+    const validadeInvalidada = invalidatedTesteKeys.size > 0;
 
     const answeredEslinga = Boolean(normalizeCheckValue(saved.checks?.[ESLINGA_COLOR_CHECK_KEY]));
     const eslingaInvalidada = Boolean(
@@ -1062,7 +1074,6 @@ export function mergeChecklistItems(builtItems, storedItems) {
       checks[key] = normalizeCheckValue(saved.checks?.[key]);
     }
     for (const key of invalidatedTesteKeys) checks[key] = '';
-    if (validade_testes?.encontrado === false) checks[VALIDADE_TESTES_CHECK_KEY] = '';
     if (eslingaInvalidada) checks[ESLINGA_COLOR_CHECK_KEY] = '';
 
     const status = computeItemStatus({ ...mergedBase, checks });
@@ -1080,14 +1091,14 @@ export function mergeChecklistItems(builtItems, storedItems) {
   });
 }
 
-/** Checklist completo (todos os itens aprovados) — habilita liberação. */
+/** Checklist completo (todos os itens conferidos) — habilita liberação. */
 export function isChecklistItemsComplete(respostas) {
   const parsed = parseStoredChecklist(respostas);
   if (parsed.legacy) {
     // Legado: se havia checklist_validado_em, tratado fora; aqui não há itens.
     return false;
   }
-  return areAllItemsApproved(parsed.items);
+  return areAllItemsInspected(parsed.items);
 }
 
 // --- Compatibilidade com o checklist legado (perguntas sim/não) ---

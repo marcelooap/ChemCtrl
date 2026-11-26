@@ -293,14 +293,13 @@ const APPROVE_REJECT_OPTIONS = ANSWER_OPTIONS.filter(
 /**
  * Conferência teste a teste. A data mínima de execução é hoje − (validade − prazo).
  * Sem validade cadastrada, permanece hoje − prazo.
- * Sem testes para o destino, a verificação fica bloqueada.
+ * Destino sem testes cadastrados não entra nesta seção (não bloqueia a conferência).
  * Itens antigos (um prazo único, sem lista) continuam no card legado.
  */
 function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, onChange, language, t }) {
   const prefix = 'painel.comercial.agendamentos.checklist.validadeTestes';
   const testes = Array.isArray(validade?.testes) ? validade.testes : [];
   const legado = testes.length === 0 && validade?.dias != null && validade?.configurado !== false;
-  const bloqueado = testes.length === 0 && !legado;
   const chipClass = 'border-border/60 bg-muted/30 shadow-none';
   const testeByKey = new Map(testes.map((teste) => [teste.key, teste]));
 
@@ -316,21 +315,6 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
           label={t(`${prefix}.destino`)}
           value={validade?.destino || t(`${prefix}.destinoVazio`)}
         />
-
-        {bloqueado ? (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-semibold">{t(`${prefix}.naoConfigurado`)}</p>
-              <p className="mt-0.5 text-xs">
-                {t(validade?.destino ? `${prefix}.naoConfiguradoHint` : `${prefix}.naoConfiguradoSemDestino`)}
-              </p>
-            </div>
-          </div>
-        ) : null}
 
         {(defs || []).map((def) => {
           const teste = testeByKey.get(def.key);
@@ -406,7 +390,7 @@ function ValidadeTestesSection({ validade, defs, itemNumbers, checks, disabled, 
                   label={t(`${prefix}.resultado`)}
                   number={itemNumbers.get(def.key)}
                   value={value}
-                  disabled={disabled || bloqueado}
+                  disabled={disabled}
                   onChange={(v) => onChange(def.key, v)}
                   options={APPROVE_REJECT_OPTIONS}
                   t={t}
@@ -1480,11 +1464,9 @@ export default function AgendamentoCarregamentoChecklistModal({
                   title={
                     canRelease
                       ? ''
-                      : anyRejected
-                        ? t('painel.comercial.agendamentos.checklist.rejectedBlockedHint')
-                        : allApproved
-                          ? t('painel.comercial.agendamentos.checklist.photoRequiredHint')
-                          : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
+                      : doneCount === items.length
+                        ? t('painel.comercial.agendamentos.checklist.photoRequiredHint')
+                        : t('painel.comercial.agendamentos.checklist.liberarBlockedHint')
                   }
                 >
                   {saving ? (

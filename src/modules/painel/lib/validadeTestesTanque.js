@@ -243,7 +243,8 @@ export function validarPrazosPorDestino(rows = []) {
 
 /**
  * Testes e Color Cod aplicáveis à solicitação: cliente + destino.
- * Sem cadastro para o destino, `encontrado` é false e a lista de testes fica vazia.
+ * Sem cadastro para o destino, `encontrado` é false e a lista fica vazia —
+ * a conferência segue sem a seção de validade (destino sem teste obrigatório).
  *
  * @param {{ prazosPorDestino?: Array<{ destino: string, color_cod?: string|null, testes?: Array<{ nome: string, dias: number }> }> }} config
  * @param {string|null|undefined} destino destino da solicitação de saída

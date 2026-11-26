@@ -91,9 +91,7 @@ function ValidadeTestesResumo({ validade, t, language }) {
             </span>
           </p>
         </>
-      ) : (
-        <p className="font-medium text-amber-700">{t(`${prefix}.naoConfigurado`)}</p>
-      )}
+      ) : null}
     </div>
   );
 }

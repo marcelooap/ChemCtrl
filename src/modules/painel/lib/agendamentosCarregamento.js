@@ -351,7 +351,7 @@ export function isChecklistValidado(bookings) {
 
 /**
  * Progresso parcial do checklist por item (não marca como validado
- * a menos que todos os itens estejam aprovados).
+ * a menos que todos os itens estejam conferidos — aprovados ou reprovados).
  */
 export async function saveCarregamentoChecklistProgress({
   bookings,
@@ -373,6 +373,7 @@ export async function saveCarregamentoChecklistProgress({
 
   // Foto é obrigatória para validar tanque cheio e embalado.
   // Tanque vazio libera sem foto. Administrador pode liberar sem foto.
+  // Itens reprovados permanecem registrados, mas não bloqueiam a liberação.
   // Checklists já liberados são preservados (edição posterior não pode
   // invalidar uma liberação anterior).
   const alreadyValidated = list.every((row) => Boolean(row.checklist_validado_em));
@@ -383,11 +384,11 @@ export async function saveCarregamentoChecklistProgress({
   if (markValidated && !isLegacyPayload && !releasable) {
     throw new Error(
       t?.('painel.comercial.agendamentos.checklist.liberarBlockedHint') ||
-        'O checklist precisa estar aprovado e com foto em todos os itens.'
+        'O checklist precisa estar conferido e com foto em todos os itens.'
     );
   }
 
-  const allApproved = isLegacyPayload ? markValidated || releasable : releasable;
+  const validated = isLegacyPayload ? markValidated || releasable : releasable;
 
   const patch = {
     checklist_respostas: payload,
@@ -396,14 +397,14 @@ export async function saveCarregamentoChecklistProgress({
       user?.nome || user?.full_name || user?.username || user?.email || '—',
   };
 
-  if (allApproved) {
+  if (validated) {
     patch.checklist_validado_em = new Date().toISOString();
   } else {
     patch.checklist_validado_em = null;
   }
 
   await Promise.all(ids.map((id) => entities.agendamentosCarregamento.update(id, patch)));
-  return { validated: allApproved, patch };
+  return { validated, patch };
 }
 
 export function normalizeBookings(bookings) {
