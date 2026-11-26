@@ -103,6 +103,11 @@ export function resolveUnidadeCanonicaGrupo(fontesDoGrupo) {
 
 /**
  * Reescreve uma fonte na unidade canônica do grupo (com densidade).
+ *
+ * Embalado sem densidade válida: o saldo é a quantidade nominal da embalagem
+ * (ex.: BALDE 12 KG lançado em kg ou L). Igual à tela de Estoque
+ * (`valorNaUnidadeEntrada` não converte embalado). Relabel a UOM do grupo
+ * e preserva o número — zerar via kg↔L apagava linhas reais (GAMAZYME 72+120).
  */
 export function converterFonteParaUnidade(fonte, unidadeAlvo) {
   if (!fonte) return fonte;
@@ -116,8 +121,16 @@ export function converterFonteParaUnidade(fonte, unidadeAlvo) {
   ) {
     return { ...fonte, unidade: alvo };
   }
-  const dens = fonte.densidade;
-  const conv = (q) => converterQuantidadeEntreUom(q, origem, alvo, dens);
+
+  const dens = parseDensidade(fonte.densidade);
+  const densidadeValida = dens > 0 && dens < 20;
+  const isEmbalado =
+    fonte.tipo_recebimento === "embalado" || fonte.embalado === true;
+  if (isEmbalado && !densidadeValida) {
+    return { ...fonte, unidade: alvo };
+  }
+
+  const conv = (q) => converterQuantidadeEntreUom(q, origem, alvo, fonte.densidade);
   return {
     ...fonte,
     unidade: alvo,

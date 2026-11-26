@@ -300,4 +300,60 @@ assert(
   assert(approx(out.saldoTanque, 100, 0.01), "125 kg / 1.25 = 100 L");
 }
 
+// Embalado misto L+kg sem densidade: soma nominal (não zerar kg)
+{
+  const fontes = [
+    {
+      codigo: "1015981",
+      produto: "GAMAZYME 700 FN - BALDE 12 KG",
+      cliente_nome: "VIBRA ENERGIA",
+      cliente_id: "vibra",
+      unidade: "L",
+      tipo_recebimento: "embalado",
+      embalado: true,
+      densidade: null,
+      saldo: 72,
+      saldoEmbalado: 72,
+      saldoTanque: 0,
+      saldoTanka: 0,
+      colunasLivro: true,
+    },
+    {
+      codigo: "1015981",
+      produto: "GAMAZYME 700 FN - BALDE 12 KG",
+      cliente_nome: "VIBRA ENERGIA",
+      cliente_id: "vibra",
+      unidade: "kg",
+      tipo_recebimento: "embalado",
+      embalado: true,
+      densidade: null,
+      saldo: 120,
+      saldoEmbalado: 120,
+      saldoTanque: 0,
+      saldoTanka: 0,
+      colunasLivro: true,
+    },
+  ];
+  const norm = normalizarGruposComMisturaUom(fontes);
+  assert(
+    norm.every((f) => String(f.unidade).toLowerCase() === "l"),
+    "embalado misto relabel para L"
+  );
+  assert(
+    approx(
+      norm.reduce((s, f) => s + (Number(f.saldo) || 0), 0),
+      192,
+      0.01
+    ),
+    "embalado sem densidade preserva 72+120"
+  );
+  const [row] = aggregateEstoqueEnvioProdutos(norm);
+  assert(row.unidade === "L", "GAMAZYME agregado em L");
+  assert(approx(row.saldo, 192, 0.01), `GAMAZYME saldo 192 (got ${row.saldo})`);
+  assert(
+    approx(row.saldoEmbalado, 192, 0.01),
+    `GAMAZYME embalado 192 (got ${row.saldoEmbalado})`
+  );
+}
+
 console.log("estoqueEnvioProdutos.test.mjs: OK");
