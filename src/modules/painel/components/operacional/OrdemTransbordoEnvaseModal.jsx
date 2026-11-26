@@ -247,6 +247,9 @@ export default function OrdemTransbordoEnvaseModal({
   isotanques = [],
   vasilhames = [],
   transbordos = [],
+  /** Pendentes da Ordem — fracionados ainda não gravados em vasilhames. */
+  validacoesPendentes = [],
+  excludeValidacaoId = null,
   fixedOperador = null,
   externalError = "",
   /** Rótulo do botão primário (ex.: "Salvar" na edição pela Validação). */
@@ -1535,6 +1538,8 @@ export default function OrdemTransbordoEnvaseModal({
                     }))
                   }
                   todosDestinos={destinos}
+                  validacoesPendentes={validacoesPendentes}
+                  excludeValidacaoId={excludeValidacaoId}
                 />
               ))}
             </div>

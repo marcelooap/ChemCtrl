@@ -831,6 +831,7 @@ export default function Validacao() {
           vasilhames={vasilhames}
           transbordos={transbordos}
           entradas={entradas}
+          validacoesPendentes={validacoes}
           externalError={editSaveError}
         />
       )}

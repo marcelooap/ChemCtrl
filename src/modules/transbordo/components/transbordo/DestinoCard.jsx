@@ -27,8 +27,14 @@ import {
   tanqueEstaCheio,
   volumeAcumuladoDoTanque,
 } from "@transbordo/lib/vasilhameComposicao";
+import { resolveFracionadosParaEnvase } from "@transbordo/lib/validacaoTransbordo";
 
 const INPUT_EDITABLE = "bg-card";
+
+function isRealVasilhameId(id) {
+  if (id == null || id === "") return false;
+  return !String(id).startsWith("pending-fracionado:");
+}
 
 function findVasilhameCadastro(placa, vasilhames = []) {
   if (!placa) return null;
@@ -40,6 +46,80 @@ function findVasilhameCadastro(placa, vasilhames = []) {
   if (matches.length === 0) return null;
   const withTara = matches.find((v) => Number(v.tara) > 0);
   return withTara || matches[0];
+}
+
+function formatMenorTesteInput(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
+function tanqueIdentityKey(placa, barril) {
+  return `${String(placa || "").trim().toUpperCase()}|${String(barril || "")
+    .trim()
+    .toUpperCase()}`;
+}
+
+/** Próximo tanque fracionado livre (FIFO), ignorando os já usados em outras linhas. */
+function pickNextFracionadoDisponivel(
+  fracionadosSorted = [],
+  todosDestinos = [],
+  currentDestino = null
+) {
+  const usedIds = new Set();
+  const usedKeys = new Set();
+
+  (todosDestinos || []).forEach((d) => {
+    // Referência (não índice): no TransbordoModal o index do card é local por origem.
+    if (currentDestino && d === currentDestino) return;
+    if ((d?.tipo_embalagem || "") !== "Vasilhame") return;
+    if (d.vasilhame_existente_id) usedIds.add(String(d.vasilhame_existente_id));
+    const placa = String(d.placa || "").trim();
+    const barril = String(d.barril || "").trim();
+    if (placa || barril) usedKeys.add(tanqueIdentityKey(placa, barril));
+  });
+
+  return (
+    fracionadosSorted.find((v) => {
+      if (v?.id && usedIds.has(String(v.id))) return false;
+      const key = tanqueIdentityKey(v.placa, v.barril);
+      if (!key || key === "|") return false;
+      return !usedKeys.has(key);
+    }) || null
+  );
+}
+
+/** Preenche identidade + lacres/eslinga/gps/menor teste a partir do tanque fracionado. */
+function applyFracionadoTanqueToDestino(destino, matched, { keepFracionadoFlag = false } = {}) {
+  if (!matched) return { ...destino };
+
+  const semPlaca =
+    !String(matched.placa || "").trim() && String(matched.barril || "").trim();
+  const placaText = semPlaca ? "" : String(matched.placa || "").trim();
+
+  let novaTara = destino.tara;
+  if (
+    matched.tara != null &&
+    matched.tara !== "" &&
+    Number(matched.tara) >= 0
+  ) {
+    novaTara = roundMass(matched.tara);
+  }
+
+  return {
+    ...destino,
+    placa: placaText,
+    barril: semPlaca
+      ? matched.barril
+      : matched.barril || destino.barril || "",
+    tara: novaTara,
+    vasilhame_existente_id: isRealVasilhameId(matched.id) ? matched.id : null,
+    fracionado: keepFracionadoFlag ? !!destino.fracionado : false,
+    lacres: matched.lacres != null ? String(matched.lacres) : "",
+    eslinga: matched.eslinga != null ? String(matched.eslinga) : "",
+    gps: matched.gps != null ? String(matched.gps) : "",
+    menor_teste: formatMenorTesteInput(matched.menor_teste),
+    observacao: String(matched.observacao || "").trim(),
+  };
 }
 
 /**
@@ -139,18 +219,21 @@ export default function DestinoCard({
   excludeTransbordoId = null,
   excludeTransbordoCodigo = "",
   todosDestinos = [],
+  /** Validações ainda pendentes (Ordem de Transbordo) — fracionados ainda não materializados. */
+  validacoesPendentes = [],
+  excludeValidacaoId = null,
 }) {
   const tipo = destino.tipo_embalagem || "";
   const tipoLabel = labelTipoEmbalagem(tipo) || tipo;
 
-  const fracionadoVasilhames = vasilhames.filter(
-    (v) =>
-      v.fracionado === true &&
-      (v.status || "No Pátio") === "No Pátio" &&
-      (v.produto_id === produtoId ||
-        (produtoNome &&
-          v.produto_nome?.toLowerCase() === produtoNome.toLowerCase()))
-  );
+  // Inclui tanques fracionados do pátio + destinos fracionados de OPs ainda não validados.
+  const fracionadoVasilhames = resolveFracionadosParaEnvase({
+    vasilhames,
+    validacoesPendentes,
+    produtoId,
+    produtoNome,
+    excludeValidacaoId,
+  });
 
   const selectedFracionado =
     fracionadoVasilhames.find(
@@ -291,7 +374,7 @@ export default function DestinoCard({
   const handleTipoChange = (label, item) => {
     const tipoValue = item?.value || label;
     const volumePadrao = VOLUME_PADRAO_EMBALAGEM[tipoValue];
-    const updated = {
+    let updated = {
       ...destino,
       tipo_embalagem: tipoValue,
       volume: 0,
@@ -302,6 +385,31 @@ export default function DestinoCard({
       tara: 0,
       volume_total: 0,
     };
+
+    // Ao selecionar Vasilhame: sugere o tanque fracionado mais antigo ainda livre.
+    if (tipoValue === "Vasilhame") {
+      const nextFracionado = pickNextFracionadoDisponivel(
+        fracionadoVasilhames,
+        todosDestinos.length > 0 ? todosDestinos : [destino],
+        destino
+      );
+      if (nextFracionado) {
+        updated = applyFracionadoTanqueToDestino(updated, nextFracionado);
+      } else {
+        updated = {
+          ...updated,
+          placa: "",
+          barril: "",
+          vasilhame_existente_id: null,
+          fracionado: false,
+          lacres: "",
+          eslinga: "",
+          gps: "",
+          menor_teste: "",
+        };
+      }
+    }
+
     recalc(updated);
     onChange(updated);
   };
@@ -495,7 +603,8 @@ export default function DestinoCard({
               <SearchableSelect
                 value={destino.placa || ""}
                 onChange={(label, item) => {
-                  const semPlaca = item && !String(item.placa || "").trim() && item.barril;
+                  const semPlaca =
+                    item && !String(item.placa || "").trim() && item.barril;
                   const placaText = semPlaca
                     ? ""
                     : String(item?.placa || label || "").trim();
@@ -506,41 +615,45 @@ export default function DestinoCard({
                     matched?.fracionado === true &&
                     (matched?.status || "No Pátio") === "No Pátio" &&
                     (matched?.produto_id === produtoId ||
+                      matched?._fromValidacaoPendente ||
                       (produtoNome &&
-                        matched?.produto_nome?.toLowerCase() ===
-                          produtoNome.toLowerCase()));
+                        String(matched?.produto_nome || "").toLowerCase() ===
+                          String(produtoNome).toLowerCase()));
 
                   const sameTank =
                     destino.vasilhame_existente_id === matched?.id;
 
-                  // Se o tanque está cadastrado e possui tara definida, puxa automaticamente
-                  let novaTara = destino.tara;
-                  if (
-                    matched &&
-                    matched.tara != null &&
-                    matched.tara !== "" &&
-                    Number(matched.tara) >= 0
-                  ) {
-                    novaTara = roundMass(matched.tara);
+                  let updated;
+                  if (isFracionadoPatio && matched) {
+                    updated = applyFracionadoTanqueToDestino(destino, matched, {
+                      keepFracionadoFlag: sameTank,
+                    });
+                    // Mantém a placa digitada quando o match veio só por texto.
+                    if (!semPlaca && placaText) updated.placa = placaText;
+                  } else {
+                    let novaTara = destino.tara;
+                    if (
+                      matched &&
+                      matched.tara != null &&
+                      matched.tara !== "" &&
+                      Number(matched.tara) >= 0
+                    ) {
+                      novaTara = roundMass(matched.tara);
+                    }
+                    updated = {
+                      ...destino,
+                      placa: placaText,
+                      barril: semPlaca
+                        ? item.barril
+                        : matched?.barril || destino.barril || "",
+                      tara: novaTara,
+                      vasilhame_existente_id: null,
+                      fracionado: false,
+                      observacao: item
+                        ? String(item.observacao || "").trim()
+                        : destino.observacao || "",
+                    };
                   }
-
-                  const updated = {
-                    ...destino,
-                    placa: placaText,
-                    barril: semPlaca
-                      ? item.barril
-                      : matched?.barril || destino.barril || "",
-                    tara: novaTara,
-                    vasilhame_existente_id: isFracionadoPatio ? matched.id : null,
-                    fracionado: isFracionadoPatio
-                      ? sameTank
-                        ? !!destino.fracionado
-                        : false
-                      : false,
-                    observacao: item
-                      ? String(item.observacao || "").trim()
-                      : destino.observacao || "",
-                  };
                   recalc(updated);
                   onChange(updated);
                 }}
@@ -561,10 +674,12 @@ export default function DestinoCard({
               ) : null}
               {selectedFracionado && (
                 <p className="text-xs text-primary font-medium">
-                  Tanque no pátio (fracionado) — volume atual:{" "}
-                  {formatVolume(selectedFracionado.volume)} L. O volume informado
-                  será somado a este registro. Deixe &quot;Destino fracionado&quot;
-                  desmarcado se o tanque estiver sendo completado.
+                  {selectedFracionado._fromValidacaoPendente
+                    ? "Tanque fracionado em OP pendente de validação"
+                    : "Tanque no pátio (fracionado)"}{" "}
+                  — volume atual: {formatVolume(selectedFracionado.volume)} L. O
+                  volume informado será somado a este registro. Deixe &quot;Destino
+                  fracionado&quot; desmarcado se o tanque estiver sendo completado.
                 </p>
               )}
             </div>
@@ -583,25 +698,22 @@ export default function DestinoCard({
                           barril.trim().toUpperCase()
                     )
                   : null;
-                const updated = {
-                  ...destino,
-                  barril,
-                  vasilhame_existente_id: matched
-                    ? matched.id
-                    : !placa
+                let updated;
+                if (matched) {
+                  updated = applyFracionadoTanqueToDestino(destino, matched, {
+                    keepFracionadoFlag:
+                      destino.vasilhame_existente_id === matched.id,
+                  });
+                  updated.barril = barril;
+                } else {
+                  updated = {
+                    ...destino,
+                    barril,
+                    vasilhame_existente_id: !placa
                       ? null
                       : destino.vasilhame_existente_id,
-                  tara:
-                    matched &&
-                    matched.tara != null &&
-                    matched.tara !== "" &&
-                    Number(matched.tara) >= 0
-                      ? roundMass(matched.tara)
-                      : destino.tara,
-                  observacao: matched
-                    ? String(matched.observacao || "").trim()
-                    : destino.observacao || "",
-                };
+                  };
+                }
                 recalc(updated);
                 onChange(updated);
               }}
@@ -610,9 +722,13 @@ export default function DestinoCard({
             />
             <IntegerField
               label={
-                preserveEntryMass
-                  ? `Quantidade (${unidadeLabel}) *`
-                  : "Volume (L) *"
+                selectedFracionado
+                  ? preserveEntryMass
+                    ? `Quantidade (${unidadeLabel}) * · atual ${formatVolume(selectedFracionado.volume)} L`
+                    : `Volume (L) * · atual ${formatVolume(selectedFracionado.volume)} L`
+                  : preserveEntryMass
+                    ? `Quantidade (${unidadeLabel}) *`
+                    : "Volume (L) *"
               }
               value={destino.volume}
               onChange={(v) => updateField("volume", v)}

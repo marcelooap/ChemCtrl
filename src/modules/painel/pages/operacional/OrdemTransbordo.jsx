@@ -2642,6 +2642,7 @@ export default function OrdemTransbordo() {
         vasilhames={vasilhames}
         transbordos={transbordos}
         entradas={entradas}
+        validacoesPendentes={validacoesPendentes}
         externalError={editViewError}
       />
 
@@ -2742,6 +2743,7 @@ export default function OrdemTransbordo() {
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
+        validacoesPendentes={validacoesPendentes}
         fixedOperador={fixedOperador}
         externalError={saveError}
       />

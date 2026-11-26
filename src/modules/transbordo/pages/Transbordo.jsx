@@ -281,13 +281,15 @@ function renderTransbordoVolumeQuantidade(
  * estoque); o restante é buscado em paralelo.
  */
 async function fetchTransbordoLists({ force = false } = {}) {
-  const [workspace, prods, cliens, isos, entradasDoc] = await Promise.all([
-    loadTransbordoWorkspaceLists({ force }),
-    listProdutos({ modulo: "ARMAZENAGEM" }),
-    entities.clientes.list(),
-    listTankas(),
-    entities.entradas.list(),
-  ]);
+  const [workspace, prods, cliens, isos, entradasDoc, validacoes] =
+    await Promise.all([
+      loadTransbordoWorkspaceLists({ force }),
+      listProdutos({ modulo: "ARMAZENAGEM" }),
+      entities.clientes.list(),
+      listTankas(),
+      entities.entradas.list(),
+      entities.transbordoValidacoes.list("-created_at").catch(() => []),
+    ]);
   return {
     trans: workspace.transbordos,
     ents: workspace.estoque,
@@ -296,6 +298,9 @@ async function fetchTransbordoLists({ force = false } = {}) {
     cliens,
     isos,
     entradasDoc,
+    validacoesPendentes: (validacoes || []).filter(
+      (v) => v?.status === "pendente"
+    ),
   };
 }
 
@@ -306,6 +311,7 @@ export default function Transbordo() {
   const [entradas, setEntradas] = useState([]);
   const [isotanques, setIsotanques] = useState([]);
   const [vasilhames, setVasilhames] = useState([]);
+  const [validacoesPendentes, setValidacoesPendentes] = useState([]);
   const [search, setSearch] = useState("");
   const [clienteFilter, setClienteFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
@@ -435,8 +441,8 @@ export default function Transbordo() {
       setProdutos(prods);
       setClientes(cliens);
       setEntradas(volumes.estoque);
-      setIsotanques(isos);
-      setVasilhames(vasilhamesAlinhados);
+        setIsotanques(isos);
+        setVasilhames(vasilhamesAlinhados);
     } catch (maintErr) {
       console.warn("[Transbordo] Manutenção em segundo plano falhou:", maintErr);
     } finally {
@@ -467,12 +473,14 @@ export default function Transbordo() {
         setEntradas(volumes.estoque);
         setIsotanques(lists.isos);
         setVasilhames(volumes.vasilhames);
+        setValidacoesPendentes(lists.validacoesPendentes || []);
         return {
           volumes,
           prods: lists.prods,
           cliens: lists.cliens,
           isos: lists.isos,
           entradasDoc: lists.entradasDoc,
+          validacoesPendentes: lists.validacoesPendentes || [],
         };
       });
     } catch {
@@ -916,6 +924,7 @@ export default function Transbordo() {
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
+        validacoesPendentes={validacoesPendentes}
         prefillEntrada={activePrefill}
         externalError={saveError}
       />

@@ -291,6 +291,7 @@ export default function TransbordoModal({
   isotanques,
   vasilhames,
   transbordos,
+  validacoesPendentes = [],
   prefillEntrada,
   prefillOrigemTipo = "",
   headerPrefill = null,
@@ -1853,6 +1854,7 @@ export default function TransbordoModal({
                           excludeTransbordoId={editingIdForSaldo}
                           excludeTransbordoCodigo={editingCodigoTransbordo}
                           todosDestinos={destinos}
+                          validacoesPendentes={validacoesPendentes}
                         />
                         );
                       })}

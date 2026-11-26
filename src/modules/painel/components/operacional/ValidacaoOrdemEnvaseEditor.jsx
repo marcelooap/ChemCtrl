@@ -141,6 +141,7 @@ export default function ValidacaoOrdemEnvaseEditor({
   vasilhames = [],
   transbordos = [],
   entradas = [],
+  validacoesPendentes = [],
   externalError = "",
 }) {
   const { t } = useTranslation();
@@ -696,6 +697,8 @@ export default function ValidacaoOrdemEnvaseEditor({
         isotanques={isotanques}
         vasilhames={vasilhames}
         transbordos={transbordos}
+        validacoesPendentes={validacoesPendentes}
+        excludeValidacaoId={validacao?.id || null}
         externalError={externalError}
         submitLabel={t("common.save", { defaultValue: "Salvar" })}
         headerActions={

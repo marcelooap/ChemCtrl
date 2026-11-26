@@ -306,6 +306,149 @@ function asPayloadObject(v) {
   return typeof v === "object" ? v : null;
 }
 
+function tanqueKeyFracionado(placa, barril) {
+  return `${String(placa || "").trim().toUpperCase()}|${String(barril || "")
+    .trim()
+    .toUpperCase()}`;
+}
+
+function matchesProdutoFracionado(rowProdutoId, rowProdutoNome, produtoId, produtoNome) {
+  if (produtoId && rowProdutoId) {
+    return String(rowProdutoId) === String(produtoId);
+  }
+  if (
+    produtoNome &&
+    rowProdutoNome &&
+    String(rowProdutoNome).toLowerCase() === String(produtoNome).toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isFracionadoPatioRow(v, produtoId, produtoNome) {
+  return (
+    v?.fracionado === true &&
+    (v?.status || "No Pátio") === "No Pátio" &&
+    matchesProdutoFracionado(v?.produto_id, v?.produto_nome, produtoId, produtoNome)
+  );
+}
+
+/**
+ * Tanques fracionados elegíveis para auto-preenchimento no envase:
+ * - já no pátio (vasilhames.fracionado)
+ * - OU destino Vasilhame fracionado em validação ainda pendente
+ *
+ * Pendências posteriores que completam o mesmo tanque (fracionado=false)
+ * removem a sugestão. Volume acumula aportes pendentes sobre o saldo do pátio.
+ *
+ * @param {object} params
+ * @param {object[]} [params.vasilhames]
+ * @param {object[]} [params.validacoesPendentes]
+ * @param {string} [params.produtoId]
+ * @param {string} [params.produtoNome]
+ * @param {string|null} [params.excludeValidacaoId]  ignora a validação em edição
+ */
+export function resolveFracionadosParaEnvase({
+  vasilhames = [],
+  validacoesPendentes = [],
+  produtoId,
+  produtoNome,
+  excludeValidacaoId = null,
+} = {}) {
+  const byKey = new Map();
+
+  for (const v of vasilhames || []) {
+    if (!isFracionadoPatioRow(v, produtoId, produtoNome)) continue;
+    const key = tanqueKeyFracionado(v.placa, v.barril);
+    if (key === "|") continue;
+    byKey.set(key, {
+      ...v,
+      _fromValidacaoPendente: false,
+    });
+  }
+
+  const pendentes = (validacoesPendentes || [])
+    .filter(
+      (v) =>
+        v &&
+        v.status === "pendente" &&
+        (!excludeValidacaoId || String(v.id) !== String(excludeValidacaoId))
+    )
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.created_at || a.created_date || a.data || 0).getTime() -
+        new Date(b.created_at || b.created_date || b.data || 0).getTime()
+    );
+
+  for (const val of pendentes) {
+    const payload = asPayloadObject(val.transbordo_payload) || {};
+    const pId = payload.produto_id || val.produto_id;
+    const pNome = payload.produto_nome || val.produto_nome;
+    if (!matchesProdutoFracionado(pId, pNome, produtoId, produtoNome)) continue;
+
+    const destinos = Array.isArray(payload.destinos) ? payload.destinos : [];
+    destinos.forEach((d, idx) => {
+      if ((d?.tipo_embalagem || "") !== "Vasilhame") return;
+      const key = tanqueKeyFracionado(d.placa, d.barril);
+      if (key === "|") return;
+
+      const volDest = roundVolume(d.volume_total || d.volume || 0);
+      const existing = byKey.get(key);
+
+      if (d.fracionado === true) {
+        const baseVol = existing ? roundVolume(existing.volume || 0) : 0;
+        const fromPatio = existing && !existing._fromValidacaoPendente;
+        byKey.set(key, {
+          id: fromPatio
+            ? existing.id
+            : `pending-fracionado:${val.id}:${idx}`,
+          placa: String(d.placa || existing?.placa || "").trim(),
+          barril: String(d.barril || existing?.barril || "").trim(),
+          tara: d.tara ?? existing?.tara ?? 0,
+          lacres: d.lacres ?? existing?.lacres ?? "",
+          eslinga: d.eslinga ?? existing?.eslinga ?? "",
+          gps: d.gps ?? existing?.gps ?? "",
+          menor_teste: d.menor_teste ?? existing?.menor_teste ?? "",
+          observacao: d.observacao ?? existing?.observacao ?? "",
+          volume: roundVolume(baseVol + volDest),
+          capacidade: existing?.capacidade,
+          fracionado: true,
+          status: "No Pátio",
+          produto_id: pId || existing?.produto_id || produtoId || null,
+          produto_nome: pNome || existing?.produto_nome || produtoNome || "",
+          created_at:
+            existing?.created_at ||
+            existing?.created_date ||
+            val.created_at ||
+            val.created_date ||
+            val.data ||
+            null,
+          created_date:
+            existing?.created_date ||
+            val.created_date ||
+            val.created_at ||
+            val.data ||
+            null,
+          _fromValidacaoPendente: !fromPatio,
+          _validacaoId: val.id,
+        });
+        return;
+      }
+
+      // Destino que completa o tanque: deixa de ser sugerido como fracionado.
+      byKey.delete(key);
+    });
+  }
+
+  return [...byKey.values()].sort(
+    (a, b) =>
+      new Date(a.created_at || a.created_date || a.data || 0).getTime() -
+      new Date(b.created_at || b.created_date || b.data || 0).getTime()
+  );
+}
+
 export function buildEnvaseEditModelFromValidacao(validacao) {
   if (!validacao) return null;
   const tp = asPayloadObject(validacao.transbordo_payload);
