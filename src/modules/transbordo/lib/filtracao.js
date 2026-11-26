@@ -462,3 +462,41 @@ export async function upsertFiltracaoForVasilhame(entities, vasilhame, extras = 
     buildFiltracaoFromVasilhame(vasilhame, extras)
   );
 }
+
+/**
+ * Envio pontual de um tanque para a tela de Filtração.
+ * Independente da flag `filtrado` do produto — correção operacional
+ * (ex.: produto marcado depois do transbordo).
+ * Respeita elegibilidade: tipo Vasilhame e não fracionado.
+ *
+ * @returns {{ ok: boolean, status: string, filtracao: object|null }}
+ */
+export async function enviarVasilhameParaFiltracao(entitiesApi, vasilhame) {
+  if (!vasilhame?.id) {
+    return { ok: false, status: "invalid", filtracao: null };
+  }
+  if ((vasilhame.tipo || "") !== "Vasilhame") {
+    return { ok: false, status: "tipo_invalido", filtracao: null };
+  }
+  if (vasilhame.fracionado === true) {
+    return { ok: false, status: "fracionado", filtracao: null };
+  }
+
+  const existing = await entitiesApi.filtracoes.filter({
+    vasilhame_id: vasilhame.id,
+  });
+  if (existing.length > 0) {
+    return { ok: true, status: "already_exists", filtracao: existing[0] };
+  }
+
+  const filtro = await getFiltroEmUso(entitiesApi);
+  const created = await entitiesApi.filtracoes.create(
+    buildFiltracaoFromVasilhame(vasilhame, {
+      codigo: vasilhame.codigo,
+      transbordo_id: vasilhame.transbordo_id,
+      filtro_id: filtro?.id ?? null,
+      filtro_codigo: filtro?.codigo ?? "",
+    })
+  );
+  return { ok: true, status: "created", filtracao: created };
+}

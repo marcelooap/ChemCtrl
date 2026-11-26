@@ -7,7 +7,8 @@ import {
   DialogFooter,
 } from "@shared/components/ui/dialog";
 import { Button } from "@shared/components/ui/button";
-import { FileDown, FileText } from "lucide-react";
+import { useToast } from "@shared/components/ui/use-toast";
+import { FileDown, FileText, FlaskConical, Loader2 } from "lucide-react";
 import {
   formatVolume,
   formatMass,
@@ -37,6 +38,7 @@ import {
   listAjustesManuais,
   formatAjusteDateTime,
 } from "@transbordo/lib/estoqueAjusteManual";
+import { enviarVasilhameParaFiltracao } from "@transbordo/lib/filtracao";
 
 const formatDate = (d) => {
   if (!d) return "—";
@@ -79,14 +81,21 @@ const formatDate = (d) => {
     saidas: saidasProp,
     transbordos = [],
   }) {
+    const { toast } = useToast();
     const [fetchedSaidas, setFetchedSaidas] = useState([]);
     const [loadingSaidas, setLoadingSaidas] = useState(false);
     const [ajustes, setAjustes] = useState([]);
+    const [filtracaoStatus, setFiltracaoStatus] = useState("idle"); // idle|checking|absent|present
+    const [sendingFiltracao, setSendingFiltracao] = useState(false);
     const saidas = Array.isArray(saidasProp) ? saidasProp : fetchedSaidas;
 
     const isUnitario = Boolean(
       vasilhame &&
       (isDestinoEmbalagemUnitaria(vasilhame.tipo) || isVasilhameLegadoEmbalado(vasilhame.tipo))
+    );
+    const isTipoVasilhame = (vasilhame?.tipo || "") === "Vasilhame";
+    const isFracionado = Boolean(
+      vasilhame && resolveFracionadoFromTransbordos(vasilhame, transbordos)
     );
 
     useEffect(() => {
@@ -131,6 +140,79 @@ const formatDate = (d) => {
         cancelled = true;
       };
     }, [open, vasilhame?.id]);
+
+    useEffect(() => {
+      if (!open || !vasilhame?.id || !isTipoVasilhame) {
+        setFiltracaoStatus("idle");
+        return undefined;
+      }
+      let cancelled = false;
+      setFiltracaoStatus("checking");
+      entities.filtracoes
+        .filter({ vasilhame_id: vasilhame.id })
+        .then((rows) => {
+          if (cancelled) return;
+          setFiltracaoStatus(rows?.length > 0 ? "present" : "absent");
+        })
+        .catch(() => {
+          if (!cancelled) setFiltracaoStatus("absent");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [open, vasilhame?.id, isTipoVasilhame]);
+
+    const handleEnviarFiltracao = async () => {
+      if (!vasilhame?.id || sendingFiltracao) return;
+      setSendingFiltracao(true);
+      try {
+        const result = await enviarVasilhameParaFiltracao(entities, {
+          ...vasilhame,
+          fracionado: isFracionado,
+        });
+        if (result.status === "created") {
+          setFiltracaoStatus("present");
+          toast({
+            title: "Enviado para Filtração",
+            description: `Tanque ${vasilhame.placa || vasilhame.codigo || ""} disponível na tela de Filtração para lançar resultados.`,
+          });
+        } else if (result.status === "already_exists") {
+          setFiltracaoStatus("present");
+          toast({
+            title: "Já na Filtração",
+            description: "Este tanque já possui registro na tela de Filtração.",
+          });
+        } else if (result.status === "fracionado") {
+          toast({
+            title: "Tanque fracionado",
+            description:
+              "Complete o vasilhame (remova a tag Fracionado) antes de enviar para Filtração.",
+            variant: "destructive",
+          });
+        } else if (result.status === "tipo_invalido") {
+          toast({
+            title: "Tipo não elegível",
+            description: "Apenas embalagens do tipo Vasilhame entram na Filtração.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Não foi possível enviar",
+            description: "Verifique o registro do tanque e tente novamente.",
+            variant: "destructive",
+          });
+        }
+      } catch (err) {
+        console.error("[Transbordo] Falha ao enviar vasilhame para filtração:", err);
+        toast({
+          title: "Erro ao enviar",
+          description: "Não foi possível criar o registro de filtração.",
+          variant: "destructive",
+        });
+      } finally {
+        setSendingFiltracao(false);
+      }
+    };
 
     const display = useMemo(() => {
       if (!vasilhame) return null;
@@ -514,22 +596,57 @@ const formatDate = (d) => {
             )}
           </div>
   
-          <DialogFooter>
-            <Button type="button" variant="default" onClick={() => generateBoletaPDF(display)}>
-              <FileDown className="w-4 h-4" />
-              Gerar Boleta
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => generateRelatorioFiscalPDF(display)}
-            >
-              <FileText className="w-4 h-4" />
-              Relatório Fiscal
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Fechar
-            </Button>
+          <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {isTipoVasilhame && (
+                <Button
+                  type="button"
+                  variant={filtracaoStatus === "present" ? "outline" : "secondary"}
+                  disabled={
+                    sendingFiltracao ||
+                    filtracaoStatus === "checking" ||
+                    filtracaoStatus === "present" ||
+                    isFracionado
+                  }
+                  title={
+                    isFracionado
+                      ? "Complete o vasilhame antes de enviar para Filtração"
+                      : filtracaoStatus === "present"
+                        ? "Este tanque já está na tela de Filtração"
+                        : "Envia este tanque para a tela de Filtração (mesmo se o produto não estiver marcado como filtrado)"
+                  }
+                  onClick={handleEnviarFiltracao}
+                >
+                  {sendingFiltracao || filtracaoStatus === "checking" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FlaskConical className="w-4 h-4" />
+                  )}
+                  {filtracaoStatus === "present"
+                    ? "Já na Filtração"
+                    : isFracionado
+                      ? "Fracionado — não elegível"
+                      : "Enviar para Filtração"}
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="default" onClick={() => generateBoletaPDF(display)}>
+                <FileDown className="w-4 h-4" />
+                Gerar Boleta
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => generateRelatorioFiscalPDF(display)}
+              >
+                <FileText className="w-4 h-4" />
+                Relatório Fiscal
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Fechar
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
