@@ -4,6 +4,8 @@ import {
   roundVolume,
   roundQuantidade,
   litrosFromMassaKg,
+  massaKgFromLitrosOperacionais,
+  TOLERANCIA_ALINHAMENTO_MASSA_KG,
 } from "@transbordo/lib/format";
 import {
   loteToKg,
@@ -220,13 +222,17 @@ export function quantidadeFifoOperacional(row, estoqueItem) {
   const peso = Number(row?.pesoLiq) || 0;
   if (estoqueOperaEmLitros(estoqueItem)) return vol;
   if (isEstoqueEmbaladoMassa(estoqueItem)) return vol > 0 ? vol : peso;
-  if (peso > 0) return peso;
   const dens = parseDensidade(
     row?.densidade ||
       estoqueItem?.densidade ||
       estoqueItem?.lotes?.[0]?.densidade
   );
-  return dens > 0 && vol > 0 ? roundMass(vol * dens) : 0;
+  // Recupera massa canônica (917 L @ 1,09 → 1.000 kg, não 999,53).
+  if (vol > 0 && dens > 0) {
+    return massaKgFromLitrosOperacionais(vol, dens, peso);
+  }
+  if (peso > 0) return peso;
+  return 0;
 }
 
 /**
@@ -825,8 +831,8 @@ export function listDestinosFifoForEstoque(
       // pode ter sido volume × densidade (kg tratado como litro).
       if (isEstoqueEmbaladoMassa(estoqueItem)) {
         pesoLiq = roundMass(volume);
-      } else if (pesoLiq <= 0 && dens > 0) {
-        pesoLiq = roundMass(volume * dens);
+      } else if (dens > 0 && volume > 0) {
+        pesoLiq = massaKgFromLitrosOperacionais(volume, dens, pesoLiq);
       }
 
       rows.push({
@@ -1122,8 +1128,8 @@ export function listHistoricoTransbordosEncadeados(
         );
         if (isEstoqueEmbaladoMassa(estoqueItem)) {
           pesoLiq = roundMass(volume);
-        } else if (pesoLiq <= 0 && dens > 0) {
-          pesoLiq = roundMass(volume * dens);
+        } else if (dens > 0 && volume > 0) {
+          pesoLiq = massaKgFromLitrosOperacionais(volume, dens, pesoLiq);
         }
 
         rows.push({
@@ -1724,13 +1730,14 @@ export function calcSaidasConvencional(
             Number(item.quantidade_solicitada) ||
             Number(item.peso_liquido) ||
             0;
-          if (!(qtd > 0)) {
-            const vol = Number(item.volume_solicitado) || 0;
-            const dens = resolveDensidadeParaMassa(estoqueItem, {
-              vasilhame: v,
-              transbordos,
-            });
-            if (vol > 0 && dens > 0) qtd = roundMass(vol * dens);
+          const vol = Number(item.volume_solicitado) || 0;
+          const dens = resolveDensidadeParaMassa(estoqueItem, {
+            vasilhame: v,
+            transbordos,
+          });
+          // Volume × dens canônico: 917 L @ 1,09 → 1.000 kg (não 999,53).
+          if (vol > 0 && dens > 0) {
+            qtd = massaKgFromLitrosOperacionais(vol, dens, qtd);
           }
         } else {
           qtd =
@@ -1927,21 +1934,12 @@ export function resolveMassaVasilhameParaBaixa(vasilhame, transbordos = []) {
     }
   }
 
-  if (peso > 0) {
-    if (
-      vol > 0 &&
-      dens > 0 &&
-      dens < 20 &&
-      Math.abs(dens - 1) > 0.02 &&
-      Math.abs(peso - vol) < 0.51
-    ) {
-      return roundMass(vol * dens);
-    }
-    return peso;
+  // Volume operacional × dens com recuperação do saldo inteiro
+  // (917 L @ 1,09 → 1.000 kg; peso residual 999,53 também recupera).
+  if (vol > 0 && dens > 0 && dens < 20) {
+    return massaKgFromLitrosOperacionais(vol, dens, peso);
   }
-
-  // Nunca tratar litros como kg quando a densidade estiver ausente
-  if (vol > 0 && dens > 0) return vol * dens;
+  if (peso > 0) return peso;
 
   const fromComp = (vasilhame.composicao || []).reduce(
     (s, c) => s + (Number(c.quantidade_kg) || 0),
@@ -1953,7 +1951,9 @@ export function resolveMassaVasilhameParaBaixa(vasilhame, transbordos = []) {
     (s, c) => s + (Number(c.quantidade_l) || 0),
     0
   );
-  if (fromCompL > 0 && dens > 0) return fromCompL * dens;
+  if (fromCompL > 0 && dens > 0) {
+    return massaKgFromLitrosOperacionais(fromCompL, dens, fromComp);
+  }
 
   let fromOp = 0;
   for (const t of related) {
@@ -1969,12 +1969,12 @@ export function resolveMassaVasilhameParaBaixa(vasilhame, transbordos = []) {
         placaBarrilKey(vasilhame.placa, vasilhame.barril) !== "||";
       if (!sameId && !samePlaca) continue;
       const pesoDest = Number(d.peso_liquido) || 0;
-      if (pesoDest > 0) {
-        fromOp += pesoDest;
+      const volDest = Number(d.volume_total || d.volume) || 0;
+      if (volDest > 0 && densT > 0) {
+        fromOp += massaKgFromLitrosOperacionais(volDest, densT, pesoDest);
         continue;
       }
-      const volDest = Number(d.volume_total || d.volume) || 0;
-      if (volDest > 0 && densT > 0) fromOp += volDest * densT;
+      if (pesoDest > 0) fromOp += pesoDest;
     }
   }
   return fromOp;
@@ -2453,13 +2453,29 @@ export function computeEstoqueSaldo(
   );
   // Ajuste manual embalado: ledger (não altera saldo_inicial da entrada).
   const ajusteEmb = ajusteEmbaladoFromContext(saldoCtx, estoqueItem);
-  const bruto = quantidade - saidoEmb - saidoConv - saidoPatio + ajusteEmb;
-  return Math.max(
+  const saidoTotal = saidoEmb + saidoConv + saidoPatio;
+  const bruto = quantidade - saidoTotal + ajusteEmb;
+  const saldo = Math.max(
     0,
     estoqueOperaEmLitros(estoqueItem)
       ? roundVolume(bruto)
       : roundQuantidade(bruto)
   );
+  // Residual clássico L×dens após baixa do saldo inteiro
+  // (ex.: 1.000 − 999,53 = 0,47 kg). Não zera parcial legítimo (saída inteira).
+  if (
+    !estoqueOperaEmLitros(estoqueItem) &&
+    saldo > 0 &&
+    saldo <= TOLERANCIA_ALINHAMENTO_MASSA_KG &&
+    saidoTotal > 0 &&
+    Math.abs(quantidade - Math.round(quantidade)) < 1e-6 &&
+    Math.abs(saidoTotal - Math.round(quantidade)) <=
+      TOLERANCIA_ALINHAMENTO_MASSA_KG + 1e-9 &&
+    Math.abs(saidoTotal - Math.round(saidoTotal)) > 1e-6
+  ) {
+    return 0;
+  }
+  return saldo;
 }
 
 /**
@@ -2497,7 +2513,7 @@ function litrosParaQuantidadeOperacional(estoqueItem, litros, densOverride = 0) 
     parseDensidade(densOverride) ||
     parseDensidade(estoqueItem?.densidade) ||
     parseDensidade(estoqueItem?.lotes?.[0]?.densidade);
-  if (dens > 0) return roundMass(vol * dens);
+  if (dens > 0) return massaKgFromLitrosOperacionais(vol, dens);
   // Sem densidade: não promover litro a kg/lb
   return 0;
 }
@@ -2535,21 +2551,11 @@ function quantidadeComposicaoOperacional(c, estoqueItem, opts = {}) {
     densidade: opts.densidade,
   });
 
-  if (qKg > 0) {
-    // qKg às vezes foi copiado do litro (dens ≠ 1), inclusive em embalado→tanque.
-    if (
-      dens > 0 &&
-      dens < 20 &&
-      qL > 0 &&
-      Math.abs(qKg - qL) < 0.51 &&
-      Math.abs(dens - 1) > 0.02
-    ) {
-      return roundMass(qL * dens);
-    }
-    return roundMass(qKg);
+  // Recupera massa do saldo (917 L @ 1,09 → 1.000 kg, não 999,53 do L×dens).
+  if (qL > 0 && dens > 0 && dens < 20) {
+    return massaKgFromLitrosOperacionais(qL, dens, qKg);
   }
-
-  if (qL > 0 && dens > 0) return roundMass(qL * dens);
+  if (qKg > 0) return roundMass(qKg);
   // Sem densidade: não promover litro a kg
   return 0;
 }
@@ -2864,7 +2870,11 @@ function claimVasilhameQtyAgainstPatio(
   if (estoqueOperaEmLitros(estoqueItem)) {
     return roundOp(estoqueItem, takeL);
   }
-  return roundOp(estoqueItem, takeL * dens);
+  // Preferir a massa pedida quando o saque cobre o volume operacional inteiro.
+  return roundOp(
+    estoqueItem,
+    massaKgFromLitrosOperacionais(takeL, dens, qty)
+  );
 }
 
 /**
@@ -3344,7 +3354,18 @@ export function computeEstoqueQuantidadesPorLocal(
       top.set(Math.max(0, roundOp(estoqueItem, top.qty + diff)));
     }
   } else if (diff > 0) {
-    if (entradaEmbalado) {
+    // Não reinjetar residual L×dens no Embalado após consumo quase total
+    // (ex.: 0,47 kg de 1.000 kg @ 1,09). Entrada pequena genuína (0,47
+    // recebidos e intactos) continua aparecendo.
+    const qtdOrigOp = getEstoqueQuantidade(estoqueItem);
+    const residualArredondamento =
+      !estoqueOperaEmLitros(estoqueItem) &&
+      diff <= TOLERANCIA_ALINHAMENTO_MASSA_KG &&
+      alocado <= 0 &&
+      qtdOrigOp > TOLERANCIA_ALINHAMENTO_MASSA_KG &&
+      saldoOp <= TOLERANCIA_ALINHAMENTO_MASSA_KG &&
+      saldoOp + TOLERANCIA_ALINHAMENTO_MASSA_KG < qtdOrigOp;
+    if (entradaEmbalado && !residualArredondamento) {
       // Entrada embalada ainda sem tanque/tanka/unitário vinculado.
       qtyPatioOp += diff;
     }
