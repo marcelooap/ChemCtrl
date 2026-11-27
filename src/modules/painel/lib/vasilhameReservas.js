@@ -21,6 +21,10 @@ import {
 import { resolveVasilhameExpedidoDisplay } from '@transbordo/lib/vasilhamePatio';
 import { buildContainerYardRestorePatch } from '@transbordo/lib/saidaIndContainer';
 import { parseNumero } from '@transbordo/lib/format';
+import {
+  getQuantidadeEmbalagensFromVasilhame,
+  isDestinoEmbalagemUnitaria,
+} from '@transbordo/lib/tiposEmbalagem';
 import { entities } from '@transbordo/services/entities';
 
 const UUID_RE =
@@ -29,6 +33,8 @@ const UUID_RE =
 export const ORIGEM_TRANSBORDO = 'transbordo';
 export const ORIGEM_INDUSTRIALIZACAO = 'industrializacao';
 export const VASILHAME_RESERVA_PREFIX = 'vasilhame';
+/** Unidade de reserva parcial por embalagens (bombona/tambor/IBC). */
+export const VASILHAME_RESERVA_UNIDADE_EMB = 'emb';
 
 function toUuidOrNull(value) {
   if (value == null || value === '') return null;
@@ -77,6 +83,58 @@ export function buildVasilhameReservaChave(origem, origemId) {
 
 export function isVasilhameReservado(reservas = [], chave) {
   return (reservas || []).some((r) => r?.chave === chave && r.status === 'ativa');
+}
+
+export function getVasilhameReservaAtiva(reservas = [], chave) {
+  return (reservas || []).find((r) => r?.chave === chave && r.status === 'ativa') || null;
+}
+
+function resolveVasilhameSource(sourceOrRow) {
+  if (!sourceOrRow) return null;
+  return sourceOrRow.source || sourceOrRow;
+}
+
+/**
+ * Quantidade de embalagens disponíveis no vasilhame (bombonas/tambores/IBCs).
+ * Tanques e demais tipos unitários retornam 1 (reserva integral).
+ */
+export function getVasilhameEmbalagensDisponiveis(sourceOrRow) {
+  const source = resolveVasilhameSource(sourceOrRow);
+  if (!source) return 1;
+  if (!isDestinoEmbalagemUnitaria(source.tipo)) return 1;
+  const qtd = getQuantidadeEmbalagensFromVasilhame(source);
+  return qtd > 0 ? Math.round(qtd) : 1;
+}
+
+export function isVasilhameReservaParcialSuportada(sourceOrRow) {
+  return getVasilhameEmbalagensDisponiveis(sourceOrRow) > 1;
+}
+
+/**
+ * Resolve quantas embalagens estão reservadas.
+ * Reservas legadas (`unidade_medida !== emb`) continuam valendo pelo vasilhame inteiro.
+ */
+export function resolveVasilhameQuantidadeReservada(reserva, sourceOrRow) {
+  if (!reserva || reserva.status !== 'ativa') return 0;
+  const max = getVasilhameEmbalagensDisponiveis(sourceOrRow);
+  const qty = Math.round(Number(reserva.quantidade) || 0);
+  const unidade = String(reserva.unidade_medida || '')
+    .trim()
+    .toLowerCase();
+
+  if (unidade === VASILHAME_RESERVA_UNIDADE_EMB) {
+    if (qty <= 0) return 0;
+    return Math.min(max, qty);
+  }
+
+  // Legado / reserva integral do vasilhame.
+  return max;
+}
+
+export function resolveVasilhameReservaFracao(reserva, sourceOrRow) {
+  const max = getVasilhameEmbalagensDisponiveis(sourceOrRow);
+  if (max <= 0) return 0;
+  return resolveVasilhameQuantidadeReservada(reserva, sourceOrRow) / max;
 }
 
 function isTankagemTransbordo(vasilhame) {
@@ -210,6 +268,9 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
   const loteDatas = resolveVasilhameLoteDatas(vasilhame, context.estoqueById || null, {
     transbordos: context.transbordos || [],
   });
+  const reservaAtiva = getVasilhameReservaAtiva(reservas, chave);
+  const quantidadeEmbalagens = getVasilhameEmbalagensDisponiveis(display);
+  const quantidadeReservada = resolveVasilhameQuantidadeReservada(reservaAtiva, display);
   return {
     id: chave,
     chave,
@@ -232,7 +293,14 @@ export function mapTransbordoVasilhame(vasilhame, reservas = [], context = {}) {
     dataValidade: loteDatas.data_validade || null,
     lacres: String(vasilhame.lacres || '').trim() || null,
     createdAt: vasilhame.created_at || null,
-    reservado: isVasilhameReservado(reservas, chave),
+    reservado: Boolean(reservaAtiva),
+    quantidadeEmbalagens,
+    quantidadeReservada,
+    reservaParcial:
+      Boolean(reservaAtiva) &&
+      quantidadeEmbalagens > 1 &&
+      quantidadeReservada > 0 &&
+      quantidadeReservada < quantidadeEmbalagens,
     fracionado: isTransbordoFracionado(vasilhame),
     emPatio: transbordoStatus(vasilhame) === 'No Pátio',
     dataSaida: exitDateOrNull(vasilhame.data_saida),
@@ -302,6 +370,9 @@ export function mapIndContainer(
   const production = productionOfContainer(display, productions);
   const codigo = resolveProductCode(recipes, display, production);
   const loteSummary = resolveIndContainerLoteSummary(display, productions, recipes);
+  const reservaAtiva = getVasilhameReservaAtiva(reservas, chave);
+  const quantidadeEmbalagens = getVasilhameEmbalagensDisponiveis(display);
+  const quantidadeReservada = resolveVasilhameQuantidadeReservada(reservaAtiva, display);
   return {
     id: chave,
     chave,
@@ -323,7 +394,14 @@ export function mapIndContainer(
     dataValidade: loteSummary.dataValidade,
     lacres: loteSummary.lacres,
     createdAt: display.created_date || display.created_at || null,
-    reservado: isVasilhameReservado(reservas, chave),
+    reservado: Boolean(reservaAtiva),
+    quantidadeEmbalagens,
+    quantidadeReservada,
+    reservaParcial:
+      Boolean(reservaAtiva) &&
+      quantidadeEmbalagens > 1 &&
+      quantidadeReservada > 0 &&
+      quantidadeReservada < quantidadeEmbalagens,
     fracionado: isContainerFractional(display, production, transfers),
     emPatio: (display.status || '') === 'No Pátio',
     dataSaida: exitDateOrNull(display.departure_date),
@@ -530,6 +608,24 @@ function isUnidadeMassa(unidade) {
   );
 }
 
+function isUnidadeEmbalagem(unidade) {
+  const u = String(unidade || '')
+    .trim()
+    .toLowerCase();
+  return (
+    u === 'un' ||
+    u === 'und' ||
+    u === 'unid' ||
+    u === 'unidade' ||
+    u === 'unidades' ||
+    u === 'emb' ||
+    u === 'pc' ||
+    u === 'pç' ||
+    u === 'pçs' ||
+    u === 'pcs'
+  );
+}
+
 /** Litros: trata milhar BR ("5.000") que Number/parseFloat interpretaria como 5. */
 function parseLitros(value) {
   if (value == null || value === '') return 0;
@@ -545,7 +641,8 @@ function parseLitros(value) {
 
 /**
  * Soma o conteúdo dos vasilhames de transbordo com reserva comercial ativa,
- * na unidade do estoque de produtos (L → volume; kg → peso líquido).
+ * na unidade do estoque de produtos (L → volume; kg → peso líquido; un → embalagens).
+ * Reservas parciais (`emb`) abatem apenas a fração correspondente.
  */
 export function sumReservadoVasilhamesConteudo(
   vasilhames = [],
@@ -558,14 +655,16 @@ export function sumReservadoVasilhamesConteudo(
   const cliId = clienteId ? String(clienteId).trim() : '';
   const asVolume = isUnidadeVolume(unidade);
   const asMassa = isUnidadeMassa(unidade);
-  if (!asVolume && !asMassa) return 0;
+  const asEmbalagem = isUnidadeEmbalagem(unidade);
+  if (!asVolume && !asMassa && !asEmbalagem) return 0;
 
   return (vasilhames || []).reduce((sum, v) => {
     if (!v || (v.tipo || '') === 'Tankagem') return sum;
     if ((v.status || 'No Pátio') !== 'No Pátio') return sum;
 
     const chave = buildVasilhameReservaChave(ORIGEM_TRANSBORDO, v.id);
-    if (!isVasilhameReservado(reservas, chave)) return sum;
+    const reserva = getVasilhameReservaAtiva(reservas, chave);
+    if (!reserva) return sum;
 
     if (cod && normKey(v.produto_codigo) !== cod) return sum;
     if (nome && nome !== '—') {
@@ -583,13 +682,25 @@ export function sumReservadoVasilhamesConteudo(
     else sameCliente = !cliId && !cliNome && !vId && !vCliNome;
     if (!sameCliente) return sum;
 
+    const reservedPkgs = resolveVasilhameQuantidadeReservada(reserva, v);
+    if (reservedPkgs <= 0) return sum;
+
+    if (asEmbalagem) {
+      if (!isDestinoEmbalagemUnitaria(v.tipo)) return sum;
+      return sum + reservedPkgs;
+    }
+
+    const fracao = resolveVasilhameReservaFracao(reserva, v);
+    if (fracao <= 0) return sum;
+
     if (asVolume) {
       const volume = parseLitros(v.volume);
       const capacidade = parseLitros(v.capacidade);
-      return sum + (volume > 0 ? volume : capacidade);
+      const base = volume > 0 ? volume : capacidade;
+      return sum + base * fracao;
     }
 
-    return sum + (parseNumero(v.peso_liquido) || 0);
+    return sum + (parseNumero(v.peso_liquido) || 0) * fracao;
   }, 0);
 }
 
@@ -600,10 +711,17 @@ function normalizeSolicitante(value) {
 }
 
 /**
- * Reserva comercial unitária do vasilhame (Livre → Reservado).
- * Persistida em t_material_reservas com chave própria, sem alterar o estoque.
+ * Reserva comercial do vasilhame (Livre → Reservado).
+ * Em embalagens unitárias (bombona/tambor/IBC) aceita quantidade parcial de embalagens.
+ * Persistida em t_material_reservas com chave própria, sem alterar o estoque físico.
  */
-export async function reservarVasilhame({ row, user, observacao = '', solicitante }) {
+export async function reservarVasilhame({
+  row,
+  user,
+  observacao = '',
+  solicitante,
+  quantidade,
+}) {
   if (!row?.chave || !row?.origemId) {
     throw new Error('Vasilhame inválido.');
   }
@@ -611,12 +729,49 @@ export async function reservarVasilhame({ row, user, observacao = '', solicitant
   const solicitanteNome = normalizeSolicitante(solicitante);
   if (!solicitanteNome) throw new Error('Informe o solicitante da reserva.');
 
+  const maxEmbalagens = getVasilhameEmbalagensDisponiveis(row);
+  const parcial = isVasilhameReservaParcialSuportada(row);
+  let qtd = 1;
+  let unidadeMedida = 'un';
+
+  if (parcial) {
+    qtd = Math.round(Number(quantidade) || 0);
+    if (qtd <= 0) {
+      throw new Error('Informe a quantidade de embalagens a reservar.');
+    }
+    if (qtd > maxEmbalagens) {
+      throw new Error(
+        `Não é possível reservar mais de ${maxEmbalagens} embalagem(ns).`
+      );
+    }
+    unidadeMedida = VASILHAME_RESERVA_UNIDADE_EMB;
+  }
+
   const existing = await entities.materialReservas.filter({ chave: row.chave });
   const ativa = (existing || []).find((r) => r.status === 'ativa');
-  if (ativa) return { changed: false };
-
   const usuarioNome =
     user?.nome || user?.full_name || user?.username || user?.email || '—';
+
+  if (ativa) {
+    const sameQty = Math.round(Number(ativa.quantidade) || 0) === qtd;
+    const sameUnidade =
+      String(ativa.unidade_medida || '').trim().toLowerCase() === unidadeMedida;
+    const sameSolicitante =
+      normalizeSolicitante(ativa.solicitante) === solicitanteNome;
+    if (sameQty && sameUnidade && sameSolicitante) {
+      return { changed: false, updated: false };
+    }
+
+    await entities.materialReservas.update(ativa.id, {
+      quantidade: qtd,
+      unidade_medida: unidadeMedida,
+      solicitante: solicitanteNome,
+      usuario_id: toUserIdText(user?.id),
+      usuario_nome: usuarioNome,
+      observacao: observacao || ativa.observacao || null,
+    });
+    return { changed: true, updated: true };
+  }
 
   await entities.materialReservas.create({
     chave: row.chave,
@@ -626,8 +781,8 @@ export async function reservarVasilhame({ row, user, observacao = '', solicitant
     produto_codigo: row.codigo === '—' ? '' : row.codigo,
     produto_nome: row.produto === '—' ? null : row.produto,
     lote: row.lote === '—' ? '' : row.lote,
-    unidade_medida: 'un',
-    quantidade: 1,
+    unidade_medida: unidadeMedida,
+    quantidade: qtd,
     status: 'ativa',
     usuario_id: toUserIdText(user?.id),
     usuario_nome: usuarioNome,
@@ -635,7 +790,7 @@ export async function reservarVasilhame({ row, user, observacao = '', solicitant
     observacao: observacao || null,
   });
 
-  return { changed: true };
+  return { changed: true, updated: false };
 }
 
 /**

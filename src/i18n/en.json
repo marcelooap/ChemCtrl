@@ -1927,11 +1927,20 @@
           "confirmTitle": "Reserve container",
           "confirmMessage": "Confirm reservation of container {{id}} ({{produto}} — {{cliente}})? Status will change to Reserved.",
           "confirmAction": "Reserve",
+          "editTitle": "Edit container reservation",
+          "editMessage": "Adjust the reserved quantity for container {{id}} ({{produto}} — {{cliente}}).",
+          "updateAction": "Save",
+          "updateSuccess": "Reservation updated",
           "reserveSuccess": "Container reserved",
+          "quantityLabel": "Package quantity",
+          "quantityHint": "Available: {{max}} ({{placa}})",
           "releaseTitle": "Remove reservation",
           "releaseMessage": "Remove the reservation of container {{id}} ({{produto}} — {{cliente}})? Status will return to Available.",
           "releaseAction": "Remove reservation",
           "releaseSuccess": "Reservation removed",
+          "errors": {
+            "exceedsPackages": "Cannot reserve more than {{max}} package(s)."
+          },
           "columns": {
             "id": "ID",
             "origem": "Origin",
@@ -1946,7 +1955,8 @@
           },
           "status": {
             "livre": "Available",
-            "reservado": "Reserved"
+            "reservado": "Reserved",
+            "parcial": "Partial ({{reserved}}/{{total}})"
           },
           "origem": {
             "transbordo": "Conventional",
@@ -1955,6 +1965,7 @@
           "actions": {
             "view": "View",
             "reservar": "Reserve",
+            "editar": "Edit reservation",
             "remover": "Remove reservation",
             "generateBoleta": "Generate Slip"
           },

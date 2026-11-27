@@ -133,9 +133,14 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
 
   const statusReservado = Boolean(row.reservado || row.saldoReservado > 0);
   const statusLabel = isVasilhame
-    ? statusReservado
-      ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
-      : t('painel.comercial.reservarMaterial.vasilhames.status.livre')
+    ? !statusReservado
+      ? t('painel.comercial.reservarMaterial.vasilhames.status.livre')
+      : row.reservaParcial
+        ? t('painel.comercial.reservarMaterial.vasilhames.status.parcial', {
+            reserved: row.quantidadeReservada,
+            total: row.quantidadeEmbalagens,
+          })
+        : t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
     : statusReservado
       ? t('painel.comercial.reservarMaterial.statusFilter.reservado')
       : t('painel.comercial.reservarMaterial.statusFilter.livre');
@@ -390,7 +395,9 @@ export default function ReservaViewModal({ open, onClose, row, reservas = [] }) 
                             {r.usuario_nome || '—'}
                           </td>
                           <td className={`${tdClass} font-semibold tabular-nums text-foreground`}>
-                            {formatQty(r.quantidade, unidade)} {unidade}
+                            {String(unidade || '').toLowerCase() === 'emb'
+                              ? `${Math.round(Number(r.quantidade) || 0)} emb.`
+                              : `${formatQty(r.quantidade, unidade)} ${unidade || ''}`.trim()}
                           </td>
                           <td className={tdClass}>
                             <StatusBadge

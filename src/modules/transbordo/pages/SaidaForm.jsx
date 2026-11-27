@@ -271,8 +271,12 @@ export default function SaidaForm({
             ? descricaoCarregamentoGenerico(it)
             : "",
         };
-        // Trava/exclusão: estado explícito (não herdar false do emptySaidaItem).
-        if (it.validado === true || it.validado === false) {
+        // Placeholders vazios nunca ficam travados — mesmo se uma validação
+        // anterior tiver gravado validado:true por engano (ex.: S346).
+        if (isItemSaidaVazio(it)) {
+          merged.validado = false;
+        } else if (it.validado === true || it.validado === false) {
+          // Trava/exclusão: estado explícito (não herdar false do emptySaidaItem).
           merged.validado = it.validado;
         } else {
           merged.validado = itemFoiBaixado(it, saida);
@@ -574,6 +578,9 @@ export default function SaidaForm({
    */
   const itemTravado = (item) => {
     if (!editingSaida || !item) return false;
+    // Linhas "Aguardando Informações" permanecem editáveis mesmo com a
+    // saída já validada — o usuário pode completar o produto sem desvalidar.
+    if (isItemSaidaVazio(item)) return false;
     if (item.validado === false) return false;
     if (item.validado === true) return true;
 
@@ -595,10 +602,20 @@ export default function SaidaForm({
 
   const updateItem = (index, updated) => {
     const withHistorico = aplicarHistoricoHerdado(updated, historicoTanqueKeys);
-    setFormData((prev) => ({
-      ...prev,
-      itens: prev.itens.map((it, i) => (i === index ? withHistorico : it)),
-    }));
+    setFormData((prev) => {
+      const anterior = prev.itens[index];
+      // Placeholder que acabou de receber produto: pendente de validação.
+      const nextItem =
+        anterior &&
+        isItemSaidaVazio(anterior) &&
+        !isItemSaidaVazio(withHistorico)
+          ? { ...withHistorico, validado: false }
+          : withHistorico;
+      return {
+        ...prev,
+        itens: prev.itens.map((it, i) => (i === index ? nextItem : it)),
+      };
+    });
   };
 
   const addItem = () => {
@@ -918,16 +935,19 @@ export default function SaidaForm({
         if (!item || !editingSaida) return false;
         // Mesma regra do itemTravado: não confundir item novo com outro
         // embalado já baixado no mesmo lote/entrada.
+        if (isItemSaidaVazio(item)) return false;
         if (item.validado === false) return false;
-        if (item.validado === true) return true;
         const uid = String(item.item_uid || "").trim();
         if (uid) {
           const byUid = (editingSaida.itens || []).find(
             (it) => String(it.item_uid || "").trim() === uid
           );
           if (!byUid) return false;
+          // Placeholder original preenchido agora → ainda não baixado.
+          if (isItemSaidaVazio(byUid)) return false;
           return itemFoiBaixado(byUid, editingSaida);
         }
+        if (item.validado === true) return true;
         const original = origemPorChave.get(saidaItemChave(item));
         return Boolean(original && itemFoiBaixado(original, editingSaida));
       };

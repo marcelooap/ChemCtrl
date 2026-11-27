@@ -35,7 +35,10 @@ import {
   ORIGEM_INDUSTRIALIZACAO,
   ORIGEM_TRANSBORDO,
   buildVasilhameReservaChave,
+  getVasilhameEmbalagensDisponiveis,
+  getVasilhameReservaAtiva,
   isVasilhameReservado,
+  resolveVasilhameQuantidadeReservada,
   sumReservadoVasilhamesConteudo,
 } from "@painel/lib/vasilhameReservas";
 import { containerClientMatches } from "@transbordo/lib/saidaOrigem";
@@ -147,16 +150,29 @@ function CapacidadeCount({ total = 0, reservado = 0 }) {
   );
 }
 
-function StatusReservaBadge({ reservado }) {
+function StatusReservaBadge({
+  reservado,
+  reservaParcial = false,
+  quantidadeReservada = 0,
+  quantidadeEmbalagens = 0,
+}) {
+  const label = !reservado
+    ? "Livre"
+    : reservaParcial
+      ? `Parcial (${quantidadeReservada}/${quantidadeEmbalagens})`
+      : "Reservado";
+
   return (
     <span
       className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
-        reservado
-          ? "bg-purple-100 text-purple-800"
-          : "bg-green-100 text-green-800"
+        !reservado
+          ? "bg-green-100 text-green-800"
+          : reservaParcial
+            ? "bg-amber-100 text-amber-800"
+            : "bg-purple-100 text-purple-800"
       }`}
     >
-      {reservado ? "Reservado" : "Livre"}
+      {label}
     </span>
   );
 }
@@ -572,13 +588,31 @@ export default function EstoqueEnvio() {
             ? ORIGEM_INDUSTRIALIZACAO
             : ORIGEM_TRANSBORDO;
         const chave = buildVasilhameReservaChave(origem, v.id);
-        const reservado = isVasilhameReservado(reservas, chave);
+        const reservaAtiva = getVasilhameReservaAtiva(reservas, chave);
+        const reservado = Boolean(reservaAtiva) || isVasilhameReservado(reservas, chave);
+        const quantidadeEmbalagens = getVasilhameEmbalagensDisponiveis(v);
+        const quantidadeReservada = resolveVasilhameQuantidadeReservada(
+          reservaAtiva,
+          v
+        );
+        const reservaParcial =
+          reservado &&
+          quantidadeEmbalagens > 1 &&
+          quantidadeReservada > 0 &&
+          quantidadeReservada < quantidadeEmbalagens;
         return {
           ...v,
           origem,
           reservaChave: chave,
           reservado,
-          statusReserva: reservado ? "Reservado" : "Livre",
+          quantidadeEmbalagens,
+          quantidadeReservada,
+          reservaParcial,
+          statusReserva: !reservado
+            ? "Livre"
+            : reservaParcial
+              ? `Parcial (${quantidadeReservada}/${quantidadeEmbalagens})`
+              : "Reservado",
         };
       });
   }, [vasilhamesConsolidados, clienteFilter, clientes, q, reservas]);
@@ -1643,7 +1677,12 @@ export default function EstoqueEnvio() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <StatusReservaBadge reservado={v.reservado} />
+                        <StatusReservaBadge
+                          reservado={v.reservado}
+                          reservaParcial={v.reservaParcial}
+                          quantidadeReservada={v.quantidadeReservada}
+                          quantidadeEmbalagens={v.quantidadeEmbalagens}
+                        />
                       </td>
                     </tr>
                   );

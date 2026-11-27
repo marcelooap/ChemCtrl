@@ -1401,11 +1401,20 @@
           "confirmTitle": "Réserver le contenant",
           "confirmMessage": "Confirmer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut passera à Réservé.",
           "confirmAction": "Réserver",
+          "editTitle": "Modifier la réservation du contenant",
+          "editMessage": "Ajustez la quantité réservée du contenant {{id}} ({{produto}} — {{cliente}}).",
+          "updateAction": "Enregistrer",
+          "updateSuccess": "Réservation mise à jour",
           "reserveSuccess": "Contenant réservé",
+          "quantityLabel": "Quantité d'emballages",
+          "quantityHint": "Disponible : {{max}} ({{placa}})",
           "releaseTitle": "Retirer la réservation",
           "releaseMessage": "Retirer la réservation du contenant {{id}} ({{produto}} — {{cliente}}) ? Le statut redeviendra Libre.",
           "releaseAction": "Retirer la réservation",
           "releaseSuccess": "Réservation retirée",
+          "errors": {
+            "exceedsPackages": "Impossible de réserver plus de {{max}} emballage(s)."
+          },
           "columns": {
             "id": "ID",
             "origem": "Origine",
@@ -1420,7 +1429,8 @@
           },
           "status": {
             "livre": "Libre",
-            "reservado": "Réservé"
+            "reservado": "Réservé",
+            "parcial": "Partiel ({{reserved}}/{{total}})"
           },
           "origem": {
             "transbordo": "Conventionnel",
@@ -1429,6 +1439,7 @@
           "actions": {
             "view": "Voir",
             "reservar": "Réserver",
+            "editar": "Modifier la réservation",
             "remover": "Retirer la réservation",
             "generateBoleta": "Générer la Boleta"
           },

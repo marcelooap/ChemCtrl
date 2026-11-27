@@ -16,13 +16,18 @@ import { Label } from '@shared/components/ui/label';
 import { RowActionButton } from '@shared/components/ui/RowActionButton';
 import { Can } from '@industrializacao/lib/rbac/Can';
 import { formatVolume } from '@transbordo/lib/format';
+import NumberInputBr from '@transbordo/components/NumberInputBr';
 import { useToast } from '@shared/components/ui/use-toast';
 import { useSubmitGuard } from '@shared/hooks/useSubmitGuard';
 import ReservaViewModal from '@painel/components/comercial/ReservaViewModal';
 import {
   ORIGEM_INDUSTRIALIZACAO,
   generateVasilhameBoletas,
+  getVasilhameEmbalagensDisponiveis,
+  getVasilhameReservaAtiva,
+  isVasilhameReservaParcialSuportada,
   liberarVasilhame,
+  resolveVasilhameQuantidadeReservada,
   reservarVasilhame,
 } from '@painel/lib/vasilhameReservas';
 
@@ -51,12 +56,24 @@ export default function VasilhamesReservaTable({
   const [viewRow, setViewRow] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [solicitante, setSolicitante] = useState('');
+  const [quantidade, setQuantidade] = useState('');
   const [reserveError, setReserveError] = useState('');
   const [reserving, setReserving] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
 
   const isLiberar = pendingAction?.type === 'liberar';
-  const reserveRow = pendingAction?.type === 'reservar' ? pendingAction.row : null;
+  const reserveRow =
+    pendingAction?.type === 'reservar' || pendingAction?.type === 'editar'
+      ? pendingAction.row
+      : null;
+  const isEditingReserve = pendingAction?.type === 'editar';
+  const reserveSupportsPartial = reserveRow
+    ? isVasilhameReservaParcialSuportada(reserveRow)
+    : false;
+  const reserveMaxEmbalagens = reserveRow
+    ? getVasilhameEmbalagensDisponiveis(reserveRow)
+    : 1;
+  const reserveQtd = Math.round(Number(quantidade) || 0);
 
   const selectedRows = useMemo(
     () => rows.filter((row) => selected.has(row.id)),
@@ -110,15 +127,32 @@ export default function VasilhamesReservaTable({
     });
 
   const openReserve = (row) => {
+    const max = getVasilhameEmbalagensDisponiveis(row);
     setSolicitante('');
+    setQuantidade(isVasilhameReservaParcialSuportada(row) ? String(max) : '1');
     setReserveError('');
     setPendingAction({ type: 'reservar', row });
+  };
+
+  const openEditReserve = (row) => {
+    if (!isVasilhameReservaParcialSuportada(row)) {
+      setPendingAction({ type: 'liberar', row });
+      return;
+    }
+    const reservaAtiva = getVasilhameReservaAtiva(reservas, row.chave);
+    const reservedQty = resolveVasilhameQuantidadeReservada(reservaAtiva, row);
+    const max = getVasilhameEmbalagensDisponiveis(row);
+    setSolicitante(reservaAtiva?.solicitante || '');
+    setQuantidade(String(reservedQty > 0 ? reservedQty : max));
+    setReserveError('');
+    setPendingAction({ type: 'editar', row });
   };
 
   const closeReserve = () => {
     if (reserving) return;
     setPendingAction(null);
     setSolicitante('');
+    setQuantidade('');
     setReserveError('');
   };
 
@@ -143,15 +177,38 @@ export default function VasilhamesReservaTable({
       return;
     }
 
+    if (reserveSupportsPartial) {
+      if (reserveQtd <= 0) {
+        setReserveError(t('painel.comercial.reservarMaterial.errors.qtyRequired'));
+        return;
+      }
+      if (reserveQtd > reserveMaxEmbalagens) {
+        setReserveError(
+          t('painel.comercial.reservarMaterial.vasilhames.errors.exceedsPackages', {
+            max: reserveMaxEmbalagens,
+          })
+        );
+        return;
+      }
+    }
+
     setReserving(true);
     setReserveError('');
     try {
-      await reservarVasilhame({ row, user, solicitante: nome });
+      await reservarVasilhame({
+        row,
+        user,
+        solicitante: nome,
+        quantidade: reserveSupportsPartial ? reserveQtd : 1,
+      });
       toast({
-        title: t('painel.comercial.reservarMaterial.vasilhames.reserveSuccess'),
+        title: isEditingReserve
+          ? t('painel.comercial.reservarMaterial.vasilhames.updateSuccess')
+          : t('painel.comercial.reservarMaterial.vasilhames.reserveSuccess'),
       });
       setPendingAction(null);
       setSolicitante('');
+      setQuantidade('');
       await onReload?.({ silent: true });
     } catch (err) {
       setReserveError(err?.message || t('painel.comercial.reservarMaterial.errors.saveFailed'));
@@ -326,7 +383,12 @@ export default function VasilhamesReservaTable({
                       {row.observacao}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <StatusBadge reservado={row.reservado} />
+                      <StatusBadge
+                        reservado={row.reservado}
+                        reservaParcial={row.reservaParcial}
+                        quantidadeReservada={row.quantidadeReservada}
+                        quantidadeEmbalagens={row.quantidadeEmbalagens}
+                      />
                     </td>
                     {showDataSaida ? (
                       <td className="px-4 py-3 whitespace-nowrap tabular-nums font-medium text-foreground">
@@ -347,8 +409,12 @@ export default function VasilhamesReservaTable({
                           <Can anyOf={['painel_comercial_reserva.edit', 'painel_comercial_reserva.create']}>
                             {row.reservado ? (
                               <RowActionButton
-                                title={t('painel.comercial.reservarMaterial.vasilhames.actions.remover')}
-                                onClick={() => setPendingAction({ type: 'liberar', row })}
+                                title={
+                                  isVasilhameReservaParcialSuportada(row)
+                                    ? t('painel.comercial.reservarMaterial.vasilhames.actions.editar')
+                                    : t('painel.comercial.reservarMaterial.vasilhames.actions.remover')
+                                }
+                                onClick={() => openEditReserve(row)}
                               >
                                 <BookmarkMinus />
                               </RowActionButton>
@@ -410,17 +476,53 @@ export default function VasilhamesReservaTable({
           >
             <DialogHeader>
               <DialogTitle>
-                {t('painel.comercial.reservarMaterial.vasilhames.confirmTitle')}
+                {isEditingReserve
+                  ? t('painel.comercial.reservarMaterial.vasilhames.editTitle')
+                  : t('painel.comercial.reservarMaterial.vasilhames.confirmTitle')}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleConfirmReserve} className="space-y-4">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {t('painel.comercial.reservarMaterial.vasilhames.confirmMessage', {
-                  id: reserveRow?.displayId || '—',
-                  produto: reserveRow?.produto || '—',
-                  cliente: reserveRow?.clienteNome || '—',
-                })}
+                {t(
+                  isEditingReserve
+                    ? 'painel.comercial.reservarMaterial.vasilhames.editMessage'
+                    : 'painel.comercial.reservarMaterial.vasilhames.confirmMessage',
+                  {
+                    id: reserveRow?.displayId || '—',
+                    produto: reserveRow?.produto || '—',
+                    cliente: reserveRow?.clienteNome || '—',
+                  }
+                )}
               </p>
+              {reserveSupportsPartial ? (
+                <div className="space-y-2">
+                  <Label htmlFor="vasilhame-reserva-quantidade">
+                    {t('painel.comercial.reservarMaterial.vasilhames.quantityLabel')}
+                    <span className="text-destructive"> *</span>
+                  </Label>
+                  <NumberInputBr
+                    id="vasilhame-reserva-quantidade"
+                    value={quantidade}
+                    onChange={(value) => {
+                      setQuantidade(value);
+                      if (reserveError) setReserveError('');
+                    }}
+                    decimals={0}
+                    min={0}
+                    max={reserveMaxEmbalagens}
+                    disabled={reserving}
+                    aria-label={t(
+                      'painel.comercial.reservarMaterial.vasilhames.quantityLabel'
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('painel.comercial.reservarMaterial.vasilhames.quantityHint', {
+                      max: reserveMaxEmbalagens,
+                      placa: reserveRow?.placa || '—',
+                    })}
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="vasilhame-reserva-solicitante">
                   {t('painel.comercial.reservarMaterial.requester')}
@@ -435,7 +537,7 @@ export default function VasilhamesReservaTable({
                   }}
                   maxLength={120}
                   autoComplete="off"
-                  autoFocus
+                  autoFocus={!reserveSupportsPartial}
                   disabled={reserving}
                   placeholder={t('painel.comercial.reservarMaterial.requesterPlaceholder')}
                   aria-required
@@ -448,14 +550,50 @@ export default function VasilhamesReservaTable({
                   <span>{reserveError}</span>
                 </div>
               ) : null}
-              <DialogFooter>
+              <DialogFooter className="gap-2 sm:gap-2">
+                {isEditingReserve ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                    disabled={reserving}
+                    onClick={async () => {
+                      if (reserving || !reserveRow) return;
+                      setReserving(true);
+                      setReserveError('');
+                      try {
+                        await liberarVasilhame({ row: reserveRow, user });
+                        toast({
+                          title: t(
+                            'painel.comercial.reservarMaterial.vasilhames.releaseSuccess'
+                          ),
+                        });
+                        setPendingAction(null);
+                        setSolicitante('');
+                        setQuantidade('');
+                        await onReload?.({ silent: true });
+                      } catch (err) {
+                        setReserveError(
+                          err?.message ||
+                            t('painel.comercial.reservarMaterial.errors.saveFailed')
+                        );
+                      } finally {
+                        setReserving(false);
+                      }
+                    }}
+                  >
+                    {t('painel.comercial.reservarMaterial.vasilhames.releaseAction')}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" onClick={closeReserve} disabled={reserving}>
                   {t('buttons.cancel')}
                 </Button>
                 <Button type="submit" disabled={reserving}>
                   {reserving
                     ? t('painel.comercial.reservarMaterial.saving')
-                    : t('painel.comercial.reservarMaterial.vasilhames.confirmAction')}
+                    : isEditingReserve
+                      ? t('painel.comercial.reservarMaterial.vasilhames.updateAction')
+                      : t('painel.comercial.reservarMaterial.vasilhames.confirmAction')}
                 </Button>
               </DialogFooter>
             </form>
@@ -482,17 +620,33 @@ function OrigemBadge({ origem }) {
   );
 }
 
-function StatusBadge({ reservado }) {
+function StatusBadge({
+  reservado,
+  reservaParcial = false,
+  quantidadeReservada = 0,
+  quantidadeEmbalagens = 0,
+}) {
   const { t } = useTranslation();
+  const label = !reservado
+    ? t('painel.comercial.reservarMaterial.vasilhames.status.livre')
+    : reservaParcial
+      ? t('painel.comercial.reservarMaterial.vasilhames.status.parcial', {
+          reserved: quantidadeReservada,
+          total: quantidadeEmbalagens,
+        })
+      : t('painel.comercial.reservarMaterial.vasilhames.status.reservado');
+
   return (
     <span
       className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
-        reservado ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+        !reservado
+          ? 'bg-green-100 text-green-800'
+          : reservaParcial
+            ? 'bg-amber-100 text-amber-800'
+            : 'bg-purple-100 text-purple-800'
       }`}
     >
-      {reservado
-        ? t('painel.comercial.reservarMaterial.vasilhames.status.reservado')
-        : t('painel.comercial.reservarMaterial.vasilhames.status.livre')}
+      {label}
     </span>
   );
 }

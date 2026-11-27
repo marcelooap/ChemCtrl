@@ -1927,11 +1927,20 @@
           "confirmTitle": "Reservar vasilhame",
           "confirmMessage": "Confirmar reserva do vasilhame {{id}} ({{produto}} — {{cliente}})? O status passará para Reservado.",
           "confirmAction": "Reservar",
+          "editTitle": "Editar reserva do vasilhame",
+          "editMessage": "Ajuste a quantidade reservada do vasilhame {{id}} ({{produto}} — {{cliente}}).",
+          "updateAction": "Salvar",
+          "updateSuccess": "Reserva atualizada",
           "reserveSuccess": "Vasilhame reservado",
+          "quantityLabel": "Quantidade de embalagens",
+          "quantityHint": "Disponível: {{max}} ({{placa}})",
           "releaseTitle": "Remover reserva",
           "releaseMessage": "Remover a reserva do vasilhame {{id}} ({{produto}} — {{cliente}})? O status voltará para Livre.",
           "releaseAction": "Remover reserva",
           "releaseSuccess": "Reserva removida",
+          "errors": {
+            "exceedsPackages": "Não é possível reservar mais de {{max}} embalagem(ns)."
+          },
           "columns": {
             "id": "ID",
             "origem": "Origem",
@@ -1946,7 +1955,8 @@
           },
           "status": {
             "livre": "Livre",
-            "reservado": "Reservado"
+            "reservado": "Reservado",
+            "parcial": "Parcial ({{reserved}}/{{total}})"
           },
           "origem": {
             "transbordo": "Convencional",
@@ -1955,6 +1965,7 @@
           "actions": {
             "view": "Visualizar",
             "reservar": "Reservar",
+            "editar": "Editar reserva",
             "remover": "Remover reserva",
             "generateBoleta": "Gerar Boleta"
           },

@@ -27,6 +27,7 @@ import {
   getModulosRelevantesSaida,
   itemFoiBaixado,
   isTanqueVazioItem,
+  isItemSaidaVazio,
   calcSaidaQuantidadeTotal,
   saidaItemChave,
   applyItemValidacaoFlags,
@@ -362,6 +363,11 @@ export async function applySaidaFiscalToggle(
 
   const updatedItens = itensAll.map((item) => {
     if (scope !== "all" && !scopedRefs.has(item)) return item;
+    // Placeholders sem produto não entram na validação — permanecem
+    // editáveis para o usuário completar depois, sem exigir desvalidação.
+    if (isItemSaidaVazio(item)) {
+      return { ...item, validado: false };
+    }
     if (!movimentoRefs.has(item)) {
       // Desvalidação individual: não altera os demais itens do escopo.
       if (!checked && chavesFiltro) return item;

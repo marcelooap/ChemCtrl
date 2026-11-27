@@ -1401,11 +1401,20 @@
           "confirmTitle": "Reservar envase",
           "confirmMessage": "¿Confirmar la reserva del envase {{id}} ({{produto}} — {{cliente}})? El estado pasará a Reservado.",
           "confirmAction": "Reservar",
+          "editTitle": "Editar reserva del envase",
+          "editMessage": "Ajuste la cantidad reservada del envase {{id}} ({{produto}} — {{cliente}}).",
+          "updateAction": "Guardar",
+          "updateSuccess": "Reserva actualizada",
           "reserveSuccess": "Envase reservado",
+          "quantityLabel": "Cantidad de embalajes",
+          "quantityHint": "Disponible: {{max}} ({{placa}})",
           "releaseTitle": "Quitar reserva",
           "releaseMessage": "¿Quitar la reserva del envase {{id}} ({{produto}} — {{cliente}})? El estado volverá a Libre.",
           "releaseAction": "Quitar reserva",
           "releaseSuccess": "Reserva quitada",
+          "errors": {
+            "exceedsPackages": "No es posible reservar más de {{max}} embalaje(s)."
+          },
           "columns": {
             "id": "ID",
             "origem": "Origen",
@@ -1420,7 +1429,8 @@
           },
           "status": {
             "livre": "Libre",
-            "reservado": "Reservado"
+            "reservado": "Reservado",
+            "parcial": "Parcial ({{reserved}}/{{total}})"
           },
           "origem": {
             "transbordo": "Convencional",
@@ -1429,6 +1439,7 @@
           "actions": {
             "view": "Ver",
             "reservar": "Reservar",
+            "editar": "Editar reserva",
             "remover": "Quitar reserva",
             "generateBoleta": "Generar Boleta"
           },
