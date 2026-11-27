@@ -372,7 +372,8 @@ export default function EstoqueViewDialog({
     transbordos,
     saidas,
     vasilhames,
-    ajustes
+    ajustes,
+    item ? [item] : []
   );
   const saldoCalculado = computeEstoqueSaldo(
     item,

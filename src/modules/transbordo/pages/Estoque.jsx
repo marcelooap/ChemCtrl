@@ -351,9 +351,10 @@ export default function Estoque() {
         transbordos,
         saidas,
         vasilhames,
-        ajustesManuais
+        ajustesManuais,
+        estoque
       ),
-    [transbordos, saidas, vasilhames, ajustesManuais]
+    [transbordos, saidas, vasilhames, ajustesManuais, estoque]
   );
 
   /**

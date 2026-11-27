@@ -55,7 +55,8 @@ export async function buildEstoqueView(
     volumes.transbordos,
     saidas,
     volumes.vasilhames,
-    ajustes
+    ajustes,
+    volumes.estoque
   );
 
   // Saldo = quantidade − saídas de vasilhame (pátio/fiscal) − saídas embalado

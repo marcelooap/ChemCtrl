@@ -245,7 +245,8 @@ export default function EstoqueEnvio() {
           trans,
           saics,
           vasilhamesOk,
-          ajustes || []
+          ajustes || [],
+          ests
         );
         const estoqueWithSaldo = ests
           .filter((e) => !isEstoqueEmbalagemUnitaria(e))
@@ -395,7 +396,8 @@ export default function EstoqueEnvio() {
       volumes.transbordos,
       saidas,
       volumes.vasilhames,
-      ajustesManuais
+      ajustesManuais,
+      volumes.estoque
     );
     // Cada recalculo começa sem reivindicações (ctx pode ser reusado em hot path).
     saldoCtx.claimedLitersByVasilhameId.clear();

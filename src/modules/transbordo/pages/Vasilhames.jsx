@@ -239,23 +239,22 @@ function renderVolumeQuantidadeCells(
   const densN = parseDensidade(dens);
   const storedVol = roundVolume(vasilhame?.volume || 0);
   let volOp = Number(operacional.volume) || 0;
-  // Off-by-one (1.501 vs 1.500): prefere a soma da composição / volume envasado.
+  // Prefere a soma da composição do próprio tanque. Rebuild por placa pode
+  // agregar destinos de outros registros com a mesma placa (ex.: RETORNO IND.).
   const compSum = roundVolume(
     (Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : []).reduce(
       (s, c) => s + (Number(c.quantidade_l) || 0),
       0
     )
   );
-  if (volOp > 0 && compSum > 0 && Math.abs(volOp - compSum) > 0.01) {
-    if (Math.abs(volOp - compSum) <= 1.001) {
-      volOp = compSum;
-    } else if (
-      storedVol > 0 &&
-      Math.abs(storedVol - compSum) <= 0.5 &&
-      Math.abs(volOp - storedVol) <= 1.001
-    ) {
-      volOp = storedVol;
-    }
+  const compKg = roundMass(
+    (Array.isArray(vasilhame?.composicao) ? vasilhame.composicao : []).reduce(
+      (s, c) => s + (Number(c.quantidade_kg) || 0),
+      0
+    )
+  );
+  if (compSum > 0 && (volOp <= 0 || Math.abs(volOp - compSum) > 0.01)) {
+    volOp = compSum;
   } else if (
     storedVol > 0 &&
     volOp > 0 &&
@@ -270,9 +269,11 @@ function renderVolumeQuantidadeCells(
       ? massaKgFromLitrosOperacionais(
           volOp,
           densN,
-          Number(operacional.massa) || Number(vasilhame?.peso_liquido) || 0
+          compKg || Number(operacional.massa) || Number(vasilhame?.peso_liquido) || 0
         )
-      : Number(operacional.massa) || 0;
+      : compKg > 0
+        ? compKg
+        : Number(operacional.massa) || 0;
   const vDisplay = {
     ...vasilhame,
     volume: volOp,

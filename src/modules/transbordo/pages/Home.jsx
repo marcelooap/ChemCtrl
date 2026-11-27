@@ -81,7 +81,13 @@ export default function Home() {
       return { transbordos: [], estoque: [], vasilhames: [] };
     }
 
-    const saldoCtx = createEstoqueSaldoContext(transbordos, saidas, vasilhames);
+    const saldoCtx = createEstoqueSaldoContext(
+      transbordos,
+      saidas,
+      vasilhames,
+      [],
+      rawEstoque
+    );
     const estoqueWithSaldo = rawEstoque
       .filter((e) => !isMateriaPrimaIndustrializacao(e, null))
       .map((e) => {

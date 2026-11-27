@@ -1292,12 +1292,72 @@ function destinosDoVasilhame(vasilhame, transbordos = []) {
   return hits;
 }
 
+/**
+ * Transbordos ligados a este tanque por id/OP/composição/vasilhame_existente_id.
+ * Evita agregar destinos de outros registros que só compartilham a placa
+ * (ex.: vários tanques com placa "RETORNO IND.").
+ * Lista vazia = sem vínculo explícito (caller pode cair no fallback por placa).
+ */
+export function scopeTransbordosToVasilhameLinks(vasilhame, transbordos = []) {
+  if (!vasilhame) return [];
+  const linked = new Map();
+  const push = (t) => {
+    if (t?.id != null && !linked.has(t.id)) linked.set(t.id, t);
+  };
+
+  if (vasilhame.transbordo_id) {
+    const byId = (transbordos || []).find(
+      (t) => t.id === vasilhame.transbordo_id
+    );
+    if (byId) push(byId);
+  }
+
+  const opCodes = new Set(
+    [
+      vasilhame.numero_op,
+      ...(Array.isArray(vasilhame.composicao)
+        ? vasilhame.composicao.map((c) => c?.transbordo_codigo)
+        : []),
+    ]
+      .map((c) => String(c || "").trim())
+      .filter((c) => c && c.toLowerCase() !== "manual")
+  );
+
+  const vasilhameId = vasilhame.id != null ? String(vasilhame.id) : "";
+  for (const t of transbordos || []) {
+    const code = String(t.codigo_transbordo || "").trim();
+    if (opCodes.has(code)) {
+      push(t);
+      continue;
+    }
+    if (
+      vasilhameId &&
+      (t.destinos || []).some(
+        (d) =>
+          d?.vasilhame_existente_id != null &&
+          String(d.vasilhame_existente_id) === vasilhameId
+      )
+    ) {
+      push(t);
+    }
+  }
+
+  return [...linked.values()];
+}
+
 /** Volume/massa esperados pelos destinos do transbordo. Null se não houver vínculo. */
 export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
   if ((vasilhame?.tipo || "Vasilhame") === "Vasilhame" && vasilhame?.placa) {
-    const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
-      alignToVolume: false,
-    }).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
+    const scoped = scopeTransbordosToVasilhameLinks(vasilhame, transbordos);
+    // Com vínculo explícito, nunca soma a placa inteira (placa compartilhada).
+    const listForRebuild = scoped.length > 0 ? scoped : transbordos;
+    const history = rebuildComposicaoFromTransbordos(
+      vasilhame,
+      listForRebuild,
+      {
+        alignToVolume: false,
+      }
+    ).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
     const volume = roundVolume(
       history.reduce((s, c) => s + (c.quantidade_l || 0), 0)
     );
@@ -1305,8 +1365,7 @@ export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
       const dens =
         parseDensidade(vasilhame?.densidade) ||
         parseDensidade(
-          (transbordos || []).find((t) => parseDensidade(t?.densidade))
-            ?.densidade
+          listForRebuild.find((t) => parseDensidade(t?.densidade))?.densidade
         );
       const massaFromComp = roundMass(
         history.reduce((s, c) => s + (c.quantidade_kg || 0), 0)
@@ -1351,16 +1410,96 @@ export function expectedVolumeFromDestinos(vasilhame, transbordos = []) {
   return { volume, massa, densidade: dens };
 }
 
-/** Volume/massa operacionais: destinos do OP prevalecem sobre o campo corrompido. */
+/**
+ * Soma operacional da composição do próprio registro.
+ * Usada quando o rebuild por placa agrega destinos de outros tanques
+ * que compartilham a mesma placa (ex.: "RETORNO IND.").
+ */
+export function volumeMassaFromComposicao(vasilhame, densidade) {
+  const composicao = Array.isArray(vasilhame?.composicao)
+    ? vasilhame.composicao
+    : [];
+  const volume = roundVolume(
+    composicao.reduce((s, c) => s + (Number(c.quantidade_l) || 0), 0)
+  );
+  if (!(volume > 0)) return null;
+  const dens =
+    parseDensidade(densidade) || parseDensidade(vasilhame?.densidade);
+  const massaFromComp = roundMass(
+    composicao.reduce((s, c) => s + (Number(c.quantidade_kg) || 0), 0)
+  );
+  const massa =
+    dens > 0
+      ? massaKgFromLitrosOperacionais(
+          volume,
+          dens,
+          massaFromComp || Number(vasilhame?.peso_liquido) || 0
+        )
+      : massaFromComp > 0
+        ? massaFromComp
+        : roundMass(vasilhame?.peso_liquido || 0);
+  return { volume, massa, densidade: dens };
+}
+
+/**
+ * Volume/massa operacionais para exibição e baixa.
+ * Destinos do OP corrigem campo corrompido, mas a composição do próprio
+ * tanque prevalece quando o rebuild por placa diverge (placa compartilhada).
+ */
 export function resolveVasilhameOperacionalPar(vasilhame, opts = {}) {
+  const fromComp = volumeMassaFromComposicao(vasilhame, opts.densidade);
   const fromDest = expectedVolumeFromDestinos(
     vasilhame,
     opts.transbordos || []
   );
   const dens =
     parseDensidade(opts.densidade) ||
+    parseDensidade(fromComp?.densidade) ||
     parseDensidade(fromDest?.densidade) ||
     parseDensidade(vasilhame?.densidade);
+
+  if (fromComp && fromDest) {
+    const destVol = roundVolume(fromDest.volume || 0);
+    const compVol = roundVolume(fromComp.volume || 0);
+    // Off-by-one: mantém destinos (já alinhados à densidade canônica).
+    if (Math.abs(destVol - compVol) <= 1.001) {
+      return {
+        volume: fromDest.volume,
+        massa: fromDest.massa,
+        densidade: dens,
+      };
+    }
+    // Divergência material: composição do registro é a fonte de verdade
+    // na listagem/visualizar (evita somar vários tanques da mesma placa).
+    return {
+      volume: fromComp.volume,
+      massa:
+        dens > 0
+          ? massaKgFromLitrosOperacionais(
+              fromComp.volume,
+              dens,
+              fromComp.massa || fromDest.massa || 0
+            )
+          : fromComp.massa,
+      densidade: dens,
+    };
+  }
+
+  if (fromComp) {
+    return {
+      volume: fromComp.volume,
+      massa:
+        dens > 0
+          ? massaKgFromLitrosOperacionais(
+              fromComp.volume,
+              dens,
+              fromComp.massa || 0
+            )
+          : fromComp.massa,
+      densidade: dens,
+    };
+  }
+
   if (fromDest) {
     return {
       volume: fromDest.volume,
@@ -1407,7 +1546,9 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   // Lote alterado no cadastro é a fonte da tela e da etiqueta.
   if (composicaoTemLoteManual(vasilhame.composicao)) return null;
 
-  const history = rebuildComposicaoFromTransbordos(vasilhame, transbordos, {
+  const scoped = scopeTransbordosToVasilhameLinks(vasilhame, transbordos);
+  const listForRebuild = scoped.length > 0 ? scoped : transbordos;
+  const history = rebuildComposicaoFromTransbordos(vasilhame, listForRebuild, {
     alignToVolume: false,
   }).filter((c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR);
   const historySum = roundVolume(
@@ -1415,7 +1556,7 @@ export function repairVolumeFromDestinosPatch(vasilhame, transbordos = []) {
   );
   if (historySum <= 0) return null;
 
-  const pre = preTransbordoEntries(vasilhame, transbordos).filter(
+  const pre = preTransbordoEntries(vasilhame, listForRebuild).filter(
     (c) => (c.lote || "").trim() !== LOTE_APORTE_ANTERIOR
   );
   const preSum = roundVolume(

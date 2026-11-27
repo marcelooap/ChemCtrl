@@ -1,0 +1,304 @@
+{
+  "patioO39": {
+    "count": 9,
+    "rows": [
+      {
+        "placa": "15669-0",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2609080977",
+        "dens": "1.3",
+        "op": "T412"
+      },
+      {
+        "placa": "15634-2",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2609080977",
+        "dens": "1.3",
+        "op": "T412"
+      },
+      {
+        "placa": "15686-0",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2611031181",
+        "dens": "1.3",
+        "op": "T478"
+      },
+      {
+        "placa": "14372-1",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2611031181",
+        "dens": "1.3",
+        "op": "T478"
+      },
+      {
+        "placa": "16916-5",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2611031181",
+        "dens": "1.3",
+        "op": "T478"
+      },
+      {
+        "placa": "05152-8",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2611031181",
+        "dens": "1.3",
+        "op": "T478"
+      },
+      {
+        "placa": "17748-3",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2606180624",
+        "dens": "1,300",
+        "op": "T220"
+      },
+      {
+        "placa": "07 x Bombonas de 20 L",
+        "tipo": "Bombona de 20 L",
+        "volume": 140,
+        "peso": 182,
+        "lote": "2609080977",
+        "dens": "1.3",
+        "op": "T420"
+      },
+      {
+        "placa": "14326-9",
+        "tipo": "Vasilhame",
+        "volume": 1500,
+        "peso": 1950,
+        "lote": "2611031181",
+        "dens": "1.3",
+        "op": "T478"
+      }
+    ],
+    "patioVol": 12140,
+    "patioTanqueVol": 12000,
+    "patioBombonaVol": 140
+  },
+  "results": [
+    {
+      "codigo": 335,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2609080977",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 29198,
+      "saldo_final_db": 24005.8,
+      "saldo": 3724,
+      "embalado": 0,
+      "tanque": 3900,
+      "tanka": 0,
+      "total": 3900,
+      "claimedDelta": {
+        "1e614591-9142-4c68-b66d-86484b890304": {
+          "litros": 1500,
+          "placa": "15669-0",
+          "tipo": "Vasilhame",
+          "lote": "2609080977",
+          "volume": 1500
+        },
+        "bba07a30-0e32-4046-9194-f2f4951b072b": {
+          "litros": 1500,
+          "placa": "15634-2",
+          "tipo": "Vasilhame",
+          "lote": "2609080977",
+          "volume": 1500
+        }
+      }
+    },
+    {
+      "codigo": 336,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2606180624",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 6114.77,
+      "saldo_final_db": 1952.17,
+      "saldo": 0,
+      "embalado": 0,
+      "tanque": 1950,
+      "tanka": 0,
+      "total": 1950,
+      "claimedDelta": {
+        "82a2c394-6a64-4d8d-b7a6-7cc9f45bc1c4": {
+          "litros": 1500,
+          "placa": "17748-3",
+          "tipo": "Vasilhame",
+          "lote": "2606180624",
+          "volume": 1500
+        }
+      }
+    },
+    {
+      "codigo": 337,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2609020960",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 260,
+      "saldo_final_db": 0,
+      "saldo": 260,
+      "embalado": 0,
+      "tanque": 0,
+      "tanka": 0,
+      "total": 0,
+      "claimedDelta": {}
+    },
+    {
+      "codigo": 367,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2609020960",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 6,
+      "saldo_final_db": 0.8,
+      "saldo": 0,
+      "embalado": 0,
+      "tanque": 0,
+      "tanka": 0,
+      "total": 0,
+      "claimedDelta": {}
+    },
+    {
+      "codigo": 471,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2611031181",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 30597,
+      "saldo_final_db": 30597,
+      "saldo": 30597,
+      "embalado": 0,
+      "tanque": 9749,
+      "tanka": 20848,
+      "total": 30597,
+      "claimedDelta": {
+        "2da39cb5-865b-48b5-8dbb-dc24807ce733": {
+          "litros": 1499.076923076923,
+          "placa": "14326-9",
+          "tipo": "Vasilhame",
+          "lote": "2611031181",
+          "volume": 1500
+        },
+        "b2f06513-f15b-48fb-a56e-1351c9997d03": {
+          "litros": 1500,
+          "placa": "15686-0",
+          "tipo": "Vasilhame",
+          "lote": "2611031181",
+          "volume": 1500
+        },
+        "f1f51881-535b-4df9-ad85-67e49840a0d5": {
+          "litros": 1500,
+          "placa": "14372-1",
+          "tipo": "Vasilhame",
+          "lote": "2611031181",
+          "volume": 1500
+        },
+        "c34a2f66-b9c8-4785-8173-d95747b8e523": {
+          "litros": 1500,
+          "placa": "16916-5",
+          "tipo": "Vasilhame",
+          "lote": "2611031181",
+          "volume": 1500
+        },
+        "0bfecf92-7344-49a6-87ee-9140751d9017": {
+          "litros": 1500,
+          "placa": "05152-8",
+          "tipo": "Vasilhame",
+          "lote": "2611031181",
+          "volume": 1500
+        }
+      }
+    },
+    {
+      "codigo": 629,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2611201256",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 30940,
+      "saldo_final_db": 30940,
+      "saldo": 30940,
+      "embalado": 0,
+      "tanque": 0,
+      "tanka": 30940,
+      "total": 30940,
+      "claimedDelta": {}
+    }
+  ],
+  "o39Summary": {
+    "sumTanque": 15599,
+    "sumEmbalado": 0,
+    "sumTanka": 51788,
+    "patioVol": 12140,
+    "patioTanqueVol": 12000,
+    "gapTanqueVsPatioVol": 3459,
+    "gapTanqueVsPatioTanque": 3599
+  },
+  "item335": [
+    {
+      "codigo": 335,
+      "produto": "SISBRAX SCAVE O-39",
+      "cliente": "VIBRA ENERGIA",
+      "lote": "2609080977",
+      "um": "kg",
+      "dens": 1.3,
+      "tipo": "granel",
+      "embaladoFlag": false,
+      "inicial": 29198,
+      "saldo_final_db": 24005.8,
+      "saldo": 3724,
+      "embalado": 0,
+      "tanque": 3900,
+      "tanka": 0,
+      "total": 3900,
+      "claimedDelta": {
+        "1e614591-9142-4c68-b66d-86484b890304": {
+          "litros": 1500,
+          "placa": "15669-0",
+          "tipo": "Vasilhame",
+          "lote": "2609080977",
+          "volume": 1500
+        },
+        "bba07a30-0e32-4046-9194-f2f4951b072b": {
+          "litros": 1500,
+          "placa": "15634-2",
+          "tipo": "Vasilhame",
+          "lote": "2609080977",
+          "volume": 1500
+        }
+      }
+    }
+  ]
+}
